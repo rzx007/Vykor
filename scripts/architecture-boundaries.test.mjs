@@ -125,6 +125,55 @@ test("counts direct legacy store calls with file locations", () => {
   );
 });
 
+test("composition-root Store close is lifecycle work for exact repository paths on both platforms", () => {
+  const source = "store.close();\nthis.store.close();\ncontext.store.close();";
+  for (const file of [
+    "packages/server/src/application/daemon-application.ts",
+    "packages/server/src/application/default-node-application.ts",
+    "packages\\server\\src\\application\\daemon-application.ts",
+    "packages\\server\\src\\application\\default-node-application.ts",
+  ]) {
+    assert.deepEqual(countLegacyCalls(source, file), [], file);
+  }
+});
+
+test("Store close outside the two exact composition roots remains a controlled legacy call", () => {
+  for (const file of [
+    "packages/server/src/application/other.ts",
+    "packages/server/src/application/session/daemon-application.ts",
+    "other/packages/server/src/application/default-node-application.ts",
+    "packages/server/src/application/default-node-application.tsx",
+    "packages/services/src/application/daemon-application.ts",
+    "C:\\workspace\\packages\\server\\src\\application\\daemon-application.ts",
+  ]) {
+    assert.deepEqual(countLegacyCalls("store.close();", file), [
+      { file, line: 1, name: "close" },
+    ], file);
+  }
+});
+
+test("composition roots still count Store business calls with their original locations", () => {
+  for (const file of [
+    "packages/server/src/application/daemon-application.ts",
+    "packages/server/src/application/default-node-application.ts",
+  ]) {
+    assert.deepEqual(countLegacyCalls("this.store.close();\nstore.createRun();\ncontext.store.interruptActiveRuns();", file), [
+      { file, line: 2, name: "createRun" },
+      { file, line: 3, name: "interruptActiveRuns" },
+    ], file);
+  }
+});
+
+test("lifecycle classification leaves no room for an added Store business call", () => {
+  const file = "packages/server/src/application/default-node-application.ts";
+  const baseline = { sessionStoreFlatCalls: 1 };
+  const current = countLegacyCalls("store.close();\nstore.createRun();", file).length;
+  assert.deepEqual(validateLegacyBaseline(baseline, { sessionStoreFlatCalls: current }), []);
+  const increased = countLegacyCalls("store.close();\nstore.createRun();\nstore.createRun();", file).length;
+  assert.deepEqual(validateLegacyBaseline(baseline, { sessionStoreFlatCalls: increased }), [
+    "sessionStoreFlatCalls increased from 1 to 2",
+  ]);
+});
 test("server routes cannot import SessionStore or repositories", () => {
   assert.deepEqual(
     checkImportBoundary("packages/server/src/http/routes/sessions.ts", "../../../services/src/session-runtime/store.js"),
@@ -821,4 +870,30 @@ test("Protocol pins Job and Terminal imports and wrapped origins to contracts en
     for (const name of ["jobs.ts", "runtime/terminal.ts", "bridge.ts", "wrapped.ts"]) assert.ok(violations.some(item => item.fromFile.endsWith(`/src/${name}`)), name);
     assert.ok(!violations.some(item => item.fromFile.endsWith("/good.ts")));
   });
+});
+
+test("only the exact storage growth benchmark can synchronously launch measurement workers", () => {
+  const benchmark = "packages/services/src/database/persistence/__test__/storage-growth.bench.mjs";
+  const source = 'import { spawnSync } from "node:child_process"; export const worker = spawnSync;';
+  policyFixture({
+    [benchmark]: source,
+    "packages/services/src/database/persistence/production.mjs": source,
+    "packages/services/src/database/persistence/storage-growth.bench.mjs": source,
+    "packages/services/src/database/persistence/__test__/other.bench.mjs": source,
+    "packages/services/src/database/persistence/__test__/ordinary.test.mjs": source,
+  }, (directory) => {
+    const violations = collectPolicyViolations(directory, strictPolicy());
+    assert.ok(!violations.some(item => item.fromFile === benchmark), JSON.stringify(violations));
+    for (const file of ["production.mjs", "storage-growth.bench.mjs", "__test__/other.bench.mjs", "__test__/ordinary.test.mjs"]) {
+      assert.ok(violations.some(item => item.fromFile === `packages/services/src/database/persistence/${file}` && item.target.startsWith("storage-hosts:")), file);
+    }
+  });
+  for (const fromFile of [benchmark, benchmark.replaceAll("/", "\\")]) {
+    assert.deepEqual(checkModuleDependency({ fromFile, specifier: "node:child_process", importedNames: ["spawnSync"] }, strictPolicy()), []);
+    for (const importedNames of [["exec"], ["spawn"], ["*"], ["spawnSync", "exec"]]) {
+      assert.ok(checkModuleDependency({ fromFile, specifier: "node:child_process", importedNames }, strictPolicy()).length, importedNames.join(","));
+    }
+    assert.ok(checkModuleDependency({ fromFile, specifier: "node:net", importedNames: ["connect"] }, strictPolicy()).length);
+    assert.ok(checkModuleDependency({ fromFile, specifier: "@vykor/execution-node", importedNames: ["ExecutionRuntimeOwner"] }, strictPolicy()).length);
+  }
 });

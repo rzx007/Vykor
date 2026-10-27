@@ -76,6 +76,19 @@
 
 终端命令队列不进入该快照。它是发往 `TerminalTool` 的一次性命令，消费完成后立即删除。
 
+### `use-utility-panel-close.ts`
+
+唯一的标签关闭请求入口，管理单关、文件 Ctrl+W、关闭其他和关闭右侧。它只保留目标 ID、显式保留目标、确认阶段、错误、忙碌状态和界面实例标记；标签与文件快照仍由 runtime 持有，编辑草稿仍在 draft store，应用页面仍由 page manager 持有。
+
+同一请求按以下顺序推进：文件确认与必要保存 → 侧聊确认与销毁 → 一次提交普通标签关闭 → 按原可见顺序逐个确认应用。每次异步返回都先检查原界面实例是否仍有效；会话或项目切换、离开后返回和卸载都会使旧请求失效，已经发出的外部操作仍可能完成。
+
+- 保存失败不提交普通关闭；已经写盘的文件不回滚，其余标签与草稿保留。除非明确选择不保存，否则在整批文件处理结束、发出侧聊销毁前和普通关闭提交前重新读取所有目标草稿；即使开始时文件没有修改，等待侧聊确认或销毁期间的新编辑、正在保存的文件也会阻止后续推进并回到文件确认。已成功销毁的侧聊在同一请求内记录完成，重新保存或明确不保存后不会再次销毁，取消也不会恢复已销毁的侧聊。
+- 侧聊销毁失败停留在原确认步骤，允许重试。普通关闭已经提交、侧聊已经销毁或应用已经关闭时，不做撤销。
+- 应用失败保留当前与剩余 ID，用户可重试；取消结束整个请求，未处理的页面和草稿继续保留。复用原有逐个确认框。
+- 请求存在期间不叠加第二批关闭；按钮忙碌保护和请求引用共同防止重复派发副作用。
+
+普通标签关闭由 runtime reducer 的 `closeOrdinaryTabs` 动作一次计算 tabs、browserTabs、fileTabs、当前文件、加载中文件及当前标签。显式保留的应用仍可选中；默认回退只选择普通标签，不能显示后台应用。reducer 只计算状态；丢弃草稿、保存文件、终端命令与 repository 写入都在 reducer 之外执行。
+
 ### `utility-panel-tab-strip.tsx`
 
 只负责标签条、右键菜单、“新建工具”菜单和面板右上角按钮的渲染。菜单开关属于临时视图状态，不应随会话缓存。
@@ -200,8 +213,8 @@ vykor.desktop.file-tabs
 `utility-panel-state.test.ts` 覆盖范围生成、草稿迁移、不同会话隔离、非法持久化数据和 runtime reducer。修改相关逻辑后，至少还应运行：
 
 ```powershell
-..\..\node_modules\.bin\vitest.CMD run src/renderer/src/components/desktop/layout/main-layout/utility-panel/utility-panel-state.test.ts
-.\node_modules\.bin\tsc.CMD --noEmit -p tsconfig.web.json --composite false
+pnpm --filter @vykor/desktop exec vitest run src/renderer/src/components/desktop/layout/main-layout/utility-panel/__test__ src/renderer/src/components/desktop/tools/side-chat/__test__/side-chat-panel.test.tsx
+pnpm --filter @vykor/desktop typecheck:web
 ```
 
 涉及终端标签生命周期时，还应运行完整 desktop 测试，确认关闭全部标签和重新创建终端的路径没有回退。

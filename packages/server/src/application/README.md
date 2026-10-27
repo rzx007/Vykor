@@ -10,6 +10,8 @@
 
 应用持有服务实例与资源生命周期；持久记录通过 services 提供的接口访问，各业务目录保存自己的临时协调状态。
 
+`createDefaultNodeApplication()` 同步返回应用。返回前，工厂负责回收自己创建但尚未交出的 Store，即使指定了 `ownsStore:false`；外部 Store 默认借用，只有明确 `ownsStore:true` 才在同步构造失败时关闭。构造错误直接返回；如果 Store 关闭也失败，则通过 `AggregateError.errors` 按顺序保留构造错误和关闭错误。成功返回后仍按原有 `ownsStore` 规则关闭，重复调用 `Application.close()` 共用一次关闭过程。`ready()` 的异步恢复失败由已返回的应用负责，调用方仍须关闭应用。
+
 `DaemonApplication` 为 Agent 注入当前 owner 与接纳状态约束下的 S1 结果读取工厂，正文沿用已有工具操作记录。`__test__/daemon-result-reading.integration.test.ts` 通过实际 Node Agent 与真实 SQLite 关闭重开验证长结果尾部补读、查询结果不递归归档、查询错误的只读分类及同名替换边界。
 
 ## 主要文件

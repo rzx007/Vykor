@@ -173,9 +173,17 @@ export function validateLegacyBaseline(baseline, current) {
   });
 }
 
+const storeLifecycleRoots = new Set([
+  "packages/server/src/application/daemon-application.ts",
+  "packages/server/src/application/default-node-application.ts",
+]);
+
 export function countLegacyCalls(source, file) {
   const matches = [];
+  const ownsStoreLifecycle = storeLifecycleRoots.has(file.replaceAll("\\", "/"));
   for (const match of source.matchAll(storeCallPattern)) {
+    // 仅两个既定组装根负责 Store 关闭；其他位置和业务方法仍受增长门禁约束。
+    if (ownsStoreLifecycle && match[1] === "close") continue;
     const line = source.slice(0, match.index).split("\n").length;
     matches.push({ file, line, name: match[1] });
   }

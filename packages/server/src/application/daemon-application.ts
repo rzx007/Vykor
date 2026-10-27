@@ -282,6 +282,7 @@ export class DaemonApplication implements DurableAgentApplication {
     return createMaintenanceApplicationService({ store: this.store, control: this.control, commands: this.commands, terminals: this.terminals, ...host, readiness: () => this.diagnosticState, closeApplication: () => { host.beforeClose?.(); return this.close(); } });
   }
   private closePromise?: Promise<void>;
+  private releaseContextUsageLiveAssembler?: () => void;
   private readyState: "starting" | "ready" | "failed" | "closing" | "closed" = "starting";
   get diagnosticState() { return { phase: this.readyState, accepting: this.readyState === "ready" && this.operationGate.accepting }; }
   private ownerLease: ApplicationOwnerLease;
@@ -740,7 +741,7 @@ export class DaemonApplication implements DurableAgentApplication {
           skillsList,
         });
       };
-      bindContextUsageLiveAssembler(async ({ sessionId, cwd, previousContextWindow }) => {
+      this.releaseContextUsageLiveAssembler = bindContextUsageLiveAssembler(async ({ sessionId, cwd, previousContextWindow }) => {
         if (!this.agentPool.configured) return null;
         const session = store.sessions.get(sessionId);
         if (!session) return null;
@@ -1091,6 +1092,7 @@ export class DaemonApplication implements DurableAgentApplication {
         );
       void this.startupRecovery.catch(() => {});
     } catch (error) {
+      this.releaseContextUsageLiveAssembler?.();
       void (async () => {
         try { await createdWorkflowHost?.close(); }
         finally { await executionOwner.close(); }
@@ -1119,7 +1121,7 @@ export class DaemonApplication implements DurableAgentApplication {
    * 最后放掉主人锁、关 store。中途失败都攒着，尽量拆干净再一起报。
    */
   private async closeWork(): Promise<void> {
-    bindContextUsageLiveAssembler(undefined);
+    this.releaseContextUsageLiveAssembler?.();
     const failures: unknown[] = [];
     // Stop accepting OAuth logins, abort uncommitted ones and let commit
     // regions settle before the store is released.

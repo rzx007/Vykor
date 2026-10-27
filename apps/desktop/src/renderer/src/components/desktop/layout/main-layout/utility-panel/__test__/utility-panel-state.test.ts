@@ -209,3 +209,23 @@ describe("utility panel state", () => {
     expect(readUtilityPanelRuntimeState(draftScope)).toBeUndefined()
   })
 })
+
+it("commits ordinary closures as one immutable snapshot while preserving an explicit app selection", () => {
+  const browser = { id: "browser", title: "browser", url: null, input: "", loading: false, canGoBack: false, canGoForward: false }
+  const file = { projectPath: "D:/repo", type: "code" as const, preview: {
+    path: "a.ts", name: "a.ts", language: "typescript", content: "a", size: 1, binary: false,
+    scope: "project" as const, relativePath: "a.ts", rootLabel: "project", previewBytes: null, mediaType: null, imagePreviewError: null,
+  } }
+  const initial = { ...defaultUtilityPanelRuntimeState(),
+    tabs: [{ id: "file", tool: "files" as const, title: "a.ts", filePath: "a.ts", projectPath: "D:/repo" }, { id: "browser", tool: "browser" as const, title: "browser" }],
+    browserTabs: [browser], fileTabs: [file], activeFilePath: "a.ts", loadingFilePath: "a.ts", activeTabId: "file",
+  }
+  const next = utilityPanelRuntimeReducer(initial, { type: "closeOrdinaryTabs", tabIds: ["file", "browser"],
+    preferredActiveTabId: "plugin-app:kept", appTabIds: ["plugin-app:kept"], selectedProjectPath: "D:/repo" })
+  expect(next).toMatchObject({ tabs: [], browserTabs: [], fileTabs: [], activeFilePath: null, loadingFilePath: null, activeTabId: "plugin-app:kept" })
+  expect(initial.tabs.map(tab => tab.id)).toEqual(["file", "browser"])
+  expect(initial.fileTabs).toEqual([file])
+  expect(initial.browserTabs).toEqual([browser])
+  const fallback = utilityPanelRuntimeReducer(initial, { type: "closeOrdinaryTabs", tabIds: ["file", "browser"], appTabIds: ["plugin-app:background"], selectedProjectPath: "D:/repo" })
+  expect(fallback.activeTabId).toBe("")
+})

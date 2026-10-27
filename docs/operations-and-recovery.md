@@ -25,6 +25,10 @@
 
 `ready()` 没完成时，Application 不能接受 prompt。任何恢复失败都会让启动失败，不允许一边报错一边继续写数据库。
 
+默认 Node 工厂 `createDefaultNodeApplication()` 在同步构造成功后返回 Application。若返回前构造失败，工厂会关闭自行创建的 Store（包括指定 `ownsStore:false` 的情况）；外部传入的 Store 默认仍由调用方关闭，只有明确 `ownsStore:true` 才交给工厂回收。回收成功时原样抛出构造错误；回收也失败时，`AggregateError.errors` 依次保留构造错误与关闭错误。
+
+成功取得 Application 后，Store 沿用原有关闭规则：自建默认关闭，外部默认借用，显式 `ownsStore` 优先。调用方仍须在 `ready()` 异步失败后调用 `Application.close()`；重复关闭共用同一次过程，拥有的 Store 只关闭一次。这次同步失败回收不改变正常停机步骤。
+
 ## Application Owner
 
 Owner 是数据库里的一条带 generation 的写入租约，作用是阻止两个 daemon 同时操作同一份数据。

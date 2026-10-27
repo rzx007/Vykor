@@ -3570,13 +3570,13 @@
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 403,
+      "line": 404,
       "text": "      this.pluginUiHistory = new PluginUiHistoryService({ store });",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 1065,
+      "line": 1066,
       "text": "        recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },

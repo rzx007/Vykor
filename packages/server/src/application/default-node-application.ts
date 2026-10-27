@@ -16,7 +16,7 @@ export interface DefaultNodeApplicationOptions
 
 /**
  * 默认 Node 进程的组装入口。CLI、Desktop 或 HTTP 可以直接用它拿到同一个应用。
- * 这里创建的 Store 会随 Application.close() 一起关闭。
+ * 返回前工厂负责自建 Store；成功返回后按 ownsStore 决定是否随应用关闭。
  */
 export function createDefaultNodeApplication(
   options: DefaultNodeApplicationOptions,
@@ -27,9 +27,21 @@ export function createDefaultNodeApplication(
       path: options.storePath ?? getDefaultSessionStorePath(),
       attachmentLimits: options.attachmentLimits,
     });
-  return new DaemonApplication({
-    ...options,
-    store,
-    ownsStore: options.ownsStore ?? !options.store,
-  });
+  const ownsStore = options.ownsStore ?? !options.store;
+  try {
+    return new DaemonApplication({ ...options, store, ownsStore });
+  } catch (constructionError) {
+    // 尚未返回的自建 Store 没有接手者，即使成功后不归应用关闭也要回收。
+    if (!options.store || ownsStore) {
+      try {
+        store.close();
+      } catch (closeError) {
+        throw new AggregateError(
+          [constructionError, closeError],
+          "Daemon application construction and Store cleanup failed",
+        );
+      }
+    }
+    throw constructionError;
+  }
 }

@@ -17,7 +17,16 @@ import {
 import type { UtilityPanelRuntimeState } from "./utility-panel-state"
 import type { UtilityTab } from "./utility-panel-tabs"
 
+export type CloseOrdinaryTabsAction = {
+  type: "closeOrdinaryTabs"
+  tabIds: string[]
+  preferredActiveTabId?: string
+  selectedProjectPath?: string
+  appTabIds: string[]
+}
+
 export type UtilityPanelRuntimeAction =
+  | CloseOrdinaryTabsAction
   | { type: "tabs"; value: SetStateAction<UtilityTab[]> }
   | { type: "browserTabs"; value: SetStateAction<BrowserToolTab[]> }
   | { type: "fileTabs"; value: SetStateAction<FileViewerTab[]> }
@@ -41,6 +50,35 @@ export function utilityPanelRuntimeReducer(
   action: UtilityPanelRuntimeAction
 ): UtilityPanelRuntimeState {
   switch (action.type) {
+    case "closeOrdinaryTabs": {
+      const closingIds = new Set(action.tabIds.filter((id) => !id.startsWith("plugin-app:")))
+      const closingFiles = state.tabs.filter((tab) => closingIds.has(tab.id) && tab.filePath)
+      const tabs = state.tabs.filter((tab) => !closingIds.has(tab.id))
+      const fileTabs = state.fileTabs.filter((file) => !closingFiles.some(
+        (tab) => tab.filePath === file.preview.path && tab.projectPath === file.projectPath
+      ))
+      const visibleTabs = tabs.filter((tab) => !tab.projectPath || tab.projectPath === action.selectedProjectPath)
+      const selectable = (id: string | undefined) => id && !closingIds.has(id) && (
+        visibleTabs.some((tab) => tab.id === id) || action.appTabIds.includes(id)
+      )
+      const activeTabId = selectable(action.preferredActiveTabId)
+        ? action.preferredActiveTabId!
+        : selectable(state.activeTabId)
+          ? state.activeTabId
+          : (visibleTabs[0] ?? tabs[0])?.id ?? ""
+      const activeTab = tabs.find((tab) => tab.id === activeTabId)
+      const visibleFiles = fileTabs.filter((file) => (file.projectPath ?? null) === (action.selectedProjectPath ?? null))
+      const activeFilePath = activeTab?.filePath ?? (
+        visibleFiles.some((file) => file.preview.path === state.activeFilePath)
+          ? state.activeFilePath : visibleFiles[0]?.preview.path ?? null
+      )
+      return {
+        ...state, tabs, fileTabs, activeTabId, activeFilePath,
+        browserTabs: state.browserTabs.filter((tab) => !closingIds.has(tab.id)),
+        loadingFilePath: closingFiles.some((tab) => tab.filePath === state.loadingFilePath)
+          ? null : state.loadingFilePath,
+      }
+    }
     case "tabs":
       return { ...state, tabs: resolveState(state.tabs, action.value) }
     case "browserTabs":
@@ -89,6 +127,7 @@ export function defaultUtilityPanelRuntimeState(): UtilityPanelRuntimeState {
 type UtilityPanelRuntimeController = {
   state: UtilityPanelRuntimeState
   fileTabsRef: React.MutableRefObject<FileViewerTab[]>
+  closeOrdinaryTabs: (action: CloseOrdinaryTabsAction) => UtilityPanelRuntimeState
   setTabs: Dispatch<SetStateAction<UtilityTab[]>>
   setBrowserTabs: Dispatch<SetStateAction<BrowserToolTab[]>>
   setFileTabs: Dispatch<SetStateAction<FileViewerTab[]>>
@@ -112,6 +151,15 @@ export function useUtilityPanelRuntime(scopeId: string): UtilityPanelRuntimeCont
       readUtilityPanelRuntimeState(initialScopeId) ?? defaultUtilityPanelRuntimeState()
   )
   const fileTabsRef = useRef(state.fileTabs)
+  const stateRef = useRef(state)
+  stateRef.current = state
+  const closeOrdinaryTabs = useCallback((action: CloseOrdinaryTabsAction) => {
+    const next = utilityPanelRuntimeReducer(stateRef.current, action)
+    stateRef.current = next
+    fileTabsRef.current = next.fileTabs
+    dispatch(action)
+    return next
+  }, [])
 
   useEffect(() => {
     fileTabsRef.current = state.fileTabs
@@ -161,6 +209,7 @@ export function useUtilityPanelRuntime(scopeId: string): UtilityPanelRuntimeCont
   return {
     state,
     fileTabsRef,
+    closeOrdinaryTabs,
     setTabs,
     setBrowserTabs,
     setFileTabs,

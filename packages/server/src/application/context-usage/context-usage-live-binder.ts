@@ -6,17 +6,21 @@ export type ContextUsageLiveAssembler = (
   input: AssembleLiveContextUsageInput,
 ) => Promise<ContextUsageSnapshot | null>;
 
-let boundAssembler: ContextUsageLiveAssembler | undefined;
+let currentBinding: { assembler: ContextUsageLiveAssembler } | undefined;
 
-/** Daemon binds a live assembler once the agent pool exists. */
+/** Each binding owns its release, including repeated bindings of the same callback. */
 export function bindContextUsageLiveAssembler(
-  assembler: ContextUsageLiveAssembler | undefined,
-): void {
-  boundAssembler = assembler;
+  assembler: ContextUsageLiveAssembler,
+): () => void {
+  const binding = { assembler };
+  currentBinding = binding;
+  return () => {
+    if (currentBinding === binding) currentBinding = undefined;
+  };
 }
 
 export function getBoundContextUsageLiveAssembler():
   | ContextUsageLiveAssembler
   | undefined {
-  return boundAssembler;
+  return currentBinding?.assembler;
 }
