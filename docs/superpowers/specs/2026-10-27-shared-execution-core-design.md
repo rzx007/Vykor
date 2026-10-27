@@ -1,6 +1,6 @@
 # SDK 与 daemon 共用执行核心的架构方案
 
-> 状态：阶段 A 已提交；阶段 B 已实施并通过统一验收，待主会话阶段提交；C 待实施。核对日期：2026-10-28。实施入口：[文件级实施计划](../plans/2026-10-27-shared-execution-core.md)。事实依据：[固定版本调研](../../research/2026-10-27-agent-task-lifecycle-comparison.md)。
+> 状态：已实施并通过真实验收。A/B/C 均已审查并分别提交；三文件真实生命周期 66/66（A7+B31+C28），四大门禁与文档/退役检查通过，尾部审查修正另有定向复验。核对日期：2026-10-28。实施入口：[文件级实施计划](../plans/2026-10-27-shared-execution-core.md)。事实依据：[固定版本调研](../../research/2026-10-27-agent-task-lifecycle-comparison.md)。
 
 推荐沿用现有四类执行器，把它们共同放到 Node 组装路径中。SDK 与 daemon 使用相同的执行器、Jobs 路由、子 Agent 名额和收尾规则。daemon 只增加授权、环境接入、持久记录和 HTTP 返回格式。删除重复的 child 执行登记器、daemon Jobs 生命周期分支和按全量列表发现归属的逻辑。
 

@@ -216,3 +216,13 @@ P7–P13 实现与集中验收完成，当前策略的 `stageExceptions` 为零�
 - 移动测试文件时，`pnpm check-docs` 必须失败，直到这里的链接更新。
 - 一个测试可以证明多条相关规则，但不能只写“全量测试会覆盖”而不给具体入口。
 - 历史计划中的测试清单不算当前证据。
+
+## 共用执行核心与真实 Workflow 验收
+
+| 硬规则 | 主要测试 |
+| --- | --- |
+| SDK/daemon 真实三轮各 12 worker、默认并发 8/累计 64、第九拒绝、取消和 deadline 实际调用/清理、迟到旧 attempt、审批/保留后代、同身份恢复与当前授权 | [真实 Workflow 生命周期](../tests/agent-integration/__test__/workflow-child-lifecycle.integration.test.ts) |
+| 查询失败不替代 worker、固定 run 回执、memory/file 公共断言、未知回执不能被取消伪造确认 | [真实 runner](../packages/agent-runtime/src/node/workflow/__test__/agent-workflow-runner.test.ts)、[宿主](../packages/agent-runtime/src/node/workflow/__test__/workflow-host.test.ts)、[公共场景](../tests/workflow/lifecycle-scenarios.ts) |
+| 唯一 coordinator deadline/宽限、实际停止前不重试、旧 attempt 进度隔离、未知停止错误 | [调度器](../packages/coordinator/src/workflow/__test__/scheduler.test.ts) |
+| 普通/Workflow/system inherit 环境前解析、同 tick send/suspend 串行、历史和实例保留 | [子运行](../packages/agent-runtime/src/node/children/__test__/child-agent.test.ts)、[配置](../packages/agent-runtime/src/node/children/__test__/child-agent-options.test.ts) |
+| 删除 adapter、process 回退、重复 timer 与 daemon 生命周期分支 | [架构边界](../scripts/architecture-boundaries.test.mjs) |

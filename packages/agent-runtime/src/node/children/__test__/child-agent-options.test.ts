@@ -20,6 +20,15 @@ const overriddenTool = {
 };
 
 describe("deriveChildAgentOptions", () => {
+  it("resolves role inherit to the actual parent model, provider and effort", () => {
+    const options = deriveChildAgentOptions({
+      configuration: { model: "actual-parent", provider: "actual-provider", effort: "high", reasoningEffort: "high" },
+      settings: { model: "settings-default" } as Settings,
+      child: { description: "inherit", prompt: "work", agent: "worker", cwd: "/repo", model: "inherit", effort: "inherit" },
+      cwd: "/repo", sessionId: "child",
+    });
+    expect(options).toMatchObject({ model: "actual-parent", provider: "actual-provider", effort: "high", reasoningEffort: "high" });
+  });
   it("does not force a root delivery schema onto an unrelated default child", () => {
     const options = deriveChildAgentOptions({
       configuration: { outputContract: { schema: { type: "object", required: ["rootReport"] } } },

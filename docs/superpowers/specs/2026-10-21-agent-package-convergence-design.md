@@ -1,5 +1,7 @@
 # Agent 核心包架构收敛方案
 
+> 历史快照：本文的 child 等待 adapter 是当时落点，已由 [共用执行核心方案](../specs/2026-10-27-shared-execution-core-design.md) 的真实 childId/runId 路径替代并删除；旧源码行号不代表现状。
+
 > 状态：架构调整方案已完成实施；2026-10-22 P0–P6 全部验收通过。公共契约、本机配置、execution-node、Kernel/Node、显式模型准入和 Server 用例均已收敛，阶段例外为 0。当前接口见权威文档，实施结果见 [P6 收口记录](../reviews/2026-10-21-agent-package-convergence-closeout.md)。
 > 范围：packages 的职责、依赖、运行状态所有权和公开入口。实施顺序见[分阶段实施计划](../plans/2026-10-21-agent-package-convergence.md)。
 

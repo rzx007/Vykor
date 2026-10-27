@@ -19,3 +19,5 @@ Git 工作目录创建和本机配置继承放在 [Node 子管理](../../node/ch
 每个已接纳 run 在 requests 保留真实 handle、receipt、许可、时间与唯一结果；同轮 steer 输入只引用该记录。currentRequest 只是当前指针。readRun/waitRun 固定 runId；interruptRun 只接纳匹配轮次的停止请求，等待确认应调用 waitRun。
 
 阶段 B 使用 `reserveIdentity` 保留深度与累计身份数，用 `acquireRun` 原子申请运行许可。真实 invocation 与准备清理都结束后归还许可；保存错误保留 `projectionError`，资源清理错误保留 `cleanupUnconfirmed` 与原资源。requests 上限 256，只淘汰已保存结果及其输入别名；明确未接纳的输入不永久占位。初始化/恢复阶段也先把许可挂到原准备记录，撤销确认后才释放。
+
+安全卸载沿用 startChain，与 send/resume 串行，并固定原 request/runId 和实际 agent 引用。只有该 run 已停止且结果已保存、agent 空闲、没有准备/审批/调用/清理/附属工作时才关闭实例。suspending 只在串行槽执行时公布，避免前置 send 等待后置 suspend。Node 通过既有 Jobs 视图检查附属工作；任意保留后代都会阻止卸载，因为关闭父实例会关闭其后代身份。历史、cwd、授权和 identity 留在原记录；普通 child 继续使用 5 分钟 TTL。

@@ -131,6 +131,8 @@ export interface VykorAgentConfiguration {
   requestConfigurationStoreForSession?: (
     sessionId: string,
   ) => AgentRequestConfigurationReader | undefined;
+  /** Existing host catalog/authorization validation, before any child environment side effects. */
+  validateModelSelection?: (input: { provider?: string; model: string; effort?: string; explicitEffort: boolean }) => Promise<{ effort?: string }>;
   /** Host-owned model capacity lookup; absent for SDK callers without a catalog. */
   resolveModelContextWindow?: (input: {
     provider?: string;

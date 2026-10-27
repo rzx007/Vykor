@@ -403,7 +403,9 @@ export async function createVykorRuntime(
             ...snapshot.configuration,
             baseUrl: snapshot.configuration.baseUrl,
           };
-          const effort = snapshot.configuration.effort;
+          const selection = await configuration.validateModelSelection?.({ model: requestConfiguration.model, provider: requestConfiguration.provider,
+            effort: requestConfiguration.effort, explicitEffort: false });
+          const effort = selection ? selection.effort : snapshot.configuration.effort;
           const sessionPrompt = Object.prototype.hasOwnProperty.call(
             snapshot.configuration,
             "systemPrompt",
@@ -470,6 +472,7 @@ export async function createVykorRuntime(
           return {
             revision: snapshot.revision,
             ...snapshot.configuration,
+            effort,
             client: resolvedClient!,
             systemPromptForTools,
             maxOutputTokens,

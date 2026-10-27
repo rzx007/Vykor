@@ -51,3 +51,5 @@ pnpm check-docs
 ```
 
 新增模块按职责放入分类，更新对应 README；迁移文件时同步导入、公开入口、资源地址、文档和旧引用清单。
+
+SDK 与 daemon 共用默认 Workflow child runner、按真实 run 的许可与停止屏障。daemon 通过既有模型目录校验端口在环境申请前及每轮实际配置准备时复查可用性；不新增 worker 生命周期表或自动重放。

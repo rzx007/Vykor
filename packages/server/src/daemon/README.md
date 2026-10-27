@@ -32,3 +32,5 @@
 默认应用为 Agent 加载器注入成对的 `toolSafety`，覆盖根运行、子运行与手动工具入口。宿主登记从 Node 的实际运行范围捕获工具定义和环境，权限及审批继续经过原有检查流程。
 
 加载器同时传递宿主 `toolResults` 工厂。默认应用将其连接到已有 S1 结果，按当前 owner、Run 和准备完成的工具来源读取；重启后重新加载 Agent 仍能按引用补读。`ToolResult` 只有实际捕获的内置定义及执行函数匹配已登记身份时，才作为只读操作记录，同名替换或自由只读提示不会得到该承诺。
+
+prepareModelMetadata 接收当前 session；默认应用沿现有 settings/catalog reader 为 validateModelSelection 提供实时查询。此回调复用既有 validateRequestSelection，并随原模型元数据传入 Node；Server 不复制 child 的环境申请、运行、取消或卸载状态。

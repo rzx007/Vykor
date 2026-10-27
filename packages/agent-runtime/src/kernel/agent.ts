@@ -107,6 +107,8 @@ export interface VykorAgent {
     toolUse: ToolUseBlock,
     options: VykorAgentRunToolOptions,
   ): Promise<ToolExecutionResult>;
+  /** True only while no run, maintenance or retained descendant needs this instance. */
+  canSuspend?(): boolean | Promise<boolean>;
   getHistory(): Message[];
   loadHistory(messages: Message[]): void;
   clear(): void;
@@ -165,6 +167,9 @@ export class KernelAgent implements VykorAgent {
   }
   get state(): VykorAgentState {
     return this.lifecycleState;
+  }
+  canSuspend(): boolean | Promise<boolean> {
+    return this.lifecycleState === "idle" && !this.activeRun && !this.maintenance && !this.closePromise && this.options.childManager.list().length === 0;
   }
   subscribe(listener: AgentEventListener): AgentEventSubscription {
     return this.options.eventBus.subscribe(listener);

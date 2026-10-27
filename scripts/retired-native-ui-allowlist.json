@@ -3576,7 +3576,7 @@
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 1045,
+      "line": 1048,
       "text": "        recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },

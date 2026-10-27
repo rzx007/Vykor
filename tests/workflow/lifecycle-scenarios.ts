@@ -1,3 +1,5 @@
+import { createDefaultNodeAgent } from "@vykor/agent-runtime";
+import type { AgentChildController } from "@vykor/agent-contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorkflowHost } from "@vykor/agent-runtime/node/workflow";
 import {
@@ -223,6 +225,30 @@ export function workflowLifecycleScenarios(
         expect(host.repository.load("wait")?.status).toBe("completed"),
       );
     });
+    it("saves and reads the real default worker receipt", async () => {
+      const host = setup();
+      let controller!: AgentChildController;
+      const root = await createDefaultNodeAgent({ cwd: process.cwd(), sessionId: "owner",
+        settings: { model: "offline", permission: { mode: "full_access" }, plugins: { enabled: false }, memory: { enabled: false }, sandbox: { enabled: false } } as any,
+        client: { async *streamMessage() { yield { type: "text_delta", delta: "real receipt output" }; yield { type: "complete", stopReason: "end_turn" }; } },
+        tools: [{ name: "CaptureController", description: "Capture the actual test run controller", inputSchema: {}, async execute(_input, context) { controller = context.agent!.children; return { content: [{ type: "text", text: "captured" }] }; } }],
+      });
+      try {
+        const owner = { ...scope(), cwd: process.cwd() };
+        await root.runTool({ type: "tool_use", id: "capture", name: "CaptureController", input: {} }, { scope: owner, tools: root.host.plugins.createRunCapabilityView().tools });
+        const bound = host.bind({ cwd: owner.cwd, sessionId: "owner", children: root.children });
+        const created = await bound.invoke({ input: { ...spec, runId: "real-receipt", waitForCompletion: true }, scope: owner, signal: owner.signal, children: controller });
+        expect(created.isError).toBeUndefined();
+        const saved = host.repository.load("real-receipt")!;
+        const receipt = saved.results.work.metadata!;
+        expect(receipt.workerTaskId).toEqual(expect.any(String));
+        expect(receipt.workerRunId).toEqual(expect.any(String));
+        const actual = await root.children.get(receipt.workerTaskId as string)!.waitRun(receipt.workerRunId as string);
+        expect(saved.results.work.result).toBe(actual.result?.output);
+        expect(actual.result?.status).toBe("completed");
+      } finally { await root.close(); }
+    });
+
     it("non-persistent runs complete without adding durable snapshots", async () => {
       const host = setup();
       const bound = host.bind({

@@ -233,6 +233,22 @@ describe("AgentChildManager", () => {
     } finally { await manager.closeAll(); }
   });
 
+  it.each(["normal", "workflow", "system"])("resolves %s inherit from actual parent configuration before environment acquire", async kind => {
+    const steps: string[] = [];
+    const creations: any[] = [];
+    const configuration = { model: "actual", provider: "parent-provider", effort: "high", reasoningEffort: "high", client: { async *streamMessage() {} },
+      validateModelSelection: async (selection: any) => { steps.push("validate"); expect(selection).toMatchObject({ model: "actual", provider: "parent-provider", effort: "high" }); return { effort: "high" }; } };
+    const manager = createManager(new AgentEventBus(), async options => { creations.push(options); return fakeAgent(() => completedRun("done")); }, undefined, undefined, false, configuration,
+      async input => { steps.push("environment"); expect(input).toMatchObject({ model: "actual", effort: "high" }); return { cwd: "/isolated", release: async () => {} }; });
+    try {
+      const spawn = { description: kind, prompt: kind, agent: "worker", cwd: "/repo", model: "inherit", effort: "inherit" };
+      const child = kind === "system" ? await manager.spawnSystemChild(parentScope(), spawn, kind) : await manager.createController(parentScope()).spawnChildAgent(spawn);
+      await child.result;
+      expect(steps.slice(0, 2)).toEqual(["validate", "environment"]);
+      expect(creations[0]).toMatchObject({ model: "actual", provider: "parent-provider", effort: "high", reasoningEffort: "high", cwd: "/isolated" });
+    } finally { await manager.closeAll(); }
+  });
+
   it("uses the parent's applied selection for a newly created child", async () => {
     let appliedModel = "old-model";
     const models: string[] = [];
@@ -1295,6 +1311,21 @@ describe("AgentChildManager", () => {
     await first.closeAll();
   });
 
+  it("serializes same-tick follow-up before an old-run suspend without a cycle", async () => {
+    const manager = createManager(new AgentEventBus(), async () => fakeAgent(() => completedRun("done")));
+    try {
+      const child = await manager.createController(parentScope()).spawnChildAgent({ description: "worker", prompt: "first", agent: "worker", cwd: "/repo" });
+      await child.result;
+      const handle = manager.get(child.id)!;
+      const send = handle.send({ content: "follow-up" });
+      const suspend = handle.requestSuspend!(child.runId);
+      const receipt = await send;
+      expect(await suspend).toBe(false);
+      expect(receipt.runId).not.toBe(child.runId);
+      expect((await handle.waitRun(receipt.runId)).result?.output).toBe("done");
+    } finally { await manager.closeAll(); }
+  });
+
   it("suspends idle resources and restores history for the next run", async () => {
     const bus = new AgentEventBus();
     const events: string[] = [];
@@ -1772,6 +1803,7 @@ function parentScope(signal = new AbortController().signal): AgentRunScope {
 function fakeAgent(submitMessage: any, close = vi.fn(async () => {})) {
   return {
     submitMessage,
+    canSuspend: () => true,
     createRunCapabilityView: () => createRunCapabilityView({ toolRegistry: new ToolRegistry() }),
     host:{plugins:{createRunCapabilityView:()=>createRunCapabilityView({toolRegistry:new ToolRegistry()})}},
     getHistory: vi.fn(() => []),

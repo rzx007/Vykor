@@ -1,5 +1,7 @@
 # P3：Agent 定义、团队和 Workflow 宿主收敛记录
 
+> 历史快照：本文的 child 等待 adapter 是当时落点，已由 [共用执行核心方案](../specs/2026-10-27-shared-execution-core-design.md) 的真实 childId/runId 路径替代并删除；旧源码行号不代表现状。
+
 > 状态：当前阶段实施与验证记录。对应 T04–T06 / M07–M14；P0–P3 已完成，P4–P6 未启动。范围和后续任务见[实施计划](../plans/2026-10-21-agent-package-convergence.md)。
 
 日期：2026-10-22。本轮保留原有文件记录、SQLite schema、HTTP/SSE 和模型工具结果格式，没有迁移真实用户文件。

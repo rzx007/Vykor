@@ -216,6 +216,8 @@ export interface AgentChildHandle {
   readonly activity?: ChildActivitySnapshot;
   /** Host-owned current Run selection, separate from user input and metadata. */
   send(input: AgentChildInput, authorization?: ReadonlyMap<string, import("./execution.js").RunToolBinding>): Promise<AgentInputReceipt>;
+  /** Unload only this stopped, saved run; a newer run or unsafe work keeps the instance. */
+  requestSuspend?(expectedRunId: string): Promise<boolean>;
   interrupt(reason?: string): Promise<void>;
   /** Interrupts only the matching current Run, leaving the child available for reuse. */
   interruptRun(expectedRunId: string, reason?: string): Promise<boolean>;

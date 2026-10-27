@@ -1,3 +1,4 @@
+import { resolveApiClient } from "../configuration/default-runtime-provider.js";
 import { NodeRunCatalogue } from "../capabilities/node-run-catalogue.js";
 import type {
   AgentChildSpawnInput,
@@ -109,7 +110,7 @@ export class NodeChildManager extends AgentChildManager {
         options.settings.childBudget,
         options.configuration.childBudget,
       ),
-      resolveChild: (input) => {
+      resolveChild: async (input) => {
         const configuration =
           options.configurationForChild?.() ?? options.configuration;
         const { requestConfigurationStoreForSession, ...inherited } =
@@ -124,8 +125,20 @@ export class NodeChildManager extends AgentChildManager {
           sessionId: input.sessionId,
           ...(input.system ? { internalTextOnly: true } : {}),
         });
+        const validateSelection = async () => {
+          if (resolved.model && configuration.validateModelSelection) {
+            const validated = await configuration.validateModelSelection({ model: resolved.model, provider: resolved.provider, effort: resolved.effort,
+              explicitEffort: input.spawn.effort !== undefined && input.spawn.effort !== "inherit" });
+            if (resolved.effort !== validated.effort) resolved.reasoningEffort = undefined;
+            resolved.effort = validated.effort;
+          }
+        };
+        await validateSelection();
+        if (!resolved.client && resolved.model) resolved.client = await resolveApiClient(options.settings, resolved, undefined, input.sessionId);
         const spawn = {
           ...input.spawn,
+          model: resolved.model,
+          effort: resolved.effort,
           approvalMode: resolved.approvalMode,
           workMode: resolved.workMode,
           permissionMode:
@@ -165,9 +178,11 @@ export class NodeChildManager extends AgentChildManager {
               settingsMaxTurns: options.settings.maxTurns,
             }),
           createAgent: async () => {
+            await validateSelection();
             const agent = await options.createAgent(
               {
                 ...resolved,
+                cwd: input.lease.cwd,
                 ...(input.system && input.outputContract ? { outputContract: input.outputContract } : {}),
                 requestConfigurationStoreForSession,
                 requestConfigurationStore:

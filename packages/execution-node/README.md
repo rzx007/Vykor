@@ -38,3 +38,5 @@ try {
 pnpm --filter @vykor/execution-node test
 pnpm test:execution-integration
 ```
+
+Workflow 的默认框架 worker 由 Agent Runtime 的 ChildManager 执行，不再把 child 等待结果包装为本包的进程 AwaitExecutionResult，也不在查询失败时改用进程后端。Shell 与显式进程仍由本包 supervisor 唯一持有。

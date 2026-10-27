@@ -15,3 +15,5 @@
 实际执行和存储仍由生产任务的一方负责：终端保存在终端提供方，后台进程、子 Agent 和工作流由各自管理器保存，持久执行摘要由 `SessionExecutionRecord` 描述。本包只在组合宿主中缓存任务所属来源。
 
 生命周期、输出游标及适配要求见 [Jobs 统一后台任务协议](../../docs/jobs-protocol.md)，Task 与 Workflow 的接口调整见 [Jobs Task/Workflow Convergence](../../docs/jobs-task-workflow-convergence.md)。新增共用逻辑放 `src/`，测试放 [src/__test__](src/__test__/)。
+
+Workflow 来源把尚未确认的取消、deadline 与清理映射为 stopping；只有原 worker 确认停止才能结束该 attempt 或按显式策略重试。查询失败保留原回执，不创建替代 worker。

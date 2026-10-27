@@ -530,8 +530,11 @@ export class DaemonApplication implements DurableAgentApplication {
           error: error instanceof Error ? error.message : String(error),
         }),
         getSession: (id) => store.sessions.get(id),
-        prepareModelMetadata: async settings =>
-          createModelMetadataResolvers(settings, await this.modelCatalog.load()),
+        prepareModelMetadata: async (settings, session) =>
+          createModelMetadataResolvers(settings, await this.modelCatalog.load(), async () => ({
+            settings: await runtimeDiscovery.resolveSettings(session.cwd) ?? settings,
+            catalog: await this.modelCatalog.load(),
+          })),
         createAgent: options.createAgent,
         mcpRuntimeRegistry: this.mcpRuntimes,
         acquireEnvironment: acquireSessionEnvironment,

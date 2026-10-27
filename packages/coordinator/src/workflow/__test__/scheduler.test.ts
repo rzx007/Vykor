@@ -271,11 +271,9 @@ describe("runWorkflow", () => {
         mode: "parallel",
         tasks: [{ id: "slow", timeoutMs: 1 }],
       },
-      async () => {
-        await new Promise(() => {
-          // Intentionally never resolves; the workflow timeout should decide the attempt.
-        });
-        return { summary: "too late" };
+      async ({ signal }) => {
+        await new Promise<void>(resolve => signal!.addEventListener("abort", () => resolve(), { once: true }));
+        return { status: "failed", summary: "actual worker stopped" };
       },
     );
 
@@ -331,25 +329,54 @@ describe("runWorkflow", () => {
     expect(aborted).toBe(false);
   });
 
-  it("marks cleanup unconfirmed when a runner ignores the abort after its deadline", async () => {
-    const result = await runWorkflow(
-      { mode: "parallel", tasks: [{ id: "stubborn", timeoutMs: 1 }] },
-      async ({ signal }) => {
-        await new Promise<void>((resolve) => {
-          signal?.addEventListener("abort", () => resolve(), { once: true });
-        });
-        await new Promise(() => { /* never settles */ });
-        return { summary: "too late" };
-      },
-    );
+  it("keeps an unconfirmed attempt running past the grace without overlapping retry", async () => {
+    vi.useFakeTimers();
+    let release!: () => void;
+    let attempts = 0;
+    let done = false;
+    const snapshots: WorkflowRunSnapshot[] = [];
+    try {
+      const work = runWorkflow({ mode: "parallel", tasks: [{ id: "stubborn", timeoutMs: 1, retry: { maxAttempts: 2 } }] },
+        async ({ attempt }) => {
+          attempts++;
+          if (attempt === 1) await new Promise<void>(resolve => { release = resolve; });
+          return { summary: "actual stop", result: `attempt:${attempt}` };
+        }, { onSnapshot: snapshot => snapshots.push(snapshot) }).finally(() => { done = true; });
+      await vi.advanceTimersByTimeAsync(5_002);
+      expect(done).toBe(false);
+      expect(attempts).toBe(1);
+      expect(snapshots.at(-1)?.runningTasks.stubborn?.metadata).toMatchObject({ stopping: true, cleanupUnconfirmed: true });
+      release();
+      const result = await work;
+      expect(result.results.stubborn).toMatchObject({ status: "completed", attempts: 2, result: "attempt:2" });
+      expect(attempts).toBe(2);
+    } finally { vi.useRealTimers(); }
+  });
 
-    expect(result.results.stubborn).toEqual(expect.objectContaining({
-      status: "failed",
-      attempts: 1,
-      timedOut: true,
-      cleanupUnconfirmed: true,
-    }));
-  }, 15_000);
+  it("ignores old attempt progress after the next attempt started", async () => {
+    let oldProgress!: (progress: { metadata: Record<string, unknown> }) => void;
+    const snapshots: WorkflowRunSnapshot[] = [];
+    const result = await runWorkflow({ mode: "parallel", tasks: [{ id: "work", retry: { maxAttempts: 2 } }] },
+      async ({ attempt, reportProgress }) => {
+        if (attempt === 1) { oldProgress = reportProgress!; return { status: "failed", summary: "first stopped" }; }
+        reportProgress!({ metadata: { workerRunId: "new" } });
+        oldProgress({ metadata: { workerRunId: "old" } });
+        return { summary: "new stopped", metadata: { workerRunId: "new" } };
+      }, { onSnapshot: snapshot => snapshots.push(snapshot) });
+    expect(result.results.work?.metadata?.workerRunId).toBe("new");
+    expect(snapshots.flatMap(snapshot => Object.values(snapshot.runningTasks)).some(task => task.metadata?.workerRunId === "old")).toBe(false);
+  });
+
+  it.each([false, true])("does not retry an explicitly unconfirmed runner rejection afterDeadline=%s", async afterDeadline => {
+    let attempts = 0;
+    const result = await runWorkflow({ mode: "parallel", tasks: [{ id: "unknown", retry: { maxAttempts: 2 }, ...(afterDeadline ? { timeoutMs: 1 } : {}) }] }, async ({ signal }) => {
+      attempts++;
+      if (afterDeadline) await new Promise<void>(resolve => signal!.addEventListener("abort", () => resolve(), { once: true }));
+      throw Object.assign(new Error("original stop unavailable"), { cleanupUnconfirmed: true, metadata: { workerTaskId: "original", workerRunId: "original-run" } });
+    });
+    expect(attempts).toBe(1);
+    expect(result.results.unknown).toMatchObject({ status: "failed", attempts: 1, cleanupUnconfirmed: true, metadata: { workerTaskId: "original", workerRunId: "original-run", stopping: true } });
+  });
 
   it("emits structured workflow events", async () => {
     const events: WorkflowRunEvent[] = [];

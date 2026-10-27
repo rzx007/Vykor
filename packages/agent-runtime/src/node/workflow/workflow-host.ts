@@ -215,7 +215,7 @@ export class WorkflowHost {
           persist(() => {
             repository.save(snapshot);
             active.snapshot = snapshot;
-            if (snapshot.status !== "running")
+            if (snapshot.status !== "running" && !hasUnconfirmedWorker(snapshot))
               repository.finish(snapshot.runId, snapshot.status);
           });
         },
@@ -233,7 +233,7 @@ export class WorkflowHost {
     const cleanup = () => {
       options.signal?.removeEventListener("abort", ownerInterrupted);
       // Cancellation keeps ownership until its terminal write has finished.
-      if (!active.cancellation) this.active.delete(options.runId);
+      if (!active.cancellation && !hasUnconfirmedWorker(active.snapshot)) this.active.delete(options.runId);
     };
     void work.then(
       (result) => {
@@ -262,7 +262,17 @@ export class WorkflowHost {
     const runId =
       typeof snapshotOrId === "string" ? snapshotOrId : snapshotOrId.runId;
     const active = this.active.get(runId);
-    if (active?.cancellation) return active.cancellation;
+    if (active?.cancellation) {
+      // A repeated explicit cancel may confirm the original failed cleanup.
+      // Keep the original cancellation waiter and fixed worker/run identities.
+      const stopTask = options.stopTask ?? active.stopTask;
+      if (stopTask) for (const task of [...Object.values(active.snapshot.runningTasks), ...Object.values(active.snapshot.results).filter(result => result.cleanupUnconfirmed || result.metadata?.cleanupUnconfirmed)]) {
+        const id = task.metadata?.workerTaskId;
+        const runId = task.metadata?.workerRunId;
+        if (typeof id === "string") void stopTask(id, options.reason ?? active.stopReason, typeof runId === "string" ? runId : undefined).catch(() => {});
+      }
+      return active.cancellation;
+    }
     let snapshot: WorkflowRunSnapshot | undefined;
     try {
       snapshot = (active?.repository ?? this.repository).load(runId) ?? active?.snapshot;
@@ -297,8 +307,10 @@ export class WorkflowHost {
       onEvent?: (event: WorkflowRunEvent) => void;
     },
   ): Promise<WorkflowRunResult> {
-    const stops = Object.values(snapshot.runningTasks).map(async (task) => {
+    const stops = [...Object.values(snapshot.runningTasks), ...Object.values(snapshot.results).filter(result => result.cleanupUnconfirmed || result.metadata?.cleanupUnconfirmed)].map(async (task) => {
       const id = task.metadata?.workerTaskId;
+      const uncertain = "cleanupUnconfirmed" in task && task.cleanupUnconfirmed || task.metadata?.cleanupUnconfirmed;
+      if (uncertain && (typeof id !== "string" || !options.stopTask)) throw new Error("Workflow worker stop cannot be confirmed without its original receipt and stop port");
       if (typeof id === "string" && options.stopTask)
         await options.stopTask(id, reason, typeof task.metadata?.workerRunId === "string" ? task.metadata.workerRunId : undefined);
     });
@@ -312,6 +324,11 @@ export class WorkflowHost {
     const results = new Map<string, WorkflowTaskRunResult>(
       Object.entries(snapshot.results),
     );
+    for (const [id, result] of results) if (result.cleanupUnconfirmed || result.metadata?.cleanupUnconfirmed) {
+      const { cleanupUnconfirmed: _uncertain, ...confirmed } = result;
+      const { cleanupUnconfirmed: _diagnostic, stopping: _stopping, ...metadata } = result.metadata ?? {};
+      results.set(id, { ...confirmed, metadata });
+    }
     const now = Date.now();
     for (const taskId of plan.executionOrder) {
       if (results.has(taskId)) continue;
@@ -384,8 +401,8 @@ export class WorkflowHost {
       label: run.summary,
       ownerSession: options.sessionId,
       status:
-        run.status === "running"
-          ? "running"
+        hasUnconfirmedWorker(run) ? "stopping" : run.status === "running"
+          ? (this.active.get(run.runId)?.stopReason || Object.values(run.runningTasks).some(task => task.metadata?.stopping || task.metadata?.cleanupUnconfirmed) ? "stopping" : "running")
           : run.termination === "cancelled"
             ? "killed"
             : run.status,
@@ -393,12 +410,12 @@ export class WorkflowHost {
         read: true,
         wait: true,
         send: false,
-        cancel: run.status === "running",
+        cancel: run.status === "running" || hasUnconfirmedWorker(run),
       },
       cwd: options.cwd,
       startedAt: run.createdAt,
       updatedAt: run.updatedAt,
-      ...(run.status !== "running" ? { finishedAt: run.updatedAt } : {}),
+      ...(run.status !== "running" && !hasUnconfirmedWorker(run) ? { finishedAt: run.updatedAt } : {}),
       metadata: {
         mode: run.plan.mode,
         totalTasks: run.plan.tasks.length,
@@ -551,10 +568,9 @@ export class WorkflowHost {
       const runner = (options.createRunner ?? createAgentWorkflowRunner)({
         cwd: scope.cwd,
         sessionId: scope.sessionId,
-        executionOwner: options.executionOwner,
+        children: options.children,
         agent: call.children ? { children: call.children } : undefined,
         team: asOptionalString(input.team),
-        timeoutMs,
         permissionMode: parsePermissionMode(input.permissionMode),
         getAgentDefinition: (name) => getAgentDefinition(name, definitions),
       });
@@ -570,20 +586,15 @@ export class WorkflowHost {
             ? async (id: string, reason?: string, runId?: string) => {
                 const child = options.children?.get(id);
                 if (child) {
-                  if (!runId) throw new Error("Workflow worker run identity is unavailable");
+                  if (!runId) {
+                    if (!child.runId) { await child.close(); return; }
+                    throw new Error("Workflow worker run identity is unavailable");
+                  }
                   await child.interruptRun(runId, reason);
                   await child.waitRun(runId);
                   return;
                 }
-                if (call.children!.hasChildAgent(id)) throw new Error("Workflow worker handle is unavailable");
-                if (!options.executionOwner)
-                  throw new Error("Workflow worker host is unavailable");
-                return await options.executionOwner
-                  .getDetachedProcessSupervisor({
-                    cwd: scope.cwd,
-                    sessionId: scope.sessionId,
-                  })
-                  .stopExecution(id);
+                throw new Error(`Workflow worker handle is unavailable: ${id}`);
               }
             : undefined),
       };
@@ -686,4 +697,8 @@ async function waitForRequest<T>(
   } finally {
     signal.removeEventListener("abort", aborted);
   }
+}
+
+function hasUnconfirmedWorker(snapshot: WorkflowRunSnapshot): boolean {
+  return Object.values(snapshot.results).some(result => result.cleanupUnconfirmed || result.metadata?.cleanupUnconfirmed);
 }

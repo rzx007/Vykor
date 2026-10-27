@@ -104,11 +104,7 @@ export async function resolveDefaultAgentCapabilities(
   const workflowTool = workflowHost ? workflowHost.bind({
     cwd: options.cwd, sessionId: options.sessionId,
     children: childManager, executionOwner: options.executionOwner, definitions: options.agentDefinitions,
-    stopTask: async (id, reason, runId) => {
-      const child = childManager.get(id);
-      if (child) { const expected = runId ?? child.runId; if (expected) { await child.interruptRun(expected, reason ?? "Workflow cancelled"); await child.waitRun(expected); } return; }
-      return await options.executionOwner.getDetachedProcessSupervisor({ cwd: options.cwd, sessionId: options.sessionId }).stopExecution(id);
-    },
+
   }) : undefined;
   if (workflowTool) options.cleanup.add(() => workflowTool.close(), workflowTool);
   const terminalResolution = await options.resolveDefaultTerminal({

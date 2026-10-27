@@ -93,9 +93,11 @@ export interface DaemonAgentLoaderOptions {
   executionOwner?: ExecutionRuntimeOwner;
   prepareModelMetadata?(
     settings: Settings,
+    session: SessionRecord,
   ): Promise<
     Pick<
       VykorAgentOptions,
+      | "validateModelSelection"
       | "resolveReasoningEfforts"
       | "resolveModelContextWindow"
       | "resolveModelOutputLimit"
@@ -215,7 +217,7 @@ export function createDaemonAgentLoader(
     const backgroundShell = options.shellAdmissionForSession?.(session);
     const tools = (await options.tools?.({ session, settings })) ?? [];
     const modelMetadata = settings
-      ? await options.prepareModelMetadata?.(settings)
+      ? await options.prepareModelMetadata?.(settings, session)
       : undefined;
     const acquiredEnvironment =
       settings && options.acquireEnvironment

@@ -242,7 +242,6 @@ describe("workflowTool", () => {
       expect.objectContaining({
         cwd: "/work",
         team: "alpha",
-        timeoutMs: 10000,
         permissionMode: "plan",
       }),
     );
@@ -449,7 +448,6 @@ describe("workflowTool", () => {
           cwd,
           sessionId: "session-1",
           team: undefined,
-          timeoutMs: undefined,
           permissionMode: undefined,
           agent: undefined,
         }),

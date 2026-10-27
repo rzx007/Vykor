@@ -337,6 +337,12 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
       },
     });
   }
+  override async canSuspend(): Promise<boolean> {
+    if (!super.canSuspend()) return false;
+    const jobs = await this.assembled.jobs?.list({ sessionId: this.id });
+    if (jobs?.errors.length || jobs?.jobs.some(job => !["completed", "failed", "killed"].includes(job.status))) return false;
+    return super.canSuspend();
+  }
   override loadHistory(
     messages: import("@vykor/agent-contracts").Message[],
   ): void {

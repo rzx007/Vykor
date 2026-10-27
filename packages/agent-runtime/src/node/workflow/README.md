@@ -21,4 +21,6 @@
 
 ## 共用执行核心（阶段 A）
 
-Workflow Jobs 使用原始 runId 作为 jobId。停止接线携带已捕获 childId/runId 调 interruptRun；runner 的进一步收拢留到阶段 C。
+Workflow Jobs 使用原始 runId 作为 jobId。默认 runner 只启动真实 child，记录 childId/runId，再调用同一 handle.waitRun；停止只调固定轮次的 interruptRun。查询错误保留原回执，等待原实际停止后返回不可重试的查询失败；没有回执或无法确认停止时保留 stopping。没有 process 回退或查询失败后另起 worker。显式自定义 WorkflowRunner 仍可由 createRunner 接入。
+
+coordinator 独占 attempt deadline、5 秒诊断宽限和重试。宽限到期仍等待原 worker，不能提前发布完成或重试；迟到进度只影响原 attempt。重复 Workflow cancel 可重新确认同一 worker 清理，并保留原取消 Promise。成功且已保存的一次性 worker 请求固定原 run 的安全卸载，默认 8/64 额度不变。

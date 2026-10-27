@@ -911,3 +911,15 @@ test("shared execution sources keep daemon adaptation free of lifecycle controll
     assert.doesNotMatch(source, /childObservations|shellRequests|ownerByJobKey|setInterval/);
   }
 });
+
+
+test("default Workflow owns only real child receipts and no second execution policy", () => {
+  const root = new URL("../", import.meta.url);
+  assert.equal(existsSync(new URL("packages/agent-runtime/src/node/children/child-task-adapter.ts", root)), false);
+  const runner = readFileSync(new URL("packages/agent-runtime/src/node/workflow/agent-workflow-runner.ts", root), "utf8");
+  assert.doesNotMatch(runner, /AwaitExecutionResult|awaitFrameworkChildTask|hasChildAgent|DetachedProcess|setTimeout|CLEANUP_GRACE|stopTimedOutTask|spawning replacement/);
+  assert.match(runner, /handle\.waitRun\(receipt\.runId\)/);
+  assert.match(runner, /handle\.interruptRun\(receipt\.runId/);
+  const host = readFileSync(new URL("packages/agent-runtime/src/node/workflow/workflow-host.ts", root), "utf8");
+  assert.doesNotMatch(host, /getDetachedProcessSupervisor|hasChildAgent|stopExecution/);
+});

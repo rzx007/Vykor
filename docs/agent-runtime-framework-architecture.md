@@ -250,4 +250,4 @@ QueryEngine 唯一持有消息历史；turn-context 冻结本轮请求，model-a
 NodeRuntimeResources 创建或借用 ExecutionRuntimeOwner、插件/MCP、Jobs、Workflow 与子环境。创建者负责关闭共享实例，child 只释放自己的视图；每轮 prepare 返回 release，准备失败、Run 终态和 close 都要释放，release 幂等。Kernel 不创建本机能力。
 
 
-阶段 A 已接通 Jobs 协议 6 与共同执行来源；最新接口和所有权说明见 [Jobs 协议](./jobs-protocol.md)。额度和 Workflow runner 的后续收拢仍按阶段 B/C 计划执行。
+SDK 与 daemon 共用执行核心已接通协议 6 / Jobs 3。ChildManager 按真实 run 占用许可，Framework 的实际停止与可靠保存分开；Workflow 默认只用 childId/runId，coordinator 独占 deadline 和重试。接口见 [Jobs 协议](./jobs-protocol.md)，实施与验收见 [共享核心计划](./superpowers/plans/2026-10-27-shared-execution-core.md)。

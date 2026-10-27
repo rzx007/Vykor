@@ -112,11 +112,11 @@ durable task 已 terminal 后，延迟到达的 live `pending/running` snapshot 
 
 ## Suspend / resume
 
-child run 完成后进入 idle。默认 5 分钟无输入：
+child run 实际停止后归还运行许可并进入 idle；卸载还要求终态已保存。普通 child 默认 5 分钟无输入，成功的一次性 Workflow worker 可立即请求同一安全卸载：
 
-1. snapshot history。
-2. close child MCP/sandbox/runtime。
-3. 保留 invocation/handle/session identity。
+1. 固定原 runId/request/实例，与 send、resume、close 串行，确认没有待接纳输入、审批、调用、准备清理或附属后台工作。任意保留后代均阻止卸载，避免父 close 丢失其身份。
+2. snapshot history，close 该实际实例的 MCP/sandbox/runtime。
+3. 保留 invocation/handle/session identity、cwd 和授权。
 4. 发布 `child.suspended`。
 
 后续输入创建新 child agent、load history、发布 `child.resumed`，再执行新 run。恢复创建与 close 共享同一个 creation barrier；close 不会在新 agent 仍可能出现时提前返回。
@@ -146,4 +146,4 @@ packages/server/src/application/session/interactions/session-interaction-service
 ```
 
 
-阶段 A 已接通 Jobs 协议 6 与共同执行来源；最新接口和所有权说明见 [Jobs 协议](./jobs-protocol.md)。额度和 Workflow runner 的后续收拢仍按阶段 B/C 计划执行。
+SDK 与 daemon 共用执行核心已接通协议 6 / Jobs 3。ChildManager 按真实 run 占用许可，Framework 的实际停止与可靠保存分开；Workflow 默认只用 childId/runId，coordinator 独占 deadline 和重试。接口见 [Jobs 协议](./jobs-protocol.md)，实施与验收见 [共享核心计划](./superpowers/plans/2026-10-27-shared-execution-core.md)。

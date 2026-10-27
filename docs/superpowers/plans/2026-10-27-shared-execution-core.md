@@ -1,6 +1,6 @@
 # SDK 与 daemon 共用执行核心实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. 用户已明确授权 A、B、C 全部生产修改；当前完成阶段 A，后续按 B → C 顺序实施，每阶段统一验收。
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. 用户已明确授权 A、B、C 全部生产修改；三个阶段已实施，通过真实统一验收并分别提交。
 
 **Goal:** 完成 Agent、Shell、Terminal、Workflow 生命周期收拢，使 SDK 和 daemon 共用同一套执行规则，并删除被替代的实现。
 
@@ -12,7 +12,7 @@
 
 ## 当前进度
 
-阶段 A 已审查并提交为 `a54f28210b88d3a4f9c78ecf492bb7afa492ce7b`。协议为 6，Jobs feature 为 3。阶段 B 已实现并完成验收：真实 B31 + A7 组合 38/38，Runtime 134/134、Server 108/108、Core 57/57 和受影响五包类型检查通过；等待主会话阶段提交；证据见工作树的 `.superpowers/sdd/2026-10-27-shared-execution-core/stage-b-report.md`。阶段 C 的 runner 清理尚未开始。
+阶段 A 已审查并提交为 `a54f28210b88d3a4f9c78ecf492bb7afa492ce7b`；阶段 B 已审查并提交为 `59f3ebd41c1ac7b4e8c858f72149fbddc7f51925`。协议为 6，Jobs feature 为 3。阶段 C 已实施并通过最终验收：A/B/C 真实三文件 66/66、Workflow 28/28；审查尾部修正另复验 8/8 真实取消/查询路径和 26/26 runner/宿主用例。四大门禁及文档/退役检查通过；阶段 C 的独立提交包含本次最终记录。证据见工作树 `.superpowers/sdd/2026-10-27-shared-execution-core/stage-c-report.md`。
 
 ## 全局约束与基线
 
@@ -380,7 +380,7 @@ describe.each(["sdk", "daemon"] as const)("shared composition: %s", mode => {
 - [x] 执行 `pnpm exec vitest run --config tests/agent-integration/vitest.config.ts tests/agent-integration/__test__/shared-job-composition.integration.test.ts`；首次在基线真实组合处观察重复归属或结果丢失，阶段 A 完成后全部通过。
 - [x] 执行 A1 到 A4 的定向测试、受影响包类型检查、`pnpm check:client-api`、`pnpm check-types:server-client`、`pnpm check:retired-ui`、`pnpm check-docs`、`git diff --check`。协议变化另跑 `pnpm test:server-client`。
 - [x] 确认阶段 A 删除清单全部完成：Composite、LocalAgentJobHost、ChildAgentExecutionRegistry、child bridge、daemon 的 reopen/stop fallback/live snapshot 复制、Shell 两张 daemon 运行表、Terminal list 找指定 ID、workflow 前缀别名与所有 v5 请求入口。
-- [ ] 记录阶段 A 验收证据并形成阶段提交（证据已记录，待集中审查后提交）。此时 SDK/daemon 正常使用同一核心，仍沿用旧额度计数；不把 B 的改善宣称已交付。
+- [x] 记录阶段 A 验收证据并形成阶段提交（a54f2821，审查与原始提交 hook 已通过）。此时 SDK/daemon 正常使用同一核心，仍沿用旧额度计数；不把 B 的改善宣称已交付。
 
 ## B1：单轮许可与真实停止屏障
 
@@ -517,12 +517,12 @@ try {
 
 **接口：**runner 的 worker receipt 保存已有 `childId + runId`；等待调用真实 handle.waitRun(runId)，取消调用 interruptRun(runId)。WorkflowHost 的取消不再传 taskId 后探测 backend；coordinator 继续拥有 attempt deadline、唯一停止宽限和 cleanupUnconfirmed 阻止重试规则。保留显式自定义 WorkflowRunner 扩展，不保留默认 runner 的隐式另一后端。
 
-- [ ] 先写查询失败不重建 worker、超时不重叠 retry、迟到结果只更新原 attempt 的测试。使用真实 worker receipt；不要把 child result 转换为 AwaitExecutionResult 再断言。
-- [ ] role 解析统一把 inherit 解析为父实际 model/provider/effort；创建环境前完成。单元测试覆盖普通 Agent、Workflow、system child，同一解析函数；显式模型仍受父授权上限约束。
-- [ ] runner 删除 `hasChildAgent -> else process`、`catch -> spawn replacement`、`stopTimedOutTask` 及重复等待 timer。给 coordinator 的 runnerResult 明确携带实际 failureKind、partialResult 与 cleanupUnconfirmed，不能把未知停止报成可重试失败。
-- [ ] WorkflowHost 默认 stop 直接固定 child run；删除 `stopTask` 的模糊 taskId fallback。持久元数据读取只定位旧归档，不能因此恢复执行或自动生成替代 worker。
-- [ ] 一次性 worker 完成后请求现有 suspend；要求没有 active run、steer 队列、审批、活动后代、附属后台工作和 cleanup。无法证明安全就沿用现有 TTL；不增加新的池/缓存。检查 old instance 的清理只作用于该实际实例引用。
-- [ ] 执行 `pnpm --filter @vykor/agent-runtime exec vitest run src/node/workflow/__test__ src/node/children/__test__/child-agent-options.test.ts src/node/children/__test__/child-agent.test.ts` 和 coordinator 对应 task-runner 测试。
+- [x] 先写查询失败不重建 worker、超时不重叠 retry、迟到结果只更新原 attempt 的测试。使用真实 worker receipt；不要把 child result 转换为 AwaitExecutionResult 再断言。
+- [x] role 解析统一把 inherit 解析为父实际 model/provider/effort；创建环境前完成。单元测试覆盖普通 Agent、Workflow、system child，同一解析函数；显式模型仍受父授权上限约束。
+- [x] runner 删除 `hasChildAgent -> else process`、`catch -> spawn replacement`、`stopTimedOutTask` 及重复等待 timer。给 coordinator 的 runnerResult 明确携带实际 failureKind、partialResult 与 cleanupUnconfirmed，不能把未知停止报成可重试失败。
+- [x] WorkflowHost 默认 stop 直接固定 child run；删除 `stopTask` 的模糊 taskId fallback。持久元数据读取只定位旧归档，不能因此恢复执行或自动生成替代 worker。
+- [x] 一次性 worker 完成后请求现有 suspend；要求没有 active run、steer 队列、审批、活动后代、附属后台工作和 cleanup。无法证明安全就沿用现有 TTL；不增加新的池/缓存。检查 old instance 的清理只作用于该实际实例引用。
+- [x] 执行 `pnpm --filter @vykor/agent-runtime exec vitest run src/node/workflow/__test__ src/node/children/__test__/child-agent-options.test.ts src/node/children/__test__/child-agent.test.ts` 和 coordinator 对应 task-runner 测试。
 
 ## C2：最终真实 Workflow 验收与旧路径清零
 
@@ -533,14 +533,14 @@ try {
 - 更新 `docs/{agent-child-session-flow,coordinator-hard-scheduler-flow,agent-runtime-framework-architecture,daemon-application-architecture,architecture-migration-status,contract-test-index}.md`、`packages/{agent-runtime,execution-node,jobs,server}/README.md` 及相关目录 README。
 - `scripts/architecture-boundaries.test.mjs`、`tests/agent-integration/README.md` 补边界和验收入口。
 
-- [ ] SDK 和 daemon 各运行 3 轮真实 Workflow，每轮 12 个顺序 child worker；默认额度 8 不得耗尽。测试固定总身份数 36，小于 64，不能通过放大预算绕过问题。
-- [ ] 真实 Workflow 的并发设为 8，worker 受控阻塞，统计实际进入执行的 child run 峰值；第 9 个接纳按核心限额拒绝，coordinator 不能为了补偿额度创建重复 worker。
-- [ ] 工作流取消及 deadline 测试：阻塞一个真实 worker 的清理，使其停止未确认；Workflow 保持 stopping，不能重试/显示完成；释放后结算原 worker。另测试旧 attempt 的迟到结果不覆盖新 attempt。
-- [ ] 验证 safe suspend 后同一身份 follow-up 恢复历史与工作目录；活动后代或未决审批存在时不提前卸载；授权快照和工具绑定不得扩大。
-- [ ] 执行 `pnpm exec vitest run --config tests/agent-integration/vitest.config.ts tests/agent-integration/__test__/shared-job-composition.integration.test.ts tests/agent-integration/__test__/child-run-settlement.integration.test.ts tests/agent-integration/__test__/workflow-child-lifecycle.integration.test.ts`。
-- [ ] 执行 `pnpm check-types`、`pnpm check:client-api`、`pnpm test:execution-integration`、`pnpm test:server-client` 和受影响四类执行器/Workflow 包的定向测试；只有新的失败或跨模块风险未解决时才扩大到完整测试套件。
-- [ ] 执行 `pnpm check:retired-ui`、`pnpm check-docs`、`git diff --check`；检查现行手册、imports、exports、README 与旧引用清单已同步。历史研究保留原事实，通过顶部链接指向新方案，不伪造旧源码行号为现状。
-- [ ] 做最终删除审计并记录证据：下表每项均需文件不存在或运行代码零引用，不能留未启用的实现。
+- [x] SDK 和 daemon 各运行 3 轮真实 Workflow，每轮 12 个顺序 child worker；默认额度 8 不得耗尽。测试固定总身份数 36，小于 64，不能通过放大预算绕过问题。
+- [x] 真实 Workflow 的并发设为 8，worker 受控阻塞，统计实际进入执行的 child run 峰值；第 9 个接纳按核心限额拒绝，coordinator 不能为了补偿额度创建重复 worker。
+- [x] 工作流取消及 deadline 测试：阻塞一个真实 worker 的清理，使其停止未确认；Workflow 保持 stopping，不能重试/显示完成；释放后结算原 worker。另测试旧 attempt 的迟到结果不覆盖新 attempt。
+- [x] 验证 safe suspend 后同一身份 follow-up 恢复历史与工作目录；活动后代或未决审批存在时不提前卸载；授权快照和工具绑定不得扩大。
+- [x] 执行 `pnpm exec vitest run --config tests/agent-integration/vitest.config.ts tests/agent-integration/__test__/shared-job-composition.integration.test.ts tests/agent-integration/__test__/child-run-settlement.integration.test.ts tests/agent-integration/__test__/workflow-child-lifecycle.integration.test.ts`。
+- [x] 执行 `pnpm check-types`、`pnpm check:client-api`、`pnpm test:execution-integration`、`pnpm test:server-client` 和受影响四类执行器/Workflow 包的定向测试；只有新的失败或跨模块风险未解决时才扩大到完整测试套件。
+- [x] 执行 `pnpm check:retired-ui`、`pnpm check-docs`、`git diff --check`；检查现行手册、imports、exports、README 与旧引用清单已同步。历史研究保留原事实，通过顶部链接指向新方案，不伪造旧源码行号为现状。
+- [x] 做最终删除审计并记录证据：下表每项均需文件不存在或运行代码零引用，不能留未启用的实现。
 
 | 阶段 | 必须退场的旧路径 | 替代入口 |
 | --- | --- | --- |
@@ -557,7 +557,7 @@ try {
 | C | child-task-adapter、Workflow process fallback、catch 后 spawn | 真实 childId/runId 与 waitRun |
 | C | runner 第二套 wait timeout / stopTimedOutTask 宽限 | coordinator 唯一 deadline / cleanup 策略 |
 
-- [ ] 形成阶段 C 提交，并将方案状态改为“已实施”时附真实命令输出、测试数和版本。不能仅因计划条目勾完而宣称完成。
+- [x] 由主会话审查后形成阶段 C 提交，并将方案状态改为“已实施”时附真实命令输出、测试数和版本。不能仅因计划条目勾完而宣称完成。
 
 ## 阶段检查命令与提交方式
 
@@ -581,4 +581,37 @@ git diff --check
 
 实现时若出现下列情况，应先返回职责边界检查：需要第二个结果 Map 才能读完、需要 list 才能取消、需要 catch 后换执行器才能运行、需要新 Job 表才能结算、需要后台重放才能恢复、需要 flag 才能长期保留旧控制器。先修正来源绑定、run 记录、停止屏障和投影接口；不能直接增加兜底层。
 
-计划初稿仅核对文档；后续用户已授权 A、B、C 生产实施。阶段 A 的验收使用真实默认工厂、daemon、child handle、SQLite、进程和原生 PTY，已取得独立输出；原调研的 39 个隔离测试仍只作为历史证据。B、C 按各自门槛继续。
+计划初稿仅核对文档；后续用户已授权 A、B、C 生产实施。阶段 A 的验收使用真实默认工厂、daemon、child handle、SQLite、进程和原生 PTY，已取得独立输出；原调研的 39 个隔离测试仍只作为历史证据。B、C 已按各自门槛完成；最终真实生命周期三文件 66/66，四大门禁与文档/退役检查均通过。
+
+
+## 阶段 C 的源码核对与计划修正
+
+实际执行位置为 `C:/Users/ruanz/.codex/worktrees/shared-execution-core/openharness-ts`，分支 `codex/shared-execution-core`；主工作区的其他 Desktop/UI/plugin 工作未修改。A/B 提交如上，C 经主会话与独立审查后单独提交。
+
+初始源码在 child 环境申请后才调用 resolveChild；仅替换 inherit 字符串不满足顺序。现改为 Node 预检并解析 model/provider/effort，Kernel 成功后才申请环境，仍使用原 lease 对象，创建实例时读取实际 cwd。现有配置只有容量查询与只读 reader，故沿既有 modelMetadata 接线增加窄 validateModelSelection 端口，复用 Server 的 validateRequestSelection；授权通过当前 settings/catalog reader 在初始、冷恢复和每轮实际配置准备时复查。没有新增目录、缓存或验证平台，SDK 自有 client 且无目录时保留显式自定义模型。
+
+原 TTL 关闭父实例会关闭它的后代管理器。为保存后代身份，安全卸载保守要求没有任何保留后代，而不只是没有活动后代。startChain 内固定原 request/runId/实例，suspending 仅在槽实际执行时公布；同 tick 先 send 再旧轮 suspend 不循环等待。普通 child 保持 5 分钟 TTL，成功且已保存的一次性 worker 可请求立即卸载。
+
+唯一 deadline/5 秒清理诊断宽限/retry 留在 coordinator。宽限不代表停止，等待原执行真实确认；查询故障先停止并等待原回执的实际结果屏障，再返回不可重试的查询失败。缺回执、缺 handle 或无法确认清理时禁止重试，保留 WorkflowHost 原 active 与 Jobs stopping；取消也不能用缺失回执伪造确认。重复取消只确认原 worker 清理，不更换 waiter 或重放模型。迟到旧 attempt 的进度与终态不覆盖新 attempt。
+
+删除清单：阶段 A 的三份旧执行/Jobs 镜像文件与对应导出/专项测试已退场；C 删除 child-task-adapter.ts，旧 runner 的 spawnWorker/awaitTask/stopTask 注入、process 探测、catch-spawn、重复等待 timer 和 stopTimedOutTask 全部删除。显式完整 WorkflowRunner 扩展保留。历史研究保留原事实，并从顶部链接到新方案；现行手册更新为真实 childId/runId。
+
+最终状态归属：FrameworkAgentRun 拥有实际调用与清理停止事实；ChildManager requests 拥有原 run 回执/结果/保存诊断，Registry 拥有身份和原子运行许可；supervisor/Terminal provider 各自拥有真实进程/PTY；WorkflowHost 拥有 live workflow 与取消，coordinator 拥有依赖/attempt/deadline/retry；daemon 只提供授权、环境、持久投影与格式转换。阶段 C 没有新增生产文件；全方案仅新增计划内四份路由/来源绑定文件。没有新增管理器、缓存、状态表或执行 ID；C 删除一份生产适配文件并缩减 runner，新增窄配置校验和安全卸载方法。
+
+限制保持：SDK 无 archive 的旧轮在 256 条有界留存淘汰后返回 RUN_RESULT_NOT_RETAINED；未保存结果不能淘汰，满时拒绝接纳。S1 unknown 写入保护不放宽；没有跨进程自动追杀、模型/工具自动重放。保留后代的父实例继续保守驻留。
+
+
+## 最终验证记录（2026-10-28）
+
+运行环境：Windows，Node v24.10.0，pnpm 10.30.2。命令输出保存在隔离工作树 `.superpowers/sdd/2026-10-27-shared-execution-core/`；阶段 C 由主会话独立提交，并执行仓库原始类型检查 hook。
+
+- `pnpm exec vitest run --config tests/agent-integration/vitest.config.ts tests/agent-integration/__test__/shared-job-composition.integration.test.ts tests/agent-integration/__test__/child-run-settlement.integration.test.ts tests/agent-integration/__test__/workflow-child-lifecycle.integration.test.ts`：3 文件 66/66（A7+B31+C28），242.86 秒，`stage-c-integration-accepted.log`。没有跳过的验收；原生 Windows PTY helper 有 AttachConsole 噪声，但实际退出断言通过。
+- Runtime 定向：`pnpm --filter @vykor/agent-runtime exec vitest run src/node/workflow/__test__ src/node/children/__test__ src/node/jobs/__test__ src/node/agent/__test__/agent-post-run-child.test.ts src/node/runtime/__test__/default-runtime.test.ts`：16 文件 206/206，`stage-c-runtime-accepted.log`。审查尾部增加未知回执与真实 memory/file receipt 后，runner/host 两文件 26/26，`stage-c-review-tail-accepted.log`；实际取消、deadline、重复取消及查询清理两模式另复验 8/8，`stage-c-review-tail-integration.log`。
+- `pnpm --filter @vykor/coordinator exec vitest run src/workflow/__test__`：30/30，`stage-c-coordinator-accepted.log`。
+- Server 模型配置、loader、Jobs 与投影定向：5 文件 82/82，`stage-c-server-accepted.log`。
+- 主会话独立运行 `pnpm check-types`：Turbo 72/72 成功，另 server-client TypeScript 成功，`stage-c-final-types.log`；`pnpm check:client-api`：73 条边界和 4 条公开 API 检查成功，`stage-c-client-final-guard.log`；`pnpm test:server-client`：124/124，`stage-c-final-server-client.log`；`pnpm test:execution-integration` 最终 4/4，真实 WSL Shell/PTY，无跳过，`stage-c-final-execution-confirmed.log`。初轮有平台预检跳过，补实测后不以该跳过作为验收。
+- `node --test scripts/architecture-boundaries.test.mjs`：64/64，`stage-c-architecture.log`。
+- `pnpm check-docs`：检查器 4/4，925 Markdown / 404 模块 README 通过；`pnpm check:retired-ui`：检查器 1/1，errors=[]，4559 文件、731 引用、90 移除。源码插入三行后，既有清单只更新原文完全相同的一项行号 1045→1048；未扩大批准范围。
+- 最终删除审计：909 个生产 TypeScript 文件，18 项文件/符号/控制分支检查通过，`stage-c-deletion-audit.log`；全部 staged/unstaged `git diff HEAD --check` 通过。当前 adapter、process 回退、catch-spawn 和重复停止 timer 零运行引用。
+
+完整失败/修正记录、审查处理与最终限制见本地 `stage-c-report.md`。最终代码经主会话及独立审查代理只读审查，三项生命周期问题及两个尾部分支均已修复并有实际回归证据。

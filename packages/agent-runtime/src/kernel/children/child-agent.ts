@@ -166,7 +166,7 @@ export interface AgentChildManagerOptions {
     tools?: ChildTools;
     system: boolean;
     outputContract?: AgentOutputContract;
-  }): ResolvedChildExecution;
+  }): ResolvedChildExecution | Promise<ResolvedChildExecution>;
 }
 
 export class AgentChildManager implements AgentChildDirectory {
@@ -342,15 +342,22 @@ export class AgentChildManager implements AgentChildDirectory {
     const firstRequest: ChildRequest = { input: firstInput, parent: captureParent(parentScope),
       receipt: Promise.resolve({ sessionId, ...firstIds }), settled: false, permit: firstPermit, identityPreparationPending: true };
     this.prepareResultWaiter(firstRequest);
-    let lease: AgentChildEnvironmentLease;
-    let environmentFailure: { error: unknown } | undefined;
+    // Resolve model/authorization before acquiring a cwd/worktree or lease.
+    // The same captured lease object is filled only after successful preflight.
+    const lease: AgentChildEnvironmentLease = { cwd: input.cwd, release: async () => {} };
+    let resolved: ResolvedChildExecution;
     try {
-      lease = await this.environment.acquire(input, childId);
+      resolved = await this.options.resolveChild({ spawn: input, lease, childId, sessionId, parentScope,
+        tools: options.tools, system, ...(system && options.outputContract ? { outputContract: options.outputContract } : {}) });
     } catch (error) {
-      environmentFailure = { error };
-      // Announce the failed attempt so the host can persist a failed Child Run.
-      lease = { cwd: input.cwd, release: async () => {} };
+      firstPermit.release();
+      budgetReservation.rollback();
+      if (system && this.systemChildId === childId) this.systemChildId = undefined;
+      throw error;
     }
+    let environmentFailure: { error: unknown } | undefined;
+    try { Object.assign(lease, await this.environment.acquire(resolved.spawn, childId)); }
+    catch (error) { environmentFailure = { error }; }
     const record = {} as ChildRecord;
     Object.defineProperty(record, "result", { get: () => {
       const completion = record.currentRequest?.resultPromise;
@@ -358,32 +365,6 @@ export class AgentChildManager implements AgentChildDirectory {
       return completion;
     } });
     const handle = new ChildHandle(this, () => record);
-    let resolved: ResolvedChildExecution;
-    try {
-      resolved = this.options.resolveChild({
-        spawn: input,
-        lease,
-        childId,
-        sessionId,
-        parentScope,
-        tools: options.tools,
-        system,
-        ...(system && options.outputContract ? { outputContract: options.outputContract } : {}),
-      });
-    } catch (error) {
-      // Even configuration failure can own an acquired environment. Keep its
-      // original identity/permit addressable until that lease is revoked.
-      firstRequest.preparationError = error;
-      Object.assign(record, { id: childId, sessionId, cwd: lease.cwd, spawn: input, parentScope, system, lease, handle, budgetReservation, currentRequest: firstRequest,
-        state: "starting", startChain: Promise.resolve(), createAgent: async () => { throw error; },
-        requests: new Map([[firstIds.inputId, firstRequest]]),
-      } satisfies Partial<ChildRecord>);
-      this.directory.register(handle);
-      this.records.set(childId, record);
-      try { await this.closeRecord(record, failedResult(error), false); }
-      catch (cleanupError) { throw combineFailures(error, cleanupError, `Child configuration cleanup unconfirmed: ${childId}`); }
-      throw error;
-    }
     const parentRequestConfiguration: Partial<AgentModelConfiguration> & {
       baseUrl?: string;
     } = resolved.parentRequestConfiguration ?? {};
@@ -948,47 +929,63 @@ export class AgentChildManager implements AgentChildDirectory {
     }
   }
 
+  requestSuspend(childId: string, expectedRunId: string): Promise<boolean> {
+    const record = this.require(childId);
+    const request = record.currentRequest;
+    const agent = record.agent;
+    if (!request?.result || request.accepted?.runId !== expectedRunId || !agent || record.suspending) return Promise.resolve(false);
+    return this.suspendRecord(record, request, agent);
+  }
+
+  private suspendRecord(record: ChildRecord, request: ChildRequest, agent: VykorAgent): Promise<boolean> {
+    this.clearIdleTimer(record);
+    // Serialize the captured request/instance with send and resume. Close marks
+    // the record unavailable synchronously and waits this same operation.
+    let suspended = false;
+    const work = record.startChain.then(async () => {
+      // Publish only after preceding admissions have finished; otherwise their
+      // ensureAgent would wait a suspension queued behind themselves.
+      record.suspending = suspending;
+      if (request.projectionPending) await request.run?.result.catch(() => {});
+      this.refreshProjection(request);
+      const current = () => record.currentRequest === request && record.agent === agent && record.state === "idle" && !record.currentRun && !record.creating && !record.cleanupPromise && !!request.result && !request.projectionPending && !request.projectionError;
+      if (!current() || !agent.canSuspend || !(await agent.canSuspend()) || !current()) return;
+      record.suspendedHistory = agent.getHistory();
+      await agent.close();
+      if (record.agent === agent) record.agent = undefined;
+      if (isChildUnavailable(record)) return;
+      record.state = "suspended";
+      suspended = true;
+      await this.emitChild(record, { type: "child.suspended", data: { childId: record.id, sessionId: record.sessionId } });
+    });
+    record.startChain = work.then(() => {}, () => {});
+    const suspending = work.finally(() => { if (record.suspending === suspending) record.suspending = undefined; });
+    void suspending.catch(error => {
+      if (isChildUnavailable(record) || !this.records.has(record.id)) return;
+      record.state = "closing";
+      const closing = (async () => {
+        try { await this.closeRecord(record, failedResult(error), true); }
+        catch (cleanupError) { throw combineFailures(error, cleanupError, `Child agent suspension and cleanup failed: ${record.id}`); }
+        throw error;
+      })();
+      record.closePromise = closing;
+      this.backgroundClosures.add(closing);
+      void closing.catch(() => {});
+    });
+    return suspending.then(() => suspended);
+  }
+
   private scheduleSuspend(record: ChildRecord): void {
     const idleTtlMs = this.options.idleTtlMs ?? 5 * 60_000;
     if (idleTtlMs <= 0 || isChildUnavailable(record)) return;
     this.clearIdleTimer(record);
+    const request = record.currentRequest;
+    const agent = record.agent;
+    if (!request || !agent) return;
     record.idleTimer = setTimeout(() => {
       record.idleTimer = undefined;
-      if (record.state !== "idle" || !record.agent) return;
-      const agent = record.agent;
-      const suspending = (async () => {
-        record.suspendedHistory = agent.getHistory();
-        await agent.close();
-        if (record.agent === agent) record.agent = undefined;
-        if (isChildUnavailable(record)) return;
-        record.state = "suspended";
-        await this.emitChild(record, {
-          type: "child.suspended",
-          data: { childId: record.id, sessionId: record.sessionId },
-        });
-      })().finally(() => {
-        if (record.suspending === suspending) record.suspending = undefined;
-      });
-      record.suspending = suspending;
-      void suspending.catch((error) => {
-        if (isChildUnavailable(record) || !this.records.has(record.id)) return;
-        record.state = "closing";
-        const closing = (async () => {
-          try {
-            await this.closeRecord(record, failedResult(error), true);
-          } catch (cleanupError) {
-            throw combineFailures(
-              error,
-              cleanupError,
-              `Child agent suspension and cleanup failed: ${record.id}`,
-            );
-          }
-          throw error;
-        })();
-        record.closePromise = closing;
-        this.backgroundClosures.add(closing);
-        void closing.catch(() => {});
-      });
+      if (record.currentRequest !== request || record.agent !== agent || record.suspending) return;
+      void this.suspendRecord(record, request, agent).catch(() => {});
     }, idleTtlMs);
     record.idleTimer.unref?.();
   }
@@ -1152,6 +1149,7 @@ class ChildHandle implements AgentChildHandle {
   ): Promise<AgentInputReceipt> {
     return this.manager.send(this.id, input, authorization);
   }
+  requestSuspend(expectedRunId: string): Promise<boolean> { return this.manager.requestSuspend(this.id, expectedRunId); }
   interrupt(reason?: string): Promise<void> {
     return this.manager.interrupt(this.id, reason);
   }

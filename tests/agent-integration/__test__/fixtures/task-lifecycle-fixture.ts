@@ -22,6 +22,13 @@ export interface LifecycleFixture {
   sendMany(inputs: Array<{ target: AgentTarget; text: string }>): Promise<PromiseSettledResult<JobInputReceipt>[]>;
   sendAccepted(target: AgentTarget, text: string): Promise<JobInputReceipt>;
   modelCalls(label: string): number;
+  observedHistory(label: string): string[];
+  observedCwd(label: string): string | undefined;
+  environmentAcquires(): number;
+  setCatalogModels(models: string[]): void;
+  holdApproval(): void;
+  approvalEntered(): Promise<void>;
+  releaseApproval(): void;
   inRootRun(probe: (execution: AgentExecutionContext) => Promise<void>): Promise<void>;
   holdCleanup(label: string): void;
   cleanupEntered(label: string): Promise<void>;
@@ -58,13 +65,18 @@ function payload(result: ToolResult): Record<string, any> {
   return JSON.parse(body);
 }
 
-export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { childBudget?: Partial<AgentChildBudget>; failTerminalSave?: boolean; failStartedAck?: boolean | number; failChildCreated?: boolean; failLeaseReleaseOnce?: boolean; failShellSave?: boolean; failure?: { label: string; kind: "failed" | "max_turns" } } = {}): Promise<LifecycleFixture> {
+export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { childBudget?: Partial<AgentChildBudget>; failTerminalSave?: boolean; failStartedAck?: boolean | number; failChildCreated?: boolean; failLeaseReleaseOnce?: boolean; failShellSave?: boolean; catalogModels?: string[]; failCleanupOnce?: string; failure?: { label: string; kind: "failed" | "max_turns"; once?: boolean } } = {}): Promise<LifecycleFixture> {
   const directory = mkdtempSync(join(tmpdir(), `shared-jobs-${mode}-`));
   if (options.failure?.kind === "max_turns") writeFileSync(join(directory, `${options.failure.label}.txt`), "finalization input");
+  let environmentAcquires = 0;
+  let approval: { entered: ReturnType<typeof gate>; released: ReturnType<typeof gate> } | undefined;
+  const customProvider = { id: "fixture-provider", displayName: "Fixture", apiFormat: "openai" as const, baseUrl: "https://fixture.invalid/v1", models: (options.catalogModels ?? []).map(id => ({ id, displayName: id })) };
   const holds = new Map<string, { entered: ReturnType<typeof gate>; released: ReturnType<typeof gate> }>();
   const cleanups = new Map<string, { entered: ReturnType<typeof gate>; released: ReturnType<typeof gate> }>();
   const labelsByRun = new Map<string, string>();
   const calls = new Map<string, number>();
+  const histories = new Map<string, string[]>();
+  const cwds = new Map<string, string>();
   const scripts = new Map<string, { name: string; input: Record<string, unknown>; result?: ToolResult; probe?: (execution: AgentExecutionContext) => Promise<void>; probeError?: unknown }>();
   const names = ["Agent", "JobRead", "JobWait", "JobSend", "JobCancel", "JobList", "BackgroundShellCreate", "TerminalOpen", "Workflow"];
   const decorators = names.map(name => ({ name, decorate: (base: ToolDefinition): ToolDefinition => ({ ...base, execute: async (input, context) => {
@@ -82,7 +94,7 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
   decorators.push({ name: "Read", decorate: (base: ToolDefinition): ToolDefinition => markTrustedReadOnlyTool({ ...base, execute: async (input, context) => {
     const label = String(input.file_path ?? "").split(/[\\/]/).at(-1)?.replace(/\.txt$/, "");
     const hold = label ? holds.get(label) : undefined;
-    if (label && context.agent) labelsByRun.set(context.agent.scope.runId, label);
+    if (label && context.agent) { labelsByRun.set(context.agent.scope.runId, label); cwds.set(label, context.agent.scope.cwd); }
     const result = await base.execute(input, context);
     if (hold) { hold.entered.resolve(); await hold.released.promise; }
     return result;
@@ -98,8 +110,17 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
     }
     const latestUser = [...params.messages].reverse().find(message => message.type === "user");
     const label = text(latestUser).split("\n")[0]!.trim();
+    histories.set(label, params.messages.map(message => text(message)));
     if (!label.startsWith("fixture-call:")) calls.set(label, (calls.get(label) ?? 0) + 1);
-    if (options.failure?.label === label) {
+    if (label === "parent-retained" && last?.type !== "tool_result") {
+      yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "real-descendant", name: "Agent", input: { prompt: "descendant-held", description: "retained descendant", subagentType: "worker", allowedTools: ["Read"] } } };
+      yield { type: "complete", stopReason: "tool_use" }; return;
+    }
+    if (label === "approval-held" && last?.type !== "tool_result") {
+      yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "real-approval", name: "Write", input: { file_path: join(directory, "approved.txt"), content: "approved" } } };
+      yield { type: "complete", stopReason: "tool_use" }; return;
+    }
+    if (options.failure?.label === label && (!options.failure.once || calls.get(label) === 1)) {
       if (options.failure.kind === "max_turns") {
         if (calls.get(label) === 1) {
           yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "limit-read", name: "Read", input: { file_path: join(directory, `${label}.txt`) } } };
@@ -121,19 +142,37 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
       yield { type: "complete", stopReason: "end_turn" };
     }
   } };
-  const settings = { model: "offline", apiFormat: "openai" as const, maxTurns: 8, permission: { mode: "full_access" as const }, plugins: { enabled: false }, memory: { enabled: false }, sandbox: { enabled: false }, ...(options.childBudget ? { childBudget: options.childBudget } : {}) };
+  const settings = { model: "offline", apiFormat: "openai" as const, maxTurns: 8, permission: { mode: "full_access" as const }, plugins: { enabled: false }, memory: { enabled: false }, sandbox: { enabled: false }, ...(options.childBudget ? { childBudget: options.childBudget } : {}), ...(options.catalogModels ? { provider: customProvider.id, customProviders: [customProvider] } : {}) };
   let node!: DefaultNodeAgent;
   let application: DaemonApplication | undefined;
   let store: SessionStore | undefined;
   let rootSessionId = `fixture-${randomUUID()}`;
   let restoreSave = () => {};
   let reliableSink: AgentEventListener | undefined;
+  const terminalEvents = new Map<string, AgentEvent>();
+  let sdkStarts = 0;
+  const observeEvent: AgentEventListener = async event => {
+    if (["run.completed", "run.failed", "run.interrupted"].includes(event.type) && event.context.runId) terminalEvents.set(event.context.runId, event);
+    if (mode === "sdk" && options.failStartedAck && event.type === "run.started" && event.context.childId && ++sdkStarts === (typeof options.failStartedAck === "number" ? options.failStartedAck : 1)) throw new Error("injected started projection failure");
+  };
   let leaseFailureInjected = false;
-  const childEnvironment = { acquire: async (input: { prompt: string; cwd: string }) => ({ cwd: input.cwd, release: async () => {
+  let cleanupFailureInjected = false;
+  const releaseRun = async (runId: string, release?: () => void | Promise<void>) => {
+    const label = labelsByRun.get(runId) ?? "";
+    const cleanup = cleanups.get(label);
+    if (cleanup) { cleanup.entered.resolve(); await cleanup.released.promise; }
+    if (options.failCleanupOnce === label && !cleanupFailureInjected) { cleanupFailureInjected = true; throw new Error("injected run cleanup failure"); }
+    await release?.();
+  };
+  const childEnvironment = { acquire: async (input: { prompt: string; cwd: string }) => { environmentAcquires++; return ({ cwd: input.cwd, release: async () => {
     if (options.failLeaseReleaseOnce && !leaseFailureInjected) { leaseFailureInjected = true; throw new Error("injected environment release failure"); }
     const cleanup = cleanups.get(input.prompt);
     if (cleanup) { cleanup.entered.resolve(); await cleanup.released.promise; }
-  } }) };
+  } }); } };
+  const requestPermission: import("@vykor/agent-contracts").AgentEffects["requestPermission"] = async (input) => {
+    if (approval && input.toolName === "Write") { approval.entered.resolve(); await approval.released.promise; }
+    return { status: "approved", decision: "once" };
+  };
   if (mode === "daemon") {
     store = new SessionStore({ path: join(directory, "sessions.db") });
     if (options.failChildCreated) {
@@ -169,14 +208,16 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
     application = new DaemonApplication({ store, settings, log: () => {}, createAgent: async ({ options }) => {
       options.toolDecorators = [...(options.toolDecorators ?? []), ...decorators];
       options.capabilityOverrides = { ...options.capabilityOverrides, childEnvironment };
-      if (options.sessionId === rootSessionId) reliableSink = options.onEvent;
+      options.effects = { ...options.effects, requestPermission };
+      if (options.sessionId === rootSessionId) {
+        reliableSink = options.onEvent;
+        options.onEvent = async event => { await observeEvent(event); await reliableSink?.(event); };
+      }
       const original = options.onRunCapabilities;
       options.onRunCapabilities = async snapshot => {
         const release = await original?.(snapshot);
         return async () => {
-          const cleanup = cleanups.get(labelsByRun.get(snapshot.scope.runId) ?? "");
-          if (cleanup) { cleanup.entered.resolve(); await cleanup.released.promise; }
-          await release?.();
+          await releaseRun(snapshot.scope.runId, release);
         };
       };
       const node = await createDefaultNodeAgent({ ...options, client });
@@ -186,10 +227,9 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
     } });
     await application.ready();
     rootSessionId = application.commands.createSession({ cwd: directory, model: "offline" }).id;
-  } else node = await createDefaultNodeAgent({ cwd: directory, sessionId: rootSessionId, settings, client, toolDecorators: decorators, childBudget: options.childBudget, capabilityOverrides: { childEnvironment },
+  } else node = await createDefaultNodeAgent({ cwd: directory, sessionId: rootSessionId, settings, client, onEvent: observeEvent, effects: { requestPermission }, toolDecorators: decorators, childBudget: options.childBudget, capabilityOverrides: { childEnvironment },
     onRunCapabilities: snapshot => async () => {
-      const cleanup = cleanups.get(labelsByRun.get(snapshot.scope.runId) ?? "");
-      if (cleanup) { cleanup.entered.resolve(); await cleanup.released.promise; }
+      await releaseRun(snapshot.scope.runId);
     },
   });
 
@@ -238,6 +278,13 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
       return result;
     },
     modelCalls: label => calls.get(label) ?? 0,
+    observedHistory: label => histories.get(label) ?? [],
+    observedCwd: label => cwds.get(label),
+    environmentAcquires: () => environmentAcquires,
+    setCatalogModels: models => { customProvider.models = models.map(id => ({ id, displayName: id })); },
+    holdApproval: () => { approval = { entered: gate(), released: gate() }; },
+    approvalEntered: () => approval!.entered.promise,
+    releaseApproval: () => approval?.released.resolve(),
     inRootRun: async probe => { await invoke("JobList", {}, probe); },
     holdCleanup: label => cleanups.set(label, { entered: gate(), released: gate() }),
     cleanupEntered: label => cleanups.get(label)!.entered.promise,
@@ -269,11 +316,13 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
     },
     redeliverTerminal: async runId => {
       const saved = store?.listProjectionSettlements().find(record => (record.payload.event as AgentEvent | undefined)?.context.runId === runId);
-      if (!saved || !reliableSink) throw new Error("Original durable terminal event is unavailable");
-      await reliableSink(saved.payload.event as AgentEvent);
+      const event = saved?.payload.event as AgentEvent | undefined ?? terminalEvents.get(runId);
+      if (!event || !reliableSink) throw new Error("Original durable terminal event is unavailable");
+      await reliableSink(event);
     },
     close: async () => {
       restoreSave();
+      approval?.released.resolve();
       for (const hold of holds.values()) hold.released.resolve();
       for (const cleanup of cleanups.values()) cleanup.released.resolve();
       await Promise.allSettled(node.children.list().map(handle => handle.result));
