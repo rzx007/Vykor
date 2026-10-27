@@ -39,6 +39,6 @@ ChatPersistence 规定同步读写接口，SQLite 实现调用状态加载和保
 pnpm --filter @vykor/services exec node --expose-gc --import ../../apps/cli/node_modules/tsx/dist/loader.mjs src/database/persistence/__test__/storage-growth.bench.mjs
 ```
 
-可传 `--output=<聚合 JSON 路径>`，并会生成各 worker 原始 JSON；这是基准输出选项，不是产品配置。运行基准时不要并行跑重测试。两轮同 Node、同脚本、同数据，变更测量口径后须重跑 baseline。
+可传 `--output=<聚合 JSON 路径>`，并会生成各 worker 原始 JSON；这是基准输出选项，不是产品配置。运行基准时不要并行跑重测试。新的比较应确保两轮同 Node、同脚本、同数据，变更测量口径后须重跑 baseline；交付前应将原始 JSON、确切脚本和源码身份保存到 Git 跟踪的记录或持久审查附件。
 
-2026-10-27 的 256 行 rowid 分批候选证明四表原始集合有界，但 1,000 Run 构造中位数增加 24.32% 且增加 18.493 ms，触发事先门槛，因此加载器与读事务候选已回滚；当前仍一次读取四表。基准保留用于复测，不代表已经减少生产加载峰值。完整 baseline/candidate 三样本、各组中位数、原始集合统计、Node/脚本 SHA、回滚依据及驻留限制见[存储手册](../../../../../docs/session-runtime-storage-architecture.md#历史增长基准与有界加载评估2026-10-27)。
+当前加载器与读事务候选已回滚，仍一次读取四表。2026-10-27 的历史报告记载了 256 行分批及 1,000 Run 构造中位数增加 24.32% / 18.493 ms；这些数字可以复算，但候选补丁和原始 JSON 未恢复，报告脚本 SHA 也与现存脚本不同，不能称为已独立复验的收益。基准用于重新测量当前源码，不代表已经减少生产加载峰值。历史转录数值和限制见[存储手册](../../../../../docs/session-runtime-storage-architecture.md#历史增长基准与有界加载评估2026-10-27)，已核实的源码身份及本轮原始样本见[证据复查记录](../../../../../docs/superpowers/reviews/2026-10-27-n4-evidence-audit.md)。
