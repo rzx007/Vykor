@@ -1,0 +1,1 @@
+Architecture boundaries pass: {"sessionStoreFlatCalls":103}; policy exceptions: 0

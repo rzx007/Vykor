@@ -1,0 +1,686 @@
+diff --git a/packages/server/src/application/maintenance/README.md b/packages/server/src/application/maintenance/README.md
+index 95050925..b3e44c2e 100644
+--- a/packages/server/src/application/maintenance/README.md
++++ b/packages/server/src/application/maintenance/README.md
+@@ -10,6 +10,8 @@
+ 
+ 每次工具操作保护判断只读取一次 `listSafetyStates()` 有限元数据，用目标树的会话 ID 集合筛选，不读取或复制完整工具结果。执行删除前会重新读取，预览后新增的未决操作同样受保护。
+ 
++查询时传入四种未结算状态，先排除无关状态再生成元数据；树的归属判断仍由本服务处理。该读取仍需遍历历史。
++
+ ## 状态归属
+ 
+ 持久策略由策略仓储保存，统计事实来自会话存储和文件系统，独占维护由 control 协调。
+diff --git a/packages/server/src/application/maintenance/cleanup-settings.ts b/packages/server/src/application/maintenance/cleanup-settings.ts
+index 2d2a8e69..f806c2d6 100644
+--- a/packages/server/src/application/maintenance/cleanup-settings.ts
++++ b/packages/server/src/application/maintenance/cleanup-settings.ts
+@@ -11,7 +11,7 @@ import type { CleanupPreview, CleanupResult } from "./query-models.js";
+ export type { CleanupCandidate, CleanupPreview, CleanupResult } from "./query-models.js";
+ export class MaintenanceCleanupService {
+   private previews = new Map<string, CleanupPreview>();
+-  constructor(private store: SessionStore, private control: DaemonControlService, private commands: SessionCommandService, private terminals?: Pick<DaemonTerminalService, "list">) {}
++  constructor(private store: SessionStore, private control: DaemonControlService, private commands: SessionCommandService, private terminals?: Pick<DaemonTerminalService, "list">) { }
+   preview(input: { kind: "session" | "log"; olderThan: number }): CleanupPreview {
+     if (!["session", "log"].includes(input.kind) || !Number.isFinite(input.olderThan) || input.olderThan < 0 || input.olderThan > Date.now()) throw new Error("清理类型或时间范围无效");
+     const result: CleanupPreview = { id: randomUUID(), createdAt: Date.now(), olderThan: input.olderThan, candidates: [], protected: [], bytes: 0, scope: input.kind === "session" ? "删除所选根会话及子会话；附件引用随既有删除流程释放，物理文件由附件清理另行处理。数据库文件不会因此立即缩小。" : `只删除 ${getLogsDir()} 中已轮转、早于指定时间的日志；当前 daemon.log 和非轮转文件保护。` };
+@@ -95,8 +95,8 @@ export class MaintenanceCleanupService {
+     if (this.control.hasAnyActiveRuns() || this.control.runtimeSnapshot().coordinator.queuedRunCount > 0) return "后台仍有活动或排队任务，请收尾后重试";
+     if (ids.some(id => this.store.runs.listRuns(id).some(run => run.status === "pending" || run.status === "running"))) return "包含活动或排队运行记录";
+     const sessionIds = new Set(ids);
+-    if (this.store.toolOperations.listSafetyStates().some(operation => sessionIds.has(operation.sessionId)
+-      && ["prepared", "authorized", "dispatching", "unknown"].includes(operation.state)))
++    if (this.store.toolOperations.listSafetyStates({ states: ["prepared", "authorized", "dispatching", "unknown"] })
++      .some(operation => sessionIds.has(operation.sessionId)))
+       return "包含尚未结算的工具操作，请先核对结果或取消未派发操作";
+     if (ids.some(id => this.store.listSessionTasks(id).some(task => task.status === "pending" || task.status === "running"))) return "包含活动子任务或后台任务";
+     if (this.store.permissions.list().some(permission => ids.includes(permission.sessionId) && permission.status === "pending")) return "仍有待批准操作";
+diff --git a/packages/server/src/application/session/execution/README.md b/packages/server/src/application/session/execution/README.md
+index 885b6398..4b6fb103 100644
+--- a/packages/server/src/application/session/execution/README.md
++++ b/packages/server/src/application/session/execution/README.md
+@@ -57,6 +57,16 @@ S1 不提供重启续跑。默认来源身份含当前宿主捕获的实现身
+ 
+ 结算成功、提交失败及人工核对后的状态判断只读取已有 `getSummary()` 摘要，不复制完整输入与结果。完整回执的保存、比较和显式读取仍保留原有复制规则。
+ 
++危险操作检查向 `listSafetyStates` 传入 unknown/dispatching 与本宿主的失败操作 ID，按“或”取候选；已确认的只读失败 ID 也保留，再按原有 kind、Run 状态及同根树规则判断。Core 的两次策略检查和 Server 在 authorize/dispatch 的两次重查均保留。
++
++本机合成基准放在 [tool-operation-hot-path.bench.mjs](./__test__/tool-operation-hot-path.bench.mjs)。从仓库根运行单个进程：
++
++```powershell
++pnpm --filter @vykor/server exec node --expose-gc --import ../../apps/cli/node_modules/tsx/dist/loader.mjs src/application/session/execution/__test__/tool-operation-hot-path.bench.mjs
++```
++
++正式比较由 `docs/superpowers/reviews/2026-10-27-storage-hot-path/run-experiments.py` 顺序启动两轮，每版本每轮三个新进程；查询和追加操作的派发使用独立临时数据库。该基准不调用真实工具、模型或用户文件，不新增产品命令。
++
+ `ToolOperationReviewService` 是宿主人工核对入口，通过 daemon 的窄 `toolOperationReview` 属性接到 HTTP。列表返回同根会话树的 unknown，以及原 Run 已结束但仍为 dispatching 的操作身份、状态和版本；按 ID 查询才返回各最多 4000 字符的输入及原始结果预览，以及最近 20 条有界证据。预览可能含原工具数据，仅供已认证宿主人工检查，不能作为模型指令，也不会自动写入模型上下文。
+ 
+ dispatching 尚不能提交人工结论。列表、详情和拒绝响应的 `recoveryHint` 提示先排查存储失败，等待实际调用结束，确认旧 daemon 停止后重启；经过既有启动恢复，再刷新记录进行核对。接口不在线释放这类记录，也不自动重放。
+diff --git a/packages/server/src/application/session/execution/__test__/tool-operation-hot-path.bench.mjs b/packages/server/src/application/session/execution/__test__/tool-operation-hot-path.bench.mjs
+new file mode 100644
+index 00000000..bd9ec833
+--- /dev/null
++++ b/packages/server/src/application/session/execution/__test__/tool-operation-hot-path.bench.mjs
+@@ -0,0 +1,253 @@
++import assert from 'node:assert/strict';
++import { createHash } from 'node:crypto';
++import { mkdtempSync, readFileSync, writeFileSync, rmSync, realpathSync } from 'node:fs';
++import { tmpdir } from 'node:os';
++import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
++import { fileURLToPath } from 'node:url';
++import { SessionStore } from '@vykor/services';
++import { SessionDatabase } from '../../../../../../services/src/database/session-database.ts';
++import { defaultDurableEventRegistry } from '../../../../../../services/src/session-runtime/events/event-registry.ts';
++import { ToolOperationService } from '../tool-operation-service.ts';
++
++// One process per invocation. The archived Python coordinator runs three fresh
++// processes per version/round, sequentially, and retains every result.
++const script = fileURLToPath(import.meta.url);
++const root = realpathSync(resolve(dirname(script), '../../../../../../..'));
++const sha = path => createHash('sha256').update(readFileSync(path)).digest('hex');
++const sources = {
++  server: fileURLToPath(new URL('../tool-operation-service.ts', import.meta.url)),
++  services: fileURLToPath(import.meta.resolve('@vykor/services')),
++  operations: join(root, 'packages/services/src/tool-operations/tool-operation-repository.ts'),
++  executions: join(root, 'packages/services/src/execution-records/execution-repository.ts'),
++};
++for (const path of Object.values(sources)) {
++  const child = relative(root, realpathSync(path));
++  assert.ok(child && !child.startsWith('..') && !isAbsolute(child), 'Source escaped its checkout');
++}
++const stamp = 1_800_000_000_000;
++const cwd = 'synthetic-storage-growth';
++const uuid = n => `00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`;
++const canonical = value => value && typeof value === 'object'
++  ? Array.isArray(value) ? `[${value.map(canonical).join(',')}]`
++    : `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonical(value[key])}`).join(',')}}`
++  : JSON.stringify(value);
++function seed(path, runs, bodyBytes) {
++  const database = SessionDatabase.open({ path });
++  const sql = database.connection;
++  const prepared = new Map();
++  function insert(table, row) {
++    let statement = prepared.get(table);
++    if (!statement) {
++      const keys = Object.keys(row);
++      statement = sql.prepare(`INSERT INTO ${table} (${keys.join(',')}) VALUES (${keys.map(key => `@${key}`).join(',')})`);
++      prepared.set(table, statement);
++    }
++    statement.run(row);
++  }
++  try {
++    sql.transaction(() => {
++      for (const id of ['current', 'history']) insert('session', { id, cwd, title: id, model: 'synthetic', status: 'idle', metadata_json: '{}', created_at: stamp, updated_at: stamp });
++      for (let i = 0; i < runs; i++) {
++        const sessionId = i < 10 ? 'current' : 'history';
++        const seq = i < 10 ? i + 1 : i - 9;
++        const runId = `run-${i}`, inputId = `input-${i}`, executionId = `execution-${i}`;
++        const operationId = `operation_${uuid(i + 1)}`, toolAttemptId = `tool_attempt_${uuid(i + 1)}`;
++        const toolCallId = `call-${i}`;
++        const body = bodyBytes ? (`run:${i}:` + 'x'.repeat(bodyBytes)).slice(0, bodyBytes) : '';
++        const result = { toolUseId: toolCallId, toolName: 'Read', content: [{ type: 'text', text: body }], executionState: 'completed', operationId, toolAttemptId };
++        const toolIdentity = JSON.stringify({ source: { kind: 'builtin' }, implementation: 'storage-growth-v1' });
++        const intent = { sessionId, runId, agentId: 'agent', inputId, cwd, toolCallId, toolName: 'Read', input: {}, kind: 'read_only', toolIdentity };
++        const operation = { id: operationId, operationId, sessionId, runId, executionId, agentId: 'agent', inputId, traceId: `trace-${i}`, cwd, toolCallId, toolName: 'Read', toolIdentity, normalizedInput: {}, kind: 'read_only', state: 'confirmed', revision: 4, intentRevision: 1, intentDigest: createHash('sha256').update(canonical(intent)).digest('hex'), policyVersion: 'synthetic', activeAttemptId: toolAttemptId, result, createdAt: stamp, updatedAt: stamp };
++        const attempt = { id: toolAttemptId, operationId, toolAttemptId, revision: 3, ownerId: 'synthetic-owner', sessionId, runId, executionId, status: 'confirmed', startedAt: stamp, finishedAt: stamp, result };
++        const execution = { id: executionId, sessionId, runId, status: 'completed', startedAt: stamp, finishedAt: stamp, createdAt: stamp, updatedAt: stamp };
++        insert('session_input', { id: inputId, session_id: sessionId, seq, delivery: 'queue', content: 'read', items_json: JSON.stringify([{ type: 'text', text: 'read' }]), metadata_json: '{}', created_at: stamp });
++        insert('session_run', { id: runId, session_id: sessionId, input_id: inputId, status: 'completed', started_at: stamp, finished_at: stamp, metadata_json: '{}', created_at: stamp, updated_at: stamp });
++        insert('session_run_attempt', { id: `model-${i}`, run_id: runId, sequence: 1, status: 'completed', provider: 'synthetic', model: 'synthetic', started_at: stamp, finished_at: stamp, created_at: stamp, updated_at: stamp });
++        for (let j = 0; j < 2; j++) {
++          const messageId = `message-${i}-${j}`;
++          insert('session_message', { id: messageId, session_id: sessionId, seq: seq * 2 - 1 + j, role: j ? 'assistant' : 'user', run_id: runId, input_id: inputId, metadata_json: '{}', created_at: stamp, updated_at: stamp });
++          insert('session_message_part', { id: `part-${i}-${j}`, session_id: sessionId, message_id: messageId, seq: seq * 2 - 1 + j, type: j ? 'tool' : 'text', status: 'completed', text: j ? null : 'read', tool_use_id: j ? toolCallId : null, tool_name: j ? 'Read' : null, input_json: j ? '{}' : null, output_json: j ? JSON.stringify(result) : null, metadata_json: '{}', created_at: stamp, updated_at: stamp });
++        }
++        insert('execution', { id: executionId, session_id: sessionId, run_id: runId, data_json: JSON.stringify(execution) });
++        insert('tool_operation', { id: operationId, session_id: sessionId, run_id: runId, logical_call_id: JSON.stringify([null, toolCallId]), state: 'confirmed', data_json: JSON.stringify(operation) });
++        insert('tool_dispatch_attempt', { id: toolAttemptId, session_id: sessionId, operation_id: operationId, data_json: JSON.stringify(attempt) });
++        const payload = { runId, generationId: `generation-${i}`, attempt: 1, model: 'synthetic' };
++        defaultDurableEventRegistry.prepareRead('session.model.attempt.started', 1, payload, sessionId);
++        insert('session_event', { id: `event-${i}`, seq: i + 1, type: 'session.model.attempt.started', schema_version: 1, session_id: sessionId, payload_json: JSON.stringify(payload), created_at: stamp });
++      }
++    })();
++    assert.equal(sql.prepare("SELECT count(*) AS n FROM session_run WHERE session_id = 'current'").get().n, 10);
++    for (const table of ['session_input', 'session_run', 'session_run_attempt', 'execution', 'tool_operation', 'tool_dispatch_attempt', 'session_event']) assert.equal(sql.prepare(`SELECT count(*) AS n FROM ${table}`).get().n, runs);
++    for (const table of ['session_message', 'session_message_part']) assert.equal(sql.prepare(`SELECT count(*) AS n FROM ${table}`).get().n, runs * 2);
++    assert.deepEqual(sql.pragma('foreign_key_check'), []);
++  } finally { database.close(); }
++}
++
++
++const warmup = 10, repeats = 100, initialRuns = 10010, bodyBytes = 4096;
++const median = values => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
++const stats = samplesMs => ({ samplesMs, medianMs: median(samplesMs),
++  p95Ms: [...samplesMs].sort((a, b) => a - b)[Math.ceil(samplesMs.length * 0.95) - 1] });
++async function measure(work) {
++  for (let i = 0; i < warmup; i++) await work(i);
++  const samples = [];
++  for (let i = 0; i < repeats; i++) {
++    const start = performance.now();
++    await work(i + warmup);
++    samples.push(performance.now() - start);
++  }
++  return stats(samples);
++}
++async function withStore(work) {
++  const directory = mkdtempSync(join(tmpdir(), 'vykor-tool-hot-path-'));
++  let store;
++  try {
++    const path = join(directory, 'synthetic.db');
++    seed(path, initialRuns, bodyBytes);
++    store = new SessionStore({ path });
++    const lease = store.acquireApplicationOwner({ ownerId: 'measurement-owner', pid: process.pid, staleAfterMs: 600_000 });
++    return await work(store, lease);
++  } finally {
++    store?.close();
++    const child = relative(resolve(tmpdir()), resolve(directory));
++    assert.ok(child && !child.startsWith('..') && !isAbsolute(child) && child.startsWith('vykor-tool-hot-path-'));
++    rmSync(directory, { recursive: true, force: true });
++  }
++}
++function counts(store) {
++  return { operations: store.toolOperations.listSafetyStates().length,
++    currentCandidates: store.toolOperations.listResultCandidates('current').length,
++    executions: store.executions.list().length,
++    runs: Object.keys(store.storage.state.runs).length,
++    attempts: Object.keys(store.storage.state.toolDispatchAttempts).length };
++}
++function intentFor(sessionId, runId, id, name = 'Write') {
++  return { scope: { sessionId, agentId: sessionId, runId, inputId: 'bench-input',
++    traceId: 'bench-trace', cwd, signal: new AbortController().signal },
++    toolUse: { type: 'tool_use', id, name, input: { value: 1 } } };
++}
++function receiptResult(intent, executionState = 'completed') {
++  return { toolUseId: intent.toolUse.id, toolName: intent.toolUse.name,
++    content: [{ type: 'text', text: 'simulated receipt' }], executionState };
++}
++async function dispatchInput(service, intent) {
++  let operation = await service.operations.prepare(intent);
++  const policy = await service.requiredPolicy.check({ intent, operation, phase: 'authorization' });
++  assert.equal(policy.allowed, true, policy.reason);
++  operation = await service.operations.authorize({ intent, operation, policyVersion: policy.policyVersion });
++  const recheck = await service.requiredPolicy.check({ intent, operation, phase: 'dispatch' });
++  assert.equal(recheck.allowed, true, recheck.reason);
++  return service.operations.dispatch({ intent, operation, policyVersion: recheck.policyVersion });
++}
++async function main() {
++  assert.equal(typeof global.gc, 'function', 'Use --expose-gc');
++  const candidates = await withStore(async store => {
++    const initial = counts(store);
++    assert.deepEqual(initial, { operations: initialRuns, currentCandidates: 10, executions: initialRuns,
++      runs: initialRuns, attempts: initialRuns });
++    const expectedIds = Array.from({ length: 10 }, (_, i) => `operation_${uuid(i + 1)}`);
++    const timing = await measure(() => {
++      const rows = store.toolOperations.listResultCandidates('current');
++      assert.deepEqual(rows.map(row => row.operationId), expectedIds);
++    });
++    const final = counts(store);
++    assert.deepEqual(final, initial);
++    return { initial, final, timing };
++  });
++  const dispatch = await withStore(async (store, lease) => {
++    store.runs.createRun({ id: 'bench-run', sessionId: 'current' });
++    const service = new ToolOperationService({ store, ownerLease: () => lease });
++    const initial = counts(store);
++    const original = store.toolOperations.listSafetyStates;
++    const safetyCalls = [];
++    store.toolOperations.listSafetyStates = function (...args) {
++      const start = performance.now();
++      const rows = original.apply(this, args);
++      safetyCalls.push({ ms: performance.now() - start, returned: rows.length });
++      return rows;
++    };
++    try {
++      const timing = await measure(async i => {
++        const intent = intentFor('current', 'bench-run', `dispatch-${i}`);
++        const receipt = await dispatchInput(service, intent);
++        await service.operations.settle({ receipt, result: receiptResult(intent) });
++        assert.equal(store.toolOperations.getSummary(receipt.operationId)?.state, 'confirmed');
++      });
++      assert.equal(safetyCalls.length, (warmup + repeats) * 4, 'All four safety reviews must execute');
++      const measuredSafety = safetyCalls.splice(0);
++      const final = counts(store);
++      assert.deepEqual(final, { ...initial, operations: initialRuns + warmup + repeats,
++        currentCandidates: 10 + warmup + repeats, executions: initialRuns + 1,
++        attempts: initialRuns + warmup + repeats });
++      return { initial, final, appendedOperations: warmup + repeats, timing,
++        safety: { calls: measuredSafety, measured: stats(measuredSafety.slice(warmup * 4).map(row => row.ms)) } };
++    } finally { store.toolOperations.listSafetyStates = original; }
++  });
++  // A separate fixture checks actual filtering for unknown/orphaned dispatches
++  // and a read-only failed receipt. Unrelated roots still permit dispatch;
++  // the read-only failure in the current tree must block it.
++  const blocked = await withStore(async (store, lease) => {
++    store.runs.createRun({ id: 'history-active', sessionId: 'history' });
++    store.runs.createRun({ id: 'current-active', sessionId: 'current' });
++    let failCommit = false;
++    const service = new ToolOperationService({ store, ownerLease: () => lease,
++      describe: intent => intent.toolUse.name === 'Read' ? { kind: 'read_only' } : undefined });
++    const orphanIntent = intentFor('history', 'history-active', 'orphan');
++    const orphan = await dispatchInput(service, orphanIntent);
++    const unknownIntent = intentFor('history', 'history-active', 'unknown');
++    const unknown = await dispatchInput(service, unknownIntent);
++    await service.operations.settle({ receipt: unknown, result: receiptResult(unknownIntent, 'unknown') });
++    store.runs.updateRun('history-active', { status: 'completed' });
++    const intent = intentFor('current', 'current-active', 'blocked-write');
++    const operation = await service.operations.prepare(intent);
++    assert.equal((await service.requiredPolicy.check({ intent, operation, phase: 'authorization' })).allowed, true,
++      'Unrelated roots must not block the current tree');
++    const failedIntent = intentFor('current', 'current-active', 'failed-read', 'Read');
++    const failed = await dispatchInput(service, failedIntent);
++    const context = store.storage;
++    context.coordinator.setHooks({ beforeCommit() { if (failCommit) throw new Error('synthetic receipt commit failure'); } });
++    failCommit = true;
++    await assert.rejects(service.operations.settle({ receipt: failed, result: receiptResult(failedIntent) }), /synthetic receipt commit failure/);
++    failCommit = false;
++    context.coordinator.setHooks();
++    // Durable repair alone does not clear this Service's failed-receipt marker.
++    // Its confirmed read-only ID must therefore survive the OR filter too.
++    store.toolOperations.settle({ receipt: failed, result: receiptResult(failedIntent) });
++    const original = store.toolOperations.listSafetyStates;
++    const safetyCalls = [];
++    store.toolOperations.listSafetyStates = function (...args) {
++      const start = performance.now();
++      const rows = original.apply(this, args);
++      const ms = performance.now() - start;
++      safetyCalls.push({ ms, returned: rows.length,
++        pendingIncluded: [unknown.operationId, orphan.operationId, failed.operationId].every(id => rows.some(row => row.id === id)) });
++      return rows;
++    };
++    try {
++      const initial = counts(store);
++      safetyCalls.length = 0;
++      const timing = await measure(async () => {
++        const policy = await service.requiredPolicy.check({ intent, operation, phase: 'authorization' });
++        assert.equal(policy.allowed, false);
++        assert.ok(policy.reason.includes(failed.operationId), 'Read-only failed receipt was lost');
++      });
++      const measured = safetyCalls.splice(0);
++      const final = counts(store);
++      assert.deepEqual(final, initial);
++      assert.equal(measured.length, warmup + repeats);
++      for (const call of measured) assert.ok(call.pendingIncluded, 'Pending or additional failure ID was omitted');
++      await service.operations.settle({ receipt: failed, result: receiptResult(failedIntent), late: true });
++      assert.equal((await service.requiredPolicy.check({ intent, operation, phase: 'dispatch' })).allowed, true);
++      return { initial, final, timing, safety: measured,
++        expectedPendingIds: [unknown.operationId, orphan.operationId, failed.operationId] };
++    } finally { store.toolOperations.listSafetyStates = original; }
++  });
++  return { node: process.version, pid: process.pid, sha256: sha(script), root,
++    sources: Object.fromEntries(Object.entries(sources).map(([name, path]) => [name, { path: realpathSync(path), sha256: sha(path) }])),
++    seed: { totalRuns: initialRuns, unrelatedRuns: initialRuns - 10, currentResults: 10, bodyBytes, warmup, repeats },
++    candidates, dispatch, blocked };
++}
++const result = await main();
++const output = process.argv.find(arg => arg.startsWith('--output='))?.slice('--output='.length);
++if (output) writeFileSync(output, JSON.stringify(result, null, 2) + '\n');
++else console.log(JSON.stringify(result));
+diff --git a/packages/server/src/application/session/execution/__test__/tool-operation-service.test.ts b/packages/server/src/application/session/execution/__test__/tool-operation-service.test.ts
+index 67b3bb7b..0b6837ec 100644
+--- a/packages/server/src/application/session/execution/__test__/tool-operation-service.test.ts
++++ b/packages/server/src/application/session/execution/__test__/tool-operation-service.test.ts
+@@ -34,6 +34,29 @@ async function authorized(f: Awaited<ReturnType<typeof fixture>>, intent = f.int
+   return { intent, operation: await f.service.operations.authorize({ intent, operation, policyVersion: policy.policyVersion }), policyVersion: policy.policyVersion };
+ }
+ describe("daemon tool operation host", () => {
++  it("keeps a confirmed read-only failed-receipt ID in every dangerous safety review until host settlement", async () => {
++    let failCommit = false;
++    const f = await fixture({ beforeCommit: () => { if (failCommit) throw new Error("receipt commit failed"); } });
++    f.service = new ToolOperationService({ store: f.store, ownerLease: () => f.lease,
++      describe: intent => intent.toolUse.name === "Read" ? { kind: "read_only" } : undefined });
++    const waiting = await authorized(f);
++    const readIntent = { ...f.intent, toolUse: { ...f.intent.toolUse, id: "read", name: "Read" } };
++    const read = await authorized(f, readIntent), receipt = await f.service.operations.dispatch(read);
++    const result = { toolUseId: "read", toolName: "Read", content: [{ type: "text" as const, text: "done" }], executionState: "completed" as const };
++    failCommit = true;
++    await expect(f.service.operations.settle({ receipt, result })).rejects.toThrow("receipt commit failed");
++    failCommit = false;
++    // A durable repair has not yet cleared this host's independent failure marker.
++    f.store.toolOperations.settle({ receipt, result });
++    expect(f.store.toolOperations.getSummary(receipt.operationId)?.state).toBe("confirmed");
++    for (const phase of ["authorization", "dispatch"] as const)
++      expect((await f.service.requiredPolicy.check({ ...waiting, phase })).allowed).toBe(false);
++    await expect(f.service.operations.authorize(waiting)).rejects.toThrow(/unresolved/i);
++    await expect(f.service.operations.dispatch(waiting)).rejects.toThrow(/unresolved/i);
++    expect(f.store.toolOperations.listAttempts(waiting.operation.operationId)).toEqual([]);
++    await f.service.operations.settle({ receipt, result, late: true });
++    await expect(f.service.operations.dispatch(waiting)).resolves.toMatchObject({ ownerId: "owner" });
++  });
+   it("settles large results and preserves full reads without copying bodies for status checks", async () => {
+     const f = await fixture(), input = await authorized(f);
+     const receipt = await f.service.operations.dispatch(input);
+diff --git a/packages/server/src/application/session/execution/tool-operation-service.ts b/packages/server/src/application/session/execution/tool-operation-service.ts
+index e5c1caa4..04b9cbb7 100644
+--- a/packages/server/src/application/session/execution/tool-operation-service.ts
++++ b/packages/server/src/application/session/execution/tool-operation-service.ts
+@@ -147,7 +147,9 @@ export class ToolOperationService implements AgentToolSafety {
+   private assertUnblocked(intent: ToolOperationIntent, kind: ToolOperationKind): void {
+     if (kind === "read_only") return;
+     const rootSessionId = this.rootSessionId(intent.scope.sessionId);
+-    const blocked = this.options.store.toolOperations.listSafetyStates().find(row => {
++    const blocked = this.options.store.toolOperations.listSafetyStates({
++      states: ["unknown", "dispatching"], includeOperationIds: this.unsettledFailures,
++    }).find(row => {
+       const settlementFailed = this.unsettledFailures.has(row.id);
+       if (row.kind === "read_only" && !settlementFailed) return false;
+       const run = row.state === "dispatching" ? this.options.store.runs.getRun(row.runId) : undefined;
+diff --git a/packages/services/src/execution-records/README.md b/packages/services/src/execution-records/README.md
+index 1cf25941..fc963347 100644
+--- a/packages/services/src/execution-records/README.md
++++ b/packages/services/src/execution-records/README.md
+@@ -4,4 +4,8 @@
+ 
+ 主要文件是 [execution-repository.ts](execution-repository.ts)，公开入口为 [index.ts](index.ts)。宿主调用 `ensure({ sessionId, runId })`，或首次准备工具操作时自动创建；同一 Run 重复调用返回已有记录。`get` 和 `list` 返回副本，Run 状态变化时同步保存执行状态和结束时间。
+ 
++`ensure` 直接遍历共享状态的自有键，找到第一个 Run 匹配就检查身份并返回副本，不先复制全部匹配记录。仍能看到同一事务刚建立的执行头，回滚和 owner 接管后读取的都是同一份当前状态，没有额外维护的查询状态。
++
+ 状态保存在 SessionStore 的共享状态及同一个 SQLite 数据库中。memory 会话只进入内存存储，写入复用事务、当前 owner 校验和回滚日志。新增执行头字段及查询放本目录；工具派发状态放相邻的 [tool-operations](../tool-operations/README.md)，跨目录测试放工具操作的 `__test__/`。
++
++本域的查找、身份冲突、事务内读取与回滚测试放 [__test__/execution-repository.test.ts](__test__/execution-repository.test.ts)。
+diff --git a/packages/services/src/execution-records/__test__/execution-repository.test.ts b/packages/services/src/execution-records/__test__/execution-repository.test.ts
+new file mode 100644
+index 00000000..950045f9
+--- /dev/null
++++ b/packages/services/src/execution-records/__test__/execution-repository.test.ts
+@@ -0,0 +1,62 @@
++import { mkdtempSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
++import { isAbsolute, join, relative, resolve } from "node:path";
++import { afterEach, describe, expect, it } from "vitest";
++import { SessionStore } from "../../session-runtime/store.js";
++import type { StorageContext } from "../../database/storage-context.js";
++
++const cleanups: (() => void)[] = [];
++afterEach(() => cleanups.splice(0).reverse().forEach(cleanup => cleanup()));
++function fixture(storage: "sqlite" | "memory" = "sqlite") {
++  const directory = mkdtempSync(join(tmpdir(), "execution-ensure-"));
++  const store = new SessionStore({ path: join(directory, "store.db") });
++  cleanups.push(() => {
++    const child = relative(resolve(tmpdir()), resolve(directory));
++    if (!child || child.startsWith("..") || isAbsolute(child) || !child.startsWith("execution-ensure-")) throw new Error("Unsafe temporary cleanup");
++    rmSync(directory, { recursive: true, force: true });
++  });
++  cleanups.push(() => store.close());
++  store.sessions.create({ id: "s", cwd: directory, model: "m", storage });
++  store.runs.createRun({ id: "r", sessionId: "s" });
++  return { store, rows: (store as unknown as { storage: StorageContext }).storage.state.executions };
++}
++describe("execution ensure", () => {
++  it("stops at the first matching Run and returns a copy even after that Run ends", () => {
++    const { store, rows } = fixture();
++    const first = store.executions.ensure({ id: "first", sessionId: "s", runId: "r" });
++    store.runs.updateRun("r", { status: "completed" });
++    Object.defineProperty(rows, "unrelated-tail", { configurable: true, enumerable: true, get() { throw new Error("Read past the first execution"); } });
++    try {
++      let copy: typeof first | undefined;
++      expect(() => { copy = store.executions.ensure({ sessionId: "s", runId: "r" }); }).not.toThrow();
++      expect(copy).toMatchObject({ id: "first", status: "completed" });
++      copy!.status = "failed";
++      expect(store.executions.get("first")?.status).toBe("completed");
++    } finally { delete rows["unrelated-tail"]; }
++  });
++  it("checks the first execution identity before any later matching ID", () => {
++    const { store, rows } = fixture();
++    const first = store.executions.ensure({ id: "z-first", sessionId: "s", runId: "r" });
++    rows["a-later"] = { ...first, id: "a-later" };
++    expect(() => store.executions.ensure({ id: "a-later", sessionId: "s", runId: "r" })).toThrow("Execution identity conflict");
++  });
++  it("does not reuse inherited execution records", () => {
++    const { store, rows } = fixture();
++    const prototype = Object.getPrototypeOf(rows);
++    Object.setPrototypeOf(rows, { ghost: { id: "ghost", sessionId: "s", runId: "r", status: "pending" } });
++    try {
++      expect(store.executions.ensure({ id: "own", sessionId: "s", runId: "r" }).id).toBe("own");
++    } finally { Object.setPrototypeOf(rows, prototype); }
++  });
++  it.each(["sqlite", "memory"] as const)("reads newly ensured %s records inside atomic and rolls them back together", storage => {
++    const { store } = fixture(storage);
++    expect(() => store.transaction(() => {
++      const first = store.executions.ensure({ sessionId: "s", runId: "r" });
++      expect(store.executions.ensure({ sessionId: "s", runId: "r" })).toEqual(first);
++      expect(store.executions.list()).toHaveLength(1);
++      throw new Error("abort transaction");
++    })).toThrow("abort transaction");
++    expect(store.executions.list()).toEqual([]);
++    expect(store.executions.ensure({ id: "after-rollback", sessionId: "s", runId: "r" }).id).toBe("after-rollback");
++  });
++});
+diff --git a/packages/services/src/execution-records/execution-repository.ts b/packages/services/src/execution-records/execution-repository.ts
+index f91f4813..95ef5cf5 100644
+--- a/packages/services/src/execution-records/execution-repository.ts
++++ b/packages/services/src/execution-records/execution-repository.ts
+@@ -13,10 +13,13 @@ export class ExecutionRepository {
+       const session = assertSession(this.storage.state, input.sessionId);
+       const run = this.storage.state.runs[input.runId];
+       if (!run || run.sessionId !== input.sessionId) throw new Error("Execution Run does not belong to session");
+-      const existing = this.list({ runId: input.runId })[0];
+-      if (existing) {
++      const rows = this.storage.state.executions;
++      for (const id in rows) {
++        if (!Object.hasOwn(rows, id)) continue;
++        const existing = rows[id]!;
++        if (existing.runId !== input.runId) continue;
+         if (input.id && existing.id !== input.id) throw new Error("Execution identity conflict");
+-        return existing;
++        return clone(existing);
+       }
+       assertMutableSession(session);
+       if (run.status !== "pending" && run.status !== "running") throw new Error("Execution Run is terminal");
+diff --git a/packages/services/src/tool-operations/README.md b/packages/services/src/tool-operations/README.md
+index a8df3334..fedde2c4 100644
+--- a/packages/services/src/tool-operations/README.md
++++ b/packages/services/src/tool-operations/README.md
+@@ -10,6 +10,10 @@
+ 
+ 安全判断使用 `listSafetyStates()`，只返回 id、sessionId、runId、kind、state，不复制输入和正文。补读使用 `listResultCandidates(sessionId)` / `getResultCandidate(operationId)` 读取已完成结果的身份和来源；授权与分页之后才调用 `readResultText(operationId)` 生成单条文本。`get/list` 仍供需要完整审计记录的调用方使用，Operation 与 Attempt 的正文保存策略不变。
+ 
++`listSafetyStates({ states, includeOperationIds })` 可按状态或额外操作 ID 筛选，两者同时提供时按“或”保留，一条记录只返回一次；额外 ID 可以是已确认的只读操作。无参数或空对象仍返回全部元数据，显式空状态数组或空 ID Set 不产生匹配。遍历自有键，先筛选再投影。
++
++逻辑调用查找、同会话派发保护找到首个匹配即停止；结果及人工审查候选按原有自有键枚举次序生成新对象，返回副本的规则不变。查询仍读取共享状态并遍历历史，复杂度仍为 O(N)，没有新增缓存或索引，也没有解决正文常驻。
++
+ 未知写操作阻止同一会话后续危险派发，换工具或新建操作不能绕过，只读工具仍可核对。`reconcile` 仅供可信宿主传入只读查询的非空证据；不能从错误文本推断未生效。核对为 `not_applied` 后，经过当前授权才可创建新的 Attempt。确认已生效需要可信完整结果，缺失结果时保持 unknown。每次核对证据追加到操作及原尝试，保留历史。
+ 
+ 启动时宿主确认旧 owner 失活，在取得写入权的同一事务内重新读取持久状态，再调用 `recoverDispatching` 将所有遗留未结算尝试标记 unknown；固定 ownerId 也不能跳过旧派发。不重新调用工具。合法迟到结果可将同一个 unknown Attempt 确认为 completed，即使 Run 已结束，但不能重新交付模型或取得新派发权。
+diff --git a/packages/services/src/tool-operations/__test__/tool-operation-repository.test.ts b/packages/services/src/tool-operations/__test__/tool-operation-repository.test.ts
+index 6f332b70..ab60fce3 100644
+--- a/packages/services/src/tool-operations/__test__/tool-operation-repository.test.ts
++++ b/packages/services/src/tool-operations/__test__/tool-operation-repository.test.ts
+@@ -37,6 +37,96 @@ function dispatch(f: ReturnType<typeof setup>) {
+   return { operation, authorized, receipt };
+ }
+ describe("tool operation repository", () => {
++  it("merges safety states and additional IDs by OR, with explicit empty and default semantics", () => {
++    const f = setup();
++    const make = (id: string, state: "confirmed" | "unknown" | "dispatching" | "prepared") => {
++      const intent = { ...f.intent, toolUse: { ...f.intent.toolUse, id } };
++      const operation = f.store.toolOperations.prepare({ ...intent, toolIdentity: "v1", kind: "read_only" });
++      if (state !== "prepared") {
++        const authorized = f.store.toolOperations.authorize({ intent, operation, policyVersion: "p1" });
++        const receipt = f.store.toolOperations.dispatch({ intent, operation: authorized, policyVersion: "p1", ownerId: "owner" });
++        if (state !== "dispatching") f.store.toolOperations.settle({ receipt, result: { ...result(state === "unknown" ? "unknown" : "completed"), toolUseId: id } });
++      }
++      return operation.operationId;
++    };
++    const extra = make("extra-read", "confirmed"), unknown = make("unknown", "unknown");
++    const dispatching = make("dispatching", "dispatching"), prepared = make("prepared", "prepared");
++    const all = [extra, unknown, dispatching, prepared];
++    expect(f.store.toolOperations.listSafetyStates().map(row => row.id)).toEqual(all);
++    expect(f.store.toolOperations.listSafetyStates({}).map(row => row.id)).toEqual(all);
++    expect(f.store.toolOperations.listSafetyStates({ states: [] })).toEqual([]);
++    expect(f.store.toolOperations.listSafetyStates({ includeOperationIds: new Set() })).toEqual([]);
++    expect(f.store.toolOperations.listSafetyStates({ states: [], includeOperationIds: new Set() })).toEqual([]);
++    expect(f.store.toolOperations.listSafetyStates({ states: ["unknown"] }).map(row => row.id)).toEqual([unknown]);
++    expect(f.store.toolOperations.listSafetyStates({ includeOperationIds: new Set([extra]) }).map(row => row.id)).toEqual([extra]);
++    const rows = f.store.toolOperations.listSafetyStates({ states: ["unknown", "dispatching"], includeOperationIds: new Set([extra, unknown]) });
++    expect(rows.map(row => row.id)).toEqual([extra, unknown, dispatching]);
++    expect(rows[0]!.kind).toBe("read_only");
++    rows[0]!.state = "cancelled";
++    expect(f.store.toolOperations.getSummary(extra)?.state).toBe("confirmed");
++  });
++  it("filters confirmed history before accessing projected safety fields", () => {
++    const f = setup(), { receipt } = dispatch(f);
++    f.store.toolOperations.settle({ receipt, result: result("unknown") });
++    const context = (f.store as unknown as { storage: StorageContext }).storage;
++    const original = context.state.toolOperations[receipt.operationId]!;
++    for (let i = 0; i < 1000; i++) {
++      context.state.toolOperations[`history-${i}`] = { ...original, id: `history-${i}`, state: "confirmed",
++        get sessionId(): string { throw new Error("Unmatched history must not be projected"); } };
++    }
++    expect(() => f.store.toolOperations.listSafetyStates({ states: ["unknown"] })).not.toThrow();
++    expect(f.store.toolOperations.listSafetyStates({ states: ["unknown"] }).map(row => row.id)).toEqual([receipt.operationId]);
++  });
++  it("returns result and review candidates in own-key insertion order with independent projections", () => {
++    const f = setup(), { receipt } = dispatch(f);
++    f.store.toolOperations.settle({ receipt, result: result() });
++    const context = (f.store as unknown as { storage: StorageContext }).storage;
++    const original = context.state.toolOperations[receipt.operationId]!;
++    delete context.state.toolOperations[receipt.operationId];
++    for (const id of ["z-result", "a-result"]) context.state.toolOperations[id] = { ...original, id, operationId: id };
++    for (const [id, state] of [["z-review", "unknown"], ["a-review", "dispatching"]] as const)
++      context.state.toolOperations[id] = { ...original, id, operationId: id, state };
++    const rows = context.state.toolOperations;
++    const prototype = Object.getPrototypeOf(rows);
++    Object.setPrototypeOf(rows, Object.defineProperty({}, "inherited", { enumerable: true, get() { throw new Error("Inherited record must not be read"); } }));
++    try {
++      const results = f.store.toolOperations.listResultCandidates("s");
++      expect(results.map(row => row.operationId)).toEqual(["z-result", "a-result"]);
++      const reviews = f.store.toolOperations.listReviewCandidates();
++      expect(reviews.map(row => row.operationId)).toEqual(["z-review", "a-review"]);
++      expect(f.store.toolOperations.listSafetyStates()).toHaveLength(4);
++      results[0]!.toolName = "changed";
++      reviews[0]!.state = "cancelled";
++      expect(f.store.toolOperations.getResultCandidate("z-result")?.toolName).toBe("write");
++      expect(f.store.toolOperations.getSummary("z-review")?.state).toBe("unknown");
++    } finally { Object.setPrototypeOf(rows, prototype); }
++  });
++  it("stops at the first logical call and still returns a deep copy of its result", () => {
++    const f = setup(), { receipt } = dispatch(f);
++    f.store.toolOperations.settle({ receipt, result: result() });
++    const rows = (f.store as unknown as { storage: StorageContext }).storage.state.toolOperations;
++    Object.defineProperty(rows, "unrelated-tail", { configurable: true, enumerable: true, get() { throw new Error("Read past the matching call"); } });
++    try {
++      let copy: ReturnType<typeof f.store.toolOperations.prepare> | undefined;
++      expect(() => { copy = f.store.toolOperations.prepare({ ...f.intent, toolIdentity: "builtin:write:v1" }); }).not.toThrow();
++      expect(copy?.operationId).toBe(receipt.operationId);
++      (copy!.result!.content[0] as { text: string }).text = "changed";
++      expect(f.store.toolOperations.readResultText(receipt.operationId)).toBe("receipt");
++    } finally { delete rows["unrelated-tail"]; }
++  });
++  it("stops at the first same-session dispatch blocker before reading unrelated history", () => {
++    const f = setup(), { receipt } = dispatch(f);
++    f.store.toolOperations.settle({ receipt, result: result("unknown") });
++    const intent = { ...f.intent, toolUse: { ...f.intent.toolUse, id: "next" } };
++    const operation = f.store.toolOperations.prepare({ ...intent, toolIdentity: "v1" });
++    const authorized = f.store.toolOperations.authorize({ intent, operation, policyVersion: "p1" });
++    const rows = (f.store as unknown as { storage: StorageContext }).storage.state.toolOperations;
++    Object.defineProperty(rows, "unrelated-tail", { configurable: true, enumerable: true, get() { throw new Error("Read past the first blocker"); } });
++    try {
++      expect(() => f.store.toolOperations.dispatch({ intent, operation: authorized, policyVersion: "p1", ownerId: "owner" })).toThrow("Unknown or unsettled write operation");
++      expect(f.store.toolOperations.listAttempts(operation.operationId)).toEqual([]);
++    } finally { delete rows["unrelated-tail"]; }
++  });
+   it("reloads the durable ledger after acquiring ownership, including writes made after construction", () => {
+     const f = setup();
+     f.store.acquireApplicationOwner({ ownerId: "owner", pid: process.pid, staleAfterMs: 1000 });
+diff --git a/packages/services/src/tool-operations/tool-operation-repository.ts b/packages/services/src/tool-operations/tool-operation-repository.ts
+index 9b05193a..14ad30a9 100644
+--- a/packages/services/src/tool-operations/tool-operation-repository.ts
++++ b/packages/services/src/tool-operations/tool-operation-repository.ts
+@@ -97,7 +97,17 @@ export class ToolOperationRepository {
+       if (input.kind === "idempotent_write" && !input.businessKey?.trim()) throw new Error("Idempotent writes require a stable business key");
+       const description = { kind: input.kind ?? "non_replayable", toolIdentity: input.toolIdentity, businessKey: input.businessKey };
+       const intentDigest = digest(input, description);
+-      const existing = Object.values(this.storage.state.toolOperations).find(row => row.sessionId === input.scope.sessionId && row.runId === input.scope.runId && row.toolCallId === input.toolUse.id && row.generationId === input.generationId);
++      const rows = this.storage.state.toolOperations;
++      let existing: ToolOperationRecord | undefined;
++      for (const id in rows) {
++        if (!Object.hasOwn(rows, id)) continue;
++        const row = rows[id]!;
++        if (row.sessionId === input.scope.sessionId && row.runId === input.scope.runId
++          && row.toolCallId === input.toolUse.id && row.generationId === input.generationId) {
++          existing = row;
++          break;
++        }
++      }
+       if (existing) {
+         if (existing.intentDigest !== intentDigest) throw new Error("Tool operation intent conflict");
+         return ticket(existing);
+@@ -153,12 +163,18 @@ export class ToolOperationRepository {
+       if (!input.ownerId.trim()) throw new Error("Tool dispatch owner is required");
+       const owner = this.storage.database.orm.select().from(applicationOwners).where(eq(applicationOwners.key, "application")).get();
+       if (owner && owner.ownerId !== input.ownerId) throw new Error("Tool dispatch owner is no longer active");
+-      if (row.kind !== "read_only" && Object.values(this.storage.state.toolOperations).some(other => {
+-        if (other.sessionId !== row.sessionId || other.kind === "read_only") return false;
+-        if (other.state === "unknown") return true;
+-        const otherRun = this.storage.state.runs[other.runId];
+-        return other.state === "dispatching" && other.runId !== row.runId && (!otherRun || (otherRun.status !== "pending" && otherRun.status !== "running"));
+-      })) throw new Error("Unknown or unsettled write operation blocks dangerous dispatch");
++      if (row.kind !== "read_only") {
++        const rows = this.storage.state.toolOperations;
++        for (const id in rows) {
++          if (!Object.hasOwn(rows, id)) continue;
++          const other = rows[id]!;
++          if (other.sessionId !== row.sessionId || other.kind === "read_only") continue;
++          const otherRun = other.state === "dispatching" ? this.storage.state.runs[other.runId] : undefined;
++          if (other.state === "unknown" || (other.state === "dispatching" && other.runId !== row.runId
++            && (!otherRun || (otherRun.status !== "pending" && otherRun.status !== "running"))))
++            throw new Error("Unknown or unsettled write operation blocks dangerous dispatch");
++        }
++      }
+       this.mutable(row);
+       const toolAttemptId = `tool_attempt_${randomUUID()}`;
+       row.state = "dispatching";
+@@ -213,18 +229,32 @@ export class ToolOperationRepository {
+     return !!row && row.state === "dispatching" && row.activeAttemptId === toolAttemptId;
+   }
+   /** Safety checks never need normalized inputs, receipts or result bodies. */
+-  listSafetyStates(): ToolOperationSafetyState[] {
+-    return Object.values(this.storage.state.toolOperations).map(({ id, sessionId, runId, kind, state }) => ({ id, sessionId, runId, kind, state }));
++  listSafetyStates(filter: { states?: readonly ToolOperationRecord["state"][]; includeOperationIds?: ReadonlySet<string> } = {}): ToolOperationSafetyState[] {
++    const rows = this.storage.state.toolOperations, result: ToolOperationSafetyState[] = [];
++    const filtered = filter.states !== undefined || filter.includeOperationIds !== undefined;
++    for (const key in rows) {
++      if (!Object.hasOwn(rows, key)) continue;
++      const row = rows[key]!;
++      if (filtered && !filter.states?.includes(row.state) && !filter.includeOperationIds?.has(row.id)) continue;
++      const { id, sessionId, runId, kind, state } = row;
++      result.push({ id, sessionId, runId, kind, state });
++    }
++    return result;
+   }
+   getResultCandidate(operationId: string): ToolResultCandidate | undefined {
+     const row = this.storage.state.toolOperations[operationId];
+     return row && resultCandidate(row);
+   }
+   listResultCandidates(sessionId: string): ToolResultCandidate[] {
+-    return Object.values(this.storage.state.toolOperations).flatMap(row => {
+-      const candidate = row.sessionId === sessionId ? resultCandidate(row) : undefined;
+-      return candidate ? [candidate] : [];
+-    });
++    const rows = this.storage.state.toolOperations, result: ToolResultCandidate[] = [];
++    for (const id in rows) {
++      if (!Object.hasOwn(rows, id)) continue;
++      const row = rows[id]!;
++      if (row.sessionId !== sessionId) continue;
++      const candidate = resultCandidate(row);
++      if (candidate) result.push(candidate);
++    }
++    return result;
+   }
+   /** Only call after candidate authorization/pagination; no Operation or Attempt body copy. */
+   readResultText(operationId: string): string {
+@@ -241,7 +271,13 @@ export class ToolOperationRepository {
+   }
+   /** Projects finite identity fields before cloning; never copies full output into a listing. */
+   listReviewCandidates(): ToolOperationSummary[] {
+-    return Object.values(this.storage.state.toolOperations).filter(row => row.state === "unknown" || row.state === "dispatching").map(summary);
++    const rows = this.storage.state.toolOperations, result: ToolOperationSummary[] = [];
++    for (const id in rows) {
++      if (!Object.hasOwn(rows, id)) continue;
++      const row = rows[id]!;
++      if (row.state === "unknown" || row.state === "dispatching") result.push(summary(row));
++    }
++    return result;
+   }
+   getReviewPreview(operationId: string): ToolOperationReviewPreview {
+     const row = this.require(operationId);

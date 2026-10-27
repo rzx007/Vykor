@@ -1,0 +1,8 @@
+{
+  "startedAt": "2026-10-27T07:32:48.885587+00:00",
+  "arguments": [
+    "C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts",
+    "C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts"
+  ],
+  "coordinatorSha256": "75bedcc1114ee2eab12ea557003ed6da58fd4777d2cbd3979f6aaa40f20fc34b"
+}

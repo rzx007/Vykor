@@ -1,0 +1,34 @@
+{
+  "baseCommit": "13d9f7cca84a9acef5644d8a89367d07c94ef6e5",
+  "candidatePatch": "attempt-2/candidate.patch",
+  "candidatePatchSha256": "3ede9b8edec0c3e11d5c66f5c341b825bf2519adc4e66fdecce16ed2725b9705",
+  "frozenDriverSha256": "1c8c2ee5804b07fc331f58b1d00bc5682736b62083cbcfe8054f762b79e16cb3",
+  "files": [
+    {
+      "originalPath": "packages/server/src/application/session/execution/tool-operation-service.ts",
+      "archivePath": "docs/superpowers/reviews/2026-10-27-storage-hot-path/candidate-source/packages/server/src/application/session/execution/tool-operation-service.ts.txt",
+      "sha256": "dcdf737446fa30932b3185f16aded88eee5455b27649ea191ebb44b78a254054"
+    },
+    {
+      "originalPath": "packages/server/src/application/maintenance/cleanup-settings.ts",
+      "archivePath": "docs/superpowers/reviews/2026-10-27-storage-hot-path/candidate-source/packages/server/src/application/maintenance/cleanup-settings.ts.txt",
+      "sha256": "3deab0e8e848aef6a966c88563a1c393f3ba7ba153f4783df2786a1c32824ee8"
+    },
+    {
+      "originalPath": "packages/services/src/tool-operations/tool-operation-repository.ts",
+      "archivePath": "docs/superpowers/reviews/2026-10-27-storage-hot-path/candidate-source/packages/services/src/tool-operations/tool-operation-repository.ts.txt",
+      "sha256": "4df1669649c52e34ca43a216980cbbf877c85fc3295c6015679c8719f8ec673c"
+    },
+    {
+      "originalPath": "packages/services/src/execution-records/execution-repository.ts",
+      "archivePath": "docs/superpowers/reviews/2026-10-27-storage-hot-path/candidate-source/packages/services/src/execution-records/execution-repository.ts.txt",
+      "sha256": "4bdc3ea9f158c6e9ed93f9b0b0cc2698f24c418465569f1b32f64febfb3c0f4e"
+    },
+    {
+      "originalPath": "packages/services/src/index.ts",
+      "archivePath": "docs/superpowers/reviews/2026-10-27-storage-hot-path/candidate-source/packages/services/src/index.ts.txt",
+      "sha256": "d106a12627063943ce53b75e32f8bce9373e55c63e481cdc9a896f2a4ea0f0de"
+    }
+  ],
+  "reason": "Exact measured source bytes retained before Q2 rollback; .txt suffix prevents these archival copies being treated as live source."
+}

@@ -1,0 +1,121 @@
+warning: in the working copy of 'packages/services/src/execution-records/__test__/execution-repository.test.ts', LF will be replaced by CRLF the next time Git touches it
+Starting r1-baseline-hot-1
+r1-baseline-hot-1 candidate 11.210799999997107 dispatch 102.79210000000603
+Starting r1-baseline-hot-2
+r1-baseline-hot-2 candidate 11.541199999999662 dispatch 81.57120000000577
+Starting r1-baseline-hot-3
+r1-baseline-hot-3 candidate 3.7597999999998137 dispatch 39.60159999999814
+Starting r1-baseline-growth-100-4096-1
+r1-baseline-growth-100-4096-1 construct 111.14030000000002 takeover 81.43150000000014
+Starting r1-baseline-growth-100-4096-2
+r1-baseline-growth-100-4096-2 construct 38.3759 takeover 17.322799999999916
+Starting r1-baseline-growth-100-4096-3
+r1-baseline-growth-100-4096-3 construct 55.6726000000001 takeover 32.49149999999986
+Starting r1-baseline-growth-1000-4096-1
+r1-baseline-growth-1000-4096-1 construct 133.06410000000005 takeover 121.21730000000025
+Starting r1-baseline-growth-1000-4096-2
+r1-baseline-growth-1000-4096-2 construct 131.22140000000013 takeover 113.56700000000001
+Starting r1-baseline-growth-1000-4096-3
+r1-baseline-growth-1000-4096-3 construct 153.1334999999999 takeover 103.7773000000002
+Starting r1-baseline-growth-10000-4096-1
+r1-baseline-growth-10000-4096-1 construct 2775.940499999999 takeover 2601.8173000000024
+Starting r1-baseline-growth-10000-4096-2
+r1-baseline-growth-10000-4096-2 construct 2902.0342 takeover 2588.7098000000005
+Starting r1-baseline-growth-10000-4096-3
+r1-baseline-growth-10000-4096-3 construct 2981.8725000000013 takeover 2456.871500000001
+Starting r1-baseline-growth-10000-0-1
+r1-baseline-growth-10000-0-1 construct 1444.6152000000002 takeover 1607.499099999999
+Starting r1-baseline-growth-10000-0-2
+r1-baseline-growth-10000-0-2 construct 1587.0911999999998 takeover 1230.2576
+Starting r1-baseline-growth-10000-0-3
+r1-baseline-growth-10000-0-3 construct 1739.0482999999995 takeover 1484.981099999999
+Starting r1-candidate-hot-1
+r1-candidate-hot-1 candidate 6.602500000000873 dispatch 81.58940000000439
+Starting r1-candidate-hot-2
+r1-candidate-hot-2 candidate 6.996100000000297 dispatch 34.81319999999687
+Starting r1-candidate-hot-3
+r1-candidate-hot-3 candidate 4.435999999997875 dispatch 34.02930000000197
+Starting r1-candidate-growth-100-4096-1
+r1-candidate-growth-100-4096-1 construct 39.79220000000032 takeover 15.465799999999945
+Starting r1-candidate-growth-100-4096-2
+r1-candidate-growth-100-4096-2 construct 26.391700000000128 takeover 18.34569999999985
+Starting r1-candidate-growth-100-4096-3
+r1-candidate-growth-100-4096-3 construct 27.89449999999988 takeover 28.965799999999945
+Starting r1-candidate-growth-1000-4096-1
+r1-candidate-growth-1000-4096-1 construct 117.26279999999997 takeover 108.43769999999995
+Starting r1-candidate-growth-1000-4096-2
+r1-candidate-growth-1000-4096-2 construct 140.0976999999998 takeover 160.57029999999986
+Starting r1-candidate-growth-1000-4096-3
+r1-candidate-growth-1000-4096-3 construct 213.83219999999983 takeover 204.61639999999989
+Starting r1-candidate-growth-10000-4096-1
+r1-candidate-growth-10000-4096-1 construct 1595.8802000000014 takeover 1368.7618999999995
+Starting r1-candidate-growth-10000-4096-2
+r1-candidate-growth-10000-4096-2 construct 2542.7983000000004 takeover 2457.8876
+Starting r1-candidate-growth-10000-4096-3
+r1-candidate-growth-10000-4096-3 construct 2998.986000000001 takeover 2679.3793000000023
+Starting r1-candidate-growth-10000-0-1
+r1-candidate-growth-10000-0-1 construct 1601.2549000000008 takeover 1319.1014000000005
+Starting r1-candidate-growth-10000-0-2
+r1-candidate-growth-10000-0-2 construct 1405.2603 takeover 1266.8554000000004
+Starting r1-candidate-growth-10000-0-3
+r1-candidate-growth-10000-0-3 construct 1708.0051000000003 takeover 1615.6251999999995
+Starting r2-candidate-hot-1
+r2-candidate-hot-1 candidate 6.7489000000023225 dispatch 76.3211999999985
+Starting r2-candidate-hot-2
+r2-candidate-hot-2 candidate 9.082099999999627 dispatch 66.02690000000439
+Starting r2-candidate-hot-3
+r2-candidate-hot-3 candidate 5.599999999998545 dispatch 76.51710000000458
+Starting r2-candidate-growth-100-4096-1
+r2-candidate-growth-100-4096-1 construct 50.25469999999996 takeover 17.39339999999993
+Starting r2-candidate-growth-100-4096-2
+r2-candidate-growth-100-4096-2 construct 35.153699999999844 takeover 20.494700000000194
+Starting r2-candidate-growth-100-4096-3
+r2-candidate-growth-100-4096-3 construct 39.963700000000244 takeover 36.1215000000002
+Starting r2-candidate-growth-1000-4096-1
+r2-candidate-growth-1000-4096-1 construct 379.14609999999993 takeover 266.38110000000006
+Starting r2-candidate-growth-1000-4096-2
+r2-candidate-growth-1000-4096-2 construct 418.6821 takeover 283.5511999999999
+Starting r2-candidate-growth-1000-4096-3
+r2-candidate-growth-1000-4096-3 construct 308.1374999999998 takeover 225.93589999999995
+Starting r2-candidate-growth-10000-4096-1
+r2-candidate-growth-10000-4096-1 construct 2929.2472000000016 takeover 2572.2847
+Starting r2-candidate-growth-10000-4096-2
+r2-candidate-growth-10000-4096-2 construct 2497.0969999999998 takeover 2691.798100000002
+Starting r2-candidate-growth-10000-4096-3
+r2-candidate-growth-10000-4096-3 construct 2958.0789000000004 takeover 2506.8381999999983
+Starting r2-candidate-growth-10000-0-1
+r2-candidate-growth-10000-0-1 construct 722.2880999999998 takeover 716.4790000000003
+Starting r2-candidate-growth-10000-0-2
+r2-candidate-growth-10000-0-2 construct 2981.2716 takeover 2771.5510999999988
+Starting r2-candidate-growth-10000-0-3
+r2-candidate-growth-10000-0-3 construct 802.5182999999997 takeover 639.1597999999994
+Starting r2-baseline-hot-1
+r2-baseline-hot-1 candidate 6.072300000001633 dispatch 48.30659999999989
+Starting r2-baseline-hot-2
+r2-baseline-hot-2 candidate 5.602600000000166 dispatch 62.59389999999985
+Starting r2-baseline-hot-3
+r2-baseline-hot-3 candidate 3.4601000000002387 dispatch 47.89519999999902
+Starting r2-baseline-growth-100-4096-1
+r2-baseline-growth-100-4096-1 construct 33.197599999999966 takeover 20.277000000000044
+Starting r2-baseline-growth-100-4096-2
+r2-baseline-growth-100-4096-2 construct 26.239100000000008 takeover 15.588899999999967
+Starting r2-baseline-growth-100-4096-3
+r2-baseline-growth-100-4096-3 construct 40.139900000000125 takeover 18.293899999999894
+Starting r2-baseline-growth-1000-4096-1
+r2-baseline-growth-1000-4096-1 construct 116.33699999999999 takeover 92.22980000000007
+Starting r2-baseline-growth-1000-4096-2
+r2-baseline-growth-1000-4096-2 construct 217.01369999999997 takeover 195.3107
+Starting r2-baseline-growth-1000-4096-3
+r2-baseline-growth-1000-4096-3 construct 135.6875 takeover 134.20060000000012
+Starting r2-baseline-growth-10000-4096-1
+r2-baseline-growth-10000-4096-1 construct 2843.2965000000004 takeover 2295.0622000000003
+Starting r2-baseline-growth-10000-4096-2
+r2-baseline-growth-10000-4096-2 construct 2894.1685000000016 takeover 2318.983799999998
+Starting r2-baseline-growth-10000-4096-3
+r2-baseline-growth-10000-4096-3 construct 2658.286 takeover 2225.254200000001
+Starting r2-baseline-growth-10000-0-1
+r2-baseline-growth-10000-0-1 construct 1630.6282 takeover 1133.3907
+Starting r2-baseline-growth-10000-0-2
+r2-baseline-growth-10000-0-2 construct 1683.1062999999995 takeover 1354.8318
+Starting r2-baseline-growth-10000-0-3
+r2-baseline-growth-10000-0-3 construct 1368.5516999999995 takeover 1151.3255000000008

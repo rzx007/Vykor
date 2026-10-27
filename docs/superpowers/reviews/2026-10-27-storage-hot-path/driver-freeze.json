@@ -1,0 +1,10 @@
+{
+  "q1Commit": "13d9f7cca84a9acef5644d8a89367d07c94ef6e5",
+  "driverSha256": "1c8c2ee5804b07fc331f58b1d00bc5682736b62083cbcfe8054f762b79e16cb3",
+  "driverGitBlob": "bd9ec833ddc8bbff5ffd4373bb5b09e823356df9",
+  "node": "v24.18.1",
+  "smokeCommand": "pnpm --filter @vykor/server exec node --expose-gc --import ../../apps/cli/node_modules/tsx/dist/loader.mjs src/application/session/execution/__test__/tool-operation-hot-path.bench.mjs --output=C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\docs\\superpowers\\reviews\\2026-10-27-storage-hot-path\\smoke-q1.json",
+  "smokeCwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts",
+  "smokeExitCode": 0,
+  "smokePurpose": "Fixture and driver validation only; excluded from the two pre-agreed comparison rounds."
+}

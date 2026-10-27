@@ -1,0 +1,310 @@
+{
+  "rounds": [
+    {
+      "round": 1,
+      "hot": {
+        "candidates": {
+          "medianMs": {
+            "baseline": 11.210799999997107,
+            "candidate": 6.602500000000873,
+            "absoluteDelta": -4.608299999996234,
+            "percentDelta": -41.10589788416013
+          },
+          "p95Ms": {
+            "baseline": 17.683899999999994,
+            "candidate": 8.176400000000285,
+            "absoluteDelta": -9.507499999999709,
+            "percentDelta": -53.76359287261132
+          }
+        },
+        "dispatch": {
+          "medianMs": {
+            "baseline": 81.57120000000577,
+            "candidate": 34.81319999999687,
+            "absoluteDelta": -46.758000000008906,
+            "percentDelta": -57.321701777104664
+          },
+          "p95Ms": {
+            "baseline": 125.85779999999795,
+            "candidate": 66.23459999999614,
+            "absoluteDelta": -59.623200000001816,
+            "percentDelta": -47.3734643383269
+          }
+        },
+        "blocked": {
+          "medianMs": {
+            "baseline": 7.565300000002026,
+            "candidate": 11.680300000007264,
+            "absoluteDelta": 4.115000000005239,
+            "percentDelta": 54.39308421350293
+          },
+          "p95Ms": {
+            "baseline": 16.186700000005658,
+            "candidate": 20.405799999993178,
+            "absoluteDelta": 4.21909999998752,
+            "percentDelta": 26.065226389480543
+          }
+        },
+        "safety": {
+          "medianMs": {
+            "baseline": 7.853499999997439,
+            "candidate": 3.846000000005006,
+            "absoluteDelta": -4.007499999992433,
+            "percentDelta": -51.02820398540446
+          },
+          "p95Ms": {
+            "baseline": 14.784799999993993,
+            "candidate": 8.786200000002282,
+            "absoluteDelta": -5.998599999991711,
+            "percentDelta": -40.57275039225521
+          }
+        }
+      },
+      "growth": {
+        "100/4096": {
+          "constructMs": {
+            "baseline": 55.6726000000001,
+            "candidate": 27.89449999999988,
+            "absoluteDelta": -27.778100000000222,
+            "percentDelta": -49.895460244357494
+          },
+          "takeoverMs": {
+            "baseline": 32.49149999999986,
+            "candidate": 18.34569999999985,
+            "absoluteDelta": -14.145800000000008,
+            "percentDelta": -43.53692504193426
+          },
+          "reloadedHeapMiB": {
+            "baseline": 2.252410888671875,
+            "candidate": 2.251953125,
+            "absoluteDelta": -0.000457763671875,
+            "percentDelta": -0.020323275570066635
+          }
+        },
+        "1000/4096": {
+          "constructMs": {
+            "baseline": 133.06410000000005,
+            "candidate": 140.0976999999998,
+            "absoluteDelta": 7.033599999999751,
+            "percentDelta": 5.285873500064819
+          },
+          "takeoverMs": {
+            "baseline": 113.56700000000001,
+            "candidate": 160.57029999999986,
+            "absoluteDelta": 47.003299999999854,
+            "percentDelta": 41.38816733734259
+          },
+          "reloadedHeapMiB": {
+            "baseline": 18.13897705078125,
+            "candidate": 18.146255493164062,
+            "absoluteDelta": 0.0072784423828125,
+            "percentDelta": 0.04012598043670046
+          }
+        },
+        "10000/4096": {
+          "constructMs": {
+            "baseline": 2902.0342,
+            "candidate": 2542.7983000000004,
+            "absoluteDelta": -359.2358999999997,
+            "percentDelta": -12.37876176648779
+          },
+          "takeoverMs": {
+            "baseline": 2588.7098000000005,
+            "candidate": 2457.8876,
+            "absoluteDelta": -130.82220000000052,
+            "percentDelta": -5.053567611170651
+          },
+          "reloadedHeapMiB": {
+            "baseline": 176.936279296875,
+            "candidate": 176.93749237060547,
+            "absoluteDelta": 0.00121307373046875,
+            "percentDelta": 0.000685599208538612
+          }
+        },
+        "10000/0": {
+          "constructMs": {
+            "baseline": 1587.0911999999998,
+            "candidate": 1601.2549000000008,
+            "absoluteDelta": 14.163700000000972,
+            "percentDelta": 0.8924313864257405
+          },
+          "takeoverMs": {
+            "baseline": 1484.981099999999,
+            "candidate": 1319.1014000000005,
+            "absoluteDelta": -165.8796999999986,
+            "percentDelta": -11.170492338252568
+          },
+          "reloadedHeapMiB": {
+            "baseline": 59.023094177246094,
+            "candidate": 59.024314880371094,
+            "absoluteDelta": 0.001220703125,
+            "percentDelta": 0.00206817880699095
+          }
+        }
+      },
+      "candidateGate": true,
+      "dispatchGate": true,
+      "growthRegressions": [
+        "1000/4096:takeoverMs"
+      ],
+      "p95Regressions": []
+    },
+    {
+      "round": 2,
+      "hot": {
+        "candidates": {
+          "medianMs": {
+            "baseline": 5.602600000000166,
+            "candidate": 6.7489000000023225,
+            "absoluteDelta": 1.1463000000021566,
+            "percentDelta": 20.460143504839223
+          },
+          "p95Ms": {
+            "baseline": 9.406300000000556,
+            "candidate": 9.88169999999809,
+            "absoluteDelta": 0.4753999999975349,
+            "percentDelta": 5.054059513278397
+          }
+        },
+        "dispatch": {
+          "medianMs": {
+            "baseline": 48.30659999999989,
+            "candidate": 76.3211999999985,
+            "absoluteDelta": 28.01459999999861,
+            "percentDelta": 57.99331768329519
+          },
+          "p95Ms": {
+            "baseline": 87.43000000000029,
+            "candidate": 106.83380000000034,
+            "absoluteDelta": 19.403800000000047,
+            "percentDelta": 22.19352624957107
+          }
+        },
+        "blocked": {
+          "medianMs": {
+            "baseline": 9.27390000000014,
+            "candidate": 10.56930000000284,
+            "absoluteDelta": 1.2954000000027008,
+            "percentDelta": 13.968233429330489
+          },
+          "p95Ms": {
+            "baseline": 15.852899999998044,
+            "candidate": 14.103399999999965,
+            "absoluteDelta": -1.7494999999980791,
+            "percentDelta": -11.035835714590359
+          }
+        },
+        "safety": {
+          "medianMs": {
+            "baseline": 4.9408000000003085,
+            "candidate": 8.145500000005995,
+            "absoluteDelta": 3.204700000005687,
+            "percentDelta": 64.86196567368619
+          },
+          "p95Ms": {
+            "baseline": 10.405399999999645,
+            "candidate": 12.610499999995227,
+            "absoluteDelta": 2.205099999995582,
+            "percentDelta": 21.19188113859782
+          }
+        }
+      },
+      "growth": {
+        "100/4096": {
+          "constructMs": {
+            "baseline": 33.197599999999966,
+            "candidate": 39.963700000000244,
+            "absoluteDelta": 6.766100000000279,
+            "percentDelta": 20.381292623564008
+          },
+          "takeoverMs": {
+            "baseline": 18.293899999999894,
+            "candidate": 20.494700000000194,
+            "absoluteDelta": 2.2008000000002994,
+            "percentDelta": 12.030239588061109
+          },
+          "reloadedHeapMiB": {
+            "baseline": 2.2521209716796875,
+            "candidate": 2.2510757446289062,
+            "absoluteDelta": -0.00104522705078125,
+            "percentDelta": -0.04641078627324324
+          }
+        },
+        "1000/4096": {
+          "constructMs": {
+            "baseline": 135.6875,
+            "candidate": 379.14609999999993,
+            "absoluteDelta": 243.45859999999993,
+            "percentDelta": 179.42596038691843
+          },
+          "takeoverMs": {
+            "baseline": 134.20060000000012,
+            "candidate": 266.38110000000006,
+            "absoluteDelta": 132.18049999999994,
+            "percentDelta": 98.4947161190038
+          },
+          "reloadedHeapMiB": {
+            "baseline": 18.13622283935547,
+            "candidate": 18.13531494140625,
+            "absoluteDelta": -0.00090789794921875,
+            "percentDelta": -0.005005992467455034
+          }
+        },
+        "10000/4096": {
+          "constructMs": {
+            "baseline": 2843.2965000000004,
+            "candidate": 2929.2472000000016,
+            "absoluteDelta": 85.95070000000123,
+            "percentDelta": 3.0229242711761195
+          },
+          "takeoverMs": {
+            "baseline": 2295.0622000000003,
+            "candidate": 2572.2847,
+            "absoluteDelta": 277.22249999999985,
+            "percentDelta": 12.079084392571149
+          },
+          "reloadedHeapMiB": {
+            "baseline": 176.93749237060547,
+            "candidate": 176.93749237060547,
+            "absoluteDelta": 0.0,
+            "percentDelta": 0.0
+          }
+        },
+        "10000/0": {
+          "constructMs": {
+            "baseline": 1630.6282,
+            "candidate": 802.5182999999997,
+            "absoluteDelta": -828.1099000000004,
+            "percentDelta": -50.78471597633356
+          },
+          "takeoverMs": {
+            "baseline": 1151.3255000000008,
+            "candidate": 716.4790000000003,
+            "absoluteDelta": -434.84650000000056,
+            "percentDelta": -37.769206015153856
+          },
+          "reloadedHeapMiB": {
+            "baseline": 59.01861572265625,
+            "candidate": 59.02629089355469,
+            "absoluteDelta": 0.0076751708984375,
+            "percentDelta": 0.013004660994608841
+          }
+        }
+      },
+      "candidateGate": false,
+      "dispatchGate": false,
+      "growthRegressions": [
+        "1000/4096:constructMs",
+        "1000/4096:takeoverMs"
+      ],
+      "p95Regressions": [
+        "dispatch"
+      ]
+    }
+  ],
+  "stableGrowthRegressions": [
+    "1000/4096:takeoverMs"
+  ],
+  "stableP95Regressions": [],
+  "retainQ2": false
+}

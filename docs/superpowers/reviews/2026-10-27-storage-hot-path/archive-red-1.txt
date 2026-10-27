@@ -1,0 +1,333 @@
+{
+  "rounds": [
+    {
+      "round": 1,
+      "hot": {
+        "candidates": {
+          "medianMs": {
+            "baseline": 20,
+            "candidate": 10,
+            "msDelta": -10,
+            "percentDelta": -50.0
+          },
+          "p95Ms": {
+            "baseline": 20,
+            "candidate": 10,
+            "msDelta": -10,
+            "percentDelta": -50.0
+          }
+        },
+        "dispatch": {
+          "medianMs": {
+            "baseline": 20,
+            "candidate": 10,
+            "msDelta": -10,
+            "percentDelta": -50.0
+          },
+          "p95Ms": {
+            "baseline": 20,
+            "candidate": 10,
+            "msDelta": -10,
+            "percentDelta": -50.0
+          }
+        },
+        "blocked": {
+          "medianMs": {
+            "baseline": 20,
+            "candidate": 10,
+            "msDelta": -10,
+            "percentDelta": -50.0
+          },
+          "p95Ms": {
+            "baseline": 20,
+            "candidate": 10,
+            "msDelta": -10,
+            "percentDelta": -50.0
+          }
+        },
+        "safety": {
+          "medianMs": {
+            "baseline": 20,
+            "candidate": 10,
+            "msDelta": -10,
+            "percentDelta": -50.0
+          },
+          "p95Ms": {
+            "baseline": 20,
+            "candidate": 10,
+            "msDelta": -10,
+            "percentDelta": -50.0
+          }
+        }
+      },
+      "growth": {
+        "100/4096": {
+          "constructMs": {
+            "baseline": 100,
+            "candidate": 100,
+            "msDelta": 0,
+            "percentDelta": 0.0
+          },
+          "takeoverMs": {
+            "baseline": 100,
+            "candidate": 100,
+            "msDelta": 0,
+            "percentDelta": 0.0
+          },
+          "reloadedHeapMiB": {
+            "baseline": 100.0,
+            "candidate": 100.0,
+            "msDelta": 0.0,
+            "percentDelta": 0.0
+          }
+        },
+        "1000/4096": {
+          "constructMs": {
+            "baseline": 100,
+            "candidate": 100,
+            "msDelta": 0,
+            "percentDelta": 0.0
+          },
+          "takeoverMs": {
+            "baseline": 100,
+            "candidate": 100,
+            "msDelta": 0,
+            "percentDelta": 0.0
+          },
+          "reloadedHeapMiB": {
+            "baseline": 100.0,
+            "candidate": 100.0,
+            "msDelta": 0.0,
+            "percentDelta": 0.0
+          }
+        },
+        "10000/4096": {
+          "constructMs": {
+            "baseline": 100,
+            "candidate": 100,
+            "msDelta": 0,
+            "percentDelta": 0.0
+          },
+          "takeoverMs": {
+            "baseline": 100,
+            "candidate": 100,
+            "msDelta": 0,
+            "percentDelta": 0.0
+          },
+          "reloadedHeapMiB": {
+            "baseline": 100.0,
+            "candidate": 100.0,
+            "msDelta": 0.0,
+            "percentDelta": 0.0
+          }
+        },
+        "10000/0": {
+          "constructMs": {
+            "baseline": 100,
+            "candidate": 100,
+            "msDelta": 0,
+            "percentDelta": 0.0
+          },
+          "takeoverMs": {
+            "baseline": 100,
+            "candidate": 100,
+            "msDelta": 0,
+            "percentDelta": 0.0
+          },
+          "reloadedHeapMiB": {
+            "baseline": 100.0,
+            "candidate": 100.0,
+            "msDelta": 0.0,
+            "percentDelta": 0.0
+          }
+        }
+      },
+      "candidateGate": true,
+      "dispatchGate": true,
+      "growthRegressions": [],
+      "p95Regressions": []
+    },
+    {
+      "round": 2,
+      "hot": {
+        "candidates": {
+          "medianMs": {
+            "baseline": 20,
+            "candidate": 10,
+            "msDelta": -10,
+            "percentDelta": -50.0
+          },
+          "p95Ms": {
+            "baseline": 20,
+            "candidate": 10,
+            "msDelta": -10,
+            "percentDelta": -50.0
+          }
+        },
+        "dispatch": {
+          "medianMs": {
+            "baseline": 20,
+            "candidate": 10,
+            "msDelta": -10,
+            "percentDelta": -50.0
+          },
+          "p95Ms": {
+            "baseline": 20,
+            "candidate": 10,
+            "msDelta": -10,
+            "percentDelta": -50.0
+          }
+        },
+        "blocked": {
+          "medianMs": {
+            "baseline": 20,
+            "candidate": 10,
+            "msDelta": -10,
+            "percentDelta": -50.0
+          },
+          "p95Ms": {
+            "baseline": 20,
+            "candidate": 10,
+            "msDelta": -10,
+            "percentDelta": -50.0
+          }
+        },
+        "safety": {
+          "medianMs": {
+            "baseline": 20,
+            "candidate": 10,
+            "msDelta": -10,
+            "percentDelta": -50.0
+          },
+          "p95Ms": {
+            "baseline": 20,
+            "candidate": 10,
+            "msDelta": -10,
+            "percentDelta": -50.0
+          }
+        }
+      },
+      "growth": {
+        "100/4096": {
+          "constructMs": {
+            "baseline": 100,
+            "candidate": 100,
+            "msDelta": 0,
+            "percentDelta": 0.0
+          },
+          "takeoverMs": {
+            "baseline": 100,
+            "candidate": 100,
+            "msDelta": 0,
+            "percentDelta": 0.0
+          },
+          "reloadedHeapMiB": {
+            "baseline": 100.0,
+            "candidate": 100.0,
+            "msDelta": 0.0,
+            "percentDelta": 0.0
+          }
+        },
+        "1000/4096": {
+          "constructMs": {
+            "baseline": 100,
+            "candidate": 100,
+            "msDelta": 0,
+            "percentDelta": 0.0
+          },
+          "takeoverMs": {
+            "baseline": 100,
+            "candidate": 100,
+            "msDelta": 0,
+            "percentDelta": 0.0
+          },
+          "reloadedHeapMiB": {
+            "baseline": 100.0,
+            "candidate": 100.0,
+            "msDelta": 0.0,
+            "percentDelta": 0.0
+          }
+        },
+        "10000/4096": {
+          "constructMs": {
+            "baseline": 100,
+            "candidate": 100,
+            "msDelta": 0,
+            "percentDelta": 0.0
+          },
+          "takeoverMs": {
+            "baseline": 100,
+            "candidate": 100,
+            "msDelta": 0,
+            "percentDelta": 0.0
+          },
+          "reloadedHeapMiB": {
+            "baseline": 100.0,
+            "candidate": 100.0,
+            "msDelta": 0.0,
+            "percentDelta": 0.0
+          }
+        },
+        "10000/0": {
+          "constructMs": {
+            "baseline": 100,
+            "candidate": 100,
+            "msDelta": 0,
+            "percentDelta": 0.0
+          },
+          "takeoverMs": {
+            "baseline": 100,
+            "candidate": 100,
+            "msDelta": 0,
+            "percentDelta": 0.0
+          },
+          "reloadedHeapMiB": {
+            "baseline": 100.0,
+            "candidate": 100.0,
+            "msDelta": 0.0,
+            "percentDelta": 0.0
+          }
+        }
+      },
+      "candidateGate": true,
+      "dispatchGate": true,
+      "growthRegressions": [],
+      "p95Regressions": []
+    }
+  ],
+  "stableGrowthRegressions": [],
+  "stableP95Regressions": [],
+  "retainQ2": true
+}
+EF
+======================================================================
+ERROR: test_existing_evidence_is_rejected_before_starting_commands (__main__.ExperimentArchiveTests.test_existing_evidence_is_rejected_before_starting_commands)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\docs\superpowers\reviews\2026-10-27-storage-hot-path\__test__\experiment-archive.test.py", line 30, in test_existing_evidence_is_rejected_before_starting_commands
+    module["main"]()
+  File "C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\docs\superpowers\reviews\2026-10-27-storage-hot-path\run-experiments.py", line 41, in main
+    "node": subprocess.check_output(["node", "--version"]).decode().strip(), "checkouts": {}}
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ruanz\AppData\Roaming\uv\python\cpython-3.11.14-windows-x86_64-none\Lib\unittest\mock.py", line 1124, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ruanz\AppData\Roaming\uv\python\cpython-3.11.14-windows-x86_64-none\Lib\unittest\mock.py", line 1128, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\ruanz\AppData\Roaming\uv\python\cpython-3.11.14-windows-x86_64-none\Lib\unittest\mock.py", line 1183, in _execute_mock_call
+    raise effect
+RuntimeError: Must reject before running any command
+
+======================================================================
+FAIL: test_successful_worker_exits_cannot_accept_an_incomplete_coordinator_run (__main__.ExperimentArchiveTests.test_successful_worker_exits_cannot_accept_an_incomplete_coordinator_run)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\docs\superpowers\reviews\2026-10-27-storage-hot-path\__test__\experiment-archive.test.py", line 57, in test_successful_worker_exits_cannot_accept_an_incomplete_coordinator_run
+    with self.assertRaises(ValueError):
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.491s
+
+FAILED (failures=1, errors=1)

@@ -1,0 +1,18 @@
+
+ RUN  v3.2.4 C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/packages/server
+
+ ✓ src/application/maintenance/__test__/cleanup-settings.test.ts (15 tests) 2458ms
+   ✓ maintenance cleanup protection > protects the aged tree with a 'prepared' operation in 'root' without full reads  312ms
+ ✓ src/application/session/execution/__test__/tool-operation-service.test.ts (19 tests) 4471ms
+   ✓ daemon tool operation host > settles large results and preserves full reads without copying bodies for status checks  509ms
+   ✓ daemon tool operation host > keeps other receipt failures blocked after late resolution without full reads  677ms
+   ✓ daemon tool operation host > keeps other receipt failures blocked after review resolution without full reads  548ms
+ ✓ src/application/session/execution/__test__/tool-operation-invocation.test.ts (7 tests) 899ms
+ ✓ src/application/session/execution/__test__/tool-operation-review.test.ts (7 tests) 1592ms
+   ✓ host tool operation review > shows unsettled terminal dispatches with recovery steps while keeping active dispatches out  355ms
+
+ Test Files  4 passed (4)
+      Tests  48 passed (48)
+   Start at  15:54:09
+   Duration  55.01s (transform 15.72s, setup 179ms, collect 64.37s, tests 9.42s, environment 3ms, prepare 948ms)
+

@@ -76,3 +76,11 @@ POST 返回新的有限操作信息。若返回 409，重新读取详情并核�
 工具超时或取消后，原调用可能仍在本进程执行。`ToolOperationService` 按 Core 登记的实际调用 Promise 暂存未结束操作；此时即使 Run 已终态，也拒绝 `applied` 和 `not_applied`，只允许追加 `unknown` 证据。调用实际返回或拒绝后才移除该保护，正常返回 unknown 不会永久占用它。此追踪不持久化，也不从工具结果 metadata 推断；重启后仍按持久未知状态核对。
 
 活跃父会话可以查看并核对已归档子会话留下的未知操作，只要仍属同一根树且原 Run 已结束；归档不会移除未知写入阻断。请求入口会话本身仍须可用，正在关闭的目标会话不可核对。危险派发被阻断时，错误包含首个未决操作 ID 和同根会话的 GET 核对地址，不包含输入或结果正文。
+
+## 本机合成基准
+
+[tool-operation-hot-path.bench.mjs](./__test__/tool-operation-hot-path.bench.mjs) 使用真实 Service 与独立临时 SQLite，不执行真实工具、模型或用户文件操作。查询夹具保持 10 条候选，派发夹具另行记录 110 次追加与四次安全复查。从仓库根运行单个进程：
+
+    pnpm --filter @vykor/server exec node --expose-gc --import ../../apps/cli/node_modules/tsx/dist/loader.mjs src/application/session/execution/__test__/tool-operation-hot-path.bench.mjs
+
+Q2 两轮收益未达到保留条件，生产改动已撤回；基准与完整材料保留在 docs/superpowers/reviews/2026-10-27-storage-hot-path/，没有新增产品脚本命令。

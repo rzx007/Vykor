@@ -1,0 +1,14 @@
+
+> vykor@1.0.0 check:retired-ui C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts
+> node --test scripts/check-retired-native-ui.test.mjs && node scripts/check-retired-native-ui.mjs
+
+✔ each historical approval is exact and does not hide a new live entry in the same file (1.9043ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 122.2963
+{"errors":[],"files":4546,"references":731,"removed":90}

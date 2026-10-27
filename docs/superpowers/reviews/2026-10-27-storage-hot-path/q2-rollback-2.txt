@@ -1,0 +1,11 @@
+
+ RUN  v3.2.4 C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/packages/services
+
+ ✓ src/tool-results/__test__/tool-result-reader.test.ts (8 tests) 1035ms
+ ✓ src/tool-operations/__test__/tool-operation-repository.test.ts (27 tests) 4949ms
+
+ Test Files  2 passed (2)
+      Tests  35 passed (35)
+   Start at  15:55:08
+   Duration  11.56s (transform 1.68s, setup 102ms, collect 11.70s, tests 5.98s, environment 1ms, prepare 576ms)
+

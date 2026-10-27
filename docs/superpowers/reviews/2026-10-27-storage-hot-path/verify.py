@@ -29,14 +29,17 @@ def pnpm(*args):
 
 def main():
     phase = sys.argv[1]
-    if phase == "q1-red":
+    if phase.startswith("archive-"):
+        commands = [[sys.executable, str(HERE / "__test__/experiment-archive.test.py")]]
+    elif phase == "q1-red":
         commands = [pnpm("--filter", "@vykor/server", "exec", "vitest", "run", SERVER_TESTS[0], SERVER_TESTS[3])]
     elif phase == "q2-red":
         commands = [pnpm("--filter", "@vykor/services", "exec", "vitest", "run", *SERVICES_TESTS[:2])]
     else:
         commands = [pnpm("--filter", "@vykor/server", "exec", "vitest", "run", *SERVER_TESTS)]
-        if phase == "q2-green":
-            commands += [pnpm("--filter", "@vykor/services", "exec", "vitest", "run", *SERVICES_TESTS),
+        if phase in ("q2-green", "q2-rollback"):
+            services = SERVICES_TESTS if phase == "q2-green" else [SERVICES_TESTS[0], SERVICES_TESTS[2]]
+            commands += [pnpm("--filter", "@vykor/services", "exec", "vitest", "run", *services),
                          pnpm("--filter", "@vykor/services", "check-types")]
         commands += [pnpm("--filter", "@vykor/server", "check-types"),
             ["node", "scripts/architecture-boundaries.mjs"], pnpm("check:retired-ui"), pnpm("check-docs"),

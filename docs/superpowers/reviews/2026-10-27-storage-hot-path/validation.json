@@ -123,5 +123,335 @@
     "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
     "exitCode": 0,
     "log": "q1-green-6.txt"
+  },
+  {
+    "phase": "archive-red",
+    "step": 1,
+    "command": [
+      "C:\\Users\\ruanz\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\python.exe",
+      "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\docs\\superpowers\\reviews\\2026-10-27-storage-hot-path\\__test__\\experiment-archive.test.py"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 1,
+    "log": "archive-red-1.txt"
+  },
+  {
+    "phase": "archive-red",
+    "step": 1,
+    "command": [
+      "C:\\Users\\ruanz\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\python.exe",
+      "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\docs\\superpowers\\reviews\\2026-10-27-storage-hot-path\\__test__\\experiment-archive.test.py"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 1,
+    "log": "archive-red-1-rerun-2.txt"
+  },
+  {
+    "phase": "archive-green",
+    "step": 1,
+    "command": [
+      "C:\\Users\\ruanz\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\python.exe",
+      "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\docs\\superpowers\\reviews\\2026-10-27-storage-hot-path\\__test__\\experiment-archive.test.py"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "archive-green-1.txt"
+  },
+  {
+    "phase": "q2-red",
+    "step": 1,
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "D:\\nvm4w\\nodejs\\pnpm.cmd",
+      "--filter",
+      "@vykor/services",
+      "exec",
+      "vitest",
+      "run",
+      "src/tool-operations/__test__/tool-operation-repository.test.ts",
+      "src/execution-records/__test__/execution-repository.test.ts"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 1,
+    "log": "q2-red-1.txt"
+  },
+  {
+    "phase": "q2-green",
+    "step": 1,
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "D:\\nvm4w\\nodejs\\pnpm.cmd",
+      "--filter",
+      "@vykor/server",
+      "exec",
+      "vitest",
+      "run",
+      "src/application/session/execution/__test__/tool-operation-service.test.ts",
+      "src/application/session/execution/__test__/tool-operation-invocation.test.ts",
+      "src/application/session/execution/__test__/tool-operation-review.test.ts",
+      "src/application/maintenance/__test__/cleanup-settings.test.ts"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "q2-green-1.txt"
+  },
+  {
+    "phase": "q2-green",
+    "step": 2,
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "D:\\nvm4w\\nodejs\\pnpm.cmd",
+      "--filter",
+      "@vykor/services",
+      "exec",
+      "vitest",
+      "run",
+      "src/tool-operations/__test__/tool-operation-repository.test.ts",
+      "src/execution-records/__test__/execution-repository.test.ts",
+      "src/tool-results/__test__/tool-result-reader.test.ts",
+      "src/conversations/__test__/record-rollback.test.ts",
+      "src/conversations/__test__/conversation-transactions.test.ts",
+      "src/session-runtime/__test__/temporary-chat-storage.test.ts",
+      "src/session-runtime/__test__/store.test.ts"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "q2-green-2.txt"
+  },
+  {
+    "phase": "q2-green",
+    "step": 3,
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "D:\\nvm4w\\nodejs\\pnpm.cmd",
+      "--filter",
+      "@vykor/services",
+      "check-types"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "q2-green-3.txt"
+  },
+  {
+    "phase": "q2-green",
+    "step": 4,
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "D:\\nvm4w\\nodejs\\pnpm.cmd",
+      "--filter",
+      "@vykor/server",
+      "check-types"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "q2-green-4.txt"
+  },
+  {
+    "phase": "q2-green",
+    "step": 5,
+    "command": [
+      "node",
+      "scripts/architecture-boundaries.mjs"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "q2-green-5.txt"
+  },
+  {
+    "phase": "q2-green",
+    "step": 6,
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "D:\\nvm4w\\nodejs\\pnpm.cmd",
+      "check:retired-ui"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "q2-green-6.txt"
+  },
+  {
+    "phase": "q2-green",
+    "step": 7,
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "D:\\nvm4w\\nodejs\\pnpm.cmd",
+      "check-docs"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "q2-green-7.txt"
+  },
+  {
+    "phase": "q2-green",
+    "step": 8,
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "q2-green-8.txt"
+  },
+  {
+    "phase": "archive-green",
+    "step": 1,
+    "command": [
+      "C:\\Users\\ruanz\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\python.exe",
+      "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\docs\\superpowers\\reviews\\2026-10-27-storage-hot-path\\__test__\\experiment-archive.test.py"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "archive-green-1-rerun-2.txt"
+  },
+  {
+    "phase": "archive-green",
+    "step": 1,
+    "command": [
+      "C:\\Users\\ruanz\\AppData\\Local\\hermes\\hermes-agent\\venv\\Scripts\\python.exe",
+      "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\docs\\superpowers\\reviews\\2026-10-27-storage-hot-path\\__test__\\experiment-archive.test.py"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "archive-green-1-rerun-3.txt"
+  },
+  {
+    "phase": "q2-rollback",
+    "step": 1,
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "D:\\nvm4w\\nodejs\\pnpm.cmd",
+      "--filter",
+      "@vykor/server",
+      "exec",
+      "vitest",
+      "run",
+      "src/application/session/execution/__test__/tool-operation-service.test.ts",
+      "src/application/session/execution/__test__/tool-operation-invocation.test.ts",
+      "src/application/session/execution/__test__/tool-operation-review.test.ts",
+      "src/application/maintenance/__test__/cleanup-settings.test.ts"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "q2-rollback-1.txt"
+  },
+  {
+    "phase": "q2-rollback",
+    "step": 2,
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "D:\\nvm4w\\nodejs\\pnpm.cmd",
+      "--filter",
+      "@vykor/services",
+      "exec",
+      "vitest",
+      "run",
+      "src/tool-operations/__test__/tool-operation-repository.test.ts",
+      "src/tool-results/__test__/tool-result-reader.test.ts"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "q2-rollback-2.txt"
+  },
+  {
+    "phase": "q2-rollback",
+    "step": 3,
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "D:\\nvm4w\\nodejs\\pnpm.cmd",
+      "--filter",
+      "@vykor/services",
+      "check-types"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "q2-rollback-3.txt"
+  },
+  {
+    "phase": "q2-rollback",
+    "step": 4,
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "D:\\nvm4w\\nodejs\\pnpm.cmd",
+      "--filter",
+      "@vykor/server",
+      "check-types"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "q2-rollback-4.txt"
+  },
+  {
+    "phase": "q2-rollback",
+    "step": 5,
+    "command": [
+      "node",
+      "scripts/architecture-boundaries.mjs"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "q2-rollback-5.txt"
+  },
+  {
+    "phase": "q2-rollback",
+    "step": 6,
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "D:\\nvm4w\\nodejs\\pnpm.cmd",
+      "check:retired-ui"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "q2-rollback-6.txt"
+  },
+  {
+    "phase": "q2-rollback",
+    "step": 7,
+    "command": [
+      "cmd.exe",
+      "/d",
+      "/c",
+      "D:\\nvm4w\\nodejs\\pnpm.cmd",
+      "check-docs"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "q2-rollback-7.txt"
+  },
+  {
+    "phase": "q2-rollback",
+    "step": 8,
+    "command": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+    "exitCode": 0,
+    "log": "q2-rollback-8.txt"
   }
 ]
