@@ -235,9 +235,10 @@
   --annotation: oklch(0.56 0.17 42);
   --control-shadow: 0 2px 8px oklch(0.145 0 0 / 4%);
   --ui-font-size: 14px;
-  --ui-font-size-caption: calc(var(--ui-font-size) - 3px);
-  --ui-font-size-xs: calc(var(--ui-font-size) - 2px);
-  --ui-font-size-sm: calc(var(--ui-font-size) - 1px);
+  /* 中文辅助文字保留 12px 下限，缩小界面字号时也不继续压缩笔画。 */
+  --ui-font-size-caption: max(12px, calc(var(--ui-font-size) - 3px));
+  --ui-font-size-xs: max(12px, calc(var(--ui-font-size) - 2px));
+  --ui-font-size-sm: max(12px, calc(var(--ui-font-size) - 1px));
   --ui-font-size-lg: calc(var(--ui-font-size) + 2px);
   --ui-font-size-xl: calc(var(--ui-font-size) + 4px);
   --ui-font-size-title: calc(var(--ui-font-size) + 6px);
@@ -248,6 +249,7 @@
   --chat-line-height: 1.625;
   --chat-paragraph-gap: 1em;
   --chat-content-width: 48rem;
+  --chat-prose-width: 40em;
   --chat-column-gutter: 1.5rem;
   --code-font-size: 13px;
   --code-line-height: 1.5;
@@ -590,6 +592,26 @@ html:is([data-window-shell="transparent"], [data-window-shell="translucent"]) .b
     text-indent: 0;
   }
 
+  /* 只增加视觉间距，不改消息原文；流式与完成态沿用同一套排版。 */
+  @supports (text-autospace: normal) {
+    .assistant-markdown {
+      text-autospace: normal;
+    }
+
+    .assistant-markdown
+      :is(
+        pre,
+        code,
+        kbd,
+        samp,
+        .assistant-file-link,
+        [data-streamdown="code-block"],
+        [data-streamdown="table-wrapper"]
+      ) {
+      text-autospace: no-autospace;
+    }
+  }
+
   .desktop-streamdown {
     --muted: var(--code);
     --muted-foreground: var(--ui-muted);
@@ -788,8 +810,14 @@ html:is([data-window-shell="transparent"], [data-window-shell="translucent"]) .b
   }
 
   .assistant-markdown [data-streamdown="paragraph"] {
+    /* 仅限制普通段落，外层消息列、代码块和表格仍使用原有宽度。 */
+    max-width: min(100%, var(--chat-prose-width));
     margin-block: 0;
     line-height: var(--chat-line-height);
+  }
+
+  .assistant-markdown [data-streamdown="table-wrapper"] [data-streamdown="paragraph"] {
+    max-width: none;
   }
 
   .assistant-markdown [data-streamdown="paragraph"] + [data-streamdown="paragraph"] {
