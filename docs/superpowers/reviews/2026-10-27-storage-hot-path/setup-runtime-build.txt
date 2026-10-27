@@ -1,0 +1,16 @@
+
+> @vykor/agent-runtime@0.1.0 build C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\packages\agent-runtime
+> rimraf dist && tsc -p tsconfig.build.json && node scripts/build.mjs
+
+
+  dist\kernel.js  244.4kb
+
+Done in 109ms
+
+  dist\workflow.js  411.5kb
+
+Done in 156ms
+
+  dist\index.js  3.4mb
+
+Done in 1483ms

@@ -74,7 +74,7 @@ export class ToolOperationService implements AgentToolSafety {
           });
           this.clearResolvedFailure(input.receipt.operationId);
         } catch (error) {
-          const operation = store.toolOperations.get(input.receipt.operationId);
+          const operation = store.toolOperations.getSummary(input.receipt.operationId);
           if (operation?.state === "dispatching" || operation?.state === "unknown")
             this.unsettledFailures.add(input.receipt.operationId);
           throw error;
@@ -124,7 +124,7 @@ export class ToolOperationService implements AgentToolSafety {
     return operation;
   }
   private clearResolvedFailure(operationId: string): void {
-    const state = this.options.store.toolOperations.get(operationId)?.state;
+    const state = this.options.store.toolOperations.getSummary(operationId)?.state;
     if (state === "confirmed" || state === "not_applied") this.unsettledFailures.delete(operationId);
   }
   private assertOwner(): void { this.assertLease(this.options.ownerLease()); }

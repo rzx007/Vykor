@@ -2,7 +2,7 @@
 
 > **For agentic workers:** 按本计划 Q1、Q2 逐批执行；采用 `subagent-driven-development` 或 `executing-plans` 技能，在每批实现后独立审查。复选项表示实施步骤，不表示当前已完成。
 
-> 状态：评估完成，下一阶段提案，尚未实施。基线：`2ae6a425d72b70bc6229ac77c96ff350e7f91c3e`；日期：2026-10-27。
+> 状态：Q1 已验证并独立审查，Q2 待实施。实施起点：最新 `origin/main = c0bdb5dbfbda8a6e02be5fbfdc6e0c9ccd4191cc`；归档数据基线：`2ae6a425d72b70bc6229ac77c96ff350e7f91c3e`；日期：2026-10-27。
 
 **Goal:** 减少工具调用期间没有业务价值的正文复制、数组构造和全量投影，保留现有存储及安全语义。
 
@@ -95,11 +95,13 @@ Q1 预计 1–2 个工程日；Q2 预计 2–4 个工程日，含回归和性能
 
 **接口：** 消费现有 `getSummary(operationId)` 和无参数 `listSafetyStates()`；不新增 Repository 接口。
 
-- [ ] 在真实 Service 测试夹具中加入成功结算、提交失败、迟到结算及人工核对场景；只读状态期间把完整 `get()` 设置为抛错，验证状态处理仍正确且不调用它。大正文取 1 MiB，保留正常完整结果读取测试。
-- [ ] 将异常处理和 `clearResolvedFailure` 的状态读取改为 `getSummary()`，保留每个 operation 独立解除失败保护的规则，不能因一次结算失败清空其他失败记录。
-- [ ] 为清理增加“禁止完整 list()”用例，覆盖根、子、孙会话，以及 `prepared/authorized/dispatching/unknown` 四种状态；preview 后新增未决操作时，execute 必须再次阻止删除。
-- [ ] 清理保护改为一次 `listSafetyStates()`，配合目标会话 ID Set 判断；不能用只包含 unknown/dispatching 的人工审查候选代替四状态检查。
-- [ ] 先运行新增用例确认旧实现失败，再做最小实现，运行本批回归与 Server 类型检查，更新 README，独立审查后单独提交。
+- [x] 在真实 Service 测试夹具中加入成功结算、提交失败、迟到结算及人工核对场景；只读状态期间把完整 `get()` 设置为抛错，验证状态处理仍正确且不调用它。大正文取 1 MiB，保留正常完整结果读取测试。
+- [x] 将异常处理和 `clearResolvedFailure` 的状态读取改为 `getSummary()`，保留每个 operation 独立解除失败保护的规则，不能因一次结算失败清空其他失败记录。
+- [x] 为清理增加“禁止完整 list()”用例，覆盖根、子、孙会话，以及 `prepared/authorized/dispatching/unknown` 四种状态；preview 后新增未决操作时，execute 必须再次阻止删除。
+- [x] 清理保护改为一次 `listSafetyStates()`，配合目标会话 ID Set 判断；不能用只包含 unknown/dispatching 的人工审查候选代替四状态检查。
+- [x] 先运行新增用例确认旧实现失败，再做最小实现，运行本批回归与 Server 类型检查，更新 README，独立审查后单独提交。
+
+实施证据见[Q1–Q2 记录](../reviews/2026-10-27-storage-hot-path/README.md)和[Q1 独立审查](../reviews/2026-10-27-storage-hot-path/q1-review.md)。Q1 的 RED 为 16 项预期失败；GREEN 为 Server 四文件 48 项，Server 类型、架构、退役 UI、文档和空白门禁均通过。
 
 **验收：** 完整 get/list 的调用数为 0；所有原有保护和错误不变。该批消除不必要的正文复制，不承诺减少启动耗时、常驻内存或所有历史扫描。
 

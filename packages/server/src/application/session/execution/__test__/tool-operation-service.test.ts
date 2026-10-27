@@ -34,6 +34,43 @@ async function authorized(f: Awaited<ReturnType<typeof fixture>>, intent = f.int
   return { intent, operation: await f.service.operations.authorize({ intent, operation, policyVersion: policy.policyVersion }), policyVersion: policy.policyVersion };
 }
 describe("daemon tool operation host", () => {
+  it("settles large results and preserves full reads without copying bodies for status checks", async () => {
+    const f = await fixture(), input = await authorized(f);
+    const receipt = await f.service.operations.dispatch(input);
+    const result = { toolUseId: "call", toolName: "Write", content: [{ type: "text" as const, text: "x".repeat(1024 * 1024) }] };
+    const fullRead = vi.spyOn(f.store.toolOperations, "get").mockImplementation(() => { throw new Error("Status checks must use summaries"); });
+    await expect(f.service.operations.settle({ receipt, result })).resolves.toBeUndefined();
+    expect(fullRead).not.toHaveBeenCalled();
+    fullRead.mockRestore();
+    expect(f.store.toolOperations.get(receipt.operationId)?.result).toEqual(result);
+  });
+  it.each(["late", "review"] as const)("keeps other receipt failures blocked after %s resolution without full reads", async resolution => {
+    let failCommit = false;
+    const f = await fixture({ beforeCommit: () => { if (failCommit) throw new Error("receipt commit failed"); } });
+    const first = await authorized(f);
+    const second = await authorized(f, { ...f.intent, toolUse: { ...f.intent.toolUse, id: "second" } });
+    const waiting = await authorized(f, { ...f.intent, toolUse: { ...f.intent.toolUse, id: "waiting" } });
+    const receipts = [await f.service.operations.dispatch(first), await f.service.operations.dispatch(second)];
+    const results = ["call", "second"].map(toolUseId => ({ toolUseId, toolName: "Write",
+      content: [{ type: "text" as const, text: "x".repeat(1024 * 1024) }] }));
+    const fullRead = vi.spyOn(f.store.toolOperations, "get").mockImplementation(() => { throw new Error("Status checks must use summaries"); });
+    failCommit = true;
+    for (let i = 0; i < 2; i++) await expect(f.service.operations.settle({ receipt: receipts[i]!, result: results[i]! })).rejects.toThrow("receipt commit failed");
+    failCommit = false;
+    await expect(f.service.operations.dispatch(waiting)).rejects.toThrow(/unresolved/i);
+    for (let i = 0; i < 2; i++) {
+      if (resolution === "late") await f.service.operations.settle({ receipt: receipts[i]!, result: results[i]!, late: true });
+      else {
+        await f.service.operations.settle({ receipt: receipts[i]!, result: { ...results[i]!, executionState: "unknown" } });
+        f.service.reconcile({ operationId: receipts[i]!.operationId,
+          expectedRevision: f.store.toolOperations.getSummary(receipts[i]!.operationId)!.revision,
+          outcome: "not_applied", evidence: "trusted lookup confirms absence" });
+      }
+      if (i === 0) await expect(f.service.operations.dispatch(waiting)).rejects.toThrow(/unresolved/i);
+    }
+    await expect(f.service.operations.dispatch(waiting)).resolves.toMatchObject({ ownerId: "owner" });
+    expect(fullRead).not.toHaveBeenCalled();
+  });
   it("observes the current dispatch without copying the complete operation", async () => {
     const f = await fixture(), input = await authorized(f);
     const receipt = await f.service.operations.dispatch(input);
