@@ -29,6 +29,8 @@ vk
 
 准备 Node.js、pnpm 和 Bun。pnpm 版本以根 `package.json` 的 `packageManager` 为准，各构建工具的 Node 要求以各包声明为准。
 
+Windows 上的文件边界测试会实际创建文件符号链接。运行测试前，请开启 [Windows 开发者模式](https://learn.microsoft.com/windows/advanced-settings/developer-mode)，让普通 Node.js 进程具备创建链接的权限；也可使用管理员终端运行测试。若创建链接时报 `EPERM`，应修复本机权限后重跑，不能跳过用例、用普通文件替代链接或放宽断言。
+
 ```bash
 git clone https://github.com/rzx007/Vykor.git vykor
 cd vykor

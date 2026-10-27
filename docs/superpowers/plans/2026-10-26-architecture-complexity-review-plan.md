@@ -197,3 +197,19 @@ pnpm exec vitest run --config tests/desktop-integration/vitest.config.ts tests/d
 - `node scripts/architecture-boundaries.mjs`：104 个存储平铺调用、0 个策略例外；`pnpm check:retired-ui` 无错误；`pnpm check-docs` 的 4 项策略测试与 911 个 Markdown、403 个模块 README 通过；`git diff --check` 和各批暂存差异检查通过。
 
 合并结论依据独立源码审查、完整类型和上述运行验证；三项文件链接权限失败与四项 WSL 跳过作为已证实的环境限制保留，没有通过修改无关文件或削弱检查来取得通过。本次提交范围仍只有五批代码、受影响测试与文档，原有 `plugins/` 未纳入提交。
+
+## Windows 文件符号链接权限修复（2026-10-27）
+
+用户要求继续解决上一节三项文件链接权限失败，明确不允许跳过用例或削弱断言。先重跑原测试，确认插件一项、ImageToText 两项均在 `fs.symlink()` 创建真实文件链接时被 Windows 拒绝，尚未进入业务断言；独立 Node 标准库探针也稳定返回 `EPERM`。本机当时未设置开发者模式开关，普通进程也没有创建符号链接的系统特权。
+
+用户明确授权开启开发者模式，首次 Windows UAC 未完成，按用户要求重新发起后成功。只设置本机 `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock` 下的 `AllowDevelopmentWithoutDevLicense=1`，未启用设备发现或远程调试。随后确认测试进程仍为非管理员，并实际创建文件链接，检查 `lstat().isSymbolicLink()`、最终目标路径及通过链接读取目标更新后的内容，全部成功；临时探针文件已清理。
+
+原测试、断言和生产代码均未修改。仓库根 README 补充 Windows 测试的权限前置条件，不能用普通文件、硬链接、模拟文件系统或跳过来替代真实文件符号链接。
+
+定向重跑 `pnpm --filter @vykor/plugins exec vitest run src/components/__test__/app-resources.test.ts` 为 **6/6**，`pnpm --filter @vykor/server exec vitest run src/application/visual-tools/__test__/daemon-image-to-text-tool.test.ts` 为 **19/19**，均退出 0、无跳过，原三项失败全部实际执行通过。
+
+随后先运行 `pnpm exec turbo test --force --continue=always --concurrency=2`，**73/73 个包任务成功，0 个缓存命中**，确认环境修复后全部重新执行；其中 Plugins **104**、Server **1949**、Desktop **2822** 项通过，原失败的两个文件也在全仓测试中再次通过。再运行根入口 `pnpm test`，复用这轮成功的包任务，并完整执行后续链，**退出 0**：脚本 **32**、Agent 集成 **60**、Desktop 集成 **1**、Server/Client 集成 **124** 项通过。
+
+全仓已有的条件跳过未改：包测试共 **19** 项（Sandbox 4、Plugins 1、Hooks 2、Tools 3、Agent Runtime 9），执行环境集成另有 **4** 项 WSL 用例按原条件跳过。它们不计为通过；本次三个文件链接用例均没有跳过，也没有新增条件、放宽超时或改动检查命令。根 README 和本记录为仅有的已跟踪文件改动，原有 `plugins/` 继续保留且不纳入提交。
+
+`pnpm check-docs`、`pnpm check:retired-ui`、`node scripts/architecture-boundaries.mjs` 和 `git diff --check` 均通过。文件链接权限问题在本机已修复，无需修改产品协议、存储格式、依赖或测试实现。
