@@ -86,6 +86,8 @@
 
 本节描述目标与验收要求，不代表代码已经实现；不能从创建日期或文件名推断完成状态。
 
+- [子代理与工作流生命周期调研及架构建议](./research/2026-10-27-agent-task-lifecycle-comparison.md)：对照五个参考项目，建议明确任务归属、稳定运行身份、分开执行额度与会话保留，并统一 Workflow 收尾；尚未修改生产代码。
+- [SDK 与 daemon 共用执行核心方案](./superpowers/specs/2026-10-27-shared-execution-core-design.md)与[文件级实施计划](./superpowers/plans/2026-10-27-shared-execution-core.md)：已核对当前代码差异，明确状态归属、三阶段替换与删除清单、真实工厂和 child handle 验收；待实施。
 - [存储热路径优化计划](./superpowers/plans/2026-10-27-storage-hot-path-optimization-plan.md)：评估全历史加载、正文常驻和扫描成本；建议先做 Q1 摘要读取与 Q2 先筛选再投影，完整正文按需读取暂缓。附当前版本 12 进程原始基线。
 - [核心 Agent 能力补齐方案](./superpowers/specs/2026-10-26-agent-core-capability-completion-design.md)：S1 工具操作安全已实现；S2 可恢复执行、S3 持久审批与 P1 交付能力仍待实施。
 - [桌面设置需求](./desktop-settings-requirements.md)：逐页目标行为和验收要求，具体完成范围需核对实现。
