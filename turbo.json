@@ -1,7 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
-  "globalDependencies": ["vitest.config.ts", "tests/setup-isolated-host.ts"],
+  "globalDependencies": ["vitest.config.ts", "tests/setup-isolated-host.ts", "tests/helpers/**"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
@@ -27,8 +27,15 @@
     "test": {
       "dependsOn": ["^build"]
     },
+    "@vykor/plugins#test": {
+      "dependsOn": ["^build"],
+      "env": ["VYKOR_OFFICIAL_PLUGINS_DIR"],
+      "cache": false
+    },
     "@vykor/agent-runtime#test": {
       "dependsOn": ["^build"],
+      "env": ["VYKOR_OFFICIAL_PLUGINS_DIR"],
+      "cache": false,
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/examples/plugins/text-inspector/**"]
     },
     "@vykor/server#test": {

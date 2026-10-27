@@ -213,3 +213,53 @@ pnpm exec vitest run --config tests/desktop-integration/vitest.config.ts tests/d
 全仓已有的条件跳过未改：包测试共 **19** 项（Sandbox 4、Plugins 1、Hooks 2、Tools 3、Agent Runtime 9），执行环境集成另有 **4** 项 WSL 用例按原条件跳过。它们不计为通过；本次三个文件链接用例均没有跳过，也没有新增条件、放宽超时或改动检查命令。根 README 和本记录为仅有的已跟踪文件改动，原有 `plugins/` 继续保留且不纳入提交。
 
 `pnpm check-docs`、`pnpm check:retired-ui`、`node scripts/architecture-boundaries.mjs` 和 `git diff --check` 均通过。文件链接权限问题在本机已修复，无需修改产品协议、存储格式、依赖或测试实现。
+
+## 原 23 项跳过的补齐与实际执行（2026-10-27）
+
+本轮从 `981bd24f` 继续，开始时已跟踪文件与暂存区干净，原有未跟踪 `plugins/` 保留。23 项均已在对应环境实际执行通过，没有无法运行项；Windows 单端仍保留四项平台跳过，它们已在 Linux 实际补跑，不计入 Windows 通过数。没有修改生产代码、删除平台边界、放宽超时或减少断言。
+
+### 逐项结果
+
+官方源码原先未通过 `VYKOR_OFFICIAL_PLUGINS_DIR` 显式提供。干净检出 `rzx007/vykor-plugins` 的固定提交 `4adc372eca251feeb4ed6199f184e98ed8283a43`，knowledge-work 为 1.1.2，office-work 为 0.12.4。仅对测试子进程提供路径，不使用根目录原有 `plugins/`；knowledge-work 离线构建校验通过，办公入口用例只需已有技能文件，无需下载 Office 引擎。
+
+1. [办公入口](../../../packages/plugins/src/__test__/office-work-entry.test.ts)：主 Agent 和四项官方技能入口，已通过。
+2. [研究写作插件](../../../packages/agent-runtime/src/node/plugins/native-tools/__test__/knowledge-work.test.ts)：真实工具注册与 WebFetch 来源记录，已通过。
+3. 同文件：两位专家与它们引用的技能解析，已通过。
+4. 同文件：来源与引文绑定校验，已通过。
+5. 同文件：缺失证据、未知来源和被修改引文的逐条报告，已通过。
+6. 同文件：本地材料引用不擅自读取，已通过。
+7. 同文件：拒绝歧义的来源与断言身份，已通过。
+8. 同文件：拒绝带额外字段的输入，已通过。
+9. 同文件：拒绝超过 24,000 字符的来源文本，已通过。
+10. 同文件：拒绝空引文，已通过。
+
+下面五项原先写死 `C:/Program Files/Git/bin/sh.exe`，而本机 Git 实际安装于 D 盘。[公共测试帮助代码](../../../tests/helpers/README.md)现在实际执行候选 Shell，支持 PATH、Git 的实际安装位置及默认位置。保留原脚本和所有断言；文件操作的 Linux 分支仍强制执行，缺少或损坏 `/bin/sh` 时失败。
+
+11. [WSL 脚本边界](../../../packages/sandbox/src/environment/__test__/wsl-process-boundary.test.ts)：保留导出的 HOME 和 SHELL，已通过。
+12. 同文件：未导出 HOME/SHELL 时从账号信息恢复 HOME，已通过。
+13. 同文件：通过外部进程组终止命令执行取消监督脚本，已通过。
+14. [文件操作](../../../packages/tools/src/file/__test__/operations.test.ts)：可搜索祖先下缺失父目录与目标的错误分类，已通过。
+15. 同文件：并发出现目标目录时不把原子替换文件移入目录，已通过。
+
+下面三项验证 POSIX 行为，Windows 的 cmd 和文件权限模型不能原生验证同一断言。在独立 Debian 文件系统中按现有锁文件安装 Node 依赖，使用与宿主相同的 Node 24.10.0 和 pnpm 10.30.2，原文件分别为 Hooks 43/43、文件操作 21/21，通过且无跳过。
+
+16. [Hooks](../../../packages/hooks/src/__test__/index.test.ts)：带单引号和空格的 JSON 作为完整单个参数交给子进程，已通过。
+17. 同文件：参数中隐藏的命令替换、分号与引号不执行注入命令，已通过。
+18. [文件操作](../../../packages/tools/src/file/__test__/operations.test.ts)：原子替换保留原文件 `0755` 权限位，已通过。
+
+本机已有 WSL 2 和内核，原先没有 Linux 发行版。通过 WSL 官方命令安装 Debian 13，补齐 Bash、ripgrep、procps、util-linux，并完成首次账号初始化，使用锁定口令的普通测试账号 `vykor-test` 作为该新发行版默认用户。真实终端原先停在首次用户名提示，初始化后正常退出和中断；没有修改终端实现。
+
+19. [真实 WSL 集成](../../../tests/execution-node/wsl.e2e.test.ts)：cwd、环境变量、退出码和文件读写，已通过。
+20. 同文件：AbortSignal 取消长任务且无残留进程，已通过。夹具的 `exec -a` 需要 Bash；原 Debian `/bin/sh` 为 dash，提前退出后又错过迟到注册的退出监听。现改用 Bash、立即监听退出、取消前断言任务仍存活，保留非零退出、5 秒取消时限、进程残留检查和 10 秒总超时。
+21. 同文件：真实搜索与后台 Shell，已通过。
+22. 同文件：stdio MCP 与真实交互终端的输出、退出和中断恢复，已通过。四项完整原命令 `pnpm test:execution-integration` 为 4/4、无跳过。
+
+23. [SRT 沙箱](../../../packages/sandbox/__test__/e2e/srt.e2e.test.ts)：真实受限 Shell 命令，已通过。在 Debian 内安装固定 `@anthropic-ai/sandbox-runtime@0.0.81`、bubblewrap 和 socat，实际隔离探针及原 SRT 端到端测试均成功，未用模拟隔离替代。Linux 专属两个文件及此项合计 65 项通过、0 跳过。
+
+安装真实 SRT 后，Hooks 原有的“运行器不可用时阻止命令”用例暴露了隐含环境假设。该用例现在显式指定隔离临时目录中不存在的运行器，继续走真实不可用分支，保留阻止执行的断言；在同时安装了真实 SRT 的 Linux 中完整 43 项也全部通过。
+
+独立审查发现仅把官方插件路径加入 Turbo 缓存不足以跟踪同路径的外部源码更新。已为 Plugins 和 Agent Runtime 两个测试任务显式传入已有变量、禁用结果缓存，并保留构建依赖；公共测试帮助代码纳入缓存输入。审查复核通过，无剩余阻断，不新增产品依赖、配置项或生产服务。
+
+收尾先显式提供上述固定官方源码路径，运行 `pnpm exec turbo test --force --continue=always --concurrency=2`，**73/73 个任务成功、0 个缓存命中**；再按最终配置运行完整 `pnpm test`，**退出 0**，两个外部插件测试包再次实际执行。Windows 包测试现为 Sandbox **41 通过/1 平台跳过**、Plugins **105/105**、Hooks **41 通过/2 平台跳过**、Tools **650 通过/1 平台跳过**、Agent Runtime **803/803**；这四项保留的平台标记均已有本节 Linux 实际通过的证据。脚本 **32**、WSL **4**、Agent 集成 **60**、Desktop 集成 **1**、Server/Client 集成 **124** 项全部通过，不再有 WSL 环境跳过。
+
+`pnpm check-types` 为 **72/72** 个任务成功，Server/Client 联合类型也通过；`pnpm check-docs` 为 **912** 个 Markdown、**404** 个模块 README 通过。`pnpm check:retired-ui`、`node scripts/architecture-boundaries.mjs` 与 `git diff --check` 通过。独立审查再次核对逐项记录与原始日志，一致且无过度声称；原有未跟踪 `plugins/` 未修改、未清理、未纳入提交。

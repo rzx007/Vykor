@@ -31,6 +31,8 @@ vk
 
 Windows 上的文件边界测试会实际创建文件符号链接。运行测试前，请开启 [Windows 开发者模式](https://learn.microsoft.com/windows/advanced-settings/developer-mode)，让普通 Node.js 进程具备创建链接的权限；也可使用管理员终端运行测试。若创建链接时报 `EPERM`，应修复本机权限后重跑，不能跳过用例、用普通文件替代链接或放宽断言。
 
+跨平台验证需要 Windows 中实际可用的 Git Shell（执行 `sh` 脚本的程序）、完成首次用户初始化的 WSL 发行版，以及 Linux 中限制命令访问范围的 SRT 运行器和它使用的 bubblewrap 隔离工具。POSIX 引号安全、文件权限位和 SRT 测试在 Linux 中运行，不能用 Windows 结果代替。官方插件兼容性检查需显式设置 `VYKOR_OFFICIAL_PLUGINS_DIR`，指向独立 `vykor-plugins` 仓库的 `plugins` 目录；涉及外部插件的两个包测试不缓存结果，避免外部源码更新后重用旧验证。运行入口见[契约与测试索引](docs/contract-test-index.md)。
+
 ```bash
 git clone https://github.com/rzx007/Vykor.git vykor
 cd vykor

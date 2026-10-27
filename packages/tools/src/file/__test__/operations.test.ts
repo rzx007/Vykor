@@ -1,16 +1,17 @@
 import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
 
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { findPosixShell } from "../../../../../tests/helpers/posix-shell.js";
 import { createFileReadTool } from "../read.js";
 import { createFileWriteTool } from "../write.js";
 import { FileNotFoundError, HostFileOperations, WslFileOperations } from "../operations.js";
 
 const roots: string[] = [];
+const shell = findPosixShell() ?? (process.platform === "win32" ? "" : "/bin/sh");
 afterEach(async () => { await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true }))); });
 
 describe("file operations", () => {
@@ -169,13 +170,12 @@ describe("FileNotFoundError mapping", () => {
     });
   });
 
-  it.skipIf(process.platform === "win32" && !existsSync("C:/Program Files/Git/bin/sh.exe"))(
+  it.skipIf(process.platform === "win32" && !shell)(
     "recognizes a missing target under a missing parent with a searchable ancestor",
     async () => {
       const root = await mkdtemp(join(tmpdir(), "vk-wsl-nested-missing-"));
       roots.push(root);
       const target = join(root, "new", "deep", "file.txt").replaceAll("\\", "/");
-      const shell = process.platform === "win32" ? "C:/Program Files/Git/bin/sh.exe" : "/bin/sh";
       const operations = new WslFileOperations(
         wslEnvironment(async (argv) => {
           const result = spawnSync(shell, argv.slice(1), { encoding: "utf8" });
@@ -220,14 +220,13 @@ describe("atomic WSL file operations", () => {
     expect(calls[0]?.slice(-2)).toEqual(["vk-atomic", "/tmp/script.sh"]);
   });
 
-  it.skipIf(process.platform === "win32" && !existsSync("C:/Program Files/Git/bin/sh.exe"))(
+  it.skipIf(process.platform === "win32" && !shell)(
     "does not move an atomic replacement inside a concurrently created directory",
     async () => {
       const root = await mkdtemp(join(tmpdir(), "vk-wsl-atomic-dir-"));
       roots.push(root);
       const target = join(root, "occupied");
       await mkdir(target);
-      const shell = process.platform === "win32" ? "C:/Program Files/Git/bin/sh.exe" : "/bin/sh";
       const operations = new WslFileOperations(
         wslEnvironment(async (argv) => {
           const input: Buffer[] = [];

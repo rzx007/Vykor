@@ -53,14 +53,16 @@ maybeDescribe("WSL execution environment e2e", () => {
     const controller = new AbortController();
     const marker = `vk-wsl-abort-${Date.now()}`;
     const child = spawnWslProcess({
-      argv: ["/bin/sh", "-c", `exec -a ${marker} sleep 30`],
+      argv: ["/bin/bash", "-c", `exec -a ${marker} sleep 30`],
       cwd: hostPathToWslPath(process.cwd()),
       signal: controller.signal,
     });
+    const completion = collect(child).catch((error) => ({ code: -1, stdout: String(error) }));
     await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(child.exitCode).toBeNull();
     const startedAt = Date.now();
     controller.abort();
-    const aborted = await collect(child).catch((error) => ({ code: -1, stdout: String(error) }));
+    const aborted = await completion;
     expect(aborted.code).not.toBe(0);
     expect(Date.now() - startedAt).toBeLessThan(5_000);
     await new Promise((resolve) => setTimeout(resolve, 200));

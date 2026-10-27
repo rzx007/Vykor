@@ -8,6 +8,16 @@
 
 `pnpm check-docs` 先运行[文档检查器回归](../scripts/__test__/documentation-policy.test.mjs)，再检查根说明、docs Markdown 及模块 README 的链接、章节、状态、当前源码路径、导航和协议版本声明。历史正文只验证链接，不将旧路径和旧协议当作当前实现检查。内容权威性与维护入口见[文档维护约定](./documentation-policy.md)。
 
+## 环境相关测试
+
+`pnpm test` 按宿主平台运行工作区和跨包测试。补齐环境后应实际重跑，不能把平台跳过计为通过，也不能用模拟结果代替真实进程、文件系统或沙箱。
+
+- Windows 的[WSL 脚本边界测试](../packages/sandbox/src/environment/__test__/wsl-process-boundary.test.ts)和[文件操作测试](../packages/tools/src/file/__test__/operations.test.ts)通过[公共测试帮助代码](../tests/helpers/README.md)查找 Git 中实际可执行的 `sh`，支持非默认盘符安装，不要求复制到 C 盘。
+- `pnpm test:execution-integration` 运行[真实 WSL 集成](../tests/execution-node/wsl.e2e.test.ts)。需要 WSL 2、已完成首次用户初始化的默认 Linux 发行版，以及 Bash、ripgrep、procps 和 util-linux。取消用例使用 Bash 的 `exec -a` 设置进程标记，并检查取消时限和残留进程；交互终端不能停在首次创建用户的提示上。
+- [办公入口](../packages/plugins/src/__test__/office-work-entry.test.ts)和[研究写作插件](../packages/agent-runtime/src/node/plugins/native-tools/__test__/knowledge-work.test.ts)兼容性检查需要真实的独立 `vykor-plugins` 源码。运行前显式设置已有的 `VYKOR_OFFICIAL_PLUGINS_DIR` 指向该仓库的 `plugins` 目录，再执行 `pnpm test`。Turbo 传入该变量；这两个包的测试不缓存外部源码结果，不自动发现相邻目录或用户安装。
+- [Hooks 引号与注入安全](../packages/hooks/src/__test__/index.test.ts)的两项 POSIX 用例，以及[文件操作](../packages/tools/src/file/__test__/operations.test.ts)的可执行权限位用例，需要在 Linux 或 macOS 的 Node 中运行。Windows 的 `cmd` 和文件权限模型无法验证同一行为。在独立 Linux 检出中按锁文件安装依赖后，分别运行 `pnpm --filter @vykor/hooks exec vitest run src/__test__/index.test.ts` 和 `pnpm --filter @vykor/tools exec vitest run src/file/__test__/operations.test.ts`。
+- [SRT 端到端测试](../packages/sandbox/__test__/e2e/srt.e2e.test.ts)运行真实受限命令。在 Linux 或 WSL 的 Linux Node 中安装 `@anthropic-ai/sandbox-runtime`，并提供它实际使用的 `bubblewrap` 和 `socat`，再运行 `pnpm --filter @vykor/sandbox e2e:srt`；原生 Windows 不支持这一沙箱。缺少运行器时应阻止执行的 Hooks 测试显式指定不存在的运行器，避免与这项正常运行测试的环境前提冲突。
+
 ## 生命周期契约编号
 
 ### S1 工具操作安全

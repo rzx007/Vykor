@@ -21,3 +21,5 @@
 ```bash
 pnpm --filter @vykor/hooks test
 ```
+
+两项 POSIX 命令参数与注入安全测试需要在 Linux 或 macOS 运行。严格沙箱不可用的测试显式指定隔离临时目录中不存在的运行器，不依赖开发机是否安装了 SRT；失败时阻止执行的原断言保持。
