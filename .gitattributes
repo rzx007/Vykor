@@ -3,3 +3,6 @@ packages/services/src/session-runtime/migrations/** text eol=lf
 # Keep archived measurements byte-for-byte so their recorded SHA256 stays valid.
 docs/superpowers/reviews/2026-10-27-storage-optimization-baseline.json -text
 docs/superpowers/reviews/2026-10-27-storage-optimization-baseline-context.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# Raw logs and patches retain their original whitespace as evidence.
+docs/superpowers/reviews/2026-10-27-storage-hot-path/** -text -whitespace
+packages/server/src/application/session/execution/__test__/tool-operation-hot-path.bench.mjs text eol=lf

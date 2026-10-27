@@ -1,0 +1,8 @@
+warning: in the working copy of 'packages/services/src/execution-records/__test__/execution-repository.test.ts', LF will be replaced by CRLF the next time Git touches it
+Starting r1-baseline-hot-1
+Traceback (most recent call last):
+  File "C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\docs\superpowers\reviews\2026-10-27-storage-hot-path\run-experiments.py", line 124, in <module>
+    main()
+  File "C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\docs\superpowers\reviews\2026-10-27-storage-hot-path\run-experiments.py", line 105, in main
+    raise RuntimeError(f"{name} failed: all stdout/stderr preserved")
+RuntimeError: r1-baseline-hot-1 failed: all stdout/stderr preserved

@@ -1,0 +1,148 @@
+
+ RUN  v3.2.4 C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/packages/server
+
+ ❯ src/application/maintenance/__test__/cleanup-settings.test.ts (15 tests | 13 failed) 1088ms
+   ✓ maintenance cleanup protection > protects pending permissions and rechecks activity after preview 26ms
+   × maintenance cleanup protection > protects the aged tree with a 'prepared' operation in 'root' without full reads 205ms
+     → Cleanup must only read metadata
+   × maintenance cleanup protection > protects the aged tree with a 'authorized' operation in 'root' without full reads 70ms
+     → Cleanup must only read metadata
+   × maintenance cleanup protection > protects the aged tree with a 'dispatching' operation in 'root' without full reads 67ms
+     → Cleanup must only read metadata
+   × maintenance cleanup protection > protects the aged tree with a 'unknown' operation in 'root' without full reads 56ms
+     → Cleanup must only read metadata
+   × maintenance cleanup protection > protects the aged tree with a 'prepared' operation in 'child' without full reads 61ms
+     → Cleanup must only read metadata
+   × maintenance cleanup protection > protects the aged tree with a 'authorized' operation in 'child' without full reads 58ms
+     → Cleanup must only read metadata
+   × maintenance cleanup protection > protects the aged tree with a 'dispatching' operation in 'child' without full reads 53ms
+     → Cleanup must only read metadata
+   × maintenance cleanup protection > protects the aged tree with a 'unknown' operation in 'child' without full reads 75ms
+     → Cleanup must only read metadata
+   × maintenance cleanup protection > protects the aged tree with a 'prepared' operation in 'grandchild' without full reads 57ms
+     → Cleanup must only read metadata
+   × maintenance cleanup protection > protects the aged tree with a 'authorized' operation in 'grandchild' without full reads 55ms
+     → Cleanup must only read metadata
+   × maintenance cleanup protection > protects the aged tree with a 'dispatching' operation in 'grandchild' without full reads 67ms
+     → Cleanup must only read metadata
+   × maintenance cleanup protection > protects the aged tree with a 'unknown' operation in 'grandchild' without full reads 56ms
+     → Cleanup must only read metadata
+   × maintenance cleanup protection > rechecks descendant operations before executing an earlier cleanup preview 88ms
+     → expected [] to deeply equal [ { id: 'root', …(1) } ]
+   ✓ maintenance cleanup protection > allows aged trees with confirmed operations and terminal Runs to be cleaned 93ms
+ ❯ src/application/session/execution/__test__/tool-operation-service.test.ts (19 tests | 3 failed) 1533ms
+   × daemon tool operation host > settles large results and preserves full reads without copying bodies for status checks 227ms
+     → promise rejected "Error: Status checks must use summaries" instead of resolving
+   × daemon tool operation host > keeps other receipt failures blocked after late resolution without full reads 97ms
+     → expected [Function] to throw error including 'receipt commit failed' but got 'Status checks must use summaries'
+   × daemon tool operation host > keeps other receipt failures blocked after review resolution without full reads 101ms
+     → expected [Function] to throw error including 'receipt commit failed' but got 'Status checks must use summaries'
+   ✓ daemon tool operation host > observes the current dispatch without copying the complete operation 56ms
+   ✓ daemon tool operation host > allows writes without copying full historical operation records for the safety check 63ms
+   ✓ daemon tool operation host > dispatches an operation only once and creates its execution header 75ms
+   ✓ daemon tool operation host > blocks unknown writes across new tool call IDs and tool names 62ms
+   ✓ daemon tool operation host > rejects changed runtime policy and accepts legal terminal late receipts 71ms
+   ✓ daemon tool operation host > fences a stale owner before dispatch 82ms
+   ✓ daemon tool operation host > ignores retry/read-only hints and records the actual implementation identity 58ms
+   ✓ daemon tool operation host > recovers abandoned dispatches when the next owner ID is next without dispatching prepared work 74ms
+   ✓ daemon tool operation host > recovers abandoned dispatches when the next owner ID is owner without dispatching prepared work 66ms
+   ✓ daemon tool operation host > allows only explicitly trusted read-only diagnostics past an unknown write 55ms
+   ✓ daemon tool operation host > blocks unknown child writes through root and sibling routes while preserving unrelated roots 76ms
+   ✓ daemon tool operation host > does not retain a captured scope when its execution header transaction rolls back 57ms
+   ✓ daemon tool operation host > blocks orphaned child dispatches before restart, including a previously authorized parent 74ms
+   ✓ daemon tool operation host > blocks sibling dispatch immediately after a child receipt commit fails while both Runs still run 112ms
+   ✓ daemon tool operation host > keeps each failed receipt blocked until that operation is authoritatively resolved 71ms
+   ✓ refuses a forged builtin source even when the definition and invocation match a captured trusted reader 51ms
+
+ Test Files  2 failed (2)
+      Tests  16 failed | 18 passed (34)
+   Start at  14:56:08
+   Duration  24.70s (transform 7.12s, setup 277ms, collect 40.63s, tests 2.62s, environment 0ms, prepare 3.66s)
+
+undefined
+C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\packages\server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/application/session/execution/__test__/tool-operation-service.test.ts src/application/maintenance/__test__/cleanup-settings.test.ts
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 16 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/application/maintenance/__test__/cleanup-settings.test.ts > maintenance cleanup protection > protects the aged tree with a 'prepared' operation in 'root' without full reads
+ FAIL  src/application/maintenance/__test__/cleanup-settings.test.ts > maintenance cleanup protection > protects the aged tree with a 'authorized' operation in 'root' without full reads
+ FAIL  src/application/maintenance/__test__/cleanup-settings.test.ts > maintenance cleanup protection > protects the aged tree with a 'dispatching' operation in 'root' without full reads
+ FAIL  src/application/maintenance/__test__/cleanup-settings.test.ts > maintenance cleanup protection > protects the aged tree with a 'unknown' operation in 'root' without full reads
+ FAIL  src/application/maintenance/__test__/cleanup-settings.test.ts > maintenance cleanup protection > protects the aged tree with a 'prepared' operation in 'child' without full reads
+ FAIL  src/application/maintenance/__test__/cleanup-settings.test.ts > maintenance cleanup protection > protects the aged tree with a 'authorized' operation in 'child' without full reads
+ FAIL  src/application/maintenance/__test__/cleanup-settings.test.ts > maintenance cleanup protection > protects the aged tree with a 'dispatching' operation in 'child' without full reads
+ FAIL  src/application/maintenance/__test__/cleanup-settings.test.ts > maintenance cleanup protection > protects the aged tree with a 'unknown' operation in 'child' without full reads
+ FAIL  src/application/maintenance/__test__/cleanup-settings.test.ts > maintenance cleanup protection > protects the aged tree with a 'prepared' operation in 'grandchild' without full reads
+ FAIL  src/application/maintenance/__test__/cleanup-settings.test.ts > maintenance cleanup protection > protects the aged tree with a 'authorized' operation in 'grandchild' without full reads
+ FAIL  src/application/maintenance/__test__/cleanup-settings.test.ts > maintenance cleanup protection > protects the aged tree with a 'dispatching' operation in 'grandchild' without full reads
+ FAIL  src/application/maintenance/__test__/cleanup-settings.test.ts > maintenance cleanup protection > protects the aged tree with a 'unknown' operation in 'grandchild' without full reads
+Error: Cleanup must only read metadata
+ ❯ ToolOperationRepository.<anonymous> src/application/maintenance/__test__/cleanup-settings.test.ts:28:96
+     26|     await withRealStore(async ({ store, service, addOperation, advance…
+     27|       const operationId = addOperation(sessionId, state);
+     28|       const fullList = vi.spyOn(store.toolOperations, "list").mockImpl…
+       |                                                                                                ^
+     29|       const metadata = vi.spyOn(store.toolOperations, "listSafetyState…
+     30|       advanceTime();
+ ❯ src/application/maintenance/cleanup-settings.ts:97:57
+ ❯ MaintenanceCleanupService.protection src/application/maintenance/cleanup-settings.ts:97:13
+ ❯ MaintenanceCleanupService.preview src/application/maintenance/cleanup-settings.ts:22:29
+ ❯ src/application/maintenance/__test__/cleanup-settings.test.ts:31:31
+ ❯ withRealStore src/application/maintenance/__test__/cleanup-settings.test.ts:91:11
+ ❯ src/application/maintenance/__test__/cleanup-settings.test.ts:26:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/16]⎯
+
+ FAIL  src/application/maintenance/__test__/cleanup-settings.test.ts > maintenance cleanup protection > rechecks descendant operations before executing an earlier cleanup preview
+AssertionError: expected [] to deeply equal [ { id: 'root', …(1) } ]
+
+- Expected
++ Received
+
+- [
+-   {
+-     "id": "root",
+-     "reason": StringContaining "工具操作",
+-   },
+- ]
++ []
+
+ ❯ src/application/maintenance/__test__/cleanup-settings.test.ts:51:30
+     49|       const result = await service.execute({ previewId: preview.id, id…
+     50|       expect(result.completed).toEqual([]);
+     51|       expect(result.skipped).toEqual([{ id: "root", reason: expect.str…
+       |                              ^
+     52|       expect(store.toolOperations.get(operationId)?.state).toBe("unkno…
+     53|       expect(store.sessions.get("grandchild")).toBeDefined();
+ ❯ withRealStore src/application/maintenance/__test__/cleanup-settings.test.ts:91:5
+ ❯ src/application/maintenance/__test__/cleanup-settings.test.ts:43:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/16]⎯
+
+ FAIL  src/application/session/execution/__test__/tool-operation-service.test.ts > daemon tool operation host > settles large results and preserves full reads without copying bodies for status checks
+AssertionError: promise rejected "Error: Status checks must use summaries" instead of resolving
+ ❯ src/application/session/execution/__test__/tool-operation-service.test.ts:42:66
+     40|     const result = { toolUseId: "call", toolName: "Write", content: [{…
+     41|     const fullRead = vi.spyOn(f.store.toolOperations, "get").mockImple…
+     42|     await expect(f.service.operations.settle({ receipt, result })).res…
+       |                                                                  ^
+     43|     expect(fullRead).not.toHaveBeenCalled();
+     44|     fullRead.mockRestore();
+
+Caused by: Error: Status checks must use summaries
+ ❯ ToolOperationRepository.<anonymous> src/application/session/execution/__test__/tool-operation-service.test.ts:41:95
+ ❯ Object.settle src/application/session/execution/tool-operation-service.ts:77:50
+ ❯ src/application/session/execution/__test__/tool-operation-service.test.ts:42:39
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/16]⎯
+
+ FAIL  src/application/session/execution/__test__/tool-operation-service.test.ts > daemon tool operation host > keeps other receipt failures blocked after late resolution without full reads
+ FAIL  src/application/session/execution/__test__/tool-operation-service.test.ts > daemon tool operation host > keeps other receipt failures blocked after review resolution without full reads
+AssertionError: expected [Function] to throw error including 'receipt commit failed' but got 'Status checks must use summaries'
+
+Expected: "receipt commit failed"
+Received: "Status checks must use summaries"
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/16]⎯
+

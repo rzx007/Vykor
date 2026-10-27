@@ -1,0 +1,1772 @@
+{
+  "startedAt": "2026-10-27T07:34:11.640145+00:00",
+  "processes": [
+    {
+      "name": "r1-baseline-hot-1",
+      "round": 1,
+      "label": "baseline",
+      "kind": "hot",
+      "group": null,
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\server\\src\\application\\session\\execution\\__test__\\tool-operation-hot-path.bench.mjs"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\server",
+      "startedAt": "2026-10-27T07:34:12.804488+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:35:25.409009+00:00",
+      "stdoutSha256": "b47982d431b7169073fa73dd8701bbad4d0c89da0e9f454ae9747c82a6867b04"
+    },
+    {
+      "name": "r1-baseline-hot-2",
+      "round": 1,
+      "label": "baseline",
+      "kind": "hot",
+      "group": null,
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\server\\src\\application\\session\\execution\\__test__\\tool-operation-hot-path.bench.mjs"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\server",
+      "startedAt": "2026-10-27T07:35:25.455898+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:36:29.846047+00:00",
+      "stdoutSha256": "4163d1cf3c8baa13f87e0faab716f8bfb0d59efe8a68498b823eb0676c7c0119"
+    },
+    {
+      "name": "r1-baseline-hot-3",
+      "round": 1,
+      "label": "baseline",
+      "kind": "hot",
+      "group": null,
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\server\\src\\application\\session\\execution\\__test__\\tool-operation-hot-path.bench.mjs"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\server",
+      "startedAt": "2026-10-27T07:36:29.884039+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:37:06.971002+00:00",
+      "stdoutSha256": "86b320baa98bd6c29eb83beaddc9879a190ec0079e5a7d67c543adb8c8ee7925"
+    },
+    {
+      "name": "r1-baseline-growth-100-4096-1",
+      "round": 1,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        100,
+        4096
+      ],
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "100",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:37:07.008727+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:37:10.441464+00:00",
+      "stdoutSha256": "58ed086aa8d7c8dc0532587a6db4bf8e789bf01ac273c19bdb5ea3b94a89f675"
+    },
+    {
+      "name": "r1-baseline-growth-100-4096-2",
+      "round": 1,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        100,
+        4096
+      ],
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "100",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:37:10.488768+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:37:12.833184+00:00",
+      "stdoutSha256": "ba74da3ade8e0991f66e09ac3861eb9115d3d3afa2ef6436ec5434b9c10812f5"
+    },
+    {
+      "name": "r1-baseline-growth-100-4096-3",
+      "round": 1,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        100,
+        4096
+      ],
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "100",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:37:12.873745+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:37:14.851236+00:00",
+      "stdoutSha256": "f547ca5d9e37b529904e4ae0b4723a02027925d5e70109f1549d720c3920cf8f"
+    },
+    {
+      "name": "r1-baseline-growth-1000-4096-1",
+      "round": 1,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        1000,
+        4096
+      ],
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "1000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:37:14.895146+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:37:17.919906+00:00",
+      "stdoutSha256": "7d113f4e56ed617c91961dd683372b6c3422a4d0b792d8c34be772e43153801b"
+    },
+    {
+      "name": "r1-baseline-growth-1000-4096-2",
+      "round": 1,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        1000,
+        4096
+      ],
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "1000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:37:17.952693+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:37:20.247765+00:00",
+      "stdoutSha256": "4940a04f94afb4449e49bb4fb2b7160158b47815931d6a5b540f1e50f56e8a64"
+    },
+    {
+      "name": "r1-baseline-growth-1000-4096-3",
+      "round": 1,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        1000,
+        4096
+      ],
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "1000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:37:20.282501+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:37:23.214613+00:00",
+      "stdoutSha256": "b5e53bb97ad70ba775b4cb7429dcd73b030ec9bc18324c310d3c5aba0e1e5a16"
+    },
+    {
+      "name": "r1-baseline-growth-10000-4096-1",
+      "round": 1,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        10000,
+        4096
+      ],
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:37:23.244993+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:37:47.028460+00:00",
+      "stdoutSha256": "5012e5c93b0bc22a1d7ea97fc0cd4a69d5b0d03295b187f6aff7bbeff890b470"
+    },
+    {
+      "name": "r1-baseline-growth-10000-4096-2",
+      "round": 1,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        10000,
+        4096
+      ],
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:37:47.061018+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:38:11.124243+00:00",
+      "stdoutSha256": "fd8f1508664a7093582a09c7b023f8f100a061422bb0fa2f18083f34ef01f75a"
+    },
+    {
+      "name": "r1-baseline-growth-10000-4096-3",
+      "round": 1,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        10000,
+        4096
+      ],
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:38:11.160584+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:38:33.507270+00:00",
+      "stdoutSha256": "e24344a49fc630c2564eabed5b98215dfc3432610406d15d62e9c3c8a2482f86"
+    },
+    {
+      "name": "r1-baseline-growth-10000-0-1",
+      "round": 1,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        10000,
+        0
+      ],
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "0"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:38:33.546147+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:38:45.202338+00:00",
+      "stdoutSha256": "d824de1e043c8c4e7b3ddd8fbc30101b714e5ee727a65c49194cd5cbd10c90f2"
+    },
+    {
+      "name": "r1-baseline-growth-10000-0-2",
+      "round": 1,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        10000,
+        0
+      ],
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "0"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:38:45.230877+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:38:55.474116+00:00",
+      "stdoutSha256": "8b47c9b59506b40777002fc48fcc2ed5deffd63c76678de92af7f6c613d7b104"
+    },
+    {
+      "name": "r1-baseline-growth-10000-0-3",
+      "round": 1,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        10000,
+        0
+      ],
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "0"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:38:55.509143+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:39:06.141501+00:00",
+      "stdoutSha256": "03dedc6244b2574fe6826f890f0a8eeabdaf71b83e905a7bca596bac5b1629f4"
+    },
+    {
+      "name": "r1-candidate-hot-1",
+      "round": 1,
+      "label": "candidate",
+      "kind": "hot",
+      "group": null,
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\server\\src\\application\\session\\execution\\__test__\\tool-operation-hot-path.bench.mjs"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\server",
+      "startedAt": "2026-10-27T07:39:06.177102+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:40:16.421814+00:00",
+      "stdoutSha256": "0c910d9de55aea5760116ed3bcb88818ce8d8b870c601082fbf22f29c721e90c"
+    },
+    {
+      "name": "r1-candidate-hot-2",
+      "round": 1,
+      "label": "candidate",
+      "kind": "hot",
+      "group": null,
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\server\\src\\application\\session\\execution\\__test__\\tool-operation-hot-path.bench.mjs"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\server",
+      "startedAt": "2026-10-27T07:40:16.474192+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:41:18.089903+00:00",
+      "stdoutSha256": "5fd79573df33e112356b85e899fd37c68835d22130e9d67e3dc0ca9968b70bfa"
+    },
+    {
+      "name": "r1-candidate-hot-3",
+      "round": 1,
+      "label": "candidate",
+      "kind": "hot",
+      "group": null,
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\server\\src\\application\\session\\execution\\__test__\\tool-operation-hot-path.bench.mjs"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\server",
+      "startedAt": "2026-10-27T07:41:18.138938+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:42:12.054765+00:00",
+      "stdoutSha256": "68d3990ca94d6c2320b6414845a1b4e392f1b9e4f6de02659d92ec99495b8b59"
+    },
+    {
+      "name": "r1-candidate-growth-100-4096-1",
+      "round": 1,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        100,
+        4096
+      ],
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "100",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:42:12.089973+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:42:14.874425+00:00",
+      "stdoutSha256": "d0e8490785bcffeb71ff28bb4f2bfd35d92c2b80371dc8f992341771d01d6da9"
+    },
+    {
+      "name": "r1-candidate-growth-100-4096-2",
+      "round": 1,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        100,
+        4096
+      ],
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "100",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:42:14.905658+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:42:17.191187+00:00",
+      "stdoutSha256": "dba3e65f2e7af1fce1f2f820bc2214c8b7a73f522f7dd50c013c9059320f071c"
+    },
+    {
+      "name": "r1-candidate-growth-100-4096-3",
+      "round": 1,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        100,
+        4096
+      ],
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "100",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:42:17.224211+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:42:20.106879+00:00",
+      "stdoutSha256": "d7059a49c7947b194f27aa54f0c94dd60f3fb492e8d22467a60a6a9268eaba36"
+    },
+    {
+      "name": "r1-candidate-growth-1000-4096-1",
+      "round": 1,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        1000,
+        4096
+      ],
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "1000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:42:20.138427+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:42:22.910499+00:00",
+      "stdoutSha256": "672f7231955db45e5730e5a66d833d16e990d1803dcf0a2e96c0bf635996ab2d"
+    },
+    {
+      "name": "r1-candidate-growth-1000-4096-2",
+      "round": 1,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        1000,
+        4096
+      ],
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "1000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:42:22.934403+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:42:25.931044+00:00",
+      "stdoutSha256": "28d28fbe1a1dae5cde34f518c4a48a23cf723e9645eded0daf9e2c3dd1f11304"
+    },
+    {
+      "name": "r1-candidate-growth-1000-4096-3",
+      "round": 1,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        1000,
+        4096
+      ],
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "1000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:42:25.954888+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:42:29.087352+00:00",
+      "stdoutSha256": "e10dde5055588ec52a6c4bec764e910299374792a017f06cc9f160f533428b07"
+    },
+    {
+      "name": "r1-candidate-growth-10000-4096-1",
+      "round": 1,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        10000,
+        4096
+      ],
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:42:29.115669+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:42:41.380256+00:00",
+      "stdoutSha256": "648091cbb39d8796a7dfc7094a3fd7f80d8074554500fc2a92f555415f318893"
+    },
+    {
+      "name": "r1-candidate-growth-10000-4096-2",
+      "round": 1,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        10000,
+        4096
+      ],
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:42:41.411238+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:43:01.134196+00:00",
+      "stdoutSha256": "e471028cd3cc5353c0db11adfe04189f663c64c62f01f276f52cb618cb25679e"
+    },
+    {
+      "name": "r1-candidate-growth-10000-4096-3",
+      "round": 1,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        10000,
+        4096
+      ],
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:43:01.169785+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:43:21.975899+00:00",
+      "stdoutSha256": "af0f4583bb79791aaea5009264aaab1a6b2029e4309f9f184d86c9700e701b37"
+    },
+    {
+      "name": "r1-candidate-growth-10000-0-1",
+      "round": 1,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        10000,
+        0
+      ],
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "0"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:43:22.006987+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:43:31.145531+00:00",
+      "stdoutSha256": "6680ad8df5f7a3b6ddada0f24a25b1d1489487653aad490217dfaf704c938edc"
+    },
+    {
+      "name": "r1-candidate-growth-10000-0-2",
+      "round": 1,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        10000,
+        0
+      ],
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "0"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:43:31.179737+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:43:41.062186+00:00",
+      "stdoutSha256": "fd3edaa031107e3b14d9eedf588e165549060cb25db7aa9b323c8f45ad83dfe2"
+    },
+    {
+      "name": "r1-candidate-growth-10000-0-3",
+      "round": 1,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        10000,
+        0
+      ],
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "0"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:43:41.101320+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:43:51.452711+00:00",
+      "stdoutSha256": "3ebd212b5b3a3c948b889388ae431de6c4fe47a0e967a05572b7d9f3919b51a4"
+    },
+    {
+      "name": "r2-candidate-hot-1",
+      "round": 2,
+      "label": "candidate",
+      "kind": "hot",
+      "group": null,
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\server\\src\\application\\session\\execution\\__test__\\tool-operation-hot-path.bench.mjs"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\server",
+      "startedAt": "2026-10-27T07:43:51.484327+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:44:57.295884+00:00",
+      "stdoutSha256": "4191b8661c921a10de177ffd477384ca49e192cad055abecbd9ceedac9ba01a0"
+    },
+    {
+      "name": "r2-candidate-hot-2",
+      "round": 2,
+      "label": "candidate",
+      "kind": "hot",
+      "group": null,
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\server\\src\\application\\session\\execution\\__test__\\tool-operation-hot-path.bench.mjs"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\server",
+      "startedAt": "2026-10-27T07:44:57.341983+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:46:02.410871+00:00",
+      "stdoutSha256": "d1709b98c2f6b58cfd24dcad02091654a31bc8666a8675ff328fb52916f82ff9"
+    },
+    {
+      "name": "r2-candidate-hot-3",
+      "round": 2,
+      "label": "candidate",
+      "kind": "hot",
+      "group": null,
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\server\\src\\application\\session\\execution\\__test__\\tool-operation-hot-path.bench.mjs"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\server",
+      "startedAt": "2026-10-27T07:46:02.463360+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:47:02.669436+00:00",
+      "stdoutSha256": "94bafcf65520f07898ec5a79aa8ca620ad67fc44e4c644a0db6b4e37212e3a4f"
+    },
+    {
+      "name": "r2-candidate-growth-100-4096-1",
+      "round": 2,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        100,
+        4096
+      ],
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "100",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:47:02.712757+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:47:05.501411+00:00",
+      "stdoutSha256": "b060a3883b465bc9cbdb49e029f16ec79e746d8fa99d8bb195a394c5ed08c3bf"
+    },
+    {
+      "name": "r2-candidate-growth-100-4096-2",
+      "round": 2,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        100,
+        4096
+      ],
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "100",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:47:05.543055+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:47:08.501199+00:00",
+      "stdoutSha256": "4780867a79675c83067d38f4fe2f12bbf89a15eab0eedecd60426916f7068357"
+    },
+    {
+      "name": "r2-candidate-growth-100-4096-3",
+      "round": 2,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        100,
+        4096
+      ],
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "100",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:47:08.535829+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:47:11.537654+00:00",
+      "stdoutSha256": "0ab7a9cd11ad82b8de9a28f0d993b25b5d51108799921527f2f8c391af50f8ad"
+    },
+    {
+      "name": "r2-candidate-growth-1000-4096-1",
+      "round": 2,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        1000,
+        4096
+      ],
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "1000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:47:11.582804+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:47:16.225674+00:00",
+      "stdoutSha256": "97f690ba4538a9f33ec317a68bd6c2673be6c0ad5b0c6babe591cbf0129bbd24"
+    },
+    {
+      "name": "r2-candidate-growth-1000-4096-2",
+      "round": 2,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        1000,
+        4096
+      ],
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "1000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:47:16.291801+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:47:20.402549+00:00",
+      "stdoutSha256": "a4887786696d28589eba3f95f7b3297fc46109abf5abf8a8037a0e26244e76d4"
+    },
+    {
+      "name": "r2-candidate-growth-1000-4096-3",
+      "round": 2,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        1000,
+        4096
+      ],
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "1000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:47:20.433389+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:47:24.983456+00:00",
+      "stdoutSha256": "63c4f8a4ffd7cae4b35a5482dbc4cfca2bdd4e57d9ab431f9b36e9151b81f520"
+    },
+    {
+      "name": "r2-candidate-growth-10000-4096-1",
+      "round": 2,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        10000,
+        4096
+      ],
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:47:25.011795+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:47:51.183688+00:00",
+      "stdoutSha256": "1771ef8dfead73766f403052e02272b0f7a431d08bb2fbd9e285a14a83197193"
+    },
+    {
+      "name": "r2-candidate-growth-10000-4096-2",
+      "round": 2,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        10000,
+        4096
+      ],
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:47:51.249077+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:48:11.546065+00:00",
+      "stdoutSha256": "3ff3fb427b71829834614d5780cab42d980b99fd71ddb90fefc453102dcac819"
+    },
+    {
+      "name": "r2-candidate-growth-10000-4096-3",
+      "round": 2,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        10000,
+        4096
+      ],
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:48:11.580819+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:48:33.064238+00:00",
+      "stdoutSha256": "368bd84049579eae8379cae3fac2178ab85afae100bf477a7801b4b1063f9c9b"
+    },
+    {
+      "name": "r2-candidate-growth-10000-0-1",
+      "round": 2,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        10000,
+        0
+      ],
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "0"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:48:33.084689+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:48:40.419875+00:00",
+      "stdoutSha256": "a729a5c6b352965d595c5921ab1efd31a00686599635a6dadb89ff03fe70d815"
+    },
+    {
+      "name": "r2-candidate-growth-10000-0-2",
+      "round": 2,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        10000,
+        0
+      ],
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "0"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:48:40.448446+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:48:56.332352+00:00",
+      "stdoutSha256": "6ec240e9c6b51204ec1319a361a5408992c4cc4a4beadd34e8f12c566138bf4a"
+    },
+    {
+      "name": "r2-candidate-growth-10000-0-3",
+      "round": 2,
+      "label": "candidate",
+      "kind": "growth",
+      "group": [
+        10000,
+        0
+      ],
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "0"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:48:56.390487+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:49:08.796619+00:00",
+      "stdoutSha256": "d05ea029c266287c68fa4c6b2f8746fa28ffe496204d99c63714aea2dce76ec9"
+    },
+    {
+      "name": "r2-baseline-hot-1",
+      "round": 2,
+      "label": "baseline",
+      "kind": "hot",
+      "group": null,
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\server\\src\\application\\session\\execution\\__test__\\tool-operation-hot-path.bench.mjs"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\server",
+      "startedAt": "2026-10-27T07:49:08.836554+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:49:44.805912+00:00",
+      "stdoutSha256": "d838772d192cb1b7afa4137fec20abbce1ff60e91bb57cc53c6250718796c3ff"
+    },
+    {
+      "name": "r2-baseline-hot-2",
+      "round": 2,
+      "label": "baseline",
+      "kind": "hot",
+      "group": null,
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\server\\src\\application\\session\\execution\\__test__\\tool-operation-hot-path.bench.mjs"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\server",
+      "startedAt": "2026-10-27T07:49:44.853409+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:50:22.860812+00:00",
+      "stdoutSha256": "30b7016ef5caafff1a42e29863a5f1a6f727fe8e61ddd3ad75b33e497ff71640"
+    },
+    {
+      "name": "r2-baseline-hot-3",
+      "round": 2,
+      "label": "baseline",
+      "kind": "hot",
+      "group": null,
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\server\\src\\application\\session\\execution\\__test__\\tool-operation-hot-path.bench.mjs"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\server",
+      "startedAt": "2026-10-27T07:50:22.892390+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:50:55.867616+00:00",
+      "stdoutSha256": "2ff1ed64c95d609e027b83e60247ef93c011721216ece16405047f2e62ad1d30"
+    },
+    {
+      "name": "r2-baseline-growth-100-4096-1",
+      "round": 2,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        100,
+        4096
+      ],
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "100",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:50:55.902572+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:50:57.741229+00:00",
+      "stdoutSha256": "be60105f4a3fc5ff93aad958939643001edce1802158dc7a26f1929d82d76cef"
+    },
+    {
+      "name": "r2-baseline-growth-100-4096-2",
+      "round": 2,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        100,
+        4096
+      ],
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "100",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:50:57.768236+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:50:59.283125+00:00",
+      "stdoutSha256": "14272d47338e5d86dee599e658b8eab13eeb8eb8a27c63c44e4b2e65e7d18b62"
+    },
+    {
+      "name": "r2-baseline-growth-100-4096-3",
+      "round": 2,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        100,
+        4096
+      ],
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "100",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:50:59.308124+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:51:00.985154+00:00",
+      "stdoutSha256": "cf1fe09bc11855d79e8666e89e30301a43af31280076cd1444c3bee11dee0aad"
+    },
+    {
+      "name": "r2-baseline-growth-1000-4096-1",
+      "round": 2,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        1000,
+        4096
+      ],
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "1000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:51:01.015393+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:51:03.623749+00:00",
+      "stdoutSha256": "61ab44b669fd62cf2f25024aaeb027322c6aec3645e0ba7ed2aef151cc8a68dc"
+    },
+    {
+      "name": "r2-baseline-growth-1000-4096-2",
+      "round": 2,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        1000,
+        4096
+      ],
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "1000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:51:03.658475+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:51:07.023304+00:00",
+      "stdoutSha256": "24bccb62f28a75799fe6308b63bc403e8c94cc59e70ee8f82f836a5ac11cd3c4"
+    },
+    {
+      "name": "r2-baseline-growth-1000-4096-3",
+      "round": 2,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        1000,
+        4096
+      ],
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "1000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:51:07.055858+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:51:10.346852+00:00",
+      "stdoutSha256": "837600ce07754f9fffbce442f79b7591f6fa33c0a27f156055d7c1ddc7ba5b9a"
+    },
+    {
+      "name": "r2-baseline-growth-10000-4096-1",
+      "round": 2,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        10000,
+        4096
+      ],
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:51:10.378894+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:51:32.633231+00:00",
+      "stdoutSha256": "64b57cee7794e06496b423702d26a8b9897205619ff3f197582223c52a6cb8a8"
+    },
+    {
+      "name": "r2-baseline-growth-10000-4096-2",
+      "round": 2,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        10000,
+        4096
+      ],
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:51:32.668239+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:51:54.457061+00:00",
+      "stdoutSha256": "f4894694e74a09e10cd1e50b947ff613a10cb682adb377addac6f120ac56dfd3"
+    },
+    {
+      "name": "r2-baseline-growth-10000-4096-3",
+      "round": 2,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        10000,
+        4096
+      ],
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "4096"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:51:54.484509+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:52:13.377243+00:00",
+      "stdoutSha256": "27a6ff5ef22798a22ca2652fc2257b56fea2e5046e47d342d1e3106f8056fce7"
+    },
+    {
+      "name": "r2-baseline-growth-10000-0-1",
+      "round": 2,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        10000,
+        0
+      ],
+      "repeat": 1,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "0"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:52:13.417753+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:52:23.442578+00:00",
+      "stdoutSha256": "4b093f693da43481dd853cc4a47af795684ac00d04b296e6adec5e075666187a"
+    },
+    {
+      "name": "r2-baseline-growth-10000-0-2",
+      "round": 2,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        10000,
+        0
+      ],
+      "repeat": 2,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "0"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:52:23.479429+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:52:35.656692+00:00",
+      "stdoutSha256": "a6b78ca988c2897a46b6933e4ff5fb8704ce3e2c5d23c5cd1cba16d551b2187b"
+    },
+    {
+      "name": "r2-baseline-growth-10000-0-3",
+      "round": 2,
+      "label": "baseline",
+      "kind": "growth",
+      "group": [
+        10000,
+        0
+      ],
+      "repeat": 3,
+      "command": [
+        "D:\\nvm4w\\nodejs\\node.EXE",
+        "--expose-gc",
+        "--import",
+        "file:///C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts/apps/cli/node_modules/tsx/dist/loader.mjs",
+        "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services\\src\\database\\persistence\\__test__\\storage-growth.bench.mjs",
+        "--worker",
+        "10000",
+        "0"
+      ],
+      "cwd": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+      "startedAt": "2026-10-27T07:52:35.688025+00:00",
+      "exitCode": 0,
+      "endedAt": "2026-10-27T07:52:44.228459+00:00",
+      "stdoutSha256": "801f244a084aa7b14fa07f1c02624511994ebd2f41471cd4d38d1f8b5e25d601"
+    }
+  ],
+  "node": "v24.18.1",
+  "nodeExecutable": "D:\\nvm4w\\nodejs\\node.EXE",
+  "nodeExecutableSha256": "ac51903c4c111815d52280b1fdcc8da067cbb37e2fe1a765097b85c3292c8582",
+  "checkouts": {
+    "baseline": {
+      "root": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts",
+      "head": "13d9f7cca84a9acef5644d8a89367d07c94ef6e5",
+      "status": "?? packages/server/src/application/session/execution/__test__/tool-operation-hot-path.bench.mjs",
+      "hotSha256": "1c8c2ee5804b07fc331f58b1d00bc5682736b62083cbcfe8054f762b79e16cb3",
+      "growthSha256": "f43f16f969f7c6366081e7a54406b15ed8a2939d8db2d9a1168605431ab43c0f",
+      "workspaceLinks": {
+        "packages\\agent-contracts\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\environment",
+        "packages\\agent-runtime\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\agent-runtime\\node_modules\\@vykor\\api": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\api",
+        "packages\\agent-runtime\\node_modules\\@vykor\\auth": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\auth",
+        "packages\\agent-runtime\\node_modules\\@vykor\\coordinator": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\coordinator",
+        "packages\\agent-runtime\\node_modules\\@vykor\\core": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\core",
+        "packages\\agent-runtime\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\environment",
+        "packages\\agent-runtime\\node_modules\\@vykor\\execution-node": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\execution-node",
+        "packages\\agent-runtime\\node_modules\\@vykor\\hooks": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\hooks",
+        "packages\\agent-runtime\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\host-config",
+        "packages\\agent-runtime\\node_modules\\@vykor\\jobs": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\jobs",
+        "packages\\agent-runtime\\node_modules\\@vykor\\mcp": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\mcp",
+        "packages\\agent-runtime\\node_modules\\@vykor\\memory": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\memory",
+        "packages\\agent-runtime\\node_modules\\@vykor\\permissions": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\permissions",
+        "packages\\agent-runtime\\node_modules\\@vykor\\plugin-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\plugin-contracts",
+        "packages\\agent-runtime\\node_modules\\@vykor\\plugins": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\plugins",
+        "packages\\agent-runtime\\node_modules\\@vykor\\prompts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\prompts",
+        "packages\\agent-runtime\\node_modules\\@vykor\\sandbox": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\sandbox",
+        "packages\\agent-runtime\\node_modules\\@vykor\\skills": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\skills",
+        "packages\\agent-runtime\\node_modules\\@vykor\\terminal": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\terminal",
+        "packages\\agent-runtime\\node_modules\\@vykor\\terminal-node": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\terminal-node",
+        "packages\\agent-runtime\\node_modules\\@vykor\\tools": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\tools",
+        "packages\\api\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\api\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\host-config",
+        "packages\\auth\\node_modules\\@vykor\\api": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\api",
+        "packages\\auth\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\host-config",
+        "packages\\client\\node_modules\\@vykor\\protocol": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\protocol",
+        "packages\\coordinator\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\core\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\core\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\environment",
+        "packages\\domain-contracts\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\domain-contracts\\node_modules\\@vykor\\json-data": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\json-data",
+        "packages\\domain-contracts\\node_modules\\@vykor\\plugin-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\plugin-contracts",
+        "packages\\execution-node\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\execution-node\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\environment",
+        "packages\\execution-node\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\host-config",
+        "packages\\execution-node\\node_modules\\@vykor\\sandbox": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\sandbox",
+        "packages\\hooks\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\hooks\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\environment",
+        "packages\\hooks\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\host-config",
+        "packages\\hooks\\node_modules\\@vykor\\sandbox": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\sandbox",
+        "packages\\host-config\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\mcp\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\mcp\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\environment",
+        "packages\\mcp\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\host-config",
+        "packages\\mcp\\node_modules\\@vykor\\plugin-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\plugin-contracts",
+        "packages\\mcp\\node_modules\\@vykor\\sandbox": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\sandbox",
+        "packages\\permissions\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\permissions\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\host-config",
+        "packages\\personalization\\node_modules\\@vykor\\memory": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\memory",
+        "packages\\plugin-contracts\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\plugin-contracts\\node_modules\\@vykor\\json-data": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\json-data",
+        "packages\\plugin-converters\\node_modules\\@vykor\\plugins": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\plugins",
+        "packages\\plugin-sources\\node_modules\\@vykor\\plugin-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\plugin-contracts",
+        "packages\\plugins\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\plugins\\node_modules\\@vykor\\coordinator": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\coordinator",
+        "packages\\plugins\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\host-config",
+        "packages\\plugins\\node_modules\\@vykor\\json-data": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\json-data",
+        "packages\\plugins\\node_modules\\@vykor\\plugin-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\plugin-contracts",
+        "packages\\plugins\\node_modules\\@vykor\\skills": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\skills",
+        "packages\\prompts\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\prompts\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\environment",
+        "packages\\prompts\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\host-config",
+        "packages\\prompts\\node_modules\\@vykor\\memory": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\memory",
+        "packages\\prompts\\node_modules\\@vykor\\personalization": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\personalization",
+        "packages\\prompts\\node_modules\\@vykor\\sandbox": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\sandbox",
+        "packages\\protocol\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\protocol\\node_modules\\@vykor\\domain-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\domain-contracts",
+        "packages\\protocol\\node_modules\\@vykor\\jobs": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\jobs",
+        "packages\\protocol\\node_modules\\@vykor\\json-data": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\json-data",
+        "packages\\protocol\\node_modules\\@vykor\\plugin-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\plugin-contracts",
+        "packages\\protocol\\node_modules\\@vykor\\terminal": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\terminal",
+        "packages\\sandbox\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\environment",
+        "packages\\sandbox\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\host-config",
+        "packages\\server\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\server\\node_modules\\@vykor\\agent-runtime": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-runtime",
+        "packages\\server\\node_modules\\@vykor\\api": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\api",
+        "packages\\server\\node_modules\\@vykor\\auth": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\auth",
+        "packages\\server\\node_modules\\@vykor\\channels": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\channels",
+        "packages\\server\\node_modules\\@vykor\\coordinator": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\coordinator",
+        "packages\\server\\node_modules\\@vykor\\core": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\core",
+        "packages\\server\\node_modules\\@vykor\\domain-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\domain-contracts",
+        "packages\\server\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\environment",
+        "packages\\server\\node_modules\\@vykor\\execution-node": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\execution-node",
+        "packages\\server\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\host-config",
+        "packages\\server\\node_modules\\@vykor\\jobs": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\jobs",
+        "packages\\server\\node_modules\\@vykor\\json-data": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\json-data",
+        "packages\\server\\node_modules\\@vykor\\mcp": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\mcp",
+        "packages\\server\\node_modules\\@vykor\\memory": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\memory",
+        "packages\\server\\node_modules\\@vykor\\output-styles": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\output-styles",
+        "packages\\server\\node_modules\\@vykor\\permissions": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\permissions",
+        "packages\\server\\node_modules\\@vykor\\personalization": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\personalization",
+        "packages\\server\\node_modules\\@vykor\\plugin-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\plugin-contracts",
+        "packages\\server\\node_modules\\@vykor\\plugin-sources": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\plugin-sources",
+        "packages\\server\\node_modules\\@vykor\\plugins": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\plugins",
+        "packages\\server\\node_modules\\@vykor\\prompts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\prompts",
+        "packages\\server\\node_modules\\@vykor\\protocol": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\protocol",
+        "packages\\server\\node_modules\\@vykor\\sandbox": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\sandbox",
+        "packages\\server\\node_modules\\@vykor\\services": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\services",
+        "packages\\server\\node_modules\\@vykor\\skills": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\skills",
+        "packages\\server\\node_modules\\@vykor\\terminal": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\terminal",
+        "packages\\server\\node_modules\\@vykor\\terminal-node": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\terminal-node",
+        "packages\\server\\node_modules\\@vykor\\tools": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\tools",
+        "packages\\services\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\services\\node_modules\\@vykor\\core": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\core",
+        "packages\\services\\node_modules\\@vykor\\domain-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\domain-contracts",
+        "packages\\services\\node_modules\\@vykor\\execution-node": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\execution-node",
+        "packages\\services\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\host-config",
+        "packages\\services\\node_modules\\@vykor\\memory": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\memory",
+        "packages\\terminal\\node_modules\\@vykor\\jobs": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\jobs",
+        "packages\\terminal-node\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\environment",
+        "packages\\terminal-node\\node_modules\\@vykor\\jobs": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\jobs",
+        "packages\\terminal-node\\node_modules\\@vykor\\terminal": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\terminal",
+        "packages\\tools\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\tools\\node_modules\\@vykor\\coordinator": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\coordinator",
+        "packages\\tools\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\environment",
+        "packages\\tools\\node_modules\\@vykor\\execution-node": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\execution-node",
+        "packages\\tools\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\host-config",
+        "packages\\tools\\node_modules\\@vykor\\jobs": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\jobs",
+        "packages\\tools\\node_modules\\@vykor\\sandbox": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\sandbox",
+        "packages\\tools\\node_modules\\@vykor\\terminal": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-baseline\\OpenHarness-ts\\packages\\terminal"
+      },
+      "sourceSha256": {
+        "server": "3abbd557d0f6b4b42a048a182ead0b75947ca4b71bc90976b2f825855ca20267",
+        "services": "d106a12627063943ce53b75e32f8bce9373e55c63e481cdc9a896f2a4ea0f0de",
+        "operations": "bd75c9fbb5241aa4ae88058d555e63c7f26ae778561789197e7d30347f0437bf",
+        "executions": "67b68844fdd317bd8039dd791e78898c6182cccba086332465c3f1bec2bf6d25"
+      }
+    },
+    "candidate": {
+      "root": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+      "head": "13d9f7cca84a9acef5644d8a89367d07c94ef6e5",
+      "status": "M docs/superpowers/plans/2026-10-27-storage-hot-path-optimization-plan.md\n M docs/superpowers/reviews/2026-10-27-storage-hot-path/README.md\n M docs/superpowers/reviews/2026-10-27-storage-hot-path/validation.json\n M docs/superpowers/reviews/2026-10-27-storage-hot-path/verify.py\n M packages/server/src/application/maintenance/README.md\n M packages/server/src/application/maintenance/cleanup-settings.ts\n M packages/server/src/application/session/execution/README.md\n A packages/server/src/application/session/execution/__test__/tool-operation-hot-path.bench.mjs\n M packages/server/src/application/session/execution/__test__/tool-operation-service.test.ts\n M packages/server/src/application/session/execution/tool-operation-service.ts\n M packages/services/src/execution-records/README.md\n A packages/services/src/execution-records/__test__/execution-repository.test.ts\n M packages/services/src/execution-records/execution-repository.ts\n M packages/services/src/tool-operations/README.md\n M packages/services/src/tool-operations/__test__/tool-operation-repository.test.ts\n M packages/services/src/tool-operations/tool-operation-repository.ts\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/__test__/\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/archive-green-1-rerun-2.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/archive-green-1.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/archive-red-1-rerun-2.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/archive-red-1.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/attempt-1-run-experiments.py\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/attempt-2-console.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/attempt-2/\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/benchmark-review.md\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/candidate.patch\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/driver-freeze.json\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/experiment-console.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/manifest.json\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/q1-hook-context.json\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/q1-hook-task-logs.zip\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/q2-green-1.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/q2-green-2.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/q2-green-3.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/q2-green-4.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/q2-green-5.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/q2-green-6.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/q2-green-7.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/q2-green-8.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/q2-pre-measure-diff-check.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/q2-red-1.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/r1-baseline-hot-1.json\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/r1-baseline-hot-1.stderr.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/run-experiments.py\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/run-reservation.json\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/setup-baseline.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/setup-online.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/setup.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/smoke-q1-console.txt\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/smoke-q1.json\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/summarize.py\n?? docs/superpowers/reviews/2026-10-27-storage-hot-path/verify-archive.py",
+      "hotSha256": "1c8c2ee5804b07fc331f58b1d00bc5682736b62083cbcfe8054f762b79e16cb3",
+      "growthSha256": "f43f16f969f7c6366081e7a54406b15ed8a2939d8db2d9a1168605431ab43c0f",
+      "workspaceLinks": {
+        "packages\\agent-contracts\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\environment",
+        "packages\\agent-runtime\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\agent-runtime\\node_modules\\@vykor\\api": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\api",
+        "packages\\agent-runtime\\node_modules\\@vykor\\auth": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\auth",
+        "packages\\agent-runtime\\node_modules\\@vykor\\coordinator": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\coordinator",
+        "packages\\agent-runtime\\node_modules\\@vykor\\core": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\core",
+        "packages\\agent-runtime\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\environment",
+        "packages\\agent-runtime\\node_modules\\@vykor\\execution-node": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\execution-node",
+        "packages\\agent-runtime\\node_modules\\@vykor\\hooks": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\hooks",
+        "packages\\agent-runtime\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\host-config",
+        "packages\\agent-runtime\\node_modules\\@vykor\\jobs": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\jobs",
+        "packages\\agent-runtime\\node_modules\\@vykor\\mcp": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\mcp",
+        "packages\\agent-runtime\\node_modules\\@vykor\\memory": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\memory",
+        "packages\\agent-runtime\\node_modules\\@vykor\\permissions": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\permissions",
+        "packages\\agent-runtime\\node_modules\\@vykor\\plugin-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\plugin-contracts",
+        "packages\\agent-runtime\\node_modules\\@vykor\\plugins": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\plugins",
+        "packages\\agent-runtime\\node_modules\\@vykor\\prompts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\prompts",
+        "packages\\agent-runtime\\node_modules\\@vykor\\sandbox": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\sandbox",
+        "packages\\agent-runtime\\node_modules\\@vykor\\skills": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\skills",
+        "packages\\agent-runtime\\node_modules\\@vykor\\terminal": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\terminal",
+        "packages\\agent-runtime\\node_modules\\@vykor\\terminal-node": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\terminal-node",
+        "packages\\agent-runtime\\node_modules\\@vykor\\tools": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\tools",
+        "packages\\api\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\api\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\host-config",
+        "packages\\auth\\node_modules\\@vykor\\api": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\api",
+        "packages\\auth\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\host-config",
+        "packages\\client\\node_modules\\@vykor\\protocol": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\protocol",
+        "packages\\coordinator\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\core\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\core\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\environment",
+        "packages\\domain-contracts\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\domain-contracts\\node_modules\\@vykor\\json-data": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\json-data",
+        "packages\\domain-contracts\\node_modules\\@vykor\\plugin-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\plugin-contracts",
+        "packages\\execution-node\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\execution-node\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\environment",
+        "packages\\execution-node\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\host-config",
+        "packages\\execution-node\\node_modules\\@vykor\\sandbox": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\sandbox",
+        "packages\\hooks\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\hooks\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\environment",
+        "packages\\hooks\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\host-config",
+        "packages\\hooks\\node_modules\\@vykor\\sandbox": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\sandbox",
+        "packages\\host-config\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\mcp\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\mcp\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\environment",
+        "packages\\mcp\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\host-config",
+        "packages\\mcp\\node_modules\\@vykor\\plugin-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\plugin-contracts",
+        "packages\\mcp\\node_modules\\@vykor\\sandbox": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\sandbox",
+        "packages\\permissions\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\permissions\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\host-config",
+        "packages\\personalization\\node_modules\\@vykor\\memory": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\memory",
+        "packages\\plugin-contracts\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\plugin-contracts\\node_modules\\@vykor\\json-data": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\json-data",
+        "packages\\plugin-converters\\node_modules\\@vykor\\plugins": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\plugins",
+        "packages\\plugin-sources\\node_modules\\@vykor\\plugin-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\plugin-contracts",
+        "packages\\plugins\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\plugins\\node_modules\\@vykor\\coordinator": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\coordinator",
+        "packages\\plugins\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\host-config",
+        "packages\\plugins\\node_modules\\@vykor\\json-data": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\json-data",
+        "packages\\plugins\\node_modules\\@vykor\\plugin-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\plugin-contracts",
+        "packages\\plugins\\node_modules\\@vykor\\skills": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\skills",
+        "packages\\prompts\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\prompts\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\environment",
+        "packages\\prompts\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\host-config",
+        "packages\\prompts\\node_modules\\@vykor\\memory": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\memory",
+        "packages\\prompts\\node_modules\\@vykor\\personalization": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\personalization",
+        "packages\\prompts\\node_modules\\@vykor\\sandbox": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\sandbox",
+        "packages\\protocol\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\protocol\\node_modules\\@vykor\\domain-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\domain-contracts",
+        "packages\\protocol\\node_modules\\@vykor\\jobs": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\jobs",
+        "packages\\protocol\\node_modules\\@vykor\\json-data": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\json-data",
+        "packages\\protocol\\node_modules\\@vykor\\plugin-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\plugin-contracts",
+        "packages\\protocol\\node_modules\\@vykor\\terminal": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\terminal",
+        "packages\\sandbox\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\environment",
+        "packages\\sandbox\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\host-config",
+        "packages\\server\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\server\\node_modules\\@vykor\\agent-runtime": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-runtime",
+        "packages\\server\\node_modules\\@vykor\\api": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\api",
+        "packages\\server\\node_modules\\@vykor\\auth": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\auth",
+        "packages\\server\\node_modules\\@vykor\\channels": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\channels",
+        "packages\\server\\node_modules\\@vykor\\coordinator": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\coordinator",
+        "packages\\server\\node_modules\\@vykor\\core": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\core",
+        "packages\\server\\node_modules\\@vykor\\domain-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\domain-contracts",
+        "packages\\server\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\environment",
+        "packages\\server\\node_modules\\@vykor\\execution-node": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\execution-node",
+        "packages\\server\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\host-config",
+        "packages\\server\\node_modules\\@vykor\\jobs": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\jobs",
+        "packages\\server\\node_modules\\@vykor\\json-data": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\json-data",
+        "packages\\server\\node_modules\\@vykor\\mcp": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\mcp",
+        "packages\\server\\node_modules\\@vykor\\memory": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\memory",
+        "packages\\server\\node_modules\\@vykor\\output-styles": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\output-styles",
+        "packages\\server\\node_modules\\@vykor\\permissions": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\permissions",
+        "packages\\server\\node_modules\\@vykor\\personalization": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\personalization",
+        "packages\\server\\node_modules\\@vykor\\plugin-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\plugin-contracts",
+        "packages\\server\\node_modules\\@vykor\\plugin-sources": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\plugin-sources",
+        "packages\\server\\node_modules\\@vykor\\plugins": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\plugins",
+        "packages\\server\\node_modules\\@vykor\\prompts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\prompts",
+        "packages\\server\\node_modules\\@vykor\\protocol": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\protocol",
+        "packages\\server\\node_modules\\@vykor\\sandbox": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\sandbox",
+        "packages\\server\\node_modules\\@vykor\\services": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\services",
+        "packages\\server\\node_modules\\@vykor\\skills": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\skills",
+        "packages\\server\\node_modules\\@vykor\\terminal": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\terminal",
+        "packages\\server\\node_modules\\@vykor\\terminal-node": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\terminal-node",
+        "packages\\server\\node_modules\\@vykor\\tools": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\tools",
+        "packages\\services\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\services\\node_modules\\@vykor\\core": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\core",
+        "packages\\services\\node_modules\\@vykor\\domain-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\domain-contracts",
+        "packages\\services\\node_modules\\@vykor\\execution-node": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\execution-node",
+        "packages\\services\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\host-config",
+        "packages\\services\\node_modules\\@vykor\\memory": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\memory",
+        "packages\\terminal\\node_modules\\@vykor\\jobs": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\jobs",
+        "packages\\terminal-node\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\environment",
+        "packages\\terminal-node\\node_modules\\@vykor\\jobs": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\jobs",
+        "packages\\terminal-node\\node_modules\\@vykor\\terminal": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\terminal",
+        "packages\\tools\\node_modules\\@vykor\\agent-contracts": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\agent-contracts",
+        "packages\\tools\\node_modules\\@vykor\\coordinator": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\coordinator",
+        "packages\\tools\\node_modules\\@vykor\\environment": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\environment",
+        "packages\\tools\\node_modules\\@vykor\\execution-node": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\execution-node",
+        "packages\\tools\\node_modules\\@vykor\\host-config": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\host-config",
+        "packages\\tools\\node_modules\\@vykor\\jobs": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\jobs",
+        "packages\\tools\\node_modules\\@vykor\\sandbox": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\sandbox",
+        "packages\\tools\\node_modules\\@vykor\\terminal": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\packages\\terminal"
+      },
+      "sourceSha256": {
+        "server": "dcdf737446fa30932b3185f16aded88eee5455b27649ea191ebb44b78a254054",
+        "services": "d106a12627063943ce53b75e32f8bce9373e55c63e481cdc9a896f2a4ea0f0de",
+        "operations": "4df1669649c52e34ca43a216980cbbf877c85fc3295c6015679c8719f8ec673c",
+        "executions": "4bdc3ea9f158c6e9ed93f9b0b0cc2698f24c418465569f1b32f64febfb3c0f4e"
+      }
+    }
+  },
+  "endedAt": "2026-10-27T07:52:44.267504+00:00",
+  "completed": true
+}

@@ -1,0 +1,85 @@
+
+> @vykor/server@0.1.0 check-types C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\packages\server
+> tsc --noEmit
+
+src/application/agent/agent-pool.ts(1,49): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/agent/agent-pool.ts(5,8): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/agent/agent-pool.ts(107,27): error TS18048: 'entry' is possibly 'undefined'.
+src/application/agent/agent-pool.ts(114,24): error TS18048: 'entry' is possibly 'undefined'.
+src/application/agent/agent-pool.ts(268,10): error TS7006: Parameter 'child' implicitly has an 'any' type.
+src/application/agent/daemon-agent-event-projector.ts(3,33): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/agent/live-child-agent-directory.ts(1,33): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/agent/tool-app-origin-projector.ts(2,49): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/auto-review/session-auto-review-service.ts(8,33): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/context-usage/assemble-session-context-usage.ts(1,32): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/control/daemon-control-service.ts(207,49): error TS7006: Parameter 'hook' implicitly has an 'any' type.
+src/application/daemon-application.ts(7,64): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/daemon-application.ts(12,30): error TS2307: Cannot find module '@vykor/agent-runtime/node/workflow' or its corresponding type declarations.
+src/application/daemon-application.ts(28,8): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/daemon-application.ts(507,23): error TS7006: Parameter 'scope' implicitly has an 'any' type.
+src/application/daemon-application.ts(507,30): error TS7006: Parameter 'tools' implicitly has an 'any' type.
+src/application/daemon-application.ts(536,30): error TS7006: Parameter 'input' implicitly has an 'any' type.
+src/application/daemon-application.ts(593,52): error TS7006: Parameter 'base' implicitly has an 'any' type.
+src/application/daemon-application.ts(647,28): error TS7006: Parameter 'snapshot' implicitly has an 'any' type.
+src/application/default-application-services.ts(44,22): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/default-application-services.ts(47,29): error TS7006: Parameter 'agent' implicitly has an 'any' type.
+src/application/default-services/extensions/plugin-service.ts(2,46): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/default-services/memory/context-service.ts(23,41): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/projects/desktop-git-workspaces.ts(4,8): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/projects/desktop-git-workspaces.ts(17,14): error TS7006: Parameter 'args' implicitly has an 'any' type.
+src/application/projects/desktop-git-workspaces.ts(17,20): error TS7006: Parameter 'cwd' implicitly has an 'any' type.
+src/application/schedule/scheduled-task-executor.ts(4,78): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/schedule/scheduled-task-executor.ts(50,57): error TS7006: Parameter 'error' implicitly has an 'any' type.
+src/application/session/configuration/session-runtime-discovery.ts(1,74): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/session/execution/run-admission-work.ts(2,45): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/session/execution/run-control-service.ts(339,79): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/application/session/execution/run-control-service.ts(343,84): error TS7006: Parameter 'active' implicitly has an 'any' type.
+src/application/session/execution/session-run-executor-assembly.ts(1,41): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/session/execution/session-run-executor.ts(7,40): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/session/execution/session-run-executor.ts(349,12): error TS7006: Parameter 'id' implicitly has an 'any' type.
+src/application/session/execution/session-run-executor.ts(360,55): error TS7006: Parameter 'candidate' implicitly has an 'any' type.
+src/application/session/execution/session-run-executor.ts(408,58): error TS7006: Parameter 'tool' implicitly has an 'any' type.
+src/application/session/execution/session-run-executor.ts(550,21): error TS7006: Parameter 'error' implicitly has an 'any' type.
+src/application/session/execution/session-run-executor.ts(704,31): error TS18046: 'error' is of type 'unknown'.
+src/application/session/execution/tool-operation-service.ts(5,49): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/session/execution/tool-operation-service.ts(109,41): error TS2345: Argument of type '{ policyVersion: string; tools: Map<unknown, unknown>; environment: any; }' is not assignable to parameter of type '{ policyVersion: string; tools: ReadonlyMap<string, RunToolBinding>; environment?: unknown; }'.
+  The types of 'tools.forEach' are incompatible between these types.
+    Type '(callbackfn: (value: unknown, key: unknown, map: Map<unknown, unknown>) => void, thisArg?: any) => void' is not assignable to type '(callbackfn: (value: RunToolBinding, key: string, map: ReadonlyMap<string, RunToolBinding>) => void, thisArg?: any) => void'.
+      Types of parameters 'callbackfn' and 'callbackfn' are incompatible.
+        Types of parameters 'value' and 'value' are incompatible.
+          Type 'unknown' is not assignable to type 'RunToolBinding'.
+src/application/session/execution/tool-result-service.ts(3,36): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/session/interactions/session-input-materializer.ts(2,40): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/session/maintenance/session-maintenance-service.ts(4,42): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/session/maintenance/session-post-run-maintenance.ts(4,36): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/session/maintenance/workflow-recovery.ts(1,35): error TS2307: Cannot find module '@vykor/agent-runtime/node/workflow' or its corresponding type declarations.
+src/application/session/maintenance/workflow-recovery.ts(13,65): error TS7006: Parameter 'run' implicitly has an 'any' type.
+src/application/session/plugins/plugin-app-assembly.ts(2,56): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/session/plugins/plugin-app-assembly.ts(25,8): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/session/plugins/plugin-app-operation-executor.ts(56,29): error TS7006: Parameter 'event' implicitly has an 'any' type.
+src/application/session/plugins/plugin-app-operation-service.ts(3,34): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/session/plugins/plugin-app-operation-service.ts(7,8): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/session/plugins/plugin-app-static-resources.ts(1,76): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/session/plugins/plugin-app-static-resources.ts(13,31): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/application/session/plugins/plugin-app-static-resources.ts(29,60): error TS1064: The return type of an async function or method must be the global Promise<T> type. Did you mean to write 'Promise<any>'?
+src/application/session/plugins/session-plugin-capability-service.ts(4,8): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/session/plugins/session-plugin-capability-service.ts(34,63): error TS7006: Parameter 'candidate' implicitly has an 'any' type.
+src/application/session/plugins/session-plugin-capability-service.ts(40,36): error TS7006: Parameter 'candidate' implicitly has an 'any' type.
+src/application/session/plugins/session-plugin-selection.ts(6,8): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/application/session/plugins/session-plugin-selection.ts(213,16): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/application/session/plugins/session-plugin-selection.ts(238,14): error TS7006: Parameter 'item' implicitly has an 'any' type.
+src/commands/default-command-catalog.ts(8,41): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/commands/default-command-catalog.ts(42,18): error TS7006: Parameter 'skill' implicitly has an 'any' type.
+src/daemon/daemon-agent.ts(1,34): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/daemon/daemon-agent.ts(12,8): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+src/daemon/daemon-agent.ts(20,35): error TS2307: Cannot find module '@vykor/agent-runtime/node/workflow' or its corresponding type declarations.
+src/daemon/daemon-agent.ts(306,45): error TS7006: Parameter 'input' implicitly has an 'any' type.
+src/daemon/daemon-agent.ts(312,47): error TS7006: Parameter 'input' implicitly has an 'any' type.
+src/daemon/daemon-agent.ts(318,45): error TS7006: Parameter 'input' implicitly has an 'any' type.
+src/daemon/daemon-agent.ts(350,29): error TS7006: Parameter 'event' implicitly has an 'any' type.
+src/jobs/daemon-job-service.ts(5,35): error TS2307: Cannot find module '@vykor/agent-runtime/node/workflow' or its corresponding type declarations.
+src/jobs/daemon-job-service.ts(371,24): error TS7006: Parameter 'taskId' implicitly has an 'any' type.
+src/permissions/session-approval.ts(3,50): error TS2307: Cannot find module '@vykor/agent-runtime' or its corresponding type declarations.
+C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\packages\server:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @vykor/server@0.1.0 check-types: `tsc --noEmit`
+Exit status 2

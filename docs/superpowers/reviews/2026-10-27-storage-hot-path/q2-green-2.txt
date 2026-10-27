@@ -1,0 +1,99 @@
+
+ RUN  v3.2.4 C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/packages/services
+
+ ✓ src/conversations/__test__/conversation-transactions.test.ts (52 tests) 18109ms
+   ✓ ConversationTransactions.admitPrompt > admission matrix > admits structured items with skills and text  443ms
+   ✓ ConversationTransactions.admitPrompt > admission matrix > rejects empty text and empty items when attachments are empty  445ms
+   ✓ ConversationTransactions.admitPrompt > admission matrix > validates attachment errors: not found, deleted, not ready, too large, count exceeded, prompt bytes, session bytes  308ms
+   ✓ ConversationTransactions.admitPrompt > admitPromptWithRun > rolls back input if run creation fails  382ms
+   ✓ ConversationTransactions.admitPrompt > admitPromptWithRun > does not create a run if input id exists with different content  658ms
+   ✓ ConversationTransactions.admitPrompt > createReplayRun > creates replay run for existing input with metadata  457ms
+   ✓ ConversationTransactions.admitPrompt > createReplayRun > throws if source input does not exist  462ms
+   ✓ ConversationTransactions.admitPrompt > createReplayRun > supports explicit id idempotency and throws on explicit id conflict  427ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > replaces every message and part, preserves all part fields, and survives reopen  397ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > rolls back transcript replacement after an injected failure  408ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > replaces transcript and admits a prompt with createRun=false  317ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > rolls back replacement and admission when run creation fails  365ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > edits the latest prompt by removing its dependent graph and keeping earlier history  465ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > edits the latest prompt and creates its owning run  357ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > restores the entire removed graph when edited prompt run creation fails  462ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > forkSessionWithHistory > copies complete history with deduplicated inputs, attachment positions, all part fields, and requested session fields  443ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > forkSessionWithHistory > honors before and after boundaries and rejects unknown fork points  489ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > forkSessionWithHistory > rolls back memory and disk when afterForkSessionCreated fails  650ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > forkSessionWithHistory > rolls back memory and disk when afterForkInputsCopied fails  420ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > forkSessionWithHistory > rolls back memory and disk when afterForkMessagesCopied fails  420ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > forkSessionWithHistory > rolls back memory and disk when afterForkPartsCopied fails  424ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > deleteSessionTree > writes one durable global deletion event for the removed session tree  502ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > deleteSessionTree > invalidates scheduled links to every deleted session in the same transaction  336ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > deleteSessionTree > deletes a three-level tree in DFS order while preserving outside state and pending mutation  673ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > deleteSessionTree > rolls back all state and disk on sql failure  690ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > deleteSessionTree > rolls back all state and disk on memory failure  585ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > recovery transactions > settles only active attempts and interrupts only active tasks with defaults  439ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > recovery transactions > preserves returned facts and distinguishes queued calls during restart  338ms
+   ✓ ConversationTransactions.admitPrompt > transcript replacement and prompt edit > recovery transactions > interrupts active runs, marks unknown tool outcomes, terminalizes orphans, and finalizes eligible closing sessions  321ms
+ ✓ src/session-runtime/__test__/store.test.ts (70 tests) 29923ms
+   ✓ SessionStore > persists structured plugin input items and failed runs across disk reopen with required item JSON  327ms
+   ✓ SessionStore > creates a current-format database with input attachment and typed part columns  324ms
+   ✓ SessionStore > persists and reloads typed attachment and transformation parts  546ms
+   ✓ SessionStore > reloads 200 inputs with ordered attachment references from one durable snapshot  5400ms
+   ✓ SessionStore > enforces the combined byte limit for one prompt  308ms
+   ✓ SessionStore > returns the first input and owning run for an identical admission retry  327ms
+   ✓ SessionStore > persists an attachment from importing to ready  383ms
+   ✓ SessionStore > enforces attachment state transitions and hides deleted assets  340ms
+   ✓ SessionStore > reserves one durable pending task for repeated producer requests  599ms
+   ✓ SessionStore > stores Scheduled tasks and Agent run projections in SQLite  391ms
+   ✓ SessionStore > stores Workflow runs through the repository and mirrors owner-session events  328ms
+   ✓ SessionStore > lists direct child sessions without mixing descendants or siblings  378ms
+   ✓ SessionStore > persists sessions and rehydrates from disk  357ms
+   ✓ SessionStore > admits prompts, creates messages, updates parts, and keeps per-session order  758ms
+   ✓ SessionStore > atomically admits a queued prompt with its owning run  396ms
+   ✓ SessionStore > rolls back transcript replacement when replacement prompt admission fails  439ms
+   ✓ SessionStore > terminalizes only inputs that have no durable run ownership  512ms
+   ✓ SessionStore > flushes grouped deltas on the timer and retries a failed checkpoint  337ms
+   ✓ SessionStore > rolls back both SQLite and the in-memory read model when a grouped write fails  424ms
+   ✓ SessionStore > tracks runs and permission replies as durable events  367ms
+   ✓ SessionStore > returns an atomic attach snapshot and interrupts runs left by a previous daemon  346ms
+   ✓ SessionStore > expires permission requests whose live resolver belonged to a previous daemon  388ms
+   ✓ SessionStore > exposes permission repository operations without Store forwarding entries  619ms
+   ✓ SessionStore > rolls back the permission read model and mutation buffer when durable append fails  572ms
+   ✓ SessionStore > rejects a second repository reply and expires only pending requests after restart  722ms
+   ✓ SessionStore > filters permission repository reads without exposing other requests  623ms
+   ✓ SessionStore > enforces the application owner fence before repository writes  627ms
+   ✓ SessionStore > persists task/child/run links and terminalizes active tasks after a restart  796ms
+   ✓ SessionStore > archives sessions without deleting their replay history  504ms
+   ✓ SessionStore > hard deletes session trees and their replay history  503ms
+   ✓ SessionStore > owns projects in SQLite and keeps session identity when the directory is rebound  338ms
+   ✓ SessionStore > keeps unpinned project order stable when a project is inspected again  342ms
+   ✓ SessionStore > persists versioned attachment representations and reuses only completed cache entries  310ms
+   ✓ SessionStore > session runtime read contracts > verifies stable sorting orders and filters for list methods  367ms
+   ✓ SessionStore > session runtime write contracts (Stage 3B) > locks session write contracts: clone, events, updatedAt, terminal guard, and persistence  404ms
+   ✓ SessionStore > session runtime write contracts (Stage 3B) > locks conversation message and part write contracts: clone, events, updatedAt, alignment, and persistence  421ms
+   ✓ SessionStore > session runtime write contracts (Stage 3B) > locks event append write contracts: registry validation, seq monotonic, session updatedAt, and persistence  457ms
+   ✓ SessionStore > session runtime write contracts (Stage 3B) > locks run and attempt write contracts: clone, events, status transitions, terminal guards, and persistence  401ms
+   ✓ SessionStore > session runtime write contracts (Stage 3B) > locks session task write contracts: request key pair, reserve, CAS transition, ownership, and persistence  330ms
+ ✓ src/tool-operations/__test__/tool-operation-repository.test.ts (32 tests) 10620ms
+   ✓ tool operation repository > refreshes confirmed receipts on ownership acquisition while retaining local memory sessions  342ms
+   ✓ tool operation repository > records pre-dispatch interruption as cancelled and preserves the no-start result  843ms
+   ✓ tool operation repository > requires an explicit failed not_started result for a pre-dispatch rejection  590ms
+   ✓ tool operation repository > persists complete results, execution heads and attempts across real SQLite reopen  721ms
+   ✓ tool operation repository > keeps memory execution, operation and attempt collections out of SQLite  736ms
+   ✓ tool operation repository > rolls sqlite rows and mutation buffers back when commit fails  631ms
+   ✓ tool operation repository > rolls memory rows and mutation buffers back when commit fails  414ms
+   ✓ tool operation repository > fences stale owners before any operation mutation  502ms
+   ✓ tool operation repository > deletes all operation collections with the session and retains unresolved records under ordinary retention  492ms
+   ✓ tool operation repository > mirrors Run lifecycle on Execution heads without clearing unresolved operations  441ms
+   ✓ tool operation repository > rolls back sqlite dispatch and settlement without losing the earlier receipt  304ms
+   ✓ tool operation repository > rejects changed policy, scope, owner and terminal Run before reserving an attempt  381ms
+   ✓ keeps applied reconciliation unknown when its result omits executionState and preserves evidence after reopen  329ms
+   ✓ accepts the same attempt's real late completion after manual not_applied and retains review history  354ms
+ ✓ src/session-runtime/__test__/temporary-chat-storage.test.ts (11 tests) 1031ms
+ ✓ src/conversations/__test__/record-rollback.test.ts (17 tests) 2498ms
+ ✓ src/tool-results/__test__/tool-result-reader.test.ts (8 tests) 1796ms
+   ✓ S1 tool result reader > reads a stable reference and literal tail after closing and reopening real SQLite  365ms
+ ✓ src/execution-records/__test__/execution-repository.test.ts (5 tests) 926ms
+
+ Test Files  7 passed (7)
+      Tests  195 passed (195)
+   Start at  15:26:11
+   Duration  53.84s (transform 4.41s, setup 477ms, collect 30.66s, tests 64.90s, environment 3ms, prepare 3.05s)
+

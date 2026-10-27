@@ -1,0 +1,38 @@
+{
+  "initialMain": "c0bdb5dbfbda8a6e02be5fbfdc6e0c9ccd4191cc",
+  "q1Commit": "13d9f7cca84a9acef5644d8a89367d07c94ef6e5",
+  "primaryCheckout": "D:/code/personal-project/OpenHarness-ts",
+  "initialPrimaryStatus": "clean",
+  "implementationCheckout": "C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts",
+  "baselineCheckout": "C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-baseline/OpenHarness-ts",
+  "branch": "codex/storage-hot-path-q1-q2",
+  "node": "v24.18.1",
+  "pnpm": "10.30.2",
+  "sourceOfImplementation": "latest fetched origin/main containing c0bdb5db, not archived data version 2ae6a425",
+  "worktreeSetup": "Native creation checked out successfully but stalled locating ignored AGENTS.override.md; stopped that read-only scan. Native attachment recovery could not verify ownership, so reused that isolated checkout explicitly. Baseline added using git worktree add --detach and later pinned to Q1.",
+  "setupCommands": [
+    "git fetch origin main",
+    "git merge-base --is-ancestor c0bdb5db origin/main",
+    "git switch -c codex/storage-hot-path-q1-q2",
+    "pnpm install --offline --frozen-lockfile (failed cache; setup.txt)",
+    "pnpm install --frozen-lockfile --package-import-method=hardlink (setup-online.txt)",
+    "pnpm install --offline --frozen-lockfile --package-import-method=hardlink --verify-store-integrity=false (baseline; setup-baseline.txt)"
+  ],
+  "rollback": {
+    "ref": "13d9f7cc",
+    "productionAndExistingTestsGitDiff": [],
+    "verifiedPaths": [
+      "packages/server/src/application/session/execution/tool-operation-service.ts",
+      "packages/server/src/application/maintenance/cleanup-settings.ts",
+      "packages/services/src/tool-operations/tool-operation-repository.ts",
+      "packages/services/src/execution-records/execution-repository.ts",
+      "packages/server/src/application/session/execution/__test__/tool-operation-service.test.ts",
+      "packages/server/src/application/maintenance/__test__/cleanup-settings.test.ts",
+      "packages/services/src/tool-operations/__test__/tool-operation-repository.test.ts"
+    ],
+    "candidateExecutionTestActive": false,
+    "candidatePatch": "attempt-2/candidate.patch",
+    "sourceBytes": "candidate-source/manifest.json"
+  },
+  "integration": "No merge or push; leave isolated branch and both checkouts for user review"
+}

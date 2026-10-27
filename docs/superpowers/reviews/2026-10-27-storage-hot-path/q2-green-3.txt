@@ -1,0 +1,4 @@
+
+> @vykor/services@0.1.0 check-types C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\packages\services
+> tsc --noEmit
+

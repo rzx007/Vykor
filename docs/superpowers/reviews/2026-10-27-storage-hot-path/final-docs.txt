@@ -1,0 +1,17 @@
+
+> vykor@1.0.0 check-docs C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts
+> node --test scripts/__test__/documentation-policy.test.mjs && node scripts/check-docs.mjs
+
+✔ classifies the document itself instead of words in its cross references (0.9964ms)
+✔ rejects a stale declared protocol version while allowing migration context (2.0306ms)
+✔ collects nested module READMEs without generated or installed dependencies (25.0934ms)
+✔ finds repository source files in prose and code blocks as well as inline paths (2.325ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 249.7245
+文档检查通过：920 个 Markdown 文件（含 404 个模块 README）；链接、章节、源码路径、状态、入口、协议版本声明和契约测试映射均有效。

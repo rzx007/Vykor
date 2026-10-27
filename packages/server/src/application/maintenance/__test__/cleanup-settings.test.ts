@@ -11,7 +11,7 @@ describe("maintenance cleanup protection", () => {
     const root = mkdtempSync(join(tmpdir(), "maintenance-cleanup-")); const previous = process.env.VYKOR_DATA_DIR; process.env.VYKOR_DATA_DIR = root;
     let active = false; let pending = true;
     const remove = vi.fn(async () => ["s"]);
-    const store = { sessions: { list: () => [{ id: "s", title: "old", updatedAt: 1 }], get: () => ({ id: "s", updatedAt: 1 }), listChildren: () => [] }, conversations: { listSessionInputAttachments: () => [] }, runs: { listRuns: () => [] }, toolOperations: { list: () => [] }, listSessionTasks: () => [], permissions: { list: () => pending ? [{ sessionId: "s", status: "pending" }] : [] }, listProjectionSettlements: () => [] };
+    const store = { sessions: { list: () => [{ id: "s", title: "old", updatedAt: 1 }], get: () => ({ id: "s", updatedAt: 1 }), listChildren: () => [] }, conversations: { listSessionInputAttachments: () => [] }, runs: { listRuns: () => [] }, toolOperations: { list: () => [], listSafetyStates: () => [] }, listSessionTasks: () => [], permissions: { list: () => pending ? [{ sessionId: "s", status: "pending" }] : [] }, listProjectionSettlements: () => [] };
     const service = new MaintenanceCleanupService(store as never, { hasAnyActiveRuns: () => active, runtimeSnapshot: () => ({ coordinator: { queuedRunCount: 0 } }) } as never, { deleteSessionTree: remove } as never);
     try {
       expect(service.preview({ kind: "session", olderThan: Date.now() }).protected[0]!.reason).toContain("待批准");
@@ -20,13 +20,19 @@ describe("maintenance cleanup protection", () => {
       active = false; const again = service.preview({ kind: "session", olderThan: Date.now() }); const done = await service.execute({ previewId: again.id, ids: ["s"] }); expect(done.completed).toEqual(["s"]); expect(service.audits()).toHaveLength(2);
     } finally { if (previous === undefined) delete process.env.VYKOR_DATA_DIR; else process.env.VYKOR_DATA_DIR = previous; rmSync(root, { recursive: true, force: true }); }
   });
-  it.each(["prepared", "authorized", "dispatching", "unknown"] as const)("protects the entire aged tree when a grandchild has a %s operation", async state => {
+  it.each(["root", "child", "grandchild"].flatMap(sessionId =>
+    (["prepared", "authorized", "dispatching", "unknown"] as const).map(state => ({ sessionId, state })),
+  ))("protects the aged tree with a $state operation in $sessionId without full reads", async ({ sessionId, state }) => {
     await withRealStore(async ({ store, service, addOperation, advanceTime }) => {
-      const operationId = addOperation("grandchild", state);
+      const operationId = addOperation(sessionId, state);
+      const fullList = vi.spyOn(store.toolOperations, "list").mockImplementation(() => { throw new Error("Cleanup must only read metadata"); });
+      const metadata = vi.spyOn(store.toolOperations, "listSafetyStates");
       advanceTime();
       const preview = service.preview({ kind: "session", olderThan: Date.now() });
       expect(preview.candidates).toEqual([]);
       expect(preview.protected).toEqual([{ id: "root", reason: expect.stringContaining("工具操作") }]);
+      expect(metadata).toHaveBeenCalledTimes(1);
+      expect(fullList).not.toHaveBeenCalled();
       await expect(service.execute({ previewId: preview.id, ids: ["root"] })).rejects.toThrow("清理对象不在预览中");
       expect(store.toolOperations.get(operationId)?.state).toBe(state);
       expect(store.sessions.get("root")).toBeDefined();
@@ -39,6 +45,7 @@ describe("maintenance cleanup protection", () => {
       const preview = service.preview({ kind: "session", olderThan: Date.now() });
       expect(preview.candidates.map(row => row.id)).toEqual(["root"]);
       const operationId = addOperation("sibling", "unknown");
+      vi.spyOn(store.toolOperations, "list").mockImplementation(() => { throw new Error("Cleanup must only read metadata"); });
       const result = await service.execute({ previewId: preview.id, ids: ["root"] });
       expect(result.completed).toEqual([]);
       expect(result.skipped).toEqual([{ id: "root", reason: expect.stringContaining("工具操作") }]);

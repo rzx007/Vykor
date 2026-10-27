@@ -1,0 +1,232 @@
+diff --git a/packages/server/src/application/maintenance/README.md b/packages/server/src/application/maintenance/README.md
+index 9e6a6083..95050925 100644
+--- a/packages/server/src/application/maintenance/README.md
++++ b/packages/server/src/application/maintenance/README.md
+@@ -3,16 +3,18 @@
+ 统一处理存储扫描、清理策略、用量报表及维护准备。
+ 
+ ## 入口与流程
+ 
+ 维护应用服务读取策略与存储情况，在具备维护条件时协调备份和清理；用量模块按查询条件汇总运行消耗。
+ 
+ 按年龄批量清理根会话时，预览和实际删除前都检查整棵子会话树。任一后代存在 prepared、authorized、dispatching 或 unknown 工具操作就保护整棵树，即使 Run 已结束；确认完成或明确取消的操作不单独阻止清理。用户明确删除单个会话仍走原有会话命令入口。
+ 
++每次工具操作保护判断只读取一次 `listSafetyStates()` 有限元数据，用目标树的会话 ID 集合筛选，不读取或复制完整工具结果。执行删除前会重新读取，预览后新增的未决操作同样受保护。
++
+ ## 状态归属
+ 
+ 持久策略由策略仓储保存，统计事实来自会话存储和文件系统，独占维护由 control 协调。
+ 
+ ## 主要文件
+ 
+ | 文件 | 主要接口或用途 |
+ | --- | --- |
+diff --git a/packages/server/src/application/maintenance/__test__/cleanup-settings.test.ts b/packages/server/src/application/maintenance/__test__/cleanup-settings.test.ts
+index 09acc570..775f4bf6 100644
+--- a/packages/server/src/application/maintenance/__test__/cleanup-settings.test.ts
++++ b/packages/server/src/application/maintenance/__test__/cleanup-settings.test.ts
+@@ -6,44 +6,51 @@ import { MaintenanceCleanupService } from "../cleanup-settings.js";
+ import { SessionStore } from "@vykor/services";
+ import type { ToolOperationIntent } from "@vykor/agent-contracts";
+ 
+ describe("maintenance cleanup protection", () => {
+   it("protects pending permissions and rechecks activity after preview", async () => {
+     const root = mkdtempSync(join(tmpdir(), "maintenance-cleanup-")); const previous = process.env.VYKOR_DATA_DIR; process.env.VYKOR_DATA_DIR = root;
+     let active = false; let pending = true;
+     const remove = vi.fn(async () => ["s"]);
+-    const store = { sessions: { list: () => [{ id: "s", title: "old", updatedAt: 1 }], get: () => ({ id: "s", updatedAt: 1 }), listChildren: () => [] }, conversations: { listSessionInputAttachments: () => [] }, runs: { listRuns: () => [] }, toolOperations: { list: () => [] }, listSessionTasks: () => [], permissions: { list: () => pending ? [{ sessionId: "s", status: "pending" }] : [] }, listProjectionSettlements: () => [] };
++    const store = { sessions: { list: () => [{ id: "s", title: "old", updatedAt: 1 }], get: () => ({ id: "s", updatedAt: 1 }), listChildren: () => [] }, conversations: { listSessionInputAttachments: () => [] }, runs: { listRuns: () => [] }, toolOperations: { list: () => [], listSafetyStates: () => [] }, listSessionTasks: () => [], permissions: { list: () => pending ? [{ sessionId: "s", status: "pending" }] : [] }, listProjectionSettlements: () => [] };
+     const service = new MaintenanceCleanupService(store as never, { hasAnyActiveRuns: () => active, runtimeSnapshot: () => ({ coordinator: { queuedRunCount: 0 } }) } as never, { deleteSessionTree: remove } as never);
+     try {
+       expect(service.preview({ kind: "session", olderThan: Date.now() }).protected[0]!.reason).toContain("待批准");
+       pending = false; const preview = service.preview({ kind: "session", olderThan: Date.now() }); expect(preview.candidates).toHaveLength(1);
+       active = true; const result = await service.execute({ previewId: preview.id, ids: ["s"] }); expect(result.skipped).toHaveLength(1); expect(remove).not.toHaveBeenCalled();
+       active = false; const again = service.preview({ kind: "session", olderThan: Date.now() }); const done = await service.execute({ previewId: again.id, ids: ["s"] }); expect(done.completed).toEqual(["s"]); expect(service.audits()).toHaveLength(2);
+     } finally { if (previous === undefined) delete process.env.VYKOR_DATA_DIR; else process.env.VYKOR_DATA_DIR = previous; rmSync(root, { recursive: true, force: true }); }
+   });
+-  it.each(["prepared", "authorized", "dispatching", "unknown"] as const)("protects the entire aged tree when a grandchild has a %s operation", async state => {
++  it.each(["root", "child", "grandchild"].flatMap(sessionId =>
++    (["prepared", "authorized", "dispatching", "unknown"] as const).map(state => ({ sessionId, state })),
++  ))("protects the aged tree with a $state operation in $sessionId without full reads", async ({ sessionId, state }) => {
+     await withRealStore(async ({ store, service, addOperation, advanceTime }) => {
+-      const operationId = addOperation("grandchild", state);
++      const operationId = addOperation(sessionId, state);
++      const fullList = vi.spyOn(store.toolOperations, "list").mockImplementation(() => { throw new Error("Cleanup must only read metadata"); });
++      const metadata = vi.spyOn(store.toolOperations, "listSafetyStates");
+       advanceTime();
+       const preview = service.preview({ kind: "session", olderThan: Date.now() });
+       expect(preview.candidates).toEqual([]);
+       expect(preview.protected).toEqual([{ id: "root", reason: expect.stringContaining("工具操作") }]);
++      expect(metadata).toHaveBeenCalledTimes(1);
++      expect(fullList).not.toHaveBeenCalled();
+       await expect(service.execute({ previewId: preview.id, ids: ["root"] })).rejects.toThrow("清理对象不在预览中");
+       expect(store.toolOperations.get(operationId)?.state).toBe(state);
+       expect(store.sessions.get("root")).toBeDefined();
+       expect(store.sessions.get("sibling")).toBeDefined();
+     });
+   });
+   it("rechecks descendant operations before executing an earlier cleanup preview", async () => {
+     await withRealStore(async ({ store, service, addOperation, advanceTime }) => {
+       advanceTime();
+       const preview = service.preview({ kind: "session", olderThan: Date.now() });
+       expect(preview.candidates.map(row => row.id)).toEqual(["root"]);
+       const operationId = addOperation("sibling", "unknown");
++      vi.spyOn(store.toolOperations, "list").mockImplementation(() => { throw new Error("Cleanup must only read metadata"); });
+       const result = await service.execute({ previewId: preview.id, ids: ["root"] });
+       expect(result.completed).toEqual([]);
+       expect(result.skipped).toEqual([{ id: "root", reason: expect.stringContaining("工具操作") }]);
+       expect(store.toolOperations.get(operationId)?.state).toBe("unknown");
+       expect(store.sessions.get("grandchild")).toBeDefined();
+     });
+   });
+   it("allows aged trees with confirmed operations and terminal Runs to be cleaned", async () => {
+diff --git a/packages/server/src/application/maintenance/cleanup-settings.ts b/packages/server/src/application/maintenance/cleanup-settings.ts
+index 1d4f8609..2d2a8e69 100644
+--- a/packages/server/src/application/maintenance/cleanup-settings.ts
++++ b/packages/server/src/application/maintenance/cleanup-settings.ts
+@@ -89,18 +89,19 @@ export class MaintenanceCleanupService {
+       if (!desktop?.worktree) return false;
+       const path = (desktop.worktree as Record<string, unknown>).path;
+       if (typeof path !== "string" || !isAbsolute(path)) return true;
+       try { statSync(path); return true; }
+       catch (error) { return (error as NodeJS.ErrnoException).code !== "ENOENT"; }
+     })) return "仍绑定独立工作目录；请先在 Git 设置中安全清理独立工作目录";
+     if (this.control.hasAnyActiveRuns() || this.control.runtimeSnapshot().coordinator.queuedRunCount > 0) return "后台仍有活动或排队任务，请收尾后重试";
+     if (ids.some(id => this.store.runs.listRuns(id).some(run => run.status === "pending" || run.status === "running"))) return "包含活动或排队运行记录";
+-    if (ids.some(sessionId => this.store.toolOperations.list({ sessionId }).some(operation =>
+-      ["prepared", "authorized", "dispatching", "unknown"].includes(operation.state),
+-    ))) return "包含尚未结算的工具操作，请先核对结果或取消未派发操作";
++    const sessionIds = new Set(ids);
++    if (this.store.toolOperations.listSafetyStates().some(operation => sessionIds.has(operation.sessionId)
++      && ["prepared", "authorized", "dispatching", "unknown"].includes(operation.state)))
++      return "包含尚未结算的工具操作，请先核对结果或取消未派发操作";
+     if (ids.some(id => this.store.listSessionTasks(id).some(task => task.status === "pending" || task.status === "running"))) return "包含活动子任务或后台任务";
+     if (this.store.permissions.list().some(permission => ids.includes(permission.sessionId) && permission.status === "pending")) return "仍有待批准操作";
+     if (this.store.listProjectionSettlements().some(row => ids.includes(row.rootSessionId) && (row.status === "pending" || row.status === "retrying"))) return "仍有待收束的数据记录";
+     if (this.store.workflows?.listRuns().some(row => row.ownerSessionId && ids.includes(row.ownerSessionId) && row.status === "running")) return "仍有活动工作流";
+     return null;
+   }
+ }
+diff --git a/packages/server/src/application/session/execution/README.md b/packages/server/src/application/session/execution/README.md
+index 77201690..885b6398 100644
+--- a/packages/server/src/application/session/execution/README.md
++++ b/packages/server/src/application/session/execution/README.md
+@@ -50,16 +50,18 @@ S1 不提供重启续跑。默认来源身份含当前宿主捕获的实现身
+ 新请求用 `validateOutputSchemaRequest` 处理显式字段，拒绝 metadata/runMetadata 隐式入口；保存快照使用 `outputSchemaMetadata`。执行、重放使用 `readStoredOutputSchema` 读取旧 Input/Run 快照并拒绝两者冲突，不迁移旧数据。编辑与 resume 的 HTTP 和客户端入口也使用显式字段。
+ 
+ `ToolResultService.forRun(scope, bindings)` 从当前实际工具集合建立只读补读能力。旧记录的来源必须与当前获准工具来源精确相符，历史实现版本不影响读取。每次查询重新检查应用 owner、精确会话、运行是否结束或取消、工作目录及权限配置版本；父子或兄弟会话不能互读。正文仍由 S1 操作记录保存，本服务不复制正文，也不重新执行原操作。
+ 
+ 当前捕获的内置结果读取工具自身输出不进入 `list`，也不能通过推测引用再 `read/search`，避免查询结果逐层变成新的补读正文。识别依赖定义身份和执行函数，不按名称屏蔽普通替换工具。历史权限仍按工具名和来源核对：可信宿主以相同 builtin 来源更换实现时，视为同一授权来源；如需区分这类历史实现语义，需另行保存持久能力标记。
+ 
+ 回执提交失败时，宿主立即按操作 ID 保存内存阻塞，即使所属运行仍显示运行中，也禁止同树其他运行新派发危险操作。已开始的调用仍可结算；只有对应操作成功保存确定结果，或可信核对确认已生效/未生效，才清除该项阻塞。一次成功结算不会清除其他操作的失败；重启后由持久 `dispatching` 记录转为未知继续保护。
+ 
++结算成功、提交失败及人工核对后的状态判断只读取已有 `getSummary()` 摘要，不复制完整输入与结果。完整回执的保存、比较和显式读取仍保留原有复制规则。
++
+ `ToolOperationReviewService` 是宿主人工核对入口，通过 daemon 的窄 `toolOperationReview` 属性接到 HTTP。列表返回同根会话树的 unknown，以及原 Run 已结束但仍为 dispatching 的操作身份、状态和版本；按 ID 查询才返回各最多 4000 字符的输入及原始结果预览，以及最近 20 条有界证据。预览可能含原工具数据，仅供已认证宿主人工检查，不能作为模型指令，也不会自动写入模型上下文。
+ 
+ dispatching 尚不能提交人工结论。列表、详情和拒绝响应的 `recoveryHint` 提示先排查存储失败，等待实际调用结束，确认旧 daemon 停止后重启；经过既有启动恢复，再刷新记录进行核对。接口不在线释放这类记录，也不自动重放。
+ 
+ 入口先检查当前 owner、服务是否接收请求及请求会话是否可用；提交时还检查操作属于同根树、原 Run 已结束、`expectedRevision` 一致，以及非空且不超过 8192 字符的 `evidence`。`unknown` 仅追加证据；`not_applied` 解除该操作的未知状态；`applied` 没有经人工核实的明确 completed 结果时仍是 unknown。提供的结果最多 65536 字符，身份必须匹配原操作。原 Attempt 的未知结果与审计记录保留，所有核对都不会自动重试工具。
+ 
+ 具体 HTTP 调用（地址、token、sessionId 和 operationId 替换为当前值；协议版本用 `/capabilities` 返回的 `protocol.version`）：
+ 
+diff --git a/packages/server/src/application/session/execution/__test__/tool-operation-service.test.ts b/packages/server/src/application/session/execution/__test__/tool-operation-service.test.ts
+index f0896bfb..67b3bb7b 100644
+--- a/packages/server/src/application/session/execution/__test__/tool-operation-service.test.ts
++++ b/packages/server/src/application/session/execution/__test__/tool-operation-service.test.ts
+@@ -29,16 +29,53 @@ async function fixture(transactionHooks?: { beforeCommit(): void }) {
+ }
+ async function authorized(f: Awaited<ReturnType<typeof fixture>>, intent = f.intent) {
+   const operation = await f.service.operations.prepare(intent);
+   const policy = await f.service.requiredPolicy.check({ intent, operation, phase: "authorization" });
+   expect(policy.allowed).toBe(true);
+   return { intent, operation: await f.service.operations.authorize({ intent, operation, policyVersion: policy.policyVersion }), policyVersion: policy.policyVersion };
+ }
+ describe("daemon tool operation host", () => {
++  it("settles large results and preserves full reads without copying bodies for status checks", async () => {
++    const f = await fixture(), input = await authorized(f);
++    const receipt = await f.service.operations.dispatch(input);
++    const result = { toolUseId: "call", toolName: "Write", content: [{ type: "text" as const, text: "x".repeat(1024 * 1024) }] };
++    const fullRead = vi.spyOn(f.store.toolOperations, "get").mockImplementation(() => { throw new Error("Status checks must use summaries"); });
++    await expect(f.service.operations.settle({ receipt, result })).resolves.toBeUndefined();
++    expect(fullRead).not.toHaveBeenCalled();
++    fullRead.mockRestore();
++    expect(f.store.toolOperations.get(receipt.operationId)?.result).toEqual(result);
++  });
++  it.each(["late", "review"] as const)("keeps other receipt failures blocked after %s resolution without full reads", async resolution => {
++    let failCommit = false;
++    const f = await fixture({ beforeCommit: () => { if (failCommit) throw new Error("receipt commit failed"); } });
++    const first = await authorized(f);
++    const second = await authorized(f, { ...f.intent, toolUse: { ...f.intent.toolUse, id: "second" } });
++    const waiting = await authorized(f, { ...f.intent, toolUse: { ...f.intent.toolUse, id: "waiting" } });
++    const receipts = [await f.service.operations.dispatch(first), await f.service.operations.dispatch(second)];
++    const results = ["call", "second"].map(toolUseId => ({ toolUseId, toolName: "Write",
++      content: [{ type: "text" as const, text: "x".repeat(1024 * 1024) }] }));
++    const fullRead = vi.spyOn(f.store.toolOperations, "get").mockImplementation(() => { throw new Error("Status checks must use summaries"); });
++    failCommit = true;
++    for (let i = 0; i < 2; i++) await expect(f.service.operations.settle({ receipt: receipts[i]!, result: results[i]! })).rejects.toThrow("receipt commit failed");
++    failCommit = false;
++    await expect(f.service.operations.dispatch(waiting)).rejects.toThrow(/unresolved/i);
++    for (let i = 0; i < 2; i++) {
++      if (resolution === "late") await f.service.operations.settle({ receipt: receipts[i]!, result: results[i]!, late: true });
++      else {
++        await f.service.operations.settle({ receipt: receipts[i]!, result: { ...results[i]!, executionState: "unknown" } });
++        f.service.reconcile({ operationId: receipts[i]!.operationId,
++          expectedRevision: f.store.toolOperations.getSummary(receipts[i]!.operationId)!.revision,
++          outcome: "not_applied", evidence: "trusted lookup confirms absence" });
++      }
++      if (i === 0) await expect(f.service.operations.dispatch(waiting)).rejects.toThrow(/unresolved/i);
++    }
++    await expect(f.service.operations.dispatch(waiting)).resolves.toMatchObject({ ownerId: "owner" });
++    expect(fullRead).not.toHaveBeenCalled();
++  });
+   it("observes the current dispatch without copying the complete operation", async () => {
+     const f = await fixture(), input = await authorized(f);
+     const receipt = await f.service.operations.dispatch(input);
+     const fullRead = vi.spyOn(f.store.toolOperations, "get").mockImplementation(() => { throw new Error("Invocation tracking must not copy the complete input"); });
+     let finish!: () => void;
+     const settled = new Promise<void>(resolve => { finish = resolve; });
+     try {
+       expect(() => f.service.operations.observeInvocation!({ receipt, settled })).not.toThrow();
+diff --git a/packages/server/src/application/session/execution/tool-operation-service.ts b/packages/server/src/application/session/execution/tool-operation-service.ts
+index 0b3cc606..e5c1caa4 100644
+--- a/packages/server/src/application/session/execution/tool-operation-service.ts
++++ b/packages/server/src/application/session/execution/tool-operation-service.ts
+@@ -69,17 +69,17 @@ export class ToolOperationService implements AgentToolSafety {
+         try {
+           this.atomic(() => {
+             this.assertOwner();
+             if (input.receipt.ownerId !== this.options.ownerLease().ownerId) throw new Error("Tool receipt owner mismatch");
+             store.toolOperations.settle(input);
+           });
+           this.clearResolvedFailure(input.receipt.operationId);
+         } catch (error) {
+-          const operation = store.toolOperations.get(input.receipt.operationId);
++          const operation = store.toolOperations.getSummary(input.receipt.operationId);
+           if (operation?.state === "dispatching" || operation?.state === "unknown")
+             this.unsettledFailures.add(input.receipt.operationId);
+           throw error;
+         }
+       },
+       reject: async input => this.atomic(() => {
+         this.assertOwner();
+         store.toolOperations.reject(input);
+@@ -119,17 +119,17 @@ export class ToolOperationService implements AgentToolSafety {
+       if (input.outcome !== "unknown" && this.pendingInvocations.has(input.operationId))
+         throw new Error("Tool invocation is still executing; only unknown evidence may be recorded until it settles");
+       return this.options.store.toolOperations.reconcile(input);
+     });
+     this.clearResolvedFailure(operation.operationId);
+     return operation;
+   }
+   private clearResolvedFailure(operationId: string): void {
+-    const state = this.options.store.toolOperations.get(operationId)?.state;
++    const state = this.options.store.toolOperations.getSummary(operationId)?.state;
+     if (state === "confirmed" || state === "not_applied") this.unsettledFailures.delete(operationId);
+   }
+   private assertOwner(): void { this.assertLease(this.options.ownerLease()); }
+   private assertCurrent(scope: AgentRunScope): string {
+     this.assertOwner();
+     if (this.options.accepting?.() === false || scope.signal.aborted) throw new Error("Tool Run no longer accepts dispatch");
+     const session = this.options.store.sessions.get(scope.sessionId), run = this.options.store.runs.getRun(scope.runId);
+     if (!session || session.status === "closing" || session.status === "archived") throw new Error("Tool session is unavailable");

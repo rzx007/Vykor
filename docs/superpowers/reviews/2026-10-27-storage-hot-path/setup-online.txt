@@ -1,0 +1,350 @@
+Scope: all 39 workspace projects
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +1619
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+   ╭──────────────────────────────────────────╮
+   │                                          │
+   │   Update available! 10.30.2 → 12.15.0.   │
+   │   Changelog: https://pnpm.io/v/12.15.0   │
+   │     To update, run: pnpm self-update     │
+   │                                          │
+   ╰──────────────────────────────────────────╯
+
+Progress: resolved 1619, reused 123, downloaded 0, added 0
+Progress: resolved 1619, reused 269, downloaded 0, added 0
+Progress: resolved 1619, reused 397, downloaded 0, added 0
+Progress: resolved 1619, reused 558, downloaded 0, added 0
+Progress: resolved 1619, reused 649, downloaded 0, added 0
+Progress: resolved 1619, reused 705, downloaded 0, added 0
+Progress: resolved 1619, reused 737, downloaded 0, added 0
+Progress: resolved 1619, reused 768, downloaded 0, added 0
+Progress: resolved 1619, reused 831, downloaded 0, added 0
+Progress: resolved 1619, reused 854, downloaded 0, added 0
+Progress: resolved 1619, reused 867, downloaded 0, added 0
+Progress: resolved 1619, reused 920, downloaded 0, added 0
+Progress: resolved 1619, reused 941, downloaded 0, added 0
+Progress: resolved 1619, reused 1006, downloaded 0, added 0
+Progress: resolved 1619, reused 1033, downloaded 0, added 0
+Progress: resolved 1619, reused 1060, downloaded 0, added 0
+Progress: resolved 1619, reused 1120, downloaded 0, added 0
+Progress: resolved 1619, reused 1151, downloaded 0, added 0
+Progress: resolved 1619, reused 1160, downloaded 0, added 0
+Progress: resolved 1619, reused 1171, downloaded 0, added 0
+Progress: resolved 1619, reused 1188, downloaded 0, added 0
+Progress: resolved 1619, reused 1194, downloaded 0, added 0
+Progress: resolved 1619, reused 1212, downloaded 0, added 0
+Progress: resolved 1619, reused 1253, downloaded 0, added 0
+Progress: resolved 1619, reused 1293, downloaded 0, added 0
+Progress: resolved 1619, reused 1358, downloaded 0, added 0
+Progress: resolved 1619, reused 1449, downloaded 0, added 0
+Progress: resolved 1619, reused 1512, downloaded 3, added 4
+Progress: resolved 1619, reused 1512, downloaded 14, added 4
+ WARN  Tarball download average speed 32 KiB/s (size 41 KiB) is below 50 KiB/s: https://registry.npmjs.org/hermes-estree/-/hermes-estree-0.25.1.tgz (GET)
+Progress: resolved 1619, reused 1513, downloaded 24, added 4
+Progress: resolved 1619, reused 1513, downloaded 32, added 4
+Progress: resolved 1619, reused 1513, downloaded 41, added 8
+Progress: resolved 1619, reused 1513, downloaded 47, added 27
+Progress: resolved 1619, reused 1513, downloaded 56, added 48
+Progress: resolved 1619, reused 1514, downloaded 70, added 56
+ WARN  Tarball download average speed 32 KiB/s (size 37 KiB) is below 50 KiB/s: https://registry.npmjs.org/thinking-orbs/-/thinking-orbs-0.3.2.tgz (GET)
+ WARN  Tarball download average speed 39 KiB/s (size 90 KiB) is below 50 KiB/s: https://registry.npmjs.org/@dotenvx/dotenvx/-/dotenvx-1.75.1.tgz (GET)
+ WARN  Tarball download average speed 47 KiB/s (size 286 KiB) is below 50 KiB/s: https://registry.npmjs.org/hermes-parser/-/hermes-parser-0.25.1.tgz (GET)
+ WARN  Tarball download average speed 39 KiB/s (size 45 KiB) is below 50 KiB/s: https://registry.npmjs.org/postcss-selector-parser/-/postcss-selector-parser-7.1.5.tgz (GET)
+Progress: resolved 1619, reused 1515, downloaded 78, added 58
+Progress: resolved 1619, reused 1515, downloaded 82, added 62
+Progress: resolved 1619, reused 1515, downloaded 89, added 66
+Progress: resolved 1619, reused 1515, downloaded 91, added 78
+Progress: resolved 1619, reused 1515, downloaded 95, added 105
+Progress: resolved 1619, reused 1515, downloaded 96, added 117
+Progress: resolved 1619, reused 1515, downloaded 96, added 136
+Progress: resolved 1619, reused 1516, downloaded 99, added 162
+Progress: resolved 1619, reused 1516, downloaded 99, added 191
+Progress: resolved 1619, reused 1516, downloaded 99, added 214
+Progress: resolved 1619, reused 1516, downloaded 99, added 221
+Progress: resolved 1619, reused 1516, downloaded 99, added 238
+Progress: resolved 1619, reused 1516, downloaded 100, added 254
+Progress: resolved 1619, reused 1516, downloaded 100, added 277
+Progress: resolved 1619, reused 1516, downloaded 100, added 308
+Progress: resolved 1619, reused 1516, downloaded 100, added 321
+Progress: resolved 1619, reused 1516, downloaded 100, added 330
+Progress: resolved 1619, reused 1516, downloaded 100, added 348
+Progress: resolved 1619, reused 1516, downloaded 100, added 370
+Progress: resolved 1619, reused 1516, downloaded 100, added 384
+Progress: resolved 1619, reused 1516, downloaded 100, added 386
+Progress: resolved 1619, reused 1516, downloaded 100, added 392
+Progress: resolved 1619, reused 1516, downloaded 100, added 396
+Progress: resolved 1619, reused 1516, downloaded 100, added 398
+Progress: resolved 1619, reused 1516, downloaded 100, added 405
+Progress: resolved 1619, reused 1516, downloaded 100, added 415
+Progress: resolved 1619, reused 1517, downloaded 100, added 422
+Progress: resolved 1619, reused 1517, downloaded 100, added 426
+Progress: resolved 1619, reused 1517, downloaded 100, added 427
+Progress: resolved 1619, reused 1517, downloaded 100, added 429
+Progress: resolved 1619, reused 1517, downloaded 100, added 438
+Progress: resolved 1619, reused 1517, downloaded 100, added 440
+Progress: resolved 1619, reused 1517, downloaded 100, added 450
+Progress: resolved 1619, reused 1517, downloaded 100, added 456
+Progress: resolved 1619, reused 1517, downloaded 100, added 458
+Progress: resolved 1619, reused 1517, downloaded 100, added 465
+Progress: resolved 1619, reused 1517, downloaded 100, added 468
+Progress: resolved 1619, reused 1517, downloaded 100, added 479
+Progress: resolved 1619, reused 1517, downloaded 100, added 483
+Progress: resolved 1619, reused 1517, downloaded 100, added 484
+Progress: resolved 1619, reused 1517, downloaded 100, added 506
+Progress: resolved 1619, reused 1517, downloaded 100, added 523
+Progress: resolved 1619, reused 1517, downloaded 100, added 551
+Progress: resolved 1619, reused 1517, downloaded 100, added 571
+Progress: resolved 1619, reused 1517, downloaded 100, added 576
+Progress: resolved 1619, reused 1517, downloaded 100, added 604
+Progress: resolved 1619, reused 1517, downloaded 100, added 621
+Progress: resolved 1619, reused 1517, downloaded 100, added 629
+Progress: resolved 1619, reused 1517, downloaded 100, added 645
+Progress: resolved 1619, reused 1517, downloaded 100, added 648
+Progress: resolved 1619, reused 1517, downloaded 100, added 656
+Progress: resolved 1619, reused 1517, downloaded 100, added 664
+Progress: resolved 1619, reused 1517, downloaded 100, added 669
+Progress: resolved 1619, reused 1517, downloaded 100, added 676
+Progress: resolved 1619, reused 1517, downloaded 100, added 697
+Progress: resolved 1619, reused 1517, downloaded 100, added 706
+Progress: resolved 1619, reused 1517, downloaded 100, added 712
+Progress: resolved 1619, reused 1517, downloaded 100, added 719
+Progress: resolved 1619, reused 1517, downloaded 100, added 725
+Progress: resolved 1619, reused 1517, downloaded 100, added 734
+Progress: resolved 1619, reused 1517, downloaded 100, added 745
+Progress: resolved 1619, reused 1517, downloaded 100, added 748
+Progress: resolved 1619, reused 1517, downloaded 100, added 758
+Progress: resolved 1619, reused 1517, downloaded 100, added 766
+Progress: resolved 1619, reused 1517, downloaded 100, added 786
+Progress: resolved 1619, reused 1517, downloaded 100, added 823
+Progress: resolved 1619, reused 1517, downloaded 100, added 836
+Progress: resolved 1619, reused 1517, downloaded 100, added 849
+Progress: resolved 1619, reused 1517, downloaded 100, added 861
+Progress: resolved 1619, reused 1517, downloaded 100, added 863
+Progress: resolved 1619, reused 1517, downloaded 100, added 864
+Progress: resolved 1619, reused 1517, downloaded 100, added 872
+Progress: resolved 1619, reused 1517, downloaded 100, added 877
+Progress: resolved 1619, reused 1517, downloaded 100, added 880
+Progress: resolved 1619, reused 1517, downloaded 100, added 896
+Progress: resolved 1619, reused 1517, downloaded 100, added 911
+Progress: resolved 1619, reused 1517, downloaded 100, added 915
+Progress: resolved 1619, reused 1517, downloaded 100, added 922
+Progress: resolved 1619, reused 1517, downloaded 100, added 929
+Progress: resolved 1619, reused 1517, downloaded 100, added 932
+Progress: resolved 1619, reused 1517, downloaded 100, added 936
+Progress: resolved 1619, reused 1517, downloaded 100, added 939
+Progress: resolved 1619, reused 1517, downloaded 100, added 942
+Progress: resolved 1619, reused 1517, downloaded 100, added 945
+Progress: resolved 1619, reused 1517, downloaded 100, added 946
+Progress: resolved 1619, reused 1517, downloaded 100, added 953
+Progress: resolved 1619, reused 1517, downloaded 100, added 954
+Progress: resolved 1619, reused 1517, downloaded 100, added 964
+Progress: resolved 1619, reused 1517, downloaded 100, added 972
+Progress: resolved 1619, reused 1517, downloaded 100, added 973
+Progress: resolved 1619, reused 1517, downloaded 100, added 985
+Progress: resolved 1619, reused 1517, downloaded 100, added 1005
+Progress: resolved 1619, reused 1517, downloaded 100, added 1007
+Progress: resolved 1619, reused 1517, downloaded 100, added 1008
+Progress: resolved 1619, reused 1517, downloaded 100, added 1015
+Progress: resolved 1619, reused 1517, downloaded 100, added 1031
+Progress: resolved 1619, reused 1517, downloaded 100, added 1032
+Progress: resolved 1619, reused 1517, downloaded 100, added 1037
+Progress: resolved 1619, reused 1517, downloaded 100, added 1043
+Progress: resolved 1619, reused 1517, downloaded 100, added 1044
+Progress: resolved 1619, reused 1517, downloaded 100, added 1049
+Progress: resolved 1619, reused 1517, downloaded 100, added 1050
+Progress: resolved 1619, reused 1517, downloaded 100, added 1074
+Progress: resolved 1619, reused 1517, downloaded 100, added 1086
+Progress: resolved 1619, reused 1517, downloaded 100, added 1088
+Progress: resolved 1619, reused 1517, downloaded 100, added 1090
+Progress: resolved 1619, reused 1517, downloaded 100, added 1091
+Progress: resolved 1619, reused 1517, downloaded 100, added 1096
+Progress: resolved 1619, reused 1517, downloaded 100, added 1108
+Progress: resolved 1619, reused 1517, downloaded 100, added 1122
+Progress: resolved 1619, reused 1517, downloaded 100, added 1126
+Progress: resolved 1619, reused 1517, downloaded 100, added 1132
+Progress: resolved 1619, reused 1517, downloaded 100, added 1137
+Progress: resolved 1619, reused 1517, downloaded 100, added 1144
+Progress: resolved 1619, reused 1517, downloaded 100, added 1147
+Progress: resolved 1619, reused 1517, downloaded 100, added 1148
+Progress: resolved 1619, reused 1517, downloaded 100, added 1159
+Progress: resolved 1619, reused 1517, downloaded 100, added 1161
+Progress: resolved 1619, reused 1517, downloaded 100, added 1162
+Progress: resolved 1619, reused 1517, downloaded 100, added 1165
+Progress: resolved 1619, reused 1517, downloaded 100, added 1166
+Progress: resolved 1619, reused 1517, downloaded 100, added 1167
+Progress: resolved 1619, reused 1517, downloaded 100, added 1171
+Progress: resolved 1619, reused 1517, downloaded 100, added 1173
+Progress: resolved 1619, reused 1517, downloaded 100, added 1177
+Progress: resolved 1619, reused 1517, downloaded 100, added 1181
+Progress: resolved 1619, reused 1517, downloaded 100, added 1183
+Progress: resolved 1619, reused 1517, downloaded 100, added 1191
+Progress: resolved 1619, reused 1517, downloaded 100, added 1196
+Progress: resolved 1619, reused 1517, downloaded 100, added 1206
+Progress: resolved 1619, reused 1517, downloaded 100, added 1208
+Progress: resolved 1619, reused 1517, downloaded 100, added 1211
+Progress: resolved 1619, reused 1517, downloaded 100, added 1213
+Progress: resolved 1619, reused 1517, downloaded 100, added 1219
+Progress: resolved 1619, reused 1517, downloaded 100, added 1227
+Progress: resolved 1619, reused 1517, downloaded 100, added 1240
+Progress: resolved 1619, reused 1517, downloaded 100, added 1241
+Progress: resolved 1619, reused 1517, downloaded 100, added 1244
+Progress: resolved 1619, reused 1517, downloaded 100, added 1249
+Progress: resolved 1619, reused 1517, downloaded 100, added 1250
+Progress: resolved 1619, reused 1517, downloaded 100, added 1251
+Progress: resolved 1619, reused 1517, downloaded 100, added 1257
+Progress: resolved 1619, reused 1517, downloaded 100, added 1270
+Progress: resolved 1619, reused 1517, downloaded 100, added 1282
+Progress: resolved 1619, reused 1517, downloaded 100, added 1288
+Progress: resolved 1619, reused 1517, downloaded 100, added 1299
+Progress: resolved 1619, reused 1517, downloaded 100, added 1304
+Progress: resolved 1619, reused 1517, downloaded 100, added 1308
+Progress: resolved 1619, reused 1517, downloaded 100, added 1309
+Progress: resolved 1619, reused 1517, downloaded 100, added 1310
+Progress: resolved 1619, reused 1517, downloaded 100, added 1320
+Progress: resolved 1619, reused 1517, downloaded 100, added 1332
+Progress: resolved 1619, reused 1517, downloaded 100, added 1347
+Progress: resolved 1619, reused 1517, downloaded 100, added 1384
+Progress: resolved 1619, reused 1517, downloaded 100, added 1419
+Progress: resolved 1619, reused 1517, downloaded 100, added 1442
+Progress: resolved 1619, reused 1517, downloaded 100, added 1453
+Progress: resolved 1619, reused 1517, downloaded 100, added 1480
+Progress: resolved 1619, reused 1517, downloaded 100, added 1504
+Progress: resolved 1619, reused 1517, downloaded 100, added 1509
+Progress: resolved 1619, reused 1517, downloaded 100, added 1518
+Progress: resolved 1619, reused 1517, downloaded 100, added 1530
+Progress: resolved 1619, reused 1517, downloaded 100, added 1535
+Progress: resolved 1619, reused 1517, downloaded 100, added 1549
+Progress: resolved 1619, reused 1517, downloaded 100, added 1586
+Progress: resolved 1619, reused 1517, downloaded 100, added 1594
+Progress: resolved 1619, reused 1517, downloaded 100, added 1602
+Progress: resolved 1619, reused 1517, downloaded 100, added 1607
+Progress: resolved 1619, reused 1517, downloaded 100, added 1609
+Progress: resolved 1619, reused 1517, downloaded 100, added 1611
+Progress: resolved 1619, reused 1517, downloaded 100, added 1612
+Progress: resolved 1619, reused 1517, downloaded 100, added 1613
+Progress: resolved 1619, reused 1517, downloaded 100, added 1614
+Progress: resolved 1619, reused 1517, downloaded 100, added 1615
+Progress: resolved 1619, reused 1517, downloaded 100, added 1616
+Progress: resolved 1619, reused 1517, downloaded 100, added 1617
+Progress: resolved 1619, reused 1517, downloaded 100, added 1618
+Progress: resolved 1619, reused 1517, downloaded 100, added 1619
+Progress: resolved 1619, reused 1517, downloaded 100, added 1619, done
+.../node-pty@1.1.0/node_modules/node-pty install$ node scripts/prebuild.js || node-gyp rebuild
+.../node_modules/better-sqlite3 install$ node-gyp rebuild
+.../esbuild@0.27.7/node_modules/esbuild postinstall$ node install.js
+.../node_modules/better-sqlite3 install: C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\node_modules\.pnpm\better-sqlite3@13.0.2\node_modules\better-sqlite3>if not defined npm_config_node_gyp (node "C:\Users\ruanz\AppData\Local\pnpm\store\v11\links\@\pnpm\10.30.2\b445f16de7be3ede6b8dbffb00d5a4358756f2288ba4ad2ff394f10149dcfbe8\node_modules\pnpm\dist\node-gyp-bin\\..\node_modules\node-gyp\bin\node-gyp.js" rebuild )  else (node "C:\Users\ruanz\AppData\Local\pnpm\store\v11\links\@\pnpm\10.30.2\b445f16de7be3ede6b8dbffb00d5a4358756f2288ba4ad2ff394f10149dcfbe8\node_modules\pnpm\dist\node_modules\node-gyp\bin\node-gyp.js" rebuild ) 
+.../node-pty@1.1.0/node_modules/node-pty install: [32m> Checking prebuilds...[0m
+.../node-pty@1.1.0/node_modules/node-pty install: Done
+.../node-pty@1.1.0/node_modules/node-pty postinstall$ node scripts/post-install.js
+.../node_modules/electron postinstall$ node install.js
+.../node-pty@1.1.0/node_modules/node-pty postinstall: [32m> Cleaning release folder...[0m
+.../node-pty@1.1.0/node_modules/node-pty postinstall: [32m> Moving conpty.dll...[0m
+.../node-pty@1.1.0/node_modules/node-pty postinstall:   Using os.arch(): x64
+.../node-pty@1.1.0/node_modules/node-pty postinstall:   Found version 1.23.251008001
+.../node-pty@1.1.0/node_modules/node-pty postinstall:   Copying C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\node_modules\.pnpm\node-pty@1.1.0\node_modules\node-pty\third_party\conpty\1.23.251008001\win10-x64\conpty.dll -> C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\node_modules\.pnpm\node-pty@1.1.0\node_modules\node-pty\build\Release\conpty\conpty.dll
+.../node-pty@1.1.0/node_modules/node-pty postinstall:   Copying C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\node_modules\.pnpm\node-pty@1.1.0\node_modules\node-pty\third_party\conpty\1.23.251008001\win10-x64\OpenConsole.exe -> C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\node_modules\.pnpm\node-pty@1.1.0\node_modules\node-pty\build\Release\conpty\OpenConsole.exe
+.../node-pty@1.1.0/node_modules/node-pty postinstall: Done
+.../node_modules/better-sqlite3 install: gyp info it worked if it ends with ok
+.../node_modules/better-sqlite3 install: gyp info using node-gyp@11.5.0
+.../node_modules/better-sqlite3 install: gyp info using node@24.18.1 | win32 | x64
+.../esbuild@0.27.7/node_modules/esbuild postinstall: Done
+.../esbuild@0.25.12/node_modules/esbuild postinstall$ node install.js
+.../esbuild@0.25.12/node_modules/esbuild postinstall: Done
+.../esbuild@0.18.20/node_modules/esbuild postinstall$ node install.js
+.../node_modules/better-sqlite3 install: gyp info find Python using Python version 3.15.0 found at "C:\Users\ruanz\Documents\Vykor\2026-10-19\x2\Python\pythoncore-3.15-64\python.exe"
+.../esbuild@0.18.20/node_modules/esbuild postinstall: Done
+.../node_modules/electron postinstall: Done
+.../node_modules/better-sqlite3 install: gyp info find VS using VS2022 (17.14.36915.13) found at:
+.../node_modules/better-sqlite3 install: gyp info find VS "C:\Program Files\Microsoft Visual Studio\2022\Community"
+.../node_modules/better-sqlite3 install: gyp info find VS run with --verbose for detailed information
+.../node_modules/better-sqlite3 install: gyp info spawn C:\Users\ruanz\Documents\Vykor\2026-10-19\x2\Python\pythoncore-3.15-64\python.exe
+.../node_modules/better-sqlite3 install: gyp info spawn args [
+.../node_modules/better-sqlite3 install: gyp info spawn args 'C:\\Users\\ruanz\\AppData\\Local\\pnpm\\store\\v11\\links\\@\\pnpm\\10.30.2\\b445f16de7be3ede6b8dbffb00d5a4358756f2288ba4ad2ff394f10149dcfbe8\\node_modules\\pnpm\\dist\\node_modules\\node-gyp\\gyp\\gyp_main.py',
+.../node_modules/better-sqlite3 install: gyp info spawn args 'binding.gyp',
+.../node_modules/better-sqlite3 install: gyp info spawn args '-f',
+.../node_modules/better-sqlite3 install: gyp info spawn args 'msvs',
+.../node_modules/better-sqlite3 install: gyp info spawn args '-I',
+.../node_modules/better-sqlite3 install: gyp info spawn args 'C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\node_modules\\.pnpm\\better-sqlite3@13.0.2\\node_modules\\better-sqlite3\\build\\config.gypi',
+.../node_modules/better-sqlite3 install: gyp info spawn args '-I',
+.../node_modules/better-sqlite3 install: gyp info spawn args 'C:\\Users\\ruanz\\AppData\\Local\\pnpm\\store\\v11\\links\\@\\pnpm\\10.30.2\\b445f16de7be3ede6b8dbffb00d5a4358756f2288ba4ad2ff394f10149dcfbe8\\node_modules\\pnpm\\dist\\node_modules\\node-gyp\\addon.gypi',
+.../node_modules/better-sqlite3 install: gyp info spawn args '-I',
+.../node_modules/better-sqlite3 install: gyp info spawn args 'C:\\Users\\ruanz\\AppData\\Local\\node-gyp\\Cache\\24.18.1\\include\\node\\common.gypi',
+.../node_modules/better-sqlite3 install: gyp info spawn args '-Dlibrary=shared_library',
+.../node_modules/better-sqlite3 install: gyp info spawn args '-Dvisibility=default',
+.../node_modules/better-sqlite3 install: gyp info spawn args '-Dnode_root_dir=C:\\Users\\ruanz\\AppData\\Local\\node-gyp\\Cache\\24.18.1',
+.../node_modules/better-sqlite3 install: gyp info spawn args '-Dnode_gyp_dir=C:\\Users\\ruanz\\AppData\\Local\\pnpm\\store\\v11\\links\\@\\pnpm\\10.30.2\\b445f16de7be3ede6b8dbffb00d5a4358756f2288ba4ad2ff394f10149dcfbe8\\node_modules\\pnpm\\dist\\node_modules\\node-gyp',
+.../node_modules/better-sqlite3 install: gyp info spawn args '-Dnode_lib_file=C:\\\\Users\\\\ruanz\\\\AppData\\\\Local\\\\node-gyp\\\\Cache\\\\24.18.1\\\\<(target_arch)\\\\node.lib',
+.../node_modules/better-sqlite3 install: gyp info spawn args '-Dmodule_root_dir=C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\node_modules\\.pnpm\\better-sqlite3@13.0.2\\node_modules\\better-sqlite3',
+.../node_modules/better-sqlite3 install: gyp info spawn args '-Dnode_engine=v8',
+.../node_modules/better-sqlite3 install: gyp info spawn args '--depth=.',
+.../node_modules/better-sqlite3 install: gyp info spawn args '--no-parallel',
+.../node_modules/better-sqlite3 install: gyp info spawn args '--generator-output',
+.../node_modules/better-sqlite3 install: gyp info spawn args 'C:\\Users\\ruanz\\.codex\\worktrees\\storage-hot-path-q1-q2\\OpenHarness-ts\\node_modules\\.pnpm\\better-sqlite3@13.0.2\\node_modules\\better-sqlite3\\build',
+.../node_modules/better-sqlite3 install: gyp info spawn args '-Goutput_dir=.'
+.../node_modules/better-sqlite3 install: gyp info spawn args ]
+.../node_modules/better-sqlite3 install: gyp info spawn C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe
+.../node_modules/better-sqlite3 install: gyp info spawn args [
+.../node_modules/better-sqlite3 install: gyp info spawn args 'build/binding.sln',
+.../node_modules/better-sqlite3 install: gyp info spawn args '/clp:Verbosity=minimal',
+.../node_modules/better-sqlite3 install: gyp info spawn args '/nologo',
+.../node_modules/better-sqlite3 install: gyp info spawn args '/nodeReuse:false',
+.../node_modules/better-sqlite3 install: gyp info spawn args '/p:Configuration=Release;Platform=x64'
+.../node_modules/better-sqlite3 install: gyp info spawn args ]
+.../node_modules/better-sqlite3 install: gyp info ok 
+.../node_modules/better-sqlite3 install: Done
+
+devDependencies:
++ @anthropic-ai/sdk 0.40.1
++ @modelcontextprotocol/ext-apps 1.1.2
++ @rzx/client 0.1.0 <- packages\client
++ @types/node 22.19.17
++ @vykor/agent-contracts 0.1.0 <- packages\agent-contracts
++ @vykor/agent-runtime 0.1.0 <- packages\agent-runtime
++ @vykor/api 0.1.0 <- packages\api
++ @vykor/coordinator 0.1.0 <- packages\coordinator
++ @vykor/core 0.1.0 <- packages\core
++ @vykor/execution-node 0.1.0 <- packages\execution-node
++ @vykor/host-config 0.1.0 <- packages\host-config
++ @vykor/jobs 0.1.0 <- packages\jobs
++ @vykor/permissions 0.1.0 <- packages\permissions
++ @vykor/personalization 0.1.0 <- packages\personalization
++ @vykor/plugins 0.1.0 <- packages\plugins
++ @vykor/prompts 0.1.0 <- packages\prompts
++ @vykor/protocol 0.1.0 <- packages\protocol
++ @vykor/server 0.1.0 <- packages\server
++ @vykor/services 0.1.0 <- packages\services
++ @vykor/tools 0.1.0 <- packages\tools
++ husky 9.1.7
++ openai 4.104.0
++ rimraf 6.1.3
++ turbo 2.9.6
++ typescript 5.9.3
++ vite 7.3.2
++ vitest 3.2.4
+
+. prepare$ husky
+apps/desktop postinstall$ electron-builder install-app-deps
+. prepare: Done
+apps/desktop postinstall:   • electron-builder  version=26.15.3
+apps/desktop postinstall:   • loaded configuration  file=C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\apps\desktop\electron-builder.yml
+apps/desktop postinstall:   • packageManager not detected by file, falling back to environment detection  resolvedPackageManager=pnpm detected=C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\apps\desktop
+apps/desktop postinstall:   • detected workspace root for project using packageManager field  pm=pnpm config=pnpm@10.30.2 resolved=C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts projectDir=C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\apps\desktop
+apps/desktop postinstall:   • executing @electron/rebuild  electronVersion=39.8.10 arch=x64 buildFromSource=false workspaceRoot=C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts projectDir=./ appDir=./
+apps/desktop postinstall:   • installing native dependencies  arch=x64
+apps/desktop postinstall:   • preparing       moduleName=node-pty arch=x64
+apps/desktop postinstall:   • finished        moduleName=node-pty arch=x64
+apps/desktop postinstall:   • preparing       moduleName=better-sqlite3 arch=x64
+apps/desktop postinstall:   • finished        moduleName=better-sqlite3 arch=x64
+apps/desktop postinstall:   • completed installing native dependencies
+apps/desktop postinstall: Done
+╭ Warning ─────────────────────────────────────────────────────────────────────╮
+│                                                                              │
+│   Ignored build scripts: @modelcontextprotocol/ext-apps@1.1.2,               │
+│   electron-winstaller@5.4.0, protobufjs@7.5.4, sharp@0.34.4.                 │
+│   Run "pnpm approve-builds" to pick which dependencies should be allowed     │
+│   to run scripts.                                                            │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+Done in 9m 27.3s using pnpm v10.30.2

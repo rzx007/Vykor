@@ -1,0 +1,42 @@
+
+ RUN  v3.2.4 C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/packages/server
+
+ ✓ src/application/session/execution/__test__/tool-operation-service.test.ts (20 tests) 8461ms
+   ✓ daemon tool operation host > keeps a confirmed read-only failed-receipt ID in every dangerous safety review until host settlement  647ms
+   ✓ daemon tool operation host > settles large results and preserves full reads without copying bodies for status checks  867ms
+   ✓ daemon tool operation host > keeps other receipt failures blocked after late resolution without full reads  1130ms
+   ✓ daemon tool operation host > keeps other receipt failures blocked after review resolution without full reads  3400ms
+ ✓ src/application/maintenance/__test__/cleanup-settings.test.ts (15 tests) 11168ms
+   ✓ maintenance cleanup protection > protects the aged tree with a 'prepared' operation in 'root' without full reads  1174ms
+   ✓ maintenance cleanup protection > protects the aged tree with a 'authorized' operation in 'root' without full reads  917ms
+   ✓ maintenance cleanup protection > protects the aged tree with a 'dispatching' operation in 'root' without full reads  797ms
+   ✓ maintenance cleanup protection > protects the aged tree with a 'unknown' operation in 'root' without full reads  676ms
+   ✓ maintenance cleanup protection > protects the aged tree with a 'prepared' operation in 'child' without full reads  1003ms
+   ✓ maintenance cleanup protection > protects the aged tree with a 'authorized' operation in 'child' without full reads  802ms
+   ✓ maintenance cleanup protection > protects the aged tree with a 'dispatching' operation in 'child' without full reads  517ms
+   ✓ maintenance cleanup protection > protects the aged tree with a 'unknown' operation in 'child' without full reads  646ms
+   ✓ maintenance cleanup protection > protects the aged tree with a 'prepared' operation in 'grandchild' without full reads  458ms
+   ✓ maintenance cleanup protection > protects the aged tree with a 'authorized' operation in 'grandchild' without full reads  1036ms
+   ✓ maintenance cleanup protection > protects the aged tree with a 'dispatching' operation in 'grandchild' without full reads  562ms
+   ✓ maintenance cleanup protection > protects the aged tree with a 'unknown' operation in 'grandchild' without full reads  526ms
+   ✓ maintenance cleanup protection > rechecks descendant operations before executing an earlier cleanup preview  981ms
+   ✓ maintenance cleanup protection > allows aged trees with confirmed operations and terminal Runs to be cleaned  822ms
+ ✓ src/application/session/execution/__test__/tool-operation-invocation.test.ts (7 tests) 3849ms
+   ✓ actual tool invocation and manual review > refuses applied while a timed-out invocation can still finish  848ms
+   ✓ actual tool invocation and manual review > refuses not_applied while a timed-out invocation can still finish  859ms
+   ✓ actual tool invocation and manual review > records unknown evidence during a timed-out invocation and saves its late completion once  307ms
+   ✓ actual tool invocation and manual review > keeps aborted invocations pending until their actual rejection  327ms
+   ✓ actual tool invocation and manual review > allows review after an invocation has already settled unknown  362ms
+   ✓ actual tool invocation and manual review > allows review after an invocation has already settled rejected  625ms
+   ✓ actual tool invocation and manual review > clears tracking when a normal invocation finishes before its deadline  509ms
+ ✓ src/application/session/execution/__test__/tool-operation-review.test.ts (7 tests) 4917ms
+   ✓ host tool operation review > shows unsettled terminal dispatches with recovery steps while keeping active dispatches out  574ms
+   ✓ host tool operation review > lists only unknown identities in the same tree and returns bounded previews by ID  575ms
+   ✓ host tool operation review > accepts only an explicit completed result for applied and preserves raw audit  467ms
+   ✓ fences review reads and writes when readiness or owner lease is lost  2633ms
+
+ Test Files  4 passed (4)
+      Tests  49 passed (49)
+   Start at  15:24:49
+   Duration  74.30s (transform 28.93s, setup 261ms, collect 92.86s, tests 28.40s, environment 1ms, prepare 1.21s)
+

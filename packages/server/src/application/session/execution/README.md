@@ -55,6 +55,8 @@ S1 不提供重启续跑。默认来源身份含当前宿主捕获的实现身�
 
 回执提交失败时，宿主立即按操作 ID 保存内存阻塞，即使所属运行仍显示运行中，也禁止同树其他运行新派发危险操作。已开始的调用仍可结算；只有对应操作成功保存确定结果，或可信核对确认已生效/未生效，才清除该项阻塞。一次成功结算不会清除其他操作的失败；重启后由持久 `dispatching` 记录转为未知继续保护。
 
+结算成功、提交失败及人工核对后的状态判断只读取已有 `getSummary()` 摘要，不复制完整输入与结果。完整回执的保存、比较和显式读取仍保留原有复制规则。
+
 `ToolOperationReviewService` 是宿主人工核对入口，通过 daemon 的窄 `toolOperationReview` 属性接到 HTTP。列表返回同根会话树的 unknown，以及原 Run 已结束但仍为 dispatching 的操作身份、状态和版本；按 ID 查询才返回各最多 4000 字符的输入及原始结果预览，以及最近 20 条有界证据。预览可能含原工具数据，仅供已认证宿主人工检查，不能作为模型指令，也不会自动写入模型上下文。
 
 dispatching 尚不能提交人工结论。列表、详情和拒绝响应的 `recoveryHint` 提示先排查存储失败，等待实际调用结束，确认旧 daemon 停止后重启；经过既有启动恢复，再刷新记录进行核对。接口不在线释放这类记录，也不自动重放。
@@ -74,3 +76,11 @@ POST 返回新的有限操作信息。若返回 409，重新读取详情并核�
 工具超时或取消后，原调用可能仍在本进程执行。`ToolOperationService` 按 Core 登记的实际调用 Promise 暂存未结束操作；此时即使 Run 已终态，也拒绝 `applied` 和 `not_applied`，只允许追加 `unknown` 证据。调用实际返回或拒绝后才移除该保护，正常返回 unknown 不会永久占用它。此追踪不持久化，也不从工具结果 metadata 推断；重启后仍按持久未知状态核对。
 
 活跃父会话可以查看并核对已归档子会话留下的未知操作，只要仍属同一根树且原 Run 已结束；归档不会移除未知写入阻断。请求入口会话本身仍须可用，正在关闭的目标会话不可核对。危险派发被阻断时，错误包含首个未决操作 ID 和同根会话的 GET 核对地址，不包含输入或结果正文。
+
+## 本机合成基准
+
+[tool-operation-hot-path.bench.mjs](./__test__/tool-operation-hot-path.bench.mjs) 使用真实 Service 与独立临时 SQLite，不执行真实工具、模型或用户文件操作。查询夹具保持 10 条候选，派发夹具另行记录 110 次追加与四次安全复查。从仓库根运行单个进程：
+
+    pnpm --filter @vykor/server exec node --expose-gc --import ../../apps/cli/node_modules/tsx/dist/loader.mjs src/application/session/execution/__test__/tool-operation-hot-path.bench.mjs
+
+Q2 两轮收益未达到保留条件，生产改动已撤回；基准与完整材料保留在 docs/superpowers/reviews/2026-10-27-storage-hot-path/，没有新增产品脚本命令。

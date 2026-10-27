@@ -1,0 +1,8 @@
+{
+  "command": "git commit invokes .husky/pre-commit: pnpm check-types",
+  "result": "72/72 workspace tasks and server-client typecheck passed; hook and commit exit 0",
+  "commit": "13d9f7cca84a9acef5644d8a89367d07c94ef6e5",
+  "taskLogs": 72,
+  "recovery": "Two Turbo read-only git status children stalled at about 64KiB output; stopped those children only, then all type/build tasks ran. No hook bypass.",
+  "warnings": "No output files for existing no-op build tasks; not type errors."
+}

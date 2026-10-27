@@ -1,0 +1,180 @@
+
+ RUN  v3.2.4 C:/Users/ruanz/.codex/worktrees/storage-hot-path-q1-q2/OpenHarness-ts/packages/services
+
+ ❯ src/execution-records/__test__/execution-repository.test.ts (5 tests | 1 failed) 839ms
+   × execution ensure > stops at the first matching Run and returns a copy even after that Run ends 238ms
+     → expected [Function] to not throw an error but 'Error: Read past the first execution' was thrown
+   ✓ execution ensure > checks the first execution identity before any later matching ID 111ms
+   ✓ execution ensure > does not reuse inherited execution records 175ms
+   ✓ execution ensure > reads newly ensured sqlite records inside atomic and rolls them back together 144ms
+   ✓ execution ensure > reads newly ensured memory records inside atomic and rolls them back together 164ms
+ ❯ src/tool-operations/__test__/tool-operation-repository.test.ts (32 tests | 4 failed) 7613ms
+   × tool operation repository > merges safety states and additional IDs by OR, with explicit empty and default semantics 258ms
+     → expected [ { …(5) }, { …(5) }, { …(5) }, …(1) ] to deeply equal []
+   × tool operation repository > filters confirmed history before accessing projected safety fields 177ms
+     → expected [Function] to not throw an error but 'Error: Unmatched history must not be …' was thrown
+   ✓ tool operation repository > returns result and review candidates in own-key insertion order with independent projections 160ms
+   × tool operation repository > stops at the first logical call and still returns a deep copy of its result 150ms
+     → expected [Function] to not throw an error but 'Error: Read past the matching call' was thrown
+   × tool operation repository > stops at the first same-session dispatch blocker before reading unrelated history 170ms
+     → expected [Function] to throw error including 'Unknown or unsettled write operation' but got 'Read past the first blocker'
+   ✓ tool operation repository > reloads the durable ledger after acquiring ownership, including writes made after construction 243ms
+   ✓ tool operation repository > refreshes confirmed receipts on ownership acquisition while retaining local memory sessions 271ms
+   ✓ tool operation repository > records pre-dispatch interruption as cancelled and preserves the no-start result 165ms
+   ✓ tool operation repository > requires an explicit failed not_started result for a pre-dispatch rejection 153ms
+   ✓ tool operation repository > persists complete results, execution heads and attempts across real SQLite reopen 193ms
+   ✓ tool operation repository > keeps memory execution, operation and attempt collections out of SQLite 230ms
+   ✓ tool operation repository > rolls sqlite rows and mutation buffers back when commit fails  384ms
+   ✓ tool operation repository > rolls memory rows and mutation buffers back when commit fails  844ms
+   ✓ tool operation repository > deduplicates the same logical call, canonicalizes keys, conflicts on changed intent and preserves independent calls 239ms
+   ✓ tool operation repository > keeps trace identifiers out of logical intent identity 173ms
+   ✓ tool operation repository > requires a stable business key before trusting idempotent writes 272ms
+   ✓ tool operation repository > retains every read-only reconciliation evidence item on the operation and original attempt  383ms
+   ✓ tool operation repository > reserves dispatch once and rejects stale revision and policy versions 200ms
+   ✓ tool operation repository > can recheck an already authorized intent before any dispatch with the current policy version 170ms
+   ✓ tool operation repository > retains confirmed result for reuse and rejects conflicting duplicate settlement 168ms
+   ✓ tool operation repository > blocks unknown writes across changed tools and operation identities but permits read-only reconciliation 221ms
+   ✓ tool operation repository > requires evidence for not_applied and uses a new attempt after current authorization 185ms
+   ✓ tool operation repository > recovers lost dispatches as unknown without re-execution and accepts only matching late receipts after run ends 182ms
+   ✓ tool operation repository > fences stale owners before any operation mutation 281ms
+   ✓ tool operation repository > deletes all operation collections with the session and retains unresolved records under ordinary retention 285ms
+   ✓ tool operation repository > mirrors Run lifecycle on Execution heads without clearing unresolved operations 239ms
+   ✓ tool operation repository > rolls back sqlite dispatch and settlement without losing the earlier receipt 210ms
+   ✓ tool operation repository > rolls back memory dispatch and settlement without losing the earlier receipt 172ms
+   ✓ tool operation repository > rejects changed policy, scope, owner and terminal Run before reserving an attempt 193ms
+   ✓ tool operation repository > blocks a new Run when a terminal Run still has an unsettled dispatch 183ms
+   ✓ keeps applied reconciliation unknown when its result omits executionState and preserves evidence after reopen 211ms
+   ✓ accepts the same attempt's real late completion after manual not_applied and retains review history 240ms
+
+ Test Files  2 failed (2)
+      Tests  5 failed | 32 passed (37)
+   Start at  15:22:50
+   Duration  16.87s (transform 1.97s, setup 179ms, collect 16.41s, tests 8.45s, environment 1ms, prepare 712ms)
+
+undefined
+C:\Users\ruanz\.codex\worktrees\storage-hot-path-q1-q2\OpenHarness-ts\packages\services:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: vitest run src/tool-operations/__test__/tool-operation-repository.test.ts src/execution-records/__test__/execution-repository.test.ts
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/execution-records/__test__/execution-repository.test.ts > execution ensure > stops at the first matching Run and returns a copy even after that Run ends
+AssertionError: expected [Function] to not throw an error but 'Error: Read past the first execution' was thrown
+
+- Expected: 
+undefined
+
++ Received: 
+"Error: Read past the first execution"
+
+ ❯ src/execution-records/__test__/execution-repository.test.ts:31:93
+     29|     try {
+     30|       let copy: typeof first | undefined;
+     31|       expect(() => { copy = store.executions.ensure({ sessionId: "s", …
+       |                                                                                             ^
+     32|       expect(copy).toMatchObject({ id: "first", status: "completed" });
+     33|       copy!.status = "failed";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  src/tool-operations/__test__/tool-operation-repository.test.ts > tool operation repository > merges safety states and additional IDs by OR, with explicit empty and default semantics
+AssertionError: expected [ { …(5) }, { …(5) }, { …(5) }, …(1) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "id": "operation_e7a89583-2aad-45f7-9bf7-5d0fb4f8170d",
++     "kind": "read_only",
++     "runId": "r",
++     "sessionId": "s",
++     "state": "confirmed",
++   },
++   {
++     "id": "operation_3dccc003-5aa8-4372-8fb9-66bbbfccc5d4",
++     "kind": "read_only",
++     "runId": "r",
++     "sessionId": "s",
++     "state": "unknown",
++   },
++   {
++     "id": "operation_163ac1b9-b93b-4f27-8f04-374f4014d954",
++     "kind": "read_only",
++     "runId": "r",
++     "sessionId": "s",
++     "state": "dispatching",
++   },
++   {
++     "id": "operation_df5d080d-f8ff-4714-9273-d472218aefe7",
++     "kind": "read_only",
++     "runId": "r",
++     "sessionId": "s",
++     "state": "prepared",
++   },
++ ]
+
+ ❯ src/tool-operations/__test__/tool-operation-repository.test.ts:57:69
+     55|     expect(f.store.toolOperations.listSafetyStates().map(row => row.id…
+     56|     expect(f.store.toolOperations.listSafetyStates({}).map(row => row.…
+     57|     expect(f.store.toolOperations.listSafetyStates({ states: [] })).to…
+       |                                                                     ^
+     58|     expect(f.store.toolOperations.listSafetyStates({ includeOperationI…
+     59|     expect(f.store.toolOperations.listSafetyStates({ states: [], inclu…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  src/tool-operations/__test__/tool-operation-repository.test.ts > tool operation repository > filters confirmed history before accessing projected safety fields
+AssertionError: expected [Function] to not throw an error but 'Error: Unmatched history must not be …' was thrown
+
+- Expected: 
+undefined
+
++ Received: 
+"Error: Unmatched history must not be projected"
+
+ ❯ src/tool-operations/__test__/tool-operation-repository.test.ts:77:88
+     75|         get sessionId(): string { throw new Error("Unmatched history m…
+     76|     }
+     77|     expect(() => f.store.toolOperations.listSafetyStates({ states: ["u…
+       |                                                                                        ^
+     78|     expect(f.store.toolOperations.listSafetyStates({ states: ["unknown…
+     79|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  src/tool-operations/__test__/tool-operation-repository.test.ts > tool operation repository > stops at the first logical call and still returns a deep copy of its result
+AssertionError: expected [Function] to not throw an error but 'Error: Read past the matching call' was thrown
+
+- Expected: 
+undefined
+
++ Received: 
+"Error: Read past the matching call"
+
+ ❯ src/tool-operations/__test__/tool-operation-repository.test.ts:111:119
+    109|     try {
+    110|       let copy: ReturnType<typeof f.store.toolOperations.prepare> | un…
+    111|       expect(() => { copy = f.store.toolOperations.prepare({ ...f.inte…
+       |                                                                                                                       ^
+    112|       expect(copy?.operationId).toBe(receipt.operationId);
+    113|       (copy!.result!.content[0] as { text: string }).text = "changed";
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+ FAIL  src/tool-operations/__test__/tool-operation-repository.test.ts > tool operation repository > stops at the first same-session dispatch blocker before reading unrelated history
+AssertionError: expected [Function] to throw error including 'Unknown or unsettled write operation' but got 'Read past the first blocker'
+
+Expected: "Unknown or unsettled write operation"
+Received: "Read past the first blocker"
+
+ ❯ src/tool-operations/__test__/tool-operation-repository.test.ts:126:127
+    124|     Object.defineProperty(rows, "unrelated-tail", { configurable: true…
+    125|     try {
+    126|       expect(() => f.store.toolOperations.dispatch({ intent, operation…
+       |                                                                                                                               ^
+    127|       expect(f.store.toolOperations.listAttempts(operation.operationId…
+    128|     } finally { delete rows["unrelated-tail"]; }
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯
+
