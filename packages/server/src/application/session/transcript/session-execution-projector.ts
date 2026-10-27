@@ -1,5 +1,6 @@
 import type { ObservabilityEvent } from "../../../shared/observability.js";
 import type { SessionEventPublisher } from "./session-event-publisher.js";
+import { recoverProjectionSettlements, type ProcessSettlementStore } from "../../agent/projection-settlement-recovery.js";
 
 export interface ExecutionInfo {
   id: string;
@@ -45,7 +46,7 @@ interface SessionTaskStore {
 }
 
 export interface SessionExecutionProjectorContext {
-  store: SessionTaskStore;
+  store: SessionTaskStore & Partial<ProcessSettlementStore>;
   events: Pick<SessionEventPublisher, "checkpoint" | "publishSince">;
   traceIdForRun(runId: string): string;
   log(event: ObservabilityEvent): void;
@@ -82,6 +83,9 @@ export class SessionExecutionProjector {
   }
 
   syncPersistentExecution(task: ExecutionInfo, runtime: DetachedProcessRuntime, durableTaskId = task.id): void {
+    const projector = `process-terminal:${task.id}`;
+    const repair = this.processSettlementStore();
+    if (repair) recoverProjectionSettlements(repair, { projector });
     const status: DurableTaskStatus = task.status === "stopping" ? "running" : task.status === "pending" || task.status === "running" ||
       task.status === "completed" || task.status === "failed" || task.status === "stopped" ? task.status : "failed";
     const persisted = this.context.store.getSessionTask(durableTaskId);
@@ -102,14 +106,28 @@ export class SessionExecutionProjector {
     }
     if (task.metadata.outputWriteFailed === "1") metadata.outputWriteFailed = "1";
     const before = this.context.events.checkpoint();
-    this.context.store.updateSessionTask(durableTaskId, {
+    const update = {
       status,
       ...(output !== undefined ? { output } : {}),
       ...(status === "failed" ? { error: output ?? "Task failed" } : {}),
       ...(Object.keys(metadata).length ? { metadata } : {}),
-    });
+    };
+    try { this.context.store.updateSessionTask(durableTaskId, update); }
+    catch (cause) {
+      if (!isTerminalTaskStatus(status) || !repair || !persisted) throw cause;
+      const error = cause instanceof Error ? { name: cause.name, message: cause.message } : { name: "Error", message: String(cause) };
+      repair.createProjectionSettlement({ projector, rootSessionId: persisted.sessionId, eventSequence: 1,
+        action: "retry-terminal-projection", payload: { execution: { ...structuredClone(task), status, output: output ?? "", metadata }, durableTaskId, cause: error }, error: error.message });
+      this.context.log({ level: "error", event: "session.process_terminal.projection_failed", sessionId: persisted.sessionId, error: error.message });
+    }
     this.context.events.publishSince(before);
     if (isTerminalTaskStatus(status)) this.untrackProcessExecution(runtime, task.id);
+  }
+
+  private processSettlementStore(): ProcessSettlementStore | undefined {
+    const store = this.context.store;
+    return store.createProjectionSettlement && store.listProjectionSettlements && store.markProjectionSettlementRetrying && store.resolveProjectionSettlement && store.failProjectionSettlement
+      ? store as ProcessSettlementStore : undefined;
   }
 
   private untrackProcessExecution(runtime: DetachedProcessRuntime, taskId: string): void {

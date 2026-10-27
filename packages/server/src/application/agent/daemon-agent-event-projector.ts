@@ -75,7 +75,7 @@ export class DaemonAgentEventProjector {
   constructor(private readonly context: DaemonAgentEventProjectorContext) { }
 
   async apply(event: AgentEvent): Promise<void> {
-    await this.reconcileDurableSettlements();
+    await this.reconcileDurableSettlements(event);
     if (event.sequence <= this.lastAppliedSequence) return;
     try {
       await this.project(event);
@@ -86,7 +86,7 @@ export class DaemonAgentEventProjector {
       if (event.context.childId) {
         const settlement: PendingEventSettlement = {
           event,
-          action: event.type === "child.closed" ? "retry-projection" : "compensate-child",
+          action: isTerminalProjection(event) ? "retry-projection" : "compensate-child",
           cause: error,
         };
         recovered = await this.persistAndSettle(settlement, error);
@@ -780,6 +780,7 @@ export class DaemonAgentEventProjector {
     event: Extract<AgentEvent, { type: "run.completed" | "run.failed" | "run.interrupted" }>,
   ): Promise<void> {
     const runId = required(event.context.runId, "runId", event.type);
+    if (this.context.store.runs.getRun(runId)?.metadata.terminalFrameworkEventId === event.id) return;
     const state = this.transcripts.get(runId);
     const stateSnapshot = state ? snapshotTranscript(state) : undefined;
     const before = this.context.events.checkpoint();
@@ -820,7 +821,8 @@ export class DaemonAgentEventProjector {
           );
         }
         const existingRun = this.context.store.runs.getRun(runId);
-        const metadataPatch: Record<string, unknown> = { toolGeneration: [] };
+        const metadataPatch: Record<string, unknown> = { toolGeneration: [], terminalFrameworkEventId: event.id,
+          terminalOutput: event.data.output ?? "", ...((failed || interrupted) ? { childFailure: childFailureFromEvent(event) } : {}) };
         if (event.type === "run.completed" && event.data.delivery) {
           metadataPatch.delivery = structuredClone(event.data.delivery);
         } else if (existingRun?.metadata.delivery !== undefined) {
@@ -838,6 +840,12 @@ export class DaemonAgentEventProjector {
           ...(error ? { error } : {}),
           ...(Object.keys(metadataPatch).length > 0 ? { metadata: metadataPatch } : {}),
         });
+        if (event.context.childId) {
+          const child = this.children.get(event.context.childId);
+          if (child) this.completeChildTask(child.taskId, event.type === "run.completed"
+            ? { status: "completed", output: event.data.output }
+            : { status: interrupted ? "interrupted" : "failed", output: event.data.output ?? error ?? "", ...childFailureFromEvent(event) }, runId);
+        }
       });
     } catch (projectionError) {
       if (state && stateSnapshot) restoreTranscript(state, stateSnapshot);
@@ -854,21 +862,6 @@ export class DaemonAgentEventProjector {
     this.context.events.publishSince(before);
     this.transcripts.delete(runId);
 
-    if (event.context.childId) {
-      const child = this.children.get(event.context.childId);
-      if (child) {
-        const result = event.type === "run.completed"
-          ? { status: "completed" as const, output: event.data.output,
-              ...(event.data.delivery ? { delivery: structuredClone(event.data.delivery) } : {}) }
-          : {
-            status: interrupted ? "interrupted" as const : "failed" as const,
-            output: event.data.output ?? error ?? "",
-            ...(error ? { error } : {}),
-            ...childFailureFromEvent(event),
-          };
-        this.completeChildTask(child.taskId, result, runId);
-      }
-    }
   }
 
   private appendRuntimeEvent(
@@ -993,6 +986,11 @@ export class DaemonAgentEventProjector {
         pending.action === "retry-projection" ? "retry-terminal-projection" : "compensate-child",
         pending.cause,
       ));
+      if (pending.action === "retry-projection" && originalError instanceof Error) {
+        const settlementId = record.id;
+        Object.defineProperty(originalError, "isProjectionRecovered", { configurable: true,
+          value: () => this.context.store.getProjectionSettlement(settlementId)?.status === "resolved" });
+      }
     } catch (persistenceError) {
       throw new AggregateError(
         [originalError, persistenceError],
@@ -1028,12 +1026,18 @@ export class DaemonAgentEventProjector {
     }
   }
 
-  private async reconcileDurableSettlements(): Promise<void> {
+  private async reconcileDurableSettlements(incoming: AgentEvent): Promise<void> {
     const records = this.context.store.listProjectionSettlements({
       rootSessionId: this.context.rootSessionId,
       status: ["pending", "retrying"],
     });
     for (const record of records) {
+      if (record.action === "retry-terminal-projection") {
+        const saved = record.payload.event as AgentEvent | undefined;
+        // The execution is already stopped. Its durable repair must not block,
+        // or repeatedly retry on, every unrelated input/tool event.
+        if (!saved || saved.context.runId !== incoming.context.runId) continue;
+      }
       if (record.projector !== this.context.projectorId) {
         recoverProjectionSettlements(this.context.store, {
           projector: record.projector,
@@ -1055,23 +1059,29 @@ export class DaemonAgentEventProjector {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         this.context.store.failProjectionSettlement(record.id, message);
-        throw error;
+        if (record.action !== "retry-terminal-projection") throw error;
       }
     }
     const pendingCount = this.context.store.listProjectionSettlements({
       rootSessionId: this.context.rootSessionId,
       status: ["pending", "retrying"],
-    }).length;
+    }).filter(record => record.action !== "retry-terminal-projection").length;
     if (pendingCount > 0) {
       throw new Error(
         `Projection settlement remains pending for root session ${this.context.rootSessionId}`,
       );
     }
-    const resolvedSequence = this.context.store.listProjectionSettlements({
+    const resolvedRecords = this.context.store.listProjectionSettlements({
       projector: this.context.projectorId,
       rootSessionId: this.context.rootSessionId,
       status: "resolved",
-    }).reduce((maximum, record) => Math.max(maximum, record.eventSequence), 0);
+    });
+    for (const record of resolvedRecords) {
+      if (record.action !== "retry-terminal-projection") continue;
+      const saved = record.payload.event as AgentEvent | undefined;
+      if (saved?.context.runId && isTerminalProjection(saved)) this.transcripts.delete(saved.context.runId);
+    }
+    const resolvedSequence = resolvedRecords.reduce((maximum, record) => Math.max(maximum, record.eventSequence), 0);
     this.lastAppliedSequence = Math.max(this.lastAppliedSequence, resolvedSequence);
   }
 
@@ -1191,6 +1201,10 @@ function restoreTranscript(
 function required(value: string | undefined, name: string, eventType: string): string {
   if (!value) throw new Error(`${eventType} is missing ${name}`);
   return value;
+}
+
+function isTerminalProjection(event: AgentEvent): boolean {
+  return ["child.closed", "run.completed", "run.failed", "run.interrupted"].includes(event.type);
 }
 
 function contentToText(content: string | ContentBlock[]): string {

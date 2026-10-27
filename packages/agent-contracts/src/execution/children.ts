@@ -3,11 +3,13 @@ import type { ApprovalMode, WorkMode } from "../policy/permissions.js";
 /** Limits shared by every descendant of one root agent. The root itself is depth 0. */
 export interface AgentChildBudget {
   maxDepth: number;
+  /** Maximum child runs whose invocation and cleanup have not confirmed stop. */
   maxActiveChildren: number;
   maxTotalChildren: number;
 }
 
 export interface AgentChildBudgetSnapshot extends AgentChildBudget {
+  /** Idle/suspended identities do not occupy this count. */
   activeChildren: number;
   totalChildren: number;
 }
@@ -198,6 +200,8 @@ export interface AgentChildRunSnapshot {
   readonly result?: AgentChildResult;
   readonly stoppedAt?: number;
   readonly projectionError?: { readonly message: string };
+  /** The real cleanup/stop failed; this is not a saved terminal result. */
+  readonly cleanupUnconfirmed?: { readonly message: string };
 }
 
 export interface AgentChildHandle {

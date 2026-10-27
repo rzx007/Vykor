@@ -90,6 +90,7 @@ export function createChildJobSource(
       updatedAt: run.updatedAt,
       ...(run.stoppedAt ? { finishedAt: run.stoppedAt } : {}),
       ...(run.result?.error ? { detail: run.result.error } : {}),
+      ...(run.cleanupUnconfirmed ? { detail: run.cleanupUnconfirmed.message } : {}),
       metadata: {
         childSessionId: handle.sessionId,
         childState: handle.state,
@@ -99,6 +100,8 @@ export function createChildJobSource(
         ...(run.result?.partialResult
           ? { partialResult: run.result.partialResult }
           : {}),
+        ...(run.projectionError ? { projectionError: run.projectionError } : {}),
+        ...(run.cleanupUnconfirmed ? { cleanupUnconfirmed: run.cleanupUnconfirmed } : {}),
       },
     };
   };
@@ -133,7 +136,12 @@ export function createChildJobSource(
     read: async (input) => {
       const child = childFor(input);
       if (child && input.target.kind === "agent") {
-        const run = child.readRun(input.target.runId);
+        let run: AgentChildRunSnapshot;
+        try { run = child.readRun(input.target.runId); }
+        catch (error) {
+          if (!(error instanceof Error) || !error.message.startsWith("RUN_RESULT_NOT_RETAINED:") || !options.archive) throw error;
+          return options.archive.read(input);
+        }
         return {
           ...selectOutput(
             run.result?.output || run.result?.error || "",
@@ -154,6 +162,12 @@ export function createChildJobSource(
     wait: async (input) => {
       const child = childFor(input);
       if (child && input.target.kind === "agent") {
+        try { child.readRun(input.target.runId); }
+        catch (error) {
+          if (!(error instanceof Error) || !error.message.startsWith("RUN_RESULT_NOT_RETAINED:")) throw error;
+          const archived = await jobs.read(input);
+          return { ...archived, timedOut: !isTerminalJobStatus(archived.snapshot.status) };
+        }
         const timedOut = await observeCompletion(
           child.waitRun(input.target.runId),
           input.timeoutMs,

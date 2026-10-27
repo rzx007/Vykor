@@ -18,7 +18,7 @@
 | --- | --- |
 | [session-conversation-context.ts](./session-conversation-context.ts) | `ConversationContextCatalogStore`、`conversationContextCatalog` |
 | [session-event-publisher.ts](./session-event-publisher.ts) | `SessionEventCursor`、`SessionEventSink`、`SessionEventPublisher` |
-| [session-execution-projector.ts](./session-execution-projector.ts) | `child 持久事件投影`、`ExecutionInfo`、`ChildAgentRegistry`、`DetachedProcessRuntime` 等 |
+| [session-execution-projector.ts](./session-execution-projector.ts) | `SessionExecutionProjector`，保存真实进程事实；`ExecutionInfo`、`DetachedProcessRuntime` |
 | [transcript-image-metadata.ts](./transcript-image-metadata.ts) | `recordValue`、`generatedImageAssets` |
 | [transcript-projection.ts](./transcript-projection.ts) | `ActiveTranscriptProjectionState`、`AppliedTranscriptStreamEvent`、`SessionTranscriptProjection` |
 
@@ -32,3 +32,5 @@
 ## 共用执行核心（阶段 A）
 
 SessionExecutionProjector 只订阅真实 process 事件并同步已有持久任务；child 的创建、轮次绑定、完成与关闭统一由 DaemonAgentEventProjector 投影。这里不保存 child 执行镜像。
+
+终态保存失败时，把不可变 execution/output、原 durableTaskId 与 cause 保存到现有 Projection Settlement。明确使用 `process-terminal:<execution.id>`、序号 1 和 `retry-terminal-projection`；进程投影重试与 daemon 启动均调用原恢复函数，只写原任务结果，不启动新进程。

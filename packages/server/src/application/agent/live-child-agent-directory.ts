@@ -80,4 +80,10 @@ export class LiveChildAgentDirectory {
     }
     return await child.interruptRun(runId, reason);
   }
+
+  async waitRun(sessionId: string, runId: string): Promise<void> {
+    const child = this.get(sessionId);
+    if (!child) throw new Error(`Child runtime unavailable: ${sessionId}`);
+    await child.waitRun(runId);
+  }
 }

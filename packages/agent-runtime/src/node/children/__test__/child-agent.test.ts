@@ -1,4 +1,5 @@
 import { AgentRunNotAcceptingInputError } from "@vykor/agent-contracts";
+import { ChildRunTerminationError } from "@vykor/agent-contracts";
 import type { AgentInputReceipt, AgentRunHandle, AgentRunResult, AgentRunScope } from "@vykor/agent-contracts";
 import { AgentChildBudgetExceededError } from "@vykor/agent-contracts";
 import { MaxTurnsExceeded } from "@vykor/core";
@@ -706,7 +707,9 @@ describe("AgentChildManager", () => {
   it("returns committed child text as a partial result after a mid-run failure", async () => {
     const bus = new AgentEventBus();
     const pending = deferred<AgentRunResult>();
-    const submitMessage = vi.fn(() => runHandle(pending.promise, vi.fn()));
+    const submitMessage = vi.fn(() => runHandle(pending.promise, vi.fn(), undefined, undefined, () => ({ status: "failed", output: "model down", error: "model down", failureKind: "unknown", partialResult: {
+      version: 1, childSessionId: invocation.sessionId, runId: invocation.runId, source: "committed_assistant_text", text: "draft-evidence", truncated: false,
+    } })));
     const manager = createManager(bus, async () => fakeAgent(submitMessage));
     const invocation = await manager.createController(parentScope()).spawnChildAgent({
       description: "d",
@@ -1128,6 +1131,7 @@ describe("AgentChildManager", () => {
       vi.fn(),
       vi.fn(async () => {}),
       Promise.resolve({ sessionId: "child-session", ...options.ids }),
+      () => ({ status: "failed", output: "boom", error: "boom", failureKind: "unknown", partialResult }),
     ))));
     const invocation = await manager.createController(parentScope()).spawnChildAgent({
       description: "d", prompt: "p", agent: "worker", cwd: "/repo",
@@ -1233,7 +1237,7 @@ describe("AgentChildManager", () => {
       sessionId: "child-session",
     })).rejects.toThrow("Child run identity conflict");
     expect(interrupt).toHaveBeenCalledWith("Child run started with unexpected identity");
-    expect(manager.list()).toEqual([]);
+    await vi.waitFor(() => expect(manager.list()).toEqual([]));
   });
 
   it("indexes descendants from multiple managers in one tree-wide directory", async () => {
@@ -1460,10 +1464,11 @@ describe("AgentChildManager", () => {
     expect(manager.list()).toEqual([]);
   });
 
-  it("finishes child cleanup when run interruption fails", async () => {
+  it("retains ownership after stop failure until the run actually exits", async () => {
     const interruptError = new Error("interrupt failed");
     const close = vi.fn(async () => {});
-    const run = runHandle(new Promise<AgentRunResult>(() => {}), vi.fn(), vi.fn(async () => {
+    const actual = deferred<AgentRunResult>();
+    const run = runHandle(actual.promise, vi.fn(), vi.fn(async () => {
       throw interruptError;
     }));
     const manager = createManager(new AgentEventBus(), async () => fakeAgent(vi.fn(() => run), close));
@@ -1474,12 +1479,17 @@ describe("AgentChildManager", () => {
       cwd: "/repo",
     });
 
-    await expect(manager.close(invocation.id)).rejects.toBe(interruptError);
+    const closing = manager.close(invocation.id);
+    await vi.waitFor(() => expect(manager.get(invocation.id)!.readRun(invocation.runId).cleanupUnconfirmed).toEqual({ message: "interrupt failed" }));
+    expect(close).not.toHaveBeenCalled();
+    expect(manager.getBudgetSnapshot().activeChildren).toBe(1);
+    actual.resolve(completedResult("actual exit"));
+    await closing;
     expect(close).toHaveBeenCalledOnce();
     expect(manager.list()).toEqual([]);
   });
 
-  it("reports agent cleanup failure after releasing the child handle", async () => {
+  it("reports agent cleanup failure while retaining the unconfirmed identity", async () => {
     const closeError = new Error("agent close failed");
     const events: string[] = [];
     const bus = new AgentEventBus();
@@ -1497,11 +1507,12 @@ describe("AgentChildManager", () => {
     await invocation.result;
 
     await expect(manager.closeAll()).rejects.toBe(closeError);
-    expect(events).toContain("child.closed");
-    expect(manager.list()).toEqual([]);
+    expect(events).not.toContain("child.closed");
+    expect(manager.get(invocation.id)?.state).toBe("closing");
+    expect(manager.getBudgetSnapshot().activeChildren).toBe(0);
   });
 
-  it("removes a child whose idle suspension cannot close its Agent", async () => {
+  it("retains a child whose idle suspension cleanup remains unconfirmed", async () => {
     const events: string[] = [];
     const bus = new AgentEventBus();
     bus.subscribe((event) => { events.push(event.type); });
@@ -1520,14 +1531,14 @@ describe("AgentChildManager", () => {
     await invocation.result;
 
     await vi.waitFor(() => expect(close).toHaveBeenCalled(), { timeout: 3_000 });
-    await vi.waitFor(() => expect(manager.list()).toEqual([]), { timeout: 3_000 });
+    await vi.waitFor(() => expect(manager.get(invocation.id)?.state).toBe("closing"), { timeout: 3_000 });
     expect(events).not.toContain("child.suspended");
-    expect(events).toContain("child.closed");
+    expect(events).not.toContain("child.closed");
     const failure = await manager.closeAll().catch((error) => error);
     expect(failure).toBeInstanceOf(AggregateError);
     expect((failure as AggregateError).errors).toHaveLength(2);
     expect((failure as AggregateError).errors.every((error) => error.message === "suspend close failed")).toBe(true);
-    await expect(manager.closeAll()).resolves.toBeUndefined();
+    await expect(manager.closeAll()).rejects.toBe(failure);
   });
 
   it("bounds settled child input idempotency history", async () => {
@@ -1585,7 +1596,7 @@ describe("AgentChildManager", () => {
       cwd: "/repo",
     })).rejects.toMatchObject({
       name: "AgentChildBudgetExceededError",
-      dimension: "activeChildren",
+      dimension: "totalChildren",
       current: 1,
       limit: 1,
     });
@@ -1726,6 +1737,16 @@ function createManager(
               inputId: ids.inputId,
               runId: ids.runId,
             })),
+            settled: run.settled.then((settlement: any) => {
+              const result = { ...settlement.result };
+              if (submitOptions.signal.aborted && result.status !== "completed") {
+                const termination = submitOptions.signal.reason;
+                result.status = termination?.failureKind === "timeout" ? "failed" : "interrupted";
+                result.failureKind = termination?.failureKind ?? "unknown";
+              }
+              if (result.partialResult) result.partialResult = { ...result.partialResult, childSessionId: options.sessionId, runId: ids.runId };
+              return { ...settlement, result };
+            }),
           };
         },
       };
@@ -1793,6 +1814,7 @@ function runHandle(
     inputId: "input-1",
     runId: "run-1",
   }),
+  failureResult?: () => AgentChildResult,
 ): AgentRunHandle {
   return {
     id: "run-1",
@@ -1801,6 +1823,13 @@ function runHandle(
     traceId: "trace-1",
     started,
     result,
+    settled: result.then(result => ({ result, stoppedAt: Date.now() }), error => ({ result: failureResult?.() ?? {
+      status: error instanceof ChildRunTerminationError && error.failureKind !== "timeout" ? "interrupted" as const : "failed" as const,
+      output: error instanceof ChildRunTerminationError && error.failureKind !== "timeout" ? "" : error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.message : String(error),
+      failureKind: error instanceof ChildRunTerminationError ? error.failureKind : error instanceof MaxTurnsExceeded ? "max_turns" as const : "unknown" as const,
+      ...(error instanceof MaxTurnsExceeded && error.finalizationText ? { partialResult: { version: 1 as const, childSessionId: "child-session", runId: "run-1", source: "limit_finalization" as const, text: error.finalizationText.slice(0, 12_000), truncated: error.finalizationText.length > 12_000 } } : {}),
+    }, stoppedAt: Date.now() })),
     steer,
     interrupt,
   };

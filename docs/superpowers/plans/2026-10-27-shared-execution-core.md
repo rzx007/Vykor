@@ -12,7 +12,7 @@
 
 ## 当前进度
 
-阶段 A 的生产替换与验收已完成，等待集中审查后的阶段提交。协议为 6，Jobs feature 为 3。真实 SDK/daemon 组合 7/7、HTTP 全套 124/124、public Client child follow-up 回归 1/1；全仓类型检查通过。B 的运行名额和 C 的 runner 清理尚未开始，现有身份额度行为仍保留。
+阶段 A 已审查并提交为 `a54f28210b88d3a4f9c78ecf492bb7afa492ce7b`。协议为 6，Jobs feature 为 3。阶段 B 已实现并完成验收：真实 B31 + A7 组合 38/38，Runtime 134/134、Server 108/108、Core 57/57 和受影响五包类型检查通过；等待主会话阶段提交；证据见工作树的 `.superpowers/sdd/2026-10-27-shared-execution-core/stage-b-report.md`。阶段 C 的 runner 清理尚未开始。
 
 ## 全局约束与基线
 
@@ -384,6 +384,8 @@ describe.each(["sdk", "daemon"] as const)("shared composition: %s", mode => {
 
 ## B1：单轮许可与真实停止屏障
 
+执行边界补充：容量竞争/预期接纳拒绝在有效的真实根 run 的 `execution.children` 上探测，正常调用仍走真实工具；真实 Agent 工具拒绝仍覆盖其既有 S1 unknown 保护。Read 测试门闩保留真实读取与 ledger，仅由测试宿主标记这一明确无写副作用的 wrapper。首个准备 request 从身份分配起持有许可与 pending 结果通知；follow-up 的许可只跟实际停止，不因 started ACK 失败长期占用。新身份还需启动确认或实际环境撤销确认。
+
 **修改文件：**
 
 - `packages/agent-contracts/src/execution/execution.ts`、`children.ts`、`src/index.ts`。
@@ -396,7 +398,7 @@ describe.each(["sdk", "daemon"] as const)("shared composition: %s", mode => {
 
 **接口：**使用方案 §3 的 `AgentRunSettlement` 和 `AgentRunHandle.settled`；只保留一份实际结果。`reserveIdentity(...)` 返回已有 reservation 的 commit/rollback/release 形状；`acquireRun(childSessionId, runId): { release(): void }` 在已有 Registry 内原子获取。AgentChildRunSnapshot 结构沿用 A2，无新增状态枚举。`AgentExecutionContext` 增加 `observeInvocation(settled: Promise<void>): void`，由真实 FrameworkAgentRun 接收；它仅追踪本轮已接纳调用的停止屏障。
 
-- [ ] 写连续执行、并发、取消未确认和启动回执失败测试，先在 A 结束版本记录失败。
+- [x] 写连续执行、并发、取消未确认和启动回执失败测试，先在 A 结束版本记录失败。
 
 ```ts
 it.each(["sdk", "daemon"] as const)("reuses identity without consuming 24 run permits: %s", async mode => {
@@ -439,15 +441,17 @@ it.each(["sdk", "daemon"] as const)("holds a permit until the real invocation st
 });
 ```
 
-- [ ] 并发测试设置上限 8，阻塞 8 个真实 child；同时发起第 9、10 个申请，都应拒绝且实际进入模型/工具的 child 仍为 8。释放一个后仅允许一个新 run 接纳；同一 run 重复 settle 不得减成负数。另用上限 1 在两个已保留身份间竞争 send，只有一个获准。
-- [ ] 修改 Registry：身份保留只记录深度与 total；运行许可按 runId 占用，release 幂等且只释放自身。`activeChildren` 作为现有预算字段名保留，含义改为未确认停止的 child run 数；更新配置说明，不新增 activeRuns 别名字段。
-- [ ] 将 checked-tool-execution 传给 executeToolWithTimeout 的现有 observer 同时连接到 `execution.observeInvocation` 和原 operation observer；前者覆盖 SDK 无 toolSafety 的情况。FrameworkAgentRun 在现有本轮工具活动记录中保存未结束 invocation 的引用并在结束时删除，等待它们和附属清理后兑现 settled，再等待终态保存。工具 timeout/abort 的 race 不能兑现该屏障。result 为既有调用约定的派生入口，终态保存失败仍可拒绝；不能影响 settled 的实际 outcome。已有 completedResult/onSettled 分散写入收拢到此，不增加全局 invocation 或 settlement registry。
-- [ ] 修改 ChildManager：生成 runId 后先获取运行许可；在 submit 返回真实 handle 后立即把 handle 放进 requests，再等待 started。启动 ACK 抛错时停止这个已记录的 handle 并等 settled；没有真实 handle 时也要确认创建/环境撤销完成再回滚。不得在 catch 中直接 close/delete 后释放。
-- [ ] 完成、失败、deadline、取消都调用同一条以 run record 为参数的收尾函数。迟到回调必须核对 `record.currentRun === runRecord` 才能切换 child 的当前指针；旧记录可以完成自身结果/许可，不得动新轮。
-- [ ] 将 interruptRun 的 boolean 明确定义为停止请求是否接纳；原 run record 保存唯一 stop Promise，停止错误记在该记录诊断中。Jobs cancel 接纳后立即读回 stopping，不增加观察 timer；需要确认的 Workflow runner、close 和 daemon 等待型调用方继续 await waitRun。FrameworkAgentRun.active 和 ChildManager.currentRun 只在真实停止后解除，不能随 result 的错误提前解除。不得把停止动作错误写成 killed 或启动下一轮。
-- [ ] 运行 B1 新测试和既有 child/run 定向测试；SDK/daemon 两模式都通过前不交付 B。
+- [x] 并发测试设置上限 8，阻塞 8 个真实 child；同时发起第 9、10 个申请，都应拒绝且实际进入模型/工具的 child 仍为 8。释放一个后仅允许一个新 run 接纳；同一 run 重复 settle 不得减成负数。另用上限 1 在两个已保留身份间竞争 send，只有一个获准。
+- [x] 修改 Registry：身份保留只记录深度与 total；运行许可按 runId 占用，release 幂等且只释放自身。`activeChildren` 作为现有预算字段名保留，含义改为未确认停止的 child run 数；更新配置说明，不新增 activeRuns 别名字段。
+- [x] 将 checked-tool-execution 传给 executeToolWithTimeout 的现有 observer 同时连接到 `execution.observeInvocation` 和原 operation observer；前者覆盖 SDK 无 toolSafety 的情况。FrameworkAgentRun 在现有本轮工具活动记录中保存未结束 invocation 的引用并在结束时删除，等待它们和附属清理后兑现 settled，再等待终态保存。工具 timeout/abort 的 race 不能兑现该屏障。result 为既有调用约定的派生入口，终态保存失败仍可拒绝；不能影响 settled 的实际 outcome。已有 completedResult/onSettled 分散写入收拢到此，不增加全局 invocation 或 settlement registry。
+- [x] 修改 ChildManager：生成 runId 后先获取运行许可；在 submit 返回真实 handle 后立即把 handle 放进 requests，再等待 started。启动 ACK 抛错时停止这个已记录的 handle 并等 settled；没有真实 handle 时也要确认创建/环境撤销完成再回滚。不得在 catch 中直接 close/delete 后释放。
+- [x] 完成、失败、deadline、取消都调用同一条以 run record 为参数的收尾函数。迟到回调必须核对 `record.currentRun === runRecord` 才能切换 child 的当前指针；旧记录可以完成自身结果/许可，不得动新轮。
+- [x] 将 interruptRun 的 boolean 明确定义为停止请求是否接纳；原 run record 保存唯一 stop Promise，停止错误记在该记录诊断中。Jobs cancel 接纳后立即读回 stopping，不增加观察 timer；需要确认的 Workflow runner、close 和 daemon 等待型调用方继续 await waitRun。FrameworkAgentRun.active 和 ChildManager.currentRun 只在真实停止后解除，不能随 result 的错误提前解除。不得把停止动作错误写成 killed 或启动下一轮。
+- [x] 运行 B1 新测试和既有 child/run 定向测试；SDK/daemon 两模式都通过前不交付 B。
 
 ## B2：终态保存失败补偿、迟到结果与阶段 B 退场
+
+已发生的执行失败是原实际失败；模型暂时完成、真实 invocation/cleanup 尚未停止时收到的可信停止可以改变暂算成功。终态事件、child 快照和持久补偿使用同一输出/失败明细。清理失败保留 `cleanupUnconfirmed`；重复 cancel/close 只推进原资源清理，复用原等待者，不重新调用模型或工具。原 delivery error 的保存确认谓词只读取原 settlement 的 resolved 状态，不把启动/工具补偿当作接纳成功。阶段 B 的提交由主会话集中审查后单独执行，实现代理不提交。
 
 **修改文件：**
 
@@ -470,7 +474,7 @@ it.each(["sdk", "daemon"] as const)("holds a permit until the real invocation st
 | 迟到结果与回调 | A 首次保存失败后阻塞其补偿回调；A 实际停止后启动 B，再释放 A 补偿回调；重复投递 A 终态事件 | B 不被改为 completed/failed，不释放 B 许可；A 结果可读且只保存一次 |
 | 结果保留达到上限 | 完成并保存超过 256 个 follow-up；另测未保存记录占满 | 可淘汰旧已归档结果，点查走现有归档；未保存结果不丢弃，明确拒绝新增留存项；不是假 running |
 
-- [ ] 用以下核心断言实现保存失败用例。`failTerminalSave` 在 fixture 内只故障指定终态写入，不替换真实事件投影；恢复函数直接恢复原 store 方法并调用现有补偿入口。
+- [x] 用以下核心断言实现保存失败用例。`failTerminalSave` 在 fixture 内只故障指定终态写入，不替换真实事件投影；恢复函数直接恢复原 store 方法并调用现有补偿入口。
 
 ```ts
 const f = await createLifecycleFixture("daemon", {
@@ -490,15 +494,15 @@ try {
 
 必须追加 store 恢复后 `store.runs.getRun(a.target.runId)` 为 completed、输出相同且执行计数未增加的断言；fixture 暴露测试内定义的 `restoreTerminalSave(): Promise<void>`，实现只恢复被替换写入并调用原补偿方法，不另造 retry loop。
 
-- [ ] started ACK 与取消未确认用 deferred 屏障实现；不通过 fake timers 跳过真实清理，不用 catch 后忽略故障让测试通过。若核心现有引擎无法等待受控工具退出，先补齐该真实停止屏障，再更新名额规则。
-- [ ] started ACK 另覆盖“真实 run 已派发但回执丢失”：在 child-manager 定向测试的 createAgent 注入点调用真实 createDefaultNodeAgent，保留真实 submitMessage 返回的 run handle，只把对外 started Promise 改为原 started 兑现后、真实 Read 的 entered 门闩也兑现后抛出 `new Error("lost started acknowledgement")` 的派生 Promise；result、settled 和 child handle 均保持真实。必须先证明 Read 已进入，再使回执失败，以免只测到启动前撤销。Read 的 release 门闩继续阻塞实际停止，验证另一个 child 接纳被拒绝，释放后才恢复。此处替换的是故障回执，不能换成 fakeAgent/completedRun；A5 的 SDK/daemon 工厂验收仍完整执行。
-- [ ] 新增单元测试表格驱动 completed/failed/timeout/user_cancelled/parent_interrupted，共用同一收尾函数；重复终态和迟到事件不会重复 release 或覆盖新轮。超时只改变 failureKind，不复制收尾代码。
-- [ ] 将 child 终态投影改为纯保存共同核心 outcome。现有补偿目前只把 child.closed 放进 retry-terminal-projection；扩展同一分支到 run.completed/run.failed/run.interrupted，不再把这些事件走 compensate-child 改成失败。启动/工具持久失败仍沿用原保护。原 run 的 transcript/run 始终可补齐，更新 child task 摘要前须核对 `task.runId === event.context.runId`，不得把旧轮结果写进新轮摘要。S1 unknown 工具输入不重放。
-- [ ] 核对 `DaemonAgentEventProjector.apply` 的 recovered 返回分支：启动、输入、工具持久失败即使已保存失败补偿，也必须把原接纳失败传回执行核心，不能因“补偿记录已保存”而当作启动成功继续 dispatch。只有原终态保存已确实修复，才可把终态投递视为成功。增加与真实 started ACK 故障测试对应的回归断言。
-- [ ] Shell 保存失败使用同一既有 projection-settlement 表和 recovery 函数：沿用 action=retry-terminal-projection，projector 取 `process-terminal:<现有 execution.id>`，eventSequence 固定为本次不可变终态的 1，payload 保存 `{execution,durableTaskId,cause}`。recovery 先按 projector 分支识别该保存载荷，再执行已有 SessionTask 终态写入；不能伪造 AgentEvent，也不能启动进程。`recoverProjectionSettlements` 的原 Agent 分支仍处理真实事件；daemon 启动与进程投影重试入口覆盖这类已有记录。只扩展保存载荷，不新增表、ID 或调度服务。
-- [ ] 删除旧 `reserve()` 绑定 child.close 的 activeChildren 管理分支、残余 resultPromise 身份判断、启动 ACK 失败直接 deleteRecord 的路径。没有双方法兼容导出。
-- [ ] 执行 `pnpm exec vitest run --config tests/agent-integration/vitest.config.ts tests/agent-integration/__test__/child-run-settlement.integration.test.ts` 和 A5 真实组装回归；运行对应投影/child 定向测试及受影响类型检查。
-- [ ] 运行 `pnpm check:retired-ui`、`pnpm check-docs`、`git diff --check`，记录 B 阶段证据并提交。此阶段结束连续运行、并发、启动失败与取消/保存分离均可用，Workflow 尚待 C 删除多余控制。
+- [x] started ACK 与取消未确认用 deferred 屏障实现；不通过 fake timers 跳过真实清理，不用 catch 后忽略故障让测试通过。若核心现有引擎无法等待受控工具退出，先补齐该真实停止屏障，再更新名额规则。
+- [x] started ACK 另覆盖“真实 run 已派发但回执丢失”：在 child-manager 定向测试的 createAgent 注入点调用真实 createDefaultNodeAgent，保留真实 submitMessage 返回的 run handle，只把对外 started Promise 改为原 started 兑现后、真实 Read 的 entered 门闩也兑现后抛出 `new Error("lost started acknowledgement")` 的派生 Promise；result、settled 和 child handle 均保持真实。必须先证明 Read 已进入，再使回执失败，以免只测到启动前撤销。Read 的 release 门闩继续阻塞实际停止，验证另一个 child 接纳被拒绝，释放后才恢复。此处替换的是故障回执，不能换成 fakeAgent/completedRun；A5 的 SDK/daemon 工厂验收仍完整执行。
+- [x] 新增单元测试表格驱动 completed/failed/timeout/user_cancelled/parent_interrupted，共用同一收尾函数；重复终态和迟到事件不会重复 release 或覆盖新轮。超时只改变 failureKind，不复制收尾代码。
+- [x] 将 child 终态投影改为纯保存共同核心 outcome。现有补偿目前只把 child.closed 放进 retry-terminal-projection；扩展同一分支到 run.completed/run.failed/run.interrupted，不再把这些事件走 compensate-child 改成失败。启动/工具持久失败仍沿用原保护。原 run 的 transcript/run 始终可补齐，更新 child task 摘要前须核对 `task.runId === event.context.runId`，不得把旧轮结果写进新轮摘要。S1 unknown 工具输入不重放。
+- [x] 核对 `DaemonAgentEventProjector.apply` 的 recovered 返回分支：启动、输入、工具持久失败即使已保存失败补偿，也必须把原接纳失败传回执行核心，不能因“补偿记录已保存”而当作启动成功继续 dispatch。只有原终态保存已确实修复，才可把终态投递视为成功。增加与真实 started ACK 故障测试对应的回归断言。
+- [x] Shell 保存失败使用同一既有 projection-settlement 表和 recovery 函数：沿用 action=retry-terminal-projection，projector 取 `process-terminal:<现有 execution.id>`，eventSequence 固定为本次不可变终态的 1，payload 保存 `{execution,durableTaskId,cause}`。recovery 先按 projector 分支识别该保存载荷，再执行已有 SessionTask 终态写入；不能伪造 AgentEvent，也不能启动进程。`recoverProjectionSettlements` 的原 Agent 分支仍处理真实事件；daemon 启动与进程投影重试入口覆盖这类已有记录。只扩展保存载荷，不新增表、ID 或调度服务。
+- [x] 删除旧 `reserve()` 绑定 child.close 的 activeChildren 管理分支、残余 resultPromise 身份判断、启动 ACK 失败直接 deleteRecord 的路径。没有双方法兼容导出。
+- [x] 执行 `pnpm exec vitest run --config tests/agent-integration/vitest.config.ts tests/agent-integration/__test__/child-run-settlement.integration.test.ts` 和 A5 真实组装回归；运行对应投影/child 定向测试及受影响类型检查。
+- [x] 运行 `pnpm check:retired-ui`、`pnpm check-docs`、`git diff --check`，记录 B 阶段证据；阶段提交由主会话集中审查后执行，实现代理不提交。此阶段结束连续运行、并发、启动失败与取消/保存分离均可用，Workflow 尚待 C 删除多余控制。
 
 ## C1：Workflow 固定真实 child run，删除第二套控制
 

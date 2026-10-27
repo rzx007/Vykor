@@ -56,7 +56,7 @@ framework child 的执行不依赖 daemon task projection。daemon projector 可
 默认预算是 `maxDepth=4`、`maxActiveChildren=8`、`maxTotalChildren=64`。现有 Workflow 默认并发是 3，因此活跃上限 8 能容纳常规 Workflow 和少量交互式 Agent，同时会挡住失控的递归创建；累计上限 64 防止通过“创建一个、关闭一个、再创建一个”的循环绕过限制。可以用 Settings 或创建 Agent 时的 `childBudget` 覆盖。
 
 - depth 从 root agent 的 0 开始；child 是 1，grandchild 是 2。
-- active 统计 starting、running、idle、suspended、closing 的全部 live descendant；suspend 不退名额，真正 close 才退。
+- `activeChildren` 统计尚未确认实际停止的 child run。每轮在创建或恢复实例前原子申请许可；工具调用与附属清理都完成后归还。idle、suspended 身份不占运行名额，取消回执、工具超时和保存错误也不能提前归还。
 - total 统计 root agent 生命周期内成功分配过的 child；close 后不退。root agent 关闭后，共享账本随整棵 live tree 一起释放。
 - `agent.inspect().childBudget` 返回当前上限、active 和 total，供 debug/metrics 读取。
 
@@ -89,19 +89,22 @@ JobSend 的 ChildManager 的定点 run 记录 路由
 - child 有 active run 且 delivery 不是 queue：调用 `run.steer()`，输入在 turn boundary 注入同一 run。
 - active run 正在收尾、不再接受 steer：等待其 settle 后串行启动下一轮。
 - delivery=queue 或 child idle：沿 `startChain` 启动下一轮 run，复用 history。
-- caller 提供 input ID 时，manager 对未结算请求和最近 256 个已结算请求幂等；相同 ID 不同 payload 失败关闭。daemon 的长期 HTTP 幂等由 durable input/run 关系承担。
+- caller 提供 input ID 时，manager 在现有 256 条 requests 内保持幂等；同轮 steer 输入引用同一份 run 结果。明确未接纳的失败占位项会移除；活动与未保存结果不能淘汰，未保存记录占满时明确拒绝新输入。已保存结果可淘汰；SDK 返回 `RUN_RESULT_NOT_RETAINED`，daemon 定点读该 run 的归档。相同 ID 不同 payload 失败关闭。
 - child/grandchild 共用 tree-wide directory，所以 daemon 从 root agent 可以直接路由任意深度 descendant。
 - live child HTTP 只返回 receipt 已对应到 durable input/run 的结果；投影缺失或身份不一致会明确失败，不补造第二份 durable 事实。
 
 ## Stop / interrupt / close
 
 ```text
-JobCancel / HTTP interrupt -> child handle.interrupt()
-parent run abort          -> manager interrupt(childId)
+JobCancel(runId)           -> handle.interruptRun(runId)，立即返回 stopping
+确认单轮已经停止          -> handle.waitRun(runId)
+parent run abort          -> 原 run 的可信取消信号
 parent agent close        -> manager.closeAll()
 ```
 
 close 会先把 record 置为不可逆的 `closing`，从这一刻起 `send/steer/queue` 都拒绝新输入；然后 abort active run、等待 settlement，也等待首次创建或 suspend-resume 正在创建的 agent。随后关闭资源、释放 environment lease、发布并等待唯一一次 `child.closed`，最后置 `closed` 并从 directory 删除 handle。异步创建或 run settlement 续体发现 `closing/closed` 后不得回写 `idle/running` 或提交孤立 run。
+
+`FrameworkAgentRun.settled` 确认本轮模型、真实工具 invocation 和准备清理已停止，先固定实际结果，再归还许可与保存终态。已经发生的执行失败保留原失败；模型先正常结束、真实调用或清理仍未停止时，第一个可信停止信号可以把暂算的成功改为取消/超时。已经 settled 的结果不会因迟到信号改变。`result` 继续遵守可靠保存的错误约定；保存失败只在原 run 增加 `projectionError`，不改写结果。清理失败返回 `stopping` 与 `cleanupUnconfirmed`，保留原资源和许可；再次明确取消/关闭只重试原清理，不调用模型或工具。
 
 daemon 收到 terminal/closed event 后完成 durable run/execution 并移除 live route。若 durable close completion 失败，projector 保留带原始 `child.closed` event 的 pending projection state；后续有序事件或同一事件重试会先完成该 terminal projection，再推进 event sequence 水位。若 child 普通执行事件投影失败，projector 会先把已建立的 durable run、transcript part 和 parent execution 收束为 failed，再把 required event failure 传播给 framework。ChildManager 的定点 run 记录 的 live completion 失败不会阻止 durable execution terminal 落盘，durable completion 自身失败也不会被静默丢弃。
 

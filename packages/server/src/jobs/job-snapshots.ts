@@ -157,7 +157,7 @@ export function createTaskArchive(
       if (
         input.target.kind === "agent" &&
         snapshot.target.kind === "agent" &&
-        input.target.runId !== snapshot.target.runId
+        executionBackend(task) === "child_agent"
       ) {
         if (!task.childSessionId)
           throw new Error("Archived process target identity conflict");
@@ -171,17 +171,23 @@ export function createTaskArchive(
             (message) =>
               message.runId === targetRunId && message.role === "assistant",
           );
-        if (!messages.length)
-          throw new Error(`RUN_RESULT_NOT_RETAINED: ${input.target.runId}`);
         const messageIds = new Set(messages.map((message) => message.id));
-        output = store.conversations
+        output = typeof run.metadata.terminalOutput === "string" ? run.metadata.terminalOutput : store.conversations
           .listMessageParts(task.childSessionId)
           .filter(
             (part) => messageIds.has(part.messageId) && part.type === "text",
           )
           .map((part) => part.text ?? "")
           .join("\n");
+        if (!output && run.status !== "completed") output = run.error ?? "";
         snapshot.target = input.target;
+        snapshot.startedAt = run.startedAt ?? run.createdAt;
+        snapshot.updatedAt = run.updatedAt;
+        if (run.finishedAt) snapshot.finishedAt = run.finishedAt;
+        if (run.error) snapshot.detail = run.error; else delete snapshot.detail;
+        snapshot.metadata ??= {};
+        delete snapshot.metadata.childFailure;
+        if (run.metadata.childFailure) snapshot.metadata.childFailure = run.metadata.childFailure;
         snapshot.status =
           run.status === "completed"
             ? "completed"
@@ -197,7 +203,7 @@ export function createTaskArchive(
         send: false,
         cancel: false,
       };
-      const childFailure = readChildFailure(task);
+      const childFailure = snapshot.metadata?.childFailure;
       return {
         ...limitOutput(
           input.after === undefined ? output : output.slice(input.after),

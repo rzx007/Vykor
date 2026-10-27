@@ -99,6 +99,8 @@ export interface AgentExecutionContext {
   emit(event: AgentEventInput): Promise<void>;
   takeSteeredInputs(options?: { closeIfEmpty?: boolean }): Promise<AgentChildInput[]>;
   closeSteering(): void;
+  /** Track the actual invocation, even when its timeout/abort race has returned. */
+  observeInvocation(settled: Promise<void>): void;
 }
 
 export interface AgentRunResult {
@@ -109,6 +111,11 @@ export interface AgentRunResult {
   usage: import("../model/usage.js").UsageSnapshot;
 }
 
+export interface AgentRunSettlement {
+  readonly result: AgentRunResult | import("./children.js").AgentChildResult;
+  readonly stoppedAt: number;
+}
+
 export interface AgentRunHandle {
   readonly id: string;
   readonly inputId: string;
@@ -116,6 +123,8 @@ export interface AgentRunHandle {
   readonly traceId: string;
   readonly started: Promise<AgentInputReceipt>;
   readonly result: Promise<AgentRunResult>;
+  readonly settled: Promise<AgentRunSettlement>;
+  readonly cleanupUnconfirmed?: { readonly message: string };
   steer(input: AgentSteerInput): Promise<AgentInputReceipt>;
   interrupt(reason?: string): Promise<void>;
 }

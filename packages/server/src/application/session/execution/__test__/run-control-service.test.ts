@@ -144,6 +144,22 @@ describe("RunControlService", () => {
     expect(interruptRun).toHaveBeenLastCalledWith("child", "child-run", "edited");
     await expect(service.stopGoalChildren("wrong", "g", 1, "edited")).rejects.toThrow("归属");
   });
+  it("waits for the original child stop confirmation even when its terminal save still lags", async () => {
+    const { options, runs } = createMockControlOptions();
+    options.goals = { getGoal: () => ({ id: "g", sessionId: "s1", objectiveVersion: 1 } as any) };
+    const child: SessionRunRecord = { id: "child-run", sessionId: "child", status: "running", createdAt: 1, updatedAt: 1, metadata: { goalId: "g", goalObjectiveVersion: 1, parentRunId: "root" } };
+    runs.set(child.id, child);
+    options.durableRuns.listGoalRuns = () => [child];
+    let confirm!: () => void, done = false;
+    options.children = { interruptRun: async () => true, waitRun: async () => new Promise<void>(resolve => { confirm = resolve; }) };
+    const waiting = new RunControlService(options).stopGoalChildren("s1", "g", 1, "stop").then(() => { done = true; });
+    await vi.waitFor(() => expect(confirm).toBeTypeOf("function"));
+    expect(done).toBe(false);
+    confirm(); await waiting;
+    expect(done).toBe(true);
+    expect(child.status).toBe("running");
+  });
+
   it("queries activeRunId, queuedRunIds and hasWork correctly", () => {
     const { options, activeRuns, queuedRuns } = createMockControlOptions();
     activeRuns.set("s1", "r-active");

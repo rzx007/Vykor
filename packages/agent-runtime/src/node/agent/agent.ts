@@ -359,7 +359,6 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
     let released = false;
     const release = async () => {
       if (released) return;
-      released = true;
       if (!this.assembled.toolResults) this.toolResultArchive.releaseRun(scope.runId);
       this.preparedRegistrations.delete(scope.runId);
       try {
@@ -367,6 +366,7 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
       } finally {
         releaseConnections();
       }
+      released = true;
     };
     try {
       const candidates = this.getPluginCandidates();

@@ -18,7 +18,7 @@ import {
   createWorkflowRunSnapshot,
 } from "@vykor/coordinator";
 import type { JobSnapshot } from "@vykor/jobs";
-import type { AgentChildInput, AgentChildDirectory, AgentChildHandle, AgentEvent, AgentEventContext, AgentEventInput, AgentEventListener, AgentPermissionRequest, AgentPermissionDecision, AgentRunHandle, AgentRunResult } from "@vykor/agent-contracts";
+import type { AgentChildInput, AgentChildDirectory, AgentChildHandle, AgentEvent, AgentEventContext, AgentEventInput, AgentEventListener, AgentPermissionRequest, AgentPermissionDecision, AgentRunHandle, AgentRunResult, AgentRunSettlement } from "@vykor/agent-contracts";
 import type { Message } from "@vykor/agent-contracts";
 import { createDefaultNodeAgent, type DefaultNodeAgent } from "@vykor/agent-runtime";
 import type {
@@ -296,6 +296,19 @@ function adaptTestAgentFactory(
             runId: ids.runId,
           }),
           result,
+          // This protocol fixture owns only runPrompt and its finally cleanup;
+          // settle from that actual completion, including failure and abort.
+          settled: result.then<AgentRunSettlement, AgentRunSettlement>(
+            completed => ({ result: completed, stoppedAt: Date.now() }),
+            error => ({
+              result: {
+                status: controller.signal.aborted ? "interrupted" : "failed",
+                output,
+                error: error instanceof Error ? error.message : String(error),
+              },
+              stoppedAt: Date.now(),
+            }),
+          ),
           steer: async (input) => {
             const accepted = {
               ...input,

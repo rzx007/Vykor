@@ -27,13 +27,14 @@ export class AgentChildRegistry implements AgentChildDirectory {
   private budget: AgentChildBudget;
   private activeChildren = 0;
   private totalChildren = 0;
+  private readonly runs = new Map<string, { childSessionId: string }>();
 
   constructor(budget: AgentChildBudget = DEFAULT_AGENT_CHILD_BUDGET) {
     this.budget = normalizeChildBudget(budget);
   }
 
   configureBudget(budget: AgentChildBudget): void {
-    if (this.activeChildren > 0 || this.totalChildren > 0) {
+    if (this.depthBySessionId.size > 0 || this.activeChildren > 0 || this.totalChildren > 0) {
       if (!isDeepStrictEqual(this.budget, budget)) {
         throw new Error("Child budget cannot change after the root tree starts allocating children");
       }
@@ -46,7 +47,7 @@ export class AgentChildRegistry implements AgentChildDirectory {
     return { ...this.budget, activeChildren: this.activeChildren, totalChildren: this.totalChildren };
   }
 
-  reserve(
+  reserveIdentity(
     parentSessionId: string,
     childSessionId: string,
     options: { system?: boolean } = {},
@@ -59,13 +60,6 @@ export class AgentChildRegistry implements AgentChildDirectory {
     if (childDepth > this.budget.maxDepth) {
       throw new AgentChildBudgetExceededError("depth", this.budget.maxDepth, childDepth);
     }
-    if (this.activeChildren >= this.budget.maxActiveChildren) {
-      throw new AgentChildBudgetExceededError(
-        "activeChildren",
-        this.budget.maxActiveChildren,
-        this.activeChildren,
-      );
-    }
     if (!system && this.totalChildren >= this.budget.maxTotalChildren) {
       throw new AgentChildBudgetExceededError(
         "totalChildren",
@@ -74,7 +68,6 @@ export class AgentChildRegistry implements AgentChildDirectory {
       );
     }
 
-    this.activeChildren++;
     if (!system) this.totalChildren++;
     this.depthBySessionId.set(childSessionId, childDepth);
     let state: "reserved" | "committed" | "released" = "reserved";
@@ -85,7 +78,6 @@ export class AgentChildRegistry implements AgentChildDirectory {
       rollback: () => {
         if (state !== "reserved") return;
         state = "released";
-        this.activeChildren--;
         if (!system) this.totalChildren--;
         this.depthBySessionId.delete(childSessionId);
       },
@@ -93,11 +85,26 @@ export class AgentChildRegistry implements AgentChildDirectory {
         if (state === "released") return;
         const rollbackTotal = state === "reserved";
         state = "released";
-        this.activeChildren--;
         if (rollbackTotal && !system) this.totalChildren--;
         this.depthBySessionId.delete(childSessionId);
       },
     };
+  }
+
+  acquireRun(childSessionId: string, runId: string): { release(): void } {
+    if (!this.depthBySessionId.has(childSessionId)) throw new Error(`Child identity is not reserved: ${childSessionId}`);
+    if (this.runs.has(runId)) throw new Error(`Child run already acquired: ${runId}`);
+    if (this.activeChildren >= this.budget.maxActiveChildren) {
+      throw new AgentChildBudgetExceededError("activeChildren", this.budget.maxActiveChildren, this.activeChildren);
+    }
+    const run = { childSessionId };
+    this.runs.set(runId, run);
+    this.activeChildren++;
+    return { release: () => {
+      if (this.runs.get(runId) !== run) return;
+      this.runs.delete(runId);
+      this.activeChildren--;
+    } };
   }
 
   register(handle: AgentChildHandle): void {

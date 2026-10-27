@@ -69,3 +69,20 @@ it("does not start the tool when invocation observation fails", async () => {
   await expect(pending).rejects.toThrow("owner unavailable");
   expect(effects).toBe(0);
 });
+
+it("keeps the actual invocation barrier pending through late outcome auditing", async () => {
+  let release!: () => void, releaseAudit!: () => void, auditEntered!: () => void;
+  const invoked = new Promise<void>(done => { release = done; });
+  const audit = new Promise<void>(done => { releaseAudit = done; });
+  const entered = new Promise<void>(done => { auditEntered = done; });
+  let observed!: Promise<void>, confirmed = false;
+  const pending = executeToolWithTimeout({ name: "Read", description: "late actual read", inputSchema: {},
+    execute: async () => { await invoked; return { content: [] }; },
+  }, {}, { cwd: "/" }, 5, undefined, async () => { auditEntered(); await audit; }, settled => { observed = settled; });
+  await expect(pending).rejects.toThrow("timed out");
+  void observed.then(() => { confirmed = true; });
+  release(); await entered;
+  expect(confirmed).toBe(false);
+  releaseAudit(); await observed;
+  expect(confirmed).toBe(true);
+});

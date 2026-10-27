@@ -29,7 +29,11 @@ type SettlementStore = Pick<
   | "resolveProjectionSettlement"
   | "transaction"
   | "updateSessionTask"
->;
+> & Partial<Pick<SessionStore, "conversationTransactions">>;
+
+export type ProcessSettlementStore = Pick<SettlementStore,
+  "createProjectionSettlement" | "listProjectionSettlements" | "markProjectionSettlementRetrying" |
+  "resolveProjectionSettlement" | "failProjectionSettlement" | "getSessionTask" | "updateSessionTask">;
 
 export function projectionSettlementInput(
   projector: string,
@@ -66,7 +70,7 @@ export function decodeDaemonAgentSettlement(
 }
 
 export function recoverProjectionSettlements(
-  store: SettlementStore,
+  store: SettlementStore | ProcessSettlementStore,
   options: { projector?: string; rootSessionId?: string } = {},
 ): { resolved: number; pending: number } {
   const settlements = store.listProjectionSettlements({
@@ -101,7 +105,12 @@ export function recoverProjectionSettlements(
   };
 }
 
-function recoverOne(store: SettlementStore, settlement: ProjectionSettlementRecord): void {
+function recoverOne(store: SettlementStore | ProcessSettlementStore, settlement: ProjectionSettlementRecord): void {
+  if (settlement.projector.startsWith("process-terminal:") && settlement.action === "retry-terminal-projection") {
+    recoverProcessTerminalProjection(store, settlement);
+    return;
+  }
+  if (!("runs" in store)) throw new Error("Agent projection recovery requires the original Agent store");
   const { event, cause } = decodeDaemonAgentSettlement(settlement);
   if (settlement.action === "retry-terminal-projection") {
     recoverChildTerminalProjection(store, event);
@@ -111,6 +120,10 @@ function recoverOne(store: SettlementStore, settlement: ProjectionSettlementReco
 }
 
 function recoverChildTerminalProjection(store: SettlementStore, event: AgentEvent): void {
+  if (event.type === "run.completed" || event.type === "run.failed" || event.type === "run.interrupted") {
+    recoverRunTerminalProjection(store, event);
+    return;
+  }
   if (event.type !== "child.closed") {
     throw new Error(`Terminal projection settlement requires child.closed, received ${event.type}`);
   }
@@ -136,6 +149,46 @@ function recoverChildTerminalProjection(store: SettlementStore, event: AgentEven
     childId: event.data.childId,
     childSessionId: event.data.sessionId,
     result,
+  });
+}
+
+function recoverRunTerminalProjection(store: SettlementStore, event: Extract<AgentEvent, { type: "run.completed" | "run.failed" | "run.interrupted" }>): void {
+  const runId = event.context.runId;
+  if (!runId || !store.runs.getRun(runId)) throw new Error(`Original run not found during terminal recovery: ${runId}`);
+  const status = event.type === "run.completed" ? "completed" : event.type === "run.failed" ? "failed" : "interrupted";
+  const error = event.type === "run.completed" ? undefined : event.data.error.message;
+  const output = event.data.output ?? "";
+  store.transaction(() => {
+    const run = store.runs.getRun(runId)!;
+    if (run.metadata.terminalFrameworkEventId !== event.id) {
+      const messageIds = new Set(store.conversations.listMessages(run.sessionId).filter(message => message.runId === runId).map(message => message.id));
+      for (const part of store.conversations.listMessageParts(run.sessionId)) {
+        if (!messageIds.has(part.messageId) || !["pending", "running"].includes(part.status)) continue;
+        store.conversations.upsertMessagePart({ ...part, status });
+      }
+      store.conversationTransactions?.settleActiveRunAttempts(runId, status === "interrupted" ? "cancelled" : status, error);
+      store.runs.updateRun(runId, { status, ...(error ? { error } : {}), metadata: {
+        terminalFrameworkEventId: event.id, terminalOutput: output, toolGeneration: [], modelRetry: null,
+        ...(event.type === "run.completed" ? { ...(event.data.delivery ? { delivery: event.data.delivery } : {}), ...(event.data.stopReason ? { stopReason: event.data.stopReason } : {}) } : { childFailure: childFailureFromEvent(event) }),
+      } });
+    }
+    const task = event.context.childId ? store.getSessionTask(event.context.childId) : undefined;
+    if (task?.runId === runId && (task.status !== status || task.output !== output)) store.updateSessionTask(task.id, {
+      status, output, ...(error ? { error } : {}), ...(childFailureFromEvent(event) ? { metadata: { childFailure: childFailureFromEvent(event) } } : {}),
+    });
+    if (error) appendFrameworkEventOnce(store, event, status === "interrupted" ? "session.run.interrupted" : "session.run.error", { runId, error });
+  });
+}
+
+function recoverProcessTerminalProjection(store: ProcessSettlementStore, settlement: ProjectionSettlementRecord): void {
+  const { execution, durableTaskId } = settlement.payload;
+  if (!isRecord(execution) || typeof execution.id !== "string" || settlement.projector !== `process-terminal:${execution.id}` || typeof durableTaskId !== "string" ||
+      !["completed", "failed", "stopped", "interrupted"].includes(String(execution.status)) || typeof execution.output !== "string") throw new Error(`Invalid process terminal save payload: ${settlement.id}`);
+  const task = store.getSessionTask(durableTaskId);
+  if (!task) throw new Error(`Process task not found: ${durableTaskId}`);
+  store.updateSessionTask(durableTaskId, { status: execution.status as "completed" | "failed" | "stopped" | "interrupted", output: execution.output,
+    ...(execution.status === "failed" ? { error: execution.output || "Task failed" } : {}),
+    ...(isRecord(execution.metadata) ? { metadata: execution.metadata } : {}),
   });
 }
 

@@ -7,7 +7,8 @@ describe("LiveChildAgentDirectory", () => {
     const send = vi.fn(async () => ({ sessionId: "child-session", inputId: "input-1", runId: "run-1" }));
     const interrupt = vi.fn(async () => {});
     const interruptRun = vi.fn(async (_runId: string) => true);
-    const child = { send, interrupt, interruptRun };
+    const waitRun = vi.fn(async (_runId: string) => ({}));
+    const child = { send, interrupt, interruptRun, waitRun };
     const rootAgent = {
       id: "root-session",
       children: { get: vi.fn(() => child) },
@@ -23,6 +24,8 @@ describe("LiveChildAgentDirectory", () => {
     expect(interrupt).toHaveBeenCalledWith("stop");
     expect(await directory.interruptRun("child-session", "precise-run", "goal stopped")).toBe(true);
     expect(interruptRun).toHaveBeenCalledWith("precise-run", "goal stopped");
+    await directory.waitRun("child-session", "precise-run");
+    expect(waitRun).toHaveBeenCalledWith("precise-run");
 
     directory.unregister("child-session", "child-1");
     expect(directory.has("child-session")).toBe(false);

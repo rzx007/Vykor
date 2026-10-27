@@ -259,17 +259,21 @@ describe("runChildForCompletedRun", () => {
 describe("AgentChildRegistry system reservations", () => {
   it("counts system children against depth and active limits but not the cumulative total", () => {
     const registry = new AgentChildRegistry({ maxDepth: 4, maxActiveChildren: 8, maxTotalChildren: 1 });
-    const modelChild = registry.reserve("root", "model-child");
+    const modelChild = registry.reserveIdentity("root", "model-child");
     modelChild.commit();
+    const modelRun = registry.acquireRun("model-child", "model-run");
 
-    expect(() => registry.reserve("root", "second-model-child")).toThrow(AgentChildBudgetExceededError);
+    expect(() => registry.reserveIdentity("root", "second-model-child")).toThrow(AgentChildBudgetExceededError);
 
-    const systemChild = registry.reserve("root", "system-child", { system: true });
+    const systemChild = registry.reserveIdentity("root", "system-child", { system: true });
     systemChild.commit();
+    const systemRun = registry.acquireRun("system-child", "system-run");
     expect(registry.snapshotBudget()).toMatchObject({ totalChildren: 1, activeChildren: 2 });
 
     systemChild.release();
     modelChild.release();
+    systemRun.release();
+    modelRun.release();
     expect(registry.snapshotBudget()).toMatchObject({ totalChildren: 1, activeChildren: 0 });
   });
 });

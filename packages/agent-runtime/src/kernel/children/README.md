@@ -16,4 +16,6 @@ Git 工作目录创建和本机配置继承放在 [Node 子管理](../../node/ch
 
 ## 共用执行核心（阶段 A）
 
-每个已接纳输入在 requests 保留真实 run handle、receipt、时间与结果；currentRequest 只是当前记录指针。readRun/waitRun 固定 runId；interruptRun 只接纳匹配轮次的停止请求，等待确认应调用 waitRun。历史保留上限仍为 256。阶段 A 沿用原身份额度。
+每个已接纳 run 在 requests 保留真实 handle、receipt、许可、时间与唯一结果；同轮 steer 输入只引用该记录。currentRequest 只是当前指针。readRun/waitRun 固定 runId；interruptRun 只接纳匹配轮次的停止请求，等待确认应调用 waitRun。
+
+阶段 B 使用 `reserveIdentity` 保留深度与累计身份数，用 `acquireRun` 原子申请运行许可。真实 invocation 与准备清理都结束后归还许可；保存错误保留 `projectionError`，资源清理错误保留 `cleanupUnconfirmed` 与原资源。requests 上限 256，只淘汰已保存结果及其输入别名；明确未接纳的输入不永久占位。初始化/恢复阶段也先把许可挂到原准备记录，撤销确认后才释放。

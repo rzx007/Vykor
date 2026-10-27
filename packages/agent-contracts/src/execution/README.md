@@ -21,3 +21,5 @@
 ## 共用执行核心（阶段 A）
 
 AgentChildInvocation 的 inputId/runId 是成功接纳后的必填身份。AgentChildRunSnapshot 与 readRun/waitRun 只观察固定轮次；JobInputReceipt 与 AgentInputReceipt 结构一致。
+
+阶段 B 的 `AgentRunSettlement` 固定实际结果与停止时间；`AgentRunHandle.settled` 等待真实调用和清理，`result` 继续承接可靠保存错误。`observeInvocation` 把工具真实完成 Promise 交给当前 run。`cleanupUnconfirmed` 表示清理未确认，`projectionError` 表示已停止但结果尚未保存，二者均不创建新的执行状态或身份。
