@@ -68,7 +68,7 @@ export function workflowLifecycleScenarios(
         (
           await bound.jobs.read({
             sessionId: "owner",
-            jobId: "workflow:created",
+            target: { kind: "workflow", jobId: "created" },
           })
         ).snapshot.status,
       ).toBe("running");
@@ -86,7 +86,7 @@ export function workflowLifecycleScenarios(
         expect(JSON.stringify(result.content)).toContain("created");
       }
       await expect(
-        bound.jobs.read({ sessionId: "other", jobId: "created" }),
+        bound.jobs.read({ sessionId: "other", target: { kind: "workflow", jobId: "created" } }),
       ).rejects.toThrow("owner");
     });
     it("resumes saved results without repeating completed work", async () => {

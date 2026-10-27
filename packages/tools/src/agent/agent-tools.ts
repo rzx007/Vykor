@@ -15,7 +15,7 @@ export function createAgentTool(options: CreateAgentToolOptions): ToolDefinition
       "Spawn an in-process child-agent job for one independently deliverable scope. Give it a " +
       "`scope` (the files, modules, or assertion categories it owns) and an `expectedResult` " +
       "(the expected result you need back). When visible job controls are available, use them " +
-      "with the returned jobId. Do not claim the job completed without evidence.",
+      "with the returned target. Do not claim the job completed without evidence.",
     inputSchema: {
       type: "object",
       properties: {
@@ -151,6 +151,10 @@ export function createAgentTool(options: CreateAgentToolOptions): ToolDefinition
               kind: "job",
               action: "created",
               jobId: invocation.id,
+              target: { kind: "agent", jobId: invocation.id, runId: invocation.runId },
+              inputId: invocation.inputId,
+              runId: invocation.runId,
+              childSessionId: invocation.sessionId,
               jobKind: "agent",
               label: input.description,
               agent: `${subagentType}@${team}`,

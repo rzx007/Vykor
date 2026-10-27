@@ -33,7 +33,8 @@ function task(
 }
 const run: DesktopWorkflowRun = {
   id: "w1",
-  jobId: "workflow:w1",
+  jobId: "w1",
+  target: { kind: "workflow", jobId: "w1" },
   sessionId: "main",
   title: "编排",
   status: "running",
@@ -59,7 +60,7 @@ const call = {
   toolName: "Workflow",
   input: { action: "run" },
   status: "completed",
-  output: '{"kind":"job","jobKind":"workflow","jobId":"workflow:w1","action":"created"}',
+  output: '{"kind":"job","jobKind":"workflow","jobId":"w1","action":"created"}',
   metadata: {},
 } as DesktopSessionPart
 let cleanup: (() => Promise<void>) | undefined

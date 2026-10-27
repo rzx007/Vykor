@@ -86,21 +86,3 @@ export function toAgentCapabilitySnapshot(
     schedules: toCapabilitySnapshot(capabilities.schedules),
   };
 }
-
-export function assertJobConfiguration(
-  overrides: AgentCapabilityOverrides,
-): void {
-  if (overrides.jobs !== false) return;
-
-  const producers: Array<[keyof AgentCapabilityOverrides, string]> = [
-    ["terminal", "terminal"],
-    ["backgroundShell", "background shell"],
-    ["childEnvironment", "child environment"],
-    ["workflowRepository", "workflow repository"],
-  ];
-  for (const [key, name] of producers) {
-    if (overrides[key] !== false) {
-      throw new Error(`Jobs are disabled; ${name} must also be disabled.`);
-    }
-  }
-}

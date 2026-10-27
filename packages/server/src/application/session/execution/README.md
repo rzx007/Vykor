@@ -84,3 +84,8 @@ POST 返回新的有限操作信息。若返回 409，重新读取详情并核�
     pnpm --filter @vykor/server exec node --expose-gc --import ../../apps/cli/node_modules/tsx/dist/loader.mjs src/application/session/execution/__test__/tool-operation-hot-path.bench.mjs
 
 Q2 两轮收益未达到保留条件，生产改动已撤回；基准与完整材料保留在 docs/superpowers/reviews/2026-10-27-storage-hot-path/，没有新增产品脚本命令。
+
+
+## 共用执行核心（阶段 A）
+
+BackgroundShellService 只核对会话、提供 SQLite 预留/读取/保存和环境获取端口。进程启动、去重、启动中取消与环境释放归 supervisor；不再保存独立 starting 或 lease 目录。

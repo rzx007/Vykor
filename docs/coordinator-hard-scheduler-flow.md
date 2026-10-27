@@ -71,7 +71,7 @@ Agent runner → 通过 framework child（或显式 external task adapter）真�
 | Coordinator 模式 | `packages/coordinator/src/runtime/coordinator-mode.ts` | `getCoordinatorTools()` 含 `Workflow`；prompt / user context |
 | System prompt | `packages/coordinator/src/index.ts` | `COORDINATOR_SYSTEM_PROMPT` 说明何时用 Workflow vs Agent |
 | Workflow 工具 | `packages/tools/src/agent/workflow/tool.ts` | 校验参数并传递真实 scope/signal、children 和捕获的角色集合；一次合法调用只 invoke 一次 |
-| Jobs adapter | `packages/server/src/jobs/daemon-job-service.ts`、`packages/agent-runtime/src/node/jobs/local-agent-job-host.ts` | Workflow 普通 list/read/wait/cancel |
+| Jobs adapter | `packages/server/src/jobs/daemon-job-service.ts`、`packages/agent-runtime/src/node/jobs/node-job-bindings.ts` | Workflow 普通 list/read/wait/cancel |
 | Agent runner | `packages/agent-runtime/src/node/workflow/agent-workflow-runner.ts` | 默认 spawn/await framework child；也接受显式 external worker adapter |
 | 工具注册 | `packages/agent-runtime/src/node/tools/default-tool-registry.ts` | Node 有绑定后的 WorkflowToolPort 时才注册工具；工具不从 context 查找仓库 |
 | CLI 白名单 | `apps/cli/src/commands/main.ts` | coordinator 模式 `setAllowedTools(getCoordinatorTools())` |

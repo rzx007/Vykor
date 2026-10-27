@@ -4,7 +4,7 @@ export * from "./runtime/runtime-config.js";
 export type { ApprovalMode, WorkMode } from "./permissions/approval-mode.js";
 export type { ApprovalReviewEvidence, ApprovalReviewInput, ApprovalReviewOutcome, ApprovalReviewRecord, ApprovalReviewResult } from "./permissions/approval-review.js";
 export * from "./requests/requests.js";
-export type { JobCapabilities, JobKind, JobReadResult, JobSnapshot, JobStatus, JobWaitResult } from "./runtime/job.js";
+export type { JobCapabilities, JobTarget, JobInputReceipt, JobListResult, JobKind, JobReadResult, JobSnapshot, JobStatus, JobWaitResult } from "./runtime/job.js";
 export type { TerminalCreateRequest, TerminalEvent, TerminalReadRequest, TerminalReadResult, TerminalResizeRequest, TerminalRuntime, TerminalSessionInfo, TerminalSessionStatus, TerminalSignal, TerminalSignalRequest, TerminalScope, TerminalSource, TerminalWaitResult, TerminalWriteRequest } from "./runtime/terminal.js";
 export * from "./serialization/serialization.js";
 export * from "./channels/channel.js";

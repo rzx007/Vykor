@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DetachedProcessSupervisor, ExecutionRuntimeOwner } from "../index.js";
 import { resolveSandboxPolicy } from "@vykor/sandbox";
+import type { ShellAdmissionPorts, StartShellExecutionOptions } from "../types.js";
 
 const NODE = process.execPath;
 const NODE_COMMAND = JSON.stringify(NODE);
@@ -62,6 +63,55 @@ afterEach(async () => {
 });
 
 describe("scoped DetachedProcessSupervisor", () => {
+  it("keeps stopping after a kill fault and settles when the same real process later exits", async () => {
+    const supervisor = makeManager();
+    const task = await supervisor.startShellExecution({ argv: [NODE, "-e", "setInterval(() => {}, 1000)"], cwd: process.cwd(), description: "stop fault" });
+    const state = (supervisor as any).states.get(task.id);
+    const terminate = (supervisor as any).terminateState.bind(supervisor);
+    const fault = vi.spyOn(supervisor as any, "terminateState").mockRejectedValueOnce(new Error("controlled kill failure"));
+    await expect(supervisor.stopExecution(task.id)).rejects.toThrow("controlled kill failure");
+    expect(supervisor.getExecution(task.id)?.status).toBe("stopping");
+    fault.mockRestore();
+    await terminate(state);
+    await waitFor(() => supervisor.getExecution(task.id)?.status === "stopped");
+  });
+
+  it("does not publish stopped until the real process output drain is confirmed", async () => {
+    const supervisor = makeManager();
+    const task = await supervisor.startShellExecution({ argv: [NODE, "-e", "process.stdout.write('before-stop'); setInterval(() => {}, 1000)"], cwd: process.cwd(), description: "drain" });
+    let drained!: () => void, observed!: () => void;
+    const gate = new Promise<void>(resolve => { drained = resolve; });
+    const entered = new Promise<void>(resolve => { observed = resolve; });
+    const terminate = (supervisor as any).terminateState.bind(supervisor);
+    const fault = vi.spyOn(supervisor as any, "terminateState").mockImplementation(async (state) => { await terminate(state); observed(); await gate; });
+    const stopping = supervisor.stopExecution(task.id);
+    try {
+      await entered;
+      expect(supervisor.getExecution(task.id)?.status).toBe("stopping");
+      drained();
+      expect((await stopping).status).toBe("stopped");
+    } finally { drained(); fault.mockRestore(); await stopping; }
+  });
+
+  it("does not spawn when cancelled before environment admission", async () => {
+    const gate = () => { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; };
+    const requested = gate(), environment = gate();
+    const supervisor = makeManager();
+    const invoke = vi.fn(async () => { throw new Error("must not spawn"); });
+    const released = vi.fn(async () => undefined);
+    const options: StartShellExecutionOptions & { id: string } = { id: "cancel-before-environment", argv: [process.execPath, "-e", "process.exit(0)"], cwd: process.cwd(), sessionId: "s", description: "controlled environment", processExecutor: { execShell: invoke, execProcess: invoke } };
+    const ports: ShellAdmissionPorts = { reserve: async () => undefined, load: async () => undefined, save: async () => undefined,
+      acquireEnvironment: async input => { requested.resolve(); await environment.promise; return { launch: input, release: released }; } };
+    const started = supervisor.startShellExecution(options, ports);
+    const outcome = Promise.allSettled([started]);
+    await requested.promise;
+    const stopping = supervisor.stopExecution(options.id);
+    expect(supervisor.getExecution(options.id)?.status).not.toBe("stopped");
+    environment.resolve();
+    await Promise.all([outcome, stopping]);
+    expect(invoke).not.toHaveBeenCalled();
+    expect(released).toHaveBeenCalledTimes(1);
+  });
   it("returns isolated managers per cwd", async () => {
     const cwdA = join(tempTasksDir(), "repo-a");
     const cwdB = join(tempTasksDir(), "repo-b");
@@ -451,39 +501,14 @@ describe("DetachedProcessSupervisor real execution", () => {
     expect(parseInt(t.metadata.restart_count ?? "0", 10)).toBe(0);
   });
 
-  it("restarts a dead agent on write (broken pipe) and bounds restarts by the limit", async () => {
+  it("rejects input for a completed process without restarting its execution identity", async () => {
     const mgr = makeManager();
-    // Agent that reads one line, echoes it, then exits — so each write after the
-    // first lands on a dead process and forces a lazy restart.
-    const script =
-      "let b='';process.stdin.on('data',d=>{b+=d;const i=b.indexOf('\\n');" +
-      "if(i>=0){process.stdout.write('echo:'+b.slice(0,i)+'\\n');process.exit(0);}});";
-    const task = await mgr.startAgentProcess({
-      prompt: "first",
-      description: "restart-on-write agent",
-      cwd: process.cwd(),
-      argv: [NODE, "-e", script],
-    });
-    // Wait for the initial process to consume the prompt and exit.
-    await waitFor(() => mgr.getExecution(task.id)!.status === "completed");
-    expect(parseInt(mgr.getExecution(task.id)!.metadata.restart_count ?? "0", 10)).toBe(0);
-
-    // Each subsequent write must lazily restart the dead agent. Drive it past
-    // the restart limit (5) so the (limit+1)-th write rejects.
-    let rejected = false;
-    for (let i = 0; i < 7; i++) {
-      try {
-        await mgr.writeInput(task.id, `msg-${i}`);
-        // Let the freshly spawned child consume the line and exit again.
-        await waitFor(() => mgr.getExecution(task.id)!.status === "completed", 5000);
-      } catch (e) {
-        rejected = true;
-        expect((e as Error).message).toMatch(/restart limit/);
-        break;
-      }
-    }
-    expect(rejected).toBe(true);
-    expect(parseInt(mgr.getExecution(task.id)!.metadata.restart_count ?? "0", 10)).toBe(5);
+    const task = await mgr.startAgentProcess({ argv: [NODE, "-e", "process.stdout.write('finished')"], prompt: "first", description: "explicit process", cwd: process.cwd() });
+    await mgr.awaitExecution(task.id);
+    const before = { ...task };
+    await expect(mgr.writeInput(task.id, "late")).rejects.toThrow("does not accept input");
+    expect(mgr.getExecution(task.id)).toEqual(before);
+    expect(mgr.listExecutions()).toHaveLength(1);
   });
 
   it("agent task without argv/command is failed with needs-argv, not pending", async () => {
@@ -730,7 +755,7 @@ describe("DetachedProcessSupervisor.registerExecutionListener", () => {
     );
     const created = events.find((e) => e.id === task.id && e.event === "created");
     expect(created).toBeTruthy();
-    expect(created!.status).toBe("running");
+    expect(created!.status).toBe("pending");
   });
 
   it("fires 'completed' when a task reaches a terminal state", async () => {
@@ -792,3 +817,16 @@ let owner: ExecutionRuntimeOwner;
 setupOwner(() => { owner = new ExecutionRuntimeOwner(); });
 function getDetachedProcessSupervisor(scope?: Parameters<ExecutionRuntimeOwner["getDetachedProcessSupervisor"]>[0]) { return owner.getDetachedProcessSupervisor(scope); }
 function resetExecutionRuntimes(scope?: Parameters<ExecutionRuntimeOwner["closeScope"]>[0]) { return owner.closeScope(scope); }
+
+it("aborts only the current process observation and leaves the owner able to stop", async () => {
+  const manager = makeManager();
+  const execution = await manager.startShellExecution({ argv: [process.execPath, "-e", "setInterval(() => {}, 1000)"], cwd: process.cwd(), description: "observation abort" });
+  const controller = new AbortController();
+  const observed = manager.awaitExecution(execution.id, { signal: controller.signal });
+  const rejected = expect(observed).rejects.toThrow("observer left");
+  controller.abort(new Error("observer left"));
+  await rejected;
+  expect(manager.getExecution(execution.id)?.status).toBe("running");
+  await manager.stopExecution(execution.id);
+  expect((await manager.awaitExecution(execution.id)).status).toBe("stopped");
+});

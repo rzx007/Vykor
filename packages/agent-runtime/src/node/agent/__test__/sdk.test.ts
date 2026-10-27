@@ -110,7 +110,7 @@ describe("programmatic agent SDK", () => {
         const jobId = terminalIdFromResult(params.messages, "real-terminal-open");
         if (!hasToolResult(params.messages, "real-terminal-send")) {
           yield toolUse("real-terminal-send", "JobSend", {
-            jobId,
+            target: { kind: "terminal", jobId },
             data: "process.stdout.write('terminal-ok'); process.exit(0)\n",
           });
           yield { type: "complete" as const, stopReason: "tool_use" as const };
@@ -118,7 +118,7 @@ describe("programmatic agent SDK", () => {
         }
         if (!hasToolResult(params.messages, "real-terminal-wait")) {
           yield toolUse("real-terminal-wait", "JobWait", {
-            jobIds: [jobId],
+            targets: [{ target: { kind: "terminal", jobId } }],
             timeoutSeconds: 5,
           });
           yield { type: "complete" as const, stopReason: "tool_use" as const };
@@ -126,7 +126,7 @@ describe("programmatic agent SDK", () => {
         }
         if (!hasToolResult(params.messages, "real-terminal-read")) {
           waitPayload = toolResultPayload(params.messages, "real-terminal-wait");
-          yield toolUse("real-terminal-read", "JobRead", { jobId });
+          yield toolUse("real-terminal-read", "JobRead", { target: { kind: "terminal", jobId } });
           yield { type: "complete" as const, stopReason: "tool_use" as const };
           return;
         }
@@ -175,7 +175,7 @@ describe("programmatic agent SDK", () => {
         const jobId = terminalIdFromResult(params.messages, "stdin-terminal-open");
         if (!hasToolResult(params.messages, "stdin-terminal-warmup")) {
           yield toolUse("stdin-terminal-warmup", "JobWait", {
-            jobIds: [jobId],
+            targets: [{ target: { kind: "terminal", jobId } }],
             timeoutSeconds: 2,
           });
           yield { type: "complete" as const, stopReason: "tool_use" as const };
@@ -183,7 +183,7 @@ describe("programmatic agent SDK", () => {
         }
         if (!hasToolResult(params.messages, "stdin-terminal-send")) {
           yield toolUse("stdin-terminal-send", "JobSend", {
-            jobId,
+            target: { kind: "terminal", jobId },
             data: "setTimeout(() => process.stdout.write('stdin-echo:' + 'hello'), 500)\n",
           });
           yield { type: "complete" as const, stopReason: "tool_use" as const };
@@ -191,7 +191,7 @@ describe("programmatic agent SDK", () => {
         }
         if (!hasToolResult(params.messages, "stdin-terminal-running-wait")) {
           yield toolUse("stdin-terminal-running-wait", "JobWait", {
-            jobIds: [jobId],
+            targets: [{ target: { kind: "terminal", jobId } }],
             timeoutSeconds: 0.25,
           });
           yield { type: "complete" as const, stopReason: "tool_use" as const };
@@ -201,7 +201,7 @@ describe("programmatic agent SDK", () => {
         if (!hasToolResult(params.messages, readId)) {
           runningWaitPayload = toolResultPayload(params.messages, "stdin-terminal-running-wait");
           readDeadline = Date.now() + 5_000;
-          yield toolUse(readId, "JobRead", { jobId });
+          yield toolUse(readId, "JobRead", { target: { kind: "terminal", jobId } });
           yield { type: "complete" as const, stopReason: "tool_use" as const };
           return;
         }
@@ -215,12 +215,12 @@ describe("programmatic agent SDK", () => {
             }
             await new Promise((resolve) => setTimeout(resolve, 250));
             readAttempt += 1;
-            yield toolUse(`stdin-terminal-read-${readAttempt}`, "JobRead", { jobId });
+            yield toolUse(`stdin-terminal-read-${readAttempt}`, "JobRead", { target: { kind: "terminal", jobId } });
             yield { type: "complete" as const, stopReason: "tool_use" as const };
             return;
           }
           yield toolUse("stdin-terminal-exit", "JobSend", {
-            jobId,
+            target: { kind: "terminal", jobId },
             data: "process.exit(0)\n",
           });
           yield { type: "complete" as const, stopReason: "tool_use" as const };
@@ -228,7 +228,7 @@ describe("programmatic agent SDK", () => {
         }
         if (!hasToolResult(params.messages, "stdin-terminal-finished-wait")) {
           yield toolUse("stdin-terminal-finished-wait", "JobWait", {
-            jobIds: [jobId],
+            targets: [{ target: { kind: "terminal", jobId } }],
             timeoutSeconds: 5,
           });
           yield { type: "complete" as const, stopReason: "tool_use" as const };
@@ -275,7 +275,7 @@ describe("programmatic agent SDK", () => {
         const jobId = terminalIdFromResult(params.messages, "cancel-terminal-open");
         if (!hasToolResult(params.messages, "cancel-terminal-cancel")) {
           yield toolUse("cancel-terminal-cancel", "JobCancel", {
-            jobId,
+            target: { kind: "terminal", jobId },
             reason: "integration test complete",
           });
           yield { type: "complete" as const, stopReason: "tool_use" as const };
@@ -284,7 +284,7 @@ describe("programmatic agent SDK", () => {
         if (!hasToolResult(params.messages, "cancel-terminal-wait")) {
           cancelPayload = toolResultPayload(params.messages, "cancel-terminal-cancel");
           yield toolUse("cancel-terminal-wait", "JobWait", {
-            jobIds: [jobId],
+            targets: [{ target: { kind: "terminal", jobId } }],
             timeoutSeconds: 5,
           });
           yield { type: "complete" as const, stopReason: "tool_use" as const };
@@ -457,6 +457,7 @@ describe("programmatic agent SDK", () => {
         "Workflow",
       ];
       expect(installedTools.filter((name) => disabledToolNames.includes(name))).toEqual([]);
+      await expect(agent.host.jobs.list({ sessionId: agent.id })).resolves.toEqual({ jobs: [], errors: [] });
 
       await expect(agent.runMessage("describe the restricted runtime")).resolves.toMatchObject({
         output: "restricted runtime",
@@ -500,7 +501,7 @@ describe("programmatic agent SDK", () => {
               type: "tool_use" as const,
               id: "sdk-workflow-job-read",
               name: "JobRead",
-              input: { jobId: "workflow-override" },
+              input: { target: { kind: "workflow", jobId: "workflow-override" } },
             },
           };
           yield { type: "complete" as const, stopReason: "tool_use" as const };
@@ -670,7 +671,8 @@ describe("programmatic agent SDK", () => {
             .filter((block) => block.type === "text")
             .map((block) => block.text)
             .join("");
-          const jobId = toolResultPayload(params.messages, toolResults[0]!.toolUseId).jobId;
+          const target = toolResultPayload(params.messages, toolResults[0]!.toolUseId).target;
+          const jobId = target?.jobId;
           if (!jobId) throw new Error(`Agent tool did not return jobId: ${text}`);
           yield {
             type: "tool_use_start" as const,
@@ -678,7 +680,7 @@ describe("programmatic agent SDK", () => {
               type: "tool_use" as const,
               id: "sdk-job-wait-tool",
               name: "JobWait",
-              input: { jobIds: [jobId], timeoutSeconds: 2 },
+              input: { targets: [{ target }], timeoutSeconds: 2 },
             },
           };
           yield { type: "complete" as const, stopReason: "tool_use" };
@@ -947,7 +949,8 @@ describe("programmatic agent SDK", () => {
 
         if (usedTools.includes("Agent")) {
           const toolResult = toolResultText(params.messages, "spawn-restricted-child");
-          const jobId = toolResultPayload(params.messages, "spawn-restricted-child").jobId;
+          const target = toolResultPayload(params.messages, "spawn-restricted-child").target;
+          const jobId = target?.jobId;
           if (!jobId) throw new Error(`Agent tool did not return jobId: ${toolResult}`);
           yield {
             type: "tool_use_start" as const,
@@ -955,7 +958,7 @@ describe("programmatic agent SDK", () => {
               type: "tool_use" as const,
               id: "wait-restricted-child",
               name: "JobWait",
-              input: { jobIds: [jobId], timeoutSeconds: 2 },
+              input: { targets: [{ target }], timeoutSeconds: 2 },
             },
           };
           yield { type: "complete" as const, stopReason: "tool_use" };

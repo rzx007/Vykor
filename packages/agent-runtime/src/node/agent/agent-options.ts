@@ -13,10 +13,10 @@ import type {
 } from "@vykor/host-config";
 import type { RunCapabilityView } from "../runtime/node-runtime-resources.js";
 import type { AgentChildBudget } from "@vykor/agent-contracts";
-import type { AgentBackgroundShellHost } from "@vykor/tools";
+import type { ShellAdmissionPorts } from "@vykor/execution-node";
 import type { PermissionMode, Settings } from "@vykor/host-config";
 import type { ApprovalMode, WorkMode } from "@vykor/agent-contracts/permissions";
-import type { AgentTerminalHost } from "@vykor/terminal";
+import type { TerminalProvider } from "@vykor/terminal";
 import type { AgentJobHost } from "@vykor/jobs";
 import type { WorkflowRunRepository } from "@vykor/coordinator";
 import type { AgentChildEnvironmentProvider } from "../children/child-environment.js";
@@ -42,16 +42,9 @@ export interface AgentRunCapabilitySnapshot {
 
 export type CapabilityOverride<T> = T | false;
 
-export interface ObservableJobProducer<T> {
-  value: T;
-  jobs: AgentJobHost;
-}
-
 export interface AgentCapabilityOverrides {
-  terminal?: CapabilityOverride<ObservableJobProducer<AgentTerminalHost>>;
-  backgroundShell?: CapabilityOverride<
-    ObservableJobProducer<AgentBackgroundShellHost>
-  >;
+  terminal?: CapabilityOverride<TerminalProvider>;
+  backgroundShell?: CapabilityOverride<ShellAdmissionPorts>;
   jobs?: false;
   memory?: false;
   childEnvironment?: CapabilityOverride<AgentChildEnvironmentProvider>;
@@ -66,6 +59,7 @@ export interface AgentEffectOverrides {
 
 /** Opinionated runtime configuration exposed by the programmatic agent API. */
 export interface VykorAgentConfiguration {
+  jobArchiveForSession?: (sessionId: string) => { agent?: Pick<AgentJobHost, "list" | "read">; process?: Pick<AgentJobHost, "list" | "read"> };
   /** Trusted host-owned result validation; ordinary chat output remains unrestricted when omitted. */
   outputContract?: AgentOutputContract;
   /** Bind the host's authorized archive to the final captured tools for each Run. */

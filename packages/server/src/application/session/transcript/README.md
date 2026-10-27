@@ -18,7 +18,7 @@
 | --- | --- |
 | [session-conversation-context.ts](./session-conversation-context.ts) | `ConversationContextCatalogStore`、`conversationContextCatalog` |
 | [session-event-publisher.ts](./session-event-publisher.ts) | `SessionEventCursor`、`SessionEventSink`、`SessionEventPublisher` |
-| [session-execution-projector.ts](./session-execution-projector.ts) | `SessionChildExecutionBridge`、`ExecutionInfo`、`ChildAgentRegistry`、`DetachedProcessRuntime` 等 |
+| [session-execution-projector.ts](./session-execution-projector.ts) | `child 持久事件投影`、`ExecutionInfo`、`ChildAgentRegistry`、`DetachedProcessRuntime` 等 |
 | [transcript-image-metadata.ts](./transcript-image-metadata.ts) | `recordValue`、`generatedImageAssets` |
 | [transcript-projection.ts](./transcript-projection.ts) | `ActiveTranscriptProjectionState`、`AppliedTranscriptStreamEvent`、`SessionTranscriptProjection` |
 
@@ -27,3 +27,8 @@
 执行结果转写、事件发布与摘要提取放在这里；通用导出和文本回退算法放在 src/session。
 
 测试放在本分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移文件时同步导入、公开入口、文档链接与旧引用清单。
+
+
+## 共用执行核心（阶段 A）
+
+SessionExecutionProjector 只订阅真实 process 事件并同步已有持久任务；child 的创建、轮次绑定、完成与关闭统一由 DaemonAgentEventProjector 投影。这里不保存 child 执行镜像。

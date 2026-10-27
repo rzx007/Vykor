@@ -25,3 +25,8 @@
 与本目录职责一起修改的代码放在这里；跨分类的公共入口由上层目录组织。
 
 测试位于 [`__test__/`](./__test__)；只覆盖下级分类的测试放在对应分类的 `__test__/`。
+
+
+## 共用执行核心（阶段 A）
+
+JobResource 使用完整 JobTarget；list 返回 JobListResult，send 返回可选 JobInputReceipt。HTTP 请求与协议 decoder 一起切换为版本 6，不保留旧参数重载。

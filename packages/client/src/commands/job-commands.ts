@@ -1,4 +1,4 @@
-import type { JobReadResult, JobSnapshot } from "@vykor/protocol";
+import type { JobReadResult, JobSnapshot, JobTarget } from "@vykor/protocol";
 import type { SessionCommandHost, SlashLine } from "./session-commands.js";
 
 type ReadPresentation = (key: string, title: string, load: () => Promise<string>) => Promise<void>;
@@ -53,38 +53,41 @@ export async function handleJobCommand(
 
   if (!sessionId) return "handled";
   const args = slash.args.trim();
-  const [sub, id, ...extra] = args.split(/\s+/).filter(Boolean);
-  if ((!sub || sub === "list") && !id) {
+  const [sub, kind, id, runId, ...extra] = args.split(/\s+/).filter(Boolean);
+  if ((!sub || sub === "list") && !kind) {
     await readPresentation(`jobs:${sessionId}`, "Jobs", async () => {
-      const jobs = await client.jobs.list({
+      const listed = await client.jobs.list({
         sessionId,
         includeFinished: true,
         limit: 100,
       });
-      if (jobs.length === 0) return "No Jobs.";
+      const { jobs, errors } = listed;
+      if (jobs.length === 0 && errors.length === 0) return "No Jobs.";
       return [
         `Jobs (${jobs.length}):`,
         "",
-        ...jobs.map((job) => `  ${job.id} [${job.status}] ${job.kind}: ${job.label}`),
+        ...jobs.map((job) => `  ${job.id} [${job.status}] ${job.kind}: ${job.label}${job.target.kind === "agent" ? ` runId=${job.target.runId}` : ""}`),
+        ...errors.map(error => `${error.kind}: ${error.message}`),
       ].join("\n");
     });
     return "handled";
   }
-  if (sub === "show" && id && extra.length === 0) {
+  const target: JobTarget | undefined = kind === "agent" && id && runId ? { kind, jobId: id, runId } : ["shell", "terminal", "workflow", "dream"].includes(kind ?? "") && id && !runId ? { kind: kind as "shell" | "terminal" | "workflow" | "dream", jobId: id } : undefined;
+  if (sub === "show" && target && extra.length === 0) {
     await readPresentation(`job:${sessionId}:${id}`, "Jobs", async () => {
-      const result = await client.jobs.read(id, { sessionId });
+      const result = await client.jobs.read(target, { sessionId });
       return formatJobReadResult(result);
     });
     return "handled";
   }
-  if (sub === "cancel" && id && extra.length === 0) {
-    const snapshot = await client.jobs.cancel(id, {
+  if (sub === "cancel" && target && extra.length === 0) {
+    const snapshot = await client.jobs.cancel(target, {
       sessionId,
       reason: "Cancelled from slash command",
     });
     emit(`Job ${snapshot.id} status: ${snapshot.status}.`);
     return "handled";
   }
-  emit("Usage: /jobs [list | show ID | cancel ID]");
+  emit("Usage: /jobs [list | show KIND ID [RUN_ID] | cancel KIND ID [RUN_ID]]");
   return "handled";
 }

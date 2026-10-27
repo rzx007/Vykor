@@ -19,7 +19,7 @@ function deferred() {
 
 describe("custom WorkflowHost child cancellation", () => {
   it.each(["job", "parent", "owner", "host"] as const)(
-    "%s cancellation waits for the real child to close and saves the terminal result",
+    "%s cancellation pins the real child run without closing the reusable identity",
     async (source) => {
       const parent = new AbortController();
       const scope: AgentRunScope = {
@@ -32,8 +32,6 @@ describe("custom WorkflowHost child cancellation", () => {
         signal: parent.signal,
       };
       const started = deferred();
-      const closing = deferred();
-      const release = deferred();
       let releases = 0;
       let childId!: string;
       const manager = new AgentChildManager({
@@ -69,8 +67,6 @@ describe("custom WorkflowHost child cancellation", () => {
                 }),
               },
               release: async () => {
-                closing.resolve();
-                await release.promise;
                 releases += 1;
               },
             }),
@@ -79,10 +75,11 @@ describe("custom WorkflowHost child cancellation", () => {
       const children = manager.createController(scope);
       const repository = new MemoryWorkflowRunRepository();
       const host = new WorkflowHost(repository);
-      // Deliberately omit stopTask: custom hosts must get a working child fallback.
+      // Custom hosts supply the existing child directory, never a mirror controller.
       const bound = host.bind({
         cwd: scope.cwd,
         sessionId: scope.sessionId,
+        children: manager,
         createRunner:
           () =>
           async ({ reportProgress }) => {
@@ -93,7 +90,7 @@ describe("custom WorkflowHost child cancellation", () => {
               cwd: scope.cwd,
             });
             childId = child.id;
-            reportProgress?.({ metadata: { workerTaskId: child.id } });
+            reportProgress?.({ metadata: { workerTaskId: child.id, workerRunId: child.runId } });
             started.resolve();
             await children.awaitChildAgent(child.id);
             return { summary: "worker stopped" };
@@ -114,7 +111,7 @@ describe("custom WorkflowHost child cancellation", () => {
           if (source === "job")
             await bound.jobs.cancel({
               sessionId: "owner",
-              jobId: "workflow:cancel",
+              target: { kind: "workflow", jobId: "cancel" },
             });
           else if (source === "owner") await bound.close();
           else if (source === "host") await host.close();
@@ -122,7 +119,7 @@ describe("custom WorkflowHost child cancellation", () => {
             parent.abort(new Error("parent cancelled"));
             const result = await bound.jobs.wait({
               sessionId: "owner",
-              jobId: "workflow:cancel",
+              target: { kind: "workflow", jobId: "cancel" },
               timeoutMs: 1_000,
             });
             expect(result.timedOut).toBe(false);
@@ -132,14 +129,11 @@ describe("custom WorkflowHost child cancellation", () => {
           settled = true;
         });
         void stopping.catch(() => {});
-        await closing.promise;
-        expect(settled).toBe(false);
-        expect(releases).toBe(0);
-        expect(repository.load("cancel")?.status).toBe("running");
-        release.resolve();
         await expect(stopping).resolves.toBeUndefined();
-        expect(children.hasChildAgent(childId)).toBe(false);
-        expect(releases).toBe(1);
+        expect(settled).toBe(true);
+        expect(children.hasChildAgent(childId)).toBe(true);
+        expect(manager.get(childId)?.state).toBe("idle");
+        expect(releases).toBe(0);
         expect(repository.load("cancel")).toMatchObject({
           status: "failed",
           termination: "cancelled",
@@ -151,9 +145,8 @@ describe("custom WorkflowHost child cancellation", () => {
         await expect(bound.close()).resolves.toBeUndefined();
         await expect(host.close()).resolves.toBeUndefined();
         await expect(host.close()).resolves.toBeUndefined();
-        expect(releases).toBe(1);
+        expect(releases).toBe(0);
       } finally {
-        release.resolve();
         await Promise.allSettled([stopping, host.close(), manager.closeAll()]);
       }
     },

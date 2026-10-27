@@ -48,9 +48,10 @@ describe("createAgentTerminalBundle", () => {
       cwd: "C:\\repo",
       source: "agent",
     });
-    expect(await bundle.jobs.list({ sessionId: "session-1" })).toEqual([{
+    expect((await bundle.jobs.list({ sessionId: "session-1" })).jobs).toEqual([{
       id: opened.id,
       kind: "terminal",
+      target: { kind: "terminal", jobId: opened.id },
       label: "node-repl",
       ownerSession: "session-1",
       status: "running",
@@ -69,7 +70,7 @@ describe("createAgentTerminalBundle", () => {
     await expect(bundle.jobs.list({
       sessionId: "session-1",
       kinds: ["shell"],
-    })).resolves.toEqual([]);
+    })).resolves.toEqual({ jobs: [], errors: [] });
   });
 
   it("maps Job read and wait requests and returns terminal output with snapshots", async () => {
@@ -80,7 +81,7 @@ describe("createAgentTerminalBundle", () => {
 
     await expect(bundle.jobs.read({
       sessionId: "session-1",
-      jobId: opened.id,
+      target: { kind: "terminal", jobId: opened.id },
       after: 2,
       maxChars: 40,
     })).resolves.toMatchObject({
@@ -91,7 +92,7 @@ describe("createAgentTerminalBundle", () => {
     });
     await expect(bundle.jobs.wait({
       sessionId: "session-1",
-      jobId: opened.id,
+      target: { kind: "terminal", jobId: opened.id },
       after: 3,
       maxChars: 50,
       timeoutMs: 250,
@@ -121,16 +122,16 @@ describe("createAgentTerminalBundle", () => {
     const bundle = createAgentTerminalBundle({ cwd: "C:\\repo", sessionId: "session-1", provider });
     const opened = await bundle.terminal.open({ cwd: "C:\\repo", sessionId: "session-1" });
 
-    await bundle.jobs.send({ sessionId: "session-1", jobId: opened.id, data: "hello\n" });
+    await bundle.jobs.send({ sessionId: "session-1", target: { kind: "terminal", jobId: opened.id }, data: "hello\n" });
     const first = await bundle.jobs.cancel({
       sessionId: "session-1",
-      jobId: opened.id,
+      target: { kind: "terminal", jobId: opened.id },
       reason: "no longer needed",
     });
     now += 100;
     const second = await bundle.jobs.cancel({
       sessionId: "session-1",
-      jobId: opened.id,
+      target: { kind: "terminal", jobId: opened.id },
       reason: "still no longer needed",
     });
 
@@ -157,10 +158,10 @@ describe("createAgentTerminalBundle", () => {
     const bundle = createAgentTerminalBundle({ cwd: "C:\\repo", sessionId: "session-1", provider });
     const opened = await bundle.terminal.open({ cwd: "C:\\repo", sessionId: "session-1" });
 
-    await bundle.jobs.cancel({ sessionId: "session-1", jobId: opened.id });
+    await bundle.jobs.cancel({ sessionId: "session-1", target: { kind: "terminal", jobId: opened.id } });
     provider.exit(opened.id, 1);
 
-    await expect(bundle.jobs.read({ sessionId: "session-1", jobId: opened.id }))
+    await expect(bundle.jobs.read({ sessionId: "session-1", target: { kind: "terminal", jobId: opened.id } }))
       .resolves.toMatchObject({
         snapshot: {
           status: "killed",
@@ -169,7 +170,7 @@ describe("createAgentTerminalBundle", () => {
           finishedAt: Date.parse(EXITED_AT),
         },
       });
-    await expect(bundle.jobs.list({ sessionId: "session-1" })).resolves.toEqual([
+    await expect(bundle.jobs.list({ sessionId: "session-1" }).then(result => result.jobs)).resolves.toEqual([
       expect.objectContaining({ status: "killed", finishedAt: Date.parse(EXITED_AT) }),
     ]);
   });
@@ -186,7 +187,7 @@ describe("createAgentTerminalBundle", () => {
     const opened = await bundle.terminal.open({ cwd: "C:\\repo", sessionId: "session-1" });
     provider.exit(opened.id, exitCode);
 
-    await expect(bundle.jobs.cancel({ sessionId: "session-1", jobId: opened.id }))
+    await expect(bundle.jobs.cancel({ sessionId: "session-1", target: { kind: "terminal", jobId: opened.id } }))
       .resolves.toMatchObject({
         status,
         exitCode,
@@ -205,7 +206,7 @@ describe("createAgentTerminalBundle", () => {
 
     provider.exit(opened.id, exitCode);
 
-    await expect(bundle.jobs.list({ sessionId: "session-1" })).resolves.toEqual([
+    await expect(bundle.jobs.list({ sessionId: "session-1" }).then(result => result.jobs)).resolves.toEqual([
       expect.objectContaining({
         id: opened.id,
         status,
@@ -229,14 +230,14 @@ describe("createAgentTerminalBundle", () => {
     const opened = await bundle.terminal.open({ cwd: "C:\\repo", sessionId: "session-1" });
     now += 100;
     provider.output(opened.id, "one");
-    expect((await bundle.jobs.list({ sessionId: "session-1" }))[0]?.updatedAt).toBe(now);
+    expect((await bundle.jobs.list({ sessionId: "session-1" })).jobs[0]?.updatedAt).toBe(now);
 
     now += 100;
-    await bundle.jobs.read({ sessionId: "session-1", jobId: opened.id });
-    expect((await bundle.jobs.list({ sessionId: "session-1" }))[0]?.updatedAt).toBe(now - 100);
+    await bundle.jobs.read({ sessionId: "session-1", target: { kind: "terminal", jobId: opened.id } });
+    expect((await bundle.jobs.list({ sessionId: "session-1" })).jobs[0]?.updatedAt).toBe(now - 100);
 
-    await bundle.jobs.send({ sessionId: "session-1", jobId: opened.id, data: "two" });
-    expect((await bundle.jobs.list({ sessionId: "session-1" }))[0]?.updatedAt).toBe(now);
+    await bundle.jobs.send({ sessionId: "session-1", target: { kind: "terminal", jobId: opened.id }, data: "two" });
+    expect((await bundle.jobs.list({ sessionId: "session-1" })).jobs[0]?.updatedAt).toBe(now);
   });
 
   it("rejects every Job operation from another session", async () => {
@@ -246,20 +247,20 @@ describe("createAgentTerminalBundle", () => {
     const mismatch = "Job owner session mismatch.";
 
     await expect(bundle.jobs.list({ sessionId: "session-2" })).rejects.toThrow(mismatch);
-    await expect(bundle.jobs.read({ sessionId: "session-2", jobId: opened.id })).rejects.toThrow(mismatch);
+    await expect(bundle.jobs.read({ sessionId: "session-2", target: { kind: "terminal", jobId: opened.id } })).rejects.toThrow(mismatch);
     await expect(bundle.jobs.wait({
       sessionId: "session-2",
-      jobId: opened.id,
+      target: { kind: "terminal", jobId: opened.id },
       timeoutMs: 1,
     })).rejects.toThrow(mismatch);
     await expect(bundle.jobs.send({
       sessionId: "session-2",
-      jobId: opened.id,
+      target: { kind: "terminal", jobId: opened.id },
       data: "x",
     })).rejects.toThrow(mismatch);
     await expect(bundle.jobs.cancel({
       sessionId: "session-2",
-      jobId: opened.id,
+      target: { kind: "terminal", jobId: opened.id },
     })).rejects.toThrow(mismatch);
   });
 
@@ -332,6 +333,8 @@ class FakeTerminalProvider implements AgentTerminalProvider {
     this.terminals.set(terminal.id, terminal);
     return { ...terminal };
   }
+
+  async get(terminalId: string): Promise<TerminalSessionInfo | undefined> { return (await this.list()).find(item => item.id === terminalId); }
 
   async list(): Promise<TerminalSessionInfo[]> {
     return [...this.terminals.values()].map((terminal) => ({ ...terminal }));

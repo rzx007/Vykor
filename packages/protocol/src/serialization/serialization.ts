@@ -11,7 +11,7 @@ import type {
   SessionRecord,
 } from "../session/session.js";
 import type { AttachmentIntent } from "../attachments/attachment.js";
-import type { JobReadResult, JobSnapshot, JobWaitResult } from "../runtime/job.js";
+import type { JobReadResult, JobSnapshot, JobWaitResult, JobTarget, JobListResult, JobInputReceipt } from "../runtime/job.js";
 import type {
   TerminalEvent,
   TerminalReadResult,
@@ -412,10 +412,40 @@ export function serializeSessionStateSnapshot(snapshot: SessionStateSnapshot): s
   return JSON.stringify(snapshot);
 }
 
+export function decodeJobTarget(value: unknown): JobTarget {
+  const target = object(value, "jobTarget");
+  const kind = enumField(target, "kind", "jobTarget", ["terminal", "shell", "agent", "dream", "workflow"] as const);
+  if (!stringField(target, "jobId", "jobTarget").trim()) throw new ProtocolDataError("jobTarget.jobId is required", "jobTarget.jobId");
+  if (kind === "agent" && !stringField(target, "runId", "jobTarget").trim()) throw new ProtocolDataError("jobTarget.runId is required", "jobTarget.runId");
+  return target as unknown as JobTarget;
+}
+
+export function decodeJobInputReceipt(value: unknown): JobInputReceipt {
+  const receipt = object(value, "jobInputReceipt");
+  for (const field of ["sessionId", "inputId", "runId"] as const) {
+    if (!stringField(receipt, field, "jobInputReceipt").trim()) throw new ProtocolDataError(`jobInputReceipt.${field} is required`, `jobInputReceipt.${field}`);
+  }
+  return receipt as unknown as JobInputReceipt;
+}
+
+export function decodeJobListResult(value: unknown): JobListResult {
+  const result = object(value, "jobListResult");
+  if (!Array.isArray(result.jobs) || !Array.isArray(result.errors)) throw new ProtocolDataError("Jobs list requires jobs and errors arrays", "jobListResult");
+  result.jobs.forEach(decodeJobSnapshot);
+  for (const error of result.errors) {
+    const item = object(error, "jobListResult.errors");
+    enumField(item, "kind", "jobListResult.errors", ["terminal", "shell", "agent", "dream", "workflow"] as const);
+    stringField(item, "message", "jobListResult.errors");
+  }
+  return result as unknown as JobListResult;
+}
+
 export function decodeJobSnapshot(value: unknown): JobSnapshot {
   const job = object(value, "job");
   for (const field of ["id", "label", "ownerSession", "cwd"] as const) stringField(job, field, "job");
   enumField(job, "kind", "job", ["terminal", "shell", "agent", "dream", "workflow"] as const);
+  const target = decodeJobTarget(job.target);
+  if (target.kind !== job.kind || target.jobId !== job.id) throw new ProtocolDataError("job target does not match snapshot", "job.target");
   enumField(job, "status", "job", ["running", "stopping", "completed", "killed", "failed"] as const);
   const capabilities = recordField(job, "capabilities", "job");
   for (const field of ["read", "wait", "send", "cancel"] as const) {

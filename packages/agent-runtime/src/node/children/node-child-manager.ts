@@ -68,6 +68,7 @@ export class NodeChildManager extends AgentChildManager {
     tools?: ReadonlyMap<string, RunToolBinding> | RunCapabilityView,
     parent:
       import("../../kernel/children/child-agent.js").TrustedChildRunParent | null = null,
+    expectedRunId?: string,
   ) {
     const captured = this.childCatalogues.get(id);
     const authorization =
@@ -83,6 +84,7 @@ export class NodeChildManager extends AgentChildManager {
         ? readonlyMap([...(tools.delegatableTools ?? []), ...tools.tools])
         : tools,
       parent,
+      expectedRunId,
     );
   }
   override spawnSystemChild(

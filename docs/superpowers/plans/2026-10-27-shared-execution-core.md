@@ -1,6 +1,6 @@
 # SDK 与 daemon 共用执行核心实施计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. 当前授权仅为编写方案与计划，完成文档后停止；不能据此开始实施或派发实现代理。
+> **For agentic workers:** REQUIRED SUB-SKILL: Use `executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. 用户已明确授权 A、B、C 全部生产修改；当前完成阶段 A，后续按 B → C 顺序实施，每阶段统一验收。
 
 **Goal:** 完成 Agent、Shell、Terminal、Workflow 生命周期收拢，使 SDK 和 daemon 共用同一套执行规则，并删除被替代的实现。
 
@@ -10,10 +10,14 @@
 
 **Spec:** [架构方案](../specs/2026-10-27-shared-execution-core-design.md)。先读该文 §3 到 §6 的契约，再执行本文。调研材料只用于固定证据，不重做整轮调研。
 
+## 当前进度
+
+阶段 A 的生产替换与验收已完成，等待集中审查后的阶段提交。协议为 6，Jobs feature 为 3。真实 SDK/daemon 组合 7/7、HTTP 全套 124/124、public Client child follow-up 回归 1/1；全仓类型检查通过。B 的运行名额和 C 的 runner 清理尚未开始，现有身份额度行为仍保留。
+
 ## 全局约束与基线
 
-- 工作目录：`D:/code/personal-project/OpenHarness-ts`。下列文件表使用仓库相对路径。
-- 核对 HEAD：`dc654b8a752ddacf659cada5394e473bcc14dad5`；调研基线：`45e30ad25d66a53b4aff2e8fb2b4960910e31bfc`。执行前只检查此后涉及文件的差异；有相关变动时调整对应任务，不重新研究参考仓库。
+- 工作目录：`C:/Users/ruanz/.codex/worktrees/shared-execution-core/openharness-ts`。下列文件表使用仓库相对路径。
+- 核对 HEAD：`f40f276b（本工作树生产基线；与原计划生产代码一致）`；调研基线：`45e30ad25d66a53b4aff2e8fb2b4960910e31bfc`。执行前只检查此后涉及文件的差异；有相关变动时调整对应任务，不重新研究参考仓库。
 - 不修改 Q1 存储优化和 S1 unknown 工具写入保护。可靠启动/工具记录仍是执行前置条件。
 - 不新增通用 Job 状态库、分布式调度器、跨进程自动重放、额外执行 ID、结果缓存服务或生命周期管理器。
 - 保留默认 `maxDepth=4`、`maxActiveChildren=8`、`maxTotalChildren=64`、child 空闲 TTL 5 分钟、现有 requests 保留上限 256；只把 activeChildren 改为按 run 占用。
@@ -119,7 +123,7 @@ export interface NodeJobBindings {
 
 **接口：**消费上文的 `JobTarget/JobListResult/JobInputReceipt`，产出 `RoutedAgentJobHost`。直接方法仅使用 `sources[input.target.kind]`；缺失类型返回现有业务错误。list 对每一个 kind 分别调用 `list({...input,kinds:[kind]})`，即使同一进程来源绑定了 shell/agent/dream，也不会重复返回其他类型。
 
-- [ ] 写入路由回归测试。以下 host 仅用于路由单元测试，不能替代 A5 的真实组装验收。
+- [x] 写入路由回归测试。以下 host 仅用于路由单元测试，不能替代 A5 的真实组装验收。
 
 ```ts
 it("does not consult any list for a direct read, wait or cancel", async () => {
@@ -145,11 +149,11 @@ it("does not consult any list for a direct read, wait or cancel", async () => {
 });
 ```
 
-- [ ] 执行 `pnpm --filter @vykor/jobs exec vitest run src/__test__/routed-agent-job-host.test.ts`。基线应在导入新路由/新 target 契约处失败；先记录失败，再实现。
-- [ ] 将直接操作实现为 `return sourceFor(input.target.kind).read(input)` 等五个薄方法；list 使用 `Promise.allSettled` 汇总，调用现有 `filterJobSnapshots`。没有 ownerByJobKey 或来源探测。
-- [ ] 协议改为版本 6、Jobs feature 3；decoder 验证 kind、target 与 snapshot.id 一致，agent 必须带 runId；Client read/wait/cancel 改为 `(target, options)`，send 返回可选回执，list 返回 `{jobs,errors}`。HTTP 与 Client 不为旧参数提供重载。
-- [ ] 同阶段补测试：缺失 kind、过期 runId、非法 receipt、部分列表失败、版本不匹配。沿用现有错误响应格式，不能改为成功空列表。
-- [ ] 运行 Jobs、protocol serialization、Client job-resource 定向测试。A4/A5 接线完成前此提交仅作为阶段内审查点，不发布。
+- [x] 执行 `pnpm --filter @vykor/jobs exec vitest run src/__test__/routed-agent-job-host.test.ts`。基线应在导入新路由/新 target 契约处失败；先记录失败，再实现。
+- [x] 将直接操作实现为 `return sourceFor(input.target.kind).read(input)` 等五个薄方法；list 使用 `Promise.allSettled` 汇总，调用现有 `filterJobSnapshots`。没有 ownerByJobKey 或来源探测。
+- [x] 协议改为版本 6、Jobs feature 3；decoder 验证 kind、target 与 snapshot.id 一致，agent 必须带 runId；Client read/wait/cancel 改为 `(target, options)`，send 返回可选回执，list 返回 `{jobs,errors}`。HTTP 与 Client 不为旧参数提供重载。
+- [x] 同阶段补测试：缺失 kind、过期 runId、非法 receipt、部分列表失败、版本不匹配。沿用现有错误响应格式，不能改为成功空列表。
+- [x] 运行 Jobs、protocol serialization、Client job-resource 定向测试。A4/A5 接线完成前此提交仅作为阶段内审查点，不发布。
 
 ## A2：唯一 child 来源与共同 Node 组装
 
@@ -164,7 +168,7 @@ it("does not consult any list for a direct read, wait or cancel", async () => {
 
 **接口：**消费 `AgentChildHandle.readRun/waitRun` 与 `AgentChildInvocation` 的必填 runId/inputId；产出 `NodeJobBindings`。A2 先用现有真实 run.result 的结束来填 canonical requests，B1 再替换为真实 settled 屏障；不保留两套运行记录，仍然只有 requests 一处。A 仍采用旧 activeChildren 计数，直到 B 整体替换。
 
-- [ ] 在真实 child 的既有测试目录增加多轮与过期取消断言；新增 Jobs source 测试只能引用 ChildManager 实际返回的 handle，不能手写 getter。
+- [x] 在真实 child 的既有测试目录增加多轮与过期取消断言；新增 Jobs source 测试只能引用 ChildManager 实际返回的 handle，不能手写 getter。
 
 ```ts
 // 在 A5 的真实 fixture 中也执行，避免只在 ChildManager 隔离测试中通过。
@@ -182,13 +186,13 @@ expect((await f.wait(second)).snapshot.status).toBe("completed");
 expect(first.handle.state).not.toBe("closed");
 ```
 
-- [ ] 运行新增测试，确认基线因旧轮不可定点读取、Promise 身份比较或取消关闭整个 child 而失败。
-- [ ] 将 requests 中原先 input/receipt/settled 数据扩为同一记录的真实 handle、runId、timestamps、结果引用。`readRun` 只查此记录；`waitRun` 只等待记录的那次执行。删掉 `lastResult` 与额外 resultPromise 观察状态。保留当前 run 指针，它指向同一记录，不另存结果。
-- [ ] 将 `sendChildInput` 扩成带 expectedRunId 的原子核对入口；保留当前授权快照和 follow-up 再授权。过期请求报冲突，不重开/覆盖新轮。
-- [ ] 实现 child/process 来源：实时 child 从 `AgentChildDirectory.get(jobId)` 找 handle；其 runId 不匹配时只读旧 requests。显式进程 Agent 依据现有 task metadata 定点选择 supervisor；SDK 无存储时定点核对两个已有索引并拒绝同 ID 双重归属。进程的纯 snapshot/read 映射函数放 process-job-source.ts，供 Agent 来源复用，不再复制映射。read/wait/cancel 只调用被选择的真实执行器。
-- [ ] 实现 `createNodeJobBindings`，Agent 来源只注册一次，Shell 只绑定选定 supervisor，Terminal/Workflow 使用既有 bundle/bind。删除 `ObservableJobProducer` 生命周期覆盖接口，改为 provider/environment/storage 端口；`jobs:false` 仍只关闭工具暴露，不复制执行规则。
-- [ ] 删除 `node/jobs/local-agent-job-host.ts` 和 `__test__/local-agent-job-host.test.ts`；原过滤、输出截断、Shell 幂等测试迁至对应来源/执行器测试。不得在新文件保留 childObservations 或 shellRequests。
-- [ ] 运行 `pnpm --filter @vykor/agent-runtime exec vitest run src/node/jobs/__test__ src/node/children/__test__/child-agent.test.ts`。确认前台 Agent 工具回执包含 `{target,inputId,runId,childSessionId}`，并沿用原 jobId 的 childId，不新增 ID。
+- [x] 运行新增测试，确认基线因旧轮不可定点读取、Promise 身份比较或取消关闭整个 child 而失败。
+- [x] 将 requests 中原先 input/receipt/settled 数据扩为同一记录的真实 handle、runId、timestamps、结果引用。`readRun` 只查此记录；`waitRun` 只等待记录的那次执行。删掉 `lastResult` 与额外 resultPromise 观察状态。保留当前 run 指针，它指向同一记录，不另存结果。
+- [x] 将 `sendChildInput` 扩成带 expectedRunId 的原子核对入口；保留当前授权快照和 follow-up 再授权。过期请求报冲突，不重开/覆盖新轮。
+- [x] 实现 child/process 来源：实时 child 从 `AgentChildDirectory.get(jobId)` 找 handle；其 runId 不匹配时只读旧 requests。显式进程 Agent 依据现有 task metadata 定点选择 supervisor；SDK 无存储时定点核对两个已有索引并拒绝同 ID 双重归属。进程的纯 snapshot/read 映射函数放 process-job-source.ts，供 Agent 来源复用，不再复制映射。read/wait/cancel 只调用被选择的真实执行器。
+- [x] 实现 `createNodeJobBindings`，Agent 来源只注册一次，Shell 只绑定选定 supervisor，Terminal/Workflow 使用既有 bundle/bind。删除 `ObservableJobProducer` 生命周期覆盖接口，改为 provider/environment/storage 端口；`jobs:false` 仍只关闭工具暴露，不复制执行规则。
+- [x] 删除 `node/jobs/local-agent-job-host.ts` 和 `__test__/local-agent-job-host.test.ts`；原过滤、输出截断、Shell 幂等测试迁至对应来源/执行器测试。不得在新文件保留 childObservations 或 shellRequests。
+- [x] 运行 `pnpm --filter @vykor/agent-runtime exec vitest run src/node/jobs/__test__ src/node/children/__test__/child-agent.test.ts`。确认前台 Agent 工具回执包含 `{target,inputId,runId,childSessionId}`，并沿用原 jobId 的 childId，不新增 ID。
 
 ## A3：Shell 与 Terminal 的执行所有权回到既有执行器
 
@@ -218,7 +222,7 @@ export interface ShellAdmissionPorts {
 
 SDK 使用不落库端口和原本地 launch 配置；daemon 将已有 pending task 接纳、请求指纹和环境 lease 接入这些端口。类型字段映射在 adapter 内完成，判断何时 reserve/start/stop/release 的顺序全部在 supervisor。已经存在的 shellStartPromises、execution/state、输出 log 是唯一运行表。
 
-- [ ] 增加三项失败测试：同一请求并发只启动一个进程；环境尚未获得时取消，之后绝不 spawn；kill 拒绝或输出 drain 未结束时不发布 stopped。
+- [x] 增加三项失败测试：同一请求并发只启动一个进程；环境尚未获得时取消，之后绝不 spawn；kill 拒绝或输出 drain 未结束时不发布 stopped。
 
 ```ts
 it("does not spawn when cancelled before environment admission", async () => {
@@ -259,11 +263,11 @@ it("does not spawn when cancelled before environment admission", async () => {
 
 使用已有 `makeManager()` 以纳入该文件的真实资源清理；新增类型从 executions/types 导入。用 deferred 门闩控制竞态，不能用延时猜顺序。
 
-- [ ] 运行 executor 定向测试，记录旧代码提前 stopped 或重复启动的失败断言。
-- [ ] 将 daemon 的 starting Map、environmentLeases 及 LocalAgentJobHost 的 shellRequests 指纹/去重规则合入 supervisor 已有启动表，保持“同请求同参数复用、改参数冲突”的既有语义。清理 stale 请求沿用现有限制，不新增请求缓存。显式进程 Agent 的 writeInput 只向仍在运行的进程写入；删除已停止后复用同 ID 自动 restart 的分支及 MAX_RESTARTS/RESTART_NOTICE。再次启动必须显式调用 startAgentProcess，得到其本来使用的新 execution ID，避免同一 target 指向另一轮进程。
-- [ ] `stopExecution` 先标记停止请求，等待进程树退出和输出 drain，再冻结 stopped；失败保持 stopping。environment release 完成前若仍有实际附属执行，保持未停止；单纯结果 save 失败只报告 projectionError。
-- [ ] Terminal `get` 直接访问 provider Map；bundle 的 requireOwnedTerminal 与 daemon get 改用它。daemon 经同一个 agent-terminal-host bundle 提供 Jobs；不再复制 terminalSnapshot/wait/cancel。
-- [ ] 执行 `pnpm --filter @vykor/execution-node exec vitest run src/executions/__test__/detached-process-supervisor.test.ts` 和 `pnpm --filter @vykor/terminal-node exec vitest run src/providers/__test__/local-terminal-provider.test.ts src/host/__test__/agent-terminal-host.test.ts`；daemon Shell 定向测试也须通过。
+- [x] 运行 executor 定向测试，记录旧代码提前 stopped 或重复启动的失败断言。
+- [x] 将 daemon 的 starting Map、environmentLeases 及 LocalAgentJobHost 的 shellRequests 指纹/去重规则合入 supervisor 已有启动表，保持“同请求同参数复用、改参数冲突”的既有语义。清理 stale 请求沿用现有限制，不新增请求缓存。显式进程 Agent 的 writeInput 只向仍在运行的进程写入；删除已停止后复用同 ID 自动 restart 的分支及 MAX_RESTARTS/RESTART_NOTICE。再次启动必须显式调用 startAgentProcess，得到其本来使用的新 execution ID，避免同一 target 指向另一轮进程。
+- [x] `stopExecution` 先标记停止请求，等待进程树退出和输出 drain，再冻结 stopped；失败保持 stopping。environment release 完成前若仍有实际附属执行，保持未停止；单纯结果 save 失败只报告 projectionError。
+- [x] Terminal `get` 直接访问 provider Map；bundle 的 requireOwnedTerminal 与 daemon get 改用它。daemon 经同一个 agent-terminal-host bundle 提供 Jobs；不再复制 terminalSnapshot/wait/cancel。
+- [x] 执行 `pnpm --filter @vykor/execution-node exec vitest run src/executions/__test__/detached-process-supervisor.test.ts` 和 `pnpm --filter @vykor/terminal-node exec vitest run src/providers/__test__/local-terminal-provider.test.ts src/host/__test__/agent-terminal-host.test.ts`；daemon Shell 定向测试也须通过。
 
 ## A4：daemon 只做适配，协议调用方一次切换
 
@@ -284,15 +288,15 @@ it("does not spawn when cancelled before environment admission", async () => {
 
 **接口：**`CreateDaemonAgentContext.options` 使用 `DefaultNodeAgentOptions`，生产分支和测试/嵌入宿主分支都收到同一份 executionOwner、workflowHost 与端口。`DaemonJobService` 构造参数改为会话授权查询和 `getJobs(sessionId): AgentJobHost`；其直接方法不写 task 状态，也不自己 wait/stop。`LiveChildAgentDirectory` 暴露定点真实 handle 查找；授权仍在执行器调用前完成。
 
-- [ ] 写 daemon 验收失败测试：生产组装的同一 Shell 不被两个来源声明，child 连续三次 read 都返回实际结果，取消旧 run 不影响新 run，其他来源 list 故障不影响 Agent read/wait/cancel。
-- [ ] daemon 的 child 事件写入统一到 `DaemonAgentEventProjector`；`SessionExecutionProjector` 只保留 process track/sync 与既有持久核对，移除 createBridge、beginChildExecution、completeChildExecution 的 runtime 镜像调用。child.created 仍创建 durable session/task 并注册 LiveChildDirectory，关闭仍注销接线。
-- [ ] 删除 `ChildAgentExecutionRegistry` 及其专项测试；删除 `ExecutionRuntimeOwner.children/getChildAgentExecutionRegistry`、相关导出、runtime-only child process 类型。原 SessionTask 存储结构与旧 backend 元数据只保留读取，不保留旧运行入口。
-- [ ] 同时替换 WorkflowHost 和 default-agent-capabilities 的旧 registry stop 接线：直接使用已捕获 childId/runId 调 interruptRun。现有 runtime-owner、daemon continue-race、child-mode-recovery 和 projection-settlement 测试必须移除该 registry；不能把编译破损留给 C。删除 supervisor 注释中的旧归属说明。
-- [ ] `DaemonJobService` 删除 `createTerminalAgentHost/createDetachedProcessAgentHost` 的独立控制实现、runtimeFor、sendAdmitted 重开/回滚、stopWorkflowWorker 的 catch fallback 和独立 polling；改为授权后转发共同 host。job-snapshots 只做既有持久记录转换。
-- [ ] `JobList` 返回 errors；`JobRead/Wait/Send/Cancel` 接受完整 target；Agent send 返回接纳 receipt。`JobWait` 多目标改为 targets 数组和按 target 对应的 cursor，不保留 jobIds 参数。工具描述、schema 与回执同步更新。
-- [ ] `/jobs show <kind> <id> [runId]` 和 `/jobs cancel <kind> <id> [runId]` 定点调用；agent 必须给 runId。诊断命令显示 list.errors；Desktop Workflow 直接使用 snapshot.target，停止按钮携带已选中的 target，不能用 list 查归属。
-- [ ] 删除 `workflow:` 前缀双解析并统一原始 Workflow runId；更新客户端测试。协议 6 / Jobs 3 与所有调用方同阶段发布。
-- [ ] 通过 `rg -n 'CompositeAgentJobHost|LocalAgentJobHost|ChildAgentExecutionRegistry|getChildAgentExecutionRegistry|SessionChildExecutionBridge|childObservations|ownerByJobKey' packages apps tests` 检查运行代码与测试应无匹配。历史研究文档可保留旧名，现行手册必须描述新行为。
+- [x] 写 daemon 验收失败测试：生产组装的同一 Shell 不被两个来源声明，child 连续三次 read 都返回实际结果，取消旧 run 不影响新 run，其他来源 list 故障不影响 Agent read/wait/cancel。
+- [x] daemon 的 child 事件写入统一到 `DaemonAgentEventProjector`；`SessionExecutionProjector` 只保留 process track/sync 与既有持久核对，移除 createBridge、beginChildExecution、completeChildExecution 的 runtime 镜像调用。child.created 仍创建 durable session/task 并注册 LiveChildDirectory，关闭仍注销接线。
+- [x] 删除 `ChildAgentExecutionRegistry` 及其专项测试；删除 `ExecutionRuntimeOwner.children/getChildAgentExecutionRegistry`、相关导出、runtime-only child process 类型。原 SessionTask 存储结构与旧 backend 元数据只保留读取，不保留旧运行入口。
+- [x] 同时替换 WorkflowHost 和 default-agent-capabilities 的旧 registry stop 接线：直接使用已捕获 childId/runId 调 interruptRun。现有 runtime-owner、daemon continue-race、child-mode-recovery 和 projection-settlement 测试必须移除该 registry；不能把编译破损留给 C。删除 supervisor 注释中的旧归属说明。
+- [x] `DaemonJobService` 删除 `createTerminalAgentHost/createDetachedProcessAgentHost` 的独立控制实现、runtimeFor、sendAdmitted 重开/回滚、stopWorkflowWorker 的 catch fallback 和独立 polling；改为授权后转发共同 host。job-snapshots 只做既有持久记录转换。
+- [x] `JobList` 返回 errors；`JobRead/Wait/Send/Cancel` 接受完整 target；Agent send 返回接纳 receipt。`JobWait` 多目标改为 targets 数组和按 target 对应的 cursor，不保留 jobIds 参数。工具描述、schema 与回执同步更新。
+- [x] `/jobs show <kind> <id> [runId]` 和 `/jobs cancel <kind> <id> [runId]` 定点调用；agent 必须给 runId。诊断命令显示 list.errors；Desktop Workflow 直接使用 snapshot.target，停止按钮携带已选中的 target，不能用 list 查归属。
+- [x] 删除 `workflow:` 前缀双解析并统一原始 Workflow runId；更新客户端测试。协议 6 / Jobs 3 与所有调用方同阶段发布。
+- [x] 通过 `rg -n 'CompositeAgentJobHost|LocalAgentJobHost|ChildAgentExecutionRegistry|getChildAgentExecutionRegistry|SessionChildExecutionBridge|childObservations|ownerByJobKey' packages apps tests` 检查运行代码与测试应无匹配。历史研究文档可保留旧名，现行手册必须描述新行为。
 
 ## A5：真实组装验收、阶段 A 删除门槛
 
@@ -330,11 +334,11 @@ export function createLifecycleFixture(
 
 **fixture 实现步骤，必须与测试一起写，不能换成 fake handle：**
 
-- [ ] 建临时目录，daemon 模式新建真实 SessionStore、owner lease、session；实例化真实 DaemonApplication，让其真实 SessionRunExecutor 驱动 root run。SDK 模式直接创建真实 createDefaultNodeAgent。
-- [ ] 使用 `StreamingMessageClient` 受控实现，只替换网络。root 的每次脚本请求产生一次真实 Agent/JobRead/JobWait/JobSend/JobCancel/JobList tool_use；下一次 model 请求正常结束。普通 child 根据 prompt label 返回对应文本。`hold(label)` 的 child 改为调用真实 Read 工具读取测试目录里的标签文件：Read decorator 先兑现 entered，再等 release 门闩，随后调用真实 base.execute。由此阻塞的是实际工具 invocation，收到 abort 后也不会在门闩释放前完成；不能只阻塞一个 fake result Promise。
-- [ ] 通过现有 `toolDecorators` 包裹相应默认工具，只捕获 `await base.execute(input, context)` 的原始返回，仍完整执行真实工具。fixture 的 read/wait/send/cancel/list 都走 root 工具请求再用协议 decoder 解析捕获结果；不能单独 new host 作为测试对象。
-- [ ] spawn 从真实 Agent 工具返回解析 target，通过 `agent.children.get(target.jobId)` 取得真实 handle 并断言 sessionId/runId 与 receipt 一致。测试要多次访问实际 handle.result getter，不把它替换为稳定 Promise。
-- [ ] daemon 仅在工厂注入点添加离线 client，必须保留 loader 传来的完整 options；禁止 mock createDefaultNodeAgent 或使用 hosted echo kernel。核心创建语句固定为：
+- [x] 建临时目录，daemon 模式新建真实 SessionStore、owner lease、session；实例化真实 DaemonApplication，让其真实 SessionRunExecutor 驱动 root run。SDK 模式直接创建真实 createDefaultNodeAgent。
+- [x] 使用 `StreamingMessageClient` 受控实现，只替换网络。root 的每次脚本请求产生一次真实 Agent/JobRead/JobWait/JobSend/JobCancel/JobList tool_use；下一次 model 请求正常结束。普通 child 根据 prompt label 返回对应文本。`hold(label)` 的 child 改为调用真实 Read 工具读取测试目录里的标签文件：Read decorator 先兑现 entered，再等 release 门闩，随后调用真实 base.execute。由此阻塞的是实际工具 invocation，收到 abort 后也不会在门闩释放前完成；不能只阻塞一个 fake result Promise。
+- [x] 通过现有 `toolDecorators` 包裹相应默认工具，只捕获 `await base.execute(input, context)` 的原始返回，仍完整执行真实工具。fixture 的 read/wait/send/cancel/list 都走 root 工具请求再用协议 decoder 解析捕获结果；不能单独 new host 作为测试对象。
+- [x] spawn 从真实 Agent 工具返回解析 target，通过 `agent.children.get(target.jobId)` 取得真实 handle 并断言 sessionId/runId 与 receipt 一致。测试要多次访问实际 handle.result getter，不把它替换为稳定 Promise。
+- [x] daemon 仅在工厂注入点添加离线 client，必须保留 loader 传来的完整 options；禁止 mock createDefaultNodeAgent 或使用 hosted echo kernel。核心创建语句固定为：
 
 ```ts
 createAgent: async ({ options }) => {
@@ -343,7 +347,7 @@ createAgent: async ({ options }) => {
 }
 ```
 
-- [ ] 关闭顺序为释放所有测试门闩、等待真实任务结束、关闭 application/agent、关闭 store、删除测试目录。故障测试恢复保存端口后再关闭，不强行删除仍有归属的 run。
+- [x] 关闭顺序为释放所有测试门闩、等待真实任务结束、关闭 application/agent、关闭 store、删除测试目录。故障测试恢复保存端口后再关闭，不强行删除仍有归属的 run。
 
 **阶段 A 必过用例：**
 
@@ -371,12 +375,12 @@ describe.each(["sdk", "daemon"] as const)("shared composition: %s", mode => {
 });
 ```
 
-- [ ] 为定点操作测试注入 TerminalProvider.list 的失败，只替换此低层读取函数，其他真实来源保留；fixture 的 Agent read/wait/cancel 仍成功，JobList 返回该来源错误和其他成功项。增加同一个真实 Shell 在 SDK/daemon 列表仅出现一次的断言。
-- [ ] 用原生进程 `node -e "process.stdout.write('shell-ok')"` 检查真实 Shell 输出与退出码；用现有本机 PTY provider 创建、读取并 kill Terminal；运行一份真实单步骤 Workflow。两种入口均执行，不能以 mock provider 算作执行器集成验收。
-- [ ] 执行 `pnpm exec vitest run --config tests/agent-integration/vitest.config.ts tests/agent-integration/__test__/shared-job-composition.integration.test.ts`；首次在基线真实组合处观察重复归属或结果丢失，阶段 A 完成后全部通过。
-- [ ] 执行 A1 到 A4 的定向测试、受影响包类型检查、`pnpm check:client-api`、`pnpm check-types:server-client`、`pnpm check:retired-ui`、`pnpm check-docs`、`git diff --check`。协议变化另跑 `pnpm test:server-client`。
-- [ ] 确认阶段 A 删除清单全部完成：Composite、LocalAgentJobHost、ChildAgentExecutionRegistry、child bridge、daemon 的 reopen/stop fallback/live snapshot 复制、Shell 两张 daemon 运行表、Terminal list 找指定 ID、workflow 前缀别名与所有 v5 请求入口。
-- [ ] 记录阶段 A 验收证据并形成阶段提交。此时 SDK/daemon 正常使用同一核心，仍沿用旧额度计数；不把 B 的改善宣称已交付。
+- [x] 为定点操作测试注入 TerminalProvider.list 的失败，只替换此低层读取函数，其他真实来源保留；fixture 的 Agent read/wait/cancel 仍成功，JobList 返回该来源错误和其他成功项。增加同一个真实 Shell 在 SDK/daemon 列表仅出现一次的断言。
+- [x] 用原生进程 `node -e "process.stdout.write('shell-ok')"` 检查真实 Shell 输出与退出码；用现有本机 PTY provider 创建、读取并 kill Terminal；运行一份真实单步骤 Workflow。两种入口均执行，不能以 mock provider 算作执行器集成验收。
+- [x] 执行 `pnpm exec vitest run --config tests/agent-integration/vitest.config.ts tests/agent-integration/__test__/shared-job-composition.integration.test.ts`；首次在基线真实组合处观察重复归属或结果丢失，阶段 A 完成后全部通过。
+- [x] 执行 A1 到 A4 的定向测试、受影响包类型检查、`pnpm check:client-api`、`pnpm check-types:server-client`、`pnpm check:retired-ui`、`pnpm check-docs`、`git diff --check`。协议变化另跑 `pnpm test:server-client`。
+- [x] 确认阶段 A 删除清单全部完成：Composite、LocalAgentJobHost、ChildAgentExecutionRegistry、child bridge、daemon 的 reopen/stop fallback/live snapshot 复制、Shell 两张 daemon 运行表、Terminal list 找指定 ID、workflow 前缀别名与所有 v5 请求入口。
+- [ ] 记录阶段 A 验收证据并形成阶段提交（证据已记录，待集中审查后提交）。此时 SDK/daemon 正常使用同一核心，仍沿用旧额度计数；不把 B 的改善宣称已交付。
 
 ## B1：单轮许可与真实停止屏障
 
@@ -553,7 +557,7 @@ try {
 
 ## 阶段检查命令与提交方式
 
-执行前在隔离工作区进行代码实现；先遵守 using-git-worktrees 和现有仓库约定。本次文档编写不创建工作区，也不执行这些生产改动。每个任务按“失败测试、最小实现、对应测试、删除审计、阶段证据”推进。
+在隔离工作区实施生产修改，遵守 using-git-worktrees 和现有仓库约定。用户已授权三个阶段，阶段 A 在既有隔离工作树完成。每个任务按“失败测试、最小实现、对应测试、删除审计、阶段证据”推进。
 
 类型检查按阶段涉及包执行，例：
 
@@ -573,4 +577,4 @@ git diff --check
 
 实现时若出现下列情况，应先返回职责边界检查：需要第二个结果 Map 才能读完、需要 list 才能取消、需要 catch 后换执行器才能运行、需要新 Job 表才能结算、需要后台重放才能恢复、需要 flag 才能长期保留旧控制器。先修正来源绑定、run 记录、停止屏障和投影接口；不能直接增加兜底层。
 
-本轮只验证文档与计划的一致性、路径和文档检查。上面的验收测试是待实现的明确要求，尚未编写或运行，不能把调研阶段通过的 39 个隔离测试当作这些验收已通过的证据。文档完成后停止，等待后续实现指令。
+计划初稿仅核对文档；后续用户已授权 A、B、C 生产实施。阶段 A 的验收使用真实默认工厂、daemon、child handle、SQLite、进程和原生 PTY，已取得独立输出；原调研的 39 个隔离测试仍只作为历史证据。B、C 按各自门槛继续。

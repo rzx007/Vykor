@@ -1,12 +1,12 @@
-import type { JobKind, JobReadResult, JobSnapshot, JobStatus, JobWaitResult } from "./contracts.js";
+import type { JobKind, JobReadResult, JobSnapshot, JobStatus, JobWaitResult, JobTarget, JobInputReceipt, JobListResult } from "./contracts.js";
 
-export { CompositeAgentJobHost } from "./composite-agent-job-host.js";
+export { RoutedAgentJobHost } from "./routed-agent-job-host.js";
 
-export type { JobCapabilities, JobKind, JobReadResult, JobSnapshot, JobStatus, JobWaitResult } from "./contracts.js";
+export type { JobCapabilities, JobKind, JobReadResult, JobSnapshot, JobStatus, JobWaitResult, JobTarget, JobInputReceipt, JobListResult } from "./contracts.js";
 
 export interface JobReadRequest {
   sessionId: string;
-  jobId: string;
+  target: JobTarget;
   after?: number;
   maxChars?: number;
 }
@@ -18,13 +18,13 @@ export interface JobWaitRequest extends JobReadRequest {
 
 export interface JobSendRequest {
   sessionId: string;
-  jobId: string;
+  target: JobTarget;
   data: string;
 }
 
 export interface JobCancelRequest {
   sessionId: string;
-  jobId: string;
+  target: JobTarget;
   reason?: string;
 }
 
@@ -42,6 +42,8 @@ export interface JobListRequest {
 
 /** Host-owned job controller exposed to an Agent. */
 export interface AgentJobAuthorization {
+  /** Trusted calling Run evidence; opaque to the portable Jobs package. */
+  readonly parent?: unknown;
   readonly pluginId?: string;
   readonly pluginIds?: ReadonlySet<string>;
   /** Host-captured binding evidence, forwarded without interpreting it in jobs. */
@@ -54,11 +56,11 @@ export interface AgentJobAuthorization {
 
 /** Host-owned job controller exposed to an Agent. */
 export interface AgentJobHost {
-  list(input: JobListRequest): Promise<JobSnapshot[]>;
+  list(input: JobListRequest): Promise<JobListResult>;
   read(input: JobReadRequest): Promise<JobReadResult>;
   wait(input: JobWaitRequest): Promise<JobWaitResult>;
   /** Authorization comes from the current host Run, never from model-provided input. */
-  send(input: JobSendRequest, authorization?: AgentJobAuthorization): Promise<void>;
+  send(input: JobSendRequest, authorization?: AgentJobAuthorization): Promise<JobInputReceipt | void>;
   cancel(input: JobCancelRequest): Promise<JobSnapshot>;
 }
 

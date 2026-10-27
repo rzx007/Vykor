@@ -33,3 +33,8 @@ AgentPool 与子 Agent 目录保存活跃实例；消息、运行和结算进度
 实例复用、子 Agent 登记和执行事件转写放在这里；一次运行的业务流程放在 session/execution。
 
 测试放在本分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移文件时同步导入、公开入口、文档链接与旧引用清单。
+
+
+## 共用执行核心（阶段 A）
+
+DaemonAgentEventProjector 是 child 持久投影的唯一入口；LiveChildAgentDirectory 只保存到真实 handle 的接线，不复制结果与运行状态。

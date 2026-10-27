@@ -17,6 +17,23 @@ import { createVisibilityToolRegistry } from "../../tools/default-runtime-tools.
 import { resolveEffectiveAllowedTools } from "../../runtime/default-runtime.js";
 
 describe("AgentChildManager", () => {
+  it("retains each accepted run independently of the result getter", async () => {
+    const manager = createManager(new AgentEventBus(), async () => fakeAgent(() => completedRun("first")));
+    try {
+      const first = await manager.createController(parentScope()).spawnChildAgent({ description: "worker", prompt: "first", agent: "worker", cwd: "/other" });
+      const handle = manager.get(first.id)!;
+      await handle.waitRun(first.runId);
+      const receipt = await handle.send({ content: "second" });
+      await handle.waitRun(receipt.runId);
+      expect(receipt.runId).not.toBe(first.runId);
+      for (let i = 0; i < 3; i++) {
+        await handle.result;
+        expect(handle.readRun(first.runId).result?.output).toBe("first");
+      }
+      expect(await handle.interruptRun(first.runId)).toBe(false);
+      expect(handle.state).not.toBe("closed");
+    } finally { await manager.closeAll(); }
+  });
   it("reauthorizes hidden delegated bindings for follow-ups and preserves the captured function after idle recovery", async () => {
     const define = (name: string, text = name) => ({ name, description: name, inputSchema: { type: "object" },
       execute: async () => ({ content: [{ type: "text" as const, text }] }) });
@@ -778,6 +795,7 @@ describe("AgentChildManager", () => {
       expect(parents.map((parent) => parent?.runId)).toEqual(["P1", "P2"]);
       expect(await manager.get(child.id)!.interruptRun(child.runId!)).toBe(false);
       expect(await manager.get(child.id)!.interruptRun(second.runId)).toBe(true);
+      await manager.get(child.id)!.waitRun(second.runId);
       expect(manager.get(child.id)?.state).toBe("idle");
     } finally { await manager.closeAll(); }
   });

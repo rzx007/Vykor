@@ -7,9 +7,6 @@ import type { AgentEvent, StreamMessageParams, StreamingMessageClient } from "@v
 import type { PermissionMode, Settings } from "@vykor/host-config";
 import { createDefaultNodeAgent, type VykorAgentOptions } from "@vykor/agent-runtime";
 import { SessionStore } from "@vykor/services";
-import {
-  ChildAgentExecutionRegistry,
-} from "@vykor/execution-node";
 import { patchSessionRuntimeMetadata, readSessionRuntimeConfig } from "../../session/configuration/runtime-configuration.js";
 import { DaemonAgentEventProjector } from "../daemon-agent-event-projector.js";
 import { LiveChildAgentDirectory } from "../live-child-agent-directory.js";
@@ -52,11 +49,9 @@ describe("resolved-child-mode survives event persistence and cold daemon recover
     store.runs.createRun({id:"parent-run",inputId:rootInput.id,sessionId:parent.id});
     store.runs.updateRun("parent-run",{status:"completed"});
     const publisher = new SessionEventPublisher(store.conversations, { broadcastSince: () => {}, broadcastEvent: () => {} });
-    const registry = new ChildAgentExecutionRegistry();
     const liveChildren = new LiveChildAgentDirectory();
     projector = new DaemonAgentEventProjector({ projectorId: `daemon-agent:${root.id}`, rootSessionId: parent.id, rootAgent: root, store, liveChildren, events: publisher, log: () => {},
       transcriptProjection: new SessionTranscriptProjection(store),
-      executionProjector: new SessionExecutionProjector({ store, getChildAgentExecutionRegistry: () => registry, events: publisher, traceIdForRun: id => id, log: () => {} }),
     });
     let pool: AgentPool | undefined;
     try {

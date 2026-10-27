@@ -15,3 +15,8 @@ agent 实例持有配置、会话引用和插件应用操作状态；查询历�
 `VykorAgentConfiguration.toolSafety` 是可选的宿主能力；缺少操作记录或强制规则其中一项时，默认工厂在创建本机资源前拒绝配置。Node 准备结果将它交给执行核心，子配置沿用同一对象。默认 SDK 不创建操作数据库。实际运行的宿主登记还包含捕获的工具定义身份和执行环境信息，供宿主核对来源；它们不进入模型上下文。
 
 每个默认 Node Agent 持有一个有容量上限的内存结果存储，在相同会话的后续 Run 中继续提供有权读取的历史结果。`toolResults(scope, tools)` 配置可替换成宿主已有存储；Node 准备时交出绑定工厂，执行核心在提交选项进一步收窄后，才把实际执行的工具集合交给工厂。宿主工厂优先于默认内存实现，拒绝或失败时不会回退到内存绕开权限。Run 释放后默认存储停止接受原 Run 的调用，正文仍可由新 Run 重新按权限读取。`__test__/tool-result-reading.test.ts` 通过真实 Agent 和内置工具验证跨 Run 补读、宿主覆盖、模型和手动入口收窄及来源替换。
+
+
+## 共用执行核心（阶段 A）
+
+DefaultNodeAgent.host.jobs 保留共同执行来源；jobs:false 只关闭模型工具。Terminal 与 Shell 覆盖改为低层 provider/admission 端口，归档通过 jobArchiveForSession 只读接入。

@@ -196,3 +196,8 @@ pnpm release:client:dry -- 0.1.0
 - [本机服务管理](../packages/client/src/service/README.md)：登记、进程和状态归属。
 - [构建与安装包验证](../packages/client/scripts/README.md)：独立发布边界。
 - [产品接入](./product-surface-integration.md)：各产品共用会话与执行记录的规则。
+
+
+## Jobs 协议 6
+
+`client.jobs.list` 返回 `{jobs,errors}`；read/wait/send/cancel 的首参数为快照中的完整 target。Agent target 含 kind、jobId、runId，其他类型含 kind、jobId。send 可返回新轮接纳 receipt。具体请求见 [Jobs 协议](./jobs-protocol.md)，旧版连接会被明确拒绝。

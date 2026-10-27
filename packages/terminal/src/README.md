@@ -12,3 +12,8 @@
 `TerminalEventBus.subscribe` 返回取消订阅函数，`emit` 同步依次调用监听函数，`clear` 移除全部监听。事件订阅器只持有监听函数集合；终端状态、输出序号和进程资源由具体提供方管理。
 
 本包职责单一，新增数据定义放 `contracts.ts`，提供方接口放 `provider.ts`，事件分发逻辑放 `events.ts`。测试建议放同层 `__test__/`。
+
+
+## 共用执行核心（阶段 A）
+
+TerminalProvider.get 按 ID 定点查询；list 只用于列举。Jobs 使用同一 TerminalSessionInfo，不定义另一份终端数据。

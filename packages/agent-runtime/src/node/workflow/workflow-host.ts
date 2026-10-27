@@ -48,7 +48,7 @@ export interface WorkflowRunOwner {
   sessionId: string;
 }
 export interface PersistentWorkflowOptions {
-  stopTask?: (taskId: string, reason?: string) => Promise<unknown>;
+  stopTask?: (taskId: string, reason?: string, runId?: string) => Promise<unknown>;
   runId?: string;
   ownerSession?: string;
   ownerInput?: string;
@@ -57,7 +57,8 @@ export interface PersistentWorkflowOptions {
   onEvent?: (event: WorkflowRunEvent) => void;
 }
 export interface WorkflowBindingOptions extends WorkflowRunOwner {
-  stopTask?: (taskId: string, reason?: string) => Promise<unknown>;
+  children?: import("@vykor/agent-contracts").AgentChildDirectory;
+  stopTask?: (taskId: string, reason?: string, runId?: string) => Promise<unknown>;
   executionOwner?: ExecutionRuntimeOwner;
   definitions?: readonly AgentDefinition[];
   createRunner?: (options: AgentWorkflowRunnerOptions) => WorkflowRunner;
@@ -254,7 +255,7 @@ export class WorkflowHost {
     snapshotOrId: WorkflowRunSnapshot | string,
     options: {
       reason?: string;
-      stopTask?: (taskId: string, reason?: string) => Promise<unknown>;
+      stopTask?: (taskId: string, reason?: string, runId?: string) => Promise<unknown>;
       onEvent?: (event: WorkflowRunEvent) => void;
     } = {},
   ): Promise<WorkflowRunResult> {
@@ -292,14 +293,14 @@ export class WorkflowHost {
     active: ActiveRun | undefined,
     reason: string,
     options: {
-      stopTask?: (taskId: string, reason?: string) => Promise<unknown>;
+      stopTask?: (taskId: string, reason?: string, runId?: string) => Promise<unknown>;
       onEvent?: (event: WorkflowRunEvent) => void;
     },
   ): Promise<WorkflowRunResult> {
     const stops = Object.values(snapshot.runningTasks).map(async (task) => {
       const id = task.metadata?.workerTaskId;
       if (typeof id === "string" && options.stopTask)
-        await options.stopTask(id, reason);
+        await options.stopTask(id, reason, typeof task.metadata?.workerRunId === "string" ? task.metadata.workerRunId : undefined);
     });
     const settled = await Promise.allSettled([
       ...stops,
@@ -369,10 +370,8 @@ export class WorkflowHost {
       if (sessionId !== options.sessionId)
         throw new Error("Workflow owner session mismatch.");
     };
-    const rawId = (id: string) =>
-      id.startsWith("workflow:") ? id.slice("workflow:".length) : id;
     const owned = (id: string) => {
-      const runId = rawId(id);
+      const runId = id;
       const snapshot = this.repository.load(runId);
       if (!snapshot || snapshot.ownerSession !== options.sessionId)
         throw new Error(`Workflow run not found: ${runId}`);
@@ -381,6 +380,7 @@ export class WorkflowHost {
     const jobSnapshot = (run: WorkflowRunSnapshot): JobSnapshot => ({
       id: run.runId,
       kind: "workflow",
+      target: { kind: "workflow", jobId: run.runId },
       label: run.summary,
       ownerSession: options.sessionId,
       status:
@@ -408,7 +408,7 @@ export class WorkflowHost {
     });
     const read: AgentJobHost["read"] = async (input) => {
       assertOwner(input.sessionId);
-      const run = owned(input.jobId);
+      const run = owned(input.target.jobId);
       const snapshot = jobSnapshot(run);
       const output =
         input.after !== undefined && input.after >= run.updatedAt
@@ -445,13 +445,13 @@ export class WorkflowHost {
     const jobs: AgentJobHost = {
       list: async (input) => {
         assertOwner(input.sessionId);
-        return filterJobSnapshots(
+        return { jobs: filterJobSnapshots(
           this.repository
             .list()
             .filter((run) => run.ownerSession === options.sessionId)
             .map(jobSnapshot),
           input,
-        );
+        ), errors: [] };
       },
       read,
       wait: async (input) => {
@@ -467,7 +467,7 @@ export class WorkflowHost {
           Date.now() < until
         ) {
           await this.repository.waitForChange(
-            rawId(input.jobId),
+            input.target.jobId,
             result.snapshot.updatedAt,
             { timeoutMs: until - Date.now(), signal: input.signal },
           );
@@ -480,35 +480,17 @@ export class WorkflowHost {
       },
       send: async (input) => {
         assertOwner(input.sessionId);
-        owned(input.jobId);
-        throw new Error(`Workflow ${input.jobId} does not accept input.`);
+        owned(input.target.jobId);
+        throw new Error(`Workflow ${input.target.jobId} does not accept input.`);
       },
       cancel: async (input) => {
         assertOwner(input.sessionId);
-        owned(input.jobId);
-        await this.cancelPersistentWorkflow(rawId(input.jobId), {
+        owned(input.target.jobId);
+        await this.cancelPersistentWorkflow(input.target.jobId, {
           reason: input.reason,
-          stopTask:
-            options.stopTask ??
-            (options.executionOwner
-              ? async (id) => {
-                  const resource = {
-                    cwd: options.cwd,
-                    sessionId: options.sessionId,
-                  };
-                  try {
-                    return await options
-                      .executionOwner!.getChildAgentExecutionRegistry(resource)
-                      .stopExecution(id);
-                  } catch {
-                    return await options
-                      .executionOwner!.getDetachedProcessSupervisor(resource)
-                      .stopExecution(id);
-                  }
-                }
-              : undefined),
+          stopTask: options.stopTask,
         });
-        return jobSnapshot(owned(input.jobId));
+        return jobSnapshot(owned(input.target.jobId));
       },
     };
     return {
@@ -585,12 +567,15 @@ export class WorkflowHost {
         stopTask:
           options.stopTask ??
           (call.children
-            ? async (id: string, reason?: string) => {
-                if (call.children!.hasChildAgent(id)) {
-                  // Interrupt waits for resource cleanup and removes the child from the directory.
-                  await call.children!.interruptChildAgent(id, reason);
+            ? async (id: string, reason?: string, runId?: string) => {
+                const child = options.children?.get(id);
+                if (child) {
+                  if (!runId) throw new Error("Workflow worker run identity is unavailable");
+                  await child.interruptRun(runId, reason);
+                  await child.waitRun(runId);
                   return;
                 }
+                if (call.children!.hasChildAgent(id)) throw new Error("Workflow worker handle is unavailable");
                 if (!options.executionOwner)
                   throw new Error("Workflow worker host is unavailable");
                 return await options.executionOwner
@@ -632,7 +617,8 @@ export class WorkflowHost {
             text: JSON.stringify({
               kind: "job",
               action: "created",
-              jobId: `workflow:${id}`,
+              jobId: id,
+              target: { kind: "workflow", jobId: id },
               jobKind: "workflow",
               label: snapshot.summary,
               status: snapshot.status,

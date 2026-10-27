@@ -1,6 +1,6 @@
 # SDK 与 daemon 共用执行核心的架构方案
 
-> 状态：明确推荐的待实施方案；尚未实现。核对日期：2026-10-27。实施入口：[文件级实施计划](../plans/2026-10-27-shared-execution-core.md)。事实依据：[固定版本调研](../../research/2026-10-27-agent-task-lifecycle-comparison.md)。
+> 状态：阶段 A 已实施并通过验收；B、C 待实施。核对日期：2026-10-27。实施入口：[文件级实施计划](../plans/2026-10-27-shared-execution-core.md)。事实依据：[固定版本调研](../../research/2026-10-27-agent-task-lifecycle-comparison.md)。
 
 推荐沿用现有四类执行器，把它们共同放到 Node 组装路径中。SDK 与 daemon 使用相同的执行器、Jobs 路由、子 Agent 名额和收尾规则。daemon 只增加授权、环境接入、持久记录和 HTTP 返回格式。删除重复的 child 执行登记器、daemon Jobs 生命周期分支和按全量列表发现归属的逻辑。
 
@@ -8,7 +8,7 @@
 
 ## 1. 基线核对与本次范围
 
-调研基线为 `45e30ad25d66a53b4aff2e8fb2b4960910e31bfc`，本次工作区 HEAD 为 `dc654b8a752ddacf659cada5394e473bcc14dad5`。两者之间已合入 Q1 存储优化及 Q2 回滚证据。核对命令：
+调研基线为 `45e30ad25d66a53b4aff2e8fb2b4960910e31bfc`，方案编写时工作区 HEAD 为 `dc654b8a752ddacf659cada5394e473bcc14dad5`。两者之间已合入 Q1 存储优化及 Q2 回滚证据。核对命令：
 
 ```powershell
 git diff --name-only 45e30ad25d66a53b4aff2e8fb2b4960910e31bfc..dc654b8a752ddacf659cada5394e473bcc14dad5 -- packages apps tests scripts

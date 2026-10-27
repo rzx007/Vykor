@@ -13,3 +13,8 @@
 普通子 Agent 不继承父 Agent 的输出合同。系统子 Agent 可由宿主单独传入本次 `outputContract`；本层只把它接到该子实例配置，仍关闭普通工具与集成。合同所需的内部 `SubmitResult` 由执行核心加入最终工具集合，核验函数不会进入可序列化的创建输入或事件。
 
 子登记和额度保存在执行核心中，本层持有配置、目录管理器和创建回调。新增本机目录或继承规则放在这里，通用子状态放在 [kernel/children](../../kernel/children/README.md)。测试放在同层 `__test__/`。
+
+
+## 共用执行核心（阶段 A）
+
+NodeChildManager 保留当前调用轮的工具授权，并在 startChain 真正接纳前再次核对 expectedRunId。定点任务视图直接使用真实 handle 的 requests，不比较 result Promise 身份。

@@ -28,7 +28,7 @@ Task 和 Workflow 自己仍可保留创建、验证、恢复、模板、reconcil
 - TUI 的 `jobState/jobs` 只是客户端缓存；权威状态仍在 Terminal、两个分离的执行后端、`SessionExecutionRecord` 持久化投影和 daemon SQLite 中的 `SessionWorkflowRunRepository`，由 `DaemonJobService` 在读取时聚合。
 - `TodoPanel`、`SwarmPanel` 和独立 `WorkflowRunsPanel` 已移除。普通 Workflow 列表和详情进入统一 Jobs Panel，Steps 从所选 Workflow Job 的 `JobRead` details 展示。
 
-旧的通用 `TaskManager` 已拆成两块：`DetachedProcessSupervisor` 只管 shell/dream/显式 Agent 子进程，`ChildAgentExecutionRegistry` 只管 framework child Agent 的回调句柄。`SessionExecutionRecord` 是当前 schema 的内部持久化投影；模型侧 shell producer 已硬切为 `BackgroundShellCreate`，没有 `TaskCreate` 别名。
+旧的通用 `TaskManager` 已拆成两块：`DetachedProcessSupervisor` 只管 shell/dream/显式 Agent 子进程，`ChildManager 的定点 run 记录` 只管 framework child Agent 的回调句柄。`SessionExecutionRecord` 是当前 schema 的内部持久化投影；模型侧 shell producer 已硬切为 `BackgroundShellCreate`，没有 `TaskCreate` 别名。
 
 当前实现没有 `parentJobId` 和规范化 Job SSE。这份历史记录不承诺后续阶段；若要增加这些能力，以新的协议设计、版本和测试为准。
 
@@ -119,12 +119,12 @@ Coordinator 经常一次派出多个 Agent，`TaskWait(taskIds[])` 能并行等�
 
 ### standalone Agent 的 Jobs host 缺口已补齐
 
-daemon 会注入 `DaemonJobService.createAgentHost()`。standalone SDK 在没有 `options.jobs` 时，现在会自动创建 `LocalAgentJobHost`，并使用真实 runtime session ID 做 owner 校验。
+daemon 会注入 `DaemonJobService.createAgentHost()`。standalone SDK 在没有 `options.jobs` 时，现在会自动创建 `createNodeJobBindings`，并使用真实 runtime session ID 做 owner 校验。
 
 本地 host 聚合范围如下：
 
 ```text
-LocalAgentJobHost
+createNodeJobBindings
   -> framework child manager
   -> scoped TaskManager
   -> optional local workflow store
@@ -305,3 +305,6 @@ daemon 和 standalone 必须都注入 `AgentJobHost`，然后才能从默认 reg
 - 不把 Workflow template/validate/reconcile/resume 塞进 Jobs。
 - 不为 TaskUpdate 增加没有真实状态语义的 JobUpdate。
 - 不新增第二套 Job 数据库。
+
+
+阶段 A 已接通 Jobs 协议 6 与共同执行来源；最新接口和所有权说明见 [Jobs 协议](./jobs-protocol.md)。额度和 Workflow runner 的后续收拢仍按阶段 B/C 计划执行。

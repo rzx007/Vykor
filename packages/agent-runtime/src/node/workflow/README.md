@@ -17,3 +17,8 @@
 宿主接收工作流请求，读取或创建运行记录，再通过 runner 启动 worker；步骤结果更新仓库并驱动后续步骤，结束时保存终态。活动任务保存在宿主中，持久记录由注入的仓库负责。
 
 新增本机工作流运行规则放在这里；纯流程定义和调度约定放在 `@vykor/coordinator`，产品存储实现放在提供方包。测试放在同层 `__test__/`。
+
+
+## 共用执行核心（阶段 A）
+
+Workflow Jobs 使用原始 runId 作为 jobId。停止接线携带已捕获 childId/runId 调 interruptRun；runner 的进一步收拢留到阶段 C。

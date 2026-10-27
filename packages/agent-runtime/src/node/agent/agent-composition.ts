@@ -101,6 +101,7 @@ export interface AgentComposition {
   memory: AgentMemoryRuntime | undefined;
   childManager: AgentChildManager;
   capabilities: ResolvedAgentCapabilities;
+  jobs: import("@vykor/jobs").AgentJobHost;
   model: string;
   requestConfigurationStore: AgentRequestConfigurationReader;
   cleanup: CleanupStack;
@@ -307,6 +308,7 @@ async function composeVykorAgentInternal(
     retainMcpConnectionsForRun: mcpIntegration.retainConnectionsForRun,
     memory: environment.memory,
     childManager: environment.childManager,
+    jobs: environment.jobs,
     capabilities: environment.capabilities,
     model: options.model ?? settings.model,
     requestConfigurationStore,

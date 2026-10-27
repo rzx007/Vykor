@@ -45,7 +45,7 @@ export function createTerminalTools(host?: AgentTerminalHost): ToolDefinition[] 
           shell: optionalString(input.shell),
           ...(command ? { command } : {}),
         });
-        return { ...terminalResult("open", { terminal, jobId: terminal.id }), executionState: "completed", compactSummary: `TerminalOpen completed: jobId=${terminal.id}` };
+        return { ...terminalResult("open", { terminal, jobId: terminal.id, target: { kind: "terminal", jobId: terminal.id } }), executionState: "completed", compactSummary: `TerminalOpen completed: jobId=${terminal.id}` };
       } catch (error) {
         return { ...failed(error), failureKind: "unknown_outcome", executionState: "unknown" };
       }

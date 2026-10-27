@@ -79,7 +79,7 @@ flowchart TD
 
 Node 从用户目录和插件读取角色文件，交给 coordinator 的纯解析函数，得到唯一 AgentDefinition。每轮捕获自己可用的角色目录；Workflow 不会为了查角色回退到进程全局插件注册表。
 
-每棵根树创建一个 TeamRegistry，递归 child 借用该实例。两棵根树可以使用同名团队，成员和删除互不影响。默认工具 registry 和 LocalAgentJobHost 位于 Node；tools 只接受具名接口，不再创建这些宿主。
+每棵根树创建一个 TeamRegistry，递归 child 借用该实例。两棵根树可以使用同名团队，成员和删除互不影响。默认工具 registry 和 createNodeJobBindings 位于 Node；tools 只接受具名接口，不再创建这些宿主。
 
 Workflow 工具校验参数后调用 WorkflowToolPort.invoke。Node WorkflowHost 先保存初始快照，再启动 coordinator 调度和 child worker；后续 JobRead/JobWait/JobCancel 使用同一 Host 的 owner 视图。独立 SDK 默认使用文件仓库，daemon 应用提供一个共享 SQLite Host。Agent 关闭自己的视图，根树关闭私有 Host，借用的应用 Host 由应用关闭。正式入口是 `@vykor/agent-runtime/node/workflow`。
 
@@ -248,3 +248,6 @@ daemon 在多客户端场景下还会额外加 session / cwd / 全局层面的�
 QueryEngine 唯一持有消息历史；turn-context 冻结本轮请求，model-attempt-runner 执行单次模型请求，tool-execution-context 构造工具上下文。主生成、重试、收尾、压缩和有真实 Run 来源的记忆请求都先等待 ModelAttemptGate，结算完成后才发布 finished。准入或结算错误不当作网络错误重试。
 
 NodeRuntimeResources 创建或借用 ExecutionRuntimeOwner、插件/MCP、Jobs、Workflow 与子环境。创建者负责关闭共享实例，child 只释放自己的视图；每轮 prepare 返回 release，准备失败、Run 终态和 close 都要释放，release 幂等。Kernel 不创建本机能力。
+
+
+阶段 A 已接通 Jobs 协议 6 与共同执行来源；最新接口和所有权说明见 [Jobs 协议](./jobs-protocol.md)。额度和 Workflow runner 的后续收拢仍按阶段 B/C 计划执行。

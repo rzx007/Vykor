@@ -2,9 +2,18 @@
   "$schema": "./client-public-api-contract.schema.json",
   "version": 1,
   "entries": [
-    { "name": "getPluginAppToolPolicy", "kind": "runtime-export" },
-    { "name": "PluginAppToolDescriptor", "kind": "type-export" },
-    { "name": "PluginAppToolPolicy", "kind": "type-export" },
+    {
+      "name": "getPluginAppToolPolicy",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "PluginAppToolDescriptor",
+      "kind": "type-export"
+    },
+    {
+      "name": "PluginAppToolPolicy",
+      "kind": "type-export"
+    },
     {
       "name": "OFFICE_MEDIA_TYPES",
       "kind": "runtime-export"
@@ -1244,6 +1253,18 @@
     {
       "name": "MarketplaceProvenance",
       "kind": "type-export"
+    },
+    {
+      "kind": "type-export",
+      "name": "JobTarget"
+    },
+    {
+      "kind": "type-export",
+      "name": "JobInputReceipt"
+    },
+    {
+      "kind": "type-export",
+      "name": "JobListResult"
     }
   ]
 }

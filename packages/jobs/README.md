@@ -8,7 +8,7 @@
 | --- | --- |
 | [src](src/README.md) | 数据契约、筛选函数、组合任务宿主和测试 |
 
-`@vykor/jobs` 对应 [src/index.ts](src/index.ts)，提供 `AgentJobHost`、请求类型、筛选函数和 `CompositeAgentJobHost`。`@vykor/jobs/contracts` 对应 [src/contracts.ts](src/contracts.ts)，仅公开任务数据类型，入口声明见 [package.json](package.json)。
+`@vykor/jobs` 对应 [src/index.ts](src/index.ts)，提供 `AgentJobHost`、请求类型、筛选函数和 `RoutedAgentJobHost`。`@vykor/jobs/contracts` 对应 [src/contracts.ts](src/contracts.ts)，仅公开任务数据类型，入口声明见 [package.json](package.json)。
 
 消费方将终端、后台命令或子 Agent 等任务投影成快照，再实现统一接口。组合宿主汇总多个来源，并把控制请求转交给实际持有该任务的来源。
 

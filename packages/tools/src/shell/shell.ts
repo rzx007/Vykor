@@ -97,6 +97,7 @@ export function createShellTool(
                 kind: "job",
                 action: "created",
                 jobId: created.jobId,
+                target: { kind: "shell", jobId: created.jobId },
                 jobKind: "shell",
                 label: created.label,
                 note: "Shell was converted to a background job because the command looks long-running. Use JobWait for bounded progress or JobRead for output snapshots.",

@@ -149,8 +149,8 @@ export class AgentRunNotAcceptingInputError extends Error {
 export interface AgentChildInvocation {
   id: string;
   sessionId: string;
-  inputId?: string;
-  runId?: string;
+  inputId: string;
+  runId: string;
   result: Promise<AgentChildResult>;
   worktree?: { path: string; branch: string };
   notice?: string;
@@ -190,15 +190,28 @@ export interface AgentPostRunChildParent {
 
 export interface AgentSteerInput extends AgentChildInput {}
 
+export interface AgentChildRunSnapshot {
+  readonly receipt: AgentInputReceipt;
+  readonly startedAt: number;
+  readonly updatedAt: number;
+  readonly stopping: boolean;
+  readonly result?: AgentChildResult;
+  readonly stoppedAt?: number;
+  readonly projectionError?: { readonly message: string };
+}
+
 export interface AgentChildHandle {
   readonly id: string;
   readonly sessionId: string;
   readonly state: "starting" | "running" | "idle" | "suspended" | "closing" | "closed";
   readonly result: Promise<AgentChildResult>;
+  readonly runId?: string;
+  readRun(runId: string): AgentChildRunSnapshot;
+  waitRun(runId: string): Promise<AgentChildRunSnapshot>;
   /** Read-only bounded activity of the current Run; undefined without observed events. */
   readonly activity?: ChildActivitySnapshot;
   /** Host-owned current Run selection, separate from user input and metadata. */
-  send(input: AgentChildInput): Promise<AgentInputReceipt>;
+  send(input: AgentChildInput, authorization?: ReadonlyMap<string, import("./execution.js").RunToolBinding>): Promise<AgentInputReceipt>;
   interrupt(reason?: string): Promise<void>;
   /** Interrupts only the matching current Run, leaving the child available for reuse. */
   interruptRun(expectedRunId: string, reason?: string): Promise<boolean>;

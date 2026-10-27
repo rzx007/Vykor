@@ -457,7 +457,7 @@ describe("workflowTool", () => {
       expect(JSON.parse(textOf(result))).toMatchObject({
         kind: "job",
         action: "created",
-        jobId: "workflow:detached-run",
+        jobId: "detached-run",
         jobKind: "workflow",
         status: "running",
       });
@@ -487,11 +487,13 @@ describe("workflowTool", () => {
           releaseWorker = () => resolve({ summary: "late worker completion" });
         });
       });
-      const agent = createAgentContext(["child-task"], () => releaseWorker?.());
+      const agent = createAgentContext(["child-task"]);
+      const stopTask = vi.fn(async () => releaseWorker?.());
       const store = new FileWorkflowRunRepository({ cwd });
       const tool = createWorkflowTool({
         repository: store,
         createRunner: () => runner,
+        stopTask,
       });
 
       await tool.execute(
@@ -519,9 +521,10 @@ describe("workflowTool", () => {
       await vi.waitFor(() =>
         expect(store.load("parent-owned")?.status).toBe("failed"),
       );
-      expect(agent.children.interruptChildAgent).toHaveBeenCalledWith(
+      expect(stopTask).toHaveBeenCalledWith(
         "child-task",
         "Parent session interrupted",
+        undefined,
       );
       await vi.waitFor(() =>
         expect(store.load("parent-owned")?.summary).toBe(

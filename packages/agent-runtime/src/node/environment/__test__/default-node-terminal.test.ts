@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { AgentJobHost } from "@vykor/jobs";
+import { LocalTerminalProvider } from "@vykor/terminal-node";
 import type { AgentTerminalHost } from "@vykor/terminal";
 import { describe, expect, it, vi } from "vitest";
 
@@ -41,7 +42,7 @@ describe("resolveDefaultNodeTerminal", () => {
     const created = fakeCreatedTerminal();
     const createLocal = vi.fn(async () => created);
 
-    const result = await resolveDefaultNodeTerminal({
+    const result = await resolveDefaultNodeTerminal({ cwd: process.cwd(), sessionId: "session",
       override: undefined,
       createLocal,
     });
@@ -55,25 +56,21 @@ describe("resolveDefaultNodeTerminal", () => {
   });
 
   it("borrows a host terminal without creating or owning it", async () => {
-    const override = fakeTerminalProducer();
+    const override = new LocalTerminalProvider({ resolveCwd: async () => process.cwd() });
+    const dispose = vi.spyOn(override, "dispose");
     const createLocal = vi.fn(async () => fakeCreatedTerminal());
-
-    const result = await resolveDefaultNodeTerminal({ override, createLocal });
-
+    const result = await resolveDefaultNodeTerminal({ cwd: process.cwd(), sessionId: "session", override, createLocal });
     expect(createLocal).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      status: "available",
-      source: "override",
-      value: override,
-    });
-    expect("cleanup" in result).toBe(false);
-    expect("cleanupIdentity" in result).toBe(false);
+    expect(result.status).toBe("available");
+    if (result.status === "available") { expect(result.source).toBe("override"); await result.cleanup(); }
+    expect(dispose).not.toHaveBeenCalled();
+    await override.dispose();
   });
 
   it("disables the terminal without creating a local provider", async () => {
     const createLocal = vi.fn(async () => fakeCreatedTerminal());
 
-    const result = await resolveDefaultNodeTerminal({
+    const result = await resolveDefaultNodeTerminal({ cwd: process.cwd(), sessionId: "session",
       override: false,
       createLocal,
     });
@@ -85,7 +82,7 @@ describe("resolveDefaultNodeTerminal", () => {
   it("preserves a local terminal creation failure", async () => {
     const failure = new Error("local terminal failed");
 
-    await expect(resolveDefaultNodeTerminal({
+    await expect(resolveDefaultNodeTerminal({ cwd: process.cwd(), sessionId: "session",
       override: undefined,
       createLocal: async () => { throw failure; },
     })).rejects.toBe(failure);

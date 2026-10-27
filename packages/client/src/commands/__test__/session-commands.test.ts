@@ -15,6 +15,7 @@ import type { CommandCatalogEntry, PluginInfo } from "../../types/index.js";
 const agentJob: JobSnapshot = {
   id: "agent-1",
   kind: "agent",
+  target: { kind: "agent", jobId: "agent-1", runId: "run-1" },
   label: "Review the change",
   ownerSession: "s1",
   status: "running",
@@ -87,7 +88,7 @@ function fakeClient(overrides: Record<string, unknown> = {}): SessionCommandClie
       getUsage: method("getSessionUsage"),
     },
     jobs: {
-      list: method("listJobs", vi.fn(async () => [])),
+      list: method("listJobs", vi.fn(async () => ({ jobs: [], errors: [] }))),
       createBackgroundShell: method("createBackgroundShell"),
       read: method("readJob"),
       cancel: method("cancelJob"),
@@ -307,7 +308,7 @@ describe("dispatchSessionCommand", () => {
   });
 
   it("lists Jobs through the unified read surface", async () => {
-    const listJobs = vi.fn(async () => [agentJob]);
+    const listJobs = vi.fn(async () => ({ jobs: [agentJob], errors: [] }));
     const { host: h, emitted } = host({ client: fakeClient({ listJobs }) });
     const presented: Array<{ title: string; content: string }> = [];
     Object.assign(h, {
@@ -325,7 +326,7 @@ describe("dispatchSessionCommand", () => {
     expect(emitted).toHaveLength(0);
     expect(presented).toContainEqual({
       title: "Jobs",
-      content: "Jobs (1):\n\n  agent-1 [running] agent: Review the change",
+      content: "Jobs (1):\n\n  agent-1 [running] agent: Review the change runId=run-1",
     });
   });
 
@@ -339,10 +340,10 @@ describe("dispatchSessionCommand", () => {
     const { host: h, emitted } = host({ client: fakeClient({ readJob }) });
     Object.assign(h, { sessionId: "s1" });
 
-    await expect(dispatchSessionCommand({ name: "/jobs", args: "show agent-1" }, h))
+    await expect(dispatchSessionCommand({ name: "/jobs", args: "show agent agent-1 run-1" }, h))
       .resolves.toBe("handled");
 
-    expect(readJob).toHaveBeenCalledWith("agent-1", { sessionId: "s1" });
+    expect(readJob).toHaveBeenCalledWith(agentJob.target, { sessionId: "s1" });
     expect(emitted[0]).toContain("Job: agent-1");
     expect(emitted[0]).toContain("Kind:          agent");
     expect(emitted[0]).toContain("Status:        running");
@@ -354,10 +355,10 @@ describe("dispatchSessionCommand", () => {
     const { host: h, emitted } = host({ client: fakeClient({ cancelJob }) });
     Object.assign(h, { sessionId: "s1" });
 
-    await expect(dispatchSessionCommand({ name: "/jobs", args: "cancel agent-1" }, h))
+    await expect(dispatchSessionCommand({ name: "/jobs", args: "cancel agent agent-1 run-1" }, h))
       .resolves.toBe("handled");
 
-    expect(cancelJob).toHaveBeenCalledWith("agent-1", {
+    expect(cancelJob).toHaveBeenCalledWith(agentJob.target, {
       sessionId: "s1",
       reason: "Cancelled from slash command",
     });
@@ -386,8 +387,8 @@ describe("dispatchSessionCommand", () => {
     await dispatchSessionCommand({ name: "/background", args: "" }, h);
 
     expect(emitted).toEqual([
-      "Usage: /jobs [list | show ID | cancel ID]",
-      "Usage: /jobs [list | show ID | cancel ID]",
+      "Usage: /jobs [list | show KIND ID [RUN_ID] | cancel KIND ID [RUN_ID]]",
+      "Usage: /jobs [list | show KIND ID [RUN_ID] | cancel KIND ID [RUN_ID]]",
       "Usage: /background <command>",
     ]);
   });
@@ -469,7 +470,7 @@ describe("dispatchSessionCommand", () => {
   });
 
   it("counts Jobs in session stats without background-task terminology", async () => {
-    const listJobs = vi.fn(async () => [agentJob, job({ id: "shell-1", kind: "shell" })]);
+    const listJobs = vi.fn(async () => ({ jobs: [agentJob, job({ id: "shell-1", kind: "shell" })], errors: [] }));
     const client = fakeClient({
       listJobs,
       listMemory: vi.fn(async () => ({ directory: "/memory", entries: [] })),
@@ -503,7 +504,7 @@ describe("dispatchSessionCommand", () => {
   });
 
   it("lists only Agent Jobs for /agents", async () => {
-    const listJobs = vi.fn(async () => [agentJob]);
+    const listJobs = vi.fn(async () => ({ jobs: [agentJob], errors: [] }));
     const { host: h, emitted } = host({ client: fakeClient({ listJobs }) });
     Object.assign(h, { sessionId: "s1" });
 
@@ -519,7 +520,7 @@ describe("dispatchSessionCommand", () => {
   });
 
   it("keeps MCP failures independent while /doctor reports Jobs", async () => {
-    const listJobs = vi.fn(async () => [agentJob]);
+    const listJobs = vi.fn(async () => ({ jobs: [agentJob], errors: [] }));
     const client = fakeClient({
       listJobs,
       getSettings: vi.fn(async () => ({})),

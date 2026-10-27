@@ -42,6 +42,7 @@ export interface WorkflowWorkerSpawnResult {
   agentId: string;
   taskId: string;
   sessionId?: string;
+  runId?: string;
   backendType: string;
   error?: string;
   worktree?: { path: string; branch: string };
@@ -245,6 +246,7 @@ export function createAgentWorkflowRunner(
         metadata: {
           agentId: spawn.agentId,
           workerTaskId: spawn.taskId,
+      ...(spawn.runId ? { workerRunId: spawn.runId } : {}),
           backendType: spawn.backendType,
         },
       };
@@ -390,6 +392,7 @@ function mapAwaitedTaskToWorkerResult(
     metadata: {
       agentId: spawn.agentId,
       workerTaskId: spawn.taskId,
+      ...(spawn.runId ? { workerRunId: spawn.runId } : {}),
       backendType: spawn.backendType,
       ...(spawn.worktree ? { worktree: spawn.worktree } : {}),
       ...(spawn.notice ? { notice: spawn.notice } : {}),
@@ -413,6 +416,7 @@ function spawnMetadata(
   return {
     agentId: spawn.agentId,
     workerTaskId: spawn.taskId,
+      ...(spawn.runId ? { workerRunId: spawn.runId } : {}),
     backendType: spawn.backendType,
     ...(spawn.worktree ? { worktree: spawn.worktree } : {}),
     ...(spawn.notice ? { notice: spawn.notice } : {}),
@@ -672,6 +676,7 @@ async function defaultSpawnWorker(
     success: true,
     agentId,
     taskId: invocation.id,
+      runId: invocation.runId,
     sessionId: invocation.sessionId,
     backendType: "framework",
     worktree: invocation.worktree,

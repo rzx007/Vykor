@@ -12,3 +12,8 @@
 `spawnSystemChild` 允许宿主经独立参数提供本次输出合同，再交给 `resolveChild` 创建子实例。合同不写入可序列化的创建输入或事件。系统子 Agent 没有普通工具；内部交付工具由合同添加，结果回执沿用现有子结果返回路径。
 
 Git 工作目录创建和本机配置继承放在 [Node 子管理](../../node/children/README.md)。本层只依赖注入的环境与创建接口。测试放在同层 `__test__/`，整体父子生命周期也由 `../__test__/` 覆盖。
+
+
+## 共用执行核心（阶段 A）
+
+每个已接纳输入在 requests 保留真实 run handle、receipt、时间与结果；currentRequest 只是当前记录指针。readRun/waitRun 固定 runId；interruptRun 只接纳匹配轮次的停止请求，等待确认应调用 waitRun。历史保留上限仍为 256。阶段 A 沿用原身份额度。

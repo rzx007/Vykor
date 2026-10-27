@@ -19,10 +19,6 @@ import type { SessionInputRecord } from "@vykor/domain-contracts/sessions";
 import type { ObservabilityEvent } from "../../shared/observability.js";
 import type { LiveChildAgentDirectory } from "./live-child-agent-directory.js";
 import type { SessionEventPublisher } from "../session/transcript/session-event-publisher.js";
-import type {
-  SessionChildExecutionBridge,
-  SessionExecutionProjector,
-} from "../session/transcript/session-execution-projector.js";
 import type { ActiveTranscriptProjectionState, SessionTranscriptProjection } from "../session/transcript/transcript-projection.js";
 import { isRecord, jsonEqual, withoutTraceId } from "../support.js";
 import {
@@ -39,7 +35,6 @@ interface ChildProjectionState {
   prompt: string;
   runId?: string;
   taskId: string;
-  bridge: SessionChildExecutionBridge;
 }
 
 interface PendingEventSettlement {
@@ -59,7 +54,6 @@ export interface DaemonAgentEventProjectorContext {
     "resolveProjectionSettlement" | "transaction" | "updateSessionTask"
   > & Partial<Pick<SessionStore, "toolOperations">>;
   transcriptProjection: SessionTranscriptProjection;
-  executionProjector: Pick<SessionExecutionProjector, "createBridge">;
   liveChildren: Pick<LiveChildAgentDirectory, "register" | "unregister">;
   events: Pick<SessionEventPublisher, "checkpoint" | "publish" | "publishSince">;
   log(event: ObservabilityEvent): void;
@@ -277,27 +271,13 @@ export class DaemonAgentEventProjector {
       this.context.events.publishSince(before);
     }
 
-    const bridge = this.context.executionProjector.createBridge({ id: parent.id, cwd: parent.cwd });
     let taskId = this.context.store.runs.getSessionTask(childId)?.id;
     if (!taskId) {
       taskId = childId;
-      const registered = bridge.registerChildExecution({
-        id: childId,
-        description: spawn.description,
-        cwd,
-        sessionId: parent.id,
-        childSessionId: sessionId,
-        prompt: spawn.prompt,
-        onInput: async (content) => {
-          const child = this.context.rootAgent.children.get(childId);
-          if (!child) throw new Error(`Live child not found: ${childId}`);
-          await child.send({ content });
-        },
-        onStop: async () => {
-          await this.context.rootAgent.children.get(childId)?.interrupt("Child agent stopped");
-        },
-      });
-      if (registered.id !== taskId) throw new Error(`Child task identity conflict: ${registered.id}/${taskId}`);
+      const before = this.context.events.checkpoint();
+      this.context.store.runs.createSessionTask({ id: childId, sessionId: parent.id, childSessionId: sessionId, type: "agent", description: spawn.description, cwd,
+        metadata: { origin: "child_session", agent: spawn.agent, executionBackend: "child_agent", runtimeExecutionId: childId } });
+      this.context.events.publishSince(before);
     }
     const delegationMetadata = childDelegationMetadata(spawn);
     if (delegationMetadata) {
@@ -306,7 +286,7 @@ export class DaemonAgentEventProjector {
       this.context.events.publishSince(before);
     }
     this.context.liveChildren.register(sessionId, childId, this.context.rootAgent);
-    this.children.set(childId, { childId, sessionId, parentSessionId: parent.id, parentRunId: event.context.runId, prompt: spawn.prompt, taskId, bridge });
+    this.children.set(childId, { childId, sessionId, parentSessionId: parent.id, parentRunId: event.context.runId, prompt: spawn.prompt, taskId });
   }
 
   private async projectChildClosed(event: Extract<AgentEvent, { type: "child.closed" }>): Promise<void> {
@@ -522,7 +502,7 @@ export class DaemonAgentEventProjector {
     const child = this.children.get(event.context.childId);
     if (child) {
       child.runId = runId;
-      await child.bridge.bindChildExecutionRun(child.taskId, runId);
+      this.bindChildTask(child.taskId, runId);
     }
   }
 
@@ -886,7 +866,7 @@ export class DaemonAgentEventProjector {
             ...(error ? { error } : {}),
             ...childFailureFromEvent(event),
           };
-        await child.bridge.completeChildExecution(child.taskId, result);
+        this.completeChildTask(child.taskId, result, runId);
       }
     }
   }
@@ -968,7 +948,7 @@ export class DaemonAgentEventProjector {
     if (!child) return;
     const task = this.context.store.getSessionTask(child.taskId);
     if (task && (task.status === "pending" || task.status === "running")) {
-      await child.bridge.completeChildExecution(child.taskId, {
+      this.completeChildTask(child.taskId, {
         status: "failed",
         output: message,
         ...childFailureFromEvent(event),
@@ -986,11 +966,7 @@ export class DaemonAgentEventProjector {
     const task = this.context.store.getSessionTask(childId);
     const parent = this.context.store.sessions.get(event.context.sessionId);
     if (task && parent) {
-      const bridge = this.context.executionProjector.createBridge({ id: parent.id, cwd: parent.cwd });
-      bridge.releaseChildExecution(task.id);
-      if (task.status === "pending" || task.status === "running") {
-        await bridge.completeChildExecution(task.id, { status: "failed", output: message });
-      }
+      if (task.status === "pending" || task.status === "running") this.completeChildTask(task.id, { status: "failed", output: message });
     }
 
     const child = this.context.store.sessions.get(childSessionId);
@@ -1111,13 +1087,28 @@ export class DaemonAgentEventProjector {
     await this.compensateChildProjectionFailure(pending.event, pending.cause);
   }
 
+  private bindChildTask(taskId: string, runId: string): void {
+    const before = this.context.events.checkpoint();
+    this.context.store.runs.updateSessionTask(taskId, { status: "running", runId });
+    this.context.events.publishSince(before);
+  }
+
+  private completeChildTask(taskId: string, result: { status: "completed" | "failed" | "interrupted" | "stopped"; output: string; failureKind?: ChildFailureKind; partialResult?: ChildPartialResult }, runId?: string): void {
+    const task = this.context.store.runs.getSessionTask(taskId);
+    if (runId && task?.runId !== runId) return;
+    const before = this.context.events.checkpoint();
+    this.context.store.runs.updateSessionTask(taskId, { status: result.status, output: result.output,
+      ...(result.status === "failed" ? { error: result.output } : {}),
+      ...(result.failureKind || result.partialResult ? { metadata: { childFailure: { ...(result.failureKind ? { failureKind: result.failureKind } : {}), ...(result.partialResult ? { partialResult: result.partialResult } : {}) } } } : {}) });
+    this.context.events.publishSince(before);
+  }
+
   private async completeChildCloseProjection(
     event: Extract<AgentEvent, { type: "child.closed" }>,
     state: ChildProjectionState | undefined,
   ): Promise<void> {
     this.context.liveChildren.unregister(event.data.sessionId, event.data.childId);
     if (state) {
-      state.bridge.releaseChildExecution(state.taskId);
       if (!state.runId && event.data.result.status === "failed") {
         const inputId = `input_startup_${state.childId}`;
         const runId = `run_startup_${state.childId}`;
@@ -1134,12 +1125,12 @@ export class DaemonAgentEventProjector {
           this.context.store.runs.updateRun(runId, { status: "failed", error: event.data.result.error ?? event.data.result.output });
         });
         this.context.events.publishSince(before);
-        await state.bridge.bindChildExecutionRun(state.taskId, runId);
+        this.bindChildTask(state.taskId, runId);
         state.runId = runId;
       }
       const task = this.context.store.getSessionTask(state.taskId);
       if (task && (task.status === "pending" || task.status === "running")) {
-        await state.bridge.completeChildExecution(state.taskId, event.data.result);
+        this.completeChildTask(state.taskId, event.data.result, state.runId);
       }
     }
     this.appendRuntimeEvent(event, {

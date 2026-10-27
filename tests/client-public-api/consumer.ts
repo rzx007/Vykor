@@ -114,6 +114,18 @@ export async function consumePublicApi(client: VykorClient): Promise<void> {
   };
   const shellJob: CreateBackgroundShellResult = await client.jobs.createBackgroundShell(shellInput);
 
+  const list = await client.jobs.list({ sessionId: session.id });
+  const target = shellJob.snapshot.target;
+  await client.jobs.read(target, { sessionId: session.id });
+  await client.jobs.wait(target, { sessionId: session.id });
+  await client.jobs.cancel(target, { sessionId: session.id });
+  const receipt = await client.jobs.send({ kind: "agent", jobId: "child", runId: "run" }, { sessionId: session.id, data: "next" });
+  void [list.errors, receipt?.runId];
+  // @ts-expect-error protocol 6 requires the complete target
+  await client.jobs.read("old-id", { sessionId: session.id });
+  // @ts-expect-error an agent target must pin its runId
+  await client.jobs.cancel({ kind: "agent", jobId: "child" }, { sessionId: session.id });
+
   // Terminals Resource
   const termRequest: TerminalCreateRequest = {
     scope: { kind: "session", sessionId: session.id },

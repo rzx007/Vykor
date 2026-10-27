@@ -20,6 +20,7 @@ import {
 import type { JobSnapshot } from "@vykor/jobs";
 import type { AgentChildInput, AgentChildDirectory, AgentChildHandle, AgentEvent, AgentEventContext, AgentEventInput, AgentEventListener, AgentPermissionRequest, AgentPermissionDecision, AgentRunHandle, AgentRunResult } from "@vykor/agent-contracts";
 import type { Message } from "@vykor/agent-contracts";
+import { createDefaultNodeAgent, type DefaultNodeAgent } from "@vykor/agent-runtime";
 import type {
   AgentCapabilitySnapshot,
   AgentCompactResult,
@@ -53,7 +54,7 @@ const serverTestConfigDir = mkdtempSync(join(tmpdir(), "oh-server-config-"));
 // HTTP fixtures represent current clients; version rejection has dedicated middleware tests.
 const fetch: typeof globalThis.fetch = (input, init) => {
   const headers = new Headers(init?.headers);
-  headers.set("x-vykor-protocol-version", "5");
+  headers.set("x-vykor-protocol-version", "6");
   return globalThis.fetch(input, { ...init, headers });
 };
 let previousConfigDir: string | undefined;
@@ -693,8 +694,8 @@ describe("VykorHttpServer", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       serverVersion: "0.4.0",
-      protocol: { version: 5 },
-      features: { jobs: 2, workflow: 2, pluginCapabilities: 1 },
+      protocol: { version: 6 },
+      features: { jobs: 3, workflow: 2, pluginCapabilities: 1 },
     });
     await server.close();
     rmSync(dir, { recursive: true, force: true });
@@ -1429,129 +1430,23 @@ describe("VykorHttpServer", () => {
   });
 
   it("projects framework-owned child execution into durable child sessions", async () => {
-    const closed: string[] = [];
-    let getParentRunId: (sessionId: string) => string | undefined = () => undefined;
-    const runtimeFactory: TestAgentProgramFactory = {
-      async createRuntime({ session }) {
-        let runContext: TestAgentRunContext | undefined;
-        let runCount = 0;
-        const childContext = () => {
-          const parentRunId = getParentRunId(session.id);
-          if (!parentRunId) throw new Error("Parent Run was not found for child execution");
-          return {
-            agentId: "child-invocation",
-            sessionId: "child-session",
-            childId: "child-invocation",
-            parentSessionId: session.id,
-            parentRunId,
-          };
-        };
-        const send = async (input: AgentChildInput) => {
-          const suffix = ++runCount;
-          const inputId = input.id ?? `child-input-${suffix}`;
-          const runId = `child-run-${suffix}`;
-          await runContext!.emit(
-            {
-              type: "input.accepted",
-              data: {
-                content: input.content,
-                delivery: input.delivery ?? "queue",
-                ...(input.inputItems ? { inputItems: input.inputItems } : {}),
-                ...(input.metadata ? { metadata: input.metadata } : {}),
-              },
-            },
-            {
-              ...childContext(),
-              inputId,
-              runId,
-              traceId: `child-trace-${suffix}`,
-            },
-          );
-          await runContext!.emit(
-            { type: "run.started", data: {} },
-            {
-              ...childContext(),
-              inputId,
-              runId,
-              traceId: `child-trace-${suffix}`,
-            },
-          );
-          await runContext!.emit(
-            { type: "output.text.delta", data: { delta: "child output" } },
-            {
-              ...childContext(),
-              inputId,
-              runId,
-              traceId: `child-trace-${suffix}`,
-            },
-          );
-          await runContext!.emit(
-            { type: "run.completed", data: { output: "child output" } },
-            {
-              ...childContext(),
-              inputId,
-              runId,
-              traceId: `child-trace-${suffix}`,
-            },
-          );
-          return { sessionId: "child-session", inputId, runId };
-        };
-        const child: AgentChildHandle = {
-          id: "child-invocation",
-          sessionId: "child-session",
-          state: "idle",
-          result: Promise.resolve({
-            status: "completed",
-            output: "child output",
-          }),
-          send,
-          interrupt: async () => {},
-          interruptRun: async () => false,
-          close: async () => {},
-        };
-        return {
-          children: {
-            get: (id) => (id === child.id ? child : undefined),
-            getBySessionId: (id) =>
-              id === child.sessionId ? child : undefined,
-            list: () => [child],
-          },
-          async runPrompt(_input, run) {
-            runContext = run;
-            await run.emit({
-              type: "child.created",
-              data: {
-                childId: child.id,
-                sessionId: child.sessionId,
-                spawn: {
-                  description: "Explore@default",
-                  prompt: "inspect",
-                  agent: "Explore",
-                  cwd: session.cwd,
-                },
-                cwd: session.cwd,
-              },
-            });
-            await child.send({ content: "inspect" });
-            await run.emit({
-              type: "output.text.delta",
-              data: { delta: "child output" },
-            });
-          },
-          async close() {
-            closed.push(session.id);
-          },
-        };
-      },
+    let root: DefaultNodeAgent | undefined;
+    const createAgent: CreateDaemonAgent = async ({ options }) => {
+      const agent = await createDefaultNodeAgent({ ...options, approvalMode: "full_access", permissionMode: "full_access",
+        settings: { ...options.settings!, model: "m", apiFormat: "openai", maxTurns: 5, permission: { mode: "full_access" }, sandbox: { enabled: false }, plugins: { enabled: false }, memory: { enabled: false } },
+        client: { async *streamMessage(params) {
+          const last = params.messages.at(-1);
+          if (last?.type === "user" && last.content === "start child") {
+            yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "delegate", name: "Agent", input: { description: "child", prompt: "inspect", subagentType: "worker" } } };
+            yield { type: "complete", stopReason: "tool_use" };
+          } else { yield { type: "text_delta", delta: "child output" }; yield { type: "complete", stopReason: "end_turn" }; }
+        } } });
+      root = agent;
+      return { agent, host: agent.host };
     };
 
     await withServer(
       async ({ baseUrl, token, server }) => {
-        getParentRunId = (sessionId) => {
-          const runs = server.store.runs.listRuns(sessionId);
-          return runs.find((run) => run.status === "running")?.id ??
-            runs.at(-1)?.id;
-        };
         const response = await fetch(`${baseUrl}/sessions`, {
           method: "POST",
           headers: { ...auth(token), "content-type": "application/json" },
@@ -1598,7 +1493,15 @@ describe("VykorHttpServer", () => {
           }),
         });
         expect(closeRuntime.status).toBe(409);
-        expect(closed).not.toContain(child!.id);
+        expect(root!.children.get(task!.id)).toBeDefined();
+        const client = new VykorClient({ baseUrl, token, fetch });
+        const firstTarget = { kind: "agent", jobId: task!.id, runId: task!.runId! } as const;
+        const receipt = await client.jobs.send(firstTarget, { sessionId: "parent", data: "public Jobs follow up" });
+        expect(receipt).toMatchObject({ inputId: expect.any(String), runId: expect.any(String) });
+        const nextTarget = { ...firstTarget, runId: receipt!.runId };
+        expect((await client.jobs.wait(nextTarget, { sessionId: "parent", timeoutMs: 5_000 })).snapshot.status).toBe("completed");
+        expect((await client.jobs.cancel(firstTarget, { sessionId: "parent" })).status).toBe("completed");
+        await expect(client.jobs.send(firstTarget, { sessionId: "parent", data: "stale input" })).rejects.toMatchObject({ status: 409 });
 
         const followUp = await fetch(
           `${baseUrl}/sessions/${child!.id}/prompts`,
@@ -1623,7 +1526,7 @@ describe("VykorHttpServer", () => {
         );
         expect(server.store.sessions.get(child!.id)?.status).not.toBe("archived");
       },
-      { runtimeFactory },
+      { createAgent },
     );
   });
 
@@ -3755,7 +3658,7 @@ describe("VykorHttpServer", () => {
         });
 
         const read = await fetch(
-          `${baseUrl}/jobs/${receipt.jobId}?sessionId=s-task`,
+          `${baseUrl}/jobs/${receipt.jobId}?sessionId=s-task&kind=shell`,
           {
             headers: auth(token),
           },

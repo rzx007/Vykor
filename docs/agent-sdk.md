@@ -79,6 +79,7 @@ async function createEmbeddedAgent(client: StreamingMessageClient, tools: readon
 | `agent.host.configuration` | 读取配置快照、修改配置与模型选择 |
 | `agent.host.memory` | 显式记忆维护 |
 | `agent.host.inspect()` | Node 工具、hooks、MCP 和沙箱检查 |
+| `agent.host.jobs` | 共用执行来源的定点读取、等待、输入与取消；jobs:false 只关闭模型工具 |
 | `agent.host.workflows` | Node 的 Workflow 宿主 |
 
 Server 的自定义 `createAgent` 工厂必须返回 `{ agent, host }`（HostedAgent）。纯 Kernel 宿主可以明确返回 `host: undefined`；插件应用、记忆维护等功能在缺少对应宿主时不可用。已有的直接 Node 工厂可写成 `const node = await createDefaultNodeAgent(options); return { agent: node, host: node.host };`。
@@ -191,7 +192,7 @@ daemon 使用 `onEvent` 保证 run started、transcript 与 terminal state 已�
 
 `model.attempt.finished` 记录每次请求的结算，usageStatus 区分 complete、partial 和 unknown；unknown 没有已知用量数字。`usage.updated` 是给观察者的已知消耗通知，同一结算不能在两个事件中重复相加。daemon 仍通过 model.attempt.finished 原子保存 Run 的展示记录、已知小计和完整性，不通过 usage.updated 再计费；Goal 用量由显式 ModelAttemptGate 在事件发布前结算，事件投影不能重复写 Goal 账本。自定义持久事件接收器也应处理结算事件。结果用量包含 usageIncomplete 时，数字是已知小计，不能视作完整费用。用户中断仍需保留已发出请求的结算，再结束为 interrupted。
 
-daemon/client 的持久接口使用协议版本 5；UI 应由最新快照读取 modelRetry/modelUsage 和 part 的 modelGeneration 标记，不依赖收到每个中间事件。详见[模型网络重试](./model-network-retry-design.md)。
+daemon/client 的持久接口使用协议版本 6；UI 应由最新快照读取 modelRetry/modelUsage 和 part 的 modelGeneration 标记，不依赖收到每个中间事件。详见[模型网络重试](./model-network-retry-design.md)。
 
 权限不是 event listener 返回值，而是显式 effect：
 
@@ -323,3 +324,8 @@ Server 的 GoalModelAttemptService 从持久 Run 核对 session、Goal 版本和
 `pnpm --filter @vykor/agent-runtime test:pack` 在仓库外安装 tarball，用 TypeScript 消费 Node、Kernel、Workflow 和公共类型，再运行 fake Provider 的 root/child、事件、关闭以及跨 bundle 错误识别。它还实际启动 Native Tool 和默认 PTY/Job，不能用空导入替代。仅编译器来自测试工具链；Node 类型、产品声明及运行依赖都从临时安装目录解析，不跳过声明检查。
 
 构建保留 `default.metafile.json`、`kernel.metafile.json`。Kernel 检查源码输入和递归声明引用，明确拒绝 domain-contracts、plugin-contracts 和 json-data；默认入口仍需要 `sharp` 与 `node-pty`，不需要数据库驱动。`host-entry.mjs` 随包保留供 Native Tool 进程启动。
+
+
+## 后台任务低层端口
+
+Terminal 覆盖接收 TerminalProvider；backgroundShell 覆盖接收 ShellAdmissionPorts。Node 统一创建工具端口与 Jobs 来源，SDK 与 daemon 不各写一份生命周期。`jobArchiveForSession` 仅提供持久 list/read。child handle 的 readRun/waitRun 使用已接纳 runId，取消旧轮不会关闭 child 或影响新轮。请求与完整 target 示例见 [Jobs 协议](./jobs-protocol.md)。

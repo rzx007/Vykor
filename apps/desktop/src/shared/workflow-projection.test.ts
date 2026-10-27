@@ -8,8 +8,9 @@ function read(details: Record<string, unknown> = {}): JobReadResult {
     cursor: 0,
     truncated: false,
     snapshot: {
-      id: "workflow:w1",
+      id: "w1",
       kind: "workflow",
+      target: { kind: "workflow", jobId: "w1" },
       ownerSession: "main",
       label: "登录修复",
       status: "running",

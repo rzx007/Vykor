@@ -70,7 +70,7 @@ skill 经 command catalog 以 template 形式出现。
 
 | 命令          | 用法 / 说明                                                                                                                         |
 | ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `/jobs`       | TUI 中无参数时打开统一 Jobs Panel；`list \| show ID \| cancel ID` 列出、读取或取消当前 session 的 Job                               |
+| `/jobs`       | TUI 中无参数时打开统一 Jobs Panel；`list \| show KIND ID [RUN_ID] \| cancel KIND ID [RUN_ID]` 列出、读取或取消当前 session 的 Job                               |
 | `/background` | `/background <command>` 通过后台 shell producer 创建工作，返回 `jobId`；创建后的读取、等待、输入与取消统一走 Jobs                   |
 | `/agents`     | 只列出 `kind=agent` 的 Agent Jobs                                                                                                   |
 | `/subagents`  | 三源（builtin/user/plugin）agent 人格定义列表（差异：Python 此名为任务视图，TS 由 `/agents` 覆盖）                                  |

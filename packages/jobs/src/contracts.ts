@@ -1,5 +1,15 @@
 export type JobKind = "terminal" | "shell" | "agent" | "dream" | "workflow";
 
+export type JobTarget =
+  | { kind: "agent"; jobId: string; runId: string }
+  | { kind: "shell" | "terminal" | "workflow" | "dream"; jobId: string };
+
+export interface JobInputReceipt { sessionId: string; inputId: string; runId: string }
+export interface JobListResult {
+  jobs: JobSnapshot[];
+  errors: Array<{ kind: JobKind; message: string }>;
+}
+
 export type JobStatus =
   | "running"
   | "stopping"
@@ -18,6 +28,7 @@ export interface JobCapabilities {
 export interface JobSnapshot {
   id: string;
   kind: JobKind;
+  target: JobTarget;
   label: string;
   ownerSession: string;
   status: JobStatus;

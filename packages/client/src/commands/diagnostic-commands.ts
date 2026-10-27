@@ -69,14 +69,14 @@ export async function handleDiagnosticCommand(
     const [memory, jobsResult, settings] = await Promise.all([
       client.system.listMemory({ cwd }).catch(() => ({ entries: [] as Array<{ id: string }> })),
       client.jobs.list({ sessionId, includeFinished: true, limit: 100 })
-        .then((jobs) => ({ jobs }))
+        .then((listed) => ({ jobs: listed.jobs, errors: listed.errors }))
         .catch((error: unknown) => ({
           error: error instanceof Error ? error.message : String(error),
         })),
       client.system.getSettings().catch(() => ({} as Record<string, unknown>)),
     ]);
     const jobsSummary = "jobs" in jobsResult
-      ? String(jobsResult.jobs.length)
+      ? `${jobsResult.jobs.length}${"errors" in jobsResult && jobsResult.errors.length ? ` (${jobsResult.errors.map(error => `${error.kind}: ${error.message}`).join("; ")})` : ""}`
       : `unavailable (${jobsResult.error})`;
     emit([
       "Session stats:",
@@ -90,13 +90,14 @@ export async function handleDiagnosticCommand(
   }
   if (slash.name === "/agents") {
     if (!sessionId) return "handled";
-    const agents = await client.jobs.list({
+    const listed = await client.jobs.list({
       sessionId,
       kinds: ["agent"],
       includeFinished: true,
       limit: 100,
     });
-    if (agents.length === 0) {
+    const agents = listed.jobs;
+    if (agents.length === 0 && !listed.errors.length) {
       emit("No Agent Jobs.");
       return "handled";
     }
@@ -104,6 +105,7 @@ export async function handleDiagnosticCommand(
       `Agent Jobs (${agents.length}):`,
       "",
       ...agents.map((job) => `  ${job.id} [${job.status}] ${job.label}`),
+      ...listed.errors.map(error => `${error.kind}: ${error.message}`),
     ].join("\n"));
     return "handled";
   }
@@ -115,14 +117,14 @@ export async function handleDiagnosticCommand(
     sessionId ? client.system.getSessionMcp(sessionId).catch(() => []) : Promise.resolve([]),
     sessionId
       ? client.jobs.list({ sessionId, includeFinished: true, limit: 100 })
-        .then((jobs) => ({ jobs }))
+        .then((listed) => ({ jobs: listed.jobs, errors: listed.errors }))
         .catch((error: unknown) => ({
           error: error instanceof Error ? error.message : String(error),
         }))
       : Promise.resolve({ jobs: [] as JobSnapshot[] }),
   ]);
   const jobsSummary = "jobs" in jobsResult
-    ? String(jobsResult.jobs.length)
+    ? `${jobsResult.jobs.length}${"errors" in jobsResult && jobsResult.errors.length ? ` (${jobsResult.errors.map(error => `${error.kind}: ${error.message}`).join("; ")})` : ""}`
     : `unavailable (${jobsResult.error})`;
   const bucket = sessionId ? clientState.buckets[sessionId] : undefined;
   const diagnostics = await host.getRuntimeDiagnostics?.();

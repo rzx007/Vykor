@@ -386,7 +386,7 @@ HTTP child prompt、`JobSend` 的 session-task callback 和 `JobCancel` 最终�
 
 `rootAgent.children` 是 framework root tree 共享的 descendant directory，不只包含 direct child。`child.created` durable 建模若在 task/live-route 阶段失败，projector 会失败 task、注销已注册 route，并 archive 本次新建的 child session；framework 随后回滚 handle 与 environment lease。parent 一旦进入 `closing/archived`，projector 拒绝新的 `child.created`。
 
-child 普通 input/run/output/tool 投影失败时，projector 会把已存在的 durable run、未完成 transcript part 与 parent task 收束为 failed，再把 required event failure 传播回 framework。live child HTTP 路径只接受 framework `started/steer` receipt 对应的 durable input/run；缺失或身份不一致返回 500，不再由 application 临时补造 input/run。`SessionExecutionProjector` 先创建 durable task，再登记 `ChildAgentExecutionRegistry` 的 live handle；live 登记失败会标记 durable task failed，live completion 失败也不阻止 durable terminal 状态落盘。
+child 普通 input/run/output/tool 投影失败时，projector 会把已存在的 durable run、未完成 transcript part 与 parent task 收束为 failed，再把 required event failure 传播回 framework。live child HTTP 路径只接受 framework `started/steer` receipt 对应的 durable input/run；缺失或身份不一致返回 500，不再由 application 临时补造 input/run。`SessionExecutionProjector` 先创建 durable task，再登记 `ChildManager 的定点 run 记录` 的 live handle；live 登记失败会标记 durable task failed，live completion 失败也不阻止 durable terminal 状态落盘。
 
 durable child task 的 terminal 状态不会被延迟到达的 live `pending/running` snapshot 回退。只有显式的新一轮 child run 才会把 task 重新置为 `running`；重开时同时清除上一轮的 `finishedAt/output/error` 与 live output file，避免两轮结果混合。
 
@@ -512,3 +512,6 @@ ProjectFactsService 负责事实脱敏、session/cwd 校验、工作区独占凭
 ## 收口后的依赖检查
 
 Server 不依赖 Client。包含真实 Client 的请求级联合测试放在 `tests/server-client`，由 `pnpm test:server-client` 运行，同时纳入根 test 和 check-types。HTTP 的 maintenance/facts/notes 上下文只声明应用用例，持久规则和资源关闭归应用层；Owner、ready 和工作区互斥沿用原入口。
+
+
+阶段 A 已接通 Jobs 协议 6 与共同执行来源；最新接口和所有权说明见 [Jobs 协议](./jobs-protocol.md)。额度和 Workflow runner 的后续收拢仍按阶段 B/C 计划执行。

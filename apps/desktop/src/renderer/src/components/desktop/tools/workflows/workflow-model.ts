@@ -21,10 +21,9 @@ export function workflowToolRunId(output: unknown): string | undefined {
       value.kind === "job" &&
       value.jobKind === "workflow" &&
       value.action === "created" &&
-      typeof value.jobId === "string" &&
-      value.jobId.startsWith("workflow:")
+      typeof value.jobId === "string" && value.jobId.length > 0
     )
-      return value.jobId.slice(9)
+      return value.jobId
     if (typeof value.runId === "string" && Array.isArray(value.tasks)) return value.runId
   } catch {
     /* A tool preview or free-form worker response is not a run identity. */

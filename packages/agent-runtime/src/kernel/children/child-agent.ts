@@ -11,6 +11,7 @@ import type {
   AgentChildController,
   AgentChildDirectory,
   AgentChildHandle,
+  AgentChildRunSnapshot,
   AgentChildInput,
   AgentChildInvocation,
   AgentChildSpawnInput,
@@ -59,6 +60,22 @@ export type TrustedChildRunParent = Pick<
   "sessionId" | "runId" | "signal"
 > & { limits?: AgentExecutionLimits; toolSafety?: import("@vykor/agent-contracts").AgentToolSafety };
 
+interface ChildRequest {
+  input: AgentChildInput;
+  parent: TrustedChildRunParent | null;
+  receipt: Promise<AgentInputReceipt>;
+  settled: boolean;
+  run?: AgentRunHandle;
+  accepted?: AgentInputReceipt;
+  startedAt?: number;
+  updatedAt?: number;
+  stopping?: boolean;
+  resultPromise?: Promise<AgentChildResult>;
+  result?: AgentChildResult;
+  stoppedAt?: number;
+  stopPromise?: Promise<void>;
+}
+
 interface ChildRecord {
   id: string;
   sessionId: string;
@@ -81,17 +98,9 @@ interface ChildRecord {
   currentRun?: AgentRunHandle;
   result: Promise<AgentChildResult>;
   startChain: Promise<void>;
-  lastResult?: AgentChildResult;
+  currentRequest?: ChildRequest;
   currentRunParent?: TrustedChildRunParent | null;
-  requests: Map<
-    string,
-    {
-      input: AgentChildInput;
-      parent: TrustedChildRunParent | null;
-      receipt: Promise<AgentInputReceipt>;
-      settled: boolean;
-    }
-  >;
+  requests: Map<string, ChildRequest>;
   state: AgentChildHandle["state"];
   activity?: ChildActivityState;
   activityRunId?: string;
@@ -372,7 +381,6 @@ export class AgentChildManager implements AgentChildDirectory {
       createAgent: resolved.createAgent,
       tools,
       hardMaxTurns: resolved.hardMaxTurns,
-      result: Promise.resolve({ status: "completed", output: "" }),
       startChain: Promise.resolve(),
       requests: new Map(),
       state: "starting",
@@ -380,6 +388,7 @@ export class AgentChildManager implements AgentChildDirectory {
       budgetReservation,
     } satisfies Partial<ChildRecord>);
 
+    Object.defineProperty(record, "result", { get: () => record.currentRequest?.resultPromise ?? Promise.resolve({ status: "completed", output: "" }) });
     let announced = false;
     try {
       this.directory.register(handle);
@@ -454,8 +463,10 @@ export class AgentChildManager implements AgentChildDirectory {
     input: AgentChildInput,
     authorization?: ChildTools,
     parent: TrustedChildRunParent | null = null,
+    expectedRunId?: string,
   ): Promise<AgentInputReceipt> {
     const record = this.require(childId);
+    if (expectedRunId !== undefined && record.currentRequest?.accepted?.runId !== expectedRunId) throw new Error(`Child run conflict: expected ${expectedRunId}`);
     if (isChildUnavailable(record))
       throw new Error(`Child agent is closing or closed: ${childId}`);
     const childView = record.tools;
@@ -472,8 +483,9 @@ export class AgentChildManager implements AgentChildDirectory {
           throw new Error(`Child input id is already used: ${input.id}`);
         return await existing.receipt;
       }
-      const receipt = this.sendToRecord(record, input, parent);
-      const request = { input, parent, receipt, settled: false };
+      const receipt = this.sendToRecord(record, input, parent, expectedRunId);
+      const request: ChildRequest = record.requests.get(input.id) ?? { input, parent, receipt, settled: false };
+      request.receipt = receipt;
       record.requests.set(input.id, request);
       void receipt.then(
         () => {
@@ -487,7 +499,7 @@ export class AgentChildManager implements AgentChildDirectory {
       );
       return await receipt;
     }
-    return await this.sendToRecord(record, input, parent);
+    return await this.sendToRecord(record, input, parent, expectedRunId);
   }
 
   async interruptRun(
@@ -498,13 +510,15 @@ export class AgentChildManager implements AgentChildDirectory {
     const record = this.find(childId);
     const run = record?.currentRun;
     if (!record || !run || run.id !== expectedRunId) return false;
-    const result = record.result;
+    const request = record.currentRequest!;
+    request.stopping = true;
+    request.updatedAt = Date.now();
     record.cancelSource = "user_cancelled";
     record.abortController?.abort(
       new ChildRunTerminationError("user_cancelled", reason),
     );
-    await run.interrupt(reason);
-    await result;
+    request.stopPromise ??= run.interrupt(reason);
+    void request.stopPromise.catch(() => {});
     return true;
   }
 
@@ -544,7 +558,7 @@ export class AgentChildManager implements AgentChildDirectory {
             status: "interrupted" as const,
             output: reason ?? "Child agent stopped",
           })
-        : (record.lastResult ?? {
+        : (record.currentRequest?.result ?? {
             status: "stopped" as const,
             output: reason ?? "Child agent stopped",
           });
@@ -563,6 +577,7 @@ export class AgentChildManager implements AgentChildDirectory {
     record: ChildRecord,
     input: AgentChildInput,
     parent: TrustedChildRunParent | null,
+    expectedRunId?: string,
   ): Promise<AgentInputReceipt> {
     const activeRun = record.currentRun;
     if (parent?.signal.aborted) throw new Error("Parent run interrupted");
@@ -581,6 +596,7 @@ export class AgentChildManager implements AgentChildDirectory {
     }
     let receipt: AgentInputReceipt | undefined;
     const scheduled = record.startChain.then(async () => {
+      if (expectedRunId !== undefined && record.currentRequest?.accepted?.runId !== expectedRunId) throw new Error(`Child run conflict: expected ${expectedRunId}`);
       await record.result.catch(() => {});
       if (isChildUnavailable(record))
         throw new Error(`Child agent is closing or closed: ${record.id}`);
@@ -673,6 +689,13 @@ export class AgentChildManager implements AgentChildDirectory {
       throw error;
     }
     record.currentRun = run;
+    const request: ChildRequest = record.requests.get(ids.inputId) ?? { input, parent, receipt: run.started, settled: false };
+    request.run = run;
+    request.accepted = { sessionId: record.sessionId, inputId: ids.inputId, runId: ids.runId };
+    request.startedAt = request.updatedAt = Date.now();
+    request.stopping = false;
+    record.requests.set(ids.inputId, request);
+    record.currentRequest = request;
     const result = run.result
       .then<AgentChildResult>((completed) => ({
         status: "completed",
@@ -717,7 +740,7 @@ export class AgentChildManager implements AgentChildDirectory {
           ...partialResultFields(record, ids.runId),
         };
       });
-    record.result = result
+    request.resultPromise = result
       .finally(() => {
         parent?.signal.removeEventListener("abort", parentAbortHandler);
         this.clearRunDeadline(record);
@@ -727,7 +750,10 @@ export class AgentChildManager implements AgentChildDirectory {
         if (!isChildUnavailable(record)) record.state = "idle";
       })
       .then((settled) => {
-        record.lastResult = settled;
+        request.result = settled;
+        request.settled = true;
+        request.updatedAt = request.stoppedAt = Date.now();
+        this.trimRequestHistory(record);
         this.scheduleSuspend(record);
         return settled;
       });
@@ -746,6 +772,21 @@ export class AgentChildManager implements AgentChildDirectory {
     return receipt;
   }
 
+  readRun(childId: string, runId: string): AgentChildRunSnapshot {
+    const request = [...this.require(childId).requests.values()].find(entry => entry.accepted?.runId === runId);
+    if (!request?.accepted || request.startedAt === undefined) throw new Error(`RUN_RESULT_NOT_RETAINED: ${runId}`);
+    return { receipt: { ...request.accepted }, startedAt: request.startedAt, updatedAt: request.updatedAt!, stopping: request.stopping === true && !request.result,
+      ...(request.result ? { result: structuredClone(request.result), stoppedAt: request.stoppedAt } : {}) };
+  }
+
+  async waitRun(childId: string, runId: string): Promise<AgentChildRunSnapshot> {
+    const record = this.require(childId);
+    const request = [...record.requests.values()].find(entry => entry.accepted?.runId === runId);
+    if (!request) throw new Error(`RUN_RESULT_NOT_RETAINED: ${runId}`);
+    await request.resultPromise;
+    return this.readRun(childId, runId);
+  }
+
   private async awaitResult(childId: string): Promise<AgentChildResult> {
     return structuredClone(await this.require(childId).result);
   }
@@ -753,7 +794,7 @@ export class AgentChildManager implements AgentChildDirectory {
   private trimRequestHistory(record: ChildRecord): void {
     if (record.requests.size <= MAX_CHILD_REQUEST_HISTORY) return;
     for (const [id, request] of record.requests) {
-      if (!request.settled) continue;
+      if (!request.settled || record.currentRequest === request) continue;
       record.requests.delete(id);
       if (record.requests.size <= MAX_CHILD_REQUEST_HISTORY) return;
     }
@@ -974,6 +1015,9 @@ class ChildHandle implements AgentChildHandle {
   get state(): AgentChildHandle["state"] {
     return this.record().state;
   }
+  get runId(): string | undefined { return this.record().currentRequest?.accepted?.runId; }
+  readRun(runId: string): AgentChildRunSnapshot { return this.manager.readRun(this.id, runId); }
+  waitRun(runId: string): Promise<AgentChildRunSnapshot> { return this.manager.waitRun(this.id, runId); }
   get result(): Promise<AgentChildResult> {
     return this.record().result.then(result => structuredClone(result));
   }
