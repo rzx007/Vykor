@@ -1,1 +1,5 @@
 packages/services/src/session-runtime/migrations/** text eol=lf
+
+# Keep archived measurements byte-for-byte so their recorded SHA256 stays valid.
+docs/superpowers/reviews/2026-10-27-storage-optimization-baseline.json -text
+docs/superpowers/reviews/2026-10-27-storage-optimization-baseline-context.json -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

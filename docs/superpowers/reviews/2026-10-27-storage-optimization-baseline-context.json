@@ -1,0 +1,31 @@
+{
+  "head": "2ae6a425d72b70bc6229ac77c96ff350e7f91c3e",
+  "worktreeStatus": null,
+  "scriptPath": "packages/services/src/database/persistence/__test__/storage-growth.bench.mjs",
+  "scriptGitBlob": "5370f3e0c6339994763a26256a3a5dd465e03764",
+  "scriptSha256": "f43f16f969f7c6366081e7a54406b15ed8a2939d8db2d9a1168605431ab43c0f",
+  "node": "v24.18.1",
+  "platform": "win32",
+  "processor": "Intel64 Family 6 Model 186 Stepping 2, GenuineIntel",
+  "logicalProcessors": "16",
+  "command": "pnpm --filter @vykor/services exec node --expose-gc --import ../../apps/cli/node_modules/tsx/dist/loader.mjs src/database/persistence/__test__/storage-growth.bench.mjs --output=C:/Users/ruanz/AppData/Local/Temp/vykor-storage-growth-2ae6a425-20261027-current-a80f491d.json",
+  "measurementFileCreatedAt": "2026-10-27T14:01:00.8003317+08:00",
+  "measurementFileUpdatedAt": "2026-10-27T14:03:07.0263288+08:00",
+  "method": "Four fixed groups, three independent sequential worker processes per group. Root coordinator reserved this run with no other task heavy tests or builds. OS scheduling, other applications, and disk cache were not controlled. This is the current loader only, no candidate comparison.",
+  "output": "C:/Users/ruanz/AppData/Local/Temp/vykor-storage-growth-2ae6a425-20261027-current-a80f491d.json",
+  "samples": 12,
+  "workerPids": [
+    18896,
+    36908,
+    24852,
+    27284,
+    3308,
+    48972,
+    22940,
+    28396,
+    17632,
+    34300,
+    36776,
+    50536
+  ]
+}
