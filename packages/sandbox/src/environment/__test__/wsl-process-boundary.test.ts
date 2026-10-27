@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { findPosixShell } from "../../../../../tests/helpers/posix-shell.js";
 
 const transport = vi.hoisted(() => ({
   argv: [] as string[], child: null as any, probeScript: "", probeOutput: "/home/alex\n/bin/zsh\n",
@@ -30,14 +31,14 @@ import { preflightWsl, spawnWslProcess, wslPathToHostPath } from "../wsl-environ
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
-const shell = process.platform === "win32" ? "C:/Program Files/Git/bin/sh.exe" : "/bin/sh";
+const shell = findPosixShell() ?? "";
 
 describe("WSL process boundary without a WSL distribution", () => {
   it("decodes the default probe's HOME and SHELL response", async () => {
     await expect(preflightWsl({ platform: "win32" })).resolves.toEqual({ homeDir: "/home/alex", shell: "/bin/zsh" });
   });
 
-  it.skipIf(!existsSync(shell))("executes the probe with exported HOME and user SHELL intact", async () => {
+  it.skipIf(!shell)("executes the probe with exported HOME and user SHELL intact", async () => {
     await preflightWsl({ platform: "win32" });
     const result = spawnSync(shell, ["-c", `HOME=/home/alex; SHELL=/usr/bin/fish; ${transport.probeScript}`], { encoding: "utf8", timeout: 3000 });
     expect(result.error).toBeUndefined();
@@ -58,7 +59,7 @@ describe("WSL process boundary without a WSL distribution", () => {
     expect(existsSync(marker)).toBe(false);
   });
 
-  it.skipIf(!existsSync(shell))("executes the probe to recover the account HOME when HOME and SHELL are not exported", async () => {
+  it.skipIf(!shell)("executes the probe to recover the account HOME when HOME and SHELL are not exported", async () => {
     await preflightWsl({ platform: "win32" });
     const harness = `unset HOME SHELL
 getent() { printf 'alex:x:1000:1000::/accounts/alex:/bin/zsh\\n'; }
@@ -70,7 +71,7 @@ ${transport.probeScript}`;
     expect(result.stdout).toBe("/accounts/alex\n\n");
   });
 
-  it.skipIf(!existsSync(shell))("executes the cancellation supervisor through an external process-group kill", () => {
+  it.skipIf(!shell)("executes the cancellation supervisor through an external process-group kill", () => {
     const root = mkdtempSync(join(tmpdir(), "vk-wsl-cancel-boundary-")); roots.push(root);
     const marker = join(root, "cancel").replaceAll("\\", "/");
     const log = join(root, "kill.log").replaceAll("\\", "/");

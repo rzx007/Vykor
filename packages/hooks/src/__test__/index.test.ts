@@ -63,7 +63,11 @@ describe("HookExecutor", () => {
         apiFormat: "openai",
         maxTurns: 1,
         permission: { mode: "default" },
-        sandbox: { enabled: true, failIfUnavailable: true },
+        sandbox: {
+          enabled: true,
+          failIfUnavailable: true,
+          srt: { runtimeCommand: join(isolatedConfigDir, "missing-srt") },
+        },
       },
     });
     const result = await executor.executeCommand(
