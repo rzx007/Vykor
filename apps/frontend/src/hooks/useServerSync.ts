@@ -250,9 +250,9 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
         signal: controller.signal,
       });
       if (activeSessionIdRef.current !== sessionId || jobGenerationRef.current !== generation) return;
-      const validated = validateJobSnapshots(response, sessionId);
-      if (validated.error) {
-        const validationError = validated.error;
+      const validated = validateJobSnapshots(response.jobs, sessionId);
+      if (validated.error || response.errors.length) {
+        const validationError = validated.error ?? response.errors.map(error => `${error.kind}: ${error.message}`).join("; ");
         const now = Date.now();
         setJobState((current) => {
           const next: JobRemoteState = validated.jobs.length > 0
@@ -310,7 +310,9 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
     setJobDetailState(loading);
 
     try {
-      const response = await client.jobs.read(jobId, {
+      const selected = jobStateRef.current.jobs.find(job => job.id === jobId)?.target;
+      if (!selected) throw new Error("请先选择一个当前任务。");
+      const response = await client.jobs.read(selected, {
         sessionId,
         signal: controller.signal,
       });

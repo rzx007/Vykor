@@ -132,7 +132,7 @@ export async function executeToolWithTimeout(
     });
   });
   // Register after the race is consumed; errors from late auditing remain the host's responsibility.
-  void invocation.then(
+  const audited = invocation.then(
     returned => { if (abandoned) return onLateOutcome?.({ returned }); },
     error => { if (abandoned) return onLateOutcome?.({ error }); },
   ).catch(error => { process.emitWarning(`Late tool outcome callback failed: ${String(error)}`); });
@@ -140,7 +140,7 @@ export async function executeToolWithTimeout(
     const raced = Promise.race([invocation, timeoutPromise]);
     try {
       // Register before the invocation microtask runs; a timeout does not settle this promise.
-      observeInvocation?.(invocation.then(() => undefined, () => undefined));
+      observeInvocation?.(audited);
     } catch (error) {
       controller.abort(error);
     }

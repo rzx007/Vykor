@@ -7,7 +7,7 @@ import type {
   ExecutionEnvironmentHandle,
 } from "@vykor/environment";
 import type {
-  AgentTerminalHost,
+  TerminalProvider,
   TerminalCreateRequest,
   TerminalEventListener,
   TerminalReadRequest,
@@ -111,7 +111,7 @@ export class DaemonTerminalService {
   }
 
   async get(terminalId: string): Promise<TerminalSessionInfo> {
-    const terminal = (await this.provider.list()).find((item) => item.id === terminalId);
+    const terminal = await this.provider.get(terminalId);
     if (!terminal) throw new DaemonTerminalError(404, `Terminal ${terminalId} does not exist.`);
     return terminal;
   }
@@ -149,20 +149,9 @@ export class DaemonTerminalService {
     return this.provider.subscribe(listener);
   }
 
-  createAgentHost(rootSession: SessionRecord): AgentTerminalHost {
-    return {
-      open: async (input) => await this.create({
-        scope: { kind: "session", sessionId: rootSession.id },
-        runtime: "environment",
-        cols: input.cols ?? 100,
-        rows: input.rows ?? 30,
-        name: input.name ?? "Agent terminal",
-        shell: input.shell,
-        command: input.command,
-        cwd: input.cwd,
-        source: "agent",
-      }),
-    };
+  providerForSession(rootSession: SessionRecord): TerminalProvider {
+    return { create: input => this.create({ ...input, scope: { kind: "session", sessionId: rootSession.id }, runtime: this.options.acquireEnvironment ? "environment" : "local", source: "agent" }),
+      get: id => this.provider.get(id), list: () => this.list({ sessionId: rootSession.id, source: "agent" }), read: input => this.provider.read(input), wait: input => this.provider.wait(input), write: input => this.write(input), resize: input => this.resize(input), signal: input => this.signal(input), kill: id => this.close(id), subscribe: listener => this.subscribe(listener) };
   }
 
   async dispose(): Promise<void> {

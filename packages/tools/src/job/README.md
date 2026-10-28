@@ -24,3 +24,8 @@
 与本目录职责一起修改的代码放在这里；跨分类的公共入口由上层目录组织。
 
 测试位于 [`__test__/`](./__test__)；只覆盖下级分类的测试放在对应分类的 `__test__/`。
+
+
+## 共用执行核心（阶段 A）
+
+JobRead/Send/Cancel 接收完整 target，JobWait 接收 targets: [{target,after?}]。JobList 返回 jobs 与来源 errors。Agent send 将当前调用轮的可信授权证据转给共同来源并返回接纳 receipt。

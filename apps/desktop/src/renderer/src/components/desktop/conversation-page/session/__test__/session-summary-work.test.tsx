@@ -120,7 +120,8 @@ function run(id: string, startedAt = enteredAt + 1): DesktopWorkflowRun {
   return {
     id,
     title: id,
-    jobId: `workflow:${id}`,
+    jobId: id,
+    target: { kind: "workflow", jobId: id },
     sessionId: "chat",
     startedAt,
     updatedAt: startedAt,

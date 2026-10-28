@@ -1,26 +1,7 @@
-# 后台任务统一查询
+# daemon 任务适配
 
-把终端、子 Agent 和工作流任务转换为统一后台任务视图。
+[daemon-job-service.ts](daemon-job-service.ts) 的入口是 `DaemonJobService`。它核对所属会话及会话是否接受输入，然后转发共同 Node Jobs host；不决定 wait、停止、重开或结果状态。
 
-## 入口与流程
+[job-snapshots.ts](job-snapshots.ts) 只转换已有持久任务并提供只读 archive。旧 Agent 没有可核实 runId 时，列表 errors 说明无法定位；不猜当前轮。旧轮结果从对应 run 的持久消息读取。[child-activity.ts](child-activity.ts) 读取已有有界活动记录，[index.ts](index.ts) 汇总入口。
 
-`DaemonJobService` 从各任务来源读取状态，快照函数生成统一结果，必要时路由读取输出、发送输入或停止请求。
-
-## 状态归属
-
-实际任务由终端、执行和工作流宿主管理，持久子活动从存储读取，本目录聚合查询与控制结果。
-
-## 主要文件
-
-| 文件 | 主要接口或用途 |
-| --- | --- |
-| [child-activity.ts](./child-activity.ts) | `ChildActivityReader`、`readPersistedChildActivity` |
-| [daemon-job-service.ts](./daemon-job-service.ts) | `JobSessionQueries`、`JobTaskOperations`、`JobSessionStore`、`DaemonJobService` |
-| [index.ts](./index.ts) | 汇总本分类的公开接口 |
-| [job-snapshots.ts](./job-snapshots.ts) | `terminalSnapshot`、`taskSnapshot`、`workflowSnapshot`、`taskAcceptsInput` 等 |
-
-## 测试与维护
-
-任务类型转换、输出限制和后台任务路由放在这里，具体进程生命周期交给对应宿主。
-
-测试放在本分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移文件时同步导入、公开入口、文档链接与旧引用清单。
+执行状态属于真实 child handle、supervisor、Terminal provider 与 WorkflowHost，持久记录属于 SessionStore。本目录只适配授权与返回格式。新增读取适配放现有文件，回归放 [__test__/](__test__/)。

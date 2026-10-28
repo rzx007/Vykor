@@ -56,6 +56,8 @@ export class AgentPool {
     return this.context.loadAgent !== undefined;
   }
 
+  peekHost(sessionId: string): NodeAgentHost | undefined { return this.agents.get(sessionId)?.host; }
+
   get size(): number {
     return this.agents.size;
   }

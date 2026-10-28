@@ -29,3 +29,8 @@
 与本目录职责一起修改的代码放在这里；跨分类的公共入口由上层目录组织。
 
 测试位于 [`__test__/`](./__test__)；只覆盖下级分类的测试放在对应分类的 `__test__/`。
+
+
+## 共用执行核心（阶段 A）
+
+/jobs show KIND ID [RUN_ID] 与 /jobs cancel KIND ID [RUN_ID] 定点访问；Agent 必须提供 RUN_ID。诊断显示 list.errors。

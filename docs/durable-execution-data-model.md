@@ -135,6 +135,10 @@ Input 校验不把 `traceId` 当业务内容，因为一次网络重试可能得
 
 人工要重新执行时，创建新的 Input 和 Run，并在 metadata 里记录来源。旧 Run 仍保留原终态。
 
+实际停止与终态保存分别确认：Framework 的 `settled` 固定真实输出并归还 child 运行许可，可靠终态写入失败只留下 `projectionError`。`run.completed/run.failed/run.interrupted` 与 `child.closed` 共同使用原 Projection Settlement 的 `retry-terminal-projection` 分支，不把已经完成的执行改成失败，也不重放模型/工具。补偿按原 run 保存 `terminalOutput`、失败明细与原事件标记；更新 task 摘要前核对 `task.runId`，历史 run 点查不会借用最新一轮输出。
+
+Shell 同样只补保存：projector 为 `process-terminal:<execution.id>`，`eventSequence=1`，payload 为 `{execution,durableTaskId,cause}`。现有恢复入口识别这份进程载荷后更新原 SessionTask，不伪造 AgentEvent，不启动新进程。不增加表、队列或重试服务。旧终态保存故障不会阻止无关的新运行；启动/输入/工具的 unknown 写入保护仍保留。
+
 ## 快照与事件
 
 客户端 attach 单个 Session 时先拿原子快照：

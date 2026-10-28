@@ -114,7 +114,7 @@ export class DesktopSessionService {
     const client = await this.getClient()
     if (this.subscriptions.getOwnerSessionToken(owner.id, sessionId) !== token)
       throw new Error("会话已切换。")
-    if (input.jobId && !input.jobId.startsWith("workflow:")) throw new Error("无效的编排 ID。")
+    if (input.jobId !== undefined && !input.jobId.trim()) throw new Error("无效的编排 ID。")
     const snapshot = await readDesktopWorkflows(client, sessionId, input.jobId)
     if (this.subscriptions.getOwnerSessionToken(owner.id, sessionId) !== token)
       throw new Error("会话已切换。")
@@ -123,10 +123,10 @@ export class DesktopSessionService {
 
   async cancelWorkflow(owner: WebContents, input: DesktopWorkflowCancelInput): Promise<void> {
     const sessionId = requireString(input?.sessionId, "会话 ID")
-    const jobId = requireString(input?.jobId, "编排 ID")
+    const target = input?.target
+    if (target?.kind !== "workflow" || !target.jobId?.trim()) throw new Error("编排目标无效。")
     const token = this.subscriptions.getOwnerSessionToken(owner.id, sessionId)
     if (
-      !jobId.startsWith("workflow:") ||
       !token ||
       this.subscriptions.getOwnerSessionId(owner.id) !== sessionId
     )
@@ -134,7 +134,7 @@ export class DesktopSessionService {
     const client = await this.getClient()
     if (this.subscriptions.getOwnerSessionToken(owner.id, sessionId) !== token)
       throw new Error("会话已切换。")
-    await client.jobs.cancel(jobId, { sessionId, reason: "用户在编排面板中停止了执行" })
+    await client.jobs.cancel(target, { sessionId, reason: "用户在编排面板中停止了执行" })
   }
   readonly connection: DesktopSessionConnection
   readonly subscriptions = new SessionSubscriptionService()

@@ -33,3 +33,10 @@ AgentPool 与子 Agent 目录保存活跃实例；消息、运行和结算进度
 实例复用、子 Agent 登记和执行事件转写放在这里；一次运行的业务流程放在 session/execution。
 
 测试放在本分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移文件时同步导入、公开入口、文档链接与旧引用清单。
+
+
+## 共用执行核心（阶段 A）
+
+DaemonAgentEventProjector 是 child 持久投影的唯一入口；LiveChildAgentDirectory 只保存到真实 handle 的接线，不复制结果与运行状态。
+
+阶段 B 把 run 终态与 child.closed 都交给既有 `retry-terminal-projection` 补保存；启动、输入和工具失败仍传回执行核心。旧终态保存故障不阻塞无关新事件。独立恢复补齐原 run/transcript，仅在 task.runId 匹配时更新摘要；原 delivery error 的保存确认谓词直接读取原 settlement 是否 resolved，让已修复结果可按现有上限淘汰。Shell 的 `process-terminal:<execution.id>` 载荷走同一恢复入口。

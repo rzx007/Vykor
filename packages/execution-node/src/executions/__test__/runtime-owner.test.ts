@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ExecutionRuntimeOwner,
   DetachedProcessSupervisor,
-  ChildAgentExecutionRegistry,
 } from "../index.js";
 
 let cwd: string;
@@ -25,14 +24,10 @@ afterEach(async () => {
 });
 
 describe("host-owned execution resources", () => {
-  it("keeps framework child observation separate from process creation", () => {
-    const host = owner();
-    const processes = host.getDetachedProcessSupervisor(cwd);
-    const children = host.getChildAgentExecutionRegistry(cwd);
+  it("keeps process ownership in the existing supervisor", () => {
+    const processes = owner().getDetachedProcessSupervisor(cwd);
     expect(processes).toBeInstanceOf(DetachedProcessSupervisor);
-    expect(children).toBeInstanceOf(ChildAgentExecutionRegistry);
     expect("registerChildExecution" in processes).toBe(false);
-    expect("startShellExecution" in children).toBe(false);
   });
 
   it("reuses each backend within an owner and isolates cwd/session scopes", () => {
@@ -40,9 +35,6 @@ describe("host-owned execution resources", () => {
       scope = { cwd, sessionId: "same" };
     expect(host.getDetachedProcessSupervisor(scope)).toBe(
       host.getDetachedProcessSupervisor({ cwd: join(cwd, "."), sessionId: " same " }),
-    );
-    expect(host.getChildAgentExecutionRegistry(scope)).toBe(
-      host.getChildAgentExecutionRegistry(scope),
     );
     expect(host.getDetachedProcessSupervisor(scope)).not.toBe(
       host.getDetachedProcessSupervisor({ cwd, sessionId: "other" }),
@@ -80,19 +72,15 @@ describe("host-owned execution resources", () => {
     const host = owner(),
       scope = { cwd, sessionId: "close" };
     const processes = host.getDetachedProcessSupervisor(scope);
-    const children = host.getChildAgentExecutionRegistry(scope);
     let release!: () => void;
     const pending = new Promise<void>((resolve) => {
       release = resolve;
     });
     const stop = vi.spyOn(processes, "aclose").mockReturnValue(pending);
-    const detach = vi.spyOn(children, "close");
     const closing = host.close();
     expect(host.close()).toBe(closing);
     expect(() => host.getDetachedProcessSupervisor(scope)).toThrow(/closed/);
-    expect(() => host.getChildAgentExecutionRegistry(scope)).toThrow(/closed/);
     expect(stop).toHaveBeenCalledOnce();
-    expect(detach).toHaveBeenCalledOnce();
     let finished = false;
     void closing.then(() => {
       finished = true;
@@ -141,24 +129,6 @@ describe("host-owned execution resources", () => {
     expect(second.readOutput("same")).toBe("second");
   });
 
-  it("detaches child observers without becoming the child lifecycle owner", async () => {
-    const host = owner(),
-      children = host.getChildAgentExecutionRegistry(cwd);
-    const onStop = vi.fn(async () => {});
-    children.registerChildExecution({
-      id: "child",
-      cwd,
-      sessionId: "parent",
-      childSessionId: "child",
-      description: "child",
-      prompt: "work",
-      onInput: async () => {},
-      onStop,
-    });
-    await host.close();
-    expect(onStop).not.toHaveBeenCalled();
-    expect(() => children.registerChildExecution({} as any)).toThrow(/closed/);
-  });
 
   it("waits for in-flight process creation and stops through its environment backend", async () => {
     const host = owner(),
@@ -173,16 +143,19 @@ describe("host-owned execution resources", () => {
     const signal = vi.fn(async () => {
       exit({ exitCode: 143 });
     });
+    let requested!: () => void;
+    const entered = new Promise<void>(resolve => { requested = resolve; });
     const starting = supervisor.startShellExecution({
       cwd,
       command: "pwd",
       description: "late",
       processExecutor: {
-        execShell: () => acquired,
-        execProcess: () => acquired,
+        execShell: () => { requested(); return acquired; },
+        execProcess: () => { requested(); return acquired; },
       },
     });
     const rejected = expect(starting).rejects.toThrow(/closed during process creation/);
+    await entered;
     let finished = false;
     const closing = host.close().then(() => {
       finished = true;

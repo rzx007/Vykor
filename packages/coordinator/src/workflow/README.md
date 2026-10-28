@@ -22,3 +22,5 @@
 就绪队列、运行任务、阻塞原因和结果由 `runWorkflow()` 在内存中保存。`WorkflowRunRepository` 只约定保存、读取、领取运行权和等待变更等操作，磁盘或数据库实现属于宿主，当前目录没有 `store.ts`。
 
 调度通用规则与数据转换放在本目录，具体 worker、工作目录和存储实现放在相应宿主模块。测试放同层 `__test__/`。返回[源码导航](../README.md)。
+
+attempt deadline 和唯一 5 秒清理宽限由 task-runner 持有。宽限到期只发布 cleanupUnconfirmed，原 runner 尚未确认实际停止就继续等待；未知停止异常不进入下一次尝试。一次 attempt 结束后，其迟到 progress 不再改写新 attempt。默认 child runner 的查询失败带 retryable=false，不建立替代 worker；显式自定义 runner 也必须如实报告未确认清理。

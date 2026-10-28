@@ -1,3 +1,4 @@
+import { validateRequestSelection } from "../../session/interactions/request-selection-validation.js";
 import type { ModelsDevCatalog } from "@vykor/api";
 import type { CustomProviderModelSettings, CustomProviderSettings, Settings } from "@vykor/host-config";
 
@@ -23,11 +24,16 @@ export interface ModelLimitResolutionInput {
 export function createModelMetadataResolvers(
   settings: Pick<Settings, "customProviders">,
   catalog: ModelsDevCatalog,
+  current?: () => Promise<{ settings: Pick<Settings, "customProviders">; catalog: ModelsDevCatalog }>,
 ) {
   const customProviders = structuredClone(settings.customProviders);
   const limit = (kind: ModelLimitKind, input: { provider?: string; model: string }) =>
     resolveModelLimit(kind, { catalog, customProviders, ...input });
   return {
+    validateModelSelection: async (input: { provider?: string; model: string; effort?: string; explicitEffort: boolean }) => {
+      const live = await current?.();
+      return validateRequestSelection({ catalog: live?.catalog ?? catalog, customProviders: live ? live.settings.customProviders : customProviders, ...input, provider: input.provider, effort: input.effort });
+    },
     resolveReasoningEfforts: async ({ provider, model }: { provider?: string; model: string }) =>
       provider ? catalogModelReasoningEfforts(catalog, provider, model) : undefined,
     resolveModelContextWindow: async (input: { provider?: string; model: string }) => limit("context", input),

@@ -331,7 +331,7 @@ describe("FileWorkflowRunRepository", () => {
       reason: "user cancelled",
     });
 
-    expect(stopTask).toHaveBeenCalledWith("task_running", "user cancelled");
+    expect(stopTask).toHaveBeenCalledWith("task_running", "user cancelled", undefined);
     expect(result.status).toBe("failed");
     expect(result.results.running).toMatchObject({
       status: "killed",

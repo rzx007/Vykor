@@ -47,15 +47,15 @@ it("identifies a detached receipt without parsing worker prose or matching a dif
       content: [
         {
           type: "text",
-          text: '{"kind":"job","jobKind":"workflow","jobId":"workflow:w1","action":"created"}',
+          text: '{"kind":"job","jobKind":"workflow","jobId":"w1","action":"created"}',
         },
       ],
     })
   ).toBe("w1")
   expect(
-    workflowToolRunId('{"kind":"job","jobKind":"agent","jobId":"workflow:w1"}')
+    workflowToolRunId('{"kind":"job","jobKind":"agent","jobId":"w1"}')
   ).toBeUndefined()
-  expect(workflowToolRunId("Completed workflow:w1")).toBeUndefined()
+  expect(workflowToolRunId("Completed w1")).toBeUndefined()
 })
 
 it("reads the actual escaped synchronous Workflow notification envelope", () => {

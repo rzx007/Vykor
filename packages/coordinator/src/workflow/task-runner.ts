@@ -27,8 +27,10 @@ export async function runWorkflowTask(
   const startedAt = Date.now();
   let lastResult: WorkflowWorkerResult | undefined;
   let lastError: string | undefined;
+  let lastProgressMetadata: Record<string, unknown> | undefined;
   let lastProgressBudget: WorkflowTaskBudgetUsage | undefined;
   const recordProgress = (progress: WorkflowTaskProgress) => {
+    lastProgressMetadata = progress.metadata ?? lastProgressMetadata;
     lastProgressBudget = progress.budget ?? workflowBudgetFromMetadata(progress.metadata) ?? lastProgressBudget;
     reportProgress({
       ...progress,
@@ -37,6 +39,7 @@ export async function runWorkflowTask(
   };
 
   for (let attempt = 1; attempt <= retry.maxAttempts; attempt++) {
+    let acceptingProgress = true;
     try {
       recordProgress({
         summary: attempt === 1 ? "Task running" : `Retry attempt ${attempt} running`,
@@ -50,14 +53,15 @@ export async function runWorkflowTask(
           resumeFrom: attempt === 1 ? resumeFrom : undefined,
           budgetMode,
           budgetConserve,
-          reportProgress: recordProgress,
+          reportProgress: progress => { if (acceptingProgress) recordProgress(progress); },
           signal,
           deadlineAt,
         }),
         timeoutMs,
+        cleanupUnconfirmed => recordProgress({ summary: "Waiting for actual worker stop", metadata: { ...lastProgressMetadata, stopping: true, ...(cleanupUnconfirmed ? { cleanupUnconfirmed: true } : {}) } }),
       );
       const status = lastResult.status ?? "completed";
-      if (status === "completed" || !retry.retryOn.includes(status) || attempt === retry.maxAttempts) {
+      if (lastResult.metadata?.cleanupUnconfirmed || lastResult.metadata?.retryable === false || status === "completed" || !retry.retryOn.includes(status) || attempt === retry.maxAttempts) {
         return {
           ...lastResult,
           taskId: task.id,
@@ -74,24 +78,26 @@ export async function runWorkflowTask(
       const timeoutError = error instanceof WorkflowTaskTimeoutError ? error : undefined;
       const timedOut = timeoutError !== undefined;
       if (timeoutError?.lateResult) lastResult = timeoutError.lateResult;
-      if (timeoutError?.cleanupUnconfirmed || !retry.retryOn.includes("failed") || attempt === retry.maxAttempts) {
+      const uncertain = timeoutError?.cleanupUnconfirmed || hasUnconfirmedCleanup(error);
+      const errorMetadata = hasUnconfirmedCleanup(error) ? (error as { metadata?: Record<string, unknown> }).metadata : undefined;
+      if (uncertain || !retry.retryOn.includes("failed") || attempt === retry.maxAttempts) {
         return {
           taskId: task.id,
           status: "failed",
           summary: lastError,
           result: timeoutError?.lateResult?.result,
-          metadata: timeoutError?.lateResult?.metadata,
+          metadata: timeoutError?.lateResult?.metadata ?? (uncertain ? { ...lastProgressMetadata, ...errorMetadata, cleanupUnconfirmed: true, stopping: true } : undefined),
           budget: workflowBudgetFromMetadata(timeoutError?.lateResult?.metadata) ?? lastProgressBudget,
           attempts: attempt,
           dependencies: [...(task.dependsOn ?? [])],
           startedAt,
           finishedAt: Date.now(),
           timedOut,
-          ...(timeoutError?.cleanupUnconfirmed ? { cleanupUnconfirmed: true } : {}),
+          ...(uncertain ? { cleanupUnconfirmed: true } : {}),
           error: lastError,
         };
       }
-    }
+    } finally { acceptingProgress = false; }
   }
 
   return {
@@ -114,6 +120,7 @@ const CLEANUP_GRACE_MS = 5_000;
 async function runRunnerAttempt(
   start: (signal: AbortSignal, deadlineAt: number | undefined) => Promise<WorkflowWorkerResult> | WorkflowWorkerResult,
   timeoutMs: number | undefined,
+  onStopping: (cleanupUnconfirmed: boolean) => void,
 ): Promise<WorkflowWorkerResult> {
   const controller = new AbortController();
   if (timeoutMs === undefined) return await start(controller.signal, undefined);
@@ -129,6 +136,7 @@ async function runRunnerAttempt(
       resultPromise.then((value) => ({ timedOut: false as const, value })),
       new Promise<{ timedOut: true }>((resolve) => {
         timeout = setTimeout(() => {
+          onStopping(false);
           controller.abort(new WorkflowTaskTimeoutError(timeoutMs));
           resolve({ timedOut: true });
         }, timeoutMs);
@@ -142,13 +150,20 @@ async function runRunnerAttempt(
     const settled = await Promise.race([
       resultPromise.then(
         (value) => ({ confirmed: true as const, value }),
-        () => ({ confirmed: true as const }),
+        error => { if (hasUnconfirmedCleanup(error)) throw error; return { confirmed: true as const }; },
       ),
       new Promise<{ confirmed: false }>((resolve) => {
         graceTimer = setTimeout(() => resolve({ confirmed: false }), CLEANUP_GRACE_MS);
         graceTimer.unref?.();
       }),
     ]);
+    // The grace is diagnostic, never evidence that a real worker stopped.
+    // Keep this attempt owned until its original runner confirms settlement.
+    if (!settled.confirmed) {
+      onStopping(true);
+      const lateResult = await resultPromise.catch(error => { if (hasUnconfirmedCleanup(error)) throw error; return undefined; });
+      throw new WorkflowTaskTimeoutError(timeoutMs, false, lateResult);
+    }
     // Once the deadline wins, a late success must not turn a timed-out task
     // into a completed one. Keep any late result only as partial evidence.
     throw new WorkflowTaskTimeoutError(
@@ -183,4 +198,8 @@ function normalizeRetry(policy: WorkflowRetryPolicy | undefined): Required<Workf
     maxAttempts: Math.max(1, Math.floor(policy?.maxAttempts ?? 1)),
     retryOn: policy?.retryOn ?? ["failed"],
   };
+}
+
+function hasUnconfirmedCleanup(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "cleanupUnconfirmed" in error && error.cleanupUnconfirmed === true;
 }

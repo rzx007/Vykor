@@ -10,7 +10,7 @@ import type { SessionRunExecutor } from "./session-run-executor.js";
 
 export interface SessionRunAssemblyOptions {
   materializePluginAppContexts?(sessionId: string, value: unknown): Promise<{ items: SessionUserInputItem[]; assertCurrent(): void }>;
-  children?: { interruptRun(sessionId: string, runId: string, reason?: string): Promise<boolean> };
+  children?: { interruptRun(sessionId: string, runId: string, reason?: string): Promise<boolean>; waitRun?(sessionId: string, runId: string): Promise<void> };
   pendingPermissionId?: (sessionId: string) => string | undefined;
   preemptAutoReview?: (sessionId: string) => void;
   store: Pick<SessionStore, "conversations" | "conversationTransactions" | "runs" | "sessions" | "transaction">;

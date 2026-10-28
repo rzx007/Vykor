@@ -670,7 +670,7 @@ describe("VykorClient", () => {
   it("rejects the previous protocol by default instead of silently hiding plugin inputs", async () => {
     const client = new VykorClient({
       baseUrl: "http://127.0.0.1:3456",
-      fetch: (async () => jsonResponse({ serverVersion: "old", protocol: { version: 3 }, features: {} })) as typeof fetch,
+      fetch: (async () => jsonResponse({ serverVersion: "old", protocol: { version: 5 }, features: {} })) as typeof fetch,
     });
     await expect(client.protocol.capabilities()).rejects.toBeInstanceOf(IncompatibleProtocolError);
   });
@@ -862,7 +862,7 @@ describe("VykorClient", () => {
       token: "tok",
       fetch: (async (url: string | URL | Request) => {
         calls.push(String(url));
-        return jsonResponse({ jobs: [] });
+        return jsonResponse({ jobs: [], errors: [] });
       }) as typeof fetch,
     });
 
@@ -875,7 +875,7 @@ describe("VykorClient", () => {
         limit: 5,
         includeFinished: false,
       }),
-    ).resolves.toEqual([]);
+    ).resolves.toEqual({ jobs: [], errors: [] });
 
     expect(calls).toEqual([
       "http://127.0.0.1:3456/jobs?sessionId=session-1&startedAfter=10&limit=5&kinds=terminal%2Cagent&statuses=running%2Cfailed&includeFinished=false",

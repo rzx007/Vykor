@@ -266,7 +266,7 @@ describe("createDaemonAgentLoader", () => {
     const requestPermission = vi.fn();
     const createAgent = vi.fn(async () => agent);
     const createEventSink = vi.fn(() => sink);
-    const terminal = {} as any;
+    const terminal = { subscribe: () => () => {}, get: async () => undefined, list: async () => [] } as any;
     const terminalJobs = {} as any;
     const backgroundShell = { create: vi.fn() } as any;
     const backgroundShellJobs = {} as any;
@@ -281,11 +281,8 @@ describe("createDaemonAgentLoader", () => {
       requestPermission,
       schedules,
       createEventSink,
-      createTerminal: () => ({ value: terminal, jobs: terminalJobs }),
-      createBackgroundShell: () => ({
-        value: backgroundShell,
-        jobs: backgroundShellJobs,
-      }),
+      terminalProviderForSession: () => terminal,
+      shellAdmissionForSession: () => backgroundShell,
       tools,
       toolOverrides: [readOverride],
       trustedToolOverrides: ["Read"],
@@ -308,11 +305,8 @@ describe("createDaemonAgentLoader", () => {
       effort: "high",
       pluginsEnabled: false,
       capabilityOverrides: {
-        terminal: { value: terminal, jobs: terminalJobs },
-        backgroundShell: {
-          value: backgroundShell,
-          jobs: backgroundShellJobs,
-        },
+        terminal,
+        backgroundShell,
         schedules,
       },
       effects: { requestPermission },
@@ -338,7 +332,7 @@ describe("createDaemonAgentLoader", () => {
   });
 
   it("passes the daemon Terminal override through the real default Agent without creating a local Terminal", async () => {
-    const terminal = {} as any;
+    const terminal = { subscribe: () => () => {}, get: async () => undefined, list: async () => [] } as any;
     const terminalJobs = {} as any;
     const createLocalTerminal = vi.fn(async () => {
       throw new Error("daemon must not create a local Terminal provider");
@@ -355,7 +349,7 @@ describe("createDaemonAgentLoader", () => {
       } as any,
       createAgent: hostedAgentFactory(async ({ options }) =>
         (await vi.importActual<typeof import("@vykor/agent-runtime")>("@vykor/agent-runtime")).createDefaultNodeAgent(options)),
-      createTerminal: () => ({ value: terminal, jobs: terminalJobs }),
+      terminalProviderForSession: () => terminal,
     })!;
 
     const {agent:loaded,host} = await loader({ session, history: [], parts: [] });

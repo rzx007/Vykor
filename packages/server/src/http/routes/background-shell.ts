@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { Hono } from "hono";
 
-import type { JobReadResult } from "@vykor/protocol";
+import type { JobReadResult, JobTarget } from "@vykor/protocol";
 
 import type { BackgroundShellService } from "../../application/session/execution/background-shell-service.js";
 import {
@@ -14,7 +14,7 @@ import {
 
 export interface BackgroundShellRoutesContext {
   backgroundShells: Pick<BackgroundShellService, "create" | "stop">;
-  jobs: { read(input: { sessionId: string; jobId: string }): Promise<JobReadResult> };
+  jobs: { read(input: { sessionId: string; target: JobTarget }): Promise<JobReadResult> };
 }
 
 export function createBackgroundShellRoutes(context: BackgroundShellRoutesContext): Hono {
@@ -39,7 +39,7 @@ export function createBackgroundShellRoutes(context: BackgroundShellRoutesContex
     }
 
     try {
-      const result = await context.jobs.read({ sessionId, jobId: execution.id });
+      const result = await context.jobs.read({ sessionId, target: { kind: "shell", jobId: execution.id } });
       return jsonResponse({ jobId: execution.id, snapshot: result.snapshot }, 201);
     } catch (error) {
       if (created) {

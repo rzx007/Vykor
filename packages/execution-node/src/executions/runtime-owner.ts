@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { join, resolve } from "node:path";
 import { getProjectConfigDir } from "@vykor/host-config";
-import { ChildAgentExecutionRegistry } from "./child-agent-execution-registry.js";
 import { DetachedProcessSupervisor } from "./detached-process-supervisor.js";
 import type { ExecutionRuntimeScope } from "./types.js";
 import { LspClient, type LspServerConfig } from "../lsp/index.js";
@@ -26,7 +25,6 @@ function keyOf(scope: ExecutionRuntimeScope): string {
 export class ExecutionRuntimeOwner {
   private readonly id = randomUUID();
   private readonly processes = new Map<string, DetachedProcessSupervisor>();
-  private readonly children = new Map<string, ChildAgentExecutionRegistry>();
   private readonly scopes = new Map<string, ExecutionRuntimeScope>();
   private readonly closingScopes = new Map<string, Promise<void>>();
   private readonly lspCalls = new Map<Promise<unknown>, { key: string; abort: AbortController }>();
@@ -44,19 +42,6 @@ export class ExecutionRuntimeOwner {
       this.scopes.set(key, normalized);
     }
     return supervisor;
-  }
-
-  getChildAgentExecutionRegistry(scope?: Scope): ChildAgentExecutionRegistry {
-    const normalized = normalize(scope),
-      key = keyOf(normalized);
-    this.assertOpen(key);
-    let registry = this.children.get(key);
-    if (!registry) {
-      registry = new ChildAgentExecutionRegistry(this.outputDir(normalized, "child-agents"));
-      this.children.set(key, registry);
-      this.scopes.set(key, normalized);
-    }
-    return registry;
   }
 
   /** Each LSP request has its own signal/config; the host waits for active calls on close. */
@@ -97,19 +82,14 @@ export class ExecutionRuntimeOwner {
       )
       .map(([key]) => key);
     const work = keys.map((key) => {
-      const supervisor = this.processes.get(key),
-        children = this.children.get(key);
-      this.processes.delete(key);
-      this.children.delete(key);
-      this.scopes.delete(key);
-      children?.close(); // Observation only; the framework remains the child lifecycle owner.
+      const supervisor = this.processes.get(key);
       const calls = [...this.lspCalls].filter(([, value]) => value.key === key);
       for (const [, value] of calls) value.abort.abort(new Error("Execution scope is closing"));
       const processClosing = supervisor?.aclose() ?? Promise.resolve();
       const closing = settleShutdown([
         processClosing,
         Promise.allSettled(calls.map(([call]) => call)),
-      ]);
+      ]).then(() => { if (this.processes.get(key) === supervisor) this.processes.delete(key); this.scopes.delete(key); });
       this.closingScopes.set(key, closing);
       void closing.finally(() => this.closingScopes.delete(key)).catch(() => {});
       return closing;

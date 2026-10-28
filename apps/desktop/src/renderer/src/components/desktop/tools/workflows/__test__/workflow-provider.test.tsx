@@ -11,7 +11,7 @@ it("does not let completion of a previous session cancellation invalidate the ne
   let resolveNew!: (snapshot: DesktopWorkflowSnapshot) => void
   const read = ({ sessionId }: { sessionId: string }) =>
     sessionId === "old"
-      ? Promise.resolve({ sessionId, runs: [], errors: [], hasMore: false })
+      ? Promise.resolve({ sessionId, runs: [{ jobId: "a", target: { kind: "workflow", jobId: "a" } }], errors: [], hasMore: false } as DesktopWorkflowSnapshot)
       : new Promise<DesktopWorkflowSnapshot>((resolve) => {
           resolveNew = resolve
         })
@@ -36,7 +36,7 @@ it("does not let completion of a previous session cancellation invalidate the ne
         <p>{state?.snapshot?.sessionId ?? "loading"}</p>
         <button
           onClick={() => {
-            void state?.cancel("workflow:a")
+            void state?.cancel("a")
           }}
         >
           stop

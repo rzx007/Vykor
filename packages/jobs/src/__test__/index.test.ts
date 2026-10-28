@@ -52,6 +52,7 @@ function snapshot(
   return {
     id,
     kind,
+    target: kind === "agent" ? { kind, jobId: id, runId: "run" } : { kind, jobId: id },
     label: id,
     ownerSession: "session-1",
     status,

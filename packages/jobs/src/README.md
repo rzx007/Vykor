@@ -1,13 +1,7 @@
 # 后台任务共用接口
 
-| 文件 | 用途 |
-| --- | --- |
-| [index.ts](index.ts) | `@vykor/jobs` 公开入口，请求与宿主接口、终态判断和列表筛选 |
-| [contracts.ts](contracts.ts) | 任务快照、能力、状态、输出和等待结果，也由 `@vykor/jobs/contracts` 公开 |
-| [composite-agent-job-host.ts](composite-agent-job-host.ts) | 将多个任务来源组合成一个 `AgentJobHost` |
+[index.ts](index.ts) 定义宿主请求与筛选入口，[contracts.ts](contracts.ts) 定义纯数据，包括 `JobTarget`、快照、列表错误和接纳回执。
 
-`filterJobSnapshots` 验证时间与数量条件，筛选快照后按启动时间从新到旧排序。组合宿主的 `list` 先查询各来源、检查同一会话内任务标识是否冲突，再合并筛选；读取、等待、输入和取消都转交给任务所属来源。未缓存的任务会先通过各来源的列表重建归属，同一会话内找不到任务则报错。
+[routed-agent-job-host.ts](routed-agent-job-host.ts) 在构造时按 kind 固定来源。read、wait、send、cancel 直接访问 target 指定的来源，不调用 list。list 并行查询每种来源，保留成功项与来源错误，再统一筛选、排序和截断。
 
-组合宿主只保存来源列表和按会话、任务标识建立的内存归属缓存。输出正文、运行状态和进程句柄保留在各来源；`send` 的宿主授权证据只转交，不在本包解释。
-
-新增共用数据放 `contracts.ts`，接口与筛选放 `index.ts`，组合行为放对应实现文件。测试放 [__test__](__test__/)。
+本层只保存固定来源引用，不保存任务归属缓存、执行结果或进程。新增数据放 contracts，筛选放 index，路由行为及回归放本目录与 [__test__/](__test__/)。

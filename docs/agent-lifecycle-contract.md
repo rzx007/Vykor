@@ -74,11 +74,13 @@ stateDiagram-v2
 ```
 
 - **C1**：canonical `childId`/`sessionId` 在获取环境资源前完成冲突检查。
-- **C2**：创建、启动或事件投影失败后，不得留下可寻址的半初始化 handle。
-- **C3**：close/suspend 必须尝试 interrupt、等待创建、关闭 agent、释放 lease、注销 registry；失败汇总后仍进入终态。
+- **C2**：创建或启动回执失败时，已派发的真实 handle 仍保留原 run 与许可；先发停止请求，实际执行和准备资源确认撤销后才删除身份。尚未派发也必须确认创建与环境清理，不能以回执错误猜测已停止。
+- **C3**：close/suspend 依次确认 interrupt、创建结束、agent 关闭和 lease 释放；清理失败保留可定位的记录、资源与诊断，不发布已关闭。后续明确关闭可确认同一份清理。
 - **C4**：`child.closed` 只发布一次；daemon durable settlement 可重试，但不能重新激活 live child。
 - **C5**：root tree 共享查询目录，生命周期释放仍由创建 child 的 manager 负责。
-- **C6**：创建 child 前必须在 root tree 共享预算中原子预留 depth、active 和 total 名额；申请环境失败必须退回预留。suspend 不释放 active，close 只释放 active、不退回 total，详细计算见 [Agent Child Session Flow：Child 预算](./agent-child-session-flow.md#child-预算防止无限叫人)。
+- **C6**：同一 Registry 分别保留身份的 depth/total 与每轮运行许可。`activeChildren` 是尚未确认停止的 run 数；idle/suspended 身份不占许可，成功创建的累计 total 不随轮次完成或关闭减少。启动失败的预留只在资源撤销确认后回滚，详细计算见 [Agent Child Session Flow：Child 预算](./agent-child-session-flow.md#child-预算防止无限叫人)。
+- **C7**：`settled` 在真实 invocation 和附属清理结束后固定唯一结果，再发布终态。`interruptRun` 的 boolean 只确认停止请求已接纳；等待型调用方继续等待 `waitRun`。工具 abort/timeout 的 race 不能兑现停止屏障。
+- **C8**：终态保存失败不改实际结果、也不重新执行。`projectionError` 属于原 run；补偿只按原事件补齐记录，旧轮只在 `task.runId` 仍匹配时更新 child 摘要。未保存结果不能被 256 条留存上限淘汰。
 
 ### Daemon
 

@@ -13,6 +13,7 @@ import {
 const job: JobSnapshot = {
   id: "job-1",
   kind: "agent",
+  target: { kind: "agent", jobId: "agent-1", runId: "run-1" },
   label: "review",
   ownerSession: "s1",
   status: "running",

@@ -54,7 +54,7 @@
 
 ## 当前协议与数据基线
 
-- HTTP 协议版本是 `5`，请求头是 `x-vykor-protocol-version`。
+- HTTP 协议版本是 `6`，请求头是 `x-vykor-protocol-version`。
 - `/health` 和 `/capabilities` 是握手例外。Client 在首个业务请求前读取 capabilities；Server 在业务 handler 前拒绝缺失或不等于 5 的版本。
 - SQLite 以 `packages/services/src/session-runtime/migrations/0000_current_schema.sql` 为基线，其后为 `drizzle-kit generate` 产出的增量迁移链。
 - 每次打开都应用迁移链（基线 + 增量）；不做旧库接管或字段猜测，与当前基线不匹配的库删除重建。
@@ -105,3 +105,9 @@ OpenAI-compatible Provider、外部插件导入、平台 shell 选择、可靠�
 公共执行数据归 agent-contracts，本机配置归 host-config，本地执行/LSP 归 execution-node；Core 只负责历史和执行循环，Kernel 管 Run/Child，Node 创建默认能力并持有资源。Coordinator 保留定义解析、实例 TeamRegistry 和纯 Workflow 调度；WorkflowHost 位于 Node，文件/SQLite 仓库由宿主注入。Server 通过 HostedAgent 使用执行与宿主接口，显式执行 Goal 准入/记账和管理用例。
 
 阶段例外清零；未使用的 Coordinator 配置包装与依赖被删除。旧 Swarm 包随后在 2026-10-23 退役，团队登记由 Coordinator 的 TeamRegistry 持有，执行继续走 Node 宿主和 Kernel child，见[退役验收](./superpowers/reviews/2026-10-23-swarm-retirement-and-agent-tests.md)。SDK 安装包含声明依赖，独立消费者覆盖 Node/Kernel/Workflow、事件、子运行、关闭、错误身份及 Native Tool/PTY；该阶段的验收矩阵见 [P6 收口记录](./superpowers/reviews/2026-10-21-agent-package-convergence-closeout.md)。
+
+## SDK 与 daemon 共用执行核心（2026-10-28）
+
+Agent、Shell、Terminal、Workflow 的执行分别只归 ChildManager/FrameworkAgentRun、DetachedProcessSupervisor、Terminal provider 和 WorkflowHost/coordinator；Jobs 按 kind 与完整 target 定点路由。daemon 只接授权、环境、存储与返回格式。A、B 的审查提交及 C 的真实验收、删除清单和限制见 [实施计划](./superpowers/plans/2026-10-27-shared-execution-core.md)。
+
+Workflow 默认只控制真实 childId/runId；没有隐式 process 后端或查询失败重放。保留后代的父身份不会卸载；SDK 只保留有界结果，缺 archive 的旧轮被淘汰后明确报错；不提供跨进程执行自动重放。

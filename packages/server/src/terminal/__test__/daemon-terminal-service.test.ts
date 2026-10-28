@@ -1,3 +1,4 @@
+import { createAgentTerminalBundle } from "@vykor/terminal-node";
 import { describe, expect, it, vi } from "vitest";
 
 import { DaemonTerminalService } from "../daemon-terminal-service.js";
@@ -19,7 +20,7 @@ describe("DaemonTerminalService scoped environments", () => {
       } as any),
       spawnPty: () => pty.value,
     });
-    const terminal = await service.createAgentHost(session).open({ sessionId: session.id, cwd: session.cwd, command: "npm run dev" });
+    const terminal = await createAgentTerminalBundle({ cwd: session.cwd, sessionId: session.id, provider: service.providerForSession(session) }).terminal.open({ sessionId: session.id, cwd: session.cwd, command: "npm run dev" });
     expect(prepare).toHaveBeenCalledWith(expect.objectContaining({ shell: "/bin/sh", shellArgs: ["-lc", "npm run dev"] }));
     expect(terminal).toMatchObject({ command: "npm run dev", status: "running" });
     await service.close(terminal.id);
@@ -148,7 +149,7 @@ describe("DaemonTerminalService scoped environments", () => {
       spawnPty: vi.fn(() => pty.value),
     });
 
-    const terminal = await service.createAgentHost(session).open({
+    const terminal = await createAgentTerminalBundle({ cwd: session.cwd, sessionId: session.id, provider: service.providerForSession(session) }).terminal.open({
       sessionId: session.id,
       cwd: session.cwd,
     });

@@ -7,14 +7,13 @@ export async function readDesktopWorkflows(
   sessionId: string,
   selectedJobId?: string
 ): Promise<DesktopWorkflowSnapshot> {
-  const jobs = (
-    await client.jobs.list({ sessionId, kinds: ["workflow"], includeFinished: true, limit: 51 })
-  ).filter((job) => job.kind === "workflow" && job.ownerSession === sessionId)
-  const errors: DesktopWorkflowSnapshot["errors"] = []
+  const listed = await client.jobs.list({ sessionId, kinds: ["workflow"], includeFinished: true, limit: 51 })
+  const jobs = listed.jobs.filter((job) => job.kind === "workflow" && job.ownerSession === sessionId)
+  const errors: DesktopWorkflowSnapshot["errors"] = listed.errors.map(error => ({ jobId: error.kind, message: error.message }))
   const runs = await Promise.all(
     jobs.slice(0, 50).map(async (job) => {
       try {
-        const read = await client.jobs.read(job.id, { sessionId, maxChars: 1 })
+        const read = await client.jobs.read(job.target, { sessionId, maxChars: 1 })
         if (
           read.snapshot.ownerSession !== sessionId ||
           read.snapshot.kind !== "workflow" ||
@@ -33,7 +32,7 @@ export async function readDesktopWorkflows(
   )
   if (selectedJobId && !runs.some((run) => run.jobId === selectedJobId)) {
     try {
-      const read = await client.jobs.read(selectedJobId, { sessionId, maxChars: 1 })
+      const read = await client.jobs.read({ kind: "workflow", jobId: selectedJobId }, { sessionId, maxChars: 1 })
       if (
         read.snapshot.ownerSession !== sessionId ||
         read.snapshot.kind !== "workflow" ||

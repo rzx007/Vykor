@@ -97,8 +97,9 @@ export function projectWorkflowRun(read: JobReadResult): DesktopWorkflowRun {
       })
     : []
   return {
-    id: job.id.slice("workflow:".length),
+    id: job.id,
     jobId: job.id,
+    target: job.target,
     sessionId: job.ownerSession,
     title: job.label,
     status: details.termination === "cancelled" ? "killed" : job.status,

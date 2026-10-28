@@ -71,7 +71,7 @@ Agent runner → 通过 framework child（或显式 external task adapter）真�
 | Coordinator 模式 | `packages/coordinator/src/runtime/coordinator-mode.ts` | `getCoordinatorTools()` 含 `Workflow`；prompt / user context |
 | System prompt | `packages/coordinator/src/index.ts` | `COORDINATOR_SYSTEM_PROMPT` 说明何时用 Workflow vs Agent |
 | Workflow 工具 | `packages/tools/src/agent/workflow/tool.ts` | 校验参数并传递真实 scope/signal、children 和捕获的角色集合；一次合法调用只 invoke 一次 |
-| Jobs adapter | `packages/server/src/jobs/daemon-job-service.ts`、`packages/agent-runtime/src/node/jobs/local-agent-job-host.ts` | Workflow 普通 list/read/wait/cancel |
+| Jobs adapter | `packages/server/src/jobs/daemon-job-service.ts`、`packages/agent-runtime/src/node/jobs/node-job-bindings.ts` | Workflow 普通 list/read/wait/cancel |
 | Agent runner | `packages/agent-runtime/src/node/workflow/agent-workflow-runner.ts` | 默认 spawn/await framework child；也接受显式 external worker adapter |
 | 工具注册 | `packages/agent-runtime/src/node/tools/default-tool-registry.ts` | Node 有绑定后的 WorkflowToolPort 时才注册工具；工具不从 context 查找仓库 |
 | CLI 白名单 | `apps/cli/src/commands/main.ts` | coordinator 模式 `setAllowedTools(getCoordinatorTools())` |
@@ -205,29 +205,19 @@ onFinished:
 
 ```text
 createAgentWorkflowRunner()(context)
-  buildWorkerPrompt
-    task.prompt|description
-    + conserve hint（budgetMode=conserve）
-    + dependency results
-    + pipeline input（mode=pipeline）
-  │
-  ├─ resumeFrom.metadata.workerTaskId 存在
-  │    → live framework child 存在：awaitChildAgent(旧 id)
-  │    → 否则：awaitTask(旧 durable/external task id)
-  │    成功 → 映射结果 + git diff
-  │    失败 → 记 resumeError，改走 spawn
-  │
-  └─ agent.children.spawnChildAgent(WorkflowWorkerSpawnConfig)
-       isolate / permissionMode / tools / maxTurns（conserve 可覆盖）
-       → agent.children.awaitChildAgent(spawn.taskId, { timeoutMs })
-       → timeout 时 interruptChildAgent(spawn.taskId)
-       → getDiffSummary（worktree/cwd git）
-       → WorkflowWorkerResult
-            status / summary / result
-            metadata: agentId, workerTaskId, backendType, worktree, diff, changedFiles
+  buildWorkerPrompt（任务、依赖结果、pipeline input、conserve 提示）
+  ├─ resumeFrom：必须已有 workerTaskId + workerRunId
+  └─ spawnChildAgent：取得真实 childId + runId
+       → directory.get(childId)，固定该 handle
+       → handle.waitRun(runId)
+       → coordinator abort → interruptRun(runId)
+       → 原实际结果 + failureKind / partialResult / delivery + git diff
+       → 成功且已保存时 requestSuspend(runId)
 ```
 
-worker adapter 放在 `@vykor/agent-runtime/node/workflow`，`@vykor/coordinator` 保持纯调度。显式注入的 external worker 仍可通过 `awaitTask` / `stopTask` adapter 接入；默认 framework worker 直接使用 child handle。旧的文件邮箱、团队文件和权限同步包已经退役，不参与执行。
+默认 runner 无 process 回退、查询失败后 spawn、第二个等待期限或停止宽限。查询出错时仍要求原 run 停止，固定原真实结果屏障，确认后报告不可重试的查询错误；无法定位原回执或确认清理时保留 cleanupUnconfirmed，Jobs 显示 stopping。执行 completed 与交付回执的结论独立，不能把 NEEDS_CHANGES 变成审核通过。
+
+attempt deadline、唯一 5 秒诊断宽限与 retry 都由 coordinator 的 task-runner 持有。宽限到期仍等待原 worker，禁止重叠尝试；旧 attempt 的迟到 progress 不改新 attempt。持久枚举不新增 stopping，WorkflowHost 复用 active stopReason/cancellation 与未确认诊断映射 Jobs。重复取消重新确认原 child/run 的失败清理并沿用原取消 Promise。调用方若需另一执行方式，显式提供完整 WorkflowRunner；不再注入 awaitTask/stopTask 作为默认 runner 的另一后端。
 
 ## D. 持久化与恢复
 

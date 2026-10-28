@@ -39,7 +39,7 @@ export function summarizePart(part: SessionMessagePartRecord): SessionMessagePar
     if (!runId && part.toolName === "Workflow") {
       try {
         const job = record(JSON.parse(text));
-        if (job.kind === "job" && job.jobKind === "workflow" && job.action === "created" && typeof job.jobId === "string" && job.jobId.startsWith("workflow:")) runId = job.jobId.slice(9);
+        if (job.kind === "job" && job.jobKind === "workflow" && job.action === "created" && typeof job.jobId === "string") runId = job.jobId;
       } catch { /* Other domain actions keep their normal result. */ }
     }
     if (runId && runId.length <= 256) metadata = { ...metadata, workflowRunId: runId };

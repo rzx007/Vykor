@@ -23,6 +23,11 @@ export class LiveChildAgentDirectory {
     if (current?.childId === childId) this.entries.delete(sessionId);
   }
 
+  get(sessionId: string) {
+    const current = this.entries.get(sessionId);
+    return current?.rootAgent.children.get(current.childId);
+  }
+
   has(sessionId: string): boolean {
     const current = this.entries.get(sessionId);
     if (!current) return false;
@@ -47,7 +52,10 @@ export class LiveChildAgentDirectory {
       this.entries.delete(sessionId);
       return undefined;
     }
-    return await child.send(input);
+    const host = "host" in current.rootAgent ? (current.rootAgent as import("@vykor/agent-runtime").DefaultNodeAgent).host : undefined;
+    const view = host?.plugins.createRunCapabilityView();
+    const tools = view ? new Map([...(view.delegatableTools ?? []), ...view.tools]) : undefined;
+    return tools ? await child.send(input, tools) : await child.send(input);
   }
 
   async interrupt(sessionId: string, reason?: string): Promise<boolean> {
@@ -71,5 +79,11 @@ export class LiveChildAgentDirectory {
       return false;
     }
     return await child.interruptRun(runId, reason);
+  }
+
+  async waitRun(sessionId: string, runId: string): Promise<void> {
+    const child = this.get(sessionId);
+    if (!child) throw new Error(`Child runtime unavailable: ${sessionId}`);
+    await child.waitRun(runId);
   }
 }

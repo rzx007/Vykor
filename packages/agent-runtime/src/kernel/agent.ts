@@ -107,6 +107,8 @@ export interface VykorAgent {
     toolUse: ToolUseBlock,
     options: VykorAgentRunToolOptions,
   ): Promise<ToolExecutionResult>;
+  /** True only while no run, maintenance or retained descendant needs this instance. */
+  canSuspend?(): boolean | Promise<boolean>;
   getHistory(): Message[];
   loadHistory(messages: Message[]): void;
   clear(): void;
@@ -165,6 +167,9 @@ export class KernelAgent implements VykorAgent {
   }
   get state(): VykorAgentState {
     return this.lifecycleState;
+  }
+  canSuspend(): boolean | Promise<boolean> {
+    return this.lifecycleState === "idle" && !this.activeRun && !this.maintenance && !this.closePromise && this.options.childManager.list().length === 0;
   }
   subscribe(listener: AgentEventListener): AgentEventSubscription {
     return this.options.eventBus.subscribe(listener);
@@ -264,6 +269,7 @@ export class KernelAgent implements VykorAgent {
       async () => {
         const prepared = await this.options.preparation.prepare(scope);
         const toolSafety = this.options.toolSafety ?? prepared.run.toolSafety;
+        const invocations = new Set<Promise<void>>();
         try {
           validateToolSafety(toolSafety);
           const toolResults = await bindPreparedToolResults(prepared.run, tools, options.toolResults);
@@ -295,11 +301,18 @@ export class KernelAgent implements VykorAgent {
               emit: options.onToolEvent ?? (async () => {}),
               takeSteeredInputs: async () => [],
               closeSteering: () => {},
+              observeInvocation: settled => {
+                invocations.add(settled);
+                void settled.finally(() => invocations.delete(settled)).catch(() => {});
+              },
             },
           });
           if (!attempted) await deliver(result);
           return result;
-        } finally { await prepared.release(); }
+        } finally {
+          while (invocations.size) await Promise.allSettled([...invocations]);
+          await prepared.release();
+        }
       },
       controller,
     );
@@ -379,7 +392,17 @@ export class KernelAgent implements VykorAgent {
     return this.options.engine.getContextUsagePromptSource();
   }
   close(): Promise<void> {
-    if (this.closePromise) return this.closePromise;
+    if (this.closePromise) {
+      if (this.lifecycleState !== "closed") {
+        if (this.activeRun?.cleanupUnconfirmed) void this.activeRun.interrupt("Agent closed").catch(() => {});
+        // Keep the original close waiter; only signal retained child owners to
+        // confirm a failed cleanup. Their original close promises remain canonical.
+        for (const child of this.options.childManager.list()) {
+          if (child.runId && child.readRun(child.runId).cleanupUnconfirmed) void child.close().catch(() => {});
+        }
+      }
+      return this.closePromise;
+    }
     this.lifecycleState = "closing";
     this.maintenance?.controller?.abort("Agent closed");
     this.closePromise = (async () => {

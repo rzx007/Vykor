@@ -4,7 +4,7 @@ import { createMaintenanceApplicationService, type MaintenanceApplicationContext
 import { ToolOperationReviewService } from "./session/execution/tool-operation-review-service.js";
 import { ToolOperationService } from "./session/execution/tool-operation-service.js";
 import { ToolResultService } from "./session/execution/tool-result-service.js";
-import { isTrustedReadOnlyTool, markTrustedReadOnlyTool } from "@vykor/agent-runtime";
+import { createNodeJobBindings, isTrustedReadOnlyTool, markTrustedReadOnlyTool } from "@vykor/agent-runtime";
 import { GoalModelAttemptService } from "./goals/goal-model-attempt-service.js";
 import {hostedContextUsageAgent} from "./context-usage/assemble-session-context-usage.js";
 import { ToolAppOriginProjector } from "./agent/tool-app-origin-projector.js";
@@ -17,16 +17,15 @@ import { randomUUID } from "node:crypto";
 import { assemblePluginApps } from "./session/plugins/plugin-app-assembly.js";
 import { PluginAppConversationService } from "./session/plugins/plugin-app-conversation-service.js";
 
-import type { AgentBackgroundShellHost } from "@vykor/tools";
+import type { ShellAdmissionPorts } from "@vykor/execution-node";
+import type { AgentJobHost } from "@vykor/jobs";
+import { createTaskArchive } from "../jobs/job-snapshots.js";
 import type { Settings } from "@vykor/host-config";
 import type { ChannelConfigStore } from "@vykor/auth";
 import { createModelCatalogService } from "@vykor/api";
 import { fileReadTool } from "@vykor/tools";
 import { computePluginBehaviorDigest } from "@vykor/plugins";
-import {
-  type ObservableJobProducer,
-} from "@vykor/agent-runtime";
-import type { AgentTerminalHost } from "@vykor/terminal";
+import type { TerminalProvider } from "@vykor/terminal";
 import { readSessionRuntimeConfig } from "./session/configuration/runtime-configuration.js";
 import type { AttachmentLimits } from "@vykor/domain-contracts/attachments";
 import type { SessionRecord } from "@vykor/domain-contracts/sessions";
@@ -57,6 +56,7 @@ import { ScheduledTaskService } from "../daemon/scheduled-task-service.js";
 import { ScheduledTaskExecutor } from "./schedule/scheduled-task-executor.js";
 import { DaemonJobService, readPersistedChildActivity } from "../jobs/daemon-job-service.js";
 import type { ObservabilityEvent } from "../shared/observability.js";
+import { createAgentTerminalBundle } from "@vykor/terminal-node";
 import { DaemonTerminalService } from "../terminal/daemon-terminal-service.js";
 import { createSessionEnvironmentAcquirer } from "../runtime/session-execution-environment.js";
 import { sessionSettingsRoot } from "../runtime/session-settings-root.js";
@@ -163,8 +163,8 @@ export interface DaemonApplicationOptions {
   browserHost?: BrowserHost;
   /** 提供后 daemon 才构造渠道运行时与接入服务；未提供时渠道路由返回 503。 */
   channelConfigStore?: ChannelConfigStore;
-  createTerminal?(session: SessionRecord): ObservableJobProducer<AgentTerminalHost>;
-  createBackgroundShell?(session: SessionRecord): ObservableJobProducer<AgentBackgroundShellHost>;
+  terminalProviderForSession?(session: SessionRecord): TerminalProvider;
+  shellAdmissionForSession?(session: SessionRecord): ShellAdmissionPorts;
   log(event: ObservabilityEvent): void;
   ownerId?: string;
   ownerHeartbeatMs?: number;
@@ -413,7 +413,6 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       this.executionProjector = new SessionExecutionProjector({
         store,
-        getChildAgentExecutionRegistry: (scope) => this.executionOwner.getChildAgentExecutionRegistry(scope),
         events: this.eventPublisher,
         traceIdForRun: (runId) => this.traceIdForRun(runId),
         log: options.log,
@@ -460,15 +459,28 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       // JobWait / JobList 走这里：终端、后台 shell、子 Agent、workflow 合成一张本会话任务表。
       const toolAppOrigins = new ToolAppOriginProjector();
-      this.jobs = new DaemonJobService(
-        taskStore,
-        this.terminals,
-        (scope) => this.executionOwner.getDetachedProcessSupervisor(scope),
-        (scope) => this.executionOwner.getChildAgentExecutionRegistry(scope),
-        this.workflowHost,
-        this.executionProjector,
-        jobOperationGate,
-      );
+      this.jobs = new DaemonJobService(taskStore, sessionId => {
+        const warm = this.agentPool.peekHost(sessionId);
+        if (warm) return { ...warm.jobs,
+          list: input => warm.jobs.list(input), read: input => warm.jobs.read(input), wait: input => warm.jobs.wait(input), cancel: input => warm.jobs.cancel(input),
+          send: (input, authorization) => {
+            const view = warm.plugins.createRunCapabilityView();
+            return warm.jobs.send(input, authorization ?? { ...view, tools: new Map([...(view.delegatableTools ?? []), ...view.tools]) });
+          },
+        };
+        const session = store.sessions.get(sessionId)!;
+        const processes = this.executionOwner.getDetachedProcessSupervisor({ cwd: session.cwd, sessionId });
+        const provider = options.terminalProviderForSession?.(session) ?? this.terminals.providerForSession(session);
+        const terminal = createAgentTerminalBundle({ cwd: session.cwd, sessionId, provider, ownsProvider: false });
+        const bindings = createNodeJobBindings({
+          child: { cwd: session.cwd, sessionId, processes, children: { get: () => undefined, getBySessionId: () => undefined, list: () => [] },
+            sendChildInput: async () => { throw new Error("Live child runtime unavailable"); }, archive: createTaskArchive(store, sessionId, "agent") },
+          process: { cwd: session.cwd, sessionId, processes, admission: this.backgroundShells.admissionForSession(session), archive: createTaskArchive(store, sessionId, "process") },
+          terminal: terminal.jobs, workflow: this.workflowHost.bind({ cwd: session.cwd, sessionId }).jobs,
+        });
+        const forward = async <T>(work: () => Promise<T>) => { try { return await work(); } finally { await terminal.cleanup(); } };
+        return { list: input => forward(() => bindings.jobs.list(input)), read: input => forward(() => bindings.jobs.read(input)), wait: input => forward(() => bindings.jobs.wait(input)), send: (input, authorization) => forward(() => bindings.jobs.send(input, authorization)), cancel: input => forward(() => bindings.jobs.cancel(input)) } satisfies AgentJobHost;
+      });
 
       const attachmentAuthorizationSessions = createAttachmentAuthorizationSessionResolver({
         store: { getSession: (id) => store.sessions.get(id) },
@@ -518,46 +530,17 @@ export class DaemonApplication implements DurableAgentApplication {
           error: error instanceof Error ? error.message : String(error),
         }),
         getSession: (id) => store.sessions.get(id),
-        prepareModelMetadata: async settings =>
-          createModelMetadataResolvers(settings, await this.modelCatalog.load()),
+        prepareModelMetadata: async (settings, session) =>
+          createModelMetadataResolvers(settings, await this.modelCatalog.load(), async () => ({
+            settings: await runtimeDiscovery.resolveSettings(session.cwd) ?? settings,
+            catalog: await this.modelCatalog.load(),
+          })),
         createAgent: options.createAgent,
         mcpRuntimeRegistry: this.mcpRuntimes,
         acquireEnvironment: acquireSessionEnvironment,
-        createTerminal:
-          options.createTerminal ??
-          ((session) => ({
-            value: this.terminals.createAgentHost(session),
-            jobs: this.jobs.createTerminalAgentHost(session),
-          })),
-        createBackgroundShell:
-          options.createBackgroundShell ??
-          ((session) => ({
-            value: {
-              create: async (input) => {
-                const owner = store.sessions.get(input.sessionId);
-                if (
-                  !owner ||
-                  owner.status === "archived" ||
-                  !isSessionInTree({ getSession: (id) => store.sessions.get(id) }, session.id, owner.id)
-                ) {
-                  throw new Error("Background shell owner session mismatch.");
-                }
-                if (input.cwd !== owner.cwd) throw new Error("Background shell cwd mismatch.");
-                const { execution } = await this.backgroundShells.create({
-                  sessionId: owner.id,
-                  requestId: input.requestId,
-                  command: input.command,
-                  description: input.description,
-                  settings: input.settings,
-                  shellDescriptor: input.shellDescriptor,
-                  executionCwd: input.executionCwd,
-                  origin: "tool",
-                });
-                return { jobId: execution.id, label: execution.description };
-              },
-            },
-            jobs: this.jobs.createDetachedProcessAgentHost(session),
-          })),
+        terminalProviderForSession: options.terminalProviderForSession ?? (session => this.terminals.providerForSession(session)),
+        shellAdmissionForSession: options.shellAdmissionForSession ?? (session => this.backgroundShells.admissionForSession(session)),
+        jobArchiveForSession: sessionId => ({ agent: createTaskArchive(store, sessionId, "agent"), process: createTaskArchive(store, sessionId, "process") }),
         workflowRepository: this.workflows,
         workflowHost: this.workflowHost,
         tools: async ({ session,settings }) => {
@@ -661,7 +644,6 @@ export class DaemonApplication implements DurableAgentApplication {
             toolAppOrigins,
             store,
             transcriptProjection: this.transcriptProjection,
-            executionProjector: this.executionProjector,
             liveChildren: this.liveChildren,
             events: this.eventPublisher,
             log: options.log,

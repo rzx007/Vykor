@@ -56,23 +56,7 @@ workflowLifecycleScenarios("SQLite", fixture);
 it("DaemonJobService cancels its shared live WorkflowHost and waits for worker cleanup", async () => {
   const { store, repository, cleanup: cleanupFixture } = fixture();
   const host = new WorkflowHost(repository);
-  const unusedRuntime = () => {
-    throw new Error("Workflow runner owns this worker");
-  };
-  const jobs = new DaemonJobService(
-    {
-      getSession: (id) => store.sessions.get(id),
-      listSessionTasks: (id) => store.listSessionTasks(id),
-      getSessionTask: (id) => store.getSessionTask(id),
-      updateSessionTask: (id, input) => store.updateSessionTask(id, input),
-      transitionPendingSessionTask: (id, input) =>
-        store.transitionPendingSessionTask(id, input),
-    },
-    { list: async () => [] } as unknown as DaemonTerminalService,
-    unusedRuntime,
-    unusedRuntime,
-    host,
-  );
+  const jobs = new DaemonJobService({ getSession: id => store.sessions.get(id) }, sessionId => host.bind({ cwd: store.sessions.get(sessionId)!.cwd, sessionId }).jobs);
   const started = latch();
   const aborted = latch();
   const cleanup = latch();
@@ -95,7 +79,7 @@ it("DaemonJobService cancels its shared live WorkflowHost and waits for worker c
     await started.promise;
     const cancelling = jobs.cancel({
       sessionId: "owner",
-      jobId: "workflow:active",
+      target: { kind: "workflow", jobId: "active" },
     });
     void cancelling.then(
       () => {
@@ -112,7 +96,7 @@ it("DaemonJobService cancels its shared live WorkflowHost and waits for worker c
     expect(repository.load("active")?.status).toBe("running");
     cleanup.release();
     await expect(cancelling).resolves.toMatchObject({
-      id: "workflow:active",
+      id: "active",
       status: "killed",
     });
     await run;

@@ -3,11 +3,13 @@ import type { ApprovalMode, WorkMode } from "../policy/permissions.js";
 /** Limits shared by every descendant of one root agent. The root itself is depth 0. */
 export interface AgentChildBudget {
   maxDepth: number;
+  /** Maximum child runs whose invocation and cleanup have not confirmed stop. */
   maxActiveChildren: number;
   maxTotalChildren: number;
 }
 
 export interface AgentChildBudgetSnapshot extends AgentChildBudget {
+  /** Idle/suspended identities do not occupy this count. */
   activeChildren: number;
   totalChildren: number;
 }
@@ -149,8 +151,8 @@ export class AgentRunNotAcceptingInputError extends Error {
 export interface AgentChildInvocation {
   id: string;
   sessionId: string;
-  inputId?: string;
-  runId?: string;
+  inputId: string;
+  runId: string;
   result: Promise<AgentChildResult>;
   worktree?: { path: string; branch: string };
   notice?: string;
@@ -190,15 +192,32 @@ export interface AgentPostRunChildParent {
 
 export interface AgentSteerInput extends AgentChildInput {}
 
+export interface AgentChildRunSnapshot {
+  readonly receipt: AgentInputReceipt;
+  readonly startedAt: number;
+  readonly updatedAt: number;
+  readonly stopping: boolean;
+  readonly result?: AgentChildResult;
+  readonly stoppedAt?: number;
+  readonly projectionError?: { readonly message: string };
+  /** The real cleanup/stop failed; this is not a saved terminal result. */
+  readonly cleanupUnconfirmed?: { readonly message: string };
+}
+
 export interface AgentChildHandle {
   readonly id: string;
   readonly sessionId: string;
   readonly state: "starting" | "running" | "idle" | "suspended" | "closing" | "closed";
   readonly result: Promise<AgentChildResult>;
+  readonly runId?: string;
+  readRun(runId: string): AgentChildRunSnapshot;
+  waitRun(runId: string): Promise<AgentChildRunSnapshot>;
   /** Read-only bounded activity of the current Run; undefined without observed events. */
   readonly activity?: ChildActivitySnapshot;
   /** Host-owned current Run selection, separate from user input and metadata. */
-  send(input: AgentChildInput): Promise<AgentInputReceipt>;
+  send(input: AgentChildInput, authorization?: ReadonlyMap<string, import("./execution.js").RunToolBinding>): Promise<AgentInputReceipt>;
+  /** Unload only this stopped, saved run; a newer run or unsafe work keeps the instance. */
+  requestSuspend?(expectedRunId: string): Promise<boolean>;
   interrupt(reason?: string): Promise<void>;
   /** Interrupts only the matching current Run, leaving the child available for reuse. */
   interruptRun(expectedRunId: string, reason?: string): Promise<boolean>;

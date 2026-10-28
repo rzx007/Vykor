@@ -13,6 +13,8 @@ import type { SessionExecutionRecord, SessionRecord, SessionStatus, SessionTaskS
 import type {
   DetachedProcessExecution,
   DetachedProcessSupervisor,
+  ShellAdmissionPorts,
+  StartShellExecutionOptions,
 } from "@vykor/execution-node";
 
 import type { SessionExecutionProjector } from "../transcript/session-execution-projector.js";
@@ -114,12 +116,6 @@ export class BackgroundShellService {
   private readonly sessions: BackgroundShellSessionQueries;
   private readonly tasks: BackgroundShellTaskOperations;
 
-  private readonly starting = new Map<string, Promise<DetachedProcessExecution>>();
-  private readonly environmentLeases = new Map<string, {
-    lease: ExecutionEnvironmentHandle;
-    unsubscribe: () => void;
-  }>();
-
   constructor(private readonly context: BackgroundShellServiceContext) {
     this.sessions = context.store;
     this.tasks = context.store;
@@ -203,6 +199,10 @@ export class BackgroundShellService {
     const scope = this.resolveScope(input, { requireActiveSession: true });
     const lease = scope.sessionId ? this.context.operationGate?.enter({ sessionId: scope.sessionId, cwd: scope.cwd }) : undefined;
     try { return await this.createInScope(input, scope); }
+    catch (error) {
+      if (!(error instanceof BackgroundShellError) && error instanceof Error && error.message.includes("identity conflict")) throw new BackgroundShellError(409, error.message);
+      throw error;
+    }
     finally { lease?.release(); }
   }
 
@@ -230,132 +230,53 @@ export class BackgroundShellService {
     }
 
     const requestNamespace = input.origin ?? "http";
-    const requestFingerprint = shellRequestFingerprint({
-      cwd: scope.cwd,
-      command,
-      description,
-      settings: input.settings,
-      executionCwd: input.executionCwd,
-    });
-    let eventCursor = this.context.events.checkpoint();
-    const reservation = this.tasks.reserveSessionTask({
-      id: `task_${randomUUID()}`,
-      sessionId: scope.sessionId,
-      requestNamespace,
-      requestId,
-      type: "shell",
-      description,
-      cwd: scope.cwd,
-      metadata: {
-        origin: requestNamespace,
-        admissionPhase: "reserved",
-        requestFingerprint,
-        executionBackend: "detached_process",
-      },
-    });
-    this.context.events.publishSince(eventCursor);
-    eventCursor = this.context.events.checkpoint();
-    if (!reservation.created) {
-      if (reservation.task.metadata.requestFingerprint !== requestFingerprint) {
-        throw new BackgroundShellError(409, `Background shell request identity conflict: ${requestId}`);
-      }
-      const starting = this.starting.get(reservation.task.id);
-      if (starting) return { execution: await starting, created: false };
-      const runtime = manager.getExecution(reservation.task.id);
-      const admissionPhase = reservation.task.metadata.admissionPhase;
-      if (runtime && (admissionPhase === "reserved" || admissionPhase === "dispatching")) {
-        throw new BackgroundShellError(409, "Background shell startup owner is unavailable");
-      }
-      return { execution: runtime ?? reservation.task, created: false };
-    }
-
-    const starting = this.startReservedShell(input, scope as TaskScope & { sessionId: string }, manager, reservation.task.id, command, description, eventCursor);
-    this.starting.set(reservation.task.id, starting);
-    try { return { execution: await starting, created: true }; }
-    finally { this.starting.delete(reservation.task.id); }
+    const id = `task_${createHash("sha256").update(`${scope.sessionId}\0${requestNamespace}\0${requestId}`).digest("hex").slice(0, 32)}`;
+    const created = !this.tasks.getSessionTask(id);
+    const execution = await manager.startShellExecution({ id, requestId, requestNamespace, command, description, cwd: scope.cwd, sessionId: scope.sessionId,
+      ...(input.settings ? { settings: input.settings } : {}), ...(input.executionCwd ? { executionCwd: input.executionCwd } : {}), ...(input.shellDescriptor ? { shellDescriptor: input.shellDescriptor } : {}) }, this.admissionForSession(this.sessions.getSession(scope.sessionId)!));
+    return { execution, created };
   }
 
-  private async startReservedShell(
-    input: { settings?: Settings; shellDescriptor?: ShellDescriptor; executionCwd?: string },
-    scope: TaskScope & { sessionId: string },
-    manager: ProcessSupervisor,
-    taskId: string,
-    command: string,
-    description: string,
-    eventCursor: number,
-  ): Promise<DetachedProcessExecution> {
-    this.tasks.updateSessionTask(taskId, {
-      metadata: { admissionPhase: "dispatching" },
-    });
-    this.context.events.publishSince(eventCursor);
-    eventCursor = this.context.events.checkpoint();
-    let task: DetachedProcessExecution;
-    let environmentLease: ExecutionEnvironmentHandle | undefined;
-    let executionCwd: string | undefined;
-    try {
-      if (this.context.acquireEnvironment) {
-        const session = this.sessions.getSession(scope.sessionId);
-        if (!session) throw new BackgroundShellError(404, "Session not found");
+  /** 仅提供持久读取、预留与环境端口；启动/取消/释放顺序由 supervisor 决定。 */
+  admissionForSession(session: SessionRecord): ShellAdmissionPorts {
+    return {
+      reserve: async input => {
+        this.resolveScope({ sessionId: session.id, cwd: input.cwd }, { requireActiveSession: true });
+        if (!input.id || !input.requestId) throw new BackgroundShellError(400, "Shell identity is required");
+        const requestFingerprint = shellRequestFingerprint({ cwd: input.cwd, command: input.command ?? JSON.stringify(input.argv), description: input.description, settings: input.settings, executionCwd: input.executionCwd });
+        const before = this.context.events.checkpoint();
+        const reserved = this.tasks.reserveSessionTask({ id: input.id, sessionId: session.id, requestNamespace: input.requestNamespace ?? "tool", requestId: input.requestId, type: "shell", description: input.description, cwd: input.cwd,
+          metadata: { origin: input.requestNamespace ?? "tool", admissionPhase: "reserved", requestFingerprint, executionBackend: "detached_process" } });
+        this.context.events.publishSince(before);
+        if (reserved.task.id !== input.id || reserved.task.metadata.requestFingerprint !== requestFingerprint) throw new BackgroundShellError(409, `Background shell request identity conflict: ${input.requestId}`);
+      },
+      load: async id => {
+        const task = this.tasks.getSessionTask(id) as SessionExecutionRecord | undefined;
+        if (!task) return undefined;
+        if (task.sessionId !== session.id) throw new BackgroundShellError(409, "Background shell owner session mismatch");
+        return { id: task.id, backend: "detached_process", type: "shell", status: task.status === "interrupted" ? "stopped" : task.status, description: task.description, cwd: task.cwd, sessionId: task.sessionId,
+          createdAt: task.createdAt, startedAt: task.startedAt, finishedAt: task.finishedAt, metadata: Object.fromEntries(Object.entries(task.metadata).filter((entry): entry is [string, string] => typeof entry[1] === "string")) };
+      },
+      save: async execution => {
+        const manager = this.context.getDetachedProcessSupervisor({ cwd: session.cwd, sessionId: session.id });
+        this.context.executionProjector.trackProcessExecution(manager, execution.id);
+        const before = this.context.events.checkpoint();
+        this.context.executionProjector.syncPersistentExecution(execution, manager);
+        this.context.events.publishSince(before);
+      },
+      acquireEnvironment: async input => {
+        if (!this.context.acquireEnvironment) return { launch: input, release: async () => {} };
         const settings = input.settings ?? await this.context.getSettingsForCwd?.(sessionSettingsRoot(session));
         if (!settings) throw new BackgroundShellError(400, "Background shell settings are required");
-        environmentLease = await this.context.acquireEnvironment(
-          session,
-          settings,
-          { kind: "background", id: taskId },
-        );
-        if (input.shellDescriptor && !sameShellDescriptor(
-          input.shellDescriptor,
-          environmentLease.info.shellDescriptor,
-        )) {
-          throw new BackgroundShellError(409, "Background shell no longer matches the owning session shell.");
-        }
-        const resolvedCwd = await environmentLease.paths.resolve(
-          input.executionCwd ?? environmentLease.workspace.executionRoot, "execute",
-        );
-        if (resolvedCwd.mountPurpose !== "workspace") {
-          throw new BackgroundShellError(409, "Background shell execution cwd is outside the workspace");
-        }
-        executionCwd = resolvedCwd.executionPath;
-      }
-      task = await manager.startShellExecution({
-        id: taskId,
-        command,
-        description,
-        cwd: scope.cwd,
-        sessionId: scope.sessionId,
-        ...(input.settings ? { settings: input.settings } : {}),
-        ...(environmentLease ? {
-          processExecutor: bindEnvironmentProcessExecutor(environmentLease, executionCwd),
-        } : {}),
-      });
-    } catch (error) {
-      await environmentLease?.release();
-      this.tasks.transitionPendingSessionTask(taskId, {
-        status: "failed",
-        error: errorMessage(error),
-        metadata: { admissionPhase: "failed" },
-      });
-      this.context.events.publishSince(eventCursor);
-      throw error;
-    }
-    if (environmentLease) this.trackEnvironmentLease(manager, task, environmentLease);
-    const confirmation = this.tasks.transitionPendingSessionTask(task.id, {
-      status: processTaskStatus(task.status),
-      metadata: {
-        admissionPhase: "confirmed",
-        runtimeExecutionId: task.id,
+        const environment = await this.context.acquireEnvironment(session, settings, { kind: "background", id: input.id! });
+        try {
+          if (input.shellDescriptor && !sameShellDescriptor(input.shellDescriptor, environment.info.shellDescriptor)) throw new BackgroundShellError(409, "Background shell no longer matches the owning session shell.");
+          const cwd = await environment.paths.resolve(input.executionCwd ?? environment.workspace.executionRoot, "execute");
+          if (cwd.mountPurpose !== "workspace") throw new BackgroundShellError(409, "Background shell execution cwd is outside the workspace");
+          return { launch: { ...input, processExecutor: bindEnvironmentProcessExecutor(environment, cwd.executionPath) }, release: () => environment.release() };
+        } catch (error) { await environment.release(); throw error; }
       },
-    });
-    if (!confirmation.transitioned && confirmation.task.status === "stopped" && task.status !== "stopped") {
-      task = await manager.stopExecution(task.id);
-      this.tasks.updateSessionTask(task.id, {
-        metadata: { admissionPhase: "cancelled_before_start" },
-      });
-    }
-    this.context.executionProjector.trackProcessExecution(manager, task.id);
-    this.context.executionProjector.syncPersistentExecution(task, manager);
-    this.context.events.publishSince(eventCursor);
-    return task;
+    };
   }
 
   get(taskId: string, input: { cwd?: string; sessionId?: string }): { execution: unknown; output?: string } {
@@ -393,36 +314,10 @@ export class BackgroundShellService {
     const persisted = scope.sessionId ? this.tasks.getSessionTask(taskId) : undefined;
     const managerTaskId = persisted ? runtimeExecutionId(persisted) : taskId;
     const task = await manager.stopExecution(managerTaskId);
-    if (task.status !== "pending" && task.status !== "running") {
-      await this.releaseEnvironmentLease(managerTaskId);
-    }
     if (scope.sessionId && persisted) {
       this.context.executionProjector.syncPersistentExecution(task, manager, persisted.id);
     }
     return { execution: task };
-  }
-
-  private trackEnvironmentLease(
-    manager: ProcessSupervisor,
-    task: DetachedProcessExecution,
-    lease: ExecutionEnvironmentHandle,
-  ): void {
-    const releaseIfTerminal = (execution: DetachedProcessExecution) => {
-      if (execution.id !== task.id) return;
-      if (execution.status === "pending" || execution.status === "running") return;
-      void this.releaseEnvironmentLease(task.id);
-    };
-    const unsubscribe = manager.registerExecutionListener(releaseIfTerminal);
-    this.environmentLeases.set(task.id, { lease, unsubscribe });
-    releaseIfTerminal(task);
-  }
-
-  private async releaseEnvironmentLease(taskId: string): Promise<void> {
-    const owned = this.environmentLeases.get(taskId);
-    if (!owned) return;
-    this.environmentLeases.delete(taskId);
-    owned.unsubscribe();
-    await owned.lease.release();
   }
 
   private resolveScope(
@@ -490,7 +385,7 @@ function stableJson(value: unknown): string {
 }
 
 function processTaskStatus(status: DetachedProcessExecution["status"]): SessionTaskStatus {
-  return status;
+  return status === "stopping" ? "running" : status;
 }
 
 function runtimeExecutionId(task: { id: string; metadata: Record<string, unknown> }): string {

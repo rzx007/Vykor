@@ -36,7 +36,6 @@ function harness(client: StreamingMessageClient, tools: ToolDefinition[] = []) {
     projectorId: "daemon-agent:a", rootSessionId: session.id,
     rootAgent: {} as any, store,
     transcriptProjection: new SessionTranscriptProjection(store),
-    executionProjector: {} as any,
     liveChildren: { register() {}, unregister() {} },
     events: { checkpoint: () => store.conversations.latestEventSeq(), publish() {}, publishSince() {} },
     log() {},

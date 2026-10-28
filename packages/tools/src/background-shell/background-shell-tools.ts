@@ -62,6 +62,7 @@ return {
             kind: "job",
             action: "created",
             jobId: created.jobId,
+            target: { kind: "shell", jobId: created.jobId },
             jobKind: "shell",
             label: created.label,
           }),

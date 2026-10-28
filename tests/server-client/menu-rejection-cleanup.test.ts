@@ -29,7 +29,7 @@ function fixture() {
     const body = options?.body ? JSON.parse(String(options.body)) : {};
     let result: unknown;
     try {
-      if (path === "/capabilities") result = { serverVersion: "fixture", protocol: { version: 5 }, features: { pluginApps: 1 } };
+      if (path === "/capabilities") result = { serverVersion: "fixture", protocol: { version: 6 }, features: { pluginApps: 1 } };
       else if (path.endsWith("/open")) result = await server.open("s", body);
       else {
         const source = { sessionId: "s", appId: path.split("/")[4]! };

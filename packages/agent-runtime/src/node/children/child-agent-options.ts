@@ -56,8 +56,8 @@ export function deriveChildAgentOptions(
   input: DeriveChildAgentOptionsInput,
 ): VykorAgentOptions {
   const { configuration, child } = input;
-  const childModel = child.model ?? configuration.model;
-  const childEffort = isSupportedEffort(child.effort)
+  const childModel = child.model === "inherit" ? configuration.model ?? input.settings.model : child.model ?? configuration.model;
+  const childEffort = child.effort !== "inherit" && isSupportedEffort(child.effort)
     ? child.effort
     : configuration.effort;
   const inheritsModel = childModel === configuration.model;
@@ -88,7 +88,7 @@ export function deriveChildAgentOptions(
     settings: settingsForApprovalMode(input.settings, approvalMode),
     cwd: input.cwd,
     sessionId: input.sessionId,
-    model: child.model ?? configuration.model,
+    model: child.model === "inherit" ? configuration.model ?? input.settings.model : child.model ?? configuration.model,
     systemPrompt: child.systemPrompt ?? configuration.systemPrompt,
     workMode:
       configuration.workMode === "plan" ||

@@ -1,5 +1,7 @@
 # Agent 核心包架构收敛方案
 
+> 历史快照：本文的 child 等待 adapter 是当时落点，已由 [共用执行核心方案](../specs/2026-10-27-shared-execution-core-design.md) 的真实 childId/runId 路径替代并删除；旧源码行号不代表现状。
+
 > 状态：架构调整方案已完成实施；2026-10-22 P0–P6 全部验收通过。公共契约、本机配置、execution-node、Kernel/Node、显式模型准入和 Server 用例均已收敛，阶段例外为 0。当前接口见权威文档，实施结果见 [P6 收口记录](../reviews/2026-10-21-agent-package-convergence-closeout.md)。
 > 范围：packages 的职责、依赖、运行状态所有权和公开入口。实施顺序见[分阶段实施计划](../plans/2026-10-21-agent-package-convergence.md)。
 
@@ -51,7 +53,7 @@
 
 - [core 公共入口](../../../packages/core/src/index.ts)、[ToolContext](../../../packages/agent-contracts/src/tools/tools.ts)、[QueryEngine](../../../packages/core/src/engine/query-engine.ts)。13 个其他 package 的业务源码导入 core，很多只需要类型或路径函数。
 - [Kernel 组装](../../../packages/agent-runtime/src/kernel/index.ts)、[Agent 接口](../../../packages/agent-runtime/src/kernel/agent.ts)、[默认组装](../../../packages/agent-runtime/src/node/agent/agent-composition.ts)。Kernel 不主动发现插件，但返回接口仍带插件目录、应用记录和 Goal 参数。
-- [Workflow 工具](../../../packages/tools/src/agent/workflow/tool.ts)、[worker runner（现归 Node）](../../../packages/agent-runtime/src/node/workflow/agent-workflow-runner.ts)、[本地 Jobs（现归 Node）](../../../packages/agent-runtime/src/node/jobs/local-agent-job-host.ts)。迁移前工具内含后台 Promise、取消监听和持久记录查询；P3 已移入 Host。
+- [Workflow 工具](../../../packages/tools/src/agent/workflow/tool.ts)、[worker runner（现归 Node）](../../../packages/agent-runtime/src/node/workflow/agent-workflow-runner.ts)、[本地 Jobs（现归 Node）](https://github.com/rzx007/Vykor/blob/f40f276b/packages/agent-runtime/src/node/jobs/local-agent-job-host.ts)。迁移前工具内含后台 Promise、取消监听和持久记录查询；P3 已移入 Host。
 - 原 Workflow store 同时定义 Repository、文件实现、持久运行控制和模块级活动目录，P3 已拆为 [Repository 接口](../../../packages/coordinator/src/workflow/repository.ts)和 [Node Host](../../../packages/agent-runtime/src/node/workflow/workflow-host.ts)；[TeamRegistry](../../../packages/coordinator/src/teams/index.ts) 原为进程单例，P3 已改为根树实例。
 - [Agent 事件投影器](../../../packages/server/src/application/agent/daemon-agent-event-projector.ts) 在 `projectGoalUsage` 中检查预算并拒绝模型调用；可靠记录和执行准入通过同一事件通道相连。
 - [maintenance 路由](../../../packages/server/src/http/routes/maintenance.ts)、[facts 路由](../../../packages/server/src/http/routes/facts.ts) 承担文件读写、互斥和 Runtime 关闭编排；[边界检查](../../../scripts/architecture-boundaries.mjs) 尚未覆盖所有新入口。

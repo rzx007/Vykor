@@ -31,6 +31,7 @@ export interface TerminalProvider {
   wait(input: TerminalWaitRequest): Promise<TerminalWaitResult>;
   signal(input: TerminalSignalRequest): Promise<void>;
   kill(terminalId: string): Promise<void>;
+  get(terminalId: string): Promise<TerminalSessionInfo | undefined>;
   list(): Promise<TerminalSessionInfo[]>;
   subscribe(listener: TerminalEventListener): () => void;
 }

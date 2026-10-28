@@ -8,7 +8,7 @@ import {
   type VykorAgent,
   type VykorAgentOptions,
   type AgentEffectOverrides,
-  type ObservableJobProducer,
+  type DefaultNodeAgentOptions,
 } from "@vykor/agent-runtime";
 import { join } from "node:path";
 import {
@@ -19,7 +19,7 @@ import {
 import type { WorkflowRunRepository } from "@vykor/coordinator";
 import type { WorkflowHost } from "@vykor/agent-runtime/node/workflow";
 import { PROJECT_CONFIG_DIR_NAME } from "@vykor/host-config";
-import type { AgentBackgroundShellHost } from "@vykor/tools";
+import type { ShellAdmissionPorts } from "@vykor/execution-node";
 import type {
   AgentScheduleEffects,
   AgentRequestConfigurationReader,
@@ -31,7 +31,7 @@ import type {
 } from "@vykor/agent-contracts";
 import type { McpRuntimeRegistry } from "@vykor/mcp";
 import type { Settings } from "@vykor/host-config";
-import type { AgentTerminalHost } from "@vykor/terminal";
+import type { TerminalProvider } from "@vykor/terminal";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 import { readSessionRuntimeConfig } from "../application/session/configuration/runtime-configuration.js";
 import { readSessionRuntimeRevision } from "@vykor/domain-contracts/sessions";
@@ -43,7 +43,7 @@ export interface CreateDaemonAgentContext {
   session: SessionRecord;
   history: SessionMessageRecord[];
   parts: SessionMessagePartRecord[];
-  options: VykorAgentOptions;
+  options: DefaultNodeAgentOptions;
 }
 
 /**
@@ -93,9 +93,11 @@ export interface DaemonAgentLoaderOptions {
   executionOwner?: ExecutionRuntimeOwner;
   prepareModelMetadata?(
     settings: Settings,
+    session: SessionRecord,
   ): Promise<
     Pick<
       VykorAgentOptions,
+      | "validateModelSelection"
       | "resolveReasoningEfforts"
       | "resolveModelContextWindow"
       | "resolveModelOutputLimit"
@@ -133,12 +135,9 @@ export interface DaemonAgentLoaderOptions {
   modelAttempts?: VykorAgentOptions["modelAttempts"];
   toolSafety?: VykorAgentOptions["toolSafety"];
   toolResults?: VykorAgentOptions["toolResults"];
-  createTerminal?(
-    session: SessionRecord,
-  ): ObservableJobProducer<AgentTerminalHost>;
-  createBackgroundShell?(
-    session: SessionRecord,
-  ): ObservableJobProducer<AgentBackgroundShellHost>;
+  terminalProviderForSession?(session: SessionRecord): TerminalProvider;
+  shellAdmissionForSession?(session: SessionRecord): ShellAdmissionPorts;
+  jobArchiveForSession?: VykorAgentOptions["jobArchiveForSession"];
   workflowRepository?: WorkflowRunRepository;
   workflowHost?: WorkflowHost;
   tools?: DaemonToolsProvider;
@@ -214,11 +213,11 @@ export function createDaemonAgentLoader(
       (async () => {
         throw new Error("Daemon question host is not configured");
       });
-    const terminal = options.createTerminal?.(session);
-    const backgroundShell = options.createBackgroundShell?.(session);
+    const terminal = options.terminalProviderForSession?.(session);
+    const backgroundShell = options.shellAdmissionForSession?.(session);
     const tools = (await options.tools?.({ session, settings })) ?? [];
     const modelMetadata = settings
-      ? await options.prepareModelMetadata?.(settings)
+      ? await options.prepareModelMetadata?.(settings, session)
       : undefined;
     const acquiredEnvironment =
       settings && options.acquireEnvironment
@@ -261,7 +260,10 @@ export function createDaemonAgentLoader(
       chosenEffort && declaredEfforts?.includes(chosenEffort)
         ? chosenEffort
         : undefined;
-    const agentOptions: VykorAgentOptions = {
+    const agentOptions: DefaultNodeAgentOptions = {
+      executionOwner: options.executionOwner,
+      workflowHost: options.workflowHost,
+      jobArchiveForSession: options.jobArchiveForSession,
       ...(options.onRunCapabilities
         ? { onRunCapabilities: options.onRunCapabilities }
         : {}),
@@ -370,8 +372,6 @@ export function createDaemonAgentLoader(
         : await (async () => {
             const node = await createDefaultNodeAgent({
               ...agentOptions,
-              executionOwner: options.executionOwner,
-              workflowHost: options.workflowHost,
             });
             return { agent: node, host: node.host };
           })();

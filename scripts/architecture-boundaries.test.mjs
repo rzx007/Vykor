@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -896,4 +896,30 @@ test("only the exact storage growth benchmark can synchronously launch measureme
     assert.ok(checkModuleDependency({ fromFile, specifier: "node:net", importedNames: ["connect"] }, strictPolicy()).length);
     assert.ok(checkModuleDependency({ fromFile, specifier: "@vykor/execution-node", importedNames: ["ExecutionRuntimeOwner"] }, strictPolicy()).length);
   }
+});
+
+
+test("shared execution sources keep daemon adaptation free of lifecycle controllers", () => {
+  const root = new URL("../", import.meta.url);
+  for (const retired of ["packages/jobs/src/composite-agent-job-host.ts", "packages/agent-runtime/src/node/jobs/local-agent-job-host.ts", "packages/execution-node/src/executions/child-agent-execution-registry.ts"]) assert.equal(existsSync(new URL(retired, root)), false, retired);
+  const daemonJobs = readFileSync(new URL("packages/server/src/jobs/daemon-job-service.ts", root), "utf8");
+  assert.doesNotMatch(daemonJobs, /setTimeout|setInterval|runtimeFor|sendAdmitted|stopWorkflowWorker|updateSessionTask|createTerminalAgentHost|createDetachedProcessAgentHost/);
+  const projector = readFileSync(new URL("packages/server/src/application/session/transcript/session-execution-projector.ts", root), "utf8");
+  assert.doesNotMatch(projector, /createBridge|beginChildExecution|completeChildExecution|ChildAgentExecutionRegistry/);
+  for (const file of ["child-job-source.ts", "process-job-source.ts", "node-job-bindings.ts"]) {
+    const source = readFileSync(new URL(`packages/agent-runtime/src/node/jobs/${file}`, root), "utf8");
+    assert.doesNotMatch(source, /childObservations|shellRequests|ownerByJobKey|setInterval/);
+  }
+});
+
+
+test("default Workflow owns only real child receipts and no second execution policy", () => {
+  const root = new URL("../", import.meta.url);
+  assert.equal(existsSync(new URL("packages/agent-runtime/src/node/children/child-task-adapter.ts", root)), false);
+  const runner = readFileSync(new URL("packages/agent-runtime/src/node/workflow/agent-workflow-runner.ts", root), "utf8");
+  assert.doesNotMatch(runner, /AwaitExecutionResult|awaitFrameworkChildTask|hasChildAgent|DetachedProcess|setTimeout|CLEANUP_GRACE|stopTimedOutTask|spawning replacement/);
+  assert.match(runner, /handle\.waitRun\(receipt\.runId\)/);
+  assert.match(runner, /handle\.interruptRun\(receipt\.runId/);
+  const host = readFileSync(new URL("packages/agent-runtime/src/node/workflow/workflow-host.ts", root), "utf8");
+  assert.doesNotMatch(host, /getDetachedProcessSupervisor|hasChildAgent|stopExecution/);
 });

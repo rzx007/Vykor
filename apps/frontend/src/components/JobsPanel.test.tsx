@@ -9,6 +9,7 @@ import { JobsPanel } from "./JobsPanel";
 const baseJob: JobSnapshot = {
   id: "agent-1",
   kind: "agent",
+  target: { kind: "agent", jobId: "agent-1", runId: "run-1" },
   label: "Review the change",
   ownerSession: "session-1",
   status: "running",

@@ -49,6 +49,7 @@
 | A1、A2、A3、A4、A5 | [agent.test.ts](../packages/agent-runtime/src/node/agent/__test__/agent.test.ts)、[sdk.test.ts](../packages/agent-runtime/src/node/agent/__test__/sdk.test.ts) |
 | E1、E2、E3、E4、E5 | [event-source.test.ts](../packages/agent-runtime/src/kernel/__test__/event-source.test.ts)、[agent.test.ts](../packages/agent-runtime/src/node/agent/__test__/agent.test.ts) |
 | C1、C2、C3、C4、C5、C6 | [child-agent.test.ts](../packages/agent-runtime/src/node/children/__test__/child-agent.test.ts)、[child-environment.test.ts](../packages/agent-runtime/src/node/children/__test__/child-environment.test.ts) |
+| C7、C8 | [真实停止、额度和补偿](../tests/agent-integration/__test__/child-run-settlement.integration.test.ts)、[真实工厂启动与清理](../packages/agent-runtime/src/node/children/__test__/child-run-settlement.test.ts)、[单一实际结果](../packages/agent-runtime/src/node/runtime/__test__/framework-agent-run-settlement.test.ts) |
 | D1、D2、D3、D4、D5、D6、D7 | [http.test.ts](../tests/server-client/http.test.ts)、[daemon-control-service.test.ts](../packages/server/src/application/control/__test__/daemon-control-service.test.ts)、[session-run-executor.test.ts](../packages/server/src/application/session/execution/__test__/session-run-executor.test.ts)、[agent-pool.test.ts](../packages/server/src/application/agent/__test__/agent-pool.test.ts)、[daemon-lifecycle.soak.test.ts](../packages/server/src/daemon/__test__/daemon-lifecycle.soak.test.ts) |
 | T1、T2、T3 | [http.test.ts](../tests/server-client/http.test.ts) |
 | P1、P2、P3、P4、P5、P6、P7、P8 | [daemon-agent-event-projector.test.ts](../packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts)、[transcript-projection.test.ts](../packages/server/src/application/session/transcript/__test__/transcript-projection.test.ts)、[event-registry.test.ts](../packages/services/src/session-runtime/events/__test__/event-registry.test.ts)、[projection-settlement-recovery.test.ts](../packages/server/src/application/agent/__test__/projection-settlement-recovery.test.ts) |
@@ -194,7 +195,7 @@ P7–P13 实现与集中验收完成，当前策略的 `stageExceptions` 为零�
 | 插件清单、纯 JSON、Node 绑定与租约不能替代授权 | [插件校验](../packages/plugin-contracts/src/manifest/__test__/validation.test.ts)、[Server 绑定](../packages/server/src/application/session/plugins/__test__/plugin-app-host-binding.test.ts)、[应用授权](../packages/server/src/application/session/plugins/__test__/session-plugin-run-authorization.test.ts) | 对应包定向 Vitest |
 | 插件 HTTP 按结构化错误分类，拒绝输入不受文案和 Runtime bundle 影响，保持接纳与运行错误语义 | [HTTP 错误](../packages/server/src/http/routes/__test__/session-plugin-apps.errors.test.ts)、[真实资源入口](../packages/server/src/http/__test__/session-plugin-apps.test.ts)、[插件 parser](../packages/protocol/src/extensions/__test__/plugin-apps.test.ts)、[Native 后端](../packages/agent-runtime/src/node/plugin-apps/__test__/native-plugin-app-backend.test.ts)、[宿主策略](../packages/agent-runtime/src/node/plugin-apps/__test__/plugin-app-policy.test.ts) | 对应文件的定向 Vitest |
 | 领域输入在非 HTTP 入口也验证，附件默认值只有一个来源 | [领域输入](../packages/domain-contracts/src/inputs/__test__/validation.test.ts)、[附件策略](../packages/services/src/attachments/__test__/attachment-policy.test.ts)、[HTTP 转换](../packages/server/src/http/mappers/__test__/boundary.test.ts) | 对应包定向 Vitest |
-| Job/Terminal 数据与宿主分开，owner 与等待/取消行为保持 | [Jobs](../packages/jobs/src/__test__/index.test.ts)、[组合 Host](../packages/jobs/src/__test__/composite-agent-job-host.test.ts)、[Terminal](../packages/terminal-node/src/providers/__test__/local-terminal-provider.test.ts) | Jobs 与 terminal-node 的相关文件 |
+| Job/Terminal 数据与宿主分开，owner 与等待/取消行为保持 | [Jobs](../packages/jobs/src/__test__/index.test.ts)、[定点路由](../packages/jobs/src/__test__/routed-agent-job-host.test.ts)、[Terminal](../packages/terminal-node/src/providers/__test__/local-terminal-provider.test.ts) | Jobs 与 terminal-node 的相关文件 |
 | Client 公开集合、辅助函数及浏览器消费保持原行为 | [公开 API](../packages/client/src/__test__/public-api.test.ts)、[类型消费者](../tests/client-public-api/consumer.ts)、[策略显示](../packages/client/src/resources/plugins/__test__/plugin-app-policy.test.ts) | `pnpm check:client-api`、`pnpm test:client-browser` |
 | Kernel 不可达三个新数据包，Node/Kernel/Workflow 独立声明与运行完整 | [Kernel 反例](../packages/agent-runtime/scripts/__test__/kernel-boundary.test.mjs)、[独立消费者](../packages/agent-runtime/scripts/verify-pack.mjs) | `node --test packages/agent-runtime/scripts/__test__/kernel-boundary.test.mjs`、Runtime `test:pack` |
 
@@ -215,3 +216,13 @@ P7–P13 实现与集中验收完成，当前策略的 `stageExceptions` 为零�
 - 移动测试文件时，`pnpm check-docs` 必须失败，直到这里的链接更新。
 - 一个测试可以证明多条相关规则，但不能只写“全量测试会覆盖”而不给具体入口。
 - 历史计划中的测试清单不算当前证据。
+
+## 共用执行核心与真实 Workflow 验收
+
+| 硬规则 | 主要测试 |
+| --- | --- |
+| SDK/daemon 真实三轮各 12 worker、默认并发 8/累计 64、第九拒绝、取消和 deadline 实际调用/清理、迟到旧 attempt、审批/保留后代、同身份恢复与当前授权 | [真实 Workflow 生命周期](../tests/agent-integration/__test__/workflow-child-lifecycle.integration.test.ts) |
+| 查询失败不替代 worker、固定 run 回执、memory/file 公共断言、未知回执不能被取消伪造确认 | [真实 runner](../packages/agent-runtime/src/node/workflow/__test__/agent-workflow-runner.test.ts)、[宿主](../packages/agent-runtime/src/node/workflow/__test__/workflow-host.test.ts)、[公共场景](../tests/workflow/lifecycle-scenarios.ts) |
+| 唯一 coordinator deadline/宽限、实际停止前不重试、旧 attempt 进度隔离、未知停止错误 | [调度器](../packages/coordinator/src/workflow/__test__/scheduler.test.ts) |
+| 普通/Workflow/system inherit 环境前解析、同 tick send/suspend 串行、历史和实例保留 | [子运行](../packages/agent-runtime/src/node/children/__test__/child-agent.test.ts)、[配置](../packages/agent-runtime/src/node/children/__test__/child-agent-options.test.ts) |
+| 删除 adapter、process 回退、重复 timer 与 daemon 生命周期分支 | [架构边界](../scripts/architecture-boundaries.test.mjs) |

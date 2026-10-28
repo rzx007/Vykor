@@ -19,6 +19,23 @@ workflowLifecycleScenarios("file", () => {
 });
 
 describe("workflow persistence failures", () => {
+  it.each(["missing-receipt", "missing-stop-port"])("keeps unknown %s stopping when cancellation cannot confirm its original worker", async source => {
+    const repository = new MemoryWorkflowRunRepository();
+    const host = new WorkflowHost(repository);
+    const bound = host.bind({ cwd: "/work", sessionId: "owner" });
+    try {
+      await host.runPersistentWorkflow({ mode: "parallel", tasks: [{ id: "work", retry: { maxAttempts: 2 } }] }, async () => {
+        throw Object.assign(new Error("unknown original worker"), { cleanupUnconfirmed: true,
+          metadata: source === "missing-stop-port" ? { workerTaskId: "original", workerRunId: "run-original" } : {} });
+      }, { runId: "unknown", ownerSession: "owner" });
+      const target = { kind: "workflow", jobId: "unknown" } as const;
+      expect((await bound.jobs.read({ sessionId: "owner", target })).snapshot).toMatchObject({ status: "stopping", capabilities: { cancel: true } });
+      await expect(bound.jobs.cancel({ sessionId: "owner", target })).rejects.toThrow("cannot be confirmed");
+      expect((await bound.jobs.read({ sessionId: "owner", target })).snapshot.status).toBe("stopping");
+      expect(repository.load("unknown")?.results.work.cleanupUnconfirmed).toBe(true);
+    } finally { await host.close().catch(() => {}); }
+  });
+
   it("drains a live worker even when reading its saved snapshot fails", async () => {
     const repository = new MemoryWorkflowRunRepository();
     const host = new WorkflowHost(repository);

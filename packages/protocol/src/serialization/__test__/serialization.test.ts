@@ -6,6 +6,9 @@ import type {
 } from "../../session/session.js";
 import {
   decodeJobSnapshot,
+  decodeJobTarget,
+  decodeJobInputReceipt,
+  decodeJobListResult,
   decodeSessionStateSnapshot,
   decodeTerminalEvent,
   decodeTerminalSessionInfo,
@@ -183,6 +186,7 @@ describe("protocol serialization", () => {
       decodeJobSnapshot({
         id: "job-1",
         kind: "shell",
+        target: { kind: "shell", jobId: "job-1" },
         label: "tests",
         ownerSession: "s1",
         status: "running",
@@ -242,7 +246,7 @@ describe("protocol serialization", () => {
 
   it("preserves actual Job exit results and rejects invalid codes", () => {
     const legacy = {
-      id: "job-1", kind: "shell", label: "tests", ownerSession: "s1",
+      id: "job-1", kind: "shell", target: { kind: "shell", jobId: "job-1" }, label: "tests", ownerSession: "s1",
       status: "failed", capabilities: { read: true, wait: true, send: false, cancel: false },
       cwd: "/repo", startedAt: 1, updatedAt: 2,
     };
@@ -253,5 +257,21 @@ describe("protocol serialization", () => {
     for (const exitCode of ["7", NaN, Infinity, 1.5]) {
       expect(() => decodeJobSnapshot({ ...legacy, exitCode })).toThrow();
     }
+  });
+});
+
+
+describe("Jobs v6 targets", () => {
+  it("rejects missing kinds, missing agent run identity and mismatched snapshot targets", () => {
+    for (const value of [{ jobId: "a" }, { kind: "agent", jobId: "a" }, { kind: "unknown", jobId: "a" }]) expect(() => decodeJobTarget(value)).toThrow();
+    const snapshot = { id: "a", kind: "agent", target: { kind: "agent", jobId: "a", runId: "r" }, label: "a", ownerSession: "s", status: "completed", capabilities: { read: true, wait: true, send: true, cancel: false }, cwd: "/", startedAt: 1, updatedAt: 2 };
+    expect(decodeJobSnapshot(snapshot).target).toEqual(snapshot.target);
+    expect(() => decodeJobSnapshot({ ...snapshot, target: { kind: "shell", jobId: "a" } })).toThrow();
+    expect(() => decodeJobSnapshot({ ...snapshot, target: { kind: "agent", jobId: "other", runId: "r" } })).toThrow();
+  });
+  it("validates every receipt identity and preserves partial source errors", () => {
+    for (const value of [{}, { sessionId: "s", inputId: "i" }, { sessionId: "s", inputId: "", runId: "r" }]) expect(() => decodeJobInputReceipt(value)).toThrow();
+    expect(decodeJobInputReceipt({ sessionId: "s", inputId: "i", runId: "r" })).toEqual({ sessionId: "s", inputId: "i", runId: "r" });
+    expect(decodeJobListResult({ jobs: [], errors: [{ kind: "terminal", message: "offline" }] }).errors).toHaveLength(1);
   });
 });

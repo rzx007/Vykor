@@ -33,7 +33,7 @@ MiniMax Code 的根说明明确把该仓库定义为经过审查的公开源码�
 
 Composite 的未缓存读取先枚举所有来源，再建立归属索引。任何一个 ID 被两个来源声明都会抛错。因此读取 child A 时，旧 Shell B 的冲突也能使 A 的读取和取消失败。
 
-证据：[组装入口](../../packages/agent-runtime/src/node/capabilities/default-agent-capabilities.ts#L116)、[本地进程枚举](../../packages/agent-runtime/src/node/jobs/local-agent-job-host.ts#L172)、[daemon 注入](../../packages/server/src/application/daemon-application.ts#L530)、[全量发现与冲突](../../packages/jobs/src/composite-agent-job-host.ts#L55)。
+证据：[组装入口](../../packages/agent-runtime/src/node/capabilities/default-agent-capabilities.ts#L116)、[本地进程枚举](https://github.com/rzx007/Vykor/blob/f40f276b/packages/agent-runtime/src/node/jobs/local-agent-job-host.ts#L172)、[daemon 注入](../../packages/server/src/application/daemon-application.ts#L530)、[全量发现与冲突](https://github.com/rzx007/Vykor/blob/f40f276b/packages/jobs/src/composite-agent-job-host.ts#L55)。
 
 目标会话最后一轮中，同一旧 Shell 的来源冲突出现 10 次。最小复现也确认：两个来源共同声明旧任务 B，读取和取消另一个唯一存在的 child A，同样抛出 B 的冲突。
 
@@ -53,7 +53,7 @@ ChildHandle 的 `result` getter 每次生成一个包装后的新 Promise。Loca
 
 最小复现使用同样的 getter 行为：底层结果已经是 completed，并包含文本，连续三次 read 仍得到 `running` 和空输出。该复现证明本地观察路径存在独立缺陷；它不证明目标会话所有空输出都由这一处造成。
 
-证据：[result getter](../../packages/agent-runtime/src/kernel/children/child-agent.ts#L977)、[观察器的引用比较](../../packages/agent-runtime/src/node/jobs/local-agent-job-host.ts#L324)。
+证据：[result getter](../../packages/agent-runtime/src/kernel/children/child-agent.ts#L977)、[观察器的引用比较](https://github.com/rzx007/Vykor/blob/f40f276b/packages/agent-runtime/src/node/jobs/local-agent-job-host.ts#L324)。
 
 ### 继承配置没有在统一边界得到具体模型
 
@@ -67,7 +67,7 @@ ChildHandle 的 `result` getter 每次生成一个包装后的新 Promise。Loca
 
 Composite 的 23 个测试通过，包括“两个来源声明同 ID 应拒绝”；LocalAgentJobHost 的 16 个测试也通过，但其 child 测试使用固定 Promise 属性，真实 handle 使用每次返回新 Promise 的 getter。daemon 后台 Shell 测试分别检查注入的 host，没有经过完整的默认 Node 组装再用模型侧 JobRead 读取。
 
-证据：[Composite 测试](../../packages/jobs/src/__test__/composite-agent-job-host.test.ts#L23)、[固定 Promise 测试替身](../../packages/agent-runtime/src/node/jobs/__test__/local-agent-job-host.test.ts#L376)、[daemon host 测试](../../packages/server/src/application/__test__/durable-agent-application.test.ts#L513)。
+证据：[Composite 测试](https://github.com/rzx007/Vykor/blob/f40f276b/packages/jobs/src/__test__/composite-agent-job-host.test.ts#L23)、[固定 Promise 测试替身](https://github.com/rzx007/Vykor/blob/f40f276b/packages/agent-runtime/src/node/jobs/__test__/local-agent-job-host.test.ts#L376)、[daemon host 测试](../../packages/server/src/application/__test__/durable-agent-application.test.ts#L513)。
 
 这些测试仍有价值。缺的是跨边界验证：真实框架 handle、真实组装工厂和真实控制入口必须一起运行，模型请求可以用可控的假实现替代。
 

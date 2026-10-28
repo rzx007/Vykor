@@ -8,9 +8,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SessionStore } from "@vykor/services";
-import {
-  ChildAgentExecutionRegistry,
-} from "@vykor/execution-node";
 import { SessionExecutionProjector } from "../../session/transcript/session-execution-projector.js";
 import { SessionTranscriptProjection } from "../../session/transcript/transcript-projection.js";
 
@@ -29,6 +26,10 @@ function projectorStore(flat: Record<string, any>) {
   const directory = mkdtempSync(join(tmpdir(), "vk-projector-settlements-"));
   const settlements = new SessionStore({ path: join(directory, "store.db") });
   compactionCleanup.push(() => { settlements.close(); rmSync(directory, { recursive: true, force: true }); });
+  const tasks = new Map<string, any>();
+  const createTask = flat.createSessionTask ?? ((input: any) => { const task = { ...input, status: "pending" }; tasks.set(input.id, task); return task; });
+  const getTask = flat.getSessionTask ?? ((id: string) => tasks.get(id));
+  const updateTask = flat.updateSessionTask ?? ((id: string, patch: any) => Object.assign(getTask(id) ?? {}, patch));
   return {
     goals: { getGoal: flat.getGoal ?? vi.fn() },
     sessions: {
@@ -70,18 +71,19 @@ function projectorStore(flat: Record<string, any>) {
       createRunAttempt: flat.createRunAttempt ?? vi.fn(),
       updateRunAttempt: flat.updateRunAttempt ?? vi.fn(),
       listRunAttempts: flat.listRunAttempts ?? vi.fn(() => []),
-      getSessionTask: flat.runsGetSessionTask ?? flat.getSessionTask ?? vi.fn(),
-      updateSessionTask: flat.runsUpdateSessionTask ?? flat.updateSessionTask ?? vi.fn(),
+      createSessionTask: createTask,
+      getSessionTask: flat.runsGetSessionTask ?? getTask,
+      updateSessionTask: flat.runsUpdateSessionTask ?? updateTask,
     },
     createProjectionSettlement: flat.createProjectionSettlement ?? settlements.createProjectionSettlement.bind(settlements),
     failProjectionSettlement: flat.failProjectionSettlement ?? settlements.failProjectionSettlement.bind(settlements),
     getProjectionSettlement: flat.getProjectionSettlement ?? settlements.getProjectionSettlement.bind(settlements),
-    getSessionTask: flat.getSessionTask ?? vi.fn(),
+    getSessionTask: getTask,
     listProjectionSettlements: flat.listProjectionSettlements ?? settlements.listProjectionSettlements.bind(settlements),
     markProjectionSettlementRetrying: flat.markProjectionSettlementRetrying ?? settlements.markProjectionSettlementRetrying.bind(settlements),
     resolveProjectionSettlement: flat.resolveProjectionSettlement ?? settlements.resolveProjectionSettlement.bind(settlements),
     transaction: flat.transaction ?? (<T>(work: () => T) => work()),
-    updateSessionTask: flat.updateSessionTask ?? vi.fn(),
+    updateSessionTask: updateTask,
   } satisfies DaemonAgentEventProjectorContext["store"];
 }
 
@@ -135,7 +137,7 @@ describe("DaemonAgentEventProjector", () => {
     const projector = new DaemonAgentEventProjector({
       projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       store, rootAgent: { children: { get: () => undefined } } as any,
-      transcriptProjection: new SessionTranscriptProjection(store), executionProjector: {} as any,
+      transcriptProjection: new SessionTranscriptProjection(store),
       liveChildren: { register: vi.fn(), unregister: vi.fn() },
       events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() }, log: vi.fn(),
     });
@@ -230,52 +232,6 @@ describe("DaemonAgentEventProjector", () => {
     expect(store.runs.getRun("C1")?.status).not.toBe("running");
   });
 
-  it("releases child callbacks on close while keeping completed task results readable", async () => {
-    const registry = new ChildAgentExecutionRegistry();
-    const sessions = new Map<string, any>([["parent", {
-      id: "parent", cwd: "/repo", model: "m", metadata: { runtime: { model: "m" } },
-    }]]);
-    const tasks = new Map<string, any>();
-    const send = vi.fn(async () => {});
-    const events = { checkpoint: () => 0, publish: () => {}, publishSince: () => {} };
-    const executionProjector = new SessionExecutionProjector({
-      store: {
-        createSessionTask: input => { tasks.set(input.id, { ...input, status: "pending" }); },
-        getSessionTask: id => tasks.get(id),
-        updateSessionTask: (id, patch) => Object.assign(tasks.get(id), patch),
-      },
-      getChildAgentExecutionRegistry: () => registry,
-      events, traceIdForRun: () => "trace", log: () => {},
-    });
-    const projector = new DaemonAgentEventProjector({
-      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
-      rootAgent: { children: { get: () => ({ send }) } } as any,
-      store: projectorStore({
-        getSession: (id: string) => sessions.get(id),
-        createSession: (input: any) => { sessions.set(input.id, input); return input; },
-        getSessionTask: (id: string) => tasks.get(id),
-      }),
-      transcriptProjection: {} as any, executionProjector,
-      liveChildren: { register() {}, unregister() {} }, events, log() {},
-    });
-    await projector.apply(event("child.created", {
-      childId: "child-1", sessionId: "child-session", cwd: "/repo",
-      spawn: { description: "review", prompt: "inspect", agent: "review", cwd: "/repo" },
-    }, { sessionId: "parent", childId: "child-1" }));
-    await registry.completeExecution("child-1", { status: "completed", output: "first result" });
-    await registry.writeInput("child-1", "follow up");
-    expect(send).toHaveBeenCalledWith({ content: "follow up" });
-
-    await projector.apply(event("child.closed", {
-      childId: "child-1", sessionId: "child-session", result: { status: "completed", output: "done" },
-    }, { sessionId: "parent", childId: "child-1" }));
-
-    await expect(registry.writeInput("child-1", "late follow up")).rejects.toThrow("Child Agent callbacks not found");
-    expect(send).toHaveBeenCalledTimes(1);
-    expect(tasks.get("child-1")).toMatchObject({ status: "completed", output: "done" });
-    await expect(registry.awaitExecution("child-1")).resolves.toMatchObject({ status: "completed" });
-  });
-
   it("persists the applied parent model for a new child while the target has changed", async () => {
     const sessions = new Map<string, any>([["parent", {
       id: "parent", cwd: "/repo", model: "model-b",
@@ -289,7 +245,7 @@ describe("DaemonAgentEventProjector", () => {
         createSession: (input: any) => { sessions.set(input.id, input); return input; },
       }),
       transcriptProjection: {} as any,
-      executionProjector: { createBridge: () => ({ registerChildExecution: (input: any) => input, bindChildExecutionRun: async () => {} }) } as any,
+
       liveChildren: { register: () => {}, unregister: () => {} },
       events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
       log: vi.fn(),
@@ -320,7 +276,7 @@ describe("DaemonAgentEventProjector", () => {
         createSession: (input: any) => { sessions.set(input.id, input); return input; },
       }),
       transcriptProjection: {} as any,
-      executionProjector: { createBridge: () => ({ registerChildExecution: (input: any) => input, bindChildExecutionRun: async () => {} }) } as any,
+
       liveChildren: { register: () => {}, unregister: () => {} },
       events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() }, log: vi.fn(),
     });
@@ -348,11 +304,7 @@ describe("DaemonAgentEventProjector", () => {
         updateSessionTask,
       }),
       transcriptProjection: {} as any,
-      executionProjector: { createBridge: () => ({
-        registerChildExecution: (input: any) => ({ id: input.id }),
-        bindChildExecutionRun: async () => {},
-        completeChildExecution: async () => {},
-      }) } as any,
+
       liveChildren: { register: () => {}, unregister: () => {} },
       events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
       log: vi.fn(),
@@ -396,11 +348,7 @@ describe("DaemonAgentEventProjector", () => {
         updateSessionTask,
       }),
       transcriptProjection: {} as any,
-      executionProjector: { createBridge: () => ({
-        registerChildExecution: (input: any) => ({ id: input.id }),
-        bindChildExecutionRun: async () => {},
-        completeChildExecution: async () => {},
-      }) } as any,
+
       liveChildren: { register: () => {}, unregister: () => {} },
       events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
       log: vi.fn(),
@@ -436,7 +384,7 @@ describe("DaemonAgentEventProjector", () => {
         upsertMessagePart: vi.fn(),
       }),
       transcriptProjection: {} as any,
-      executionProjector: {} as any,
+
       liveChildren: {} as any,
       events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
       log: vi.fn(),
@@ -461,7 +409,7 @@ describe("DaemonAgentEventProjector", () => {
       rootAgent: {} as any,
       store: projectorStore({ transaction }),
       transcriptProjection: { projectStreamEvent } as any,
-      executionProjector: {} as any,
+
       liveChildren: {} as any,
       events: { checkpoint: vi.fn(() => 1), publish: vi.fn(), publishSince: vi.fn() },
       log: vi.fn(),
@@ -491,6 +439,8 @@ describe("DaemonAgentEventProjector", () => {
         getSession: (id: string) => sessions.get(id),
         createSession: (input: any) => { sessions.set(input.id, input); return input; },
         getSessionTask: () => task,
+        createSessionTask: (input: any) => { task = { ...input, status: "pending" }; return task; },
+        updateSessionTask: (_id: string, input: any) => Object.assign(task, input),
         getInput: (id: string) => inputs.get(id),
         admitPrompt: (input: any) => { const row = { ...input, content: input.items.map((item: any) => item.text).join("") }; inputs.set(input.id, row); return row; },
         getRun: (id: string) => runs.get(id),
@@ -500,12 +450,7 @@ describe("DaemonAgentEventProjector", () => {
         transaction: (work: () => unknown) => work(),
       }),
       rootAgent: {} as any, transcriptProjection: {} as any,
-      executionProjector: { createBridge: () => ({
-        registerChildExecution: (input: any) => { task = { ...input, status: "pending" }; return task; },
-        bindChildExecutionRun: async (_id: string, runId: string) => { task.runId = runId; },
-        releaseChildExecution: () => {},
-        completeChildExecution: async (_id: string, result: any) => Object.assign(task, result),
-      }) } as any,
+
       liveChildren: { register: () => {}, unregister: () => {} },
       events: { checkpoint: () => 0, publish: () => {}, publishSince: () => {} }, log: () => {},
     });
@@ -534,11 +479,13 @@ describe("DaemonAgentEventProjector", () => {
     const updateSessionTask = vi.fn((id: string, input: any) => {
       const row = tasks.get(id);
       Object.assign(row, {
+        ...input,
         metadata: { ...row.metadata, ...(input.metadata ?? {}) },
         updatedAt: row.updatedAt + 1,
       });
       return row;
     });
+    const activityWrites = () => updateSessionTask.mock.calls.filter(([, patch]) => patch.metadata?.childActivity);
     const projector = new DaemonAgentEventProjector({
       projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: {} as any,
@@ -546,6 +493,7 @@ describe("DaemonAgentEventProjector", () => {
         getSession: (id: string) => sessions.get(id),
         createSession: (input: any) => { sessions.set(input.id, input); return input; },
         getSessionTask: (id: string) => tasks.get(id),
+        createSessionTask: (input: any) => { const task = { ...input, status: "pending", updatedAt: 1 }; tasks.set(input.id, task); return task; },
         getInput: (id: string) => inputs.get(id),
         admitPrompt: (input: any) => {
           const row = { ...input, content: input.items.map((item: any) => item.text).join("") };
@@ -572,14 +520,7 @@ describe("DaemonAgentEventProjector", () => {
         completeOpenTextPart: vi.fn(),
         finalizeRunParts: vi.fn(),
       } as any,
-      executionProjector: { createBridge: () => ({
-        registerChildExecution: (input: any) => {
-          tasks.set(input.id, { id: input.id, status: "pending", metadata: {}, updatedAt: 10 });
-          return { id: input.id };
-        },
-        bindChildExecutionRun: async () => {},
-        completeChildExecution: async () => {},
-      }) } as any,
+
       liveChildren: { register: () => {}, unregister: () => {} },
       events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
       log: vi.fn(),
@@ -596,6 +537,7 @@ describe("DaemonAgentEventProjector", () => {
       sessionId: "child-session", inputId: "input-1", runId: "run-1", childId: "child-1",
     }));
 
+    updateSessionTask.mockClear();
     await projector.apply(event("output.text.delta", { delta: "SECRET PLANNING" }, {
       sessionId: "child-session", inputId: "input-1", runId: "run-1", childId: "child-1",
     }));
@@ -606,19 +548,19 @@ describe("DaemonAgentEventProjector", () => {
     });
     await projector.apply(turn);
 
-    expect(updateSessionTask).toHaveBeenCalledTimes(1);
+    expect(activityWrites()).toHaveLength(1);
     expect(tasks.get("child-1").metadata.childActivity).toMatchObject({
       runId: "run-1", turns: 1, lastEventId: turn.id,
     });
     expect(JSON.stringify(tasks.get("child-1").metadata)).not.toContain("SECRET");
 
     await projector.apply(turn);
-    expect(updateSessionTask).toHaveBeenCalledTimes(1);
+    expect(activityWrites()).toHaveLength(1);
 
     await projector.apply(event("output.turn.completed", { stopReason: "end_turn" }, {
       sessionId: "child-session", inputId: "input-1", runId: "run-1", childId: "child-1",
     }));
-    expect(updateSessionTask).toHaveBeenCalledTimes(2);
+    expect(activityWrites()).toHaveLength(2);
     expect(tasks.get("child-1").metadata.childActivity.turns).toBe(2);
 
     // A follow-up Run becomes current, then a late event from run-1 must not
@@ -632,125 +574,14 @@ describe("DaemonAgentEventProjector", () => {
     await projector.apply(event("output.turn.completed", { stopReason: "end_turn" }, {
       sessionId: "child-session", inputId: "input-2", runId: "run-2", childId: "child-1",
     }));
-    expect(updateSessionTask).toHaveBeenCalledTimes(3);
+    expect(activityWrites()).toHaveLength(3);
     expect(tasks.get("child-1").metadata.childActivity).toMatchObject({ runId: "run-2", turns: 3 });
 
     await projector.apply(event("output.turn.completed", { stopReason: "end_turn" }, {
       sessionId: "child-session", inputId: "input-1", runId: "run-1", childId: "child-1",
     }));
-    expect(updateSessionTask).toHaveBeenCalledTimes(3);
+    expect(activityWrites()).toHaveLength(3);
     expect(tasks.get("child-1").metadata.childActivity).toMatchObject({ runId: "run-2", turns: 3 });
-  });
-
-  it("completes a child task with trusted failure detail on run.failed and ignores a later child.closed", async () => {
-    const sessions = new Map<string, any>([["parent", {
-      id: "parent", cwd: "/repo", model: "m", metadata: { runtime: { model: "m" } },
-    }]]);
-    const inputs = new Map<string, any>();
-    const tasks = new Map<string, any>();
-    const runs = new Map<string, any>();
-    const completeChildExecution = vi.fn(async (id: string, result: any) => {
-      Object.assign(tasks.get(id), {
-        status: result.status,
-        output: result.output,
-        metadata: {
-          ...tasks.get(id).metadata,
-          ...(result.failureKind || result.partialResult
-            ? {
-                childFailure: {
-                  ...(result.failureKind ? { failureKind: result.failureKind } : {}),
-                  ...(result.partialResult ? { partialResult: result.partialResult } : {}),
-                },
-              }
-            : {}),
-        },
-      });
-    });
-    const projector = new DaemonAgentEventProjector({
-      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
-      rootAgent: {} as any,
-      store: projectorStore({
-        getSession: (id: string) => sessions.get(id),
-        createSession: (input: any) => { sessions.set(input.id, input); return input; },
-        getSessionTask: (id: string) => tasks.get(id),
-        getInput: (id: string) => inputs.get(id),
-        admitPrompt: (input: any) => {
-          const row = { ...input, content: input.items.map((item: any) => item.text).join("") };
-          inputs.set(input.id, row);
-          return row;
-        },
-        getRun: (id: string) => runs.get(id),
-        createRun: (input: any) => {
-          const row = { ...input, status: "pending", metadata: {} };
-          runs.set(input.id, row);
-          return row;
-        },
-        updateRun: (id: string, patch: any) => Object.assign(runs.get(id), patch),
-        createRunAttempt: (input: any) => ({ id: input.id ?? "attempt-1", ...input }),
-        updateRunAttempt: vi.fn(),
-        listRunAttempts: () => [],
-      }),
-      transcriptProjection: {
-        beginRun: () => ({}),
-        projectStreamEvent: () => ({}),
-        hasOpenTextPart: () => false,
-        projectSteeredInputs: vi.fn(),
-        completeOpenTextPart: vi.fn(),
-        completeOpenReasoningPart: vi.fn(),
-        finalizeRunParts: vi.fn(),
-      } as any,
-      executionProjector: { createBridge: () => ({
-        registerChildExecution: (input: any) => {
-          tasks.set(input.id, { id: input.id, status: "pending", metadata: {}, updatedAt: 10 });
-          return { id: input.id };
-        },
-        bindChildExecutionRun: async () => {},
-        releaseChildExecution: () => {},
-        completeChildExecution,
-      }) } as any,
-      liveChildren: { register: () => {}, unregister: () => {} },
-      events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
-      log: vi.fn(),
-    });
-    const partialResult = {
-      version: 1,
-      childSessionId: "child-session",
-      runId: "run-1",
-      source: "limit_finalization",
-      text: "final report",
-      truncated: false,
-    };
-
-    await projector.apply(event("child.created", {
-      childId: "child-1", sessionId: "child-session", cwd: "/repo",
-      spawn: { description: "review", prompt: "inspect", agent: "worker", cwd: "/repo" },
-    }, { sessionId: "parent", runId: "root-run", childId: "child-1" }));
-    await projector.apply(event("input.accepted", {
-      content: "inspect", delivery: "queue",
-    }, { sessionId: "child-session", inputId: "input-1", runId: "run-1", childId: "child-1" }));
-    await projector.apply(event("run.started", {}, {
-      sessionId: "child-session", inputId: "input-1", runId: "run-1", childId: "child-1",
-    }));
-
-    await projector.apply(event("run.failed", {
-      error: { name: "MaxTurnsExceeded", message: "Exceeded maximum agentic turns (2)" },
-      output: "final report",
-      failureKind: "max_turns",
-      partialResult,
-    }, { sessionId: "child-session", runId: "run-1", childId: "child-1" }));
-
-    expect(completeChildExecution).toHaveBeenCalledWith("child-1", expect.objectContaining({
-      status: "failed",
-      failureKind: "max_turns",
-      partialResult,
-    }));
-
-    await projector.apply(event("child.closed", {
-      childId: "child-1", sessionId: "child-session",
-      result: { status: "failed", output: "final report", failureKind: "max_turns", partialResult },
-    }, { sessionId: "parent", runId: "root-run", childId: "child-1" }));
-
-    expect(completeChildExecution).toHaveBeenCalledTimes(1);
   });
 
   it("keeps a historical goal.assessment event as ordinary history without updating Run metadata", async () => {
@@ -772,7 +603,7 @@ describe("DaemonAgentEventProjector", () => {
       }),
       rootAgent: {} as any,
       transcriptProjection: {} as any,
-      executionProjector: {} as any,
+
       liveChildren: {} as any,
       events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
       log: vi.fn(),
@@ -817,7 +648,7 @@ describe("DaemonAgentEventProjector", () => {
       },
       rootAgent: {} as any,
       transcriptProjection: {} as any,
-      executionProjector: {} as any,
+
       liveChildren: {} as any,
       log: () => {},
     });
@@ -870,7 +701,7 @@ describe("DaemonAgentEventProjector", () => {
       },
       rootAgent: {} as any,
       transcriptProjection: {} as any,
-      executionProjector: {} as any,
+
       liveChildren: {} as any,
       log: () => {},
     });
@@ -887,360 +718,6 @@ describe("DaemonAgentEventProjector", () => {
     );
     expect(persisted).toMatchObject({ items });
   });
-  it("projects child and run facts without returning execution handles", async () => {
-    const sessions = new Map<string, any>([
-      [
-        "parent",
-        {
-          id: "parent",
-          cwd: "/repo",
-          model: "gpt",
-          metadata: { runtime: { model: "gpt" } },
-        },
-      ],
-    ]);
-    const inputs = new Map<string, any>();
-    const runs = new Map<string, any>();
-    const attempts = new Map<string, any>();
-    const tasks = new Map<string, any>();
-    const store = {
-      transaction: <T>(work: () => T) => work(),
-      getSession: vi.fn((id) => sessions.get(id)),
-      createSession: vi.fn((input) => {
-        const row = { ...input, status: "idle" };
-        sessions.set(row.id, row);
-        return row;
-      }),
-      getSessionTask: vi.fn((id) => tasks.get(id)),
-      getInput: vi.fn((id) => inputs.get(id)),
-      admitPrompt: vi.fn((input) => {
-        const row = { ...input };
-        inputs.set(row.id, row);
-        return row;
-      }),
-      getRun: vi.fn((id) => runs.get(id)),
-      createRun: vi.fn((input) => {
-        const row = { ...input, status: "pending" };
-        runs.set(row.id, row);
-        return row;
-      }),
-      updateRun: vi.fn((id, update) => {
-        const row = Object.assign(runs.get(id) ?? { id }, update);
-        runs.set(id, row);
-        return row;
-      }),
-      listRunAttempts: vi.fn((runId) =>
-        [...attempts.values()].filter((attempt) => attempt.runId === runId),
-      ),
-      createRunAttempt: vi.fn((input) => {
-        const row = { ...input, status: "pending" };
-        attempts.set(row.id, row);
-        return row;
-      }),
-      updateRunAttempt: vi.fn((id, update) => {
-        const row = Object.assign(attempts.get(id), update);
-        attempts.set(id, row);
-        return row;
-      }),
-      settleActiveRunAttempts: vi.fn((runId, status, error) => {
-        for (const attempt of attempts.values()) {
-          if (
-            attempt.runId === runId &&
-            (attempt.status === "pending" || attempt.status === "running")
-          ) {
-            Object.assign(attempt, { status }, error ? { error } : {});
-          }
-        }
-      }),
-      appendEvent: vi.fn(),
-    };
-    const bridge = {
-      registerChildExecution: vi.fn((input) => {
-        tasks.set(input.id, { id: input.id, status: "pending" });
-        return { id: input.id };
-      }),
-      bindChildExecutionRun: vi.fn(async (id, runId) => {
-        Object.assign(tasks.get(id), { status: "running", runId });
-      }),
-      completeChildExecution: vi.fn(async (id, result) => {
-        Object.assign(tasks.get(id), {
-          status: result.status,
-          output: result.output,
-        });
-      }),
-    };
-    const liveDelta = {
-      id: "delta-1",
-      seq: 9,
-      type: "session.message.part.delta",
-      sessionId: "child-session",
-      payload: { delta: "done" },
-      createdAt: 1,
-    };
-    const transcript = {
-      beginRun: vi.fn(() => ({ active: true })),
-      projectSteeredInputs: vi.fn(),
-      hasOpenTextPart: vi.fn(() => false),
-      projectStreamEvent: vi.fn(() => ({ liveEvent: liveDelta })),
-      completeOpenTextPart: vi.fn(),
-      finalizeRunParts: vi.fn(),
-    };
-    const liveChildren = { register: vi.fn(), unregister: vi.fn() };
-    const rootAgent = { children: { get: vi.fn() } } as any;
-    const events = {
-      checkpoint: vi.fn(() => 1),
-      publish: vi.fn(),
-      publishSince: vi.fn(),
-    };
-    const projector = new DaemonAgentEventProjector({
-      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
-      rootAgent,
-      store: projectorStore(store),
-      transcriptProjection: transcript as any,
-      executionProjector: { createBridge: vi.fn(() => bridge) } as any,
-      liveChildren,
-      events,
-      log: vi.fn(),
-    });
-
-    await projector.apply(
-      event(
-        "child.created",
-        {
-          childId: "child-1",
-          sessionId: "child-session",
-          spawn: {
-            description: "Explore",
-            prompt: "inspect",
-            agent: "Explore",
-            cwd: "/repo",
-          },
-          cwd: "/repo",
-        },
-        { sessionId: "parent", childId: "child-1" },
-      ),
-    );
-    await projector.apply(
-      event(
-        "input.accepted",
-        {
-          content: "inspect",
-          delivery: "queue",
-          metadata: { requestedBy: "test" },
-        },
-        {
-          sessionId: "child-session",
-          inputId: "input-1",
-          runId: "run-1",
-          childId: "child-1",
-        },
-      ),
-    );
-    bridge.bindChildExecutionRun.mockRejectedValueOnce(new Error("bind failed"));
-    const started = event(
-      "run.started",
-      {},
-      {
-        sessionId: "child-session",
-        inputId: "input-1",
-        runId: "run-1",
-        childId: "child-1",
-      },
-    );
-    await expect(projector.apply(started)).rejects.toThrow("bind failed");
-    expect(transcript.finalizeRunParts).toHaveBeenCalledWith("child-session", "run-1", "failed");
-    expect(store.updateRun).toHaveBeenCalledWith("run-1", {
-      status: "failed",
-      error: "bind failed",
-    });
-    expect(bridge.completeChildExecution).toHaveBeenCalledWith("child-1", {
-      status: "failed",
-      output: "bind failed",
-    });
-    await projector.apply(
-      event(
-        "input.accepted",
-        {
-          content: "continue",
-          delivery: "queue",
-        },
-        {
-          sessionId: "child-session",
-          inputId: "input-2",
-          runId: "run-2",
-          childId: "child-1",
-        },
-      ),
-    );
-    await projector.apply(
-      event(
-        "run.started",
-        {},
-        {
-          sessionId: "child-session",
-          inputId: "input-2",
-          runId: "run-2",
-          childId: "child-1",
-        },
-      ),
-    );
-    await projector.apply(
-      event(
-        "output.text.delta",
-        { delta: "done" },
-        {
-          sessionId: "child-session",
-          inputId: "input-2",
-          runId: "run-2",
-          childId: "child-1",
-        },
-      ),
-    );
-    await projector.apply(
-      event(
-        "run.completed",
-        { output: "done" },
-        {
-          sessionId: "child-session",
-          inputId: "input-2",
-          runId: "run-2",
-          childId: "child-1",
-        },
-      ),
-    );
-
-    expect(store.createSession).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "child-session", parentId: "parent" }),
-    );
-    expect(store.admitPrompt).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: "input-1",
-        metadata: expect.objectContaining({ requestedBy: "test" }),
-      }),
-    );
-    expect(bridge.registerChildExecution).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "child-1" }),
-    );
-    expect(liveChildren.register).toHaveBeenCalledWith("child-session", "child-1", rootAgent);
-    expect(transcript.projectStreamEvent).toHaveBeenCalledWith(expect.anything(), {
-      type: "text_delta",
-      delta: "done",
-    });
-    expect(events.publish).toHaveBeenCalledWith(liveDelta);
-    expect(bridge.bindChildExecutionRun).toHaveBeenCalledTimes(2);
-    expect(store.updateRun).toHaveBeenLastCalledWith("run-2", {
-      status: "completed",
-      metadata: { toolGeneration: [] },
-    });
-    expect([...attempts.values()]).toMatchObject([
-      { id: "attempt_run-1_1", runId: "run-1", sequence: 1, status: "failed" },
-      {
-        id: "attempt_run-2_1",
-        runId: "run-2",
-        sequence: 1,
-        status: "completed",
-      },
-    ]);
-    expect(bridge.completeChildExecution).toHaveBeenCalledWith("child-1", {
-      status: "completed",
-      output: "done",
-    });
-  });
-
-  it("compensates durable child state when live route registration fails", async () => {
-    const sessions = new Map<string, any>([
-      [
-        "parent",
-        {
-          id: "parent",
-          cwd: "/repo",
-          model: "gpt",
-          metadata: { runtime: { model: "gpt" } },
-        },
-      ],
-    ]);
-    const tasks = new Map<string, any>();
-    const archiveSession = vi.fn((id) => {
-      const session = sessions.get(id);
-      Object.assign(session, { status: "archived" });
-      return session;
-    });
-    const store = {
-      getSession: vi.fn((id) => sessions.get(id)),
-      createSession: vi.fn((input) => {
-        const row = { ...input, status: "idle" };
-        sessions.set(row.id, row);
-        return row;
-      }),
-      archiveSession,
-      getSessionTask: vi.fn((id) => tasks.get(id)),
-      appendEvent: vi.fn(),
-    };
-    const completeChildExecution = vi.fn(async (id, result) => {
-      Object.assign(tasks.get(id), {
-        status: result.status,
-        output: result.output,
-      });
-    });
-    const bridge = {
-      registerChildExecution: vi.fn((input) => {
-        const task = { id: input.id, status: "pending" };
-        tasks.set(task.id, task);
-        return task;
-      }),
-      releaseChildExecution: vi.fn(),
-      completeChildExecution,
-    };
-    const liveChildren = {
-      register: vi.fn(() => {
-        throw new Error("route conflict");
-      }),
-      unregister: vi.fn(),
-    };
-    const projector = new DaemonAgentEventProjector({
-      projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
-      rootAgent: { children: { get: vi.fn() } } as any,
-      store: projectorStore(store),
-      transcriptProjection: {} as any,
-      executionProjector: { createBridge: vi.fn(() => bridge) } as any,
-      liveChildren,
-      events: {
-        checkpoint: vi.fn(() => 1),
-        publish: vi.fn(),
-        publishSince: vi.fn(),
-      },
-      log: vi.fn(),
-    });
-
-    await expect(
-      projector.apply(
-        event(
-          "child.created",
-          {
-            childId: "child-bad",
-            sessionId: "child-session-bad",
-            spawn: {
-              description: "Explore",
-              prompt: "inspect",
-              agent: "Explore",
-              cwd: "/repo",
-            },
-            cwd: "/repo",
-          },
-          { sessionId: "parent", childId: "child-bad" },
-        ),
-      ),
-    ).rejects.toThrow("route conflict");
-
-    expect(completeChildExecution).toHaveBeenCalledWith("child-bad", {
-      status: "failed",
-      output: "route conflict",
-    });
-    expect(bridge.releaseChildExecution).toHaveBeenCalledWith("child-bad");
-    expect(archiveSession).toHaveBeenCalledWith("child-session-bad");
-    expect(sessions.get("child-session-bad")?.status).toBe("archived");
-  });
-
   it("rejects replayed input ids whose durable metadata differs", async () => {
     const store = {
       transaction: <T>(work: () => T) => work(),
@@ -1257,7 +734,7 @@ describe("DaemonAgentEventProjector", () => {
       rootAgent: { children: { get: vi.fn() } } as any,
       store: projectorStore(store),
       transcriptProjection: {} as any,
-      executionProjector: {} as any,
+
       liveChildren: {} as any,
       events: { checkpoint: vi.fn(), publish: vi.fn(), publishSince: vi.fn() },
       log: vi.fn(),
@@ -1307,7 +784,7 @@ describe("DaemonAgentEventProjector", () => {
       rootAgent: { children: { get: vi.fn() } } as any,
       store: projectorStore(store),
       transcriptProjection: {} as any,
-      executionProjector: {} as any,
+
       liveChildren: {} as any,
       events,
       log: vi.fn(),
@@ -1363,7 +840,7 @@ describe("DaemonAgentEventProjector", () => {
       rootAgent: { children: { get: vi.fn() } } as any,
       store: projectorStore(store),
       transcriptProjection: {} as any,
-      executionProjector: {} as any,
+
       liveChildren: {} as any,
       events,
       log: vi.fn(),
@@ -1411,7 +888,7 @@ describe("DaemonAgentEventProjector", () => {
       rootAgent: { children: { get: vi.fn() } } as any,
       store: projectorStore(store),
       transcriptProjection: {} as any,
-      executionProjector: {} as any,
+
       liveChildren: {} as any,
       events: { checkpoint: vi.fn(), publish: vi.fn(), publishSince: vi.fn() },
       log: vi.fn(),
@@ -1452,7 +929,7 @@ describe("DaemonAgentEventProjector", () => {
         })),
       }),
       transcriptProjection: {} as any,
-      executionProjector: {} as any,
+
       liveChildren: {} as any,
       events: { checkpoint: vi.fn(), publish: vi.fn(), publishSince: vi.fn() },
       log: vi.fn(),
@@ -1479,65 +956,6 @@ describe("DaemonAgentEventProjector", () => {
     ).rejects.toThrow("Parent session is not accepting child agents");
   });
 
-  it("retains and retries child close projection state after durable completion fails", async () => {
-    const task = { id: "child-1", status: "running", output: "" };
-    const completeChildExecution = vi
-      .fn(async (_id: string, result: { status: string; output: string }) => {
-        Object.assign(task, result);
-      })
-      .mockRejectedValueOnce(new Error("store unavailable"))
-      .mockRejectedValueOnce(new Error("store still unavailable"));
-    const liveChildren = { unregister: vi.fn() };
-    const store = projectorStore({
-      getSessionTask: vi.fn(() => task),
-      appendEvent: vi.fn(),
-    });
-    const projector = new DaemonAgentEventProjector({
-      projectorId: "daemon-agent:agent-1",
-      rootSessionId: "parent",
-      rootAgent: { children: { get: vi.fn() } } as any,
-      store,
-      transcriptProjection: {} as any,
-      executionProjector: {} as any,
-      liveChildren: liveChildren as any,
-      events: { checkpoint: vi.fn(), publish: vi.fn(), publishSince: vi.fn() },
-      log: vi.fn(),
-    });
-    (projector as any).children.set("child-1", {
-      childId: "child-1",
-      sessionId: "child-session",
-      parentSessionId: "parent",
-      taskId: "child-1",
-      bridge: { completeChildExecution, releaseChildExecution: vi.fn() },
-    });
-
-    const closed = event(
-      "child.closed",
-      {
-        childId: "child-1",
-        sessionId: "child-session",
-        result: { status: "completed", output: "done" },
-      },
-      { sessionId: "parent", childId: "child-1" },
-    );
-    await expect(projector.apply(closed)).rejects.toThrow("store unavailable");
-
-    expect(liveChildren.unregister).toHaveBeenCalledWith("child-session", "child-1");
-    expect((projector as any).children.size).toBe(1);
-    expect(task.status).toBe("running");
-    expect(store.listProjectionSettlements()).toMatchObject([{
-      status: "pending", attemptCount: 1, lastError: "store still unavailable",
-    }]);
-
-    await projector.apply(closed);
-
-    expect(completeChildExecution).toHaveBeenCalledTimes(3);
-    expect(store.conversations.appendEvent).toHaveBeenCalledOnce();
-    expect((projector as any).children.size).toBe(0);
-    expect(task).toMatchObject({ status: "completed", output: "done" });
-    expect(store.listProjectionSettlements()).toMatchObject([{ status: "resolved", attemptCount: 2 }]);
-  });
-
   it("does not hide the original projection error when settlement persistence also fails", async () => {
     const projector = new DaemonAgentEventProjector({
       projectorId: "daemon-agent:agent-1",
@@ -1551,7 +969,7 @@ describe("DaemonAgentEventProjector", () => {
         }),
       }),
       transcriptProjection: {} as any,
-      executionProjector: {} as any,
+
       liveChildren: {} as any,
       events: { checkpoint: vi.fn(), publish: vi.fn(), publishSince: vi.fn() },
       log: vi.fn(),
@@ -1606,7 +1024,7 @@ describe("DaemonAgentEventProjector", () => {
         updateRun,
       }),
       transcriptProjection: {} as any,
-      executionProjector: {} as any,
+
       liveChildren: {} as any,
       events: {
         checkpoint: vi.fn(() => 1),
@@ -1645,7 +1063,7 @@ describe("DaemonAgentEventProjector", () => {
       rootAgent: { children: { get: vi.fn() } } as any,
       store: projectorStore({ appendEvent, listEvents: vi.fn(() => durableEvents) }),
       transcriptProjection: {} as any,
-      executionProjector: {} as any,
+
       liveChildren: {} as any,
       events: {
         checkpoint: vi.fn(() => 1),
@@ -1764,7 +1182,7 @@ describe("DaemonAgentEventProjector", () => {
       rootAgent: {} as any,
       store: projectorStore({ getRun: () => run, updateRun }),
       transcriptProjection: {} as any,
-      executionProjector: {} as any,
+
       liveChildren: {} as any,
       events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
       log: vi.fn(),
@@ -1808,7 +1226,7 @@ describe("DaemonAgentEventProjector", () => {
         listEvents: () => events,
       }),
       transcriptProjection: {} as any,
-      executionProjector: {} as any,
+
       liveChildren: {} as any,
       events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
       log: vi.fn(),
@@ -1846,7 +1264,7 @@ describe("DaemonAgentEventProjector", () => {
     const projector = new DaemonAgentEventProjector({
       projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       rootAgent: {} as any, store, transcriptProjection: {} as any,
-      executionProjector: {} as any, liveChildren: {} as any,
+       liveChildren: {} as any,
       events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() }, log: vi.fn(),
     });
     const finish = (attemptNumber: number, usageStatus: string, inputTokens: number, outputTokens: number) =>
@@ -1876,7 +1294,7 @@ describe("DaemonAgentEventProjector", () => {
       rootAgent: {} as any,
       store: projectorStore({ getRun: () => run, updateRun }),
       transcriptProjection: { beginGeneration } as any,
-      executionProjector: {} as any,
+
       liveChildren: {} as any,
       events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() },
       log: vi.fn(),
@@ -1928,7 +1346,7 @@ function compactionHarness() {
   const projector = new DaemonAgentEventProjector({
     projectorId: "daemon-agent:compaction", rootSessionId: sessionId,
     rootAgent: {} as any, store, transcriptProjection: {} as any,
-    executionProjector: {} as any, liveChildren: { register() {}, unregister() {} },
+     liveChildren: { register() {}, unregister() {} },
     events: {
       checkpoint: () => store.conversations.latestEventSeq(),
       publish: record => { published.push(record); },

@@ -9,6 +9,7 @@ import type {
   AgentInputReceipt,
   AgentRunHandle,
   AgentRunResult,
+  AgentRunSettlement,
   AgentRunScope,
   AgentSteerInput,
   StreamEvent,
@@ -28,7 +29,7 @@ import { MaxTurnsExceeded } from "@vykor/core/engine";
 
 import type { AgentChildManager } from "./children/child-agent.js";
 import { abortError, serializeError } from "./agent-errors.js";
-import { AgentEventDeliveryError, type AgentEventBus } from "./event-source.js";
+import type { AgentEventBus } from "./event-source.js";
 
 export interface FrameworkAgentRunOptions {
   outputContract?: import("@vykor/agent-contracts").AgentOutputContract;
@@ -146,6 +147,8 @@ export class FrameworkAgentRun implements AgentRunHandle {
   readonly traceId: string;
   readonly started: Promise<AgentInputReceipt>;
   readonly result: Promise<AgentRunResult>;
+  readonly settled: Promise<AgentRunSettlement>;
+  cleanupUnconfirmed?: { readonly message: string };
   active = true;
 
   private readonly controller = new AbortController();
@@ -156,8 +159,12 @@ export class FrameworkAgentRun implements AgentRunHandle {
     toolResults: [],
   };
   private readonly start = deferred<AgentInputReceipt>();
+  private readonly settlement = deferred<AgentRunSettlement>();
+  private readonly invocations = new Set<Promise<void>>();
   private acceptingInput = true;
   private externalAbort?: () => void;
+  private cleanupRecovery?: () => Promise<void>;
+  private cleanupRetry?: Promise<void>;
 
   constructor(private readonly options: FrameworkAgentRunOptions) {
     this.delivery = options.outputContract ? createStructuredDelivery(options.outputContract) : undefined;
@@ -166,6 +173,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
     this.sessionId = options.session.id;
     this.traceId = options.ids.traceId;
     this.started = this.start.promise;
+    this.settled = this.settlement.promise;
     if (options.externalSignal) {
       this.externalAbort = () =>
         this.controller.abort(
@@ -177,27 +185,8 @@ export class FrameworkAgentRun implements AgentRunHandle {
           once: true,
         });
     }
-    let completedResult: AgentRunResult | undefined;
     this.result = Promise.resolve()
-      .then(() => this.execute())
-      .then((result) => {
-        completedResult = result;
-        return result;
-      })
-      .finally(() => {
-        this.active = false;
-        this.acceptingInput = false;
-        if (this.externalAbort && options.externalSignal) {
-          options.externalSignal.removeEventListener(
-            "abort",
-            this.externalAbort,
-          );
-        }
-        options.onSettled(
-          completedResult,
-          completedResult ? this.snapshotToolActivity() : undefined,
-        );
-      });
+      .then(() => this.execute());
     void this.started.catch(() => {});
     void this.result.catch(() => {});
   }
@@ -222,7 +211,13 @@ export class FrameworkAgentRun implements AgentRunHandle {
   async interrupt(reason?: string): Promise<void> {
     if (!this.controller.signal.aborted)
       this.controller.abort(reason ?? "Run interrupted");
-    await this.result.catch(() => {});
+    if (this.cleanupRecovery) {
+      const retry = this.cleanupRetry ?? this.cleanupRecovery();
+      this.cleanupRetry = retry;
+      try { await retry; }
+      finally { if (this.cleanupRetry === retry) this.cleanupRetry = undefined; }
+    }
+    await this.settled;
   }
 
   private async execute(): Promise<AgentRunResult> {
@@ -234,6 +229,9 @@ export class FrameworkAgentRun implements AgentRunHandle {
     let stopReason: string | undefined;
     let currentGenerationId: string | undefined;
     let generationOutputStart = 0;
+    let outcome!: AgentRunSettlement["result"];
+    let failure: { error: unknown } | undefined;
+    let terminal: AgentEventInput | undefined;
     const scope: AgentRunScope = {
       agentId: this.options.agentId,
       sessionId: this.sessionId,
@@ -290,6 +288,10 @@ export class FrameworkAgentRun implements AgentRunHandle {
         takeSteeredInputs: (options) => this.takeSteeredInputs(options),
         closeSteering: () => {
           this.acceptingInput = false;
+        },
+        observeInvocation: settled => {
+          this.invocations.add(settled);
+          void settled.finally(() => this.invocations.delete(settled)).catch(() => {});
         },
       };
     };
@@ -369,11 +371,11 @@ export class FrameworkAgentRun implements AgentRunHandle {
       this.rejectPendingSteers();
       const delivery = this.delivery?.requireReceipt();
       if (delivery && !output) output = delivery.summary;
-      await this.emit({
+      terminal = {
         type: "run.completed",
         data: { output, ...(stopReason ? { stopReason } : {}), ...(delivery ? { delivery: structuredClone(delivery) } : {}) },
-      });
-      return {
+      };
+      outcome = {
         status: "completed",
         output,
         history: this.options.session.getHistory(),
@@ -384,30 +386,61 @@ export class FrameworkAgentRun implements AgentRunHandle {
       this.acceptingInput = false;
       this.rejectPendingSteers();
       this.start.reject(error);
-      if (!(error instanceof AgentEventDeliveryError)) {
-        const interrupted = this.controller.signal.aborted;
-        await this.emit({
-          type: interrupted ? "run.interrupted" : "run.failed",
-          data: {
-            error: serializeError(error),
-            ...(committedOutput ? { output: committedOutput } : {}),
-            ...childFailureData(
-              this.options.identity,
-              this.options.externalSignal,
-              error,
-              this.sessionId,
-              this.id,
-              committedOutput,
-            ),
-          },
-        }).catch(() => {});
-      }
-      throw error;
+      failure = { error };
+      const interrupted = this.controller.signal.aborted;
+      const detail = childFailureData(this.options.identity, this.options.externalSignal, error, this.sessionId, this.id, committedOutput);
+      outcome = {
+        status: interrupted && detail.failureKind !== "timeout" ? "interrupted" : "failed",
+        output: (detail.partialResult?.text ?? committedOutput) || (interrupted && detail.failureKind !== "timeout" ? "" : serializeError(error).message),
+        error: serializeError(error).message,
+        ...detail,
+      };
+      terminal = {
+        type: outcome.status === "interrupted" ? "run.interrupted" : "run.failed",
+        data: { error: serializeError(error), output: outcome.output, ...detail },
+      };
     } finally {
-      // A host cleanup failure rejects the handle after the terminal event; it
-      // must not fabricate a second failed terminal for an already durable Run.
-      await releaseCapabilities?.();
+      // The query's abort/timeout race can finish before the invocation does.
+      // Cleanup is part of the same barrier; a rejected cleanup never confirms stop.
+      while (this.invocations.size) await Promise.allSettled([...this.invocations]);
     }
+    const finish = async (): Promise<AgentRunResult> => {
+      // A prior execution failure remains primary. A provisional success can
+      // still be cancelled while invocation/cleanup drains. Settled is immutable.
+      if (outcome.status === "completed" && this.controller.signal.aborted) {
+        const error = abortError(this.controller.signal);
+        const detail = childFailureData(this.options.identity, this.options.externalSignal, error, this.sessionId, this.id, committedOutput);
+        outcome = { status: detail.failureKind === "timeout" ? "failed" : "interrupted", output: detail.partialResult?.text ?? (detail.failureKind === "timeout" ? serializeError(error).message : ""), error: serializeError(error).message, ...detail };
+        failure = { error };
+        terminal = { type: outcome.status === "failed" ? "run.failed" : "run.interrupted", data: { error: serializeError(error), output: outcome.output, ...detail } };
+      }
+      this.active = false;
+      this.acceptingInput = false;
+      if (this.externalAbort && this.options.externalSignal) this.options.externalSignal.removeEventListener("abort", this.externalAbort);
+      this.settlement.resolve(Object.freeze({ result: Object.freeze(outcome), stoppedAt: Date.now() }));
+      let observerError: unknown;
+      try { this.options.onSettled(outcome.status === "completed" ? outcome as AgentRunResult : undefined, outcome.status === "completed" ? this.snapshotToolActivity() : undefined); }
+      catch (error) { observerError = error; }
+      if (terminal) await this.emit(terminal);
+      if (failure) throw failure.error;
+      if (observerError) process.emitWarning(`Run settled observer failed: ${String(observerError)}`);
+      return outcome as AgentRunResult;
+    };
+    try { await releaseCapabilities?.(); }
+    catch (error) {
+      const cleaned = deferred<void>();
+      this.cleanupUnconfirmed = { message: serializeError(error).message };
+      // An explicit later stop/close can confirm the original cleanup. This
+      // resumes only cleanup and terminal saving, never the model or tools.
+      this.cleanupRecovery = async () => {
+        await releaseCapabilities?.();
+        this.cleanupRecovery = undefined;
+        this.cleanupUnconfirmed = undefined;
+        cleaned.resolve();
+      };
+      await cleaned.promise;
+    }
+    return await finish();
   }
 
   private async takeSteeredInputs(

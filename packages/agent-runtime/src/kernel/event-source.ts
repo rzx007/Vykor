@@ -10,7 +10,12 @@ import type {
 const randomUUID = () => globalThis.crypto.randomUUID();
 
 export class AgentEventDeliveryError extends Error {
-  constructor(readonly cause: unknown) {
+  /** Narrow durable-save acknowledgement, supplied only by a terminal projector. */
+  get recovered(): boolean {
+    const cause = this.cause as { isProjectionRecovered?: () => boolean } | undefined;
+    return cause?.isProjectionRecovered?.() === true;
+  }
+  constructor(readonly cause: unknown, readonly event?: AgentEvent) {
     super(cause instanceof Error ? cause.message : String(cause));
     this.name = "AgentEventDeliveryError";
   }
@@ -52,10 +57,16 @@ export class AgentEventBus implements AgentEventSource {
           await this.sink(event);
         } catch (error) {
           if (isAgentExecutionLimitError(error)) throw error;
-          throw new AgentEventDeliveryError(error);
+          throw new AgentEventDeliveryError(error, event);
         }
       }
-      for (const sink of [...this.reliableSinks]) await sink(event);
+      for (const sink of [...this.reliableSinks]) {
+        try { await sink(event); }
+        catch (error) {
+          if (isAgentExecutionLimitError(error)) throw error;
+          throw new AgentEventDeliveryError(error, event);
+        }
+      }
       for (const listener of [...this.listeners]) {
         try {
           void Promise.resolve(listener(event)).catch(() => {});

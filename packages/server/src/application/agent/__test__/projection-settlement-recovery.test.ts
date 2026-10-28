@@ -5,7 +5,6 @@ import { join } from "node:path";
 import type { AgentEvent } from "@vykor/agent-contracts";
 import { SessionStore } from "@vykor/services";
 import { describe, expect, it, vi } from "vitest";
-import { ChildAgentExecutionRegistry } from "@vykor/execution-node";
 import { DaemonAgentEventProjector } from "../daemon-agent-event-projector.js";
 import { SessionExecutionProjector } from "../../session/transcript/session-execution-projector.js";
 import { SessionTranscriptProjection } from "../../session/transcript/transcript-projection.js";
@@ -28,11 +27,6 @@ describe("projection settlement recovery", () => {
       const makeProjector = (projectorId: string) => new DaemonAgentEventProjector({
         projectorId, rootSessionId: "parent", store, rootAgent: {} as any,
         transcriptProjection: new SessionTranscriptProjection(store),
-        executionProjector: new SessionExecutionProjector({
-          store, events: publisher,
-          getChildAgentExecutionRegistry: () => new ChildAgentExecutionRegistry(),
-          traceIdForRun: id => id, log() {},
-        }),
         liveChildren: { register() {}, unregister() {} }, events: publisher, log() {},
       });
       try {
@@ -42,8 +36,8 @@ describe("projection settlement recovery", () => {
           childId: "child-1", sessionId: "child-session", cwd: directory,
           spawn: { agent: "worker", prompt: "inspect", description: "child", cwd: directory },
         }));
-        const updateTask = store.updateSessionTask.bind(store);
-        vi.spyOn(store, "updateSessionTask").mockImplementation((id, input) => {
+        const updateTask = store.runs.updateSessionTask.bind(store.runs);
+        vi.spyOn(store.runs, "updateSessionTask").mockImplementation((id, input) => {
           if (input.status === status) throw new Error("terminal task write unavailable");
           return updateTask(id, input);
         });

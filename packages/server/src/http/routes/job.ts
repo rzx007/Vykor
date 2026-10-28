@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 
-import type { JobKind, JobStatus } from "@vykor/protocol";
+import { decodeJobTarget, type JobKind, type JobStatus } from "@vykor/protocol";
 
 import type { DaemonJobService } from "../../jobs/index.js";
 import { applicationErrorResponse, errorResponse, jsonResponse, readJson } from "../support.js";
@@ -11,10 +11,10 @@ export function createJobRoutes(jobs: DaemonJobService): Hono {
     .get("/", async (c) => {
       try {
         const sessionId = required(c.req.query("sessionId"), "sessionId");
-        return jsonResponse({ jobs: await jobs.list({
+        return jsonResponse(await jobs.list({
           sessionId,
           ...readListQuery((name) => c.req.query(name)),
-        }) });
+        }));
       } catch (error) {
         return jobError(error);
       }
@@ -23,7 +23,7 @@ export function createJobRoutes(jobs: DaemonJobService): Hono {
       try {
         return jsonResponse(await jobs.read({
           sessionId: required(c.req.query("sessionId"), "sessionId"),
-          jobId: c.req.param("jobId"),
+          target: target(c.req.param("jobId"), c.req.query("kind"), c.req.query("runId")),
           after: optionalNumber(c.req.query("after")),
           maxChars: optionalNumber(c.req.query("maxChars")),
         }));
@@ -36,7 +36,7 @@ export function createJobRoutes(jobs: DaemonJobService): Hono {
       try {
         return jsonResponse(await jobs.wait({
           sessionId: required(body.sessionId, "sessionId"),
-          jobId: c.req.param("jobId"),
+          target: bodyTarget(c.req.param("jobId"), body.target),
           timeoutMs: numberValue(body.timeoutMs, 30_000),
           after: numberOrUndefined(body.after),
           maxChars: numberOrUndefined(body.maxChars),
@@ -49,12 +49,12 @@ export function createJobRoutes(jobs: DaemonJobService): Hono {
     .post("/:jobId/input", async (c) => {
       const body = await readJson(c);
       try {
-        await jobs.send({
+        const receipt = await jobs.send({
           sessionId: required(body.sessionId, "sessionId"),
-          jobId: c.req.param("jobId"),
+          target: bodyTarget(c.req.param("jobId"), body.target),
           data: typeof body.data === "string" ? body.data : "",
         });
-        return jsonResponse({ sent: true });
+        return jsonResponse({ sent: true, ...(receipt ? { receipt } : {}) });
       } catch (error) {
         return jobError(error);
       }
@@ -64,7 +64,7 @@ export function createJobRoutes(jobs: DaemonJobService): Hono {
       try {
         return jsonResponse({ snapshot: await jobs.cancel({
           sessionId: required(body.sessionId, "sessionId"),
-          jobId: c.req.param("jobId"),
+          target: bodyTarget(c.req.param("jobId"), body.target),
           ...(typeof body.reason === "string" ? { reason: body.reason } : {}),
         }) });
       } catch (error) {
@@ -76,7 +76,9 @@ export function createJobRoutes(jobs: DaemonJobService): Hono {
 function jobError(error: unknown): Response {
   if (error instanceof ApplicationError) return applicationErrorResponse(error);
   const message = error instanceof Error ? error.message : String(error);
-  return errorResponse(message.includes("not found") || message.includes("not exist") ? 404 : 400, message);
+  const status = message.includes("run conflict") || message.includes("identity conflict") ? 409
+    : message.includes("not found") || message.includes("not exist") ? 404 : 400;
+  return errorResponse(status, message);
 }
 
 function required(value: unknown, name: string): string {
@@ -144,4 +146,11 @@ function numberOrUndefined(value: unknown): number | undefined {
 
 function numberValue(value: unknown, fallback: number): number {
   return numberOrUndefined(value) ?? fallback;
+}
+
+function target(jobId: string, kind: unknown, runId: unknown) { return decodeJobTarget({ jobId, kind, runId }); }
+function bodyTarget(jobId: string, value: unknown) {
+  const selected = decodeJobTarget(value);
+  if (selected.jobId !== jobId) throw new Error("Job target does not match URL");
+  return selected;
 }

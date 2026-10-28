@@ -80,7 +80,7 @@ export interface RunControlAdmissionQuery {
 }
 
 export interface RunControlServiceOptions {
-  children?: { interruptRun(sessionId: string, runId: string, reason?: string): Promise<boolean> };
+  children?: { interruptRun(sessionId: string, runId: string, reason?: string): Promise<boolean>; waitRun?(sessionId: string, runId: string): Promise<void> };
   durableSessions: RunControlDurableSessions;
   durableRuns: RunControlDurableRuns;
   durableInputs: RunControlDurableInputs;
@@ -486,10 +486,16 @@ export class RunControlService {
     const read = () => (this.options.durableRuns.listGoalRuns?.(goalId, objectiveVersion) ?? [])
       .filter((run) => typeof run.metadata.parentRunId === "string" && (run.status === "pending" || run.status === "running"));
     const active = read();
+    const confirmed = new Set<string>();
     for (const run of active) {
-      await this.options.children?.interruptRun(run.sessionId, run.id, reason);
+      if (await this.options.children?.interruptRun(run.sessionId, run.id, reason)) {
+        if (this.options.children?.waitRun) {
+          await this.options.children.waitRun(run.sessionId, run.id);
+          confirmed.add(run.id);
+        }
+      }
     }
-    if (read().length) throw new SessionApplicationError(409, "目标子任务尚未停止，请稍后重试");
+    if (read().some(run => !confirmed.has(run.id))) throw new SessionApplicationError(409, "目标子任务尚未停止，请稍后重试");
   }
 
   async stopAndDrain(reason = "Daemon shutting down"): Promise<void> {

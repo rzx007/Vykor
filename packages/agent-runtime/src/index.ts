@@ -26,11 +26,9 @@ export type {
   AgentEffectOverrides,
   AgentRunCapabilitySnapshot,
   CapabilityOverride,
-  ObservableJobProducer,
   VykorAgentConfiguration,
 } from "./node/agent/agent-options.js";
 export {
-  assertJobConfiguration,
   disabledCapability,
   resolveCapability,
   toAgentCapabilitySnapshot,
@@ -96,7 +94,7 @@ export { loadNodeAgentDefinitions } from "./node/definitions/definitions.js";
 export * from "./node/workflow/index.js";
 
 export { createDefaultToolRegistry } from "./node/tools/default-tool-registry.js";
-export { LocalAgentJobHost, type LocalAgentJobHostOptions } from "./node/jobs/local-agent-job-host.js";
+export { createNodeJobBindings, type NodeJobBindings, type NodeJobBindingsOptions } from "./node/jobs/node-job-bindings.js";
 
 export type { RunCapabilityView, NodeRunToolBinding, RunSkillBinding, RunAgentBinding, RunMcpServerBinding, RuntimeSandboxStatus } from "./node/runtime/node-runtime-resources.js";
 

@@ -19,3 +19,8 @@ provider 实例拥有 sessions Map、事件总线、创建中任务和关闭 Pro
 ## 新增代码与测试
 
 同一职责的新代码放在本目录。测试放同层 [__test__/](__test__/)，跨分类场景放它们共同上层的 `__test__/`。
+
+
+## 共用执行核心（阶段 A）
+
+LocalTerminalProvider.get 直接查询 sessions Map 并返回只读数据副本，定点查询不依赖 list。PTY 的进程、输出和退出状态仍属于本 provider。

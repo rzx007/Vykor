@@ -79,7 +79,7 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
               steer: 1,
               runAttempts: 1,
               toolAttempts: 1,
-              jobs: 2,
+              jobs: 3,
               schedules: 1,
               workflow: 2,
               durableChannels: 1,

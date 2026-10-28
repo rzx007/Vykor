@@ -1,4 +1,4 @@
-import type { JobStatus } from "@rzx/client"
+import type { JobStatus, JobTarget } from "@rzx/client"
 
 export type DesktopWorkflowTaskStatus =
   "pending" | "running" | "completed" | "failed" | "killed" | "skipped" | "unknown"
@@ -38,6 +38,7 @@ export interface DesktopWorkflowEvent {
 export interface DesktopWorkflowRun {
   id: string
   jobId: string
+  target: JobTarget
   sessionId: string
   title: string
   status: JobStatus
@@ -69,7 +70,7 @@ export interface DesktopWorkflowInput {
   jobId?: string
 }
 export interface DesktopWorkflowCancelInput extends DesktopWorkflowInput {
-  jobId: string
+  target: JobTarget
 }
 
 export interface DesktopWorkflowAPI {

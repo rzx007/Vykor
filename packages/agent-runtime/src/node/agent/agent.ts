@@ -113,6 +113,7 @@ export interface VykorAgentSubmitOptions extends KernelSubmitOptions {
   pluginGuidance?: string;
 }
 export interface NodeAgentHost {
+  readonly jobs: import("@vykor/jobs").AgentJobHost;
   plugins: {
     pluginApps: PluginAppRuntimeHost;
     prepareRun(
@@ -207,6 +208,7 @@ export interface AssembledAgentOptions {
   stopBackgroundWork?: () => Promise<void>;
   childDirectory: AgentChildRegistry;
   capabilities: ResolvedAgentCapabilities;
+  jobs?: import("@vykor/jobs").AgentJobHost;
   model: string;
   workflowHost?: WorkflowHost;
   requestConfigurationStore?: AgentRequestConfigurationReader;
@@ -297,6 +299,14 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
       memory: Object.freeze({ remember: this.remember.bind(this) }),
       inspect: this.inspect.bind(this),
       workflows: assembled.workflowHost,
+      jobs: (() => {
+        const jobs = assembled.jobs ?? (assembled.capabilities.jobs.status === "available" ? assembled.capabilities.jobs.value : undefined);
+        if (!jobs) return undefined!;
+        return { list: jobs.list.bind(jobs), read: jobs.read.bind(jobs), wait: jobs.wait.bind(jobs), cancel: jobs.cancel.bind(jobs), send: (input: Parameters<import("@vykor/jobs").AgentJobHost["send"]>[0], authorization?: import("@vykor/jobs").AgentJobAuthorization) => {
+          const view = this.createRunCapabilityView();
+          return jobs.send(input, authorization ?? { ...view, tools: readonlyMap([...(view.delegatableTools ?? []), ...view.tools]) });
+        } };
+      })(),
     });
   }
   override submitMessage(
@@ -327,6 +337,12 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
       },
     });
   }
+  override async canSuspend(): Promise<boolean> {
+    if (!super.canSuspend()) return false;
+    const jobs = await this.assembled.jobs?.list({ sessionId: this.id });
+    if (jobs?.errors.length || jobs?.jobs.some(job => !["completed", "failed", "killed"].includes(job.status))) return false;
+    return super.canSuspend();
+  }
   override loadHistory(
     messages: import("@vykor/agent-contracts").Message[],
   ): void {
@@ -349,7 +365,6 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
     let released = false;
     const release = async () => {
       if (released) return;
-      released = true;
       if (!this.assembled.toolResults) this.toolResultArchive.releaseRun(scope.runId);
       this.preparedRegistrations.delete(scope.runId);
       try {
@@ -357,6 +372,7 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
       } finally {
         releaseConnections();
       }
+      released = true;
     };
     try {
       const candidates = this.getPluginCandidates();
@@ -410,7 +426,10 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
           Object.freeze({
             scope: Object.freeze({ ...scope }),
             executionEnvironment: this.runtime.toolFactoryOptions?.environment ? { info: this.runtime.toolFactoryOptions.environment.info, workspace: this.runtime.toolFactoryOptions.environment.workspace } : undefined,
-            identity: this.assembled.identity,
+            identity: options.childRunParent === undefined ? this.assembled.identity : {
+              ...(this.assembled.identity?.childId ? { childId: this.assembled.identity.childId } : {}),
+              ...(options.childRunParent ? { parentSessionId: options.childRunParent.sessionId, parentRunId: options.childRunParent.runId } : {}),
+            },
             capabilityView: view,
             pluginCandidates: Object.freeze(accepted),
             resolveToolAppOrigin: this.appRuntime.toolOrigin.bind(

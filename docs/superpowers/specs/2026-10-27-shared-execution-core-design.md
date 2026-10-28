@@ -1,6 +1,6 @@
 # SDK 与 daemon 共用执行核心的架构方案
 
-> 状态：明确推荐的待实施方案；尚未实现。核对日期：2026-10-27。实施入口：[文件级实施计划](../plans/2026-10-27-shared-execution-core.md)。事实依据：[固定版本调研](../../research/2026-10-27-agent-task-lifecycle-comparison.md)。
+> 状态：已实施并通过真实验收。A/B/C 均已审查并分别提交；三文件真实生命周期 66/66（A7+B31+C28），四大门禁与文档/退役检查通过，尾部审查修正另有定向复验。核对日期：2026-10-28。实施入口：[文件级实施计划](../plans/2026-10-27-shared-execution-core.md)。事实依据：[固定版本调研](../../research/2026-10-27-agent-task-lifecycle-comparison.md)。
 
 推荐沿用现有四类执行器，把它们共同放到 Node 组装路径中。SDK 与 daemon 使用相同的执行器、Jobs 路由、子 Agent 名额和收尾规则。daemon 只增加授权、环境接入、持久记录和 HTTP 返回格式。删除重复的 child 执行登记器、daemon Jobs 生命周期分支和按全量列表发现归属的逻辑。
 
@@ -8,7 +8,7 @@
 
 ## 1. 基线核对与本次范围
 
-调研基线为 `45e30ad25d66a53b4aff2e8fb2b4960910e31bfc`，本次工作区 HEAD 为 `dc654b8a752ddacf659cada5394e473bcc14dad5`。两者之间已合入 Q1 存储优化及 Q2 回滚证据。核对命令：
+调研基线为 `45e30ad25d66a53b4aff2e8fb2b4960910e31bfc`，方案编写时工作区 HEAD 为 `dc654b8a752ddacf659cada5394e473bcc14dad5`。两者之间已合入 Q1 存储优化及 Q2 回滚证据。核对命令：
 
 ```powershell
 git diff --name-only 45e30ad25d66a53b4aff2e8fb2b4960910e31bfc..dc654b8a752ddacf659cada5394e473bcc14dad5 -- packages apps tests scripts
@@ -17,7 +17,7 @@ git status --short
 
 生产代码差异限于 `application/maintenance/cleanup-settings.ts`、`application/session/execution/tool-operation-service.ts` 及其测试、基准和说明。本文涉及的 child、Jobs、执行器、Workflow 与协议代码没有变化，原报告的四项复现仍适合作为设计输入。保留 Q1 优化，不重新打开 Q2，也不再次调研五个外部仓库。
 
-本次仅交付方案和计划。实施将涉及超过 8 个文件，主要原因是删除 SDK/daemon 两套接线和修改 Jobs 契约必须同时更新调用方。按三个可交付阶段组织，每阶段内的契约、接线、删除和验收须完整合入，不能发布半个阶段。
+用户已授权方案、计划与 A/B/C 三阶段生产实施。修改涉及超过 8 个文件，主要原因是删除 SDK/daemon 两套接线和修改 Jobs 契约必须同时更新调用方。按三个可交付阶段组织，每阶段内的契约、接线、删除和验收须完整合入，不能发布半个阶段。
 
 不做：通用 Job 状态数据库、分布式调度、跨进程自动重放、新的结果缓存服务、额外执行 ID、常驻实例 LRU、父任务借用名额。daemon 重启继续采用现有中断核对与持久记录恢复，不恢复已经失去执行归属的 JavaScript 任务。
 

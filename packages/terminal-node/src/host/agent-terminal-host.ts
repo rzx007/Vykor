@@ -17,15 +17,16 @@ import { LocalTerminalProvider } from "../providers/local-terminal-provider.js";
 
 export interface AgentTerminalProvider extends Pick<
   TerminalProvider,
-  "create" | "list" | "read" | "wait" | "write" | "kill" | "subscribe"
+  "create" | "get" | "list" | "read" | "wait" | "write" | "kill" | "subscribe"
 > {
-  dispose(): Promise<void>;
+  dispose?(): Promise<void>;
 }
 
 export interface CreateAgentTerminalBundleOptions {
   cwd: string;
   sessionId: string;
-  provider?: AgentTerminalProvider;
+  provider?: TerminalProvider;
+  ownsProvider?: boolean;
 }
 
 export interface AgentTerminalBundle {
@@ -57,27 +58,27 @@ export function createAgentTerminalBundle(
     list: async (input) => {
       assertOwner(input.sessionId, options.sessionId);
       const terminals = await ownedTerminals(provider, options.sessionId);
-      return filterJobSnapshots(
+      return { jobs: filterJobSnapshots(
         terminals.map((terminal) => snapshot(terminal, observationFor(terminal, observations))),
         input,
-      );
+      ), errors: [] };
     },
     read: async (input) => {
       assertOwner(input.sessionId, options.sessionId);
-      await requireOwnedTerminal(provider, input.jobId, options.sessionId);
+      await requireOwnedTerminal(provider, input.target.jobId, options.sessionId);
       const result = await provider.read({
-        terminalId: input.jobId,
+        terminalId: input.target.jobId,
         ...(input.after !== undefined ? { after: input.after } : {}),
         ...(input.maxChars !== undefined ? { maxChars: input.maxChars } : {}),
       });
-      const terminal = await requireOwnedTerminal(provider, input.jobId, options.sessionId);
+      const terminal = await requireOwnedTerminal(provider, input.target.jobId, options.sessionId);
       return readResult(result, snapshot(terminal, observationFor(terminal, observations)));
     },
     wait: async (input) => {
       assertOwner(input.sessionId, options.sessionId);
-      await requireOwnedTerminal(provider, input.jobId, options.sessionId);
+      await requireOwnedTerminal(provider, input.target.jobId, options.sessionId);
       const result = await provider.wait({
-        terminalId: input.jobId,
+        terminalId: input.target.jobId,
         timeoutMs: input.timeoutMs,
         ...(input.after !== undefined ? { after: input.after } : {}),
         ...(input.maxChars !== undefined ? { maxChars: input.maxChars } : {}),
@@ -91,21 +92,21 @@ export function createAgentTerminalBundle(
     },
     send: async (input) => {
       assertOwner(input.sessionId, options.sessionId);
-      await requireOwnedTerminal(provider, input.jobId, options.sessionId);
-      await provider.write({ terminalId: input.jobId, data: input.data });
+      await requireOwnedTerminal(provider, input.target.jobId, options.sessionId);
+      await provider.write({ terminalId: input.target.jobId, data: input.data });
       observationFor(
-        await requireOwnedTerminal(provider, input.jobId, options.sessionId),
+        await requireOwnedTerminal(provider, input.target.jobId, options.sessionId),
         observations,
       ).updatedAt = Date.now();
     },
     cancel: async (input) => {
       assertOwner(input.sessionId, options.sessionId);
-      const terminal = await requireOwnedTerminal(provider, input.jobId, options.sessionId);
+      const terminal = await requireOwnedTerminal(provider, input.target.jobId, options.sessionId);
       const observation = observationFor(terminal, observations);
-      await provider.kill(input.jobId);
+      await provider.kill(input.target.jobId);
       observation.updatedAt = Date.now();
       return snapshot(
-        await requireOwnedTerminal(provider, input.jobId, options.sessionId),
+        await requireOwnedTerminal(provider, input.target.jobId, options.sessionId),
         observation,
       );
     },
@@ -127,7 +128,7 @@ export function createAgentTerminalBundle(
   const cleanup = (): Promise<void> => {
     cleanupPromise ??= Promise.resolve().then(async () => {
       unsubscribe();
-      await provider.dispose();
+      if (options.ownsProvider !== false) await (provider as AgentTerminalProvider).dispose?.();
     });
     return cleanupPromise;
   };
@@ -153,20 +154,19 @@ function createRequest(
 }
 
 async function ownedTerminals(
-  provider: AgentTerminalProvider,
+  provider: Pick<TerminalProvider, "list" | "get">,
   sessionId: string,
 ): Promise<TerminalSessionInfo[]> {
   return (await provider.list()).filter((terminal) => terminal.sessionId === sessionId);
 }
 
 async function requireOwnedTerminal(
-  provider: AgentTerminalProvider,
+  provider: Pick<TerminalProvider, "list" | "get">,
   terminalId: string,
   sessionId: string,
 ): Promise<TerminalSessionInfo> {
-  const terminal = (await ownedTerminals(provider, sessionId))
-    .find((candidate) => candidate.id === terminalId);
-  if (!terminal) throw new Error(`Job not found: ${terminalId}`);
+  const terminal = await provider.get(terminalId);
+  if (!terminal || terminal.sessionId !== sessionId) throw new Error(`Job not found: ${terminalId}`);
   return terminal;
 }
 
@@ -196,6 +196,7 @@ function snapshot(
   return {
     id: terminal.id,
     kind: "terminal",
+    target: { kind: "terminal", jobId: terminal.id },
     label: terminal.name,
     ownerSession: terminal.sessionId!,
     status,

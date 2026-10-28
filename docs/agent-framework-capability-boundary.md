@@ -71,7 +71,7 @@ Kernel 的硬规则：
 - 不发现插件、Skill 或 MCP；
 - 不启动 Sandbox；
 - 不写 `process.stderr`；
-- 不创建 `LocalAgentJobHost`；
+- 不创建 `createNodeJobBindings`；
 - child 的通用限制由 Kernel 收紧；Node 为整棵树解析宿主能力，借用资源不能由 child 关闭；
 - 没有显式 child environment 时只沿用 cwd，不查 Git、不建 worktree。
 
@@ -203,3 +203,6 @@ P5 中，Server 通过 GoalModelAttemptService 在实际模型请求前准入、
 架构门禁覆盖静态/类型/动态导入、再导出、别名、跨包相对路径与声明来源。当前阶段为 P13，`stageExceptions` 为空；[P7 基线](./superpowers/reviews/2026-10-22-protocol-layering-baseline.md) 的 4,173 条关系是迁移前历史快照，不是当前例外数。底层能力、Services、Node 和 Server application 不再依赖 Protocol。Client 只直接依赖 Protocol，Server/Client 联合测试放在 `tests/server-client`。存储模块仍不能导入 Office/Memory 辅助宿主、模型、进程和 PTY；宿主辅助域保留原能力。
 
 AgentDefinition 的规范来源为 coordinator/definitions，执行权限与审查数据归 agent-contracts/permissions，工具数据与执行错误归 agent-contracts，Settings 与旧模式归一化归 host-config，有效权限计算归 permissions。领域记录归 domain-contracts，插件清单与后端绑定归 plugin-contracts，通用 JSON 归 json-data/json；Job/Terminal 的纯数据从各自 /contracts 引用。旧 Core 配置、工具默认宿主与 Node 转发入口不保留。旧 Swarm 包已退役，团队登记属于 Coordinator 的 TeamRegistry，实际执行由 Node 宿主和 Kernel child 管理。
+
+
+阶段 A 已接通 Jobs 协议 6 与共同执行来源；最新接口和所有权说明见 [Jobs 协议](./jobs-protocol.md)。额度和 Workflow runner 的后续收拢仍按阶段 B/C 计划执行。

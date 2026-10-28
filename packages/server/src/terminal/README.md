@@ -22,3 +22,8 @@
 终端应用接口与项目关联放在这里；底层终端实现由 terminal 相关包提供。
 
 测试放在本分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移文件时同步导入、公开入口、文档链接与旧引用清单。
+
+
+## 共用执行核心（阶段 A）
+
+DaemonTerminalService 提供带会话/环境核对的 TerminalProvider，交给共同 agent-terminal-host bundle 生成 Jobs；不另写 Jobs 状态或 wait/cancel。get 直接查询底层 provider。

@@ -486,6 +486,7 @@ describe("createDefaultNodeAgent", () => {
     const terminalJob = {
       id: "terminal-job-1",
       kind: "terminal" as const,
+      target: { kind: "terminal" as const, jobId: "terminal-job-1" },
       ownerSession: "session-1",
       status: "running" as const,
       capabilities: { read: true, wait: true, send: true, cancel: true },
@@ -502,7 +503,7 @@ describe("createDefaultNodeAgent", () => {
         },
         jobs: {
           async list(input) {
-            return [{ ...terminalJob, ownerSession: input.sessionId }];
+            return { jobs: [{ ...terminalJob, ownerSession: input.sessionId }], errors: [] };
           },
           async read() { throw new Error("not used"); },
           async wait() { throw new Error("not used"); },
@@ -533,7 +534,7 @@ describe("createDefaultNodeAgent", () => {
     });
     await expect((agent as any).assembled.capabilities.jobs.value.list({
       sessionId: agent.id,
-    })).resolves.toContainEqual(terminalJob);
+    })).resolves.toMatchObject({ jobs: [terminalJob], errors: [] });
 
     await agent.close();
     await agent.close();
@@ -550,12 +551,9 @@ describe("createDefaultNodeAgent", () => {
     const dispose = vi.fn(async () => {});
     const cleanup = vi.fn(async () => {});
     const terminalOverride = {
-      value: {
-        async open() { throw new Error("not used"); },
-        dispose,
-      },
-      jobs: {} as never,
-      cleanup,
+      create: async () => { throw new Error("not used"); }, get: async () => undefined, list: async () => [],
+      read: async () => { throw new Error("not used"); }, wait: async () => { throw new Error("not used"); },
+      write: async () => {}, resize: async () => {}, signal: async () => {}, kill: async () => {}, subscribe: () => () => {}, dispose,
     };
     const agent = await createDefaultNodeAgent({
       cwd,

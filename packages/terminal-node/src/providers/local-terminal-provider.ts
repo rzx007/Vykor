@@ -269,6 +269,11 @@ export class LocalTerminalProvider implements TerminalProvider {
     await this.closeTarget(session);
   }
 
+  async get(terminalId: string): Promise<TerminalSessionInfo | undefined> {
+    const info = this.sessions.get(terminalId)?.info;
+    return info ? { ...info } : undefined;
+  }
+
   async list(): Promise<TerminalSessionInfo[]> {
     return [...this.sessions.values()].map((session) => ({ ...session.info }));
   }

@@ -18,6 +18,7 @@ import type {
   ProcessExecutionListener,
   StartAgentProcessOptions,
   StartShellExecutionOptions,
+  ShellAdmissionPorts,
 } from "./types.js";
 import { appendBoundedOutput } from "./bounded-output-file.js";
 import {
@@ -32,20 +33,18 @@ import {
 
 const MAX_OUTPUT_BYTES = 12_000;
 const STOP_GRACE_MS = 3_000;
-const MAX_RESTARTS = 5;
-const RESTART_NOTICE =
-  "[Vykor] Agent task restarted; prior interactive context was not preserved.\n";
 
 interface RunState {
   child: ChildProcess;
   closed: Promise<void>;
+  stopWork?: Promise<DetachedProcessExecution>;
   /** Monotonically increasing per restart; stale watchers ignore terminal updates. */
   generation: number;
 }
 
 /**
  * Supervise locally spawned non-PTY shell, dream, and explicit Agent processes.
- * Framework child Agent handles live in ChildAgentExecutionRegistry instead.
+ * Framework child Agent handles belong to their ChildManager.
  */
 export class DetachedProcessSupervisor {
   private executions = new Map<string, DetachedProcessExecution>();
@@ -59,7 +58,7 @@ export class DetachedProcessSupervisor {
   private taskSettings = new Map<string, Settings>();
   private taskPolicies = new Map<string, SandboxPolicy>();
   private taskProcessExecutors = new Map<string, EnvironmentProcessExecutor>();
-  private shellStartPromises = new Map<string, Promise<DetachedProcessExecution>>();
+  private shellStartPromises = new Map<string, { options: StartShellExecutionOptions; promise: Promise<DetachedProcessExecution>; stopRequested: boolean; ports?: ShellAdmissionPorts; release?: () => Promise<void>; releasePromise?: Promise<void>; stopPromise?: Promise<DetachedProcessExecution> }>();
   private readonly starts = new Set<Promise<RunState>>();
   private closing = false;
   private closePromise?: Promise<void>;
@@ -79,16 +78,16 @@ export class DetachedProcessSupervisor {
    * Options form supports `argv` (direct-exec, no shell) and `env`.
    */
   async startShellExecution(command: string, description: string, cwd: string): Promise<DetachedProcessExecution>;
-  async startShellExecution(options: StartShellExecutionOptions): Promise<DetachedProcessExecution>;
+  async startShellExecution(options: StartShellExecutionOptions, ports?: ShellAdmissionPorts): Promise<DetachedProcessExecution>;
   async startShellExecution(
     commandOrOptions: string | StartShellExecutionOptions,
-    description?: string,
+    descriptionOrPorts?: string | ShellAdmissionPorts,
     cwd?: string,
   ): Promise<DetachedProcessExecution> {
     this.assertOpen();
     const opts: StartShellExecutionOptions =
       typeof commandOrOptions === "string"
-        ? { command: commandOrOptions, description: description!, cwd: cwd! }
+        ? { command: commandOrOptions, description: descriptionOrPorts as string, cwd: cwd! }
         : commandOrOptions;
 
     if (opts.command == null && opts.argv == null) {
@@ -99,68 +98,93 @@ export class DetachedProcessSupervisor {
     }
 
     const id = opts.id ?? `task_${++this.idCounter}`;
+    const ports = typeof descriptionOrPorts === "object" ? descriptionOrPorts : undefined;
+    const starting = this.shellStartPromises.get(id);
+    if (starting) {
+      const normalize = ({ processExecutor: _processExecutor, ...rest }: StartShellExecutionOptions) => rest;
+      if (!isDeepStrictEqual(normalize(starting.options), normalize(opts))) throw new Error(`Execution request identity conflict: ${id}`);
+      return await starting.promise;
+    }
     const existing = this.executions.get(id);
     if (existing) {
-      if (!this.matchesShellRequest(existing, opts)) {
-        throw new Error(`Execution request identity conflict: ${id}`);
-      }
-      const inFlight = this.shellStartPromises.get(id);
-      return inFlight ? await inFlight : existing;
+      if (!this.matchesShellRequest(existing, opts)) throw new Error(`Execution request identity conflict: ${id}`);
+      return existing;
     }
-    const starting = this.startShellExecutionOnce(id, opts);
-    this.shellStartPromises.set(id, starting);
-    try {
-      return await starting;
-    } finally {
-      this.shellStartPromises.delete(id);
-    }
+    const entry = { options: { ...opts }, stopRequested: false, ports, promise: undefined as unknown as Promise<DetachedProcessExecution> };
+    this.shellStartPromises.set(id, entry);
+    entry.promise = Promise.resolve().then(() => this.startShellExecutionOnce(id, opts, ports));
+    return await entry.promise;
   }
 
-  private async startShellExecutionOnce(
-    id: string,
-    opts: StartShellExecutionOptions,
-  ): Promise<DetachedProcessExecution> {
+  private async startShellExecutionOnce(id: string, opts: StartShellExecutionOptions, ports?: ShellAdmissionPorts): Promise<DetachedProcessExecution> {
+    const entry = this.shellStartPromises.get(id)!;
     const outputFile = join(this.tasksDir, `${id}.log`);
-    const task: DetachedProcessExecution = {
-      id,
-      backend: "detached_process",
-      type: opts.type ?? "shell",
-      status: "running",
-      description: opts.description,
-      cwd: opts.cwd,
-      sessionId: opts.sessionId,
-      command: opts.command,
-      argv: opts.argv ? [...opts.argv] : undefined,
-      env: opts.env ? { ...opts.env } : undefined,
-      outputFile,
-      createdAt: Date.now(),
-      startedAt: Date.now(),
-      metadata: {},
-    };
-    this.ensureTasksDir();
-    writeFileSync(outputFile, "");
+    const task: DetachedProcessExecution = { id, backend: "detached_process", type: opts.type ?? "shell", status: "pending", description: opts.description, cwd: opts.cwd, sessionId: opts.sessionId,
+      command: opts.command, argv: opts.argv ? [...opts.argv] : undefined, env: opts.env ? { ...opts.env } : undefined, outputFile, createdAt: Date.now(), metadata: {} };
     this.executions.set(id, task);
     if (opts.settings) this.taskSettings.set(id, opts.settings);
     if (opts.policy) this.taskPolicies.set(id, opts.policy);
-    if (opts.processExecutor) this.taskProcessExecutors.set(id, opts.processExecutor);
-    this.notifyExecutionEvent(task, "created");
+    let admitted = !ports;
     try {
-      await this.startProcess(id);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      task.status = "failed";
-      task.exitCode = 1;
-      task.finishedAt = Date.now();
-      task.metadata.status_note = message;
-      try {
-        appendBoundedOutput(outputFile, `[spawn error] ${message}\n`);
-      } catch {
-        /* output file may have been removed by shutdown */
+      await ports?.reserve({ ...opts, id });
+      const archived = await ports?.load(id);
+      admitted = true;
+      if (archived && isTerminal(archived.status)) { this.executions.delete(id); this.shellStartPromises.delete(id); return archived; }
+      this.ensureTasksDir();
+      writeFileSync(outputFile, "");
+      this.notifyExecutionEvent(task, "created");
+      const environment = await (ports?.acquireEnvironment({ ...opts, id }) ?? Promise.resolve({ launch: opts, release: async () => {} }));
+      entry.release = environment.release;
+      if (entry.stopRequested || this.closing) {
+        await this.releaseAdmission(id);
+        task.status = "stopped"; task.finishedAt = Date.now();
+        await this.saveProjection(task); await this.notifyCompletion(task);
+        return task;
       }
-      await this.notifyCompletion(task);
+      const launch = environment.launch;
+      task.command = launch.command; task.argv = launch.argv; task.env = launch.env;
+      if (launch.processExecutor) this.taskProcessExecutors.set(id, launch.processExecutor);
+      task.status = "running"; task.startedAt = Date.now();
+      await this.saveProjection(task);
+      await this.startProcess(id);
+      if (entry.stopRequested) return await this.stopStartedExecution(id);
+      return task;
+    } catch (error) {
+      if (!admitted) {
+        this.executions.delete(id);
+        this.shellStartPromises.delete(id);
+        this.taskSettings.delete(id);
+        this.taskPolicies.delete(id);
+        throw error;
+      }
+      const state = this.states.get(id);
+      if (state) {
+        task.status = "stopping";
+        await this.terminateState(state);
+        this.states.delete(id);
+      }
+      await this.releaseAdmission(id);
+      task.status = entry.stopRequested ? "stopped" : "failed";
+      task.exitCode = 1; task.finishedAt = Date.now(); task.metadata.status_note = error instanceof Error ? error.message : String(error);
+      try { appendBoundedOutput(outputFile, `[spawn error] ${task.metadata.status_note}\n`); } catch { /* admission may have failed before log creation */ }
+      await this.saveProjection(task); await this.notifyCompletion(task);
       throw error;
     }
-    return task;
+  }
+
+  private async releaseAdmission(id: string): Promise<void> {
+    const entry = this.shellStartPromises.get(id);
+    if (!entry?.release) return;
+    entry.releasePromise ??= entry.release();
+    await entry.releasePromise;
+  }
+
+  private async saveProjection(task: DetachedProcessExecution): Promise<void> {
+    try { await this.shellStartPromises.get(task.id)?.ports?.save({ ...task, metadata: { ...task.metadata } }); }
+    catch (error) {
+      if (!isTerminal(task.status)) throw error;
+      task.metadata.projectionError = error instanceof Error ? error.message : String(error);
+    }
   }
 
   private matchesShellRequest(
@@ -304,52 +328,43 @@ export class DetachedProcessSupervisor {
   }
 
   private async doWrite(task: DetachedProcessExecution, payload: string): Promise<void> {
-    let state = this.states.get(task.id);
-    const writable = state?.child.stdin && !state.child.stdin.destroyed && state.child.exitCode === null;
-    if (!writable) {
-      if (task.type !== "agent") {
-        throw new Error(`Task ${task.id} does not accept input`);
-      }
-      // Lazily resurrect the dead agent before writing (restart limit enforced
-      // inside restartAgentProcess).
-      state = await this.restartAgentProcess(task);
-    }
-    const stdin = state!.child.stdin!;
-    try {
-      await writeToStdin(stdin, payload);
-    } catch (err) {
-      // Broken pipe mid-write: restart the agent once and retry (still bounded
-      // by the restart limit). Non-agent tasks just propagate the error.
-      if (task.type !== "agent") throw err;
-      const restarted = await this.restartAgentProcess(task);
-      await writeToStdin(restarted.child.stdin!, payload);
-    }
+    const state = this.states.get(task.id);
+    if (task.status !== "running" || !state?.child.stdin || state.child.stdin.destroyed || state.child.exitCode !== null) throw new Error(`Task ${task.id} does not accept input`);
+    await writeToStdin(state.child.stdin, payload);
   }
 
   // ── stop / shutdown ─────────────────────────────────────
 
   /** Terminate a running process: graceful signal, then forced tree cleanup. */
   async stopExecution(executionId: string): Promise<DetachedProcessExecution> {
+    const entry = this.shellStartPromises.get(executionId);
+    if (entry) {
+      entry.stopRequested = true;
+      if (entry.stopPromise) return entry.stopPromise;
+      entry.stopPromise = (async () => { await entry.promise.catch(() => {}); return this.stopStartedExecution(executionId); })();
+      return entry.stopPromise;
+    }
+    return this.stopStartedExecution(executionId);
+  }
+
+  private async stopStartedExecution(executionId: string): Promise<DetachedProcessExecution> {
     const task = this.executions.get(executionId);
     if (!task) throw new Error(`Execution not found: ${executionId}`);
     const state = this.states.get(executionId);
-    if (!state) {
-      if (task.status === "completed" || task.status === "failed" || task.status === "stopped") {
-        return task;
-      }
-      throw new Error(`Execution ${executionId} is not running`);
-    }
-
-    // Mark stopped first so the exit watcher does not overwrite the status.
-    task.status = "stopped";
-    task.finishedAt = Date.now();
-    // Bump generation so the watcher ignores this child's exit transition.
-    this.generations.set(executionId, (this.generations.get(executionId) ?? 0) + 1);
-
-    await this.terminateState(state);
-    this.states.delete(executionId);
-    await this.notifyCompletion(task);
-    return task;
+    if (!state && isTerminal(task.status)) return task;
+    task.status = "stopping";
+    this.notifyExecutionEvent(task, "updated");
+    if (state?.stopWork) return state.stopWork;
+    const stopping = (async () => {
+      if (state) await this.terminateState(state);
+      await this.releaseAdmission(executionId);
+      this.states.delete(executionId);
+      task.status = "stopped"; task.finishedAt = Date.now();
+      await this.saveProjection(task); await this.notifyCompletion(task);
+      return task;
+    })();
+    if (state) state.stopWork = stopping;
+    return stopping;
   }
 
   /** Register a completion listener; returns an unregister callback. */
@@ -387,7 +402,7 @@ export class DetachedProcessSupervisor {
    *   both cleaned up to avoid leaks.
    * - Unknown `taskId` → throws.
    */
-  awaitExecution(executionId: string, opts?: { timeoutMs?: number }): Promise<AwaitExecutionResult> {
+  awaitExecution(executionId: string, opts?: { timeoutMs?: number; signal?: AbortSignal }): Promise<AwaitExecutionResult> {
     const task = this.executions.get(executionId);
     if (!task) throw new Error(`Execution not found: ${executionId}`);
 
@@ -412,7 +427,9 @@ export class DetachedProcessSupervisor {
           timer = undefined;
         }
         unregister();
+        opts?.signal?.removeEventListener("abort", onAbort);
       };
+      const onAbort = () => { if (settled) return; settled = true; cleanup(); reject(opts?.signal?.reason ?? new Error("Execution wait aborted")); };
       const finish = (status: AwaitExecutionResult["status"], exitCode?: number, timedOut = false) => {
         if (settled) return;
         settled = true;
@@ -427,6 +444,9 @@ export class DetachedProcessSupervisor {
       unregister = this.registerCompletionListener((finished) => {
         if (finished.id === executionId) finish(finished.status, finished.exitCode);
       });
+
+      if (opts?.signal?.aborted) { onAbort(); return; }
+      opts?.signal?.addEventListener("abort", onAbort, { once: true });
 
       // Late-binding guard: if the task became terminal between the snapshot
       // above and the listener registration, resolve from current state.
@@ -472,18 +492,17 @@ export class DetachedProcessSupervisor {
     this.closing = true;
     this.closePromise = Promise.resolve().then(async () => {
       // An acquired environment may still be creating a process when shutdown starts.
+      for (const entry of this.shellStartPromises.values()) entry.stopRequested = true;
+      await Promise.allSettled([...this.shellStartPromises.values()].map(entry => entry.promise));
       await Promise.allSettled([...this.starts]);
-      const states = [...this.states.values()];
-      for (const id of this.states.keys()) {
-        this.generations.set(id, (this.generations.get(id) ?? 0) + 1);
-      }
-      const settled = await Promise.allSettled(states.map(s => this.terminateState(s)));
+      const ids = [...this.states.keys()];
+      const settled = await Promise.allSettled(ids.map(id => this.stopStartedExecution(id)));
       await Promise.allSettled([...this.writeChains.values()]);
-      this.states.clear();
-      this.completionListeners.clear();
-      this.executionListeners.clear();
+      for (const id of this.shellStartPromises.keys()) await this.releaseAdmission(id);
       const failures = settled.flatMap(result => result.status === "rejected" ? [result.reason] : []);
       if (failures.length) throw new AggregateError(failures, "Failed to close detached processes");
+      this.completionListeners.clear();
+      this.executionListeners.clear();
     });
     return this.closePromise;
   }
@@ -633,7 +652,6 @@ export class DetachedProcessSupervisor {
     code: number | null | undefined,
     _signal: NodeJS.Signals | null,
   ): Promise<void> {
-    if (this.closing) return;
     // Stale watcher (task was restarted or explicitly stopped).
     if (this.generations.get(taskId) !== generation) return;
     const task = this.executions.get(taskId);
@@ -641,68 +659,27 @@ export class DetachedProcessSupervisor {
 
     const exitCode = code ?? 1;
 
-    // Process exit only records terminal state. Unlike a naive "restart on any
-    // non-zero exit" loop, this mirrors Python's `_watch_process`: a dead
-    // process is just marked completed/failed and never proactively restarted.
-    // Agent tasks are resurrected lazily, only when something tries to write to
-    // a dead agent's stdin (see `doWrite` -> `restartAgentProcess`).
+    const state = this.states.get(taskId);
+    if (state?.stopWork) {
+      try { await state.stopWork; return; } catch { /* actual close still confirms this execution ended */ }
+    }
+    await this.releaseAdmission(taskId);
     task.exitCode = exitCode;
     task.processExitCode = code;
-    if (task.status !== "stopped") {
-      task.status = exitCode === 0 ? "completed" : "failed";
-    }
+    task.status = task.status === "stopping" ? "stopped" : exitCode === 0 ? "completed" : "failed";
     task.finishedAt = Date.now();
     this.states.delete(taskId);
+    await this.saveProjection(task);
     await this.notifyCompletion(task);
   }
 
-  /**
-   * Restart a dead agent task on demand (e.g. a write hit a broken pipe).
-   *
-   * This is the single chokepoint for the restart limit — every restart path
-   * funnels through here, so it can never exceed `MAX_RESTARTS`. Before
-   * spawning the replacement it reaps any lingering old child (mirroring
-   * Python's `_restart_agent_task`, which awaits the prior waiter), so we never
-   * leak an un-reaped subprocess.
-   */
-  private async restartAgentProcess(task: DetachedProcessExecution): Promise<RunState> {
-    if (task.command == null && task.argv == null) {
-      throw new Error(`Task ${task.id} does not have a restart command or argv`);
-    }
-    const restartCount = parseInt(task.metadata.restart_count ?? "0", 10) + 1;
-    if (restartCount > MAX_RESTARTS) {
-      task.metadata.status_note = `Agent task restart limit (${MAX_RESTARTS}) reached.`;
-      throw new Error(`Task ${task.id} exceeded restart limit (${MAX_RESTARTS})`);
-    }
-
-    // Reap any still-tracked previous child before spawning a replacement so we
-    // never leave an orphaned subprocess behind.
-    const prev = this.states.get(task.id);
-    if (prev) {
-      // Bump generation so the old child's exit watcher does not clobber state.
-      this.generations.set(task.id, (this.generations.get(task.id) ?? 0) + 1);
-      this.states.delete(task.id);
-      await terminateProcess(prev.child, STOP_GRACE_MS);
-    }
-
-    task.metadata.restart_count = String(restartCount);
-    task.metadata.status_note = "Task restarted; prior interactive context was not preserved.";
-    task.status = "running";
-    task.startedAt = Date.now();
-    task.finishedAt = undefined;
-    task.exitCode = undefined;
-    task.processExitCode = undefined;
-    if (task.outputFile) {
-      try {
-        appendBoundedOutput(task.outputFile, RESTART_NOTICE);
-      } catch {
-        /* ignore */
-      }
-    }
-    return this.startProcess(task.id);
-  }
-
   private async notifyCompletion(task: DetachedProcessExecution): Promise<void> {
+    const settled = [...this.shellStartPromises.keys()].filter(id => {
+      const execution = this.executions.get(id); return execution && isTerminal(execution.status);
+    });
+    const cutoff = Date.now() - 10 * 60_000;
+    for (const id of settled) if ((this.executions.get(id)?.finishedAt ?? Infinity) < cutoff) this.shellStartPromises.delete(id);
+    for (const id of settled.slice(0, Math.max(0, settled.length - 1_000))) this.shellStartPromises.delete(id);
     const snapshot: DetachedProcessExecution = { ...task, metadata: { ...task.metadata } };
     for (const listener of [...this.completionListeners.values()]) {
       try {

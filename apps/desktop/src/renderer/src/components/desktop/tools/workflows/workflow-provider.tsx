@@ -65,7 +65,7 @@ export function WorkflowProvider({
       const runId = selections.current.get(sessionId)?.runId
       const next = await window.desktop.workflows.read({
         sessionId,
-        ...(runId ? { jobId: `workflow:${runId}` } : {}),
+        ...(runId ? { jobId: runId } : {}),
       })
       if (
         sequence !== request.current ||
@@ -123,10 +123,12 @@ export function WorkflowProvider({
   const cancel = useCallback(
     async (jobId: string) => {
       if (!sessionId) return
-      await window.desktop.workflows.cancel({ sessionId, jobId })
+      const target = snapshot?.runs.find(run => run.jobId === jobId)?.target
+      if (!target) throw new Error("请先选择当前编排。")
+      await window.desktop.workflows.cancel({ sessionId, target })
       if (currentSession.current === sessionId) await refresh()
     },
-    [sessionId, refresh]
+    [sessionId, refresh, snapshot]
   )
   const value = useMemo(
     () => ({

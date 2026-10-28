@@ -97,7 +97,7 @@ async function createDefaultNodeAgentInternal(
     ...internal,
     resolveDefaultTerminal: ({ override, cwd, sessionId }) =>
       resolveDefaultNodeTerminal({
-        override,
+        override, cwd, sessionId,
         createLocal: () => internals.createLocalTerminal({ cwd, sessionId }),
       }),
     createAgent: (childOptions, identity) =>

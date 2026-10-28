@@ -4,7 +4,7 @@ import { requireDesktopPluginCapabilities } from "./plugin-capabilities"
 describe("Desktop plugin capability gate", () => {
   it("accepts the current complete server and rejects incompatible or incomplete servers", () => {
     expect(() => requireDesktopPluginCapabilities({
-      serverVersion: "current", protocol: { version: 5 }, features: { pluginCapabilities: 1 },
+      serverVersion: "current", protocol: { version: 6 }, features: { pluginCapabilities: 1 },
     })).not.toThrow()
     for (const [version, features] of [[3, { pluginCapabilities: 1 }], [5, {}]] as const) {
       expect(() => requireDesktopPluginCapabilities({ serverVersion: "old", protocol: { version }, features }))

@@ -7,8 +7,7 @@ import { join } from "node:path";
 import { expect, it } from "vitest";
 
 import type { Settings } from "@vykor/host-config";
-import { CompositeAgentJobHost } from "@vykor/jobs";
-import { LocalAgentJobHost } from "../../jobs/local-agent-job-host.js";
+import { createChildJobSource } from "../../jobs/child-job-source.js";
 import { createJobTools } from "../../../../../tools/src/job/job-tools.js";
 import {  createFixtureNodeAgent as createAgentKernel, createFixtureRuntime as createBasicAgentKernelRuntime  } from "../../agent/__test__/host-assembly.test-support.js";
 type AgentKernelRuntimeContext=any;
@@ -16,7 +15,7 @@ import { createInProcessChildEnvironmentProvider } from "../../children/child-en
 import { unavailableCapability } from "../../capabilities/capability-resolution.js";
 import { createRunCapabilityView } from "../run-capability-view.js";
 
-it("checks the current Run's plugin through real JobSend, composite host and an idle Child", async () => {
+it("checks the current Run's plugin through real JobSend, routed source and an idle Child", async () => {
   const cwd = mkdtempSync(join(tmpdir(), "vk-plugin-child-followup-"));
   const sessionId = "root-followup";
   const pluginCalls: string[] = [];
@@ -51,7 +50,7 @@ it("checks the current Run's plugin through real JobSend, composite host and an 
         yield { type: "tool_use_start", toolUse: {
           type: "tool_use", id: `call-${request.messages.length}`, name,
           // A model-provided pluginId must not become host authorization.
-          input: name === "JobSend" ? { jobId: childId, data: "continue", pluginId: "P" } : {},
+          input: name === "JobSend" ? { target: { kind: "agent", jobId: childId, runId: agent.children.get(childId)!.runId }, data: "continue", pluginId: "P" } : {},
         } };
         yield { type: "complete", stopReason: "tool_use" };
       } else {
@@ -85,10 +84,11 @@ it("checks the current Run's plugin through real JobSend, composite host and an 
   });
   const executionOwner = new ExecutionRuntimeOwner();
   try {
-    const jobs = new CompositeAgentJobHost([new LocalAgentJobHost({
+    const jobs = createChildJobSource({
       processes: executionOwner.getDetachedProcessSupervisor({ cwd, sessionId }),
-      cwd, sessionId, childManager: agent.children,
-    })]);
+      cwd, sessionId, children: agent.children,
+      sendChildInput: (id, runId, input, authorization) => rootRuntime.childManager!.send(id, input, authorization ? new Map([...(authorization.delegatableTools ?? []), ...(authorization.tools ?? [])]) as any : undefined, authorization?.parent as any ?? null, runId),
+    });
     rootRuntime.toolRegistry.register(createJobTools(jobs).find(tool => tool.name === "JobSend")!);
     await agent.runMessage("spawn", { capabilityView: agent.host.plugins.createRunCapabilityView("P"), limits: { check: boundary => { firstLimits.push(boundary); } } });
     expect(firstLimits).toContain("child");

@@ -1,10 +1,20 @@
 import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/agent-contracts";
-import type { AgentJobAuthorization, AgentJobHost, JobKind, JobStatus } from "@vykor/jobs";
+import type { AgentJobAuthorization, AgentJobHost, JobTarget, JobKind, JobStatus } from "@vykor/jobs";
 
 const DEFAULT_JOB_LIST_LIMIT = 100;
 const MAX_JOB_WAIT_IDS = 32;
 const MAX_JOB_WAIT_MS = 60_000;
-const jobIdProperty = { type: "string", description: "Job id returned by a long-running tool or JobList" };
+const targetProperty = { type: "object", properties: { kind: { type: "string", enum: ["agent", "shell", "terminal", "workflow", "dream"] }, jobId: { type: "string" }, runId: { type: "string", description: "Required for agent targets; pins one accepted run" } }, required: ["kind", "jobId"] };
+function jobTarget(value: unknown): JobTarget {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("target is required");
+  const input = value as Record<string, unknown>;
+  const kind = requiredString(input.kind, "target.kind");
+  const jobId = requiredString(input.jobId, "target.jobId");
+  if (kind === "agent") return { kind, jobId, runId: requiredString(input.runId, "target.runId") };
+  if (kind !== "shell" && kind !== "terminal" && kind !== "workflow" && kind !== "dream") throw new Error("Unsupported target kind");
+  return { kind, jobId };
+}
+
 
 export function createJobTools(port?: AgentJobHost, authorization?: AgentJobAuthorization): ToolDefinition[] {
   const jobListTool: ToolDefinition = {
@@ -36,17 +46,17 @@ export function createJobTools(port?: AgentJobHost, authorization?: AgentJobAuth
       if ("content" in host) return host;
       try {
         const limit = optionalNumber(input.limit) ?? DEFAULT_JOB_LIST_LIMIT;
-        const jobs = await host.jobs.list({
+        const listed = await host.jobs.list({
           sessionId: host.sessionId,
           ...optionalListFilters(input),
           limit,
         });
         return result("list", {
-          jobs,
+          ...listed,
           window: {
             limit,
-            returned: jobs.length,
-            possiblyTruncated: jobs.length === limit,
+            returned: listed.jobs.length,
+            possiblyTruncated: listed.jobs.length === limit,
           },
         });
       } catch (error) {
@@ -61,11 +71,11 @@ export function createJobTools(port?: AgentJobHost, authorization?: AgentJobAuth
     inputSchema: {
       type: "object",
       properties: {
-        jobId: jobIdProperty,
+        target: targetProperty,
         after: { type: "number", description: "Cursor returned by an earlier JobRead or JobWait" },
         maxChars: { type: "number", default: 12000 },
       },
-      required: ["jobId"],
+      required: ["target"],
     },
     async execute(input, context) {
       const host = resolveHost(context, port);
@@ -73,7 +83,7 @@ export function createJobTools(port?: AgentJobHost, authorization?: AgentJobAuth
       try {
         const read = await host.jobs.read({
           sessionId: host.sessionId,
-          jobId: requiredString(input.jobId, "jobId"),
+          target: jobTarget(input.target),
           after: optionalNumber(input.after),
           maxChars: optionalNumber(input.maxChars),
         });
@@ -90,22 +100,17 @@ export function createJobTools(port?: AgentJobHost, authorization?: AgentJobAuth
     inputSchema: {
       type: "object",
       properties: {
-        jobIds: {
+        targets: {
           type: "array",
-          items: jobIdProperty,
+          items: { type: "object", properties: { target: targetProperty, after: { type: "number" } }, required: ["target"] },
           minItems: 1,
           maxItems: MAX_JOB_WAIT_IDS,
           description: "Job ids to wait for concurrently",
         },
-        after: {
-          type: "object",
-          additionalProperties: { type: "number" },
-          description: "Per-job cursors returned by earlier JobRead or JobWait calls",
-        },
         timeoutSeconds: { type: "number", default: 30, description: "Requested wait in seconds. Values above 60 are shortened; a shorter execution deadline may reduce it further." },
         maxChars: { type: "number", default: 12000 },
       },
-      required: ["jobIds"],
+      required: ["targets"],
     },
     async execute(input, context) {
       const host = resolveHost(context, port);
@@ -113,32 +118,29 @@ export function createJobTools(port?: AgentJobHost, authorization?: AgentJobAuth
       try {
         const timeoutSeconds = optionalNumber(input.timeoutSeconds) ?? 30;
         if (timeoutSeconds <= 0) throw new Error("timeoutSeconds must be positive.");
-        if (Array.isArray(input.jobIds) && input.jobIds.length > MAX_JOB_WAIT_IDS) {
-          throw new Error(`jobIds cannot contain more than ${MAX_JOB_WAIT_IDS} entries.`);
-        }
-        const jobIds = requiredStringArray(input.jobIds, "jobIds");
-        const cursors = optionalCursorMap(input.after);
+        if (!Array.isArray(input.targets) || input.targets.length === 0 || input.targets.length > MAX_JOB_WAIT_IDS) throw new Error(`targets must contain 1 to ${MAX_JOB_WAIT_IDS} entries`);
+        const targets = input.targets.map(value => { const item = value as Record<string, unknown>; return { target: jobTarget(item.target), after: optionalNumber(item.after) }; });
         let timeoutMs = Math.min(timeoutSeconds * 1_000, MAX_JOB_WAIT_MS);
         if (context.deadlineAt !== undefined) {
           const remainingMs = Math.max(0, context.deadlineAt - Date.now());
           // Reserve time for the host's final snapshot and returning the tool result.
           timeoutMs = Math.min(timeoutMs, Math.max(1, remainingMs - Math.min(1_000, remainingMs * 0.2)));
         }
-        const results = await Promise.all(jobIds.map(async (jobId) => {
+        const results = await Promise.all(targets.map(async ({ target, after }) => {
           try {
             return {
-              jobId,
+              target,
               ...await host.jobs.wait({
                 sessionId: host.sessionId,
-                jobId,
+                target,
                 timeoutMs,
-                ...(cursors?.[jobId] !== undefined ? { after: cursors[jobId] } : {}),
+                ...(after !== undefined ? { after } : {}),
                 maxChars: optionalNumber(input.maxChars),
                 signal: context.abortSignal,
               }),
             };
           } catch (error) {
-            return { jobId, error: error instanceof Error ? error.message : String(error) };
+            return { target, error: error instanceof Error ? error.message : String(error) };
           }
         }));
         return result("wait", { timeoutSeconds: timeoutMs / 1_000, results });
@@ -153,24 +155,16 @@ export function createJobTools(port?: AgentJobHost, authorization?: AgentJobAuth
     description: "Send input to an interactive terminal or agent job that accepts input.",
     inputSchema: {
       type: "object",
-      properties: { jobId: jobIdProperty, data: { type: "string" } },
-      required: ["jobId", "data"],
+      properties: { target: targetProperty, data: { type: "string" } },
+      required: ["target", "data"],
     },
     async execute(input, context) {
       const host = resolveHost(context, port);
       if ("content" in host) return host;
       try {
-        const jobId = requiredString(input.jobId, "jobId");
-        // Model-originated child input carries this Run's trusted controller.
-        // Desktop/direct handle.send remains an explicitly unparented follow-up.
-        if (context.agent?.children.hasChildAgent(jobId)) {
-          const receipt = await context.agent.children.sendChildInput(jobId, { content: String(input.data ?? "") });
-          return result("send", { jobId, ...receipt });
-        }
-        const request = { sessionId: host.sessionId, jobId, data: String(input.data ?? "") };
-        if (authorization) await host.jobs.send(request, authorization);
-        else await host.jobs.send(request);
-        return result("send", { jobId });
+        const target = jobTarget(input.target);
+        const receipt = await host.jobs.send({ sessionId: host.sessionId, target, data: String(input.data ?? "") }, { ...(authorization ?? (context.agent?.tools ? { tools: context.agent.tools } : {})), ...(context.agent ? { parent: { ...context.agent.scope, limits: context.agent.limits, toolSafety: context.agent.toolSafety } } : {}) });
+        return result("send", { target, ...(receipt ? { receipt } : {}) });
       } catch (error) {
         return failed(error);
       }
@@ -182,8 +176,8 @@ export function createJobTools(port?: AgentJobHost, authorization?: AgentJobAuth
     description: "Request cancellation of a job owned by this session.",
     inputSchema: {
       type: "object",
-      properties: { jobId: jobIdProperty, reason: { type: "string" } },
-      required: ["jobId"],
+      properties: { target: targetProperty, reason: { type: "string" } },
+      required: ["target"],
     },
     async execute(input, context) {
       const host = resolveHost(context, port);
@@ -191,7 +185,7 @@ export function createJobTools(port?: AgentJobHost, authorization?: AgentJobAuth
       try {
         const snapshot = await host.jobs.cancel({
           sessionId: host.sessionId,
-          jobId: requiredString(input.jobId, "jobId"),
+          target: jobTarget(input.target),
           ...(typeof input.reason === "string" ? { reason: input.reason } : {}),
         });
         return result("cancel", { snapshot });
@@ -280,23 +274,4 @@ function optionalListFilters(input: Record<string, unknown>) {
     ...(typeof input.includeFinished === "boolean" ? { includeFinished: input.includeFinished } : {}),
     ...(optionalNumber(input.limit) !== undefined ? { limit: optionalNumber(input.limit) } : {}),
   };
-}
-
-function requiredStringArray(value: unknown, name: string): string[] {
-  if (!Array.isArray(value) || value.length === 0) throw new Error(`${name} must contain at least one job id.`);
-  return [...new Set(value.map((item) => requiredString(item, name)))];
-}
-
-function optionalCursorMap(value: unknown): Record<string, number> | undefined {
-  if (value === undefined) return undefined;
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("after must be an object keyed by job id.");
-  }
-  const cursors: Record<string, number> = {};
-  for (const [jobId, cursor] of Object.entries(value)) {
-    const parsed = optionalNumber(cursor);
-    if (parsed === undefined) throw new Error(`after.${jobId} must be a finite number.`);
-    cursors[jobId] = parsed;
-  }
-  return cursors;
 }

@@ -1,11 +1,11 @@
-import type { JobKind, JobReadResult, JobSnapshot, JobStatus, JobWaitResult } from "@vykor/protocol";
-import { decodeJobReadResult, decodeJobSnapshot, decodeJobWaitResult } from "@vykor/protocol";
+import type { JobTarget, JobListResult, JobInputReceipt, JobKind, JobReadResult, JobSnapshot, JobStatus, JobWaitResult } from "@vykor/protocol";
+import { ProtocolDataError, decodeJobListResult, decodeJobInputReceipt, decodeJobReadResult, decodeJobSnapshot, decodeJobWaitResult } from "@vykor/protocol";
 import type {
   CreateBackgroundShellInput,
   CreateBackgroundShellResult,
 } from "../../types/index.js";
 import type { HttpTransport } from "../../transport/http-transport.js";
-import { responseArray, responseField } from "../../transport/http-transport.js";
+import { responseField } from "../../transport/http-transport.js";
 
 export class JobResource {
   constructor(private readonly transport: HttpTransport) {}
@@ -21,7 +21,7 @@ export class JobResource {
     includeFinished?: boolean;
     limit?: number;
     signal?: AbortSignal;
-  }): Promise<JobSnapshot[]> {
+  }): Promise<JobListResult> {
     const { signal, kinds, statuses, includeFinished, ...query } = options;
     const response = await this.transport.request<unknown>(
       this.transport.path("/jobs", {
@@ -34,7 +34,7 @@ export class JobResource {
       }),
       { signal },
     );
-    return responseArray(response, "jobs", decodeJobSnapshot);
+    return decodeJobListResult(response);
   }
 
   async createBackgroundShell(
@@ -52,7 +52,7 @@ export class JobResource {
   }
 
   async read(
-    jobId: string,
+    target: JobTarget,
     options: {
       sessionId: string;
       after?: number;
@@ -62,14 +62,14 @@ export class JobResource {
   ): Promise<JobReadResult> {
     const { signal, ...query } = options;
     const response = await this.transport.request<unknown>(
-      this.transport.path(`/jobs/${encodeURIComponent(jobId)}`, query),
+      this.transport.path(`/jobs/${encodeURIComponent(target.jobId)}`, { ...query, kind: target.kind, ...(target.kind === "agent" ? { runId: target.runId } : {}) }),
       { signal },
     );
     return decodeJobReadResult(response);
   }
 
   async wait(
-    jobId: string,
+    target: JobTarget,
     input: {
       sessionId: string;
       timeoutMs?: number;
@@ -79,10 +79,10 @@ export class JobResource {
     options: { signal?: AbortSignal } = {},
   ): Promise<JobWaitResult> {
     const response = await this.transport.request<unknown>(
-      `/jobs/${encodeURIComponent(jobId)}/wait`,
+      `/jobs/${encodeURIComponent(target.jobId)}/wait`,
       {
         method: "POST",
-        body: input,
+        body: { ...input, target },
         signal: options.signal,
       },
     );
@@ -90,25 +90,28 @@ export class JobResource {
   }
 
   async send(
-    jobId: string,
+    target: JobTarget,
     input: { sessionId: string; data: string },
     options: { signal?: AbortSignal } = {},
-  ): Promise<void> {
-    await this.transport.request(`/jobs/${encodeURIComponent(jobId)}/input`, {
+  ): Promise<JobInputReceipt | void> {
+    const response = await this.transport.request<unknown>(`/jobs/${encodeURIComponent(target.jobId)}/input`, {
       method: "POST",
-      body: input,
+      body: { ...input, target },
       signal: options.signal,
     });
+    if (responseField(response, "sent") !== true) throw new ProtocolDataError("Job input was not accepted", "sent");
+    const receipt = (response as { receipt?: unknown }).receipt;
+    return receipt === undefined ? undefined : decodeJobInputReceipt(receipt);
   }
 
   async cancel(
-    jobId: string,
+    target: JobTarget,
     input: { sessionId: string; reason?: string },
     options: { signal?: AbortSignal } = {},
   ): Promise<JobSnapshot> {
     const response = await this.transport.request<unknown>(
-      `/jobs/${encodeURIComponent(jobId)}/cancel`,
-      { method: "POST", body: input, signal: options.signal },
+      `/jobs/${encodeURIComponent(target.jobId)}/cancel`,
+      { method: "POST", body: { ...input, target }, signal: options.signal },
     );
     return decodeJobSnapshot(responseField(response, "snapshot"));
   }

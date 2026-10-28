@@ -67,3 +67,5 @@ pnpm --filter @vykor/agent-runtime exec vitest run src/node/children/__test__
 ```
 
 新增模块按职责放入现有分类，更新该分类 README。迁移文件时同步导入、脚本、文档和旧引用清单，并运行 `pnpm check:retired-ui` 与 `pnpm check-docs`。
+
+默认 Workflow runner 只使用真实 childId/runId 与 waitRun/interruptRun；coordinator 独占 deadline 和重试。一次性 worker 的安全卸载复用 ChildManager，保留历史/cwd/授权；任意保留后代都会保守阻止卸载。模型 inherit 在申请 child 环境前解析，宿主授权在初始和后续模型准备时复查。

@@ -17,3 +17,8 @@
 ## 新增代码与测试
 
 同一职责的新代码放在本目录。测试放同层 [__test__/](__test__/)，跨分类场景放它们共同上层的 `__test__/`。
+
+
+## 共用执行核心（阶段 A）
+
+createAgentTerminalBundle 同时服务 SDK 和 daemon。它把 TerminalProvider 映射为工具与 Jobs；requireOwnedTerminal 通过 get 定点核对所属会话。

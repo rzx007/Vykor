@@ -16,3 +16,10 @@
 运行句柄、子 Agent 目录、预算计数、事件顺序和模型尝试记录都由消费方管理。错误类只保存失败原因或限制值。新增运行相关定义放本目录，测试建议放同层 `__test__/`；跨分类测试放 [../__test__](../__test__/)。
 
 `PreparedAgentRun.bindToolResults(finalTools)` 在最终工具范围确定、可靠 run.started 投影完成后创建结果读取能力，参数保留实际工具定义、来源和调用函数。模型和手动执行使用相同绑定函数，工厂不进入工具执行上下文。旧 `PreparedAgentRun.toolResults` 已弃用，暂保留公开兼容：最终绑定必须完整等价；收窄或替换来源、定义、调用函数后，旧存储不可用。新代码应使用工厂。
+
+
+## 共用执行核心（阶段 A）
+
+AgentChildInvocation 的 inputId/runId 是成功接纳后的必填身份。AgentChildRunSnapshot 与 readRun/waitRun 只观察固定轮次；JobInputReceipt 与 AgentInputReceipt 结构一致。
+
+阶段 B 的 `AgentRunSettlement` 固定实际结果与停止时间；`AgentRunHandle.settled` 等待真实调用和清理，`result` 继续承接可靠保存错误。`observeInvocation` 把工具真实完成 Promise 交给当前 run。`cleanupUnconfirmed` 表示清理未确认，`projectionError` 表示已停止但结果尚未保存，二者均不创建新的执行状态或身份。

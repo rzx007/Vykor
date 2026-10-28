@@ -1,310 +1,116 @@
-import type { AgentChildController } from "@vykor/agent-contracts";
-import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
-import type {
-  AgentDefinition,
-  WorkflowConservePolicy,
-  WorkflowDiffSummary,
-  WorkflowRunner,
-  WorkflowTask,
-  WorkflowWorkerResult,
-} from "@vykor/coordinator";
+import type { AgentChildController, AgentChildDirectory, AgentChildInvocation, AgentChildResult } from "@vykor/agent-contracts";
+import type { AgentDefinition, WorkflowConservePolicy, WorkflowDiffSummary, WorkflowRunner, WorkflowTask } from "@vykor/coordinator";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import type { AwaitExecutionResult } from "@vykor/execution-node";
-
 import { promisify } from "node:util";
-import { awaitFrameworkChildTask } from "../children/child-task-adapter.js";
-
 const execFileAsync = promisify(execFile);
 const GIT_SUMMARY_TIMEOUT_MS = 2_000;
 
-export interface WorkflowWorkerSpawnConfig {
-  name: string;
-  team: string;
-  prompt: string;
-  cwd: string;
-  parentSessionId: string;
-  sessionId?: string;
-  model?: string;
-  systemPrompt?: string;
-  permissionMode?: "default" | "plan" | "full_auto";
-  isolate?: boolean;
-  allowedTools?: string[];
-  requiredMcpServers?: string[];
-  disallowedTools?: string[];
-  maxTurns?: number;
-  effort?: string;
-}
-
-export interface WorkflowWorkerSpawnResult {
-  success: boolean;
-  agentId: string;
-  taskId: string;
-  sessionId?: string;
-  backendType: string;
-  error?: string;
-  worktree?: { path: string; branch: string };
-  notice?: string;
-}
-
 export interface AgentWorkflowRunnerOptions {
-  executionOwner?: ExecutionRuntimeOwner;
   cwd: string;
   sessionId?: string;
   team?: string;
-  timeoutMs?: number;
   permissionMode?: "default" | "plan" | "full_auto";
-  fromAgent?: string;
   agent?: { children: AgentChildController };
-  spawnWorker?: (
-    config: WorkflowWorkerSpawnConfig,
-  ) => Promise<WorkflowWorkerSpawnResult>;
-  awaitTask?: (
-    taskId: string,
-    options?: { timeoutMs?: number },
-  ) => Promise<AwaitExecutionResult>;
-  stopTask?: (taskId: string) => Promise<unknown>;
+  children?: AgentChildDirectory;
   getChangedFiles?: (cwd: string) => Promise<string[]>;
   getDiffSummary?: (cwd: string) => Promise<WorkflowDiffSummary>;
   getAgentDefinition?: (name: string) => AgentDefinition | undefined;
 }
+interface WorkerReceipt { agentId: string; taskId: string; runId: string; worktree?: AgentChildInvocation["worktree"]; notice?: string }
 
-/** Run each scheduled worker through the owning Node host. */
-export function createAgentWorkflowRunner(
-  options: AgentWorkflowRunnerOptions,
-): WorkflowRunner {
-  return async ({
-    task,
-    attempt,
-    dependencyResults,
-    pipelineInput,
-    resumeFrom,
-    budgetMode,
-    budgetConserve,
-    reportProgress,
-    signal,
-    deadlineAt,
-  }) => {
+/** Only the real child owns execution; coordinator owns deadlines and retries. */
+export function createAgentWorkflowRunner(options: AgentWorkflowRunnerOptions): WorkflowRunner {
+  return async ({ task, attempt, dependencyResults, pipelineInput, resumeFrom, budgetMode, budgetConserve, reportProgress, signal }) => {
     signal?.throwIfAborted();
-    const prompt = buildWorkerPrompt(
-      task,
-      dependencyResults,
-      pipelineInput,
-      budgetMode,
-      budgetConserve,
-    );
-    const subagentType = task.subagentType ?? "worker";
-    const agentDef = options.getAgentDefinition
-      ? options.getAgentDefinition(subagentType)
-      : undefined;
-    const waitTimeoutMs = earliestDefined(
-      options.timeoutMs,
-      agentDef?.timeoutSeconds !== undefined
-        ? agentDef.timeoutSeconds * 1_000
-        : undefined,
-      deadlineAt !== undefined
-        ? Math.max(0, deadlineAt - Date.now())
-        : undefined,
-    );
+    const name = task.subagentType ?? "worker";
+    const definition = options.getAgentDefinition?.(name);
     const team = task.team ?? options.team ?? "default";
-    const workerSessionId = createWorkerSessionId(task.id, attempt);
-    const spawnBase =
-      options.spawnWorker ??
-      ((config: WorkflowWorkerSpawnConfig) =>
-        defaultSpawnWorker(options.cwd, config, options.agent));
-    const spawnWorker = async (config: WorkflowWorkerSpawnConfig) => {
-      signal?.throwIfAborted();
-      const worker = await spawnBase(config);
-      if (signal?.aborted && worker.success) {
-        await stopTask(worker.taskId);
-        signal.throwIfAborted();
+    let receipt: WorkerReceipt;
+    let actualResult: AgentChildInvocation["result"] | undefined;
+    if (resumeFrom) {
+      const taskId = getStringMetadata(resumeFrom.metadata, "workerTaskId");
+      const runId = getStringMetadata(resumeFrom.metadata, "workerRunId");
+      if (!taskId || !runId) throw unconfirmedWorkerError("Workflow worker receipt is unavailable; execution cannot be replayed", resumeFrom.metadata);
+      receipt = { taskId, runId, agentId: getStringMetadata(resumeFrom.metadata, "agentId") ?? `${name}@${team}`,
+        worktree: getWorktreeMetadata(resumeFrom.metadata), notice: getStringMetadata(resumeFrom.metadata, "notice") };
+    } else {
+      if (!options.agent) throw new Error("Workflow worker child controller is unavailable");
+      const workerSessionId = createWorkerSessionId(task.id, attempt);
+      let child: AgentChildInvocation;
+      try { child = await options.agent.children.spawnChildAgent({
+        description: `${name}@${team}`, agent: name, team, cwd: options.cwd,
+        sessionId: workerSessionId,
+        prompt: buildWorkerPrompt(task, dependencyResults, pipelineInput, budgetMode, budgetConserve),
+        model: task.model ?? definition?.model, systemPrompt: definition?.systemPrompt,
+        permissionMode: normalizePermissionMode(budgetMode === "conserve"
+          ? budgetConserve?.permissionMode ?? task.permissionMode ?? options.permissionMode ?? definition?.permissionMode
+          : task.permissionMode ?? options.permissionMode ?? definition?.permissionMode),
+        isolate: task.isolate === true, allowedTools: definition?.tools,
+        requiredMcpServers: definition?.requiredMcpServers, disallowedTools: definition?.disallowedTools,
+        maxTurns: budgetMode === "conserve" ? budgetConserve?.maxTurns ?? definition?.maxTurns : definition?.maxTurns,
+        effort: definition?.effort != null ? String(definition.effort) : undefined,
+        timeoutSeconds: definition?.timeoutSeconds,
+      }); } catch (error) {
+        // A failed started ACK can still own a running child or unreleased
+        // preparation. Settle that exact worker session before retry is safe.
+        const original = options.children?.getBySessionId(workerSessionId);
+        if (original) {
+          try { await original.close(); }
+          catch (cleanupError) { throw unconfirmedWorkerError(String(error), { workerTaskId: original.id, workerRunId: original.runId, cleanupError: String(cleanupError) }); }
+        }
+        throw error;
       }
-      return worker;
-    };
-    const wait =
-      options.awaitTask ??
-      ((taskId, waitOptions) =>
-        defaultAwaitTask(
-          options.cwd,
-          options.sessionId,
-          taskId,
-          waitOptions,
-          options.agent,
-          options.executionOwner,
-        ));
-    const awaitTask: NonNullable<
-      AgentWorkflowRunnerOptions["awaitTask"]
-    > = async (taskId, waitOptions) => {
-      if (!signal) return await wait(taskId, waitOptions);
-      let aborted = () => {};
-      try {
-        return await Promise.race([
-          wait(taskId, waitOptions),
-          new Promise<never>((_, reject) => {
-            aborted = () => {
-              void (async () => {
-                await stopTask(taskId);
-                await wait(taskId);
-                signal.throwIfAborted();
-              })().catch(reject);
-            };
-            signal.addEventListener("abort", aborted, { once: true });
-            if (signal.aborted) aborted();
-          }),
-        ]);
-      } finally {
-        signal.removeEventListener("abort", aborted);
-      }
-    };
-    const stopTask =
-      options.stopTask ??
-      ((taskId) =>
-        defaultStopTask(
-          options.cwd,
-          options.sessionId,
-          taskId,
-          options.agent,
-          options.executionOwner,
-        ));
-
-    const resumedTaskId = getStringMetadata(
-      resumeFrom?.metadata,
-      "workerTaskId",
-    );
-    if (resumedTaskId) {
-      try {
-        reportProgress?.({
-          summary: `Waiting for existing task ${resumedTaskId}`,
-          metadata: resumeFrom?.metadata,
-        });
-        const waited = await stopTimedOutTask(
-          stopTask,
-          resumedTaskId,
-          await awaitTask(resumedTaskId, { timeoutMs: waitTimeoutMs }),
-          awaitTask,
-        );
-        const spawn = {
-          success: true,
-          agentId:
-            getStringMetadata(resumeFrom?.metadata, "agentId") ??
-            `${subagentType}@${team}`,
-          taskId: resumedTaskId,
-          backendType:
-            getStringMetadata(resumeFrom?.metadata, "backendType") ?? "resumed",
-          worktree: getWorktreeMetadata(resumeFrom?.metadata),
-          notice: getStringMetadata(resumeFrom?.metadata, "notice"),
-        } satisfies WorkflowWorkerSpawnResult;
-        const diff = await getDiffSummaryForWorker(options, spawn);
-        return mapAwaitedTaskToWorkerResult(task, spawn, waited, diff);
-      } catch (error) {
-        reportProgress?.({
-          summary: `Existing task ${resumedTaskId} unavailable; spawning replacement`,
-          metadata: {
-            ...resumeFrom?.metadata,
-            resumeError: error instanceof Error ? error.message : String(error),
-          },
-        });
-      }
+      actualResult = child.result;
+      receipt = { agentId: `${name}@${team}`, taskId: child.id, runId: child.runId, worktree: child.worktree, notice: child.notice };
     }
-
-    const spawn = await spawnWorker({
-      name: subagentType,
-      team,
-      prompt,
-      cwd: options.cwd,
-      parentSessionId: options.sessionId ?? "main",
-      sessionId: workerSessionId,
-      model: task.model ?? agentDef?.model,
-      systemPrompt: agentDef?.systemPrompt,
-      permissionMode: normalizePermissionMode(
-        budgetMode === "conserve"
-          ? (budgetConserve?.permissionMode ??
-              task.permissionMode ??
-              options.permissionMode ??
-              agentDef?.permissionMode)
-          : (task.permissionMode ??
-              options.permissionMode ??
-              agentDef?.permissionMode),
-      ),
-      isolate: task.isolate === true,
-      allowedTools: agentDef?.tools,
-      requiredMcpServers: agentDef?.requiredMcpServers,
-      disallowedTools: agentDef?.disallowedTools,
-      maxTurns:
-        budgetMode === "conserve"
-          ? (budgetConserve?.maxTurns ?? agentDef?.maxTurns)
-          : agentDef?.maxTurns,
-      effort: agentDef?.effort != null ? String(agentDef.effort) : undefined,
-    });
-
-    if (!spawn.success) {
+    const handle = options.children?.get(receipt.taskId);
+    if (!handle) {
+      const error = `Workflow worker handle is unavailable: ${receipt.taskId}`;
+      if (actualResult) return queryFailureResult(receipt, error, await actualResult);
+      throw unconfirmedWorkerError(error, spawnMetadata(receipt));
+    }
+    // Capture this exact run's existing result barrier before any query can fail.
+    // Promise identity is never used to decide which run it belongs to.
+    if (!actualResult && handle.runId === receipt.runId) actualResult = handle.result;
+    reportProgress?.({ summary: `Waiting for child ${receipt.taskId}`, metadata: spawnMetadata(receipt) });
+    const stop = () => { void handle.interruptRun(receipt.runId, "Workflow attempt stopped").catch(() => {
+      reportProgress?.({ metadata: { ...spawnMetadata(receipt), cleanupUnconfirmed: true } });
+    }); };
+    signal?.addEventListener("abort", stop, { once: true });
+    if (signal?.aborted) stop();
+    try {
+      let snapshot: Awaited<ReturnType<typeof handle.waitRun>>;
+      try {
+        handle.readRun(receipt.runId);
+        snapshot = await handle.waitRun(receipt.runId);
+      } catch (error) {
+        reportProgress?.({ summary: "Worker query failed; waiting for its actual stop", metadata: { ...spawnMetadata(receipt), stopping: true, cleanupUnconfirmed: true } });
+        await handle.interruptRun(receipt.runId, "Workflow worker query failed").catch(() => {});
+        if (!actualResult) throw unconfirmedWorkerError(String(error), spawnMetadata(receipt));
+        const actual = await actualResult;
+        // Query failure never schedules a substitute, even after actual stop.
+        return queryFailureResult(receipt, String(error), actual);
+      }
+      if (!snapshot.result) throw new Error("Workflow child stop is unconfirmed");
+      const result = snapshot.result;
+      const diff = await getDiffSummaryForWorker(options, receipt);
+      if (result.status === "completed" && !snapshot.projectionError) await handle.requestSuspend?.(receipt.runId);
       return {
-        status: "failed",
-        summary: spawn.error ?? "Failed to spawn workflow worker",
-        metadata: {
-          agentId: spawn.agentId,
-          workerTaskId: spawn.taskId,
-          backendType: spawn.backendType,
+        status: result.status === "completed" ? "completed" : result.status === "interrupted" || result.status === "stopped" ? "killed" : "failed",
+        summary: `${task.id} finished with status ${result.status}`, result: result.output,
+        metadata: { ...spawnMetadata(receipt),
+          ...("failureKind" in result && result.failureKind ? { failureKind: result.failureKind } : {}),
+          ...("partialResult" in result && result.partialResult ? { partialResult: result.partialResult } : {}),
+          ...("delivery" in result && result.delivery ? { delivery: result.delivery } : {}),
+          ...(snapshot.cleanupUnconfirmed ? { cleanupUnconfirmed: true } : {}),
+          ...(snapshot.projectionError ? { projectionError: snapshot.projectionError } : {}),
+          ...(diff && diff.changedFiles.length ? { changedFiles: diff.changedFiles, diff } : {}),
         },
       };
-    }
-
-    reportProgress?.({
-      summary: `Waiting for task ${spawn.taskId}`,
-      metadata: spawnMetadata(spawn),
-    });
-    const waited = await stopTimedOutTask(
-      stopTask,
-      spawn.taskId,
-      await awaitTask(spawn.taskId, { timeoutMs: waitTimeoutMs }),
-      awaitTask,
-    );
-    reportProgress?.({
-      summary: `Worker task ${spawn.taskId} ${waited.timedOut ? "timed out" : "finished"}; collecting changes`,
-      metadata: spawnMetadata(spawn),
-    });
-    const diff = await getDiffSummaryForWorker(options, spawn);
-    return mapAwaitedTaskToWorkerResult(task, spawn, waited, diff);
+    } finally { signal?.removeEventListener("abort", stop); }
   };
-}
-
-const CLEANUP_GRACE_MS = 5_000;
-
-async function stopTimedOutTask(
-  stopTask: (taskId: string) => Promise<unknown>,
-  taskId: string,
-  waited: AwaitExecutionResult,
-  awaitTask: (
-    taskId: string,
-    options?: { timeoutMs?: number },
-  ) => Promise<AwaitExecutionResult>,
-): Promise<AwaitExecutionResult> {
-  if (!waited.timedOut) return waited;
-  let stopRequested = false;
-  try {
-    await stopTask(taskId);
-    stopRequested = true;
-  } catch {
-    // A failed stop still leaves cleanup unconfirmed; keep the timeout result.
-  }
-  const confirmed = stopRequested
-    ? await awaitTask(taskId, { timeoutMs: CLEANUP_GRACE_MS }).catch(
-        () => undefined,
-      )
-    : undefined;
-  if (confirmed && confirmed.status !== "running" && !confirmed.timedOut)
-    return confirmed;
-  return { ...waited, cleanupUnconfirmed: true };
-}
-
-function earliestDefined(
-  ...values: Array<number | undefined>
-): number | undefined {
-  const defined = values.filter(
-    (value): value is number => value !== undefined,
-  );
-  return defined.length > 0 ? Math.min(...defined) : undefined;
 }
 
 function buildWorkerPrompt(
@@ -362,61 +168,9 @@ function indentBlock(text: string): string {
     .join("\n");
 }
 
-function mapAwaitedTaskToWorkerResult(
-  task: WorkflowTask,
-  spawn: WorkflowWorkerSpawnResult,
-  waited: AwaitExecutionResult,
-  diff: WorkflowDiffSummary | undefined,
-): WorkflowWorkerResult {
-  const status = waited.timedOut
-    ? "failed"
-    : waited.failureKind === "completed" ||
-        (!waited.failureKind && waited.status === "completed")
-      ? "completed"
-      : waited.failureKind === "interrupted" ||
-          waited.failureKind === "stopped" ||
-          (!waited.failureKind && waited.status === "stopped")
-        ? "killed"
-        : "failed";
-  const detail = waited.timedOut
-    ? `did not finish before timeout`
-    : waited.exitCode != null
-      ? `finished with exit code ${waited.exitCode}`
-      : `finished with status ${waited.status}`;
-  return {
-    status,
-    summary: `${task.id} ${detail}`,
-    result: waited.output,
-    metadata: {
-      agentId: spawn.agentId,
-      workerTaskId: spawn.taskId,
-      backendType: spawn.backendType,
-      ...(spawn.worktree ? { worktree: spawn.worktree } : {}),
-      ...(spawn.notice ? { notice: spawn.notice } : {}),
-      ...(diff && diff.changedFiles.length > 0
-        ? { changedFiles: diff.changedFiles, diff }
-        : {}),
-      ...(waited.timedOut ? { timedOut: true } : {}),
-      ...(waited.cleanupUnconfirmed ? { cleanupUnconfirmed: true } : {}),
-      ...(waited.failureKind ? { failureKind: waited.failureKind } : {}),
-      ...(waited.childFailureKind
-        ? { childFailureKind: waited.childFailureKind }
-        : {}),
-      ...(waited.partialResult ? { partialResult: waited.partialResult } : {}),
-    },
-  };
-}
-
-function spawnMetadata(
-  spawn: WorkflowWorkerSpawnResult,
-): Record<string, unknown> {
-  return {
-    agentId: spawn.agentId,
-    workerTaskId: spawn.taskId,
-    backendType: spawn.backendType,
-    ...(spawn.worktree ? { worktree: spawn.worktree } : {}),
-    ...(spawn.notice ? { notice: spawn.notice } : {}),
-  };
+function spawnMetadata(spawn: WorkerReceipt): Record<string, unknown> {
+  return { agentId: spawn.agentId, workerTaskId: spawn.taskId, workerRunId: spawn.runId,
+    ...(spawn.worktree ? { worktree: spawn.worktree } : {}), ...(spawn.notice ? { notice: spawn.notice } : {}) };
 }
 
 function getStringMetadata(
@@ -429,7 +183,7 @@ function getStringMetadata(
 
 function getWorktreeMetadata(
   metadata: Record<string, unknown> | undefined,
-): WorkflowWorkerSpawnResult["worktree"] | undefined {
+): WorkerReceipt["worktree"] | undefined {
   const value = metadata?.worktree;
   if (!value || typeof value !== "object") return undefined;
   const worktree = value as { path?: unknown; branch?: unknown };
@@ -441,7 +195,7 @@ function getWorktreeMetadata(
 
 async function getDiffSummaryForWorker(
   options: AgentWorkflowRunnerOptions,
-  spawn: WorkflowWorkerSpawnResult,
+  spawn: WorkerReceipt,
 ): Promise<WorkflowDiffSummary | undefined> {
   const cwd = spawn.worktree?.path ?? options.cwd;
   try {
@@ -636,102 +390,20 @@ function normalizeDiffSummary(diff: WorkflowDiffSummary): WorkflowDiffSummary {
   };
 }
 
-async function defaultSpawnWorker(
-  cwd: string,
-  config: WorkflowWorkerSpawnConfig,
-  agent?: { children: AgentChildController },
-): Promise<WorkflowWorkerSpawnResult> {
-  const agentId = `${config.name}@${config.team}`;
-  if (!agent) {
-    return {
-      success: false,
-      agentId,
-      taskId: "",
-      backendType: "framework",
-      error: "No framework execution context registered for workflow worker",
-    };
-  }
-  const invocation = await agent.children.spawnChildAgent({
-    description: agentId,
-    prompt: config.prompt,
-    agent: config.name,
-    team: config.team,
-    cwd,
-    sessionId: config.sessionId,
-    model: config.model,
-    systemPrompt: config.systemPrompt,
-    permissionMode: config.permissionMode,
-    isolate: config.isolate,
-    allowedTools: config.allowedTools,
-    requiredMcpServers: config.requiredMcpServers,
-    disallowedTools: config.disallowedTools,
-    maxTurns: config.maxTurns,
-    effort: config.effort,
-  });
-  return {
-    success: true,
-    agentId,
-    taskId: invocation.id,
-    sessionId: invocation.sessionId,
-    backendType: "framework",
-    worktree: invocation.worktree,
-    notice: invocation.notice,
-  };
-}
-
-async function defaultAwaitTask(
-  cwd: string,
-  sessionId: string | undefined,
-  taskId: string,
-  options?: { timeoutMs?: number },
-  agent?: { children: AgentChildController },
-  executionOwner?: ExecutionRuntimeOwner,
-): Promise<AwaitExecutionResult> {
-  if (agent?.children.hasChildAgent(taskId)) {
-    return await awaitFrameworkChildTask(
-      agent.children,
-      taskId,
-      options?.timeoutMs,
-    );
-  }
-  if (!executionOwner)
-    throw new Error(
-      "Workflow host must supply an execution owner or awaitTask",
-    );
-  return executionOwner
-    .getDetachedProcessSupervisor({ cwd, sessionId })
-    .awaitExecution(taskId, options);
-}
-
-async function defaultStopTask(
-  cwd: string,
-  sessionId: string | undefined,
-  taskId: string,
-  agent?: { children: AgentChildController },
-  executionOwner?: ExecutionRuntimeOwner,
-): Promise<unknown> {
-  if (agent?.children.hasChildAgent(taskId)) {
-    await agent.children.interruptChildAgent(taskId, "Workflow task timed out");
-    await agent.children.awaitChildAgent(taskId);
-    return;
-  }
-  if (!executionOwner)
-    throw new Error("Workflow host must supply an execution owner or stopTask");
-  return executionOwner
-    .getDetachedProcessSupervisor({ cwd, sessionId })
-    .stopExecution(taskId);
-}
-
 function createWorkerSessionId(taskId: string, attempt: number): string {
-  const rand = Math.random().toString(36).slice(2, 7);
-  return `wf-${taskId}-${attempt}-${Date.now().toString(36)}-${rand}`;
+  return `wf-${taskId}-${attempt}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+function normalizePermissionMode(value: string | undefined): "default" | "plan" | "full_auto" | undefined {
+  return value === "default" || value === "plan" || value === "full_auto" ? value : undefined;
 }
 
-function normalizePermissionMode(
-  value: string | undefined,
-): "default" | "plan" | "full_auto" | undefined {
-  if (value === "default" || value === "plan" || value === "full_auto") {
-    return value;
-  }
-  return undefined;
+function unconfirmedWorkerError(message: string, metadata?: Record<string, unknown>): Error {
+  return Object.assign(new Error(message), { cleanupUnconfirmed: true, metadata });
+}
+
+function queryFailureResult(receipt: WorkerReceipt, error: string, actual: AgentChildResult): import("@vykor/coordinator").WorkflowWorkerResult {
+  return { status: "failed", summary: error, result: actual.output,
+    metadata: { ...spawnMetadata(receipt), retryable: false, workerQueryFailed: true,
+      ...(actual.failureKind ? { failureKind: actual.failureKind } : {}),
+      ...(actual.partialResult ? { partialResult: actual.partialResult } : {}), ...(actual.delivery ? { delivery: actual.delivery } : {}) } };
 }

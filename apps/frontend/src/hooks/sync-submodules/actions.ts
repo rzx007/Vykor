@@ -438,7 +438,7 @@ export async function executeTuiAction(
             let response: Awaited<ReturnType<JobResource["cancel"]>>;
             try {
               response = await client.jobs.cancel(
-                action.job_id,
+                (() => { const selected = ctx.jobStateRef.current.jobs.find(job => job.id === action.job_id)?.target; if (!selected) throw new Error("请先选择一个当前任务。"); return selected; })(),
                 {
                   sessionId: currentSessionId,
                   reason: action.reason,
@@ -485,7 +485,7 @@ export async function executeTuiAction(
             ctx.jobControlAbortRef.current = controller;
             try {
               await client.jobs.send(
-                action.job_id,
+                (() => { const selected = ctx.jobStateRef.current.jobs.find(job => job.id === action.job_id)?.target; if (!selected) throw new Error("请先选择一个当前任务。"); return selected; })(),
                 {
                   sessionId: currentSessionId,
                   data: action.data,

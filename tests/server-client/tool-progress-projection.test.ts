@@ -21,8 +21,7 @@ async function harness() {
   const published: SessionEventRecord[] = [];
   const projector = new DaemonAgentEventProjector({
     projectorId: "daemon-agent:agent", rootSessionId: session.id,
-    rootAgent: {} as any, store, transcriptProjection: new SessionTranscriptProjection(store),
-    executionProjector: {} as any, liveChildren: { register() {}, unregister() {} },
+    rootAgent: {} as any, store, transcriptProjection: new SessionTranscriptProjection(store), liveChildren: { register() {}, unregister() {} },
     events: { checkpoint: () => store.conversations.latestEventSeq(),
       publish(event) { published.push(event); },
       publishSince(cursor) { published.push(...store.conversations.listEvents({ afterSeq: cursor })); } }, log() {},

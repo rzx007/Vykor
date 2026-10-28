@@ -14,7 +14,7 @@ import { VykorHttpServer } from "../../http/server.js";
 
 const fetch: typeof globalThis.fetch = (input, init) => {
   const headers = new Headers(init?.headers);
-  headers.set("x-vykor-protocol-version", "5");
+  headers.set("x-vykor-protocol-version", "6");
   return globalThis.fetch(input, { ...init, headers });
 };
 

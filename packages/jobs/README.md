@@ -8,10 +8,12 @@
 | --- | --- |
 | [src](src/README.md) | 数据契约、筛选函数、组合任务宿主和测试 |
 
-`@vykor/jobs` 对应 [src/index.ts](src/index.ts)，提供 `AgentJobHost`、请求类型、筛选函数和 `CompositeAgentJobHost`。`@vykor/jobs/contracts` 对应 [src/contracts.ts](src/contracts.ts)，仅公开任务数据类型，入口声明见 [package.json](package.json)。
+`@vykor/jobs` 对应 [src/index.ts](src/index.ts)，提供 `AgentJobHost`、请求类型、筛选函数和 `RoutedAgentJobHost`。`@vykor/jobs/contracts` 对应 [src/contracts.ts](src/contracts.ts)，仅公开任务数据类型，入口声明见 [package.json](package.json)。
 
 消费方将终端、后台命令或子 Agent 等任务投影成快照，再实现统一接口。组合宿主汇总多个来源，并把控制请求转交给实际持有该任务的来源。
 
 实际执行和存储仍由生产任务的一方负责：终端保存在终端提供方，后台进程、子 Agent 和工作流由各自管理器保存，持久执行摘要由 `SessionExecutionRecord` 描述。本包只在组合宿主中缓存任务所属来源。
 
 生命周期、输出游标及适配要求见 [Jobs 统一后台任务协议](../../docs/jobs-protocol.md)，Task 与 Workflow 的接口调整见 [Jobs Task/Workflow Convergence](../../docs/jobs-task-workflow-convergence.md)。新增共用逻辑放 `src/`，测试放 [src/__test__](src/__test__/)。
+
+Workflow 来源把尚未确认的取消、deadline 与清理映射为 stopping；只有原 worker 确认停止才能结束该 attempt 或按显式策略重试。查询失败保留原回执，不创建替代 worker。
