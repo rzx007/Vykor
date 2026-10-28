@@ -87,6 +87,8 @@
 
 本节描述目标与验收要求，不代表代码已经实现；不能从创建日期或文件名推断完成状态。
 
+- [有限客户端 UI 扩展设计](./superpowers/specs/2026-10-28-desktop-ui-extensions-design.md)：待评审；起始页视觉支持资源和脚本渲染，与独立宠物分开；明确会话视图和全局浮动 UI 的贡献、数据与生命周期。
+- [S1 彻底简化方案](./superpowers/specs/2026-10-28-s1-simplification-design.md)：按用户选择的 B 重写，待实施；移除整个操作状态机，只保留正常权限、真实调用收尾和独立结果补读，不兼容旧 S1 记录与引用。
 - [子代理与工作流生命周期调研及架构建议](./research/2026-10-27-agent-task-lifecycle-comparison.md)：对照五个参考项目，建议明确任务归属、稳定运行身份、分开执行额度与会话保留，并统一 Workflow 收尾；尚未修改生产代码。
 - [SDK 与 daemon 共用执行核心方案](./superpowers/specs/2026-10-27-shared-execution-core-design.md)与[文件级实施计划](./superpowers/plans/2026-10-27-shared-execution-core.md)：已核对当前代码差异，明确状态归属、三阶段替换与删除清单、真实工厂和 child handle 验收；待实施。
 - [子代理预算提示与未完成结果方案](./superpowers/specs/2026-10-28-child-budget-feedback-design.md)：待审阅；保留预算限制和真实失败记录，补充剩余轮次提示、父代理处理建议及桌面未完成展示。
