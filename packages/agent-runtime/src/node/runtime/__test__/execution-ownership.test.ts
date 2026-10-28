@@ -108,7 +108,7 @@ it("borrows an explicit environment across root and child without releasing it",
     cwd,
     settings,
     client,
-    executionEnvironment: environment,
+    executionEnvironment: async () => environment,
     capabilityOverrides: {
       ...capabilityOverrides,
       jobs: undefined,
@@ -127,19 +127,21 @@ it("borrows an explicit environment across root and child without releasing it",
   expect(release).toHaveBeenCalledTimes(1);
 });
 
-it("releases an explicitly transferred environment once after child and root close", async () => {
-  const release = vi.fn(async () => {}),
-    cwd = process.cwd();
-  const environment = {
-    info: { kind: "local", networkMode: "host", mounts: [], limitations: [] },
-    workspace: { hostRoot: cwd, executionRoot: cwd },
-    release,
-  } as any;
+it("releases a completed system child's lease independently before closing the root lease once", async () => {
+  const releases = new Map<string, number>();
+  const cwd = process.cwd();
   const agent = await createDefaultNodeAgent({
     cwd,
     settings,
     client,
-    executionEnvironment: environment,
+    executionEnvironment: async scope => {
+      releases.set(scope.sessionId, 0);
+      return {
+        info: { kind: "local", networkMode: "host", mounts: [], limitations: [] },
+        workspace: { hostRoot: scope.cwd, executionRoot: scope.cwd },
+        release: async () => { releases.set(scope.sessionId, releases.get(scope.sessionId)! + 1); },
+      } as any;
+    },
     ownsExecutionEnvironment: true,
     capabilityOverrides: {
       ...capabilityOverrides,
@@ -153,8 +155,73 @@ it("releases an explicitly transferred environment once after child and root clo
     { runId: "finished", inputId: "input", traceId: "trace" },
     "review",
   );
-  expect(release).not.toHaveBeenCalled();
+  expect([...releases.values()]).toEqual([0, 1]);
   await agent.close();
   await agent.close();
-  expect(release).toHaveBeenCalledTimes(1);
+  expect([...releases.values()]).toEqual([1, 1]);
+});
+
+it("passes the child's tightened sandbox policy to its environment factory", async () => {
+  const sandboxEnabled: Array<boolean | undefined> = [];
+  const cwd = process.cwd();
+  const agent = await createDefaultNodeAgent({
+    cwd, settings: { ...settings, permission: { mode: "default" }, sandbox: { enabled: true } },
+    approvalMode: "full_access", client, pluginsEnabled: false,
+    capabilityOverrides: { ...capabilityOverrides, jobs: undefined, childEnvironment: createInProcessChildEnvironmentProvider() },
+    executionEnvironment: async scope => {
+      sandboxEnabled.push(scope.settings.sandbox?.enabled);
+      return {
+        info: { kind: "local", networkMode: "host", mounts: [], limitations: [] },
+        workspace: { hostRoot: scope.cwd, executionRoot: scope.cwd },
+        release: async () => {},
+      } as any;
+    },
+    ownsExecutionEnvironment: true,
+  });
+  try {
+    await agent.runChildForCompletedRun(
+      { agent: "worker", description: "restricted review", prompt: "review", cwd, permissionMode: "default" },
+      { runId: "finished", inputId: "input", traceId: "trace" }, "review",
+    );
+    expect(sandboxEnabled).toEqual([false, true]);
+  } finally {
+    await agent.close();
+  }
+});
+
+it.each([true, false])("rejects an environment bound to another workspace (owned=%s)", async ownsExecutionEnvironment => {
+  let releases = 0;
+  await expect(createDefaultNodeAgent({
+    cwd: process.cwd(), settings, client, capabilityOverrides, pluginsEnabled: false,
+    executionEnvironment: async () => ({ workspace: { hostRoot: join(process.cwd(), "other") },
+      release: async () => { releases++; } }) as any,
+    ownsExecutionEnvironment,
+  })).rejects.toThrow(/workspace does not match session cwd/);
+  expect(releases).toBe(ownsExecutionEnvironment ? 1 : 0);
+});
+
+it("rejects an empty host environment lease instead of creating a default environment", async () => {
+  await expect(createDefaultNodeAgent({
+    cwd: process.cwd(), settings, client, capabilityOverrides, pluginsEnabled: false,
+    executionSurface: "desktop_managed",
+    executionEnvironment: async () => undefined as any,
+  })).rejects.toThrow(/factory returned no lease/);
+});
+
+it.each(["runtime", "integration"] as const)("releases an acquired environment exactly once when %s initialization fails", async stage => {
+  let releases = 0;
+  const cwd = process.cwd();
+  await expect(createDefaultNodeAgent({
+    cwd, settings, client, capabilityOverrides, pluginsEnabled: false,
+    executionEnvironment: async () => ({
+      info: { kind: "local", networkMode: "host", mounts: [], limitations: [] },
+      workspace: { hostRoot: cwd, executionRoot: cwd },
+      release: async () => { releases++; },
+    }) as any,
+    ownsExecutionEnvironment: true,
+    ...(stage === "runtime" ? { hostToolCeiling: ["TaskWait"] } : {
+      extensions: [{ setup: () => { throw new Error("integration failed"); } }],
+    }),
+  })).rejects.toThrow(stage === "runtime" ? /removed lifecycle/ : /integration failed/);
+  expect(releases).toBe(1);
 });

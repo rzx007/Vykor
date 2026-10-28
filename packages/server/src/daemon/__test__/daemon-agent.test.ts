@@ -219,11 +219,15 @@ describe("createDaemonAgentLoader", () => {
     });
   });
 
-  it("acquires one daemon-owned environment lease before creating an Agent", async () => {
+  it("provides a session factory that acquires a transferred lease for the actual session and settings", async () => {
     const lease = { environmentId: "env-1", release: vi.fn(async () => {}) } as any;
     const acquireEnvironment = vi.fn(async () => lease);
     const agent = { loadHistory: vi.fn(), close: vi.fn(async () => {}) } as any;
-    const createAgent = vi.fn(async () => agent);
+    let acquired: any;
+    const createAgent = vi.fn(async ({ options }) => {
+      acquired = await options.executionEnvironment({ sessionId: session.id, cwd: session.cwd, settings: options.settings });
+      return agent;
+    });
     const loader = createDaemonAgentLoader({
       settings: { model: "default-model" } as any,
       executionSurface: "desktop_managed",
@@ -238,24 +242,51 @@ describe("createDaemonAgentLoader", () => {
       expect.objectContaining({ model: "default-model" }),
     );
     const options = createAgent.mock.calls[0]![0].options;
-    expect(options.executionEnvironment).toMatchObject({ environmentId: lease.environmentId });
+    expect(options.executionEnvironment).toBeTypeOf("function");
+    expect(acquired).toMatchObject({ environmentId: lease.environmentId });
     expect(options.ownsExecutionEnvironment).toBe(true);
-    await options.executionEnvironment.release();
-    await options.executionEnvironment.release();
+    await acquired.release();
     expect(lease.release).toHaveBeenCalledOnce();
   });
 
-  it("releases an acquired environment when Agent creation fails", async () => {
+  it("does not acquire an environment before a custom Agent requests its session binding", async () => {
     const lease = { release: vi.fn(async () => {}) } as any;
+    const acquireEnvironment = vi.fn(async () => lease);
     const loader = createDaemonAgentLoader({
       settings: { model: "default-model" } as any,
       executionSurface: "desktop_managed",
-      acquireEnvironment: vi.fn(async () => lease),
+      acquireEnvironment,
       createAgent: hostedAgentFactory(vi.fn(async () => { throw new Error("create failed"); })),
     })!;
 
     await expect(loader({ session, history: [], parts: [] })).rejects.toThrow("create failed");
-    expect(lease.release).toHaveBeenCalledOnce();
+    expect(acquireEnvironment).not.toHaveBeenCalled();
+    expect(lease.release).not.toHaveBeenCalled();
+  });
+
+  it("acquires child environments from the child's durable record and effective settings", async () => {
+    const child = { ...session, id: "child-session", parentId: session.id, cwd: "/child" };
+    const requested: Array<{ owner: any; settings: any }> = [];
+    const loader = createDaemonAgentLoader({
+      settings: { model: "default-model" } as any,
+      getSession: id => id === child.id ? child : id === session.id ? session : undefined,
+      acquireEnvironment: async (owner, effectiveSettings) => {
+        requested.push({ owner, settings: effectiveSettings });
+        return { workspace: { hostRoot: owner.cwd }, release: async () => {} } as any;
+      },
+      createAgent: hostedAgentFactory(async ({ options }) => {
+        const effectiveSettings = { model: "child-model", sandbox: { enabled: true } };
+        const environment = await options.executionEnvironment({ sessionId: child.id, cwd: child.cwd, settings: effectiveSettings });
+        expect(environment.workspace.hostRoot).toBe(child.cwd);
+        expect(requested).toEqual([{ owner: child, settings: effectiveSettings }]);
+        await environment.release();
+        await expect(options.executionEnvironment({ sessionId: "missing", cwd: child.cwd, settings: effectiveSettings })).rejects.toThrow(/Execution session not found/);
+        await expect(options.executionEnvironment({ sessionId: child.id, cwd: "/wrong", settings: effectiveSettings })).rejects.toThrow(/cwd mismatch/);
+        expect(requested).toHaveLength(1);
+        return { loadHistory() {}, async close() {} };
+      }),
+    })!;
+    await loader({ session, history: [], parts: [] });
   });
 
   it("creates one fully initialized Agent from durable session state", async () => {

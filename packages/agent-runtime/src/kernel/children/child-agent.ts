@@ -215,6 +215,12 @@ export class AgentChildManager implements AgentChildDirectory {
     return undefined;
   }
 
+  /** Inspect the existing instance in this root's registry; never create or resume it. */
+  getAgentForSession(sessionId: string): VykorAgent | undefined {
+    const handle = this.directory.getBySessionId(sessionId);
+    return handle instanceof ChildHandle ? handle.getAgent() : undefined;
+  }
+
   list(): AgentChildHandle[] {
     return [...this.records.values()].map((record) => record.handle);
   }
@@ -1122,6 +1128,10 @@ class ChildHandle implements AgentChildHandle {
   }
   get sessionId(): string {
     return this.record().sessionId;
+  }
+  getAgent(): VykorAgent | undefined {
+    const record = this.record();
+    return record.state === "closed" || record.suspending ? undefined : record.agent;
   }
   get state(): AgentChildHandle["state"] {
     return this.record().state;

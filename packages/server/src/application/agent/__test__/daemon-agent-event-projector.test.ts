@@ -124,6 +124,51 @@ describe("DaemonAgentEventProjector", () => {
     await gate.settle({ scope: attemptScope(context), generationId: "select", attempt: 1, status: "completed", usageStatus: "complete", usage: { inputTokens: 8, outputTokens: 2, metering: { knownInputTokens: 8, knownOutputTokens: 2, completeness: "complete", inputIncludesCache: true, raw: {} } } });
     expect(store.goals.getGoal(goal.id)?.usage.knownTokens).toBe(10);
   });
+  it("separates a child's report from its error and clears feedback when a new run starts", async () => {
+    const { store, projector, started, liveChildren } = goalProjector();
+    const cwd = store.sessions.get("parent")!.cwd;
+    await projector.apply(event("child.created", { childId: "budget-session-handle", sessionId: "budget-session", cwd,
+      spawn: { agent: "worker", prompt: "inspect", description: "check", cwd } }, { runId: "P1" }));
+    await projector.apply(started("budget-A", "budget-session", "P1"));
+    const partialResult = { version: 1, childSessionId: "budget-session", runId: "budget-A",
+      source: "limit_finalization", text: "build passed; runtime unverified", truncated: false };
+    await projector.apply(event("run.failed", { output: partialResult.text,
+      error: { name: "MaxTurnsExceeded", message: "turn limit" }, failureKind: "max_turns", partialResult },
+      { childId: "budget-session-handle", sessionId: "budget-session", runId: "budget-A" }));
+    expect(store.getSessionTask("budget-session-handle")).toMatchObject({
+      status: "failed", output: "build passed; runtime unverified", error: "turn limit",
+      metadata: { childFailure: { failureKind: "max_turns", partialResult } },
+    });
+    await projector.apply(started("budget-B", "budget-session", "P1"));
+    const current = store.getSessionTask("budget-session-handle")!;
+    expect(current).toMatchObject({ runId: "budget-B", status: "running", metadata: { childFailure: null } });
+    expect(current.error).toBeUndefined();
+    expect(current.output).toBeUndefined();
+    expect(store.runs.getRun("budget-A")?.metadata.childFailure).toMatchObject({ partialResult });
+    await expect(projector.apply(event("run.started", {}, { sessionId: "budget-session", runId: "budget-A", inputId: "input-budget-A", childId: "budget-session-handle", parentRunId: "P1", parentSessionId: "parent" }))).rejects.toThrow("already terminal");
+    expect(store.getSessionTask("budget-session-handle")).toMatchObject({ runId: "budget-B", status: "running" });
+    liveChildren.register.mockImplementationOnce(() => { throw new Error("late creation route failure"); });
+    await expect(projector.apply(event("child.created", { childId: "budget-session-handle", sessionId: "budget-session", cwd,
+      spawn: { agent: "worker", prompt: "inspect", description: "check", cwd } }, { childId: "budget-session-handle", runId: "P1" }))).rejects.toThrow("late creation route failure");
+    expect(store.getSessionTask("budget-session-handle")).toMatchObject({ runId: "budget-B", status: "running" });
+    expect(store.sessions.get("budget-session")?.status).not.toBe("archived");
+  });
+
+  it("keeps a running child task when live compensation has no run identity", async () => {
+    const { store, projector, started } = goalProjector();
+    const cwd = store.sessions.get("parent")!.cwd;
+    await projector.apply(event("child.created", { childId: "unscoped-handle", sessionId: "unscoped", cwd,
+      spawn: { agent: "worker", prompt: "inspect", description: "check", cwd } }, { runId: "P1" }));
+    await projector.apply(started("current-B", "unscoped", "P1"));
+    store.updateSessionTask("unscoped-handle", { output: "B progress" });
+    await expect(projector.apply(event("run.started", {}, {
+      sessionId: "unscoped", inputId: "input-current-B", childId: "unscoped-handle",
+    }))).rejects.toThrow("runId");
+    expect(store.getSessionTask("unscoped-handle")).toMatchObject({ runId: "current-B", status: "running", output: "B progress" });
+    expect(store.getSessionTask("unscoped-handle")?.error).toBeUndefined();
+    expect(store.runs.getRun("current-B")?.status).toBe("running");
+  });
+
   function goalProjector() {
     const directory = mkdtempSync(join(tmpdir(), "vk-child-goal-binding-"));
     const store = new SessionStore({ path: join(directory, "store.db") });
@@ -134,11 +179,12 @@ describe("DaemonAgentEventProjector", () => {
       store.runs.createRun({ id, sessionId: "parent", metadata: { goalId: goal.id, goalObjectiveVersion: 1 } });
       store.runs.updateRun(id, { status: "completed" });
     }
+    const liveChildren = { register: vi.fn(), unregister: vi.fn() };
     const projector = new DaemonAgentEventProjector({
       projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
       store, rootAgent: { children: { get: () => undefined } } as any,
       transcriptProjection: new SessionTranscriptProjection(store),
-      liveChildren: { register: vi.fn(), unregister: vi.fn() },
+      liveChildren,
       events: { checkpoint: () => 0, publish: vi.fn(), publishSince: vi.fn() }, log: vi.fn(),
     });
     const started = (runId: string, sessionId: string, parentRunId: string, parentSessionId = "parent") => {
@@ -146,7 +192,7 @@ describe("DaemonAgentEventProjector", () => {
       return event("run.started", {}, { sessionId, inputId: `input-${runId}`, runId, childId: `${sessionId}-handle`, parentRunId, parentSessionId });
     };
     const gate = new GoalModelAttemptService({ store, events: { checkpoint: () => 0, publishSince: vi.fn() } });
-    return { store, goal, projector, started, gate };
+    return { store, goal, projector, started, gate, liveChildren };
   }
 
   it("reports the actual goal stop reason instead of implying the token budget was exhausted", async () => {
@@ -445,7 +491,11 @@ describe("DaemonAgentEventProjector", () => {
         admitPrompt: (input: any) => { const row = { ...input, content: input.items.map((item: any) => item.text).join("") }; inputs.set(input.id, row); return row; },
         getRun: (id: string) => runs.get(id),
         createRun: (input: any) => { runs.set(input.id, input); return input; },
-        updateRun: (id: string, patch: any) => Object.assign(runs.get(id), patch),
+        updateRun: (id: string, patch: any) => {
+          const run = runs.get(id);
+          const metadata = { ...run.metadata, ...patch.metadata };
+          return Object.assign(run, patch, { metadata });
+        },
         appendEvent: () => {},
         transaction: (work: () => unknown) => work(),
       }),

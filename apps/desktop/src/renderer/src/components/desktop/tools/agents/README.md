@@ -18,3 +18,5 @@
 ## 维护约定
 
 新增独立子功能时同步补充 README 和父级导航。移动文件时更新导入、动态导入与测试 mock，不保留旧路径转发文件。完整规则见 [Desktop 协作约定](../../AGENTS.md)。
+
+agentTaskPresentation 接收完整 Task，只读取本轮 childFailure，统一计算活动行、列表与详情的标签、短原因和报告提示。轮次或执行时间耗尽显示未完成，普通错误保持错误展示；报告需匹配子会话和 runId。详情复用 Alert 和 Collapsible 展开原始错误，报告在子会话正文查看，不增加 Jobs 查询或继续执行入口。

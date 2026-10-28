@@ -51,3 +51,11 @@ CLI 为 `/jobs show KIND ID [RUN_ID]` 与 `/jobs cancel KIND ID [RUN_ID]`；Agen
 归档只在实时索引明确不存在时读取，不能因任意异常切换后端。历史列表按 kind、jobId、runId 合并，实时项优先。旧 Agent 行缺少 runId 时显示来源错误，不能伪造可取消目标。daemon 无 live root 时通过同一 Node bindings 读取已保存结果，不要求重新创建模型 Agent。
 
 纯数据从 `@vykor/jobs/contracts` 导出；带信号的宿主请求留在 `@vykor/jobs`。Node 组装只接受 TerminalProvider、ShellAdmissionPorts、child environment 与持久只读端口，宿主不注入另一套 Jobs 生命周期。
+
+## 子运行失败字段
+
+框架子运行的 List、Read、Wait 快照统一在 `metadata.childFailure` 返回可信 failureKind 和已有 partialResult；metadata.childSessionId 与 target.runId 提供报告归属。Read 归档时按所请求 Run 取值，不能借用当前 Task。details.childFailure 若存在，表示同一份失败详情。
+
+状态仍为原 failed／killed，预算原因不新增业务完成状态。窗口正文、窗口 truncated 与报告自身 truncated 各自保留；窗口为空不代表没有报告。报告须具有正确版本、来源、非空文本和匹配的会话／运行身份，才能提示已有部分结果。
+
+当前 capabilities.send 可随子代理身份变化；归档始终为 false，实际发送仍复核目标。成功读取失败子任务不属于工具调用失败。工具有界摘要保留运行身份、原因和报告可用性，处理说明不自动分派、重试或生成新的续跑入口。

@@ -123,9 +123,11 @@ export interface VykorAgentConfiguration {
   childBudget?: Partial<AgentChildBudget>;
   /** Selects the managed Desktop environment path; CLI callers omit it. */
   executionSurface?: "desktop_managed" | "cli_advanced";
-  /** Optional host-provided environment handle. */
-  executionEnvironment?: ExecutionEnvironmentHandle;
-  /** Explicitly transfer this environment lease to the root Node agent; omitted means borrowed. */
+  /** Called once per actual root or child session with its effective execution policy. */
+  executionEnvironment?: (scope: Pick<AgentRunScope, "sessionId" | "cwd"> & {
+    settings: Settings;
+  }) => Promise<ExecutionEnvironmentHandle>;
+  /** Transfer each returned environment lease to its Node agent; omitted means borrowed. */
   ownsExecutionEnvironment?: boolean;
   /** Host-owned persistent selection store; default agents use an in-memory store. */
   requestConfigurationStore?: AgentRequestConfigurationReader;

@@ -642,3 +642,23 @@ deadline 不稳定的确定性复现：在真实 child 的模型返回前暂停�
 - `pnpm check-types`：72/72 任务成功，server-client 类型检查成功；独立 `agent-runtime build` 和受影响包类型检查也通过。全仓日志为本机临时目录 `openharness-review-check-types.log`。
 - `node --test scripts/architecture-boundaries.test.mjs`：64/64；`pnpm check:retired-ui` 与 `pnpm check-docs` 通过，旧路径批准清单未扩大。
 - 独立只读复核未发现实质性代码缺陷。批量测试补回首尾外部 JobWait 的 completed 状态断言，复用同一次查询结果，不增加根运行次数；补强后的四项定向复验 4/4 通过，113.69 秒，未再次重复整组测试。
+
+## 全需求复核后的环境与嵌套会话修正
+
+基于 `1c55cd15`，合入远端既有 `d2279368` 的子代理预算反馈与结果交付改动，再修正完整复核确认的两个组合缺口。主工作区原有草稿保持原样，验证在独立工作区进行。
+
+- 环境归属：`agent-options.ts` 将高层 `executionEnvironment` 替换为接收实际 sessionId、host cwd 和有效 settings 的异步工厂；`agent-composition.ts` 负责核对目录和每份租约仅释放一次，`child-agent-options.ts` 删除父 lease 借用覆盖。daemon loader 提供原有环境申请回调，删除提前申请、重复 once 包装及 catch-release。SDK 静态环境值不保留兼容分支；低层 runtime 的实际 handle 合同不变。
+- 嵌套 Jobs：Kernel 只从已有 child record 读取实际 agent，Node host 提供同根树现存 session host 查询。daemon 复用原 live-child 根映射并直接返回实际 host.jobs，删除完整 warm 包装。既有继承视图同时用于子模型提交和默认 Jobs 发送，显式工具身份校验不放宽。关闭中的实际实例继续可观察和取消；新的输入在 Node host 单一入口拒绝。
+- 终端控制目录：TerminalOpen 向宿主传可信 hostRoot，环境内 executionRoot 不再冒充宿主会话目录。
+- 合并验收：远端两条 Server 测试沿用旧的默认开启假设，真实复现失败后改为显式开启既有 `blockOnUnknownToolOutcome`；默认关闭与普通权限另有实际 Shell 测试，命令改用跨平台 Node。生产默认策略未修改。
+
+新增两份跨包回归文件，测试真实工厂、实际 child handle 和真实 Shell。分别复现并验证父环境错绑、HTTP 孙级任务取消失败、默认嵌套发送身份误拒绝，以及关闭期间误读归档。没有增加生产模块、状态表、执行 ID、缓存、补偿服务或新的生命周期管理器。唯一原有退役清单条目因删除 warm 包装平移 1048→1043，原文与批准范围不变。
+
+验证记录（同一最终生产源码）：
+
+- 两份新增真实回归：SDK / daemon 环境归属 2/2、嵌套 Jobs 5/5；环境归属与初始化回滚 10/10，daemon loader 27/27，Node 子管理与宿主装配 66/66。Terminal 控制目录适配 7/7。
+- 七文件生命周期整组首次为 85/87，790.02 秒；两项 48 次顺序执行的总耗时超过 60 秒，期间同时进行全仓构建/类型/架构检查。其余额度、保存补偿、迟到结果、deadline、环境与嵌套用例均通过。其他检查结束后，只复验这两项：2/2，SDK 6.06 秒、daemon 14.36 秒，未修改源码、数量、断言或时限；日志为本机临时目录 `openharness-final-sequential-loops.log`。该首次整组失败没有记为整组通过。
+- Server 全包首次 1942/1943、194 文件；唯一失败是项目重绑定测试中的局部宿主替身仍使用旧包装形状。补齐 `resolveSessionHost` 并保留原接纳阻塞/释放断言后，该文件 8/8。生产代码未为替身保留旧入口。
+- 远端原有两项未知结果阻断测试先复现失败，再显式启用既有设置，相关两文件 10 项通过；默认策略四项测试仍覆盖默认关闭、显式关闭、显式开启和普通权限拒绝，4/4。
+- `pnpm check-types` 72/72，另 server-client TypeScript 通过；`pnpm check:architecture`、`pnpm check-docs`、`pnpm check:retired-ui` 通过。标准架构检查的迁移包清单检查因本地未构建桌面/CLI 发布包而按原脚本跳过；本次没有修改发布包或迁移源。
+- 独立只读复审覆盖最终生产 diff，包括环境释放、工具身份、权限上限、现有实例查询和关闭未确认路径，未发现新增阻挡项。完整 GitHub CI 在推送 main 后按该提交单独核对。

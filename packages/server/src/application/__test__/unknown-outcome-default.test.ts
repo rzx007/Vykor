@@ -35,7 +35,7 @@ describe("unknown tool outcomes in the default daemon", () => {
           if (turn <= 2) {
             yield { type: "tool_use_start", toolUse: turn === 1
               ? { type: "tool_use", id: "navigate", name: "Browser", input: { action: "navigate", url: "http://localhost:5173" } }
-              : { type: "tool_use", id: "build", name: "Shell", input: { command: "printf 'build finished' > build-finished.txt", timeout: 2000 } } };
+              : { type: "tool_use", id: "build", name: "Shell", input: { command: "node -e \"require('node:fs').writeFileSync('build-finished.txt','build finished')\"", timeout: 2000 } } };
             yield { type: "complete", stopReason: "tool_use" };
           } else {
             yield { type: "text_delta", delta: "verification finished" };

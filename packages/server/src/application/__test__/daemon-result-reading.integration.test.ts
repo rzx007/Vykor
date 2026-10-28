@@ -110,7 +110,7 @@ describe("daemon trusted file reads", () => {
       ? [{ id: "unknown", name: "Uncertain", input: {} }, { id: "read", name: "Read", input: { file_path: "known.txt" } }, { id: "write", name: "Mutate", input: {} }]
       : [{ id: "missing", name: "Read", input: { file_path: "missing.txt" } }, { id: "read", name: "Read", input: { file_path: "known.txt" } }, { id: "write", name: "Mutate", input: {} }];
     const application = new DaemonApplication({ store,
-      settings: { model: "test-model", apiFormat: "openai", maxTurns: 5, permission: { mode: "full_access" }, plugins: { enabled: false }, memory: { enabled: false }, sandbox: { enabled: false } },
+      settings: { model: "test-model", apiFormat: "openai", maxTurns: 5, permission: { mode: "full_access" }, plugins: { enabled: false }, memory: { enabled: false }, sandbox: { enabled: false }, blockOnUnknownToolOutcome: unknown },
       createAgent: async context => {
         const agent = await createDefaultNodeAgent({ ...context.options,
           tools: [...(context.options.tools ?? []),
@@ -130,7 +130,8 @@ describe("daemon trusted file reads", () => {
       const admitted = await application.interactions.admitPrompt(session.id, { items: [{ type: "text", text: "check then continue" }] });
       await application.runControl.awaitRun(session.id, admitted.run!.id);
       if (unknown) {
-        // An unknown execution deliberately ends its Run. The next input may inspect safely.
+        // A later input may inspect the retained uncertainty; reading does not
+        // opt out of the explicitly enabled write guard.
         const next = await application.interactions.admitPrompt(session.id, { items: [{ type: "text", text: "inspect the uncertain result before continuing" }] });
         await application.runControl.awaitRun(session.id, next.run!.id);
       }

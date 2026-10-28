@@ -5,7 +5,7 @@ import type {
   DesktopSessionTask,
   DesktopSessionView,
 } from "@shared/session-types"
-import { groupAgentTasks, matchesAgentSessionUpdate } from "../agent-task-model"
+import { agentTaskPresentation, groupAgentTasks, matchesAgentSessionUpdate } from "../agent-task-model"
 
 function task(
   id: string,
@@ -103,5 +103,34 @@ describe("matchesAgentSessionUpdate", () => {
     expect(matchesAgentSessionUpdate("agents:details", "child", delta)).toBe(true)
     expect(matchesAgentSessionUpdate("agents:details", "other", delta)).toBe(false)
     expect(matchesAgentSessionUpdate("agents:details", "child", snapshot)).toBe(true)
+  })
+})
+
+describe("agentTaskPresentation", () => {
+  const report = { version: 1, childSessionId: "session-A", runId: "run-A", source: "limit_finalization", text: "build passed; runtime pending", truncated: false }
+  const failed = (failureKind: string, partialResult: unknown = report) => task("A", "failed", { runId: "run-A", metadata: { childFailure: { failureKind, partialResult } } })
+  it.each([
+    ["max_turns", "未完成 · 已达轮次上限", "warning"],
+    ["timeout", "未完成 · 已达时间上限", "warning"],
+    ["tool_error", "执行出错", "error"],
+    ["unknown", "执行出错", "error"],
+  ])("presents %s without treating report content as the outcome", (kind, label, tone) => {
+    expect(agentTaskPresentation(failed(kind))).toMatchObject({ label, tone, hasPartialReport: true })
+  })
+  it.each([null, [], "PARTIAL", { ...report, version: 2 }, { ...report, runId: "old" }, { ...report, childSessionId: "other" }, { ...report, source: "unknown" }, { ...report, text: " " }, { ...report, truncated: "false" }])("rejects malformed or mismatched partial reports: %j", value => {
+    const presentation = agentTaskPresentation(failed("max_turns", value))
+    expect(presentation.label).toBe("未完成 · 已达轮次上限")
+    expect(presentation.hasPartialReport).toBe(false)
+    expect(presentation.reason).not.toContain("已保留")
+  })
+  it.each(["pending", "running", "completed", "stopped", "interrupted"] as const)("does not let old budget data override %s", status => {
+    const presentation = agentTaskPresentation({ ...failed("max_turns"), status })
+    expect(presentation.label).not.toContain("上限")
+    if (status !== "interrupted") expect(presentation.hasPartialReport).toBe(false)
+  })
+  it.each([null, [], "max_turns", { failureKind: "unrecognized", partialResult: report }])("falls back safely for unknown failure metadata: %j", childFailure => {
+    const presentation = agentTaskPresentation(task("A", "failed", { runId: "run-A", error: "PASS".repeat(1000), metadata: { childFailure } }))
+    expect(presentation.label).toBe("执行出错")
+    expect(presentation.reason!.length).toBeLessThan(100)
   })
 })

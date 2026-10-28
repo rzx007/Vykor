@@ -29,3 +29,5 @@
 ## 共用执行核心（阶段 A）
 
 JobRead/Send/Cancel 接收完整 target，JobWait 接收 targets: [{target,after?}]。JobList 返回 jobs 与来源 errors。Agent send 将当前调用轮的可信授权证据转给共同来源并返回接纳 receipt。
+
+List、Read、Wait 从已有返回值生成有界摘要，保留子运行 runId、可信停止原因与报告可用性，不复制报告正文。读取失败子任务仍是成功观察；等待到期不取消运行。Read／Wait 的说明引导主代理先读报告并对照委派要求说明缺项，继续输入须使用当前能力和新接纳回执；工具不生成动态动作或自动续跑。

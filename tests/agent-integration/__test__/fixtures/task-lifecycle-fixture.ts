@@ -16,6 +16,7 @@ export interface LifecycleFixture {
   agent: DefaultNodeAgent;
   store?: SessionStore;
   terminals?: DaemonApplication["terminals"];
+  application?: DaemonApplication;
   /** Offline network script; tools, child admission and returned handles stay real. */
   scriptChild(prompt: string, steps: Array<{ name: string; input: Record<string, unknown> | ((results: ToolResult[]) => Record<string, unknown>) }>): ToolResult[];
   spawn(prompt: string): Promise<{ handle: AgentChildHandle; target: AgentTarget }>;
@@ -280,7 +281,7 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
     return { handle, target: { kind: "agent" as const, jobId: handle.id, runId: receipt.runId } };
   };
   const fixture: LifecycleFixture = {
-    agent: node, ...(store ? { store } : {}), ...(application ? { terminals: application.terminals } : {}),
+    agent: node, ...(store ? { store } : {}), ...(application ? { terminals: application.terminals, application } : {}),
     scriptChild: (prompt, steps) => { const results: ToolResult[] = []; childScripts.set(prompt, { steps, results }); return results; },
     admit: async (prompt, timeoutSeconds) => {
       let result!: Awaited<ReturnType<typeof admit>>;

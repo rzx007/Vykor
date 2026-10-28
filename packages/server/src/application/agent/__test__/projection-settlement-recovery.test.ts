@@ -269,3 +269,83 @@ function withStorePath(test: (path: string) => void): void {
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+it.each([undefined, "turn limit"])("repairs error and missing metadata even when child status/output already match: %s", error => {
+  withStorePath(path => {
+    const store = new SessionStore({ path });
+    try {
+      store.sessions.create({ id: "parent", cwd: process.cwd(), model: "m" });
+      store.sessions.create({ id: "child-session", parentId: "parent", cwd: process.cwd(), model: "m" });
+      store.createSessionTask({ id: "child-1", sessionId: "parent", childSessionId: "child-session", type: "agent", cwd: process.cwd(), description: "check" });
+      store.updateSessionTask("child-1", { status: "failed", output: "partial report", error: "partial report" });
+      const result = { status: "failed", output: "partial report", ...(error ? { error } : {}), failureKind: "max_turns" };
+      const closed = childEvent("child.closed", 41, { childId: "child-1", sessionId: "child-session", result });
+      store.createProjectionSettlement(projectionSettlementInput("daemon-agent:test", "parent", closed, "retry-terminal-projection", new Error("save failed")));
+      expect(recoverProjectionSettlements(store)).toEqual({ resolved: 1, pending: 0 });
+      expect(store.getSessionTask("child-1")).toMatchObject({ status: "failed", output: "partial report", metadata: { childFailure: { failureKind: "max_turns" } } });
+      expect(store.getSessionTask("child-1")?.error).toBe(error);
+      expect(recoverProjectionSettlements(store)).toEqual({ resolved: 0, pending: 0 });
+    } finally { store.close(); }
+  });
+});
+
+it("does not apply an unpinned old child.closed result to a newer run", () => {
+  withStorePath(path => {
+    const store = new SessionStore({ path });
+    try {
+      store.sessions.create({ id: "parent", cwd: process.cwd(), model: "m" });
+      store.sessions.create({ id: "child-session", parentId: "parent", cwd: process.cwd(), model: "m" });
+      store.runs.createRun({ id: "new-B", sessionId: "child-session" });
+      store.runs.updateRun("new-B", { status: "running" });
+      store.createSessionTask({ id: "child-1", sessionId: "parent", childSessionId: "child-session", runId: "new-B", type: "agent", cwd: process.cwd(), description: "check", status: "running" });
+      store.createProjectionSettlement(projectionSettlementInput("daemon-agent:test", "parent", childEvent("child.closed", 42, {
+        childId: "child-1", sessionId: "child-session", result: { status: "completed", output: "old A" },
+      }), "retry-terminal-projection", new Error("save failed")));
+      expect(recoverProjectionSettlements(store)).toEqual({ resolved: 1, pending: 0 });
+      expect(store.getSessionTask("child-1")).toMatchObject({ runId: "new-B", status: "running" });
+      expect(store.getSessionTask("child-1")?.output).toBeUndefined();
+    } finally { store.close(); }
+  });
+});
+
+it("does not archive a child session when replaying creation compensation after a newer run", () => {
+  withStorePath(path => {
+    const store = new SessionStore({ path });
+    try {
+      store.sessions.create({ id: "parent", cwd: process.cwd(), model: "m" });
+      store.sessions.create({ id: "child-session", parentId: "parent", cwd: process.cwd(), model: "m" });
+      store.runs.createRun({ id: "new-B", sessionId: "child-session" });
+      store.runs.updateRun("new-B", { status: "running" });
+      store.createSessionTask({ id: "child-1", sessionId: "parent", childSessionId: "child-session", runId: "new-B", type: "agent", cwd: process.cwd(), description: "check", status: "running" });
+      store.createProjectionSettlement(projectionSettlementInput("daemon-agent:test", "parent", childEvent("child.created", 43, { childId: "child-1", sessionId: "child-session" }, { runId: "original-parent" }), "compensate-child", new Error("old route failure")));
+      expect(recoverProjectionSettlements(store)).toEqual({ resolved: 1, pending: 0 });
+      expect(store.getSessionTask("child-1")).toMatchObject({ runId: "new-B", status: "running" });
+      expect(store.sessions.get("child-session")?.status).not.toBe("archived");
+    } finally { store.close(); }
+  });
+});
+
+it("keeps a running child task when recovered compensation has no run identity", () => {
+  withStorePath(path => {
+    const store = new SessionStore({ path });
+    try {
+      store.sessions.create({ id: "parent", cwd: process.cwd(), model: "m" });
+      store.sessions.create({ id: "child-session", parentId: "parent", cwd: process.cwd(), model: "m" });
+      store.runs.createRun({ id: "current-B", sessionId: "child-session" });
+      store.runs.updateRun("current-B", { status: "running" });
+      store.createSessionTask({ id: "child-1", sessionId: "parent", childSessionId: "child-session", runId: "current-B", type: "agent", cwd: process.cwd(), description: "check", status: "running" });
+      store.updateSessionTask("child-1", { output: "B progress" });
+      store.createProjectionSettlement(projectionSettlementInput("daemon-agent:test", "parent", childEvent("run.failed", 44, {
+        error: { name: "Error", message: "unscoped old event" }, output: "old report",
+      }, { sessionId: "child-session" }), "compensate-child", new Error("missing run identity")));
+      store.close();
+      const restarted = new SessionStore({ path });
+      try {
+        expect(recoverProjectionSettlements(restarted)).toEqual({ resolved: 1, pending: 0 });
+        expect(restarted.getSessionTask("child-1")).toMatchObject({ runId: "current-B", status: "running", output: "B progress" });
+        expect(restarted.getSessionTask("child-1")?.error).toBeUndefined();
+        expect(restarted.runs.getRun("current-B")?.status).toBe("running");
+      } finally { restarted.close(); }
+    } finally { store.close(); }
+  });
+});

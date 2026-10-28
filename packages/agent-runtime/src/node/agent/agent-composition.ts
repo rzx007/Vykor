@@ -10,6 +10,7 @@ import type { TerminalProvider } from "@vykor/terminal";
 import type { TeamRegistry } from "@vykor/coordinator/teams";
 import type { WorkflowHostDirectory } from "../workflow/workflow-host-directory.js";
 import { randomUUID } from "node:crypto";
+import { resolve } from "node:path";
 
 import type { AgentSession } from "@vykor/core";
 import type { McpRuntimeRegistry } from "@vykor/mcp";
@@ -119,23 +120,9 @@ export async function composeVykorAgent(
     cleanup.add(() => internal.workflowHosts.close(), internal.workflowHosts);
   const rollback = new CleanupStack();
   rollback.add(() => cleanup.close(), cleanup);
-  let ownedOptions = options;
-  if (options.executionEnvironment && options.ownsExecutionEnvironment) {
-    const supplied = options.executionEnvironment;
-    let released: Promise<void> | undefined;
-    const executionEnvironment = {
-      ...supplied,
-      release: () =>
-        (released ??= (async () => {
-          await supplied.release();
-        })()),
-    };
-    ownedOptions = { ...options, executionEnvironment };
-    rollback.add(() => executionEnvironment.release(), executionEnvironment);
-  }
   try {
     return await composeVykorAgentInternal(
-      ownedOptions,
+      options,
       internal,
       cleanup,
       rollback,
@@ -159,19 +146,15 @@ async function composeVykorAgentInternal(
         options.permissionMode ?? options.settings?.permission.mode,
       ),
   );
-  const discovery = await discoverVykorExtensions(cwd, settings, {
-    pluginsEnabled: options.internalTextOnly ? false : options.pluginsEnabled,
-  });
-  for (const warning of discovery.warnings) {
-    process.stderr.write(`[plugins] ${warning}\n`);
-  }
-
   const sessionId = options.sessionId ?? `agent_session_${randomUUID()}`;
   let activeRuntime: RuntimeBundle | undefined;
   let ownsExecutionEnvironment = options.ownsExecutionEnvironment === true;
   let executionEnvironment: ExecutionEnvironmentHandle | undefined =
-    options.executionEnvironment;
-  if (!executionEnvironment && options.executionSurface === "desktop_managed") {
+    await options.executionEnvironment?.({ sessionId, cwd, settings });
+  if (options.executionEnvironment && !executionEnvironment) {
+    throw new Error(`Execution environment factory returned no lease: ${sessionId}`);
+  }
+  if (!options.executionEnvironment && options.executionSurface === "desktop_managed") {
     const config = resolveExecutionEnvironmentConfig({
       surface: "desktop_managed",
       settings,
@@ -189,11 +172,34 @@ async function composeVykorAgentInternal(
       files: createEnvironmentFileSystem(baseEnvironment),
     };
     ownsExecutionEnvironment = true;
+  }
+  if (executionEnvironment && ownsExecutionEnvironment) {
+    const supplied = executionEnvironment;
+    let released: Promise<void> | undefined;
+    executionEnvironment = {
+      ...supplied,
+      release: () =>
+        (released ??= Promise.resolve().then(() => supplied.release())),
+    };
     rollback.add(
       () =>
         ownsExecutionEnvironment ? executionEnvironment?.release() : undefined,
       executionEnvironment,
     );
+  }
+  if (
+    executionEnvironment &&
+    resolve(executionEnvironment.workspace.hostRoot) !== resolve(cwd)
+  ) {
+    throw new Error(
+      `Execution environment workspace does not match session cwd: ${sessionId}`,
+    );
+  }
+  const discovery = await discoverVykorExtensions(cwd, settings, {
+    pluginsEnabled: options.internalTextOnly ? false : options.pluginsEnabled,
+  });
+  for (const warning of discovery.warnings) {
+    process.stderr.write(`[plugins] ${warning}\n`);
   }
   const environment = await resolveDefaultAgentCapabilities({
     runCatalogue: internal.runCatalogue,

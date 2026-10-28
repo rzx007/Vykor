@@ -250,3 +250,54 @@ function payload(result: ToolResult): Record<string, unknown> {
 function executeJob(name: string, input: Record<string, unknown>, context: ToolContext): Promise<ToolResult> {
   return createJobTools(context.jobs).find(tool => tool.name === name)!.execute(input, context);
 }
+
+function childFeedbackSnapshot(report: unknown = {
+  version: 1, childSessionId: "child-session", runId: "run-1", source: "limit_finalization", text: "private report", truncated: false,
+}): JobSnapshot {
+  return { ...snapshot, id: "child-1", kind: "agent", target: { kind: "agent", jobId: "child-1", runId: "run-1" }, status: "failed",
+    metadata: { childSessionId: "child-session", childFailure: { failureKind: "max_turns", partialResult: report } } };
+}
+
+it.each(["JobRead", "JobWait", "JobList"])("keeps child failure facts in bounded %s summaries without failing observation", async name => {
+  const child = childFeedbackSnapshot();
+  const observation = { text: "private report", cursor: 14, truncated: false, snapshot: child };
+  const send = vi.fn(async () => undefined);
+  const cancel = vi.fn(async () => child);
+  const host = context({ read: async () => observation, wait: async () => ({ ...observation, timedOut: false }), list: async () => ({ jobs: [child], errors: [] }), send, cancel });
+  const input = name === "JobList" ? {} : name === "JobRead" ? { target: child.target } : { targets: [{ target: child.target }] };
+  const result = await executeJob(name, input, host);
+  expect(result.isError).not.toBe(true);
+  expect(result.executionState).toBe("completed");
+  expect(result.compactSummary).toContain("runId=run-1");
+  expect(result.compactSummary).toContain("failureKind=max_turns");
+  expect(result.compactSummary).toContain("partialResult=available");
+  expect(result.compactSummary).not.toContain("private report");
+  expect(result.compactSummary!.length).toBeLessThanOrEqual(1000);
+  expect(payload(result)).not.toHaveProperty("outcome");
+  expect(send).not.toHaveBeenCalled();
+  expect(cancel).not.toHaveBeenCalled();
+});
+
+it.each([
+  [null, "none"],
+  [{ version: 1, childSessionId: "child-session", runId: "other", source: "limit_finalization", text: "report", truncated: false }, "none"],
+  [{ version: 2, childSessionId: "child-session", runId: "run-1", source: "limit_finalization", text: "report", truncated: false }, "none"],
+  [{ version: 1, childSessionId: "child-session", runId: "run-1", source: "untrusted", text: "report", truncated: false }, "none"],
+  [{ version: 1, childSessionId: "child-session", runId: "run-1", source: "limit_finalization", text: " ", truncated: false }, "none"],
+  [{ version: 1, childSessionId: "child-session", runId: "run-1", source: "limit_finalization", text: "report", truncated: true }, "available"],
+])("does not infer partial report availability from the current output window: %j", async (report, availability) => {
+  const child = childFeedbackSnapshot(report);
+  const result = await executeJob("JobRead", { target: child.target }, context({ read: async () => ({ snapshot: child, text: "", cursor: 200, truncated: false }) }));
+  expect(result.compactSummary).toContain(`partialResult=${availability}`);
+  expect(result.compactSummary).toContain("failureKind=max_turns");
+});
+
+it.each(["running", "process", "malformed"])("does not classify %s snapshots as terminal child budget failures", async mode => {
+  const child = childFeedbackSnapshot();
+  if (mode === "running") child.status = "running";
+  if (mode === "process") child.metadata = { executionBackend: "detached_process", childFailure: { failureKind: "max_turns" } };
+  if (mode === "malformed") child.metadata = { childSessionId: "child-session", childFailure: "max_turns" };
+  const result = await executeJob("JobWait", { targets: [{ target: child.target }] }, context({ wait: async () => ({ snapshot: child, text: "", cursor: 0, truncated: false, timedOut: true }) }));
+  expect(result.isError).not.toBe(true);
+  expect(result.compactSummary).not.toContain("failureKind=max_turns");
+});

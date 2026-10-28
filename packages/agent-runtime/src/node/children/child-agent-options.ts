@@ -81,7 +81,6 @@ export function deriveChildAgentOptions(
       : parentApprovalMode;
   return {
     ...inherited,
-    ownsExecutionEnvironment: false,
     approvalMode,
     requestConfigurationStore:
       configuration.requestConfigurationStoreForSession?.(input.sessionId),

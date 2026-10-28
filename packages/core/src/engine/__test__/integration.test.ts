@@ -2256,3 +2256,74 @@ describe("Integration: Steer follow-ups", () => {
     expect(assistant.content).toBe("");
   });
 });
+
+it("shows remaining child work rounds and reuses the reserved finalization", async () => {
+  const systems: string[] = [];
+  const toolCounts: number[] = [];
+  let executions = 0;
+  const registry = new ToolRegistry();
+  registry.register(makeTool("Loop", () => { executions++; return "checked"; }));
+  const client = {
+    async *streamMessage(params: { system?: string; tools?: unknown[] }) {
+      systems.push(params.system ?? "");
+      toolCounts.push(params.tools?.length ?? 0);
+      if (toolCounts.at(-1) === 0) {
+        yield { type: "text_delta" as const, delta: "partial report" };
+        yield { type: "complete" as const, stopReason: "end_turn" };
+      } else {
+        yield { type: "tool_use_start" as const, toolUse: {
+          type: "tool_use" as const, id: `loop-${systems.length}`, name: "Loop", input: {},
+        } };
+        yield { type: "complete" as const, stopReason: "tool_use" };
+      }
+    },
+  };
+  const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), {
+    maxTurns: 5, trajectoryTrackerFactory: false,
+  });
+  await expect(async () => {
+    for await (const event of engine.submitMessage("check", {
+      execution: { ...createExecutionContext(), hardMaxTurns: 5 },
+    })) void event;
+  }).rejects.toMatchObject({ name: "MaxTurnsExceeded", finalizationText: "partial report" });
+  expect(systems.map(value => value.match(/含当前轮还剩 (\d+) 轮/)?.[1]))
+    .toEqual(["5", "4", "3", "2", undefined]);
+  expect(toolCounts).toEqual([1, 1, 1, 1, 0]);
+  expect(executions).toBe(4);
+  expect(JSON.stringify(engine.getHistory())).not.toContain("含当前轮还剩");
+});
+
+it.each([1, 5, undefined])("does not add ordinary budget guidance on finalization, early completion or uncapped runs: %s", async hardMaxTurns => {
+  const systems: string[] = [];
+  const client = { async *streamMessage(params: { system?: string }) {
+    systems.push(params.system ?? "");
+    yield { type: "text_delta" as const, delta: "done" };
+    yield { type: "complete" as const, stopReason: "end_turn" };
+  } };
+  const engine = new QueryEngine(client, new ToolRegistry(), allowAll(), noopHooks(), { maxTurns: hardMaxTurns ?? 5, trajectoryTrackerFactory: false });
+  const run = (async () => { for await (const event of engine.submitMessage("check", {
+    execution: { ...createExecutionContext(), ...(hardMaxTurns === undefined ? {} : { hardMaxTurns }) },
+  })) void event; })();
+  if (hardMaxTurns === 1) await expect(run).rejects.toMatchObject({ name: "MaxTurnsExceeded" });
+  else await run;
+  expect(systems).toHaveLength(1);
+  expect(systems[0].includes("含当前轮还剩")).toBe(hardMaxTurns === 5);
+});
+
+it("recomputes budget guidance after request configuration tightens", async () => {
+  let maxTurns = 5;
+  const systems: string[] = [];
+  const registry = new ToolRegistry();
+  registry.register(makeTool("Loop", () => { maxTurns = 3; return "checked"; }));
+  const client = { async *streamMessage(params: { system?: string; tools?: unknown[] }) {
+    systems.push(params.system ?? "");
+    if (params.tools?.length) {
+      yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: String(systems.length), name: "Loop", input: {} } };
+      yield { type: "complete" as const, stopReason: "tool_use" };
+    } else { yield { type: "text_delta" as const, delta: "partial" }; yield { type: "complete" as const, stopReason: "end_turn" }; }
+  } };
+  const engine = new QueryEngine(client, registry, allowAll(), noopHooks(), { maxTurns: 5, trajectoryTrackerFactory: false,
+    resolveRequestConfiguration: async () => ({ revision: 1, model: "test", client, maxTurns }) });
+  await expect(async () => { for await (const event of engine.submitMessage("check", { execution: { ...createExecutionContext(), hardMaxTurns: 5 } })) void event; }).rejects.toMatchObject({ name: "MaxTurnsExceeded", maxTurns: 3 });
+  expect(systems.map(value => value.match(/含当前轮还剩 (\d+) 轮/)?.[1])).toEqual(["5", "2", undefined]);
+});

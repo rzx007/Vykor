@@ -94,12 +94,12 @@ export function createChildJobSource(
       metadata: {
         childSessionId: handle.sessionId,
         childState: handle.state,
-        ...(run.result?.failureKind
-          ? { failureKind: run.result.failureKind }
-          : {}),
-        ...(run.result?.partialResult
-          ? { partialResult: run.result.partialResult }
-          : {}),
+        ...(run.result?.failureKind || run.result?.partialResult ? {
+          childFailure: {
+            ...(run.result.failureKind ? { failureKind: run.result.failureKind } : {}),
+            ...(run.result.partialResult ? { partialResult: run.result.partialResult } : {}),
+          },
+        } : {}),
         ...(run.projectionError ? { projectionError: run.projectionError } : {}),
         ...(run.cleanupUnconfirmed ? { cleanupUnconfirmed: run.cleanupUnconfirmed } : {}),
       },

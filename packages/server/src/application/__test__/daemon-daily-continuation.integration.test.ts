@@ -21,7 +21,10 @@ function textOf(messages: Message[]): string {
 function start(store: SessionStore, client: StreamingMessageClient, tool: ToolDefinition): Promise<DaemonApplication> {
   const app = new DaemonApplication({ store,
     settings: { model: "continuation-test", apiFormat: "openai", maxTurns: 7, permission: { mode: "full_access" },
-      plugins: { enabled: false }, memory: { enabled: false, sessionMemoryEnabled: false }, sandbox: { enabled: false } },
+      plugins: { enabled: false }, memory: { enabled: false, sessionMemoryEnabled: false }, sandbox: { enabled: false },
+      // This suite checks opted-in durable write blocking; default-off behavior
+      // is exercised by unknown-outcome-default.test.ts.
+      blockOnUnknownToolOutcome: true },
     createAgent: async context => {
       const agent = await createDefaultNodeAgent({ ...context.options, client, tools: [...(context.options.tools ?? []), tool] });
       return { agent, host: agent.host };

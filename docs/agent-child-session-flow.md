@@ -147,3 +147,11 @@ packages/server/src/application/session/interactions/session-interaction-service
 
 
 SDK 与 daemon 共用执行核心已接通协议 6 / Jobs 3。ChildManager 按真实 run 占用许可，Framework 的实际停止与可靠保存分开；Workflow 默认只用 childId/runId，coordinator 独占 deadline 和重试。接口见 [Jobs 协议](./jobs-protocol.md)，实施与验收见 [共享核心计划](./superpowers/plans/2026-10-27-shared-execution-core.md)。
+
+## 子运行预算与失败反馈
+
+Agent 的 maxTurns 限制工作循环轮次，最后一轮预留给无工具总结；5 轮最多提供 4 轮普通工作。Core 的普通请求提示含当前轮的剩余额度，不另建计数，也不把提示写进消息历史。网络重试和上下文压缩仍走原有约束。
+
+Runtime 的结果将 output、真实 error、failureKind 和带 childSessionId/runId 的 partialResult 分开交付。daemon 的正常终态、关闭补偿和恢复重放遵守同一保存规则；绑定新 Run 清除上一轮失败信息，迟到旧轮不能覆盖新 Task。报告存在不表示业务已通过验收。
+
+主代理通过原 JobRead／JobWait 读取报告和停止原因，对照委派要求交代证据与缺项。继续输入是新一轮，接纳后使用新回执的 runId；不自动扩额或唤醒父代理。桌面只根据本轮结构化原因统一展示，技术错误按需展开。

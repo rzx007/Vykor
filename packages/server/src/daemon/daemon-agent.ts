@@ -225,19 +225,13 @@ export function createDaemonAgentLoader(
     const modelMetadata = settings
       ? await options.prepareModelMetadata?.(settings, session)
       : undefined;
-    const acquiredEnvironment =
-      settings && options.acquireEnvironment
-        ? await options.acquireEnvironment(session, settings)
-        : undefined;
-    let environmentReleased = false;
-    const executionEnvironment = acquiredEnvironment
-      ? {
-          ...acquiredEnvironment,
-          release: async () => {
-            if (environmentReleased) return;
-            environmentReleased = true;
-            await acquiredEnvironment.release();
-          },
+    let executionEnvironment: ExecutionEnvironmentHandle | undefined;
+    const acquireExecutionEnvironment: DefaultNodeAgentOptions["executionEnvironment"] = options.acquireEnvironment
+      ? async (scope) => {
+          const owner = executionSession(scope);
+          const acquired = await options.acquireEnvironment!(owner, scope.settings);
+          if (scope.sessionId === session.id) executionEnvironment = acquired;
+          return acquired;
         }
       : undefined;
     const requestConfigurationStore = createDaemonRequestConfigurationStore({
@@ -283,8 +277,8 @@ export function createDaemonAgentLoader(
       ...(options.executionSurface
         ? { executionSurface: options.executionSurface }
         : {}),
-      ...(executionEnvironment
-        ? { executionEnvironment, ownsExecutionEnvironment: true }
+      ...(acquireExecutionEnvironment
+        ? { executionEnvironment: acquireExecutionEnvironment, ownsExecutionEnvironment: true }
         : {}),
       ...configuration,
       requestConfigurationStore,
@@ -366,25 +360,19 @@ export function createDaemonAgentLoader(
           }
         : {}),
     };
-    let hosted: HostedAgent;
-    try {
-      hosted = options.createAgent
-        ? await options.createAgent({
-            session,
-            history,
-            parts,
-            options: agentOptions,
-          })
-        : await (async () => {
-            const node = await createDefaultNodeAgent({
-              ...agentOptions,
-            });
-            return { agent: node, host: node.host };
-          })();
-    } catch (error) {
-      await executionEnvironment?.release();
-      throw error;
-    }
+    const hosted = options.createAgent
+      ? await options.createAgent({
+          session,
+          history,
+          parts,
+          options: agentOptions,
+        })
+      : await (async () => {
+          const node = await createDefaultNodeAgent({
+            ...agentOptions,
+          });
+          return { agent: node, host: node.host };
+        })();
     const agent = hosted.agent;
     try {
       // 重启 daemon / 热加载 session 时，内存 Agent 是空的；必须先灌历史再对外暴露，

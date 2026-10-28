@@ -27,6 +27,17 @@ const terminal: TerminalSessionInfo = {
 };
 
 describe("persistent terminal tools", () => {
+  it("uses the trusted host workspace for Terminal control when the environment has another execution path", async () => {
+    const tool = createTerminalTools({ open: async input => ({ ...terminal, cwd: input.cwd }) })[0]!;
+    const result = await tool.execute({}, {
+      cwd: "/mnt/d/code/project",
+      sessionId: "session-1",
+      environment: { workspace: { kind: "wsl", hostRoot: "D:\\code\\project", executionRoot: "/mnt/d/code/project" } } as ToolContext["environment"],
+    });
+    expect(result.isError).not.toBe(true);
+    expect(parseResult(result)).toMatchObject({ terminal: { cwd: "D:\\code\\project" } });
+  });
+
   it("does not use a context host when no port was injected", async () => {
     const open = vi.fn(async () => terminal);
     const result = await createTerminalTools()[0]!.execute({}, createContext({ open }));

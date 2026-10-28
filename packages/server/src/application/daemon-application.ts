@@ -460,14 +460,9 @@ export class DaemonApplication implements DurableAgentApplication {
       // JobWait / JobList 走这里：终端、后台 shell、子 Agent、workflow 合成一张本会话任务表。
       const toolAppOrigins = new ToolAppOriginProjector();
       this.jobs = new DaemonJobService(taskStore, sessionId => {
-        const warm = this.agentPool.peekHost(sessionId);
-        if (warm) return { ...warm.jobs,
-          list: input => warm.jobs.list(input), read: input => warm.jobs.read(input), wait: input => warm.jobs.wait(input), cancel: input => warm.jobs.cancel(input),
-          send: (input, authorization) => {
-            const view = warm.plugins.createRunCapabilityView();
-            return warm.jobs.send(input, authorization ?? { ...view, tools: new Map([...(view.delegatableTools ?? []), ...view.tools]) });
-          },
-        };
+        const rootSessionId = this.liveChildren.resolveRootSessionId(sessionId) ?? sessionId;
+        const warm = this.agentPool.peekHost(rootSessionId)?.resolveSessionHost(sessionId);
+        if (warm) return warm.jobs;
         const session = store.sessions.get(sessionId)!;
         const processes = this.executionOwner.getDetachedProcessSupervisor({ cwd: session.cwd, sessionId });
         const provider = options.terminalProviderForSession?.(session) ?? this.terminals.providerForSession(session);

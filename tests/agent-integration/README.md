@@ -32,3 +32,9 @@ S1 的真实 Shell 超时回归使用宿主可执行的 Node 命令，观察实�
 `__test__/child-native-execution.integration.test.ts` 通过真实 SDK / daemon 工厂和实际 child handle，验证子 Shell 的会话归属、不同 cwd 和 SQLite 输出，以及子 Terminal 的打开、读取、取消和实际退出；用户手动 PTY 的已知 ID 也不能由同会话 child 控制，定点拒绝不依赖 list 成功。
 
 `__test__/workflow-timeout.integration.test.ts` 验证顶层时限进入同一 coordinator，并等待真实 Read 与清理完成。生命周期的 deadline 用例使用受控计时器，先确认实际 Read 进入再推进期限；另测模型尚未返回时到期，明确验证 Read 未派发，避免无限等待一个不会发生的 Read 门闩。查询失败跨过期限仍保持原 child / run，不产生额外尝试。
+
+child-run-settlement 的预算反馈贯通用例沿真实默认工厂运行：达到轮次上限、分别保存报告与错误、JobWait 读取、显式新输入接纳、旧轮重放保护、关闭后按旧 target 读取归档。既有保存失败原因表同时核对 Task／Run 错误，调用计数确认恢复没有重放模型或工具。受控网络响应不能证明真实模型一定会说明全部缺项。
+
+`__test__/child-environment-ownership.integration.test.ts` 使用真实 SDK / daemon 加载器、SQLite、两层 child handle 和原生 Shell 核对各会话目录、有效审批设置及独立租约；同一子会话卸载恢复后重新申请租约，关闭时各释放一次。
+
+`__test__/nested-session-jobs.integration.test.ts` 从实际子会话经 HTTP 共用的 `app.jobs` 读、等、取消和继续输入孙级任务。覆盖其他来源列表故障、并发旧轮输入、严格工具身份与权限上限、跨树拒绝、暂停后只读归档，以及关闭未确认时保留实际 stopping 查询。

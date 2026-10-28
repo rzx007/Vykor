@@ -39,4 +39,8 @@ AgentPool 与子 Agent 目录保存活跃实例；消息、运行和结算进度
 
 DaemonAgentEventProjector 是 child 持久投影的唯一入口；LiveChildAgentDirectory 只保存到真实 handle 的接线，不复制结果与运行状态。
 
+Daemon Jobs 收到子会话 ID 后，先经 `LiveChildAgentDirectory.resolveRootSessionId` 找到根会话池中的宿主，再通过它的 `resolveSessionHost` 读取该子会话已有的实际宿主，并直接使用该宿主的 `jobs`。子会话的子任务范围、工具授权和按轮次发送由原有执行核心处理。暂停或关闭后没有可用实例时继续读取归档，查询本身不恢复实例。
+
 阶段 B 把 run 终态与 child.closed 都交给既有 `retry-terminal-projection` 补保存；启动、输入和工具失败仍传回执行核心。旧终态保存故障不阻塞无关新事件。独立恢复补齐原 run/transcript，仅在 task.runId 匹配时更新摘要；原 delivery error 的保存确认谓词直接读取原 settlement 是否 resolved，让已修复结果可按现有上限淘汰。Shell 的 `process-terminal:<execution.id>` 载荷走同一恢复入口。
+
+子任务终态通过内部 [child-task-result.ts](child-task-result.ts) 分别映射 output、真实 error 与 childFailure。正常保存和恢复重放共用字段规则，不从报告推导错误；恢复比较也检查错误和失败元数据。新 Run 绑定时清除旧 childFailure，旧终态只更新匹配 runId 的 Task。child.closed 携带父运行上下文，恢复时只接纳可核实的子运行报告身份或原有启动记录身份，普通 Run 由其自身终态事件修复。

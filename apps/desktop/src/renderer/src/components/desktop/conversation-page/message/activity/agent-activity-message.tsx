@@ -2,7 +2,7 @@ import { Bot, ChevronRight } from "lucide-react"
 import { AgentAvatar } from "@renderer/components/desktop/shared/agent-avatar/agent-avatar"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
-import { agentTaskStatusLabel } from "../../../tools/agents/agent-task-model"
+import { agentTaskPresentation } from "@renderer/components/desktop/tools/agents/agent-task-model"
 import type { DesktopSessionPart, DesktopSessionTask } from "@shared/session-types"
 import { cn } from "@renderer/lib/utils"
 import { summarizeToolCall, toolCallStatus } from "../models/message-render-model"
@@ -39,8 +39,9 @@ export function AgentActivityMessage({
     )
   )
   const dispatchStatus = toolCallStatus(call, result)
+  const presentation = task ? agentTaskPresentation(task) : undefined
   const failed = task
-    ? task.status === "failed" || task.status === "interrupted"
+    ? presentation?.tone === "error"
     : dispatchStatus === "failed" || dispatchStatus === "interrupted"
   const active = task
     ? task.status === "running" || task.status === "pending"
@@ -48,7 +49,7 @@ export function AgentActivityMessage({
   const status = task
     ? needsInput && active
       ? "等待处理"
-      : agentTaskStatusLabel(task.status)
+      : presentation!.label
     : dispatchStatusLabels[dispatchStatus]
   const label = task?.description || summarizeToolCall(call).detail || "派出子智能体"
   const avatarId = task?.id ?? jobId
@@ -58,7 +59,7 @@ export function AgentActivityMessage({
       data-agent-activity
       disabled={!task?.childSessionId || !onOpenAgents}
       onClick={() => onOpenAgents?.(task?.id)}
-      title={task?.error || (!task && failed ? output : label)}
+      title={presentation?.reason || (!task && failed ? "子智能体启动失败" : label)}
       className="text-ui-small flex max-w-full min-w-0 items-center gap-2 rounded-sm py-1 text-left text-ui-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none enabled:hover:text-foreground"
     >
       {avatarId ? (

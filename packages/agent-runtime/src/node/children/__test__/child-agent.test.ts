@@ -14,6 +14,7 @@ import { AgentChildRegistry } from "../../../kernel/children/child-registry.js";
 import { AgentEventBus } from "../../../kernel/event-source.js";
 import { createRunCapabilityView } from "../../plugins/run-capability-view.js";
 import { ToolRegistry } from "@vykor/core";
+import { RoutedAgentJobHost } from "@vykor/jobs";
 import { createVisibilityToolRegistry } from "../../tools/default-runtime-tools.js";
 import { resolveEffectiveAllowedTools } from "../../runtime/default-runtime.js";
 
@@ -1750,7 +1751,7 @@ function createManager(
     directory,
     createAgent: async (options, identity) => {
       const agent = await createAgent(options, identity);
-      agent.host={plugins:{createRunCapabilityView:()=>agent.createRunCapabilityView()}};
+      agent.host={plugins:{createRunCapabilityView:()=>agent.createRunCapabilityView()}, jobs: new RoutedAgentJobHost({})};
       if (preserveRunIdentity) return agent;
       const submitMessage = agent.submitMessage;
       return {
@@ -1805,7 +1806,7 @@ function fakeAgent(submitMessage: any, close = vi.fn(async () => {})) {
     submitMessage,
     canSuspend: () => true,
     createRunCapabilityView: () => createRunCapabilityView({ toolRegistry: new ToolRegistry() }),
-    host:{plugins:{createRunCapabilityView:()=>createRunCapabilityView({toolRegistry:new ToolRegistry()})}},
+    host:{plugins:{createRunCapabilityView:()=>createRunCapabilityView({toolRegistry:new ToolRegistry()})}, jobs: new RoutedAgentJobHost({})},
     getHistory: vi.fn(() => []),
     loadHistory: vi.fn(),
     close,

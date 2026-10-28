@@ -51,7 +51,7 @@ describe("ProjectApplicationService", () => {
         // Only the host admission boundary is controlled; no retired process-backed Agent.
         const send = vi.fn(async () => { throw new Error("unexpected admission"); });
         vi.spyOn((application as any).agentPool, "peekHost").mockReturnValue({
-          jobs: { send }, plugins: { createRunCapabilityView: () => ({ tools: new Map() }) },
+          resolveSessionHost: (id: string) => id === "s1" ? { jobs: { send } } : undefined,
         });
       }
       const close = vi.spyOn((application as any).agentPool, "close").mockImplementation(() => closing);
@@ -99,14 +99,14 @@ describe("ProjectApplicationService", () => {
         await vi.waitFor(() => expect(store.listSessionTasks("s1")).toHaveLength(1));
         store.transitionPendingSessionTask(store.listSessionTasks("s1")[0]!.id, { status: "stopped" });
       } else {
-        const send = vi.fn(() => pending);
+        const send = vi.fn((_input: unknown) => pending);
         vi.spyOn((application as any).agentPool, "peekHost").mockReturnValue({
-          jobs: { send }, plugins: { createRunCapabilityView: () => ({ tools: new Map() }) },
+          resolveSessionHost: (id: string) => id === "s1" ? { jobs: { send } } : undefined,
         });
         admitted = application.jobs.send({ sessionId: "s1", target: { kind: "agent", jobId: "agent", runId: "run-1" }, data: "continue" }).catch(error => error);
-        await vi.waitFor(() => expect(send).toHaveBeenCalledWith(
-          expect.objectContaining({ target: { kind: "agent", jobId: "agent", runId: "run-1" } }), expect.anything(),
-        ));
+        await vi.waitFor(() => expect(send.mock.calls[0]?.[0]).toMatchObject({
+          sessionId: "s1", target: { kind: "agent", jobId: "agent", runId: "run-1" }, data: "continue",
+        }));
       }
       await expect(application.projects.rebind(project.id, tmpdir())).rejects.toMatchObject({ status: 409 });
       expect(store.sessions.get("s1")?.cwd).toBe(directory);

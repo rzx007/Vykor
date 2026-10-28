@@ -162,9 +162,11 @@ await createDefaultNodeAgent({
 
 `jobs: false` 不是独立开关：Terminal、后台 Shell、child environment 与 Workflow repository 都会产生或依赖 Job，因此必须同时写成 `terminal: false`、`backgroundShell: false`、`childEnvironment: false` 和 `workflowRepository: false`。只替换 Terminal 不会关掉本地后台 Shell 或 Memory。
 
-显式传入的执行环境默认也由调用方释放。只有创建方明确指定 `ownsExecutionEnvironment: true` 时，Node 才接管该租约；child 借用时重置此标记。Server loader 将自己申请的会话环境租约明确交给 Node，失败时也只释放一次。
+`executionEnvironment` 接受异步工厂 `async ({ sessionId, cwd, settings }) => handle`。默认工厂在每个实际 root 或 child session 创建时调用它，参数是该会话的目录和已经应用审批模式的设置。返回的 `handle.workspace.hostRoot` 必须与本次 `cwd` 一致；错误目录或获取失败会直接中止创建。子代理继承工厂，按自己的会话和目录申请环境。
 
-Host 覆盖是**借用对象**，不是由 Agent 接管的资源：它们必须能覆盖 root session 的整棵 child session tree，且由 Host 自己在合适的生命周期释放。`agent.close()` 只清理 runtime 自己创建的默认资源；不会调用 Host Terminal、后台 Shell 或其 Jobs 的释放逻辑。
+每次返回的环境租约默认由调用方释放。明确指定 `ownsExecutionEnvironment: true` 后，Node 接管各会话自己的租约，在初始化失败或关闭时释放一次。同一子会话卸载后恢复时，新 Node 实例会重新调用工厂取得新租约。Server loader 从实际会话记录申请租约并交给对应 Node 实例。
+
+Terminal / Shell 工厂返回的端口由宿主持有，共同核心清理该会话的 bundle 和订阅；宿主负责处置借用的 provider。执行环境租约则按前述 `ownsExecutionEnvironment` 约定转交或借用。
 
 Node 默认创建每棵根树的 TeamRegistry 和 WorkflowHostDirectory，child 借用本树目录。Workflow、Job 工具和 Agent.close 使用同一个 owner 视图；close 等待后台 worker 和终态保存，再移除子 Agent。应用注入的共享 Host 不由单个 Agent 关闭；其创建入口为 `@vykor/agent-runtime/node/workflow`。
 

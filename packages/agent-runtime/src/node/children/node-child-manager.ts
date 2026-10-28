@@ -194,25 +194,32 @@ export class NodeChildManager extends AgentChildManager {
                 parentRunId: input.parentScope.runId,
               },
             );
-            const submit = agent.submitMessage.bind(agent);
-            agent.submitMessage = (content, run = {}) => {
+            const inheritedView = () => {
               const baseline = agent.host.plugins.createRunCapabilityView();
               const inherited =
                 captured && baseline
                   ? bindChildRuntime(captured, baseline)
                   : captured;
+              return inherited ? deriveChildCapabilityView(inherited, spawn) : undefined;
+            };
+            const submit = agent.submitMessage.bind(agent);
+            agent.submitMessage = (content, run = {}) => {
+              const capabilityView = inheritedView();
               return submit(content, {
                 ...run,
-                ...(inherited
+                ...(capabilityView
                   ? {
-                      capabilityView: deriveChildCapabilityView(
-                        inherited,
-                        spawn,
-                      ),
+                      capabilityView,
                       pluginCandidates: capturedCandidates,
                     }
                   : {}),
               });
+            };
+            const send = agent.host.jobs.send.bind(agent.host.jobs);
+            agent.host.jobs.send = (request, authorization) => {
+              if (authorization) return send(request, authorization);
+              const view = inheritedView();
+              return send(request, view ? { ...view, tools: readonlyMap([...(view.delegatableTools ?? []), ...view.tools]) } : undefined);
             };
             return agent;
           },

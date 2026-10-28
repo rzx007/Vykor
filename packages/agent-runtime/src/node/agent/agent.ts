@@ -114,6 +114,8 @@ export interface VykorAgentSubmitOptions extends KernelSubmitOptions {
 }
 export interface NodeAgentHost {
   readonly jobs: import("@vykor/jobs").AgentJobHost;
+  /** Existing session host in this root's child registry; lookup never resumes an instance. */
+  resolveSessionHost(sessionId: string): NodeAgentHost | undefined;
   plugins: {
     pluginApps: PluginAppRuntimeHost;
     prepareRun(
@@ -277,6 +279,12 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
       );
     this.appRuntime = new PluginAppRuntime(this.id, assembled.pluginApps);
     this.host = Object.freeze({
+      resolveSessionHost: (sessionId: string): NodeAgentHost | undefined => {
+        if (this.state === "closed") return undefined;
+        if (sessionId === this.id) return this.host;
+        const child = assembled.childManager.getAgentForSession(sessionId);
+        return child instanceof NodeAgent && child.state !== "closed" ? child.host : undefined;
+      },
       plugins: Object.freeze({
         pluginApps: this.appRuntime.host,
         prepareRun: (view: RunCapabilityView) => ({
@@ -303,8 +311,10 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
         const jobs = assembled.jobs ?? (assembled.capabilities.jobs.status === "available" ? assembled.capabilities.jobs.value : undefined);
         if (!jobs) return undefined!;
         return { list: jobs.list.bind(jobs), read: jobs.read.bind(jobs), wait: jobs.wait.bind(jobs), cancel: jobs.cancel.bind(jobs), send: (input: Parameters<import("@vykor/jobs").AgentJobHost["send"]>[0], authorization?: import("@vykor/jobs").AgentJobAuthorization) => {
+          if (this.state === "closing" || this.state === "closed") return Promise.reject(new AgentOperationConflictError(this.id, this.state, "send job input"));
+          if (authorization) return jobs.send(input, authorization);
           const view = this.createRunCapabilityView();
-          return jobs.send(input, authorization ?? { ...view, tools: readonlyMap([...(view.delegatableTools ?? []), ...view.tools]) });
+          return jobs.send(input, { ...view, tools: readonlyMap([...(view.delegatableTools ?? []), ...view.tools]) });
         } };
       })(),
     });

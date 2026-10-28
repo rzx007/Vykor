@@ -1,4 +1,5 @@
 import type { HostedAgent } from "@vykor/agent-runtime";
+import { RoutedAgentJobHost } from "@vykor/jobs";
 
 /** Explicit host wiring for small test doubles and real Node agents. */
 export function hostedAgentFixture(agent: any): HostedAgent {
@@ -6,6 +7,8 @@ export function hostedAgentFixture(agent: any): HostedAgent {
   return {
     agent,
     host: agent.host ?? {
+      jobs: new RoutedAgentJobHost({}),
+      resolveSessionHost(sessionId: string) { return sessionId === agent.id ? this : undefined; },
       plugins: {
         pluginApps: agent.pluginApps,
         createRunCapabilityView:

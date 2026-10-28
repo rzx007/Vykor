@@ -8,6 +8,10 @@
 
 2026-10-28 复核后的接线约定：`AgentCapabilityOverrides.terminal` / `backgroundShell` 只接收按实际 `{ sessionId, cwd }` 返回 `TerminalProvider` / `ShellAdmissionPorts` 的工厂（或 `false`）。共同组装为每个会话调用一次，child 继承工厂而不继承父会话端口；daemon 从既有 SessionStore 读取该 child 的记录。不保留直接注入父端口的旧形式或兼容分支。
 
+完整需求复核进一步统一环境归属：高层 `executionEnvironment` 只接收异步会话工厂 `async ({ sessionId, cwd, settings }) => handle`。`settings` 已应用本会话审批模式，返回环境的 hostRoot 必须匹配本次 cwd；原静态父环境值与 child 强制借用分支删除。共用组装独占每份租约的初始化回滚与释放；daemon 只申请环境并提供根目录证据。低层 runtime 仍接收实际 handle，没有新增环境管理器。
+
+HTTP Jobs 查询 live child 会话时，经原 `LiveChildAgentDirectory` 找根会话，再从原 Registry → ChildHandle → ChildRecord.agent 取得该会话的真实 Node host，直接使用其 Jobs。lookup 不创建或恢复实例。关闭尚未确认的实例继续提供读取、等待与取消，Node host 的单一发送入口拒绝新输入。子宿主的默认发送与模型提交共用原继承授权视图，显式授权仍按工具定义身份核对。daemon 的重复 warm Jobs 包装删除，不再捕获另一份授权视图。
+
 Terminal Jobs 的列表、读取、等待、输入和取消共用“同一会话且来源为 agent”的判断。Workflow 正常结果和超时后迟到结果共用重试条件；查询失败标记不可重试后，不因期限先到而建立替代 worker。工具顶层 `timeoutSeconds` 作为额外上限合入已有任务 `timeoutMs` 后保存，唯一计时器仍归 coordinator。
 
 复杂度变化：新增两个按会话返回端口的函数类型和一个共用重试判断，替换旧的父端口值传递与两处分散判断；没有新增生产模块、ID、状态、缓存、重试器或管理器。deadline 测试将真实准备与实际 Read 分成可观察的阶段，受控推进同一时钟，另验证启动期间到期，不再无限等待不会发生的 Read。

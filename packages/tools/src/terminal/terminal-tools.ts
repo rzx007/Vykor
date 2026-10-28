@@ -38,7 +38,7 @@ export function createTerminalTools(host?: AgentTerminalHost): ToolDefinition[] 
       try {
         const terminal = await resolved.host.open({
           sessionId: resolved.sessionId,
-          cwd: context.cwd,
+          cwd: context.environment?.workspace.hostRoot ?? context.cwd,
           name: optionalString(input.name) ?? (command ? command.slice(0, 80) : undefined),
           cols: optionalNumber(input.cols),
           rows: optionalNumber(input.rows),
