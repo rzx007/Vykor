@@ -175,6 +175,19 @@ describe("tool operation repository", () => {
     const readAuth = f.store.toolOperations.authorize({ intent: readIntent, operation: read, policyVersion: "p1" });
     expect(f.store.toolOperations.dispatch({ intent: readIntent, operation: readAuth, policyVersion: "p1", ownerId: "owner" }).toolAttemptId).toBeTruthy();
   });
+  it.each(["sqlite", "memory"] as const)("allows a new %s operation when the host disables blocking without replaying the unknown operation", storage => {
+    const f = setup(storage); const { receipt } = dispatch(f);
+    f.store.toolOperations.settle({ receipt, result: result("unknown") });
+    const unknown = f.store.toolOperations.get(receipt.operationId)!;
+    const nextIntent = { ...f.intent, toolUse: { ...f.intent.toolUse, id: "next", name: "build" } };
+    const prepared = f.store.toolOperations.prepare({ ...nextIntent, toolIdentity: "build-v1" });
+    const authorized = f.store.toolOperations.authorize({ intent: nextIntent, operation: prepared, policyVersion: "p1" });
+    expect(f.store.toolOperations.dispatch({ intent: nextIntent, operation: authorized, policyVersion: "p1", ownerId: "owner", blockOnUnknownToolOutcome: false }).toolAttemptId).toBeTruthy();
+    expect(() => f.store.toolOperations.dispatch({ intent: f.intent, operation: unknown, policyVersion: "p1", ownerId: "owner", blockOnUnknownToolOutcome: false })).toThrow(/unknown/i);
+    expect(f.store.toolOperations.get(receipt.operationId)).toEqual(unknown);
+    expect(f.store.toolOperations.listAttempts(receipt.operationId)).toMatchObject([{ status: "unknown", result: result("unknown") }]);
+    expect(f.store.toolOperations.listAttempts(receipt.operationId)).toHaveLength(1);
+  });
   it("requires evidence for not_applied and uses a new attempt after current authorization", () => {
     const f = setup(); const { receipt } = dispatch(f); f.store.toolOperations.settle({ receipt, result: result("unknown") });
     let saved = f.store.toolOperations.get(receipt.operationId)!;

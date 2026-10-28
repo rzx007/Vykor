@@ -5,11 +5,11 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { SessionStore } from "@vykor/services";
 import type { ToolOperationIntent } from "@vykor/agent-contracts";
 import type { AgentRunCapabilitySnapshot } from "@vykor/agent-runtime";
-import { isTrustedReadOnlyTool, markTrustedReadOnlyTool, toolDefinitionIdentity } from "@vykor/core";
-import { ToolOperationService } from "../tool-operation-service.js";
+import { markTrustedReadOnlyTool, toolDefinitionIdentity } from "@vykor/core";
+import { ToolOperationService, describeTrustedReadOnlyToolOperation } from "../tool-operation-service.js";
 const cleanups: (() => void)[] = [];
 afterEach(() => cleanups.splice(0).reverse().forEach(cleanup => cleanup()));
-async function fixture(transactionHooks?: { beforeCommit(): void }) {
+async function fixture(transactionHooks?: { beforeCommit(): void }, blockOnUnknownToolOutcome = true) {
   const directory = mkdtempSync(join(tmpdir(), "tool-operation-host-"));
   const store = new SessionStore({ path: join(directory, "store.db"), transactionHooks });
   cleanups.push(() => {
@@ -24,7 +24,7 @@ async function fixture(transactionHooks?: { beforeCommit(): void }) {
   store.runs.createRun({ id: "r", sessionId: "s" });
   store.runs.updateRun("r", { status: "running" });
   const intent: ToolOperationIntent = { scope: { sessionId: "s", agentId: "s", runId: "r", inputId: "i", traceId: "t", cwd: directory, signal: new AbortController().signal }, toolUse: { type: "tool_use", id: "call", name: "Write", input: { value: 1 } } };
-  const service = new ToolOperationService({ store, ownerLease: () => lease });
+  const service = new ToolOperationService({ store, ownerLease: () => lease, blockOnUnknownToolOutcome: () => blockOnUnknownToolOutcome });
   return { store, service, intent, lease, ownership };
 }
 async function authorized(f: Awaited<ReturnType<typeof fixture>>, intent = f.intent) {
@@ -34,6 +34,36 @@ async function authorized(f: Awaited<ReturnType<typeof fixture>>, intent = f.int
   return { intent, operation: await f.service.operations.authorize({ intent, operation, policyVersion: policy.policyVersion }), policyVersion: policy.policyVersion };
 }
 describe("daemon tool operation host", () => {
+  it("records unknown outcomes without blocking a later operation by default", async () => {
+    const f = await fixture(), first = await authorized(f);
+    const receipt = await f.service.operations.dispatch(first);
+    await f.service.operations.settle({ receipt, result: { toolUseId: "call", toolName: "Write", content: [{ type: "text", text: "ERR_ABORTED" }], isError: true, executionState: "unknown" } });
+    const service = new ToolOperationService({ store: f.store, ownerLease: () => f.lease });
+    const intent = { ...f.intent, toolUse: { ...f.intent.toolUse, id: "open-preview", name: "TerminalOpen" } };
+    const operation = await service.operations.prepare(intent);
+    const policy = await service.requiredPolicy.check({ intent, operation, phase: "authorization" });
+    expect(policy.allowed).toBe(true);
+    const authorizedOperation = await service.operations.authorize({ intent, operation, policyVersion: policy.policyVersion });
+    await expect(service.operations.dispatch({ intent, operation: authorizedOperation, policyVersion: policy.policyVersion })).resolves.toHaveProperty("toolAttemptId");
+    expect(f.store.toolOperations.getSummary(receipt.operationId)).toMatchObject({ state: "unknown" });
+    expect(f.store.toolOperations.listAttempts(receipt.operationId)).toHaveLength(1);
+  });
+  it("can turn the unknown-outcome block off without rewriting old operations or recreating the service", async () => {
+    const f = await fixture(), first = await authorized(f);
+    const receipt = await f.service.operations.dispatch(first);
+    await f.service.operations.settle({ receipt, result: { toolUseId: "call", toolName: "Write", content: [], isError: true, executionState: "unknown" } });
+    let enabled = true;
+    const service = new ToolOperationService({ store: f.store, ownerLease: () => f.lease, blockOnUnknownToolOutcome: () => enabled });
+    const intent = { ...f.intent, toolUse: { ...f.intent.toolUse, id: "next" } };
+    const operation = await service.operations.prepare(intent);
+    expect((await service.requiredPolicy.check({ intent, operation, phase: "authorization" })).allowed).toBe(false);
+    enabled = false;
+    const policy = await service.requiredPolicy.check({ intent, operation, phase: "authorization" });
+    expect(policy.allowed).toBe(true);
+    const ticket = await service.operations.authorize({ intent, operation, policyVersion: policy.policyVersion });
+    await service.operations.dispatch({ intent, operation: ticket, policyVersion: policy.policyVersion });
+    expect(f.store.toolOperations.getSummary(receipt.operationId)).toMatchObject({ state: "unknown" });
+  });
   it("settles large results and preserves full reads without copying bodies for status checks", async () => {
     const f = await fixture(), input = await authorized(f);
     const receipt = await f.service.operations.dispatch(input);
@@ -158,7 +188,7 @@ describe("daemon tool operation host", () => {
     const receipt = await f.service.operations.dispatch(first);
     await f.service.operations.settle({ receipt, result: { toolUseId: "call", toolName: "Write", content: [{ type: "text" as const, text: "unknown" }], executionState: "unknown" } });
     const diagnostic = async () => ({ content: [{ type: "text" as const, text: "evidence" }] });
-    const service = new ToolOperationService({ store: f.store, ownerLease: () => f.lease, describe: intent => intent.binding?.invoke === diagnostic ? { kind: "read_only" } : undefined });
+    const service = new ToolOperationService({ store: f.store, ownerLease: () => f.lease, blockOnUnknownToolOutcome: () => true, describe: intent => intent.binding?.invoke === diagnostic ? { kind: "read_only" } : undefined });
     const make = (invoke: typeof diagnostic, id: string) => ({ ...f.intent, toolUse: { ...f.intent.toolUse, id, name: "Read" }, binding: { definition: { name: "Read", description: "diagnostic", inputSchema: {}, execute: invoke }, invoke, definitionIdentity: Symbol(id) } });
     const trusted = make(diagnostic, "diagnostic"), spoofed = make(async () => ({ content: [{ type: "text" as const, text: "write" }] }), "spoofed");
     const read = await service.operations.prepare(trusted);
@@ -216,9 +246,9 @@ describe("daemon tool operation host", () => {
     expect(f.store.toolOperations.listAttempts(parent.operation.operationId)).toHaveLength(0);
   });
 
-  it("blocks sibling dispatch immediately after a child receipt commit fails while both Runs still run", async () => {
+  it.each([true, false])("blocks sibling dispatch after a child receipt commit fails even with unknown blocking %s", async blockOnUnknownToolOutcome => {
     let failCommit = false;
-    const f = await fixture({ beforeCommit: () => { if (failCommit) throw new Error("receipt commit failed"); } });
+    const f = await fixture({ beforeCommit: () => { if (failCommit) throw new Error("receipt commit failed"); } }, blockOnUnknownToolOutcome);
     for (const id of ["child", "sibling"]) {
       f.store.sessions.create({ id, parentId: "s", cwd: f.intent.scope.cwd, model: "m" });
       f.store.runs.createRun({ id: `${id}-run`, sessionId: id });
@@ -250,9 +280,9 @@ describe("daemon tool operation host", () => {
     expect(readFileSync(effectsPath, "utf8")).toBe("child\nsibling\n");
   });
 
-  it("keeps each failed receipt blocked until that operation is authoritatively resolved", async () => {
+  it.each([true, false])("keeps each failed receipt blocked until resolved with unknown blocking %s", async blockOnUnknownToolOutcome => {
     let failCommit = false;
-    const f = await fixture({ beforeCommit: () => { if (failCommit) throw new Error("receipt commit failed"); } });
+    const f = await fixture({ beforeCommit: () => { if (failCommit) throw new Error("receipt commit failed"); } }, blockOnUnknownToolOutcome);
     const first = await authorized(f);
     const second = await authorized(f, { ...f.intent, toolUse: { ...f.intent.toolUse, id: "second" } });
     const waiting = await authorized(f, { ...f.intent, toolUse: { ...f.intent.toolUse, id: "waiting" } });
@@ -275,13 +305,29 @@ describe("daemon tool operation host", () => {
 
 });
 
-it("refuses a forged builtin source even when the definition and invocation match a captured trusted reader", async () => {
+it.each(["builtin", "agent"] as const)("refuses a forged %s source even when the definition and invocation match a captured trusted reader", async forgedSource => {
   const f = await fixture();
   const definition = markTrustedReadOnlyTool({ name: "Read", description: "host reader", inputSchema: {}, execute: async () => ({ content: [] }) });
   const binding = { definition, definitionIdentity: toolDefinitionIdentity(definition), invoke: definition.execute.bind(definition), source: { kind: "plugin" as const, id: "foreign" } };
   const service = new ToolOperationService({ store: f.store, ownerLease: () => f.lease,
-    describe: ({ binding }) => binding?.source?.kind === "builtin" && isTrustedReadOnlyTool(binding.definition, binding.definitionIdentity) ? { kind: "read_only" } : undefined });
+    describe: describeTrustedReadOnlyToolOperation });
   service.onRunCapabilities({ scope: f.intent.scope, capabilityView: { tools: new Map([["Read", binding]]) } } as unknown as AgentRunCapabilitySnapshot);
-  const intent = { ...f.intent, toolUse: { ...f.intent.toolUse, name: "Read" }, binding: { ...binding, source: { kind: "builtin" as const } } };
+  const intent = { ...f.intent, toolUse: { ...f.intent.toolUse, name: "Read" }, binding: { ...binding, source: { kind: forgedSource } } };
   expect((await service.operations.prepare(intent)).kind).toBe("non_replayable");
+});
+
+it.each(["builtin", "agent", "plugin", "mcp"] as const)("checks the real %s provenance before granting a trusted reader access past an unknown write", async kind => {
+  const f = await fixture(), first = await authorized(f);
+  const receipt = await f.service.operations.dispatch(first);
+  await f.service.operations.settle({ receipt, result: { content: [], toolUseId: "call", toolName: "Write", executionState: "unknown" } });
+  const definition = markTrustedReadOnlyTool({ name: "Read", description: "host reader", inputSchema: {}, execute: async () => ({ content: [] }) });
+  const binding = { definition, definitionIdentity: toolDefinitionIdentity(definition), invoke: definition.execute.bind(definition), source: { kind, id: "source" } };
+  const service = new ToolOperationService({ store: f.store, ownerLease: () => f.lease, blockOnUnknownToolOutcome: () => true, describe: describeTrustedReadOnlyToolOperation });
+  service.onRunCapabilities({ scope: f.intent.scope, capabilityView: { tools: new Map([["Read", binding]]) } } as unknown as AgentRunCapabilitySnapshot);
+  const intent = { ...f.intent, toolUse: { ...f.intent.toolUse, id: "read", name: "Read" }, binding };
+  const operation = await service.operations.prepare(intent);
+  const expectedRead = kind === "builtin" || kind === "agent";
+  expect(operation.kind).toBe(expectedRead ? "read_only" : "non_replayable");
+  expect((await service.requiredPolicy.check({ intent, operation, phase: "authorization" })).allowed).toBe(expectedRead);
+  expect(f.store.toolOperations.get(receipt.operationId)).toMatchObject({ state: "unknown" });
 });

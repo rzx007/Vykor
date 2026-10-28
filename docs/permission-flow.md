@@ -22,7 +22,7 @@ daemon 注入 `AgentToolSafety`，同时提供操作记录宿主和 `RequiredPol
 
 普通 Hook 沿用原合同，与必须生效的规则分开。root、child、手动 `runTool`、嵌套和代理调用使用同一检查管道；每次实际派发有独立尝试身份。审批等待只有 operationId，不能用预先拼出的尝试编号冒充实际调用。
 
-未声明工具默认不能自动重放。`safeToRetry`、MCP 提示和同名工具都不能证明业务支持去重。未知写操作保持阻塞，具体只读与业务去重承诺由可信宿主按实际工具实现声明。核对入口只接受授权宿主提供的只读查询证据，模型和普通工具输出不能自行确认“没有执行”。
+未声明工具默认不能自动重放。`safeToRetry`、MCP 提示和同名工具都不能证明业务支持去重。未知结果默认保留记录但不阻止其他操作；全局设置 `blockOnUnknownToolOutcome: true` 才启用同根会话树的后续写入阻断，原因及保留的检查见[决策记录](./tool-outcome-blocking-decision.md)。具体只读与业务去重承诺由可信宿主按实际工具实现声明。核对入口只接受授权宿主提供的只读查询证据，模型和普通工具输出不能自行确认“没有执行”。
 
 当前审批仍使用下面的 callback 与活体等待机制；跨重启保留审批和修改意图版本属于 S3。S1 的字段与状态见[持久运行记录](./durable-execution-data-model.md#s1-工具操作记录)，分阶段范围见[实施计划](./superpowers/plans/2026-10-26-s1-tool-operation-safety.md)。
 

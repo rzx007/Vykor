@@ -12,12 +12,16 @@
 
 `__test__/s1-tool-safety-pipeline.integration.test.ts` 将真实 Shell、Core 工具循环和 SQLite 操作服务接在一起：超时及部分输出进入下一次模型请求，可信只读检查可继续，未知写入仍拦截新 ID 的危险调用；读取成功本身不解除保护。真实迟到回执可以恢复后续写入，但不会重复交付原工具结果。回执保存失败仍走致命错误通道。
 
+`__test__/job-safety.integration.test.ts` 使用默认工具注册表、真实后台进程和 SQLite 操作记录，复现浏览器导航结果未知后 Job 查询被误拦的问题。它确认 `JobWait` 确实等到进程完成，`JobRead`、`JobList` 与 `Browser.inspect` 能返回观察结果，同时 Job 控制、Shell、文件写入、浏览器交互及同名替换仍在派发前被拦，原未知操作不会因读取成功而被确认。另通过实际 `createDefaultNodeAgent({ tools })` 和离线多轮模型调用，确认 Daemon 追加 Browser 所用的 `agent` 来源也经过同一个生产分类函数，避免手工注册掩盖接线错误。
+
 运行 `pnpm test:agent-integration`；根 `pnpm test` 已包含此命令，普通 CI 的 Test 步骤会继续执行。两个工具测试由 `pnpm --filter @vykor/tools test` 覆盖。跨包测试直接运行，避免沿用 Runtime 包的缓存而遗漏 API 或工具变化。
 
 
 `__test__/shared-job-composition.integration.test.ts` 是阶段 A 双入口验收：每种模式覆盖真实 child 多轮和旧轮取消、无关来源 list 故障、唯一 Shell 归属、原生 PTY 退出、单步骤 Workflow。共享夹具放在 `__test__/fixtures/task-lifecycle-fixture.ts`。另用真实原生 PTY 验证 daemon 没有 live root 时仍使用显式 Terminal provider，连续读取不会关闭宿主资源。
 
 `__test__/child-run-settlement.integration.test.ts` 验证阶段 B：24 轮复用与 24 新身份、64/65 累计上限、8 真实调用并发、停止与清理屏障、终态保存补偿、旧轮隔离、256 条保存/未保存留存、拒绝输入和 steer 别名、Shell 原终态补存。原因表逐一比较 live 结果、原终态事件和恢复后的持久输出；模型/工具执行计数确认没有重放。更窄的真实工厂启动 ACK 丢失、准备撤销与重复取消清理回归放在 Runtime 的 `node/children/__test__/child-run-settlement.test.ts`。
+
+专门验证未知结果阻断的用例显式启用 `blockOnUnknownToolOutcome`；其余生命周期用例继续覆盖默认关闭的行为。默认值、真实 Browser 异常后的 Shell 派发与普通权限拒绝见 Server 的 `application/__test__/unknown-outcome-default.test.ts`。
 
 `__test__/workflow-child-lifecycle.integration.test.ts` 是阶段 C 的真实 SDK/daemon 验收，使用同一默认工厂、ChildManager、实际 handle 和临时 SQLite。覆盖每模式 3×12 顺序 worker、8 并发/第 9 个核心拒绝、取消/deadline 的真实 Read 与清理屏障、查询失败不替代、ACK 失败不重叠、重复 Workflow 取消确认原清理、旧 attempt、同 tick send/suspend、历史/cwd/授权恢复、保留活动及空闲后代、实际未决审批和动态模型目录撤销。
 

@@ -170,6 +170,7 @@ export function createDefaultSettingsService(
       }
 
       const next = mergeSettingsPatch(await loadSettings(undefined, { includeEnvironment: false }), effectivePatch);
+      if (effectivePatch.blockOnUnknownToolOutcome !== undefined && typeof effectivePatch.blockOnUnknownToolOutcome !== "boolean") throw new Error("blockOnUnknownToolOutcome must be a boolean");
       if (effectivePatch.permission !== undefined && !isRecord(effectivePatch.permission)) throw new Error("权限设置必须是对象。");
       if (effectivePatch.permission !== undefined) next.permission = parsePermissionSettings(next.permission);
       if (effectivePatch.sandbox !== undefined) {
@@ -373,6 +374,7 @@ function coerceConfigValue(key: string, value: string): unknown {
       "verbose",
       "fastMode",
       "showReasoning",
+      "blockOnUnknownToolOutcome",
       "plugins.enabled",
       "plugins.uiEnabled",
       "memory.enabled",

@@ -36,6 +36,28 @@ test("a host wrapper registered by Runtime retains identity when Runtime capture
   assert.equal(runtime.isToolResultReader(binding.definition, binding.definitionIdentity), false);
 });
 
+test("shipping Runtime captures job readers without trusting job controls", () => {
+  const jobs = { list: async () => ({ jobs: [], errors: [] }) };
+  const registry = runtime.createDefaultToolRegistry({ jobs });
+  const view = runtime.createRunCapabilityView({ toolRegistry: registry });
+  for (const [name, expected] of [["JobList", true], ["JobRead", true], ["JobWait", true], ["JobSend", false], ["JobCancel", false]]) {
+    const binding = view.tools.get(name);
+    assert.equal(runtime.isTrustedReadOnlyTool(binding.definition, binding.definitionIdentity), expected, name);
+  }
+});
+
+test("shipping Runtime preserves a host input restriction across frozen Run copies", () => {
+  const registry = runtime.createDefaultToolRegistry();
+  registry.register(runtime.markTrustedReadOnlyTool({ name: "Browser", description: "mixed host tool", inputSchema: {},
+    execute: async () => ({ content: [] }),
+  }, input => input.action === "inspect"), { kind: "builtin" });
+  const binding = runtime.createRunCapabilityView({ toolRegistry: registry }).tools.get("Browser");
+  assert.equal(runtime.isTrustedReadOnlyTool(binding.definition, binding.definitionIdentity), false);
+  assert.equal(runtime.isTrustedReadOnlyTool(binding.definition, binding.definitionIdentity, { action: "inspect" }), true);
+  assert.equal(runtime.isTrustedReadOnlyTool(binding.definition, binding.definitionIdentity, { action: "navigate" }), false);
+  assert.equal(runtime.isTrustedReadOnlyTool({ ...binding.definition, execute: async () => ({ content: [] }) }, binding.definitionIdentity, { action: "inspect" }), false);
+});
+
 test("shipping helpers reject same-name execute replacements and read-only hints", () => {
   assertHostIdentityExports();
   for (const name of readNames) {

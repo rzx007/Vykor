@@ -188,8 +188,11 @@ export function createDefaultToolRegistry(
       registerBuiltin(tool, environment());
   }
   if (options.jobs) {
-    for (const tool of createJobTools(options.jobs, options.authorization))
+    for (const tool of createJobTools(options.jobs, options.authorization)) {
+      if (tool.name === "JobList" || tool.name === "JobRead" || tool.name === "JobWait")
+        markTrustedReadOnlyTool(tool);
       registerBuiltin(tool, controlPlane());
+    }
   }
   for (const tool of createMcpTools(options.mcp ?? createNodeMcpPort()))
     registerBuiltin(tool, controlPlane(true));

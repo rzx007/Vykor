@@ -73,6 +73,7 @@
 - [认证、Provider 和 Model](./auth-provider-model.md)：配置文件、凭据来源和解析顺序。
 - [远程连接](./remote-attach.md)、[daemon 系统服务](./daemon-system-service.md)：连接发现和系统常驻。
 - [运维与恢复](./operations-and-recovery.md)：启动恢复、数据目录写入者、清理、备份和格式演进。
+- [未知工具结果阻断的决定](./tool-outcome-blocking-decision.md)：默认关闭的原因、保留的检查、设置入口与待重新评估的问题。
 - [开发数据重置](./development-data-reset.md)：人工预检及逐项授权的操作说明。
 - [诊断与可观测性](./observability.md)：运行追踪、日志、状态快照和排障。
 - [发布流程](./release-process.md)：Desktop、CLI 与官方插件的发布边界。
@@ -88,6 +89,7 @@
 
 - [子代理与工作流生命周期调研及架构建议](./research/2026-10-27-agent-task-lifecycle-comparison.md)：对照五个参考项目，建议明确任务归属、稳定运行身份、分开执行额度与会话保留，并统一 Workflow 收尾；尚未修改生产代码。
 - [SDK 与 daemon 共用执行核心方案](./superpowers/specs/2026-10-27-shared-execution-core-design.md)与[文件级实施计划](./superpowers/plans/2026-10-27-shared-execution-core.md)：已核对当前代码差异，明确状态归属、三阶段替换与删除清单、真实工厂和 child handle 验收；待实施。
+- [子代理预算提示与未完成结果方案](./superpowers/specs/2026-10-28-child-budget-feedback-design.md)：待审阅；保留预算限制和真实失败记录，补充剩余轮次提示、父代理处理建议及桌面未完成展示。
 - [存储热路径优化计划](./superpowers/plans/2026-10-27-storage-hot-path-optimization-plan.md)：评估全历史加载、正文常驻和扫描成本；建议先做 Q1 摘要读取与 Q2 先筛选再投影，完整正文按需读取暂缓。附当前版本 12 进程原始基线。
 - [核心 Agent 能力补齐方案](./superpowers/specs/2026-10-26-agent-core-capability-completion-design.md)：S1 工具操作安全已实现；S2 可恢复执行、S3 持久审批与 P1 交付能力仍待实施。
 - [桌面设置需求](./desktop-settings-requirements.md)：逐页目标行为和验收要求，具体完成范围需核对实现。

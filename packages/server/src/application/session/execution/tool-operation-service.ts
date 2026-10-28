@@ -2,16 +2,24 @@ import { randomUUID } from "node:crypto";
 import type { AgentToolSafety, AgentRunScope, RunToolBinding, ToolOperationGate, ToolOperationIntent, ToolOperationKind } from "@vykor/agent-contracts";
 import { readSessionRuntimeRevision } from "@vykor/domain-contracts/sessions";
 import type { ApplicationOwnerLease, SessionStore } from "@vykor/services";
-import type { AgentRunCapabilitySnapshot } from "@vykor/agent-runtime";
+import { isTrustedReadOnlyTool, type AgentRunCapabilitySnapshot } from "@vykor/agent-runtime";
 
 export interface TrustedToolOperationDescription {
   kind: ToolOperationKind;
   businessKey?: string;
 }
+/** Host-added tools use agent provenance; private identity checks still bind the original implementation and input. */
+export function describeTrustedReadOnlyToolOperation({ binding, toolUse }: ToolOperationIntent): TrustedToolOperationDescription | undefined {
+  return binding && (binding.source?.kind === "builtin" || binding.source?.kind === "agent")
+    && isTrustedReadOnlyTool(binding.definition, binding.definitionIdentity, toolUse.input)
+    ? { kind: "read_only" } : undefined;
+}
 export interface ToolOperationServiceOptions {
   store: Pick<SessionStore, "transaction" | "assertApplicationOwner" | "sessions" | "runs" | "executions" | "toolOperations">;
   ownerLease(): ApplicationOwnerLease;
   accepting?(): boolean;
+  /** Explicit global opt-in; unknown outcomes remain recorded when this is false or absent. */
+  blockOnUnknownToolOutcome?(): boolean;
   /** Trusted host code must verify captured implementation identity before granting replay/read promises. */
   describe?(intent: ToolOperationIntent): TrustedToolOperationDescription | undefined;
 }
@@ -51,7 +59,8 @@ export class ToolOperationService implements AgentToolSafety {
       dispatch: async input => this.atomic(() => {
         this.assertVersion(input.intent.scope, input.policyVersion);
         this.assertUnblocked(input.intent, input.operation.kind);
-        return store.toolOperations.dispatch({ ...input, ownerId: this.options.ownerLease().ownerId });
+        return store.toolOperations.dispatch({ ...input, ownerId: this.options.ownerLease().ownerId,
+          blockOnUnknownToolOutcome: this.options.blockOnUnknownToolOutcome?.() === true });
       }),
       observeInvocation: ({ receipt, settled }) => {
         this.atomic(() => {
@@ -146,13 +155,15 @@ export class ToolOperationService implements AgentToolSafety {
   }
   private assertUnblocked(intent: ToolOperationIntent, kind: ToolOperationKind): void {
     if (kind === "read_only") return;
+    const blockUnknown = this.options.blockOnUnknownToolOutcome?.() === true;
+    if (!blockUnknown && this.unsettledFailures.size === 0) return;
     const rootSessionId = this.rootSessionId(intent.scope.sessionId);
     const blocked = this.options.store.toolOperations.listSafetyStates().find(row => {
       const settlementFailed = this.unsettledFailures.has(row.id);
       if (row.kind === "read_only" && !settlementFailed) return false;
       const run = row.state === "dispatching" ? this.options.store.runs.getRun(row.runId) : undefined;
-      const unresolved = settlementFailed || row.state === "unknown" || (row.state === "dispatching"
-        && (!run || (run.status !== "pending" && run.status !== "running")));
+      const unresolved = settlementFailed || (blockUnknown && (row.state === "unknown" || (row.state === "dispatching"
+        && (!run || (run.status !== "pending" && run.status !== "running")))));
       return unresolved && this.rootSessionId(row.sessionId) === rootSessionId;
     });
     if (blocked) throw new Error(`Unknown or unresolved write operation ${blocked.id} blocks dangerous dispatch in this session tree; review with GET /sessions/${encodeURIComponent(rootSessionId)}/tool-operations`);

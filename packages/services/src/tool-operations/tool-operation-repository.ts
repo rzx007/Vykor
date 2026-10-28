@@ -142,7 +142,7 @@ export class ToolOperationRepository {
     });
   }
 
-  dispatch(input: { intent: StoredToolOperationIntent; operation: ToolOperationTicket; policyVersion: string; ownerId: string }): ToolDispatchReceipt {
+  dispatch(input: { intent: StoredToolOperationIntent; operation: ToolOperationTicket; policyVersion: string; ownerId: string; blockOnUnknownToolOutcome?: boolean }): ToolDispatchReceipt {
     return this.storage.atomic(() => {
       this.storage.assertWritable();
       const row = this.current(input.operation, input.intent);
@@ -153,7 +153,7 @@ export class ToolOperationRepository {
       if (!input.ownerId.trim()) throw new Error("Tool dispatch owner is required");
       const owner = this.storage.database.orm.select().from(applicationOwners).where(eq(applicationOwners.key, "application")).get();
       if (owner && owner.ownerId !== input.ownerId) throw new Error("Tool dispatch owner is no longer active");
-      if (row.kind !== "read_only" && Object.values(this.storage.state.toolOperations).some(other => {
+      if (input.blockOnUnknownToolOutcome !== false && row.kind !== "read_only" && Object.values(this.storage.state.toolOperations).some(other => {
         if (other.sessionId !== row.sessionId || other.kind === "read_only") return false;
         if (other.state === "unknown") return true;
         const otherRun = this.storage.state.runs[other.runId];
