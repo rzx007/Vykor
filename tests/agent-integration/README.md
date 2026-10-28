@@ -22,3 +22,5 @@
 `__test__/workflow-child-lifecycle.integration.test.ts` 是阶段 C 的真实 SDK/daemon 验收，使用同一默认工厂、ChildManager、实际 handle 和临时 SQLite。覆盖每模式 3×12 顺序 worker、8 并发/第 9 个核心拒绝、取消/deadline 的真实 Read 与清理屏障、查询失败不替代、ACK 失败不重叠、重复 Workflow 取消确认原清理、旧 attempt、同 tick send/suspend、历史/cwd/授权恢复、保留活动及空闲后代、实际未决审批和动态模型目录撤销。
 
 受控模型只替换网络响应；Read 包装执行原实际 Read 后等待，继续沿用 S1 工具身份与未知写入保护。期望核心接纳拒绝在真实 JobList 运行范围内探测，不把失败的写工具当成功。没有手写 child/handle、固定成功 Promise 或 mock 默认工厂。
+
+S1 的真实 Shell 超时回归使用宿主可执行的 Node 命令，观察实际输出后再推进超时计时；临时目录清理等待进程的 close 事件，工具返回 timeout 不作为停止确认。

@@ -6,6 +6,8 @@ import type { AgentExecutionContext, Message, StreamingMessageClient, ToolDefini
 import { QueryEngine, ToolRegistry } from "@vykor/core";
 import { SessionStore } from "@vykor/services";
 import { createShellTool } from "@vykor/tools";
+import { createShellProcess, resolveHostShellLauncher } from "@vykor/sandbox";
+import { DefaultShellExecutor } from "../../../packages/tools/src/shell/executor.js";
 import { ToolOperationService } from "../../../packages/server/src/application/session/execution/tool-operation-service.js";
 
 const cleanup: Array<() => void> = [];
@@ -54,7 +56,26 @@ function fixture(options: { invoke?(): Promise<ToolResult>; timeoutMs?: number; 
 
 describe("core and daemon S1 contract through real SQLite", () => {
   it("delivers real Shell timeout output to the model, allows inspection and keeps writes blocked after new evidence", async () => {
-    const shell = createShellTool();
+    let processStopped: Promise<void> | undefined;
+    const executor = new DefaultShellExecutor({
+      createProcess: async (command, options) => {
+        const child = await createShellProcess(command, options);
+        processStopped = new Promise(resolve => { child.once("close", () => resolve()); });
+        return child;
+      },
+    });
+    const nodeCommand = `${resolveHostShellLauncher().kind === "powershell" ? "& " : ""}${JSON.stringify(process.execPath.replaceAll("\\", "/"))}`;
+    let observedOutput!: () => void;
+    const outputReady = new Promise<void>(resolve => { observedOutput = resolve; });
+    let shellOutput = "";
+    const shell = createShellTool({
+      resolve: (request, context) => executor.resolve(request, context),
+      run: (spec, signal, onOutput) => executor.run(spec, signal, text => {
+        onOutput?.(text);
+        shellOutput += text;
+        if (shellOutput.includes("partial-before-timeout")) observedOutput();
+      }),
+    });
     let inspected = 0;
     const inspect: ToolDefinition = { name: "Inspect", description: "trusted read-only diagnostic", inputSchema: { type: "object" },
       execute: async () => { inspected++; return { content: [{ type: "text", text: "observed external state" }] }; },
@@ -75,14 +96,28 @@ describe("core and daemon S1 contract through real SQLite", () => {
           ? [{ type: "tool_use" as const, id: "blocked-write", name: "ExternalWrite", input: { text: "value" } },
              { type: "tool_use" as const, id: "inspect", name: "Inspect", input: {} }]
           : turn === 1
-            ? [{ type: "tool_use" as const, id: "timeout", name: "Shell", input: { command: "printf 'partial-before-timeout\\n'; sleep 5", timeout: 100 } }]
+            ? [{ type: "tool_use" as const, id: "timeout", name: "Shell", input: { command: `${nodeCommand} -e "process.stdout.write('partial-before-timeout\\n'); setTimeout(() => {}, 10_000)"`, timeout: 100 } }]
             : [{ type: "tool_use" as const, id: "write-after-evidence", name: "ExternalWrite", input: { text: "value" } }];
         for (const toolUse of uses) yield { type: "tool_use_start", toolUse };
         yield { type: "complete", stopReason: "tool_use" };
       } },
     });
     const events = [];
-    for await (const event of f.engine.submitMessage("query and inspect", { execution: f.execution })) events.push(event);
+    // Start the real process and observe its output before advancing only the timeout clock.
+    // Host shell startup is not required to finish within the tested 100 ms budget.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const running = (async () => {
+        for await (const event of f.engine.submitMessage("query and inspect", { execution: f.execution })) events.push(event);
+      })();
+      await Promise.race([outputReady, running.then(() => { throw new Error(`Shell ended before its output was observed: ${shellOutput}`); })]);
+      await vi.advanceTimersByTimeAsync(2_100);
+      await running;
+    } finally {
+      vi.useRealTimers();
+      // A timeout result is not confirmation that the real process has stopped.
+      await processStopped;
+    }
     expect(histories).toHaveLength(4);
     const timeout = histories[1]!.find(message => message.type === "tool_result" && message.toolUseId === "timeout");
     expect(timeout).toMatchObject({ isError: true, failureKind: "timeout", executionState: "unknown" });
