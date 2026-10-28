@@ -5,7 +5,7 @@ export function createTerminalTools(host?: AgentTerminalHost): ToolDefinition[] 
   const terminalOpenTool: ToolDefinition = {
     name: "TerminalOpen",
     description:
-      "Open a visible terminal in this session's working directory. For dev servers and watchers, provide command to run the service directly: its exit then updates terminal status. Do not daemonize the command or detach its child process. Use JobRead/JobWait to inspect output, JobSend for input, and JobCancel to stop it, with the returned jobId. Without command, opens an interactive shell. Prefer Shell for short commands and BackgroundShellCreate for finite builds or installs.",
+      "Open a visible terminal in this session's working directory. For dev servers and watchers, provide command to run the service directly: its exit then updates terminal status. Do not daemonize the command or detach its child process. Use JobRead/JobWait to inspect output, JobSend for input, and JobCancel to stop it, with the returned target. Without command, opens an interactive shell. Prefer Shell for short commands and BackgroundShellCreate for finite builds or installs.",
     inputSchema: {
       type: "object",
       properties: {

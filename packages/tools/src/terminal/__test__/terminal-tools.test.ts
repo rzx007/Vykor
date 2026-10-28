@@ -95,18 +95,19 @@ describe("persistent terminal tools", () => {
 
     const opened = parseResult(await executeTerminal({}, context));
     const openedTerminal = opened.terminal as { id: string };
-    await createJobTools(context.jobs).find(tool => tool.name === "JobSend")!.execute({ jobId: openedTerminal.id, data: "hello\n" }, context);
-    await createJobTools(context.jobs).find(tool => tool.name === "JobCancel")!.execute({ jobId: openedTerminal.id, reason: "done" }, context);
+    const target = opened.target as JobSnapshot["target"];
+    await createJobTools(context.jobs).find(tool => tool.name === "JobSend")!.execute({ target, data: "hello\n" }, context);
+    await createJobTools(context.jobs).find(tool => tool.name === "JobCancel")!.execute({ target, reason: "done" }, context);
 
     expect(openedTerminal.id).toBe("terminal-1");
     expect(send).toHaveBeenCalledWith({
       sessionId: "session-1",
-      jobId: "terminal-1",
+      target: { kind: "terminal", jobId: "terminal-1" },
       data: "hello\n",
-    });
+    }, {});
     expect(cancel).toHaveBeenCalledWith({
       sessionId: "session-1",
-      jobId: "terminal-1",
+      target: { kind: "terminal", jobId: "terminal-1" },
       reason: "done",
     });
   });
@@ -114,6 +115,7 @@ describe("persistent terminal tools", () => {
 
 const terminalJob: JobSnapshot = {
   id: terminal.id,
+  target: { kind: "terminal", jobId: terminal.id },
   kind: "terminal",
   ownerSession: "session-1",
   status: "running",
@@ -140,7 +142,7 @@ function createHost(overrides: Partial<AgentTerminalHost>): AgentTerminalHost {
 
 function createJobs(overrides: Partial<AgentJobHost>): AgentJobHost {
   return {
-    list: async () => [terminalJob],
+    list: async () => ({ jobs: [terminalJob], errors: [] }),
     read: async () => ({ text: "", cursor: 0, truncated: false, snapshot: terminalJob }),
     wait: async () => ({
       text: "",

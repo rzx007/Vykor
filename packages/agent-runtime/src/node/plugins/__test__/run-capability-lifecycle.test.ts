@@ -63,7 +63,7 @@ describe("host Run capability lifecycle", () => {
       await run.result;
       expect(started).toBe(true);
       expect(requests).toBe(1);
-      expect(order).toEqual(["run.started", "register", "run.completed", "release"]);
+      expect(order).toEqual(["run.started", "register", "release", "run.completed"]);
       expect(active.size).toBe(0);
     } finally { allowRegistration.resolve(); await agent.close(); }
   });
@@ -130,22 +130,47 @@ describe("host Run capability lifecycle", () => {
       await expect(run.result).rejects.toThrow("interrupted registration");
       await expect(run.started).rejects.toThrow("interrupted registration");
       expect(requests).toBe(0);
-      expect(order).toEqual(["run.interrupted", "release"]);
+      expect(order).toEqual(["release", "run.interrupted"]);
     } finally { allowRegistration.resolve(); await agent.close(); }
   });
 
-  it("reports host release failure without forging a second terminal event", async () => {
+  it("retains an unconfirmed host release until explicit retry without forging a terminal event", async () => {
     const terminal: string[] = [];
+    const releaseEntered = deferred<void>();
     let released = 0;
+    let allowRelease = false;
     const agent = await fixture({
-      onRunCapabilities: () => async () => { released++; throw new Error("release failed"); },
-      onEvent: event => { if (["run.failed", "run.completed"].includes(event.type)) terminal.push(event.type); },
+      onRunCapabilities: () => async () => {
+        released++;
+        releaseEntered.resolve();
+        if (!allowRelease) throw new Error("release failed");
+      },
+      onEvent: event => { if (["run.failed", "run.completed", "run.interrupted"].includes(event.type)) terminal.push(event.type); },
     });
+    const run = agent.submitMessage("work");
+    let settled = false;
+    let completed = false;
+    void run.settled.then(() => { settled = true; });
+    void run.result.then(() => { completed = true; }, () => { completed = true; });
     try {
-      await expect(agent.runMessage("work")).rejects.toThrow("release failed");
-      expect(terminal).toEqual(["run.completed"]);
-      expect(released).toBe(1);
-    } finally { await agent.close(); }
+      await releaseEntered.promise;
+      await vi.waitFor(() => expect(run.cleanupUnconfirmed).toEqual({ message: "release failed" }));
+      expect(run.active).toBe(true);
+      expect(settled).toBe(false);
+      expect(completed).toBe(false);
+      expect(terminal).toEqual([]);
+      await expect(run.interrupt("confirm cleanup")).rejects.toThrow("release failed");
+      expect(released).toBe(2);
+      expect(settled).toBe(false);
+      expect(terminal).toEqual([]);
+      allowRelease = true;
+      await run.interrupt("confirm cleanup");
+      await expect(run.result).rejects.toThrow("confirm cleanup");
+      expect((await run.settled).result.status).toBe("interrupted");
+      expect(run.cleanupUnconfirmed).toBeUndefined();
+      expect(terminal).toEqual(["run.interrupted"]);
+      expect(released).toBe(3);
+    } finally { allowRelease = true; await agent.close(); }
   });
 
   it("registers through the default Node assembly without exposing the host callback as a tool", async () => {
@@ -204,7 +229,12 @@ describe("host Run capability lifecycle", () => {
       expect(grandchildSnapshot.identity?.parentRunId).toBe(childSnapshot.scope.runId);
       expect([...grandchildSnapshot.capabilityView.tools.keys()]).toEqual(["PluginP"]);
       expect(snapshots.every(snapshot => snapshot.pluginCandidates.length === 1 && snapshot.pluginCandidates[0]!.pluginId === "P")).toBe(true);
-      await vi.waitFor(() => expect(events.some(event => event.type === "child.suspended" && event.context.childId === childId)).toBe(true));
+      const childHandle = agent.children.get(childId!)!;
+      // Retained descendants require their parent's live instance, even after stopping.
+      expect(await childHandle.requestSuspend!(childSnapshot.scope.runId)).toBe(false);
+      await agent.children.get(grandchildSnapshot.identity!.childId!)!.close();
+      expect(await childHandle.requestSuspend!(childSnapshot.scope.runId)).toBe(true);
+      expect(events.some(event => event.type === "child.suspended" && event.context.childId === childId)).toBe(true);
       await childController!.sendChildInput(childId!, { content: "continue", delivery: "queue" });
       await childController!.awaitChildAgent(childId!);
       expect(snapshots).toHaveLength(4);

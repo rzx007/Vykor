@@ -196,7 +196,7 @@ const server = new VykorHttpServer({
         context,
       });
     };
-    return hostedAgentFixture({
+    const hosted = hostedAgentFixture({
       id: session.id,
       state: "idle",
       subscribe() { return () => {}; },
@@ -270,6 +270,14 @@ const server = new VykorHttpServer({
       },
       async close() {},
     });
+    hosted.host.jobs = {
+      async list() { return { jobs: [], errors: [] }; },
+      async read() { throw new Error("read is not used in this fixture"); },
+      async wait() { throw new Error("wait is not used in this fixture"); },
+      async send() { throw new Error("send is not used in this fixture"); },
+      async cancel() { throw new Error("cancel is not used in this fixture"); },
+    };
+    return hosted;
   },
 });
 
@@ -731,6 +739,7 @@ test("useServerSync hydrates daemon state and sends prompt/permission replies", 
         snapshot: {
           id: "shell_run_1",
           kind: "shell",
+          target: { kind: "shell", jobId: "shell_run_1" },
           label: "echo hi",
           ownerSession: "s1",
           status: "running",
@@ -743,10 +752,12 @@ test("useServerSync hydrates daemon state and sends prompt/permission replies", 
     }
     if (pathname === "/jobs") {
       return jsonResponse({
+        errors: [],
         jobs: [
           {
             id: "agent_job_1",
             kind: "agent",
+            target: { kind: "agent", jobId: "agent_job_1", runId: "run-1" },
             label: "demo",
             ownerSession: "s1",
             status: "running",
@@ -1496,7 +1507,7 @@ test("useServerSync reconnects the active session when daemon identity changes",
       });
     }
     if (pathname === "/sessions/s1/mcp") return jsonResponse({ servers: [] });
-    if (pathname === "/jobs") return jsonResponse({ jobs: [] });
+    if (pathname === "/jobs") return jsonResponse({ jobs: [], errors: [] });
     if (pathname === "/events/stream") {
       const signal = init?.signal;
       return new Response(
@@ -1772,6 +1783,7 @@ function workflowJobFixture(options: {
   const job = {
     id: "wf-1",
     kind: "workflow" as const,
+    target: { kind: "workflow" as const, jobId: "wf-1" },
     label: "Ship the cleanup",
     ownerSession: session.id,
     status: "running" as const,
@@ -1791,6 +1803,7 @@ function workflowJobFixture(options: {
     ...job,
     id: "agent-1",
     kind: "agent" as const,
+    target: { kind: "agent" as const, jobId: "agent-1", runId: "run-1" },
     label: "Background agent",
     capabilities: { read: true, wait: true, send: true, cancel: true },
   };
@@ -1803,12 +1816,14 @@ function workflowJobFixture(options: {
   const siblingAgentJob = {
     ...agentJob,
     id: "agent-2",
+    target: { kind: "agent" as const, jobId: "agent-2", runId: "run-2" },
     label: "Sibling agent",
   };
   const shellJob = {
     ...job,
     id: "shell-1",
     kind: "shell" as const,
+    target: { kind: "shell" as const, jobId: "shell-1" },
     label: "echo hi",
   };
   const calls: string[] = [];
@@ -1897,6 +1912,7 @@ function workflowJobFixture(options: {
       }
       const currentAgentJob = agentCancelled ? killedAgentJob : agentJob;
       return jsonResponse({
+        errors: [],
         jobs: [
           ...(options.includeWorkflowInGeneralList ? workflowJobs : []),
           currentAgentJob,
@@ -1938,10 +1954,10 @@ function workflowJobFixture(options: {
       if (options.deferSend) {
         sendSignal = init?.signal;
         return await new Promise<Response>((resolve) => {
-          releaseSend = () => resolve(jsonResponse({}));
+          releaseSend = () => resolve(jsonResponse({ sent: true }));
         });
       }
-      return jsonResponse({});
+      return jsonResponse({ sent: true });
     }
     if (requestUrl.pathname === `/sessions/${session.id}/prompts` && init?.method === "POST") {
       return jsonResponse({
@@ -2024,7 +2040,7 @@ for (const scenario of [
   {
     name: "failed /jobs cancel",
     option: "jobs-cancel" as const,
-    line: "/jobs cancel agent-1",
+    line: "/jobs cancel agent agent-1 run-1",
     expectedError: "Jobs: cancel unavailable",
   },
   {
@@ -2193,10 +2209,10 @@ test("useServerSync lists, reads, and cancels Workflow work through job_request 
     expect(requests).toContainEqual({
       path: "/jobs/wf-1/cancel",
       method: "POST",
-      body: { sessionId: "workflow-session", reason: "Stop from Jobs panel" },
+      body: { sessionId: "workflow-session", reason: "Stop from Jobs panel", target: { kind: "workflow", jobId: "wf-1" } },
     });
     expect(requests).toContainEqual({
-      path: "/jobs/wf-1?sessionId=workflow-session",
+      path: "/jobs/wf-1?sessionId=workflow-session&kind=workflow",
       method: "GET",
     });
     expect(requests.filter((request) => request.path.startsWith("/jobs?")).length).toBeGreaterThan(1);
@@ -2236,7 +2252,7 @@ test("useServerSync refreshes the selected Workflow detail together with the Job
     });
 
     const listReadsBefore = requests.filter((request) => request.path.startsWith("/jobs?")).length;
-    const detailReadsBefore = requests.filter((request) => request.path === "/jobs/wf-1?sessionId=workflow-session").length;
+    const detailReadsBefore = requests.filter((request) => request.path === "/jobs/wf-1?sessionId=workflow-session&kind=workflow").length;
     setWorkflowDetailSummary("Research changed on the producer");
     await act(async () => {
       captured?.sendRequest({ type: "job_request", job_action: "refresh" });
@@ -2245,7 +2261,7 @@ test("useServerSync refreshes the selected Workflow detail together with the Job
 
     expect(requests.filter((request) => request.path.startsWith("/jobs?")).length)
       .toBeGreaterThan(listReadsBefore);
-    expect(requests.filter((request) => request.path === "/jobs/wf-1?sessionId=workflow-session").length)
+    expect(requests.filter((request) => request.path === "/jobs/wf-1?sessionId=workflow-session&kind=workflow").length)
       .toBeGreaterThan(detailReadsBefore);
     expect(captured?.jobDetailState).toMatchObject({
       status: "ready",
@@ -2456,7 +2472,7 @@ test("useServerSync reads and cancels one Job before refreshing the list", async
       await new Promise((resolve) => setTimeout(resolve, 15));
     });
     expect(requests).toContainEqual({
-      path: "/jobs/agent-1?sessionId=workflow-session",
+      path: "/jobs/agent-1?sessionId=workflow-session&kind=agent&runId=run-1",
       method: "GET",
     });
     expect(captured?.jobDetailState).toMatchObject({
@@ -2479,7 +2495,7 @@ test("useServerSync reads and cancels one Job before refreshing the list", async
     expect(requests).toContainEqual({
       path: "/jobs/agent-1/cancel",
       method: "POST",
-      body: { sessionId: "workflow-session", reason: "TUI" },
+      body: { sessionId: "workflow-session", reason: "TUI", target: { kind: "agent", jobId: "agent-1", runId: "run-1" } },
     });
     expect(requests.filter((request) => request.path.startsWith("/jobs?")).length)
       .toBeGreaterThan(listRequestsBeforeCancel);
@@ -2638,7 +2654,7 @@ test("useServerSync preserves Job list and detail when sending input fails", asy
     expect(requests).toContainEqual({
       path: "/jobs/agent-1/input",
       method: "POST",
-      body: { sessionId: "workflow-session", data: "continue" },
+      body: { sessionId: "workflow-session", data: "continue", target: { kind: "agent", jobId: "agent-1", runId: "run-1" } },
     });
     expect(captured?.jobs).toEqual(listBeforeSend);
     expect(captured?.jobDetailState).toEqual(detailBeforeSend);
@@ -2684,7 +2700,7 @@ test("useServerSync rejects malformed, wrong-id, and wrong-session Job reads wit
         error: "Jobs: jobReadResult.text must be a string",
       },
       {
-        value: { text: "", cursor: 20, truncated: false, snapshot: { ...agentJob, id: "agent-other" } },
+        value: { text: "", cursor: 20, truncated: false, snapshot: { ...agentJob, id: "agent-other", target: { ...agentJob.target, jobId: "agent-other" } } },
         error: 'Jobs: Job snapshot id "agent-other" does not match requested Job "agent-1".',
       },
       {
@@ -2742,7 +2758,7 @@ test("useServerSync rejects missing-id, wrong-id, and wrong-owner cancel snapsho
     });
     const cachedJobs = captured?.jobs;
     const cachedDetail = captured?.jobDetailState;
-    const readsBefore = requests.filter((request) => request.path === "/jobs/agent-1?sessionId=workflow-session").length;
+    const readsBefore = requests.filter((request) => request.path === "/jobs/agent-1?sessionId=workflow-session&kind=agent&runId=run-1").length;
     const listsBefore = requests.filter((request) => request.path.startsWith("/jobs?")).length;
     const invalidSnapshots = [
       {
@@ -2750,7 +2766,7 @@ test("useServerSync rejects missing-id, wrong-id, and wrong-owner cancel snapsho
         error: "Jobs: job.id must be a string",
       },
       {
-        value: { ...agentJob, id: "agent-other" },
+        value: { ...agentJob, id: "agent-other", target: { ...agentJob.target, jobId: "agent-other" } },
         error: 'Jobs: Job snapshot id "agent-other" does not match requested Job "agent-1".',
       },
       {
@@ -2771,7 +2787,7 @@ test("useServerSync rejects missing-id, wrong-id, and wrong-owner cancel snapsho
       expect(captured?.jobs.some((job) => job.id === "agent-other" || job.ownerSession === "other-session")).toBe(false);
       expect(captured?.busy).toBe(true);
     }
-    expect(requests.filter((request) => request.path === "/jobs/agent-1?sessionId=workflow-session").length).toBe(readsBefore);
+    expect(requests.filter((request) => request.path === "/jobs/agent-1?sessionId=workflow-session&kind=agent&runId=run-1").length).toBe(readsBefore);
     expect(requests.filter((request) => request.path.startsWith("/jobs?")).length).toBe(listsBefore);
     expect(errors).toEqual(invalidSnapshots.map((invalid) => invalid.error));
   } finally {
@@ -2843,9 +2859,11 @@ test("useServerSync ignores stale Jobs responses after switching sessions", asyn
     }
     if (requestUrl.pathname === "/jobs" && requestUrl.searchParams.get("sessionId") === sessionB.id) {
       return jsonResponse({
+        errors: [],
         jobs: [{
           id: "b-agent",
           kind: "agent",
+          target: { kind: "agent", jobId: "b-agent", runId: "b-run" },
           label: "B agent",
           ownerSession: sessionB.id,
           status: "running",
@@ -2896,9 +2914,11 @@ test("useServerSync ignores stale Jobs responses after switching sessions", asyn
 
     releaseAMcp?.(jsonResponse({ servers: [{ name: "a-mcp", status: "error", toolCount: 0, resourceCount: 0 }] }));
     releaseAJobs?.(jsonResponse({
+      errors: [],
       jobs: [{
         id: "a-agent",
         kind: "agent",
+        target: { kind: "agent", jobId: "a-agent", runId: "a-run" },
         label: "A agent",
         ownerSession: sessionA.id,
         status: "running",

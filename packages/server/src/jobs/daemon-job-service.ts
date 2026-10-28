@@ -1,4 +1,5 @@
 import type { AgentJobHost } from "@vykor/jobs";
+import type { DaemonOperationGate } from "../application/control/daemon-operation-gate.js";
 import type { SessionRecord } from "@vykor/domain-contracts/sessions";
 import type { ChildActivitySnapshot } from "@vykor/agent-contracts";
 export {
@@ -19,6 +20,7 @@ export class DaemonJobService implements AgentJobHost {
   constructor(
     private readonly sessions: JobSessionQueries,
     private readonly getJobs: (sessionId: string) => AgentJobHost,
+    private readonly operationGate?: Pick<DaemonOperationGate, "enter">,
   ) {}
   list(input: Parameters<AgentJobHost["list"]>[0]) {
     return this.host(input.sessionId).list(input);
@@ -29,23 +31,24 @@ export class DaemonJobService implements AgentJobHost {
   wait(input: Parameters<AgentJobHost["wait"]>[0]) {
     return this.host(input.sessionId).wait(input);
   }
-  send(
+  async send(
     input: Parameters<AgentJobHost["send"]>[0],
     authorization?: Parameters<AgentJobHost["send"]>[1],
   ) {
-    return this.host(input.sessionId, true).send(input, authorization);
+    const session = this.sessions.getSession(input.sessionId);
+    if (!session) throw new Error(`Session not found: ${input.sessionId}`);
+    if (session.status === "closing" || session.status === "archived")
+      throw new Error("Session is not accepting new work");
+    const lease = this.operationGate?.enter({ sessionId: session.id, cwd: session.cwd });
+    try { return await this.getJobs(session.id).send(input, authorization); }
+    finally { lease?.release(); }
   }
   cancel(input: Parameters<AgentJobHost["cancel"]>[0]) {
     return this.host(input.sessionId).cancel(input);
   }
-  private host(sessionId: string, writing = false) {
+  private host(sessionId: string) {
     const session = this.sessions.getSession(sessionId);
     if (!session) throw new Error(`Session not found: ${sessionId}`);
-    if (
-      writing &&
-      (session.status === "closing" || session.status === "archived")
-    )
-      throw new Error("Session is not accepting new work");
     return this.getJobs(sessionId);
   }
 }

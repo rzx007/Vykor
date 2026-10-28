@@ -105,6 +105,15 @@ it("turns Apps off without activating legacy UI or replaying receipts and retain
   await expect(h.client().pluginApps.invoke({ ...h.request, requestId: "off" })).rejects.toMatchObject({ status: 409 });
   const submitted = await h.server().application.interactions.admitPrompt(h.session.id, { items: [{ type: "text", text: "save normally" }, { type: "capability", kind: "plugin", pluginId: h.pluginId, displayName: "App" }] });
   await h.wait(submitted.run!.id);
-  expect(h.store().conversations.listMessageParts(h.session.id).some(part => part.type === "tool" && part.output)).toBe(true);
+  expect(h.store().runs.getRun(submitted.run!.id)).toMatchObject({ status: "completed" });
+  const messageIds = new Set(h.store().conversations.listMessages(h.session.id)
+    .filter(message => message.runId === submitted.run!.id).map(message => message.id));
+  expect(h.store().conversations.listMessageParts(h.session.id)
+    .filter(part => messageIds.has(part.messageId))).toContainEqual(expect.objectContaining({
+      type: "tool", toolName: "SaveDocument", status: "completed",
+      output: expect.objectContaining({ content: expect.arrayContaining([
+        expect.objectContaining({ type: "text", text: "Saved" }),
+      ]) }),
+    }));
   expect(h.effects()).toBe(2);
 }, 30_000);

@@ -233,6 +233,12 @@ describe("generic Kernel lifecycle", () => {
               close: async () => {},
               submitMessage: (_content: any, options: any) => {
                 submitted = options;
+                const result = Promise.resolve({
+                  status: "completed" as const,
+                  output: "done",
+                  history: [],
+                  usage: { inputTokens: 0, outputTokens: 0 },
+                });
                 return {
                   id: options.ids.runId,
                   inputId: options.ids.inputId,
@@ -244,12 +250,8 @@ describe("generic Kernel lifecycle", () => {
                     inputId: options.ids.inputId,
                     runId: options.ids.runId,
                   }),
-                  result: Promise.resolve({
-                    status: "completed",
-                    output: "done",
-                    history: [],
-                    usage: { inputTokens: 0, outputTokens: 0 },
-                  }),
+                  result,
+                  settled: result.then(result => ({ result, stoppedAt: Date.now() })),
                   interrupt: async () => {},
                   steer: async () => {
                     throw new Error("closed");

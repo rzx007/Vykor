@@ -1,7 +1,8 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
+import { DaemonOperationGate } from "../../application/control/daemon-operation-gate.js";
 import { SessionStore } from "@vykor/services";
 import { createTaskArchive } from "../job-snapshots.js";
 import { DaemonJobService } from "../daemon-job-service.js";
@@ -24,4 +25,25 @@ it("reads persisted targets without opening a model and rejects unknown sessions
     expect((await service.list({ sessionId: "session" })).jobs[0]?.target).toEqual(target);
     expect(() => service.read({ sessionId: "missing", target })).toThrow(/Session not found/);
   } finally { await processes.aclose(); store.close(); rmSync(cwd, { recursive: true, force: true }); }
+});
+
+
+it("checks send admission before creating a host and releases its lease if host creation fails", async () => {
+  const gate = new DaemonOperationGate();
+  const session = { id: "session", cwd: "/workspace", status: "idle" } as any;
+  const getJobs = vi.fn(() => { throw new Error("host creation failed"); });
+  const service = new DaemonJobService({ getSession: () => session }, getJobs, gate);
+  const input = { sessionId: session.id, target: { kind: "agent" as const, jobId: "child", runId: "run" }, data: "continue" };
+  const barrier = gate.tryEnterBarrier({ kind: "global" }, () => true)!;
+  await expect(service.send(input)).rejects.toThrow(/blocked/);
+  expect(getJobs).not.toHaveBeenCalled();
+  barrier.release();
+  await expect(service.send(input)).rejects.toThrow("host creation failed");
+  const afterFailure = gate.tryEnterBarrier({ kind: "global" }, () => true);
+  expect(afterFailure).toBeDefined();
+  afterFailure!.release();
+  session.status = "archived";
+  getJobs.mockClear();
+  await expect(service.send(input)).rejects.toThrow("Session is not accepting new work");
+  expect(getJobs).not.toHaveBeenCalled();
 });

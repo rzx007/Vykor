@@ -17,7 +17,7 @@ const snapshot: JobSnapshot = {
 
 describe("Job routes", () => {
   it("requires and forwards the owner session when listing", async () => {
-    const list = vi.fn(async () => [{ ...snapshot, status: "failed" as const, exitCode: 7 }]);
+    const list = vi.fn(async () => ({ jobs: [{ ...snapshot, status: "failed" as const, exitCode: 7 }], errors: [] }));
     const app = createJobRoutes({ list } as any);
 
     const response = await app.request(
@@ -33,7 +33,7 @@ describe("Job routes", () => {
       startedAfter: 10,
       limit: 5,
     });
-    await expect(response.json()).resolves.toMatchObject({ jobs: [{ id: "terminal-1", exitCode: 7 }] });
+    await expect(response.json()).resolves.toMatchObject({ jobs: [{ id: "terminal-1", exitCode: 7 }], errors: [] });
   });
 
   it("rejects unsupported list filters", async () => {
@@ -51,13 +51,13 @@ describe("Job routes", () => {
     const response = await app.request("/terminal-1/wait", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ sessionId: "session-1", timeoutMs: 250, after: 1 }),
+      body: JSON.stringify({ sessionId: "session-1", target: { kind: "terminal", jobId: "terminal-1" }, timeoutMs: 250, after: 1 }),
     });
 
     expect(response.status).toBe(200);
     expect(wait).toHaveBeenCalledWith({
       sessionId: "session-1",
-      jobId: "terminal-1",
+      target: { kind: "terminal", jobId: "terminal-1" },
       timeoutMs: 250,
       after: 1,
       maxChars: undefined,

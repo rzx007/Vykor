@@ -4,9 +4,6 @@ import { join } from "node:path";
 
 import type { ProjectRecord } from "@vykor/domain-contracts/sessions";
 import { SessionStore } from "@vykor/services";
-import {
-  ExecutionRuntimeOwner,
-} from "@vykor/execution-node";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -44,45 +41,43 @@ describe("ProjectApplicationService", () => {
     const store = new SessionStore({ path: join(directory, "store.db") });
     const project = store.projects.inspect(directory);
     store.sessions.create({ id: "s1", cwd: directory, projectId: project.id, model: "test" });
-    const executionOwner = new ExecutionRuntimeOwner();
-    const application = new DaemonApplication({ executionOwner, store, settings: { model: "test", sandbox: { enabled: false }, memory: { enabled: false } } as any, log: () => {} });
-    const manager = executionOwner.getDetachedProcessSupervisor({ cwd: directory, sessionId: "s1" });
+    const application = new DaemonApplication({ store, settings: { model: "test", sandbox: { enabled: false }, memory: { enabled: false } } as any, log: () => {} });
     let finishClose!: () => void;
     const closing = new Promise<void>(resolve => { finishClose = resolve; });
     let rebinding: Promise<any> | undefined;
     try {
       await (application as any).startupRecovery;
       if (kind === "agent") {
-        await manager.startShellExecution({ id: "agent", type: "agent", cwd: directory, description: "agent", argv: [process.execPath, "-e", "process.stdin.once('data', d => {process.stdout.write(d);process.exit(0)})"] });
-        await manager.writeInput("agent", "first");
-        await manager.awaitExecution("agent", { timeoutMs: 10000 });
-        store.createSessionTask({ id: "agent", sessionId: "s1", cwd: directory, type: "agent", description: "agent", metadata: { executionBackend: "detached_process" } });
-        store.updateSessionTask("agent", { status: "completed", output: "first" });
+        // Only the host admission boundary is controlled; no retired process-backed Agent.
+        const send = vi.fn(async () => { throw new Error("unexpected admission"); });
+        vi.spyOn((application as any).agentPool, "peekHost").mockReturnValue({
+          jobs: { send }, plugins: { createRunCapabilityView: () => ({ tools: new Map() }) },
+        });
       }
       const close = vi.spyOn((application as any).agentPool, "close").mockImplementation(() => closing);
       rebinding = application.projects.rebind(project.id, tmpdir());
       await vi.waitFor(() => expect(close).toHaveBeenCalledWith("s1"));
       const admitted = kind === "shell"
         ? application.backgroundShells.create({ requestId: "during-rebind", sessionId: "s1", command: "echo blocked" })
-        : application.jobs.send({ sessionId: "s1", jobId: "agent", data: "continue" });
+        : application.jobs.send({ sessionId: "s1", target: { kind: "agent", jobId: "agent", runId: "run-1" }, data: "continue" });
       await expect(admitted).rejects.toMatchObject({ status: 409 });
       const http = kind === "shell"
         ? createBackgroundShellRoutes({ backgroundShells: application.backgroundShells, jobs: application.jobs })
         : createJobRoutes(application.jobs);
       const response = await http.request(kind === "shell" ? "/" : "/agent/input", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify(kind === "shell" ? { sessionId: "s1", command: "echo blocked" } : { sessionId: "s1", data: "continue" }),
+        body: JSON.stringify(kind === "shell" ? { sessionId: "s1", command: "echo blocked" } : { sessionId: "s1", target: { kind: "agent", jobId: "agent", runId: "run-1" }, data: "continue" }),
       });
       expect(response.status).toBe(409);
       expect(store.sessions.get("s1")?.cwd).toBe(directory);
       if (kind === "shell") expect(store.listSessionTasks("s1")).toEqual([]);
-      else expect(store.getSessionTask("agent")?.status).toBe("completed");
+
       finishClose();
       await rebinding;
       expect(store.sessions.get("s1")?.cwd).toBe(tmpdir());
       close.mockRestore();
     } finally {
-      finishClose(); await rebinding?.catch(() => {}); await manager.aclose(); await application.close(); store.close(); rmSync(directory, { recursive: true, force: true });
+      finishClose(); await rebinding?.catch(() => {}); await application.close(); store.close(); rmSync(directory, { recursive: true, force: true }); vi.restoreAllMocks();
     }
   });
 
@@ -94,6 +89,7 @@ describe("ProjectApplicationService", () => {
     const application = new DaemonApplication({ store, settings: { model: "test", sandbox: { enabled: false }, memory: { enabled: false } } as any, log: () => {} });
     let rejectAdmission!: (error: Error) => void;
     const pending = new Promise<never>((_resolve, reject) => { rejectAdmission = reject; });
+    void pending.catch(() => {});
     let admitted: Promise<any> | undefined;
     try {
       await (application as any).startupRecovery;
@@ -103,10 +99,14 @@ describe("ProjectApplicationService", () => {
         await vi.waitFor(() => expect(store.listSessionTasks("s1")).toHaveLength(1));
         store.transitionPendingSessionTask(store.listSessionTasks("s1")[0]!.id, { status: "stopped" });
       } else {
-        store.createSessionTask({ id: "agent", sessionId: "s1", cwd: directory, type: "agent", description: "agent", metadata: { executionBackend: "detached_process" } });
-        store.updateSessionTask("agent", { status: "completed" });
-        vi.spyOn(application.terminals, "list").mockImplementation(() => pending);
-        admitted = application.jobs.send({ sessionId: "s1", jobId: "agent", data: "continue" }).catch(error => error);
+        const send = vi.fn(() => pending);
+        vi.spyOn((application as any).agentPool, "peekHost").mockReturnValue({
+          jobs: { send }, plugins: { createRunCapabilityView: () => ({ tools: new Map() }) },
+        });
+        admitted = application.jobs.send({ sessionId: "s1", target: { kind: "agent", jobId: "agent", runId: "run-1" }, data: "continue" }).catch(error => error);
+        await vi.waitFor(() => expect(send).toHaveBeenCalledWith(
+          expect.objectContaining({ target: { kind: "agent", jobId: "agent", runId: "run-1" } }), expect.anything(),
+        ));
       }
       await expect(application.projects.rebind(project.id, tmpdir())).rejects.toMatchObject({ status: 409 });
       expect(store.sessions.get("s1")?.cwd).toBe(directory);

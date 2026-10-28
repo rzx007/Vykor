@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { vi } from "vitest";
 import * as runtime from "@vykor/agent-runtime";
 import { CURRENT_PROTOCOL_VERSION, type ApprovalReviewInput, type PluginAppToolRequest } from "@vykor/protocol";
+import { updateSettings } from "@vykor/host-config";
 import { SessionStore } from "@vykor/services";
 import { VykorClient } from "../../client/src/index.js";
 import { VykorHttpServer } from "../src/http/server.js";
@@ -29,6 +30,8 @@ export async function pluginAppHarness(kind: "native-tools" | "mcp-server", mode
     id: "fixture", displayName: "Fixture", apiFormat: "openai" as const, baseUrl: "http://127.0.0.1:1/v1",
     models: [{ id: "never", displayName: "Injected test model" }],
   }] } };
+  // Settings PATCH reloads durable configuration; keep the fixture provider available after reload.
+  await updateSettings(() => settingsRef.current, { includeEnvironment: false });
   const boot = () => new VykorHttpServer({ store, settings: settingsRef.current, token: "app-token",
     logger: () => {}, getSettings: () => settingsRef.current,
     services: { plugin: createDefaultPluginService(settingsRef), settings: createDefaultSettingsService(settingsRef) },

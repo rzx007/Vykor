@@ -6,6 +6,7 @@ import { expect, it, vi } from "vitest";
 
 const snapshot: JobSnapshot = {
   id: "terminal-1",
+  target: { kind: "terminal", jobId: "terminal-1" },
   kind: "terminal",
   label: "dev server",
   ownerSession: "session-1",
@@ -69,7 +70,7 @@ it("returns a running snapshot before the engine deadline without cancelling the
 
 function context(overrides: Partial<AgentJobHost>) {
   const jobs: AgentJobHost = {
-    list: async () => [],
+    list: async () => ({ jobs: [], errors: [] }),
     read: async () => ({ text: "", cursor: 0, truncated: false, snapshot }),
     wait: async () => ({ text: "", cursor: 0, truncated: false, snapshot, timedOut: false }),
     send: async () => undefined,

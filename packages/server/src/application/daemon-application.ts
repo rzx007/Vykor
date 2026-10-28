@@ -480,7 +480,7 @@ export class DaemonApplication implements DurableAgentApplication {
         });
         const forward = async <T>(work: () => Promise<T>) => { try { return await work(); } finally { await terminal.cleanup(); } };
         return { list: input => forward(() => bindings.jobs.list(input)), read: input => forward(() => bindings.jobs.read(input)), wait: input => forward(() => bindings.jobs.wait(input)), send: (input, authorization) => forward(() => bindings.jobs.send(input, authorization)), cancel: input => forward(() => bindings.jobs.cancel(input)) } satisfies AgentJobHost;
-      });
+      }, jobOperationGate);
 
       const attachmentAuthorizationSessions = createAttachmentAuthorizationSessionResolver({
         store: { getSession: (id) => store.sessions.get(id) },

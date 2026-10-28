@@ -38,7 +38,7 @@ describe("background shell routes", () => {
       command: "pnpm test",
       description: undefined,
     });
-    expect(read).toHaveBeenCalledWith({ sessionId: "s1", jobId: "task-1" });
+    expect(read).toHaveBeenCalledWith({ sessionId: "s1", target: { kind: "shell", jobId: "task-1" } });
     await expect(response.json()).resolves.toMatchObject({
       jobId: "task-1",
       snapshot: { id: "task-1", kind: "shell", status: "running" },

@@ -2,6 +2,7 @@ import { NodeRuntimeResources as RuntimeBundle } from "../../runtime/node-runtim
 import { describe, expect, it } from "vitest";
 import { ToolRegistry } from "@vykor/core";
 import { createAssembledAgent } from "../../agent/agent.js";
+import { disabledCapability } from "../../capabilities/capability-resolution.js";
 import { AgentEventBus } from "../../../kernel/event-source.js";
 
 function fixture(withCatalog = true) {
@@ -13,7 +14,11 @@ function fixture(withCatalog = true) {
   const pluginSelection = { candidates: [candidate], validate: async (item: typeof candidate) => { validated.push(item.pluginId); } };
   const agent = createAssembledAgent({ runtime, ...(withCatalog ? { pluginSelection } : {}),
     session: { id: "s1", getHistory: () => [] } as any, mcpConnections: () => [], eventBus: new AgentEventBus(), effects: {} as any,
-    childManager: {} as any, childDirectory: {} as any, capabilities: {} as any, model: "test" });
+    childManager: {} as any, childDirectory: {} as any, capabilities: {
+      terminal: disabledCapability(), backgroundShell: disabledCapability(), jobs: disabledCapability(),
+      memory: disabledCapability(), childEnvironment: disabledCapability(),
+      workflowRepository: disabledCapability(), schedules: disabledCapability(),
+    }, model: "test" });
   return { agent, candidate, pluginSelection, validated, signal: new AbortController().signal, get modelCalls() { return modelCalls; } };
 }
 
