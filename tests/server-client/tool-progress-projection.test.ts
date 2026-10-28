@@ -38,7 +38,7 @@ async function harness() {
   } });
   const start = (id = "call") => emit({ type: "tool.started", data: { toolUse: { type: "tool_use", id, name: "Write", input: { file_path: "a.ts", content: "body" } } } });
   const lifecycle = (phase: string, overrides: Record<string, unknown> = {}) => emit({ type: "domain.event", data: {
-    name: "tool.lifecycle", payload: { toolUseId: "call", toolAttemptId: "tool_attempt_call_1", phase, ...overrides },
+    name: "tool.lifecycle", payload: { generationId: "gen", toolUseId: "call", toolAttemptId: "tool_attempt_call_1", phase, ...overrides },
   } });
   return { store, session, emit, progress, start, lifecycle, published,
     run: () => store.runs.getRun("run")!, part: () => store.conversations.listMessageParts(session.id).find(p => p.toolUseId === "call")!,
@@ -177,11 +177,13 @@ describe("tool progress projection", () => {
     expect(h.run().metadata.toolGeneration).toEqual([]);
   });
 
-  it("binds lifecycle to a committed call and attempt, replaces its fields, and cannot revive returned or terminal tools", async () => {
+  it("binds lifecycle to a committed call, generation and attempt, replaces its fields, and cannot revive returned or terminal tools", async () => {
     const h = await harness();
     await h.lifecycle("running");
     expect(h.part()).toBeUndefined();
     await h.start();
+    await h.lifecycle("running", { generationId: "old" });
+    expect(h.part().metadata.toolProgress).toEqual({ phase: "preparing", executionState: "not_started" });
     await h.lifecycle("waiting_permission", { executionState: "not_started" });
     expect(h.part().metadata.toolProgress).toEqual({ phase: "waiting_permission", executionState: "not_started" });
     await h.lifecycle("running", { toolAttemptId: "other" });
@@ -202,6 +204,7 @@ describe("tool progress projection", () => {
     const h = await harness();
     await h.start();
     await h.lifecycle(phase, phase === "completed" ? { executionState: "completed" } : {});
+    expect(h.part().metadata.toolProgress).toMatchObject({ phase });
     h.store.conversationTransactions.interruptActiveRuns("restart");
     const knownNotStarted = ["preparing", "waiting_permission", "queued"].includes(phase);
     expect(h.part().metadata.executionState).toBe(knownNotStarted ? "not_started" : phase === "completed" ? "completed" : "unknown");
@@ -234,6 +237,7 @@ describe("tool progress projection", () => {
     const h = await harness();
     await h.start();
     await h.lifecycle("running", { executionState: "not_started" });
+    expect(h.part().metadata.toolProgress).toEqual({ phase: "running", executionState: "not_started" });
     h.store.conversationTransactions.interruptActiveRuns("restart");
     expect(h.part().metadata.executionState).toBe("unknown");
   });

@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events"
 import { expect, it, vi } from "vitest"
-import { VykorApiError, VykorClient, type PluginAppResponse } from "@rzx/client"
+import { VykorApiError, VykorClient, CURRENT_PROTOCOL_VERSION, type PluginAppResponse } from "@rzx/client"
 import { DesktopPluginAppService } from "./plugin-app-service"
 import { PluginAppDocumentStore } from "./document-store"
 const source = { sessionId: "session", appId: "app" }
@@ -14,7 +14,7 @@ function fixture() {
   const client = new VykorClient({ baseUrl: "http://localhost", fetch: async (url, options) => {
     const path = new URL(String(url)).pathname
     let body: unknown = state
-    if (path === "/capabilities") body = { serverVersion: "test", protocol: { version: 6 }, features: { pluginApps: 1 } }
+    if (path === "/capabilities") body = { serverVersion: "test", protocol: { version: CURRENT_PROTOCOL_VERSION }, features: { pluginApps: 1 } }
     else if (path.endsWith("/resources/read")) body = { contents: [{ uri: state.app.resourceUri, mimeType: "text/html;profile=mcp-app", text: "<input>" }] }
     else if (path.endsWith("/actions")) {
       const request = JSON.parse(String(options?.body)); requests.push(request)

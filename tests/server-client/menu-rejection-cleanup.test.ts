@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { SessionStore } from "@vykor/services";
-import { VykorClient } from "@rzx/client";
+import { VykorClient, CURRENT_PROTOCOL_VERSION } from "@rzx/client";
 import { SessionPluginAppService } from "../../packages/server/src/application/session/plugins/session-plugin-app-service.js";
 import { DesktopPluginAppService } from "../../apps/desktop/src/main/features/plugin-apps/plugin-app-service.js";
 import { PluginAppDocumentStore } from "../../apps/desktop/src/main/features/plugin-apps/document-store.js";
@@ -29,7 +29,7 @@ function fixture() {
     const body = options?.body ? JSON.parse(String(options.body)) : {};
     let result: unknown;
     try {
-      if (path === "/capabilities") result = { serverVersion: "fixture", protocol: { version: 6 }, features: { pluginApps: 1 } };
+      if (path === "/capabilities") result = { serverVersion: "fixture", protocol: { version: CURRENT_PROTOCOL_VERSION }, features: { pluginApps: 1 } };
       else if (path.endsWith("/open")) result = await server.open("s", body);
       else {
         const source = { sessionId: "s", appId: path.split("/")[4]! };

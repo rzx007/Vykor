@@ -11,6 +11,7 @@ import { testRender } from "@opentui/react/test-utils";
 import { useServerSync } from "./useServerSync";
 import type { TuiSessionController } from "./sessionController";
 import type { SessionEventRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRecord } from "@rzx/client";
+import { CURRENT_PROTOCOL_VERSION } from "@rzx/client";
 
 const originalFetch = globalThis.fetch;
 
@@ -25,7 +26,7 @@ function jsonResponse(body: unknown): Response {
 function capabilitiesResponse(): Response {
   return jsonResponse({
     serverVersion: "test",
-    protocol: { version: 6 },
+    protocol: { version: CURRENT_PROTOCOL_VERSION },
     features: {},
   });
 }

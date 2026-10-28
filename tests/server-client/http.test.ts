@@ -11,7 +11,7 @@ import { join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { ModelCatalogService } from "@vykor/api";
-import { VykorClient } from "../../packages/client/src/index.js";
+import { VykorClient, CURRENT_PROTOCOL_VERSION } from "../../packages/client/src/index.js";
 
 import {
   createWorkflowPlan,
@@ -54,7 +54,7 @@ const serverTestConfigDir = mkdtempSync(join(tmpdir(), "oh-server-config-"));
 // HTTP fixtures represent current clients; version rejection has dedicated middleware tests.
 const fetch: typeof globalThis.fetch = (input, init) => {
   const headers = new Headers(init?.headers);
-  headers.set("x-vykor-protocol-version", "6");
+  headers.set("x-vykor-protocol-version", String(CURRENT_PROTOCOL_VERSION));
   return globalThis.fetch(input, { ...init, headers });
 };
 let previousConfigDir: string | undefined;
@@ -707,7 +707,7 @@ describe("VykorHttpServer", () => {
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toMatchObject({
       serverVersion: "0.4.0",
-      protocol: { version: 6 },
+      protocol: { version: CURRENT_PROTOCOL_VERSION },
       features: { jobs: 3, workflow: 2, pluginCapabilities: 1 },
     });
     await server.close();

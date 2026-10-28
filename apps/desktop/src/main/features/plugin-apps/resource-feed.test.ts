@@ -1,12 +1,12 @@
 import { expect, it, vi } from "vitest"
-import { VykorClient } from "@rzx/client"
+import { VykorClient, CURRENT_PROTOCOL_VERSION } from "@rzx/client"
 import { WindowResourceFeed } from "./resource-feed"
 import type { AppMountBinding } from "./plugin-app-service"
 
 it("shares one window stream, filters exact notices, and replaces old leases and clients", async () => {
   const streams: Array<{ signal: AbortSignal; watches: Array<{ leaseGeneration: number }>; emit(value: unknown): void }> = []
   const makeClient = () => new VykorClient({ baseUrl: "http://localhost", token: "secret", fetch: async (url, init) => {
-    if (new URL(String(url)).pathname === "/capabilities") return Response.json({ serverVersion: "test", protocol: { version: 6 }, features: { pluginApps: 1 } })
+    if (new URL(String(url)).pathname === "/capabilities") return Response.json({ serverVersion: "test", protocol: { version: CURRENT_PROTOCOL_VERSION }, features: { pluginApps: 1 } })
     expect(new Headers(init?.headers).get("authorization")).toBe("Bearer secret")
     return new Response(new ReadableStream({ start(controller) {
       streams.push({ signal: init!.signal!, watches: JSON.parse(String(init?.body)).watches,

@@ -8,13 +8,14 @@ import { describe, expect, it } from "vitest";
 import type { VykorAgent } from "@vykor/agent-runtime";
 import type { AgentEvent, AgentEventContext, AgentEventInput, AgentRunHandle, AgentRunResult } from "@vykor/agent-contracts";
 import type { Message } from "@vykor/agent-contracts";
+import { CURRENT_PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER } from "@vykor/protocol";
 
 import type { CreateDaemonAgent } from "../daemon-agent.js";
 import { VykorHttpServer } from "../../http/server.js";
 
 const fetch: typeof globalThis.fetch = (input, init) => {
   const headers = new Headers(init?.headers);
-  headers.set("x-vykor-protocol-version", "6");
+  headers.set(PROTOCOL_VERSION_HEADER, String(CURRENT_PROTOCOL_VERSION));
   return globalThis.fetch(input, { ...init, headers });
 };
 

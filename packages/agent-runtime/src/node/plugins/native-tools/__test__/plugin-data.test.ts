@@ -32,13 +32,16 @@ describe("plugin data and current-Run result access", () => {
           expect(output.previous).toEqual(version === "1.0.0" ? null : { toolUseId: "read", toolName: "PlainRead", content: [{ type: "text", text: "Actual original content" }] });
           expect(output.saved.content).toEqual([{ type: "text", text: "Actual original content" }]);
           expect(JSON.parse(readFileSync(join(output.dataDir, "last.json"), "utf8")).content).toEqual(output.saved.content);
+          const savedData = readFileSync(join(output.dataDir, "last.json"), "utf8");
           if (version === "1.0.0") paths.push(output.dataDir);
           for (let n = 0; n < 17; n++) await engine.executeTool({ type: "tool_use", id: "next-" + n, name: "PlainRead", input: {} }, { execution });
           const evicted = await engine.executeTool({ type: "tool_use", id: "evicted", name: "SaveActual", input: { tool_result_id: "read" } }, { execution });
-          expect(evicted).toMatchObject({ isError: true, executionState: "not_started", failureKind: "precondition" });
+          expect(evicted).toMatchObject({ isError: true, executionState: "unknown", failureKind: "precondition" });
+          expect(readFileSync(join(output.dataDir, "last.json"), "utf8")).toBe(savedData);
           const stale = await engine.executeTool({ type: "tool_use", id: "stale", name: "SaveActual", input: { tool_result_id: "next-16" } },
             { execution: { ...execution as object, scope: { runId: "another-run", signal: new AbortController().signal } } as never });
-          expect(stale).toMatchObject({ isError: true, executionState: "not_started" });
+          expect(stale).toMatchObject({ isError: true, executionState: "unknown", failureKind: "precondition" });
+          expect(readFileSync(join(output.dataDir, "last.json"), "utf8")).toBe(savedData);
         } finally { for (const cleanup of cleanups.reverse()) await cleanup(); }
       }
       expect(paths[0]).not.toBe(paths[1]);

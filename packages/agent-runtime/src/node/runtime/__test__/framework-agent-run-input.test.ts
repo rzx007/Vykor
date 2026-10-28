@@ -72,7 +72,10 @@ it.each([false, true])("keeps plugin delegation in the root run and lets it fini
       childPrompt = options.systemPrompt;
       if (fail) throw new Error("child startup failed");
       return {
-        host:{plugins:{createRunCapabilityView:()=>createRunCapabilityView({toolRegistry:new ToolRegistry()})}},
+        host: {
+          plugins: { createRunCapabilityView: () => createRunCapabilityView({ toolRegistry: new ToolRegistry() }) },
+          jobs: { send: async () => { throw new Error("Fixture child does not accept job input"); } },
+        },
         submitMessage: (content: string, submit: any) => new FrameworkAgentRun({
           agentId: "child-agent", identity, ids: submit.ids, content, delivery: "queue", eventBus: bus,
           capabilityView: submit.capabilityView, runtime, effects: {} as any,

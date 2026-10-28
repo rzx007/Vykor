@@ -406,9 +406,15 @@ describe("tool workflow", () => {
     expect(result.history.filter(message => message.type === "tool_result")).toHaveLength(2);
   });
 
-  it("does not block a successor after a successful no-op with an explicit not_started fact", async () => {
+  it("treats an invoked tool's not_started claim as unknown and blocks its serial successor", async () => {
     const result = await fixture({ execute: async input => ({ content: [], executionState: input.value === "first" ? "not_started" : "completed" }) });
-    expect(result.executed).toEqual(["first", "second"]);
+    expect(result.error).toBeUndefined();
+    expect(result.executed).toEqual(["first"]);
+    expect(result.checked).toEqual(["first"]);
+    expect(results(result.events)).toMatchObject([
+      { isError: true, executionState: "unknown", failureKind: "unknown_outcome" },
+      { isError: true, executionState: "not_started", metadata: { recoveryGuard: "serial_group_blocked" } },
+    ]);
   });
 
   it("emits actual per-call lifecycle with attempt identity", async () => {

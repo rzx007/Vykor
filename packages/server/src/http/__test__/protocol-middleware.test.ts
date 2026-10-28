@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { describe, expect, it, vi } from "vitest";
 import { protocolMiddleware } from "../protocol-middleware.js";
+import { CURRENT_PROTOCOL_VERSION } from "@vykor/protocol";
 
 describe("protocol middleware", () => {
-  it.each([undefined, "3", "5", "7", "bad", "4.0", "04", "4e0"])(
+  it.each([undefined, "3", "5", String(CURRENT_PROTOCOL_VERSION + 1), "bad", "4.0", "04", "4e0"])(
     "rejects %s before authentication, database writes or process startup",
     async (version) => {
       const auth = vi.fn();
@@ -19,8 +20,8 @@ describe("protocol middleware", () => {
       expect(response.status).toBe(426);
       expect(await response.json()).toEqual({
         error: "protocol_version_mismatch",
-        expected: 6,
-        received: version === undefined ? null : ["3", "5", "7", "04"].includes(version) ? Number(version) : version,
+        expected: CURRENT_PROTOCOL_VERSION,
+        received: version === undefined ? null : ["3", "5", String(CURRENT_PROTOCOL_VERSION + 1), "04"].includes(version) ? Number(version) : version,
       });
       expect(auth).not.toHaveBeenCalled();
       expect(write).not.toHaveBeenCalled();
@@ -38,7 +39,7 @@ describe("protocol middleware", () => {
       expect((await app.request(path)).status).toBe(200);
     }
     expect((await app.request("/sessions", {
-      headers: { "x-vykor-protocol-version": "6" },
+      headers: { "x-vykor-protocol-version": String(CURRENT_PROTOCOL_VERSION) },
     })).status).toBe(200);
     expect(handler).toHaveBeenCalledTimes(3);
     expect((await app.request("/health/extra")).status).toBe(426);

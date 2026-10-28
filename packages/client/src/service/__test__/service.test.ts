@@ -67,7 +67,7 @@ describe("local service management", () => {
   it("starts once for concurrent callers, reuses the endpoint, and stops that instance", async () => {
     const record = join(directory, "starts.txt");
     const options = {
-      file, command: [process.execPath, fixture, file],
+      file, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION)],
       env: { START_RECORD: record }, timeoutMs: 5_000,
     };
     const [left, right] = await Promise.all([Service.ensure(options), Service.ensure(options)]);
@@ -82,7 +82,7 @@ describe("local service management", () => {
 
   it("does not replace or terminate an incompatible registered process", async () => {
     const registry = await start("1.2.3", "999");
-    await expect(Service.ensure({ file, command: [process.execPath, fixture, file] })).rejects.toThrow(/incompatible|unhealthy/i);
+    await expect(Service.ensure({ file, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION)] })).rejects.toThrow(/incompatible|unhealthy/i);
     expect(process.kill(registry.pid, 0)).toBe(true);
     expect(JSON.parse(await readFile(file, "utf8")).pid).toBe(registry.pid);
   });
@@ -109,7 +109,7 @@ describe("local service management", () => {
   it("honors cancellation without starting a process", async () => {
     const controller = new AbortController();
     controller.abort();
-    await expect(Service.ensure({ file, signal: controller.signal, command: [process.execPath, fixture, file] })).rejects.toMatchObject({ name: "AbortError" });
+    await expect(Service.ensure({ file, signal: controller.signal, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION)] })).rejects.toMatchObject({ name: "AbortError" });
     expect(await Service.discover({ file })).toBeUndefined();
   });
 
@@ -119,7 +119,7 @@ describe("local service management", () => {
     await mkdir(cliDirectory, { recursive: true });
     await writeFile(join(directory, "package.json"), '{"private":true}');
     await writeFile(join(cliDirectory, "package.json"), JSON.stringify({ name: "@rzx/ohs", bin: { vk: "cli.mjs" } }));
-    await writeFile(join(cliDirectory, "cli.mjs"), `process.argv.splice(2, process.argv.length - 2, process.env.FIXTURE_REGISTRY); await import(${JSON.stringify(new URL("./service-fixture.mjs", import.meta.url).href)});`);
+    await writeFile(join(cliDirectory, "cli.mjs"), `process.argv.splice(2, process.argv.length - 2, process.env.FIXTURE_REGISTRY, "1.2.3", ${JSON.stringify(String(CURRENT_PROTOCOL_VERSION))}); await import(${JSON.stringify(new URL("./service-fixture.mjs", import.meta.url).href)});`);
     const endpoint = await Service.ensure({ cwd: directory, env: { VYKOR_DATA_DIR: directory, FIXTURE_REGISTRY: file }, timeoutMs: 5_000 });
     endpoints.push(endpoint);
     expect(endpoint.file).toBe(file);
