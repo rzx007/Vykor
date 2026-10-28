@@ -263,12 +263,16 @@ describe("tool execution feedback", () => {
       const result = events.find((event) => event.type === "tool_use_end").result;
       const started = ["throw", "timeout", "error", "success"].includes(scenario);
       expect(executions).toBe(started ? 1 : 0);
-      expect(result.executionState).toBe(scenario === "success" ? "completed" : started ? "unknown" : "not_started");
+      expect(result.executionState).toBe(scenario === "success" || scenario === "error" ? "completed" : started ? "unknown" : "not_started");
       if (scenario !== "success") {
-        expect(result.failureKind).toBe(({ deny: "permission", ask: "permission", hook: "policy", invalid: "invalid_input", missing: "invalid_input", throw: "unknown_outcome", timeout: "timeout", error: "unknown_outcome" } as any)[scenario]);
-        expect(result.content[0].text).toContain(`execution=${result.executionState}`);
+        expect(result.failureKind).toBe(({ deny: "permission", ask: "permission", hook: "policy", invalid: "invalid_input", missing: "invalid_input", throw: "unknown_outcome", timeout: "timeout" } as any)[scenario]);
+        if (scenario === "error") {
+          expect(result.isError).toBe(true);
+          expect(result.content).toContainEqual({ type: "text", text: "result" });
+        }
         expect(result.recoveryHint).toBeTruthy();
         const feedback = requests[1].find((message: any) => message.type === "tool_result");
+        expect(feedback.content[0].text).toContain(`execution=${result.executionState}`);
         expect(feedback.content.map((block: any) => block.text).join("\n")).toContain(result.recoveryHint);
       }
     },
@@ -298,13 +302,13 @@ describe("tool execution feedback", () => {
       for await (const event of engine.submitMessage("work")) events.push(event);
       const results = events.filter((event) => event.type === "tool_use_end").map((event) => event.result);
       expect(executions).toBe(1);
-      expect(results[0]).toMatchObject({ toolUseId: "call-1", toolName: "Work", toolAttemptId: "tool_attempt_call-1_1", executionState: "unknown", metadata: { custom: "retained" } });
+      expect(results[0]).toMatchObject({ toolUseId: "call-1", toolName: "Work", toolAttemptId: "tool_attempt_call-1_1", executionState: "completed", metadata: { custom: "retained" } });
       for (const key of ["recoveryGuard", "modelGeneration", "committed", "superseded", "toolCallId", "toolAttemptId", "outcome", "compactSummary", "toolFeedbackVersion"]) expect(results[0].metadata).not.toHaveProperty(key);
       expect(results[0].compactSummary).not.toContain("authorized");
       expect(results[0].content.some((block: any) => block.text?.length > 1000)).toBe(true);
       expect(results[1]).toMatchObject({ executionState: "not_started", metadata: { recoveryGuard: "repeated_failed_call" } });
       const modelResult = requests[1].find((message: any) => message.type === "tool_result");
-      expect(modelResult.content[0].text).toBe("[tool-result kind=unknown_outcome execution=unknown]");
+      expect(modelResult.content[0].text).toBe("[tool-result kind=unknown_outcome execution=completed]");
       expect(modelResult.content).toContainEqual(image);
       expect(JSON.stringify(modelResult.content).length).toBeLessThan(500);
       engine.loadMessages([{ type: "assistant", content: "", toolUses: [{ type: "tool_use", id: "call-1", name: "Work", input: {} }] }, { type: "tool_result", toolUseId: "call-1", isError: true, content: results[0].content }]);

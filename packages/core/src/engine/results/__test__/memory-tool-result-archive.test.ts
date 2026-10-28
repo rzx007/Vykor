@@ -7,7 +7,7 @@ const scope = (sessionId = "session", runId = "run", controller = new AbortContr
 const invoke = async () => ({ content: [] });
 const binding: RunToolBinding = { definition: { name: "Read", description: "read", inputSchema: {}, execute: invoke }, invoke, source: { kind: "plugin", id: "selected" } };
 const tools = () => new Map([["Read", binding]]);
-const result = (text: string, toolUseId = "call"): ToolExecutionResult => ({ toolUseId, toolName: "Read", content: [{ type: "text", text }] });
+const result = (text: string, toolUseId = "call"): ToolExecutionResult => ({ toolUseId, toolName: "Read", executionState: "completed", content: [{ type: "text", text }] });
 
 describe("bounded memory tool result archive", () => {
   it("preserves long tails, paginates without gaps and lists historical references in a later Run", async () => {
@@ -44,7 +44,7 @@ describe("bounded memory tool result archive", () => {
     const run = archive.forRun(scope(), tools()), old = await run.retain(result("old"));
     await expect(run.retain(result("x".repeat(101), "too-big"))).rejects.toThrow(/capacity/i);
     expect((await run.read({ id: old.id })).text).toBe("old");
-    const image = await run.retain({ toolName: "Read", toolUseId: "image", content: [{ type: "image", source: { type: "file", path: "/private/secret.png", mediaType: "image/png" } }] });
+    const image = await run.retain({ toolName: "Read", toolUseId: "image", executionState: "completed", content: [{ type: "image", source: { type: "file", path: "/private/secret.png", mediaType: "image/png" } }] });
     await expect(run.read({ id: old.id })).rejects.toThrow(/unavailable|expired/i);
     expect((await run.read({ id: image.id })).text).toBe("[image content omitted]");
   });

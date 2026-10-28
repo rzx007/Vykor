@@ -54,7 +54,7 @@ export interface DaemonAgentEventProjectorContext {
     "createProjectionSettlement" | "failProjectionSettlement" | "getProjectionSettlement" |
     "getSessionTask" | "listProjectionSettlements" | "markProjectionSettlementRetrying" |
     "resolveProjectionSettlement" | "transaction" | "updateSessionTask"
-  > & Partial<Pick<SessionStore, "toolOperations">>;
+  >;
   transcriptProjection: SessionTranscriptProjection;
   liveChildren: Pick<LiveChildAgentDirectory, "register" | "unregister">;
   events: Pick<SessionEventPublisher, "checkpoint" | "publish" | "publishSince">;
@@ -663,6 +663,7 @@ export class DaemonAgentEventProjector {
     if (!run || !state || run.status !== "running" || run.sessionId !== event.context.sessionId ||
       !payload || typeof payload.toolUseId !== "string" ||
       !["preparing", "waiting_permission", "queued", "running", "completed", "failed", "unknown"].includes(String(payload.phase))) return;
+    if (state.generationId !== payload.generationId) return;
     const active = state.toolParts.get(payload.toolUseId);
     if (!active) return;
     const message = this.context.store.conversations.listMessages(run.sessionId).find(row => row.id === active.messageId);
@@ -672,25 +673,8 @@ export class DaemonAgentEventProjector {
     const previous = isRecord(part.metadata.toolProgress) ? part.metadata.toolProgress : undefined;
     if (["completed", "failed", "unknown"].includes(String(previous?.phase))) return;
     const identity: Record<string, unknown> = {};
-    if (typeof payload.operationId === "string") {
-      // Runtime events describe a committed ledger record; they cannot invent an attempt.
-      const operation = this.context.store.toolOperations?.get(payload.operationId);
-      if (!operation || operation.sessionId !== run.sessionId || operation.runId !== runId ||
-        operation.toolCallId !== payload.toolUseId ||
-        (part.metadata.operationId && part.metadata.operationId !== operation.id)) return;
-      const attemptId = typeof payload.toolAttemptId === "string" ? payload.toolAttemptId : undefined;
-      if (attemptId && operation.activeAttemptId !== attemptId) return;
-      if (payload.phase === "running" && !attemptId) return;
-      if (["preparing", "queued", "waiting_permission"].includes(String(payload.phase)) && operation.activeAttemptId) return;
-      if (part.metadata.toolAttemptId && part.metadata.toolAttemptId !== attemptId) return;
-      identity.operationId = operation.id;
-      if (attemptId) identity.toolAttemptId = attemptId;
-    } else {
-      // The ordinary SDK has no operation ledger; retain its existing single-attempt identity.
-      if (part.metadata.operationId || typeof payload.toolAttemptId !== "string" ||
-        payload.toolAttemptId !== (part.metadata.toolAttemptId ?? `tool_attempt_${payload.toolUseId}_1`)) return;
-      if (payload.phase === "running") identity.toolAttemptId = payload.toolAttemptId;
-    }
+    if (typeof payload.toolAttemptId !== "string" || payload.toolAttemptId !== (part.metadata.toolAttemptId ?? `tool_attempt_${payload.toolUseId}_1`)) return;
+    if (payload.phase === "running") identity.toolAttemptId = payload.toolAttemptId;
     const progress = { phase: payload.phase,
       ...(["not_started", "completed", "unknown"].includes(String(payload.executionState)) ? { executionState: payload.executionState } : {}),
     };

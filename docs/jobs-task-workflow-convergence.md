@@ -307,4 +307,4 @@ daemon 和 standalone 必须都注入 `AgentJobHost`，然后才能从默认 reg
 - 不新增第二套 Job 数据库。
 
 
-阶段 A 已接通 Jobs 协议 6 与共同执行来源；最新接口和所有权说明见 [Jobs 协议](./jobs-protocol.md)。额度和 Workflow runner 的后续收拢仍按阶段 B/C 计划执行。
+阶段 A 已接通 Jobs 协议 7 与共同执行来源；最新接口和所有权说明见 [Jobs 协议](./jobs-protocol.md)。额度和 Workflow runner 的后续收拢仍按阶段 B/C 计划执行。

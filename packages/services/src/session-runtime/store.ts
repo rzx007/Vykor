@@ -1,3 +1,4 @@
+import { ToolResultRepository } from "../tool-results/tool-result-repository.js";
 import { Buffer } from "node:buffer";
 import { mkdirSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
@@ -67,8 +68,6 @@ import {
   IncrementalOutput,
 } from "../conversations/index.js";
 import { RunRepository } from "../runs/run-repository.js";
-import { ExecutionRepository } from "../execution-records/execution-repository.js";
-import { ToolOperationRepository } from "../tool-operations/tool-operation-repository.js";
 import { NoteRepository } from "../notes/note-repository.js";
 import { PluginAppRepository } from "../plugin-apps/index.js";
 import {
@@ -173,8 +172,7 @@ export class SessionStore {
   readonly sessions!: SessionRepository;
   readonly conversations!: ConversationRepository;
   readonly runs!: RunRepository;
-  readonly executions!: ExecutionRepository;
-  readonly toolOperations!: ToolOperationRepository;
+  readonly toolResults!: ToolResultRepository;
   readonly conversationTransactions!: ConversationTransactions;
   readonly incrementalOutput!: IncrementalOutput;
   private storage!: StorageContext;
@@ -269,8 +267,7 @@ export class SessionStore {
         appendEvent: (input) => this.conversations.appendEvent(input),
         save: () => this.save(),
       });
-      this.executions = new ExecutionRepository(this.storage);
-      this.toolOperations = new ToolOperationRepository(this.storage, this.executions);
+      this.toolResults = new ToolResultRepository(this.storage);
       this.permissions = new PermissionRepository({
         storage: this.storage,
         assertSession: (sessionId) => assertSession(this.state, sessionId),

@@ -123,15 +123,6 @@ export class RunRepository {
       if (input.error !== undefined) run.error = input.error;
       if (input.metadata) run.metadata = { ...run.metadata, ...input.metadata };
       run.updatedAt = timestamp;
-      for (const execution of Object.values(this.storage.state.executions)) {
-        if (execution.runId !== run.id) continue;
-        this.storage.rollback?.capture(this.storage.state.executions, execution.id);
-        execution.status = run.status;
-        execution.updatedAt = timestamp;
-        if (run.startedAt !== undefined) execution.startedAt = run.startedAt;
-        if (run.finishedAt !== undefined) execution.finishedAt = run.finishedAt;
-        this.storage.mutations.executions.add(execution.id);
-      }
       this.refreshSessionStatus(session);
       this.storage.rollback?.capture(this.storage.state.sessions, session.id);
       session.updatedAt = timestamp;

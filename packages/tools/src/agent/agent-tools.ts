@@ -118,7 +118,7 @@ export function createAgentTool(options: CreateAgentToolOptions): ToolDefinition
           prompt: input.prompt as string,
           agent: subagentType,
           team,
-          cwd: context.cwd,
+          cwd: context.environment?.workspace.hostRoot ?? context.cwd,
           sessionId: workerSessionId,
           model: (input.model as string) ?? agentDef?.model,
           systemPrompt: agentDef?.systemPrompt,

@@ -89,12 +89,12 @@ describe("createDaemonAgentLoader", () => {
 
   it("passes the host-only Run capability lifecycle unchanged into the runtime", async () => {
     const onRunCapabilities = vi.fn(() => vi.fn());
-    const toolSafety = { operations: {}, requiredPolicy: {} } as never;
+    const bindToolDispatch = (() => () => {});
     const createAgent = vi.fn(async () => ({ loadHistory: vi.fn(), close: vi.fn() }) as any);
-    const loader = createDaemonAgentLoader({ createAgent:hostedAgentFactory(createAgent), onRunCapabilities, toolSafety })!;
+    const loader = createDaemonAgentLoader({ createAgent:hostedAgentFactory(createAgent), onRunCapabilities, bindToolDispatch })!;
     await loader({ session, history: [], parts: [] });
     expect(createAgent.mock.calls[0]![0].options.onRunCapabilities).toBe(onRunCapabilities);
-    expect(createAgent.mock.calls[0]![0].options.toolSafety).toBe(toolSafety);
+    expect(createAgent.mock.calls[0]![0].options.bindToolDispatch).toBe(bindToolDispatch);
   });
 
   it("forwards the host result-store factory unchanged into the runtime", async () => {

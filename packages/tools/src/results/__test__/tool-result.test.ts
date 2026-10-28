@@ -3,7 +3,7 @@ import { ToolResultAccessError, toolResultList, toolResultPage, toolResultSearch
 import { createToolResultTool, isToolResultTool } from "../index.js";
 async function fixture() {
   // This package is a leaf: exercise its injected host contract with the production pure page rules.
-  // Memory storage/authorization is covered in core and real S1 storage in services/server.
+  // Memory storage/authorization is covered in core and independent SQLite storage in services/server.
   const entries = new Map<string, { ref: ToolResultRef; text: string }>();
   const get = (id: string) => { const entry = entries.get(id); if (!entry) throw new ToolResultAccessError("Result unavailable"); return entry; };
   const archive: RunToolResultStore = {

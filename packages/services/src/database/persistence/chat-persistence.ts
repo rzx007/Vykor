@@ -6,7 +6,7 @@ import { SqliteChatPersistence } from "./sqlite-chat-persistence.js";
 import type { DurableEventRegistry } from "../../session-runtime/events/event-registry.js";
 import type { TransactionJournal } from "../transactions/transaction-journal.js";
 
-const tables = ["sessions", "inputs", "inputAttachments", "messages", "parts", "runs", "attempts", "tasks", "permissions", "pluginApps", "executions", "toolOperations", "toolDispatchAttempts"] as const;
+const tables = ["sessions", "inputs", "inputAttachments", "messages", "parts", "runs", "attempts", "tasks", "permissions", "pluginApps", "toolResults"] as const;
 type ChatTable = typeof tables[number];
 
 /** Sync transactions must never announce a Promise-valued commit as successful. */

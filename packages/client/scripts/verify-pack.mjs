@@ -34,11 +34,11 @@ try {
   const fixture = fileURLToPath(new URL("../src/service/__test__/service-fixture.mjs", import.meta.url));
   writeFileSync(join(sandbox, "consumer.mjs"), `
 import assert from "node:assert/strict";
-import { VykorClient, createInitialClientState } from "@rzx/client";
+import { VykorClient, createInitialClientState, CURRENT_PROTOCOL_VERSION } from "@rzx/client";
 import { Service } from "@rzx/client/service";
 const endpoint = await Service.ensure({
   file: ${JSON.stringify(join(sandbox, "registry.json"))},
-  command: [process.execPath, ${JSON.stringify(fixture)}, ${JSON.stringify(join(sandbox, "registry.json"))}],
+  command: [process.execPath, ${JSON.stringify(fixture)}, ${JSON.stringify(join(sandbox, "registry.json"))}, "1.2.3", String(CURRENT_PROTOCOL_VERSION)],
   timeoutMs: 5000,
 });
 try {

@@ -82,7 +82,8 @@ export interface RunToolBinding {
 /** Framework-internal execution capabilities shared with tool packages. */
 export interface AgentExecutionContext {
   readonly toolResults?: import("../tools/result-data.js").RunToolResultStore;
-  readonly toolSafety?: import("../tools/operations.js").AgentToolSafety;
+  readonly checkToolDispatch?: ToolDispatchCheck;
+  readonly bindToolDispatch?: ToolDispatchCheckFactory;
   readonly limits?: AgentExecutionLimits;
   readonly modelAttempts?: ModelAttemptGate;
   readonly profile?: AgentExecutionProfile;
@@ -135,7 +136,7 @@ export interface PreparedAgentRun {
   readonly bindToolResults?: (tools: ReadonlyMap<string, RunToolBinding>) => import("../tools/result-data.js").RunToolResultStore | Promise<import("../tools/result-data.js").RunToolResultStore>;
   /** @deprecated Use bindToolResults. Legacy stores require final bindings equivalent to this preparation. */
   readonly toolResults?: import("../tools/result-data.js").RunToolResultStore;
-  readonly toolSafety?: import("../tools/operations.js").AgentToolSafety;
+  readonly bindToolDispatch?: ToolDispatchCheckFactory;
   readonly tools: ReadonlyMap<string, RunToolBinding>;
   readonly contribution?: AgentRunContribution;
   readonly limits?: AgentExecutionLimits;
@@ -179,3 +180,8 @@ export interface AgentModelConfiguration {
   effort?: string;
   maxTurns?: number;
 }
+
+/** Bound to the final Run tool view; cwd is the trusted host workspace directory, not an environment's execution path. A failure terminates this Run before invoking the tool. */
+export type ToolDispatchCheck = (input: { scope: AgentRunScope; toolUse: ToolUseBlock; binding: RunToolBinding | undefined; cwd: string }) => void | Promise<void>;
+/** Rebound for each Run, including manual and child calls. Never reuse a parent's bound check. */
+export type ToolDispatchCheckFactory = (scope: AgentRunScope, tools: ReadonlyMap<string, RunToolBinding>) => ToolDispatchCheck;

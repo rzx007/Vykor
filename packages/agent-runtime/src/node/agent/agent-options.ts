@@ -66,8 +66,8 @@ export interface VykorAgentConfiguration {
   outputContract?: AgentOutputContract;
   /** Bind the host's authorized archive to the final captured tools for each Run. */
   toolResults?: (scope: AgentRunScope, tools: ReadonlyMap<string, RunToolBinding>) => RunToolResultStore | Promise<RunToolResultStore>;
-  /** Optional host-owned tool ledger and mandatory policy; descendants retain this pair. */
-  toolSafety?: import("@vykor/agent-contracts").AgentToolSafety;
+  /** Bind the current host dispatch check to each Run and its final tools; descendants bind their own scope. */
+  bindToolDispatch?: import("@vykor/agent-contracts").ToolDispatchCheckFactory;
   /** Host-owned admission and durable settlement for this agent tree's actual model attempts. */
   modelAttempts?: import("@vykor/agent-contracts").ModelAttemptGate;
   /** Reliable host-only registration after durable Run start, before model dispatch. Return a terminal cleanup. */

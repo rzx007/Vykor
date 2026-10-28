@@ -139,8 +139,9 @@ describe("terminal input correction failures", () => {
       expect(fixture.executions).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
       const ends = events.filter(event => event.type === "tool_use_end");
       expect(ends.filter(event => event.toolUseId.startsWith("write-"))).toHaveLength(8);
+      // These implementations ran; their self-reported not_started cannot prove absence of effects.
       expect(ends.filter(event => event.toolUseId.startsWith("write-")).every(event =>
-        event.result.executionState === "not_started")).toBe(true);
+        event.result.executionState === "unknown")).toBe(true);
       if (companion) expect(ends.find(event => event.toolUseId === "companion")).toMatchObject({ toolUseId: "companion", result: { executionState: companion } });
       expect(fixture.engine.getHistory().filter(message => message.type === "tool_result")).toHaveLength(companion ? 9 : 8);
       expect(events.some(event => event.type === "text_delta" && event.delta.includes("DSML"))).toBe(false);

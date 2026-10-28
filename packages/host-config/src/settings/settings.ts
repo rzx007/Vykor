@@ -69,7 +69,6 @@ const DEFAULT_SETTINGS: Settings = {
     autoStart: false,
   },
   autoReview: { mode: "off" },
-  blockOnUnknownToolOutcome: false,
   effort: "medium",
   passes: 1,
   outputStyle: "default",
@@ -394,6 +393,7 @@ async function loadSettingsFile(configPath: string): Promise<Partial<Settings> |
       throw new Error(`Settings file must contain a JSON object: ${configPath}`);
     }
     const settings = parsed as Record<string, unknown>;
+    delete settings.blockOnUnknownToolOutcome;
     validateSettingsFields(settings, configPath);
     return settings as Partial<Settings>;
   } catch (error) {
@@ -435,7 +435,6 @@ const TOP_LEVEL_SETTINGS_FIELDS = new Set([
   "plugins",
   "daemon",
   "autoReview",
-  "blockOnUnknownToolOutcome",
   "theme",
   "outputStyle",
   "workStyle",
@@ -453,7 +452,6 @@ function validateSettingsFields(
 ): void {
   assertKnownFields(settings, TOP_LEVEL_SETTINGS_FIELDS, "settings", configPath);
   if (settings.modelDisabled !== undefined && typeof settings.modelDisabled !== "boolean") throw new SettingsFileError("settings.modelDisabled", configPath);
-  if (settings.blockOnUnknownToolOutcome !== undefined && typeof settings.blockOnUnknownToolOutcome !== "boolean") throw new SettingsFileError("settings.blockOnUnknownToolOutcome", configPath);
   assertNestedFields(settings, "permission", [
     "mode",
     "allowedTools",

@@ -170,8 +170,6 @@ export interface Settings {
   };
   daemon?: DaemonConfig;
   autoReview?: AutoReviewSettings;
-  /** Global opt-in: block later writes after an unknown tool outcome. Audit and permissions remain enabled. */
-  blockOnUnknownToolOutcome?: boolean;
   theme?: string;
   outputStyle?: string;
   workStyle?: WorkStyle;

@@ -1,4 +1,5 @@
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
@@ -9,6 +10,7 @@ import { createExecutionEnvironment, resolveExecutionEnvironmentConfig } from "@
 import { createEnvironmentFileSystem } from "@vykor/tools";
 import { SessionStore } from "@vykor/services";
 import { createDaemonAgentLoader } from "../../../packages/server/src/daemon/daemon-agent.js";
+import { DaemonApplication } from "../../../packages/server/src/application/daemon-application.js";
 
 // Reusing the parent's bound environment would execute both descendants in rootCwd.
 it.each(["sdk", "daemon"] as const)("%s binds actual child and nested child Shell processes to their own session directories", async mode => {
@@ -156,4 +158,90 @@ it.each(["sdk", "daemon"] as const)("%s binds actual child and nested child Shel
     rmSync(rootCwd, { recursive: true, force: true });
   }
   expect(leases.map(lease => lease.releases)).toEqual([1, 1, 1, 1]);
+});
+
+it("checks mapped daemon and child dispatch against host cwd while tools keep execution cwd", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "vk-mapped-dispatch-"));
+  const store = new SessionStore({ path: join(directory, "state.db") });
+  const observed: Array<{ sessionId: string; cwd: string; hostCwd: string }> = [];
+  const toolErrors: unknown[] = [];
+  let root: DefaultNodeAgent | undefined;
+  let childId: string | undefined;
+  const app = new DaemonApplication({
+    store,
+    settings: { model: "offline", apiFormat: "openai", maxTurns: 4, permission: { mode: "full_access" },
+      sandbox: { enabled: false }, plugins: { enabled: false }, memory: { enabled: false } },
+    createAgent: async ({ options }) => {
+      root = await createDefaultNodeAgent({
+        ...options,
+        extensions: [],
+        onEvent: async event => {
+          await options.onEvent?.(event);
+          if (event.type === "tool.completed" && event.data.result.isError) toolErrors.push(event.data.result.content);
+          if (event.type === "child.created") childId = event.data.childId;
+        },
+        capabilityOverrides: { ...options.capabilityOverrides, terminal: false, backgroundShell: false },
+        ownsExecutionEnvironment: true,
+        executionEnvironment: async scope => {
+          const base = await createExecutionEnvironment({
+            config: resolveExecutionEnvironmentConfig({ surface: "desktop_managed", settings: scope.settings, cwd: scope.cwd }),
+            settings: scope.settings,
+            binding: { kind: "local", hostRoot: scope.cwd, executionRoot: scope.cwd },
+            sessionId: scope.sessionId,
+            userSkillsRoot: directory,
+          });
+          // Same host/execution directory split as WSL, without requiring WSL on the test machine.
+          return { ...base, workspace: { ...base.workspace, executionRoot: `/mapped/${scope.sessionId}` }, files: createEnvironmentFileSystem(base) };
+        },
+        toolDecorators: [...(options.toolDecorators ?? []), { name: "Agent", decorate: base => ({ ...base, execute: async (input, context) => {
+          observed.push({ sessionId: context.agent!.scope.sessionId, cwd: context.cwd, hostCwd: context.environment!.workspace.hostRoot });
+          return base.execute(input, context);
+        } }) }],
+        tools: [...(options.tools ?? []), {
+          name: "InspectCwd", description: "Observe the actual tool directory", inputSchema: { type: "object" },
+          execute: async (_input, context) => {
+            observed.push({ sessionId: context.agent!.scope.sessionId, cwd: context.cwd, hostCwd: context.environment!.workspace.hostRoot });
+            return { content: [{ type: "text", text: "observed" }] };
+          },
+        }],
+        client: { async *streamMessage({ messages }) {
+          const userIndex = messages.map(message => message.type).lastIndexOf("user");
+          if (messages.slice(userIndex + 1).some(message => message.type === "tool_result")) {
+            yield { type: "complete", stopReason: "end_turn" };
+          } else {
+            const rootInput = messages[userIndex]?.content === "root";
+            yield { type: "tool_use_start", toolUse: { type: "tool_use", id: `cwd-${randomUUID()}`,
+              name: rootInput ? "Agent" : "InspectCwd",
+              input: rootInput ? { prompt: "child", description: "mapped directory child", subagentType: "worker" } : {},
+            } };
+            yield { type: "complete", stopReason: "tool_use" };
+          }
+        } },
+      });
+      return { agent: root, host: root.host };
+    },
+    log: () => {},
+  });
+  try {
+    await app.ready();
+    const session = app.commands.createSession({ cwd: directory, model: "offline" });
+    const admission = await app.interactions.admitPrompt(session.id, { items: [{ type: "text", text: "root" }] });
+    const result = await app.runControl.awaitRun(session.id, admission.run!.id);
+    expect(result.error).toBeUndefined();
+    expect(result).toMatchObject({ status: "completed" });
+    expect(toolErrors).toEqual([]);
+    expect(childId).toBeDefined();
+    const handle = root!.children.get(childId!)!;
+    const childRun = await handle.waitRun(handle.runId!);
+    expect(childRun.result?.error).toBeUndefined();
+    expect(childRun.result).toMatchObject({ status: "completed" });
+    expect(observed).toEqual([
+      { sessionId: session.id, cwd: `/mapped/${session.id}`, hostCwd: directory },
+      { sessionId: handle.sessionId, cwd: `/mapped/${handle.sessionId}`, hostCwd: directory },
+    ]);
+  } finally {
+    await app.close();
+    store.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
 });

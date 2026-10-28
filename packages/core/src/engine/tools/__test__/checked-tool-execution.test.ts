@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentEventInput, AgentExecutionContext, HookExecutor as IHookExecutor, PermissionChecker as IPermissionChecker, StreamEvent, ToolContext, ToolDefinition, ToolRegistrationSource } from "@vykor/agent-contracts";
 import type { ToolUseBlock } from "@vykor/agent-contracts";
+import { MemoryToolResultArchive } from "../../results/memory-tool-result-archive.js";
 import { QueryEngine } from "../../query-engine.js";
 import { ToolRegistry } from "../tool-registry.js";
 import { AgentExecutionLimitError } from "@vykor/agent-contracts";
@@ -13,6 +14,7 @@ function fixture(options: {
   hook?: IHookExecutor["execute"];
   toolTimeoutMs?: number;
   source?: ToolRegistrationSource;
+  modelTool?: ToolUseBlock;
 } = {}) {
   const inputs: Record<string, unknown>[] = [];
   const contexts: ToolContext[] = [];
@@ -56,7 +58,9 @@ function fixture(options: {
     takeSteeredInputs: async () => [], closeSteering() {},
   };
   const engine = new QueryEngine({ streamMessage: async function* (): AsyncIterable<StreamEvent> {
-    clientCalls++; yield { type: "complete", stopReason: "end_turn" };
+    clientCalls++;
+    if (clientCalls === 1 && options.modelTool) yield { type: "tool_use_start", toolUse: options.modelTool };
+    yield { type: "complete", stopReason: clientCalls === 1 && options.modelTool ? "tool_use" : "end_turn" };
   } }, registry, { checkTool: async (...args) => {
     checked.push({ ...args[1] });
     return options.permission?.(...args) ?? { action: "allow" };
@@ -74,6 +78,15 @@ function fixture(options: {
 }
 
 describe("history-free checked tool execution", () => {
+  it("keeps ordinary returned errors completed and lets a corrected call execute", async () => {
+    const f = fixture({ invoke: async input => ({ content: [{ type: "text", text: String(input.text) }], isError: input.text === "hello" }) });
+    const failed = await f.engine.executeTool(f.toolUse, { execution: f.execution });
+    expect(failed).toMatchObject({ isError: true, executionState: "completed" });
+    expect(failed.failureKind).not.toBe("unknown_outcome");
+    expect(await f.engine.executeTool({ ...f.toolUse, id: "corrected", input: { text: "fixed" } }, { execution: f.execution })).toMatchObject({ executionState: "completed", content: [{ type: "text", text: "fixed" }] });
+    expect(f.inputs).toHaveLength(2);
+  });
+
   it("keeps original MCP data for persistence while post hooks only receive public tool feedback", async () => {
     const raw = { content: [{ type: "text", text: "saved" }], structuredContent: { revision: 2 }, _meta: { uiOnly: { cursor: 8 } }, isError: false };
     const hookPayloads: unknown[] = [];
@@ -254,5 +267,71 @@ it("propagates result delivery failure once and retains both delivery and hook e
     if (hookFails) await expect(call).rejects.toMatchObject({ errors: [hookFailure, saveFailure] });
     else await expect(call).rejects.toBe(saveFailure);
     expect(delivered).toHaveBeenCalledTimes(1); expect(f.inputs).toHaveLength(1);
+  }
+});
+
+it("keeps nested dispatch checks fatal even when the outer tool catches their error", async () => {
+  const f = fixture({ invoke: async (_input, context) => {
+    try { await context.invokeTool!("Inspect", { text: "nested" }); } catch { /* proxy cannot hide a host failure */ }
+    return { content: [{ type: "text", text: "caught" }] };
+  } });
+  const checked: string[] = [];
+  f.execution.checkToolDispatch = ({ toolUse }) => { checked.push(String(toolUse.input.text)); if (toolUse.input.text === "nested") throw new Error("host revoked"); };
+  await expect(f.engine.executeTool(f.toolUse, { execution: f.execution })).rejects.toThrow("host revoked");
+  expect(checked).toEqual(["hello", "nested"]);
+  expect(f.inputs).toHaveLength(1);
+});
+
+it("keeps preflight on the exact contribution already in final captured bindings", async () => {
+  const f = fixture({ modelTool: { type: "tool_use", id: "submit", name: "Submit", input: {} } }), invoked = vi.fn(async () => ({ content: [] }));
+  const definition: ToolDefinition = { name: "Submit", description: "contribution", inputSchema: {}, execute: invoked };
+  f.execution.tools = new Map([["Submit", { definition, invoke: invoked, source: { kind: "agent" } }]]);
+  const preflight = vi.fn(async () => "business output missing");
+  f.execution.contribution = { tools: [{ definition, permission: "host-internal", beforeDispatch: preflight }] };
+  const events: StreamEvent[] = [];
+  for await (const event of f.engine.submitMessage("submit", { execution: f.execution })) events.push(event);
+  const end = events.find(event => event.type === "tool_use_end");
+  expect(end?.type === "tool_use_end" && end.result).toMatchObject({ isError: true, executionState: "not_started" });
+  expect(preflight).toHaveBeenCalledOnce(); expect(invoked).not.toHaveBeenCalled();
+});
+
+it("rejects a distinct same-name contribution instead of replacing a captured binding", async () => {
+  const f = fixture();
+  f.execution.contribution = { tools: [{ permission: "host-internal", definition: { ...f.execution.tools!.get("Inspect")!.definition, execute: async () => ({ content: [] }) } }] };
+  await expect((async () => { for await (const event of f.engine.submitMessage("submit", { execution: f.execution })) void event; })()).rejects.toThrow("conflicts");
+  expect(f.inputs).toEqual([]);
+});
+
+it.each(["archive", "post-hook"] as const)("preserves completed nested facts while failing the parent on %s failure", async failure => {
+  let effects = 0, laterEffects = 0;
+  let inner: import("@vykor/agent-contracts").ToolExecutionResult | undefined;
+  const hostError = new Error(`${failure} unavailable`);
+  const f = fixture({
+    invoke: async (input, context) => {
+      if (input.text === "inner") { effects++; return { content: [{ type: "text", text: "SAVED-FACT" }] }; }
+      if (input.text === "later") { laterEffects++; return { content: [] }; }
+      inner = await context.invokeTool!("Inspect", { text: "inner" });
+      try { await context.invokeTool!("Inspect", { text: "later" }); } catch { /* parent failure stops further dispatch */ }
+      return inner;
+    },
+    hook: async (event, data) => {
+      if (failure === "post-hook" && event === "post_tool_use" && JSON.stringify(data).includes("SAVED-FACT")) throw hostError;
+      return { blocked: false };
+    },
+  });
+  const archive = new MemoryToolResultArchive().forRun(f.execution.scope, f.execution.tools!);
+  Object.assign(f.execution, { toolResults: failure === "archive" ? { ...archive, retain: async () => { throw hostError; } } : archive });
+  const delivered: import("@vykor/agent-contracts").ToolExecutionResult[] = [];
+  await expect(f.engine.executeTool(f.toolUse, { execution: f.execution, onResult: async result => { delivered.push(result); } })).rejects.toThrow(`${failure} unavailable`);
+  expect(effects).toBe(1); expect(laterEffects).toBe(0);
+  expect(inner).toMatchObject({ executionState: "completed", content: [{ type: "text", text: "SAVED-FACT" }] });
+  expect(delivered).toHaveLength(1);
+  expect(delivered[0]).toMatchObject({ executionState: "completed", content: [{ type: "text", text: "SAVED-FACT" }] });
+  if (failure === "archive") {
+    expect(inner?.resultRef).toBeUndefined(); expect(delivered[0]?.resultRef).toBeUndefined();
+    expect((await archive.list()).items).toEqual([]);
+  } else {
+    expect(inner?.resultRef).toBeDefined();
+    expect(await archive.read({ id: inner!.resultRef!.id })).toMatchObject({ text: "SAVED-FACT" });
   }
 });

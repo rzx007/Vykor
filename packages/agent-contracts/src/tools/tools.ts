@@ -8,8 +8,6 @@ import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 export interface ToolContext {
   /** Host-bound authorized archive; model input cannot choose another session. */
   toolResults?: import("./result-data.js").RunToolResultStore;
-  operationId?: string;
-  parentOperationId?: string;
   cwd: string;
   /** Effective execution environment. Runtime-owned contexts always provide it. */
   environment?: ExecutionEnvironmentHandle;

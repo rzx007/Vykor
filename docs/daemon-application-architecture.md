@@ -514,4 +514,4 @@ ProjectFactsService 负责事实脱敏、session/cwd 校验、工作区独占凭
 Server 不依赖 Client。包含真实 Client 的请求级联合测试放在 `tests/server-client`，由 `pnpm test:server-client` 运行，同时纳入根 test 和 check-types。HTTP 的 maintenance/facts/notes 上下文只声明应用用例，持久规则和资源关闭归应用层；Owner、ready 和工作区互斥沿用原入口。
 
 
-SDK 与 daemon 共用执行核心已接通协议 6 / Jobs 3。ChildManager 按真实 run 占用许可，Framework 的实际停止与可靠保存分开；Workflow 默认只用 childId/runId，coordinator 独占 deadline 和重试。接口见 [Jobs 协议](./jobs-protocol.md)，实施与验收见 [共享核心计划](./superpowers/plans/2026-10-27-shared-execution-core.md)。
+SDK 与 daemon 共用执行核心已接通协议 7 / Jobs 3。ChildManager 按真实 run 占用许可，Framework 的实际停止与可靠保存分开；Workflow 默认只用 childId/runId，coordinator 独占 deadline 和重试。接口见 [Jobs 协议](./jobs-protocol.md)，实施与验收见 [共享核心计划](./superpowers/plans/2026-10-27-shared-execution-core.md)。

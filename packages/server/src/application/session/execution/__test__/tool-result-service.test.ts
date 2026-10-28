@@ -20,87 +20,26 @@ function fixture() {
   const invoke = async () => ({ content: [] });
   const binding: RunToolBinding = { definition: { name: "Read", description: "read", inputSchema: {}, execute: invoke }, invoke, source: { kind: "plugin", id: "selected" } };
   const bindings = new Map([["Read", binding]]);
-  const intent = { scope, toolUse: { type: "tool_use" as const, id: "call", name: "Read", input: {} } };
-  const operation = store.toolOperations.prepare({ ...intent, toolIdentity: JSON.stringify({ source: binding.source, implementation: "old-process-function-id" }) });
-  const authorized = store.toolOperations.authorize({ intent, operation, policyVersion: "p" });
-  const receipt = store.toolOperations.dispatch({ intent, operation: authorized, policyVersion: "p", ownerId: "owner" });
-  const result = { operationId: operation.operationId, toolUseId: "call", toolName: "Read", executionState: "completed" as const, content: [{ type: "text" as const, text: "x".repeat(300_000) + "TAIL" }] };
-  store.toolOperations.settle({ receipt, result });
+  const result = { toolUseId: "call", toolName: "Read", executionState: "completed" as const, content: [{ type: "text" as const, text: "x".repeat(300_000) + "TAIL" }] };
   const service = new ToolResultService({ store, ownerLease: () => lease });
   return { store, service, scope, bindings, binding, result, lease, controller };
 }
 describe("host-bound historical tool result access", () => {
-  it("pages authorized results without copying the complete operation list", async () => {
+  it("lists authorized metadata without loading bodies", async () => {
     const f = fixture(), view = f.service.forRun(f.scope, f.bindings), ref = await view.retain(f.result);
-    vi.spyOn(f.store.toolOperations, "list").mockImplementation(() => { throw new Error("Full operation bodies must not be copied for result lists"); });
+    const read = vi.spyOn(f.store.toolResults, "readText");
     expect(await view.list({ limit: 1 })).toEqual({ items: [ref] });
     expect(await f.service.forRun(f.scope, new Map()).list()).toEqual({ items: [] });
+    expect(read).not.toHaveBeenCalled();
+    expect((await view.read({ id: ref.id, offset: 300_000 })).text).toBe("TAIL");
+    expect(read).toHaveBeenCalledTimes(1);
   });
-  it.each(["read", "search"] as const)("does not fetch the full operation twice for %s", async action => {
-    const f = fixture(), view = f.service.forRun(f.scope, f.bindings), ref = await view.retain(f.result);
-    const get = vi.spyOn(f.store.toolOperations, "get");
-    const text = vi.spyOn(f.store.toolOperations, "readResultText");
-    const candidate = vi.spyOn(f.store.toolOperations, "getResultCandidate");
-    const value = action === "read" ? (await view.read({ id: ref.id, offset: 300_000 })).text
-      : (await view.search({ id: ref.id, query: "TAIL" })).matches[0]?.text;
-    expect(value).toBe("TAIL");
-    expect(get).not.toHaveBeenCalled();
-    expect(text).toHaveBeenCalledTimes(1);
-    expect(candidate).toHaveBeenCalledTimes(1);
-  });
-  it("reads bodies only for the authorized page and counts text blocks in UTF-16", async () => {
-    const f = fixture();
-    const save = (call: string, sourceId: string, content: typeof f.result.content) => {
-      const intent = { scope: f.scope, toolUse: { type: "tool_use" as const, id: call, name: "Read", input: {} } };
-      const operation = f.store.toolOperations.prepare({ ...intent, toolIdentity: JSON.stringify({ source: { kind: "plugin", id: sourceId } }) });
-      const authorized = f.store.toolOperations.authorize({ intent, operation, policyVersion: "p" });
-      const receipt = f.store.toolOperations.dispatch({ intent, operation: authorized, policyVersion: "p", ownerId: "owner" });
-      f.store.toolOperations.settle({ receipt, result: { ...f.result, toolUseId: call, operationId: operation.operationId, content } });
-      return operation.operationId;
-    };
-    save("hidden", "revoked", [{ type: "text", text: "SECRET".repeat(50_000) }]);
-    const selected = save("page", "selected", [{ type: "text", text: "😀" }, { type: "text", text: "TAIL" }]);
-    save("later", "selected", [{ type: "text", text: "not this page" }]);
-    const text = vi.spyOn(f.store.toolOperations, "readResultText");
-    const view = f.service.forRun(f.scope, f.bindings);
-    expect(await view.list({ offset: 1, limit: 1 })).toMatchObject({ items: [{ totalChars: 7 }], nextOffset: 2 });
-    expect(text.mock.calls).toEqual([[selected]]);
-    text.mockClear();
-    expect(await view.list({ offset: 3, limit: 1 })).toEqual({ items: [] });
-    await expect(view.list({ offset: 4 })).rejects.toThrow();
-    expect(text).not.toHaveBeenCalled();
-  });
-  it("excludes a captured builtin reader's saved operations from list, read and search after restart", async () => {
-    const f = fixture();
-    const definition = markToolResultReader(createToolResultTool());
-    const source = { kind: "builtin" as const };
-    const binding = { definition: Object.freeze({ ...definition }), definitionIdentity: toolDefinitionIdentity(definition), invoke: definition.execute, source };
-    const intent = { scope: f.scope, toolUse: { type: "tool_use" as const, id: "reader", name: "ToolResult", input: { action: "list" } } };
-    const operation = f.store.toolOperations.prepare({ ...intent, kind: "read_only", toolIdentity: JSON.stringify({ source, implementation: "old-reader-function" }) });
-    const authorized = f.store.toolOperations.authorize({ intent, operation, policyVersion: "p" });
-    const receipt = f.store.toolOperations.dispatch({ intent, operation: authorized, policyVersion: "p", ownerId: "owner" });
-    const result = { operationId: operation.operationId, toolUseId: "reader", toolName: "ToolResult", executionState: "completed" as const, content: [{ type: "text" as const, text: "reader query output" }] };
-    f.store.toolOperations.settle({ receipt, result });
-    const ref = new ToolResultReader(f.store.toolOperations).retain("s", "r", result);
+  it("does not recursively save the captured result reader", async () => {
+    const f = fixture(), definition = markToolResultReader(createToolResultTool());
+    const binding = { definition, definitionIdentity: toolDefinitionIdentity(definition), invoke: definition.execute, source: { kind: "builtin" as const } };
     const view = f.service.forRun(f.scope, new Map([["ToolResult", binding]]));
+    await expect(view.retain({ ...f.result, toolName: "ToolResult" })).rejects.toThrow();
     expect((await view.list()).items).toEqual([]);
-    await expect(view.read({ id: ref.id })).rejects.toThrow(/authorized/i);
-    await expect(view.search({ id: ref.id, query: "reader" })).rejects.toThrow(/authorized/i);
-
-    const replacement = { ...binding, source: { kind: "agent" as const }, definition: { ...definition, execute: async () => ({ content: [] }) }, definitionIdentity: Symbol("replacement") };
-    const replaced = f.service.forRun(f.scope, new Map([["ToolResult", replacement]]));
-    expect((await replaced.list()).items).toEqual([]);
-    await expect(replaced.read({ id: ref.id })).rejects.toThrow(/authorized/i);
-
-    const ownIntent = { ...intent, toolUse: { ...intent.toolUse, id: "replacement" } };
-    const own = f.store.toolOperations.prepare({ ...ownIntent, toolIdentity: JSON.stringify({ source: replacement.source }) });
-    const ownAuthorized = f.store.toolOperations.authorize({ intent: ownIntent, operation: own, policyVersion: "p" });
-    const ownReceipt = f.store.toolOperations.dispatch({ intent: ownIntent, operation: ownAuthorized, policyVersion: "p", ownerId: "owner" });
-    const ownResult = { ...result, toolUseId: "replacement", operationId: own.operationId, content: [{ type: "text" as const, text: "ordinary same-name result" }] };
-    f.store.toolOperations.settle({ receipt: ownReceipt, result: ownResult });
-    const ownRef = await replaced.retain(ownResult);
-    expect((await replaced.list()).items).toEqual([ownRef]);
-    expect((await replaced.read({ id: ownRef.id })).text).toBe("ordinary same-name result");
   });
   it("permits historical source reads through a fresh actual binding and lists after a later Run", async () => {
     const f = fixture(), run = f.service.forRun(f.scope, f.bindings), ref = await run.retain(f.result);
@@ -143,12 +82,12 @@ describe("host-bound historical tool result access", () => {
     await expect(view.list()).rejects.toThrow();
     await expect(view.read({ id: ref.id })).rejects.toThrow();
   });
-  it("checks actual scope ownership and refuses mismatched source claims or unpersisted results", async () => {
+  it("checks actual scope ownership and refuses mismatched source claims or incomplete results", async () => {
     const f = fixture();
     expect(() => f.service.forRun({ ...f.scope, agentId: "other" }, f.bindings)).toThrow();
     expect(() => f.service.forRun({ ...f.scope, cwd: "/forged" }, f.bindings)).toThrow();
     const view = f.service.forRun(f.scope, f.bindings);
     await expect(view.retain(f.result, { kind: "builtin" })).rejects.toThrow();
-    await expect(view.retain({ ...f.result, operationId: "operation_missing" })).rejects.toThrow();
+    await expect(view.retain({ ...f.result, executionState: "unknown" })).rejects.toThrow();
   });
 });

@@ -11,7 +11,7 @@ const cleanup: Array<() => void> = [];
 afterEach(() => { for (const dispose of cleanup.splice(0).reverse()) dispose(); });
 
 async function fixture() {
-  const directory = mkdtempSync(join(tmpdir(), "vykor-s1-projector-"));
+  const directory = mkdtempSync(join(tmpdir(), "vykor-lifecycle-projector-"));
   cleanup.push(() => rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }));
   const store = new SessionStore({ path: join(directory, "session.db") });
   cleanup.push(store.close.bind(store));
@@ -29,52 +29,34 @@ async function fixture() {
   const call = { type: "tool_use" as const, id: "call", name: "Write", input: { text: "value" } };
   await emit("run.started", {});
   await emit("tool.started", { toolUse: call });
-  const intent = { toolUse: call, toolIdentity: "fixture/write@1", scope: {
-    ...context, cwd: directory, signal: new AbortController().signal,
-  } };
-  const operation = store.toolOperations.prepare(intent);
   const lifecycle = (payload: Record<string, unknown>) => emit("domain.event", { name: "tool.lifecycle", payload: { toolUseId: "call", ...payload } });
   const part = () => store.conversations.listMessageParts("session").find(row => row.toolUseId === "call")!;
-  return { store, emit, lifecycle, part, intent, operation };
+  return { store, emit, lifecycle, part };
 }
 
-describe("tool transcript identity follows actual operation receipts", () => {
-  it("does not invent an attempt when validation rejects a call before operation preparation", async () => {
+describe("tool transcript identity follows the active actual call", () => {
+  it("rejects unrelated and terminal-Run progress", async () => {
     const f = await fixture();
-    await f.emit("tool.completed", { toolUseId: "call", result: {
-      toolUseId: "call", toolName: "Write", isError: true, executionState: "not_started",
-      content: [{ type: "text", text: "invalid parameters" }],
-    } });
-    expect(typeof f.part().metadata.toolAttemptId).not.toBe("string");
-  });
-  it("shows a persisted approval wait without inventing an execution attempt", async () => {
-    const f = await fixture();
-    expect(f.part().metadata.toolAttemptId).toBeUndefined();
-    await f.lifecycle({ operationId: f.operation.operationId, phase: "waiting_permission", executionState: "not_started" });
-    expect(f.part().metadata).toMatchObject({ operationId: f.operation.operationId,
-      toolProgress: { phase: "waiting_permission", executionState: "not_started" } });
-    expect(f.part().metadata.toolAttemptId).toBeUndefined();
-    await f.emit("tool.completed", { toolUseId: "call", result: {
-      operationId: f.operation.operationId, toolUseId: "call", toolName: "Write", isError: true,
-      executionState: "not_started", content: [{ type: "text", text: "denied" }],
-    } });
-    expect(f.part().metadata.operationId).toBe(f.operation.operationId);
-    expect(typeof f.part().metadata.toolAttemptId).not.toBe("string");
-  });
-
-  it("binds the persisted dispatch attempt and rejects unrelated or regressive lifecycle updates", async () => {
-    const f = await fixture();
-    const authorized = f.store.toolOperations.authorize({ intent: f.intent, operation: f.operation, policyVersion: "policy-v1" });
-    const receipt = f.store.toolOperations.dispatch({ intent: f.intent, operation: authorized, policyVersion: "policy-v1", ownerId: "owner" });
-    await f.lifecycle({ operationId: receipt.operationId, toolAttemptId: "unrelated-attempt", phase: "running" });
+    await f.lifecycle({ toolAttemptId: "unrelated", phase: "running" });
     expect(f.part().metadata.toolProgress).toMatchObject({ phase: "preparing" });
-    await f.lifecycle({ ...receipt, phase: "running" });
-    expect(f.part().metadata).toMatchObject({ operationId: receipt.operationId, toolAttemptId: receipt.toolAttemptId,
-      toolProgress: { phase: "running" } });
-    await f.lifecycle({ operationId: receipt.operationId, phase: "waiting_permission", executionState: "not_started" });
-    expect(f.part().metadata.toolProgress).toMatchObject({ phase: "running" });
+    await f.lifecycle({ toolAttemptId: "tool_attempt_call_1", phase: "running" });
+    expect(f.part().metadata).toMatchObject({ toolAttemptId: "tool_attempt_call_1", toolProgress: { phase: "running" } });
     f.store.runs.updateRun("run", { status: "interrupted" });
-    await f.lifecycle({ ...receipt, phase: "completed", executionState: "completed" });
+    await f.lifecycle({ toolAttemptId: "tool_attempt_call_1", phase: "completed", executionState: "completed" });
     expect(f.part().metadata.toolProgress).toMatchObject({ phase: "running" });
+  });
+  it("rejects stale generation progress even when a later call reuses the tool ID", async () => {
+    const f = await fixture();
+    await f.emit("output.generation.started", { generationId: "new", attempt: 1 });
+    await f.emit("tool.started", { toolUse: { type: "tool_use", id: "call", name: "Write", input: {} } });
+    await f.lifecycle({ generationId: "old", toolAttemptId: "tool_attempt_call_1", phase: "running" });
+    expect(f.part().metadata.toolProgress).toMatchObject({ phase: "preparing" });
+    await f.lifecycle({ generationId: "new", toolAttemptId: "tool_attempt_call_1", phase: "running" });
+    expect(f.part().metadata.toolProgress).toMatchObject({ phase: "running" });
+  });
+  it("keeps pre-dispatch rejection unstarted", async () => {
+    const f = await fixture();
+    await f.emit("tool.completed", { toolUseId: "call", result: { toolUseId: "call", toolName: "Write", isError: true, executionState: "not_started", content: [] } });
+    expect(typeof f.part().metadata.toolAttemptId).not.toBe("string");
   });
 });

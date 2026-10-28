@@ -29,10 +29,10 @@
 
 测试放在本分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移文件时同步导入、公开入口、文档链接与旧引用清单。
 
-默认应用为 Agent 加载器注入成对的 `toolSafety`，覆盖根运行、子运行与手动工具入口。宿主登记从 Node 的实际运行范围捕获工具定义和环境，权限及审批继续经过原有检查流程。
 
-加载器同时传递宿主 `toolResults` 工厂。默认应用将其连接到已有 S1 结果，按当前 owner、Run 和准备完成的工具来源读取；重启后重新加载 Agent 仍能按引用补读。`ToolResult` 只有实际捕获的内置定义及执行函数匹配已登记身份时，才作为只读操作记录，同名替换或自由只读提示不会得到该承诺。
 
 prepareModelMetadata 接收当前 session；默认应用沿现有 settings/catalog reader 为 validateModelSelection 提供实时查询。此回调复用既有 validateRequestSelection，并随原模型元数据传入 Node；Server 不复制 child 的环境申请、运行、取消或卸载状态。
 
 Agent 加载器将环境获取接成按会话调用的异步工厂。Node 创建 root 或 child 时，加载器核对该实际会话的持久记录与目录，再用本次有效设置申请环境租约；各实例分别接管和释放自己的租约。
+
+普通权限与审批通过后，执行入口调用当前 Run 的 `checkToolDispatch`，核对 owner、会话、Run、输入归属、cwd、最终工具绑定和运行修订。检查失败终止本 Run；工具普通错误与 unknown 只反馈本次调用，不限制其他新调用，也不自动重试。实际调用 Promise 一直跟踪到工具真正结束。

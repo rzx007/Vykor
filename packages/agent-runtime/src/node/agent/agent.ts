@@ -195,7 +195,7 @@ export interface AssembledAgentOptions {
   pluginSelection?: PluginSelectionCatalog;
   onRunCapabilities?: VykorAgentConfiguration["onRunCapabilities"];
   modelAttempts?: VykorAgentConfiguration["modelAttempts"];
-  toolSafety?: VykorAgentConfiguration["toolSafety"];
+  bindToolDispatch?: VykorAgentConfiguration["bindToolDispatch"];
   session: AgentSession;
   mcpConnections: () => readonly McpConnection[];
   retainMcpConnectionsForRun?: () => () => void;
@@ -235,7 +235,7 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
       cwd: assembled.childManager.cwd,
       engine: assembled.runtime.queryEngine,
       effects: assembled.effects,
-      toolSafety: assembled.toolSafety,
+      bindToolDispatch: assembled.bindToolDispatch,
       outputContract: assembled.outputContract,
       eventBus: assembled.eventBus,
       childManager: assembled.childManager,
@@ -464,7 +464,7 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
             return store;
           },
           modelAttempts: this.assembled.modelAttempts,
-          toolSafety: this.assembled.toolSafety,
+          bindToolDispatch: this.assembled.bindToolDispatch,
           profile: { toolResultReferences: ids.size > 0 },
           ...(guidance ? { contribution: { systemGuidance: guidance } } : {}),
         },

@@ -21,10 +21,7 @@ function textOf(messages: Message[]): string {
 function start(store: SessionStore, client: StreamingMessageClient, tool: ToolDefinition): Promise<DaemonApplication> {
   const app = new DaemonApplication({ store,
     settings: { model: "continuation-test", apiFormat: "openai", maxTurns: 7, permission: { mode: "full_access" },
-      plugins: { enabled: false }, memory: { enabled: false, sessionMemoryEnabled: false }, sandbox: { enabled: false },
-      // This suite checks opted-in durable write blocking; default-off behavior
-      // is exercised by unknown-outcome-default.test.ts.
-      blockOnUnknownToolOutcome: true },
+      plugins: { enabled: false }, memory: { enabled: false, sessionMemoryEnabled: false }, sandbox: { enabled: false } },
     createAgent: async context => {
       const agent = await createDefaultNodeAgent({ ...context.options, client, tools: [...(context.options.tools ?? []), tool] });
       return { agent, host: agent.host };
@@ -85,15 +82,15 @@ describe("daily continuation through the durable daemon", () => {
       expect(writes).toBe(1);
       expect(readFileSync(join(directory, "report.html"), "utf8")).toBe("report-v1");
       expect(store.conversations.listInputs(session.id)).toHaveLength(3);
-      expect(store.toolOperations.list({ sessionId: session.id }).filter(row => row.toolName === "GenerateArtifact")).toHaveLength(1);
+      expect(store.toolResults.list(session.id).filter(row => row.toolName === "GenerateArtifact")).toHaveLength(1);
     } finally { await application?.close().catch(() => {}); store.close(); removeFixture(directory); }
   });
 
-  it("keeps an unknown write blocked after reopening while allowing trusted inspection", async () => {
+  it("reopens without replay and allows a new authorized call after an unknown result", async () => {
     const directory = mkdtempSync(join(tmpdir(), "agent-daily-unknown-")), database = join(directory, "session.db");
     let store = new SessionStore({ path: database }), application: DaemonApplication | undefined;
     let reopened = false, calls = 0, resumedCalls = 0, writes = 0;
-    let observedHistory = "", blocked = "", inspected = "";
+    let observedHistory = "", feedback = "", inspected = "";
     const client: StreamingMessageClient = { async *streamMessage(params) {
       let call: { id: string; name: string; input: Record<string, unknown> } | undefined;
       if (!reopened && calls++ === 0) call = { id: "publish", name: "PublishReport", input: {} };
@@ -101,18 +98,20 @@ describe("daily continuation through the durable daemon", () => {
         const step = resumedCalls++;
         if (step === 0) { observedHistory = textOf(params.messages); call = { id: "repeat", name: "PublishReport", input: {} }; }
         if (step === 1) {
-          blocked = textOf(params.messages.filter(message => message.type === "tool_result" && message.toolUseId === "repeat"));
+          feedback = textOf(params.messages.filter(message => message.type === "tool_result" && message.toolUseId === "repeat"));
           call = { id: "inspect", name: "Read", input: { file_path: "published.txt" } };
         }
         if (step === 2) inspected = textOf(params.messages.filter(message => message.type === "tool_result" && message.toolUseId === "inspect"));
       }
       if (call) yield { type: "tool_use_start", toolUse: { type: "tool_use", ...call } };
-      else yield { type: "text_delta", delta: "发布结果未知，先核对，不能重复发布。" };
+      else yield { type: "text_delta", delta: reopened ? "新请求已完成。" : "发布结果未知，先核对。" };
       yield { type: "complete", stopReason: call ? "tool_use" : "end_turn" };
     } };
     const tool: ToolDefinition = { name: "PublishReport", description: "a side effect with a lost receipt", inputSchema: { type: "object" }, execute: async () => {
       writes++; writeFileSync(join(directory, "published.txt"), "published-once");
-      return { content: [{ type: "text", text: "回执连接断开，发布结果未知。" }], isError: true, executionState: "unknown", failureKind: "transport" };
+      return writes === 1
+        ? { content: [{ type: "text", text: "回执连接断开，发布结果未知。" }], isError: true, executionState: "unknown", failureKind: "transport" }
+        : { content: [{ type: "text", text: "new request completed" }], executionState: "completed" };
     } };
     try {
       application = await start(store, client, tool);
@@ -122,14 +121,13 @@ describe("daily continuation through the durable daemon", () => {
       store = new SessionStore({ path: database }); reopened = true;
       application = await start(store, client, tool);
       expect(writes).toBe(1);
-      expect((await prompt(application, session.id, "继续，先检查发布状态。" )).status).toBe("completed");
+      expect((await prompt(application, session.id, "发起一次新的发布请求，然后检查状态。" )).status).toBe("completed");
       expect(observedHistory).toContain("发布结果未知");
-      expect(blocked).toMatch(/unknown|unresolved/i);
+      expect(feedback).toContain("new request completed");
       expect(inspected).toContain("published-once");
-      expect(writes).toBe(1);
+      expect(writes).toBe(2);
+      expect(store.toolResults.list(session.id).filter(row => row.toolName === "PublishReport")).toHaveLength(1);
       expect(store.conversations.listInputs(session.id)).toHaveLength(2);
-      expect(store.toolOperations.list({ sessionId: session.id }).find(row => row.toolCallId === "publish")).toMatchObject({ state: "unknown" });
-      expect(store.toolOperations.list({ sessionId: session.id }).find(row => row.toolCallId === "inspect")).toMatchObject({ kind: "read_only", state: "confirmed" });
     } finally { await application?.close().catch(() => {}); store.close(); removeFixture(directory); }
   });
 });

@@ -117,8 +117,8 @@ export async function runCleanSlateSmoke(options, runtime = createDefaultRuntime
     await runtime.waitForHealth(daemon.url, context);
     const smokeDriver = await runtime.createClient(daemon.url, context);
     const capabilities = await smokeDriver.capabilities();
-    if (capabilities?.protocol?.version !== 6) {
-      throw new Error(`Expected protocol version 6, received ${String(capabilities?.protocol?.version)}`);
+    if (capabilities?.protocol?.version !== 7) {
+      throw new Error(`Expected protocol version 7, received ${String(capabilities?.protocol?.version)}`);
     }
     const session = await smokeDriver.createSession(context);
     const admitted = await smokeDriver.admitPrompt(session.id, context);

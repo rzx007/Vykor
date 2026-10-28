@@ -5,7 +5,7 @@ import { readSessionRuntimeRevision } from "@vykor/domain-contracts/sessions";
 import { ToolResultReader, type ApplicationOwnerLease, type SessionStore, type ToolResultSource } from "@vykor/services";
 
 export interface ToolResultServiceOptions {
-  store: Pick<SessionStore, "transaction" | "assertApplicationOwner" | "sessions" | "runs" | "toolOperations">;
+  store: Pick<SessionStore, "transaction" | "assertApplicationOwner" | "sessions" | "runs" | "toolResults">;
   ownerLease(): ApplicationOwnerLease;
   accepting?(): boolean;
 }
@@ -16,7 +16,7 @@ export class ToolResultService {
   private readonly atomic: SessionStore["transaction"];
   private readonly assertLease: SessionStore["assertApplicationOwner"];
   constructor(private readonly options: ToolResultServiceOptions) {
-    this.reader = new ToolResultReader(options.store.toolOperations);
+    this.reader = new ToolResultReader(options.store.toolResults);
     this.atomic = options.store.transaction.bind(options.store);
     this.assertLease = options.store.assertApplicationOwner.bind(options.store);
   }
@@ -34,11 +34,10 @@ export class ToolResultService {
     };
     return {
       retain: async (result, claimedSource) => atomic(() => {
-        return this.reader.retain(captured.sessionId, captured.runId, result, reference => {
-          if (!allowed(reference)) return false;
-          if (claimedSource && (claimedSource.kind !== reference.source.kind || claimedSource.id !== reference.source.id)) throw new ToolResultAccessError("Tool result source does not match the captured binding.");
-          return true;
-        });
+        const binding = bindings.get(result.toolName);
+        if (!binding?.source || !allowed({ toolName: result.toolName, source: binding.source })) throw new ToolResultAccessError("Tool result source is not authorized.");
+        if (claimedSource && (claimedSource.kind !== binding.source.kind || claimedSource.id !== binding.source.id)) throw new ToolResultAccessError("Tool result source does not match the captured binding.");
+        return this.reader.retain(captured.sessionId, captured.runId, result, binding.source);
       }),
       list: async input => atomic(() => this.reader.list(captured.sessionId, input, allowed)),
       read: async input => atomic(() => this.reader.read(captured.sessionId, input, allowed)),

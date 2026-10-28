@@ -1,5 +1,5 @@
 # 跨执行层测试
 
-覆盖 Kernel 与 Node 共同承担的接线行为。`tool-safety-wiring.test.ts` 从创建入口、准备过程、手动工具和子运行验证宿主安全能力的传递。
+覆盖 Kernel 与 Node 共同承担的接线行为。`tool-dispatch-wiring.test.ts` 从创建入口、准备过程、手动工具和子运行验证宿主派发前检查的传递。
 
 入口是 Vitest；夹具和捕获状态仅存在于测试中，运行结束释放 Agent 与子管理器。只涉及单个分类的测试继续放在该分类自己的 `__test__/`。

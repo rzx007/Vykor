@@ -194,7 +194,7 @@ daemon 使用 `onEvent` 保证 run started、transcript 与 terminal state 已�
 
 `model.attempt.finished` 记录每次请求的结算，usageStatus 区分 complete、partial 和 unknown；unknown 没有已知用量数字。`usage.updated` 是给观察者的已知消耗通知，同一结算不能在两个事件中重复相加。daemon 仍通过 model.attempt.finished 原子保存 Run 的展示记录、已知小计和完整性，不通过 usage.updated 再计费；Goal 用量由显式 ModelAttemptGate 在事件发布前结算，事件投影不能重复写 Goal 账本。自定义持久事件接收器也应处理结算事件。结果用量包含 usageIncomplete 时，数字是已知小计，不能视作完整费用。用户中断仍需保留已发出请求的结算，再结束为 interrupted。
 
-daemon/client 的持久接口使用协议版本 6；UI 应由最新快照读取 modelRetry/modelUsage 和 part 的 modelGeneration 标记，不依赖收到每个中间事件。详见[模型网络重试](./model-network-retry-design.md)。
+daemon/client 的持久接口使用协议版本 7；UI 应由最新快照读取 modelRetry/modelUsage 和 part 的 modelGeneration 标记，不依赖收到每个中间事件。详见[模型网络重试](./model-network-retry-design.md)。
 
 权限不是 event listener 返回值，而是显式 effect：
 

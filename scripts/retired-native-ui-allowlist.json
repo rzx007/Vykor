@@ -3546,37 +3546,37 @@
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 13,
+      "line": 12,
       "text": "import { PluginUiHistoryService } from \"./session/plugins/plugin-ui-history-service.js\";",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 14,
+      "line": 13,
       "text": "import { retirePluginUiActions } from \"./recovery/retire-plugin-ui-actions.js\";",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 181,
+      "line": 180,
       "text": "  readonly pluginUiHistory?: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 234,
+      "line": 232,
       "text": "  readonly pluginUiHistory: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 404,
+      "line": 401,
       "text": "      this.pluginUiHistory = new PluginUiHistoryService({ store });",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 1043,
+      "line": 1032,
       "text": "        recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
@@ -3642,19 +3642,19 @@
     },
     {
       "path": "packages/server/src/application/recovery/__test__/startup-recovery-service.test.ts",
-      "line": 23,
+      "line": 22,
       "text": "      recoverPluginUiActions: () => { order.push(\"ui-actions\"); },",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/recovery/startup-recovery-service.ts",
-      "line": 4,
+      "line": 3,
       "text": "  recoverPluginUiActions?(): void;",
       "reason": "Startup settles original in-flight records without replay and preserves unknown facts."
     },
     {
       "path": "packages/server/src/application/recovery/startup-recovery-service.ts",
-      "line": 25,
+      "line": 23,
       "text": "    this.options.recoverPluginUiActions?.();",
       "reason": "Startup settles original in-flight records without replay and preserves unknown facts."
     },
@@ -4182,7 +4182,7 @@
     },
     {
       "path": "packages/server/src/http/server.ts",
-      "line": 477,
+      "line": 473,
       "text": "    this.app.route(\"/sessions\", createSessionPluginUiHistoryRoutes(this.application.pluginUiHistory));",
       "reason": "Registers read-only history/410 routes only."
     },

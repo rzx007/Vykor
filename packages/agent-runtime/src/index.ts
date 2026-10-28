@@ -99,4 +99,4 @@ export { createNodeJobBindings, type NodeJobBindings, type NodeJobBindingsOption
 export type { RunCapabilityView, NodeRunToolBinding, RunSkillBinding, RunAgentBinding, RunMcpServerBinding, RuntimeSandboxStatus } from "./node/runtime/node-runtime-resources.js";
 
 // Hosts must use the same bundle's identity maps as Node capability capture.
-export { markTrustedReadOnlyTool, isTrustedReadOnlyTool, isToolResultReader } from "@vykor/core";
+export { isToolResultReader } from "@vykor/core";
