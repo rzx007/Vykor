@@ -2,7 +2,7 @@ import { createNoteApplicationService, type NoteApplicationService } from "./not
 import { createProjectFactsService, type ProjectFactsService } from "./personalization/project-facts-service.js";
 import { createMaintenanceApplicationService, type MaintenanceApplicationContext } from "./maintenance/maintenance-application-service.js";
 import { ToolOperationReviewService } from "./session/execution/tool-operation-review-service.js";
-import { ToolOperationService } from "./session/execution/tool-operation-service.js";
+import { ToolOperationService, describeTrustedReadOnlyToolOperation } from "./session/execution/tool-operation-service.js";
 import { ToolResultService } from "./session/execution/tool-result-service.js";
 import { createNodeJobBindings, isTrustedReadOnlyTool, markTrustedReadOnlyTool } from "@vykor/agent-runtime";
 import { GoalModelAttemptService } from "./goals/goal-model-attempt-service.js";
@@ -508,8 +508,8 @@ export class DaemonApplication implements DurableAgentApplication {
         requestBudgetStop: (goalId) => this.goals.requestBudgetStop(goalId) });
       const toolSafety = new ToolOperationService({ store, ownerLease: () => this.ownerLease,
         accepting: () => this.readyState === "ready" && this.operationGate.accepting,
-        describe: ({ binding }) => binding?.source?.kind === "builtin"
-          && isTrustedReadOnlyTool(binding.definition, binding.definitionIdentity) ? { kind: "read_only" } : undefined });
+        blockOnUnknownToolOutcome: () => (options.getSettings?.() ?? options.settings)?.blockOnUnknownToolOutcome === true,
+        describe: describeTrustedReadOnlyToolOperation });
       this.toolOperationReview = new ToolOperationReviewService({ store, ownerLease: () => this.ownerLease,
         accepting: () => this.readyState === "ready" && this.operationGate.accepting, reconcile: input => toolSafety.reconcile(input) });
       const toolResults = new ToolResultService({ store, ownerLease: () => this.ownerLease,

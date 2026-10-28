@@ -32,6 +32,7 @@ function fixture(options: { invoke?(): Promise<ToolResult>; timeoutMs?: number; 
   const tools = [tool, ...(options.tools ?? []), ...(options.readOnlyTools ?? [])];
   for (const definition of tools) registry.register(definition, { kind: "builtin" });
   const service = new ToolOperationService({ store, ownerLease: () => lease,
+    blockOnUnknownToolOutcome: () => true,
     describe: intent => options.readOnlyTools?.some(definition => definition.execute === intent.binding?.invoke)
       ? { kind: "read_only" } : undefined,
   });

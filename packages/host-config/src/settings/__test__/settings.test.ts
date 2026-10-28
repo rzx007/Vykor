@@ -44,6 +44,19 @@ describe("daemon settings", () => {
     expect((await loadSettings()).workStyle).toBe("practical");
   });
 
+  it("keeps blocking on unknown tool outcomes off unless explicitly enabled", async () => {
+    expect((await loadSettings()).blockOnUnknownToolOutcome).toBe(false);
+    for (const enabled of [true, false]) {
+      writeFileSync(join(configDir, "settings.json"), JSON.stringify({ blockOnUnknownToolOutcome: enabled }));
+      expect((await loadSettings()).blockOnUnknownToolOutcome).toBe(enabled);
+    }
+  });
+
+  it.each(["false", 1, null])("rejects a non-boolean unknown-outcome switch: %j", async value => {
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({ blockOnUnknownToolOutcome: value }));
+    await expect(loadSettings()).rejects.toMatchObject({ field: "settings.blockOnUnknownToolOutcome" });
+  });
+
   it.each(["docker", "", null, 12])("rejects invalid saved agent environment %j", async (kind) => {
     writeFileSync(join(configDir, "settings.json"), JSON.stringify({ agentEnvironment: { kind } }));
     await expect(loadSettings()).rejects.toThrow(/agentEnvironment.kind/);

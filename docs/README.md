@@ -73,6 +73,7 @@
 - [认证、Provider 和 Model](./auth-provider-model.md)：配置文件、凭据来源和解析顺序。
 - [远程连接](./remote-attach.md)、[daemon 系统服务](./daemon-system-service.md)：连接发现和系统常驻。
 - [运维与恢复](./operations-and-recovery.md)：启动恢复、数据目录写入者、清理、备份和格式演进。
+- [未知工具结果阻断的决定](./tool-outcome-blocking-decision.md)：默认关闭的原因、保留的检查、设置入口与待重新评估的问题。
 - [开发数据重置](./development-data-reset.md)：人工预检及逐项授权的操作说明。
 - [诊断与可观测性](./observability.md)：运行追踪、日志、状态快照和排障。
 - [发布流程](./release-process.md)：Desktop、CLI 与官方插件的发布边界。

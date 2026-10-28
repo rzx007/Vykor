@@ -10,7 +10,7 @@
 
 安全判断使用 `listSafetyStates()`，只返回 id、sessionId、runId、kind、state，不复制输入和正文。补读使用 `listResultCandidates(sessionId)` / `getResultCandidate(operationId)` 读取已完成结果的身份和来源；授权与分页之后才调用 `readResultText(operationId)` 生成单条文本。`get/list` 仍供需要完整审计记录的调用方使用，Operation 与 Attempt 的正文保存策略不变。
 
-未知写操作阻止同一会话后续危险派发，换工具或新建操作不能绕过，只读工具仍可核对。`reconcile` 仅供可信宿主传入只读查询的非空证据；不能从错误文本推断未生效。核对为 `not_applied` 后，经过当前授权才可创建新的 Attempt。确认已生效需要可信完整结果，缺失结果时保持 unknown。每次核对证据追加到操作及原尝试，保留历史。
+`dispatch` 的宿主参数 `blockOnUnknownToolOutcome` 决定是否因同一会话的未知写操作阻止后续危险派发。Daemon 默认显式传 `false`；底层调用方省略时保留原来的严格检查。开启时换工具或新建操作不能绕过，只读工具仍可核对；关闭时操作自身的重复派发、归属和版本检查不变。原因见[决策记录](../../../../docs/tool-outcome-blocking-decision.md)。`reconcile` 仅供可信宿主传入只读查询的非空证据；不能从错误文本推断未生效。核对为 `not_applied` 后，经过当前授权才可创建新的 Attempt。确认已生效需要可信完整结果，缺失结果时保持 unknown。每次核对证据追加到操作及原尝试，保留历史。
 
 启动时宿主确认旧 owner 失活，在取得写入权的同一事务内重新读取持久状态，再调用 `recoverDispatching` 将所有遗留未结算尝试标记 unknown；固定 ownerId 也不能跳过旧派发。不重新调用工具。合法迟到结果可将同一个 unknown Attempt 确认为 completed，即使 Run 已结束，但不能重新交付模型或取得新派发权。
 

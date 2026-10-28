@@ -123,8 +123,8 @@ it.each(["sdk", "daemon"] as const)("waits for both real invocation and run clea
   } finally { await f.close(); }
 });
 
-it("keeps Agent tool capacity refusal under existing unknown write protection", async () => {
-  const f = await createLifecycleFixture("daemon", { childBudget: { maxActiveChildren: 1 } });
+it("keeps Agent tool capacity refusal under explicitly enabled unknown write protection", async () => {
+  const f = await createLifecycleFixture("daemon", { childBudget: { maxActiveChildren: 1 }, blockOnUnknownToolOutcome: true });
   try {
     f.hold("occupied");
     const a = await f.spawn("occupied"); await f.entered("occupied");
