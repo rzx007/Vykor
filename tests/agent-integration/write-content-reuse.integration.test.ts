@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createHash, randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { QueryEngine, ToolRegistry } from "@vykor/core/engine";
 import { type AgentExecutionContext, type HookExecutor as IHookExecutor, type PermissionChecker as IPermissionChecker, type StreamEvent } from "@vykor/agent-contracts";
 import { type Message } from "@vykor/agent-contracts";
@@ -13,6 +13,7 @@ async function scenario(options: { deny?: boolean; ask?: boolean; conflict?: boo
   const dir = await mkdtemp(join(tmpdir(), "oh-write-reuse-"));
   try {
     const file = join(dir, "index.html");
+    const invokedWrites = vi.spyOn(fileWriteTool, "execute");
     const body = options.body ?? "<!DOCTYPE html>\n<p>完整内容</p>\n".repeat(1000);
     await writeFile(file, "old", "utf8");
     const retry = { file_path: file, content_from: "original-write",
@@ -59,8 +60,9 @@ async function scenario(options: { deny?: boolean; ask?: boolean; conflict?: boo
     const engine = new QueryEngine(client, registry, permissions, hooks, { cwd: dir, trajectoryTrackerFactory: false });
     const results: StreamEvent[] = [];
     for await (const event of engine.submitMessage("fixture", options.ask ? { execution } : {})) results.push(event);
-    return { text: await readFile(file, "utf8"), body, retry, checked, requested, hooked, previews, results, modelHistory };
+    return { text: await readFile(file, "utf8"), body, retry, checked, requested, hooked, previews, results, modelHistory, writeInvocations: invokedWrites.mock.calls.length };
   } finally {
+    vi.restoreAllMocks();
     await rm(dir, { recursive: true, force: true });
   }
 }
@@ -69,6 +71,7 @@ describe("Write content reuse with the real file tool", () => {
   it("recovers one generated body using the failure text and a flat reference call", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-write-visible-body-reuse-"));
     try {
+      const invokedWrites = vi.spyOn(fileWriteTool, "execute");
       const file = join(dir, "target.html"); await writeFile(file, "original");
       const body = "<!doctype html>\n<p>body generated once</p>\n".repeat(1000);
       let step = 0; let generatedBodies = 0; let contentFrom: string | undefined;
@@ -80,6 +83,7 @@ describe("Write content reuse with the real file tool", () => {
         let input: Record<string, unknown> | undefined;
         if (turn === 0) { input = first; generatedBodies++; }
         if (turn === 1) {
+          expect(invokedWrites).not.toHaveBeenCalled();
           const feedback = texts.join("\n");
           expect(feedback).not.toContain("body generated once");
           expect(feedback).not.toMatch(/regenerate|resend.*body/i);
@@ -99,12 +103,13 @@ describe("Write content reuse with the real file tool", () => {
       const ends = results.filter(e => e.type === "tool_use_end");
       expect(ends).toHaveLength(2);
       expect(ends[0]!.result).toMatchObject({ isError: true, executionState: "not_started" });
+      expect(invokedWrites).toHaveBeenCalledTimes(1);
       expect(first).toEqual({ arguments: { content: body, prepared_from: "obsolete-reference" }, file_path: file });
       expect(contentFrom).toBe(ends[0]!.toolUseId);
       expect(ends[1]!.result).toMatchObject({ executionState: "completed" });
       expect(generatedBodies).toBe(1);
       expect(await readFile(file)).toEqual(Buffer.from(body, "utf8"));
-    } finally { await rm(dir, { recursive: true, force: true }); }
+    } finally { vi.restoreAllMocks(); await rm(dir, { recursive: true, force: true }); }
   });
 
   it("applies a large body from a short reference through approval, preview and hooks", async () => {
@@ -127,8 +132,9 @@ describe("Write content reuse with the real file tool", () => {
   it("keeps the current file when referenced overwrite fails the hash guard", async () => {
     const result = await scenario({ conflict: true });
     expect(result.text).toBe("old");
+    expect(result.writeInvocations).toBe(2);
     expect(result.results.filter(e => e.type === "tool_use_end").at(-1)).toMatchObject({
-      result: { isError: true, failureKind: "precondition", executionState: "not_started" },
+      result: { isError: true, failureKind: "precondition", executionState: "unknown" },
     });
   });
 
@@ -138,8 +144,9 @@ describe("Write content reuse with the real file tool", () => {
     expect(result.retry.content_from).toBe("original-write");
     expect(result.checked[1]).toMatchObject({ content: result.body });
     expect(result.text).toBe("externally updated");
+    expect(result.writeInvocations).toBe(2);
     expect(result.results.filter(e => e.type === "tool_use_end").at(-1)).toMatchObject({
-      result: { isError: true, failureKind: "precondition", executionState: "not_started" },
+      result: { isError: true, failureKind: "precondition", executionState: "unknown" },
     });
   });
 
@@ -147,6 +154,7 @@ describe("Write content reuse with the real file tool", () => {
     const result = await scenario({ deny: true });
     expect(result.text).toBe("old");
     expect(result.hooked).toHaveLength(1);
+    expect(result.writeInvocations).toBe(1);
     expect(result.results.filter(e => e.type === "tool_use_end").at(-1)).toMatchObject({
       result: { failureKind: "permission", executionState: "not_started" },
     });

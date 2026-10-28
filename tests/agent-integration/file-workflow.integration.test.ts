@@ -38,6 +38,7 @@ describe("one complete file workflow", () => {
   ])("keeps $fault intact through offline SSE and rejects it before a short correction", async ({ fault, wrapped }) => {
     const dir = await mkdtemp(join(tmpdir(), "oh-offline-edit-input-"));
     try {
+      const invokedEdits = vi.spyOn(fileEditTool, "execute");
       const file = join(dir, "fixture.txt");
       const original = "const todo = 10099;\nconst done = 7;\n";
       const corrected = "const todo = 10099;\nconst done = 8;\n";
@@ -110,7 +111,8 @@ describe("one complete file workflow", () => {
       expect(JSON.stringify(ends[0]?.result.content)).toContain("const todo = 10099;");
       const firstResult = ends[1]!.result;
       expect(firstResult.isError).toBe(true);
-      expect(firstResult).toMatchObject({ failureKind: fault === "missing new_string" ? "invalid_input" : "precondition", executionState: "not_started" });
+      expect(firstResult).toMatchObject({ failureKind: fault === "missing new_string" ? "invalid_input" : "precondition", executionState: "unknown" });
+      expect(invokedEdits).toHaveBeenCalledTimes(2);
       expect(beforeCorrection).toBe(original);
       expect(checked).toEqual([
         { name: "Read", input: { file_path: file } },
@@ -133,6 +135,7 @@ describe("one complete file workflow", () => {
   it.each([false, true])("preserves optional Write fields through Codex, reuse and current permissions (deny retry: %s)", async denyRetry => {
     const dir = await mkdtemp(join(tmpdir(), "oh-codex-write-contract-"));
     try {
+      const invokedWrites = vi.spyOn(fileWriteTool, "execute");
       const file = join(dir, "target.txt"); await writeFile(file, "old");
       const body = "complete generated body\n".repeat(200);
       const hash = createHash("sha256").update("old").digest("hex");
@@ -180,7 +183,8 @@ describe("one complete file workflow", () => {
         expect(Object.keys(tool.parameters.properties as object)).toEqual(["file_path", "content", "content_from", "expected_sha256"]);
       }
       const ends = events.filter(event => event.type === "tool_use_end");
-      expect(ends[0]?.result).toMatchObject({ failureKind: "precondition", executionState: "not_started" });
+      expect(ends[0]?.result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "unknown" });
+      expect(invokedWrites).toHaveBeenCalledTimes(denyRetry ? 1 : 2);
       expect(JSON.stringify(ends[0]?.result.content)).toContain("content_from");
       expect(checked).toHaveLength(2);
       expect(checked[1]).toEqual({ file_path: file, content: body, expected_sha256: hash });
@@ -191,7 +195,7 @@ describe("one complete file workflow", () => {
         ? { isError: true, failureKind: "permission", executionState: "not_started" }
         : { executionState: "completed" });
       expect(await readFile(file, "utf8")).toBe(denyRetry ? "old" : body);
-    } finally { vi.unstubAllGlobals(); await rm(dir, { recursive: true, force: true }); }
+    } finally { vi.restoreAllMocks(); vi.unstubAllGlobals(); await rm(dir, { recursive: true, force: true }); }
   });
 
   it("keeps wrong numeric Edit matches rejected and then accepts a complete Write without an extra flag", async () => {
@@ -222,8 +226,8 @@ describe("one complete file workflow", () => {
       for await (const event of engine.submitMessage("fixture")) events.push(event);
       const ends = events.filter(event => event.type === "tool_use_end");
       expect(ends.slice(0, 2).map(e => e.result)).toEqual([
-        expect.objectContaining({ failureKind: "precondition", executionState: "not_started" }),
-        expect.objectContaining({ failureKind: "precondition", executionState: "not_started" }),
+        expect.objectContaining({ isError: true, failureKind: "precondition", executionState: "unknown" }),
+        expect.objectContaining({ isError: true, failureKind: "precondition", executionState: "unknown" }),
       ]);
       expect(JSON.stringify(ends[0]?.result.content)).toContain("const todo = 23;");
       expect(ends[2]?.result).toMatchObject({ executionState: "completed" });
@@ -301,6 +305,7 @@ describe("one complete file workflow", () => {
             yield { type: "tool_generation_progress", toolKey: "write-body", toolUseId: "write-body", toolName: "Write", receivedChars: body.length };
             name = "Write"; id = "write-body"; input = { file_path: target, content: body, expected_sha256: "0".repeat(64) };
           } else if (turn === 2) {
+            expect(await readFile(target, "utf8")).toBe("old");
             const feedback = JSON.stringify(params.messages.filter(m => m.type === "tool_result" && m.toolUseId === "write-body"));
             expect(feedback).toContain("Supply the explicit target and intent options in the new call.");
             expect(feedback).toContain("Reusing data does not inherit authorization; normal permissions and state checks still apply.");
@@ -340,7 +345,7 @@ describe("one complete file workflow", () => {
       expect(events.filter(e => e.type === "tool_generation_progress").at(-1)).toMatchObject({ receivedChars: body.length, generationId: expect.any(String) });
       const ends = events.filter(e => e.type === "tool_use_end");
       expect(ends.map(e => e.toolUseId)).toEqual(["inspect", "write-body", "reuse-body", "batch-edit", "patch-files"]);
-      expect(ends[1]?.result).toMatchObject({ isError: true, executionState: "not_started" });
+      expect(ends[1]?.result).toMatchObject({ isError: true, failureKind: "precondition", executionState: "unknown" });
       expect(ends.slice(2).every(e => !e.result.isError)).toBe(true);
       const rawRetry = requests[3]!.filter(m => m.type === "assistant").flatMap(m => m.toolUses ?? []).find(c => c.id === "reuse-body");
       // In-memory history expands the reference; the actual next model input did not resend a body.

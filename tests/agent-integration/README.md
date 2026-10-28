@@ -2,6 +2,8 @@
 
 这里验证 Core 模型/工具循环与 API、权限、提示词、真实文件工具组合后的行为：流中断重试、参数纠错、文件保护、内容复用、Shell 分页、Job 等待时限及 ToolSearch 注册表接入。
 
+文件工作流与内容复用回归分别验证调用状态和实际文件内容：框架在调用前拒绝时保持 `not_started`；工具已被调用后，其自报的 `not_started` 由共同入口归为 `unknown`。真实 Write/Edit 的调用次数、文件未被错误覆盖、内容复用重新检查权限及显式纠正后成功的断言同时保留，不能仅凭执行状态推断文件是否改写。
+
 `__test__/approval-review.integration.test.ts` 验证定时任务输入经过独立审查、用户指令核实和审批存储后，能在审查输出截断并重试成功时解除 BackgroundShellCreate 的等待，且不留下待人工确认的请求。
 
 `__test__/mcp-discovery-continuation.integration.test.ts` 将实际 `McpToolCall` 与 Core 循环连接，验证同一批次搜索加载工具后，下一次调用可以重新检查权限；同时覆盖权限拒绝、同名非 MCP 来源和不存在的目标。只替换模型响应与目标执行，不手写转发工具。
