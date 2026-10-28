@@ -147,6 +147,12 @@ export interface VykorAgentConfiguration {
     provider?: string;
     model: string;
   }) => Promise<number | undefined>;
+  /** Host-owned image capability lookup for the model selected for each request. */
+  resolveModelImageSupport?: (input: {
+    provider?: string;
+    model: string;
+    apiFormat?: Settings["apiFormat"];
+  }) => Promise<boolean>;
   /** Host-owned effort catalog; absent for callers with their own client. */
   resolveReasoningEfforts?: (input: {
     provider?: string;

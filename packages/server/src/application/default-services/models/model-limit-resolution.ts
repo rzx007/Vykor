@@ -1,6 +1,7 @@
 import { validateRequestSelection } from "../../session/interactions/request-selection-validation.js";
 import type { ModelsDevCatalog } from "@vykor/api";
 import type { CustomProviderModelSettings, CustomProviderSettings, Settings } from "@vykor/host-config";
+import { supportsNativeImageInput } from "../../attachments/routing/attachment-capabilities.js";
 
 import {
   catalogModelContextWindow,
@@ -38,6 +39,8 @@ export function createModelMetadataResolvers(
       provider ? catalogModelReasoningEfforts(catalog, provider, model) : undefined,
     resolveModelContextWindow: async (input: { provider?: string; model: string }) => limit("context", input),
     resolveModelOutputLimit: async (input: { provider?: string; model: string }) => limit("output", input),
+    resolveModelImageSupport: async (input: { provider?: string; model: string; apiFormat?: Settings["apiFormat"] }) =>
+      supportsNativeImageInput({ requestConfiguration: input, settings: { customProviders } }, catalog),
   };
 }
 

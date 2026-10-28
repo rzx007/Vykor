@@ -526,8 +526,15 @@ export class QueryEngine implements IQueryEngine {
       let toolUses: ToolUseBlock[] = [];
       let stopReason = "end_turn";
 
-      const request = createTurnRequest({ model: requestConfiguration.model, messages: this.messages, system, tools,
-        maxOutputTokens: requestConfiguration.maxOutputTokens, reasoningEffort: requestConfiguration.reasoningEffort });
+      const request = createTurnRequest({
+        model: requestConfiguration.model,
+        messages: this.messages,
+        system,
+        tools,
+        maxOutputTokens: requestConfiguration.maxOutputTokens,
+        reasoningEffort: requestConfiguration.reasoningEffort,
+        supportsImageInput: requestConfiguration.supportsImageInput,
+      });
 
       // 只把「当前模型调用」包进重试。工具执行、权限请求、压缩和整个 Run
       // 都在循环之外；每次重试冻结同一份请求参数与已确认输入。

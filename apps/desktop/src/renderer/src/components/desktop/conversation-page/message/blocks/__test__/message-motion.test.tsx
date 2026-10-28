@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
-import { MotionConfig } from "motion/react"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import type { DesktopSessionPart } from "@shared/session-types"
@@ -86,36 +85,33 @@ async function renderReply(text: string, streaming: boolean, initialPartIds = ne
   )
 }
 
-it("uses StreamingResponse and the demo cursor without additional character animation", async () => {
-  vi.useFakeTimers()
+it("reveals Chinese characters without queued delays and removes wrappers on completion", async () => {
   await renderReply("你好世界", true)
-  const response = container.querySelector('[data-state="streaming"]')
-  expect(response?.getAttribute("aria-busy")).toBe("true")
-  expect(container.textContent).toBe("")
-  await act(async () => vi.advanceTimersByTimeAsync(64))
-  expect(container.textContent).toBe("你好世界")
-  expect(container.querySelector("[data-sd-animate]")).toBeNull()
-  expect(container.querySelector("button")).toBeNull()
+  const spans = [...container.querySelectorAll<HTMLElement>("[data-sd-animate]")]
+  expect(spans.map((span) => span.textContent)).toEqual(["你", "好", "世", "界"])
+  expect(spans.every((span) => !parseFloat(span.style.getPropertyValue("--sd-delay")))).toBe(true)
+  expect(container.querySelector('[data-stream-initial="true"]')).toBeNull()
 
   await renderReply("你好世界", false)
   expect(container.textContent).toContain("你好世界")
-  expect(container.querySelector('[data-state="complete"]')).toBe(response)
+  expect(container.querySelector("[data-sd-animate]")).toBeNull()
 })
 
 it("keeps a restored streaming prefix settled while revealing only appended text", async () => {
-  vi.useFakeTimers()
   const initialPartIds = new Set(["text-1"])
   await renderReply("已经显示", true, initialPartIds)
-  const paragraph = container.querySelector("p")
   expect(container.querySelector('[data-stream-initial="true"]')).not.toBeNull()
 
   await renderReply("已经显示新增", true, initialPartIds)
-  expect(container.textContent).toBe("已经显示")
-  await act(async () => vi.advanceTimersByTimeAsync(64))
   expect(container.querySelector('[data-stream-initial="true"]')).toBeNull()
-  expect(container.textContent).toBe("已经显示新增")
-  expect(container.querySelector("p")).toBe(paragraph)
-  expect(container.querySelector("[data-sd-animate]")).toBeNull()
+  const spans = [...container.querySelectorAll<HTMLElement>("[data-sd-animate]")]
+  expect(
+    spans.slice(0, 4).every((span) => span.style.getPropertyValue("--sd-duration") === "0ms")
+  ).toBe(true)
+  expect(spans.slice(4).map((span) => span.textContent)).toEqual(["新", "增"])
+  expect(
+    spans.slice(4).every((span) => parseFloat(span.style.getPropertyValue("--sd-duration")) > 0)
+  ).toBe(true)
 })
 
 it("does not animate completed history", async () => {
@@ -124,56 +120,23 @@ it("does not animate completed history", async () => {
   expect(container.textContent).toContain("历史正文")
 })
 
-it("bounds long-reply DOM nodes and preserves appended Markdown", async () => {
-  vi.useFakeTimers()
+it("keeps character animation for long streaming replies and preserves appended Markdown", async () => {
   await renderReply("简短开头", true)
-  await act(async () => vi.advanceTimersByTimeAsync(64))
+  expect(container.querySelector("[data-sd-animate]")).not.toBeNull()
 
   const longText = "长正文内容。".repeat(400)
   await renderReply(`${longText}\n\n1. 普通列表文字与 \`inlineCode\``, true)
-  expect(container.querySelector("[data-sd-animate]")).toBeNull()
+  expect(container.querySelector("[data-sd-animate]")).not.toBeNull()
   expect(container.textContent).toContain(longText)
   expect(container.querySelector("li")?.textContent).toContain("普通列表文字")
   expect(container.querySelector("code")?.textContent).toBe("inlineCode")
 
   await renderReply(`${longText}\n\n后续内容`, true)
-  expect(container.querySelector("[data-sd-animate]")).toBeNull()
+  expect(container.querySelector("[data-sd-animate]")).not.toBeNull()
   expect(container.textContent).toContain("后续内容")
   await renderReply(`${longText}\n\n最终内容`, false)
   expect(container.querySelector("[data-sd-animate]")).toBeNull()
   expect(container.textContent).toContain("最终内容")
-})
-
-it("finishes displaying received text before the response surface reports completion", async () => {
-  vi.useFakeTimers()
-  const text = "正文".repeat(55)
-  await renderReply(text, true)
-  await renderReply(text, false)
-  expect(container.querySelector('[data-state="streaming"]')).not.toBeNull()
-  await act(async () => vi.advanceTimersByTimeAsync(512))
-  expect(container.textContent!.length).toBeGreaterThanOrEqual(55)
-  expect(container.textContent!.length).toBeLessThan(110)
-  await act(async () => vi.advanceTimersByTimeAsync(512))
-  expect(container.textContent).toBe(text)
-  expect(container.querySelector('[data-state="complete"]')).not.toBeNull()
-})
-
-it("skips the demo cursor when the app requests reduced motion", async () => {
-  vi.useFakeTimers()
-  await act(async () =>
-    root.render(
-      <MotionConfig reducedMotion="always">
-        <AssistantMessage
-          {...callbacks}
-          parts={[part("直接显示完整正文")]}
-          streaming
-          initialPartIds={new Set()}
-        />
-      </MotionConfig>
-    )
-  )
-  expect(container.textContent).toBe("直接显示完整正文")
-  expect(vi.getTimerCount()).toBe(0)
 })
 
 it("enters a new standalone tool once and leaves restored tools settled", async () => {

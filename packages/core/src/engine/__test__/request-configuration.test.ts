@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { StreamMessageParams, StreamingMessageClient } from "@vykor/agent-contracts";
+import type { Message, StreamMessageParams, StreamingMessageClient } from "@vykor/agent-contracts";
 import type { AgentExecutionContext, HookExecutor as IHookExecutor } from "@vykor/agent-contracts";
 import { QueryEngine } from "../query-engine.js";
 import { ToolRegistry } from "../tools/tool-registry.js";
@@ -29,6 +29,69 @@ function createExecutionContext(
 }
 
 describe("QueryEngine request configuration", () => {
+  it("omits historical user and tool images for a text model and restores them when switching back", async () => {
+    const history: Message[] = [
+      { type: "user", content: [
+        { type: "text", text: "Describe this image" },
+        { type: "image", source: { type: "file", mediaType: "image/png", path: "/history/user.png" } },
+      ] },
+      { type: "assistant", content: "Checking", toolUses: [
+        { type: "tool_use", id: "read-image", name: "Read", input: {} },
+      ] },
+      { type: "tool_result", toolUseId: "read-image", content: [
+        { type: "text", text: "Screenshot captured" },
+        { type: "image", source: { type: "file", mediaType: "image/png", path: "/history/tool.png" } },
+      ] },
+      { type: "assistant", content: "The image shows a tree." },
+      { type: "user", content: [
+        { type: "image", source: { type: "file", mediaType: "image/png", path: "/history/only-image.png" } },
+      ] },
+      { type: "assistant", content: "Another tree." },
+    ];
+    const original = structuredClone(history);
+    const requests: StreamMessageParams[] = [];
+    const client: StreamingMessageClient = {
+      async *streamMessage(params) {
+        requests.push(params);
+        const hasImages = params.messages.some((message) =>
+          Array.isArray(message.content) && message.content.some((block) => block.type === "image"),
+        );
+        if (params.model === "text-only" && hasImages) {
+          throw new Error("Beam supports text input only. This conversation contains an image.");
+        }
+        yield { type: "text_delta", delta: "Done" };
+        yield { type: "complete", stopReason: "end_turn" };
+      },
+    };
+    let supportsImageInput = true;
+    const engine = new QueryEngine(
+      client, new ToolRegistry(),
+      { checkTool: async () => ({ action: "allow", reason: "test" }) },
+      { execute: async () => ({ blocked: false }) } as IHookExecutor,
+      { resolveRequestConfiguration: async () => ({
+        revision: 0, model: supportsImageInput ? "vision" : "text-only", client, supportsImageInput,
+      }) },
+    );
+    engine.loadMessages(history);
+    for await (const _ of engine.submitMessage("Continue")) { /* consume */ }
+    supportsImageInput = false;
+    for await (const _ of engine.submitMessage("Continue with text")) { /* consume */ }
+    supportsImageInput = true;
+    for await (const _ of engine.submitMessage("Look again")) { /* consume */ }
+
+    const textRequest = requests[1]!;
+    expect(textRequest.messages.some((message) => Array.isArray(message.content) &&
+      message.content.some((block) => block.type === "image"))).toBe(false);
+    expect(textRequest.messages[0]).toMatchObject({ content: [{ type: "text", text: "Describe this image" }, { type: "text" }] });
+    expect(textRequest.messages[2]).toMatchObject({ type: "tool_result", toolUseId: "read-image",
+      content: [{ type: "text", text: "Screenshot captured" }, { type: "text" }] });
+    expect(textRequest.messages[4]).toMatchObject({ type: "user", content: [{ type: "text", text: expect.stringMatching(/image/i) }] });
+    expect(requests[0]!.messages.slice(0, history.length)).toEqual(original);
+    expect(requests[2]!.messages.slice(0, history.length)).toEqual(original);
+    expect(engine.getHistory().slice(0, history.length)).toEqual(original);
+    expect(history).toEqual(original);
+  });
+
   it.each([undefined, 0])("continues beyond 100 requests with unlimited maxTurns %s", async (maxTurns) => {
     let requests = 0;
     const client: StreamingMessageClient = {

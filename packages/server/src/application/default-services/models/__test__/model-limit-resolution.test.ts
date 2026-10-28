@@ -40,6 +40,26 @@ function customProvider(
 }
 
 describe("model metadata snapshots", () => {
+  it.each([
+    ["vision", ["text", "image"], true],
+    ["beam", ["text"], false],
+    ["unknown", undefined, false],
+  ])("resolves image support from the selected catalog model %s", async (model, input, expected) => {
+    const resolvers = createModelMetadataResolvers({}, {
+      openai: { models: { [model]: { ...(input ? { modalities: { input } } : {}) } } },
+    });
+    await expect(resolvers.resolveModelImageSupport({ provider: "openai", model })).resolves.toBe(expected);
+  });
+
+  it.each(["native", "unsupported"] as const)("uses explicit custom model image support %s", async (imageInputSupport) => {
+    const resolvers = createModelMetadataResolvers({ customProviders: [{
+      id: "gateway", displayName: "Gateway", apiFormat: "openai", baseUrl: "https://gateway.example/v1",
+      models: [{ id: "chat", displayName: "Chat", imageInputSupport }],
+    }] }, {});
+    await expect(resolvers.resolveModelImageSupport({ provider: "gateway", model: "chat" }))
+      .resolves.toBe(imageInputSupport === "native");
+  });
+
   it("keeps an agent's model limits after the saved provider is edited", async () => {
     const provider = {
       id: "gateway", displayName: "Gateway", apiFormat: "openai" as const,

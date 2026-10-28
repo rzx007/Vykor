@@ -11,13 +11,30 @@ export interface TurnRequestInput {
   system?: string;
   maxOutputTokens?: number;
   reasoningEffort?: string;
+  supportsImageInput?: boolean;
 }
 
 /** Freeze one request boundary; the Engine alone keeps the mutable history. */
 export function createTurnRequest(
   input: TurnRequestInput,
 ): StreamMessageParams {
-  const messages = Object.freeze([...input.messages]);
+  const messages = Object.freeze(
+    input.messages.map((message): Message => {
+      if (
+        input.supportsImageInput !== false ||
+        (message.type !== "user" && message.type !== "tool_result") ||
+        !Array.isArray(message.content) ||
+        !message.content.some((block) => block.type === "image")
+      ) return message;
+      // Adapt only this request; keep the original images in the engine's history.
+      return {
+        ...message,
+        content: message.content.map((block) => block.type === "image"
+          ? { type: "text", text: "[Image omitted: the current model does not support image input. Switch to an image-capable model to inspect it.]" }
+          : block),
+      };
+    }),
+  );
   const tools = Object.freeze([...input.tools]);
   return Object.freeze({
     model: input.model,

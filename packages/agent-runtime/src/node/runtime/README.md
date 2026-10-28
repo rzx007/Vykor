@@ -14,3 +14,5 @@ agent 组装层调用 `createVykorRuntime()`，构造器收集各项能力，返
 状态集中保存在 `NodeRuntimeResources` 和清理栈中。新增资源组装与释放规则放在这里；agent 操作、子管理、模型配置、工具和记忆分别放在相邻分类。测试辅助的运行适配器留在同层 `__test__/`。
 
 每轮读取实际请求配置后，default-runtime 调用宿主可选 validateModelSelection，复查当前模型目录与权限，再准备客户端与派发。目录容量元数据可保持创建快照，授权校验使用现有 settings/catalog reader 读取当前值，不把旧 root 配置当永久许可。
+
+宿主提供 `resolveModelImageSupport` 时，每轮按实际选择的供应商、模型和 API 格式读取图片能力，随请求快照交给查询引擎。切换模型后的下一次请求因此会重新处理历史图片；未提供该查询的自定义客户端保留原有行为。

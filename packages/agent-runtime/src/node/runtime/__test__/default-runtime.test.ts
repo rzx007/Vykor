@@ -1,4 +1,4 @@
-import type { ToolDefinition } from "@vykor/agent-contracts";
+import type { Message, StreamMessageParams, ToolDefinition } from "@vykor/agent-contracts";
 import { resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -799,6 +799,41 @@ describe("createVykorRuntime tool visibility", () => {
       await runtime.close();
     }
   });
+});
+
+it("uses the selected model's image capability at each request boundary", async () => {
+  const requested: StreamMessageParams[] = [];
+  let model = "vision";
+  const runtime = await createVykorRuntime({
+    settings: { ...BASE_SETTINGS, provider: "openai", apiFormat: "openai", sandbox: { enabled: false } },
+    configuration: {
+      resolveModelImageSupport: async (input: { provider?: string; model: string; apiFormat?: string }) =>
+        input.provider === "openai" && input.apiFormat === "openai" && input.model === "vision",
+      client: {
+        async *streamMessage(input) {
+          requested.push(input);
+          yield { type: "complete" as const, stopReason: "end_turn" as const };
+        },
+      },
+    },
+    requestConfigurationStore: { read: async () => ({ revision: 0, configuration: { model } }) },
+  });
+  const imageMessage: Message = { type: "user", content: [
+    { type: "image", source: { type: "file", mediaType: "image/png", path: "/history/image.png" } },
+  ] };
+  try {
+    runtime.queryEngine.loadMessages([imageMessage]);
+    for await (const _ of runtime.queryEngine.submitMessage("First")) { /* consume */ }
+    model = "text-only";
+    for await (const _ of runtime.queryEngine.submitMessage("Continue")) { /* consume */ }
+    model = "vision";
+    for await (const _ of runtime.queryEngine.submitMessage("Look again")) { /* consume */ }
+    expect(requested[0]!.messages[0]).toEqual(imageMessage);
+    expect(requested[1]!.messages[0]).toMatchObject({ type: "user", content: [{ type: "text" }] });
+    expect(requested[2]!.messages[0]).toEqual(imageMessage);
+  } finally {
+    await runtime.close();
+  }
 });
 
 it("derives the request output cap from the catalog output size", async () => {

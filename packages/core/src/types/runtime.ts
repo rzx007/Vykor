@@ -12,6 +12,8 @@ export type QueryRequestConfiguration = {
   effort?: string;
   maxTurns?: number;
   reasoningEffort?: string;
+  /** Omitted for clients whose image capability is managed by the caller. */
+  supportsImageInput?: boolean;
   client: StreamingMessageClient;
   systemPrompt?: string;
   /** Internal request snapshot builder; receives the exact tools sent to the model. */

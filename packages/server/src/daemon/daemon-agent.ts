@@ -101,6 +101,7 @@ export interface DaemonAgentLoaderOptions {
       | "resolveReasoningEfforts"
       | "resolveModelContextWindow"
       | "resolveModelOutputLimit"
+      | "resolveModelImageSupport"
     >
   >;
   /** Host-only actual Run bindings, including delegated workers; never serialized into events. */

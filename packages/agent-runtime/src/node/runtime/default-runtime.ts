@@ -467,6 +467,11 @@ export async function createVykorRuntime(
             provider: requestConfiguration.provider,
             model: requestConfiguration.model,
           });
+          const supportsImageInput = await configuration.resolveModelImageSupport?.({
+            provider: requestConfiguration.provider ?? settings.provider,
+            model: requestConfiguration.model,
+            apiFormat: requestConfiguration.apiFormat ?? settings.apiFormat,
+          });
           const outputCap = settings.outputTokenMax ?? DEFAULT_OUTPUT_TOKEN_MAX;
           const maxOutputTokens = resolveOutputTokenCap(outputLimit, outputCap);
           return {
@@ -476,6 +481,7 @@ export async function createVykorRuntime(
             client: resolvedClient!,
             systemPromptForTools,
             maxOutputTokens,
+            ...(supportsImageInput !== undefined ? { supportsImageInput } : {}),
             ...(reasoningEffort ? { reasoningEffort } : {}),
             ...(contextWindow ? { contextWindow } : {}),
           };

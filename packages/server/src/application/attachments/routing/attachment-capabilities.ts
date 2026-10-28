@@ -15,7 +15,7 @@ import { readCatalogProvider } from "../../default-services/models/catalog-provi
 export function supportsNativeImageInput(
   context: {
     requestConfiguration?: { model: string; provider?: string; apiFormat?: Settings["apiFormat"] };
-    settings?: Settings;
+    settings?: Pick<Settings, "provider" | "customProviders">;
   },
   catalog: ModelsDevCatalog,
 ): boolean {

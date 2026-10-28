@@ -29,3 +29,5 @@
 测试放在本分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移文件时同步导入、公开入口、文档链接与旧引用清单。
 
 createModelMetadataResolvers 的容量和 effort 查询保留创建快照；validateModelSelection 则可接收现有当前配置读取器，复用会话的 validateRequestSelection。子环境申请前与每轮模型准备均经同一端口验证；目录不可用或模型已撤销时明确失败，不静默换模型。
+
+`createModelMetadataResolvers` 还提供 `resolveModelImageSupport`，复用附件的模型和供应商能力判断。每轮按所选模型查询，只有明确支持原生图片时返回 `true`；纯文本模型和能力未知的模型返回 `false`。目录和自定义供应商信息沿用创建时的快照，运行层将结果交给查询引擎处理本次请求中的历史图片。
