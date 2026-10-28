@@ -158,6 +158,56 @@ function fixture(
 }
 
 describe("durable checked tool operations", () => {
+  it("keeps host invocation tracking failure fatal even after dispatch was recorded", async () => {
+    const failure = new Error("invocation tracking unavailable");
+    const f = fixture();
+    f.execution.observeInvocation = () => { throw failure; };
+    const outcome = await f.run();
+    expect(outcome.fatalFailure?.error).toBe(failure);
+    expect(f.effects).toBe(0);
+  });
+
+  it.each(["prepare", "receipt", "lifecycle"] as const)("propagates nested %s failure even when the proxy catches it", async phase => {
+    const failure = new Error(`nested ${phase} failed`);
+    let followUp: Awaited<ReturnType<ToolDefinition["execute"]>> | undefined;
+    const f = fixture({ invoke: async (input, context) => {
+      if (input.text === "hello") {
+        try { return await context.invokeTool!("Write", { text: "child" }); }
+        catch {
+          followUp = await context.invokeTool!("Write", { text: "must not start" });
+          return { content: [{ type: "text", text: "proxy caught error" }] };
+        }
+      }
+      return { content: [{ type: "text", text: "child wrote" }] };
+    } });
+    const settle = f.safety.operations.settle;
+    f.safety.operations.settle = async input => {
+      if (phase === "receipt" && input.receipt.operationId !== "op-one") throw failure;
+      await settle(input);
+    };
+    const prepare = f.safety.operations.prepare;
+    f.safety.operations.prepare = async intent => {
+      if (phase === "prepare" && intent.parentOperationId) throw failure;
+      return prepare(intent);
+    };
+    const emit = f.execution.emit;
+    f.execution.emit = async event => {
+      if (phase === "lifecycle" && event.type === "domain.event" && event.data.name === "tool.lifecycle"
+        && event.data.payload?.parentOperationId) throw failure;
+      await emit(event);
+    };
+    const execution = { ...f.execution, tools: new Map([["Write", {
+      definition: f.definition, invoke: f.definition.execute, source: { kind: "builtin" as const },
+    }]]) };
+    const engine = new QueryEngine({ async *streamMessage() { throw new Error("unexpected model call"); } }, f.registry,
+      { checkTool: async () => ({ action: "allow" }) }, { register() {}, execute: async () => ({ blocked: false }) });
+    await expect(engine.executeTool(call(), { execution })).rejects.toBe(failure);
+    expect(followUp).toMatchObject({ isError: true, executionState: "not_started" });
+    expect(f.effects).toBe(phase === "receipt" ? 2 : 1);
+    expect(f.saved.find(entry => entry.result.toolUseId === "one")?.result.content)
+      .toEqual([{ type: "text", text: "proxy caught error" }]);
+  });
+
   it("rejects trusted validation before dispatch rights and preserves a definite no-start result", async () => {
     const f = fixture();
     const execution = { ...f.execution, contribution: { tools: [{ definition: f.definition, permission: "host-internal" as const, beforeDispatch: async () => "Evidence is missing" }] } };
@@ -214,7 +264,7 @@ describe("durable checked tool operations", () => {
       };
       const outcome = await f.run();
       expect(f.effects).toBe(0);
-      expect(outcome.failure).toBeDefined();
+      expect(outcome.fatalFailure).toBeDefined();
     },
   );
   it("uses normalized immutable input, performs both required checks and persists before completed events", async () => {
@@ -280,8 +330,11 @@ describe("durable checked tool operations", () => {
       }),
     );
   });
-  it("never redispatches unknown and stops the batch", async () => {
+  it("never redispatches unknown, blocks its serial successors and leaves independent calls available", async () => {
     const f = fixture({ serial: true });
+    f.registry.register({ name: "Inspect", description: "independent diagnostic", inputSchema: {},
+      execute: async () => ({ content: [{ type: "text", text: "independent observation" }] }),
+    });
     f.tickets.set("one", {
       operationId: "op-one",
       revision: 4,
@@ -290,9 +343,12 @@ describe("durable checked tool operations", () => {
       kind: "non_replayable",
       state: "unknown",
     });
-    const outcome = await f.run([call(), call("two")]);
+    const outcome = await f.run([call(), call("two"), { type: "tool_use", id: "inspect", name: "Inspect", input: {} }]);
     expect(f.effects).toBe(0);
-    expect(outcome.failure).toBeDefined();
+    expect(outcome.fatalFailure).toBeUndefined();
+    expect(outcome.results[0]).toMatchObject({ isError: true, failureKind: "policy", executionState: "unknown" });
+    expect(outcome.results[1]).toMatchObject({ isError: true, executionState: "not_started" });
+    expect(outcome.results[2]).toMatchObject({ executionState: "completed", content: [{ type: "text", text: "independent observation" }] });
   });
   it("stops later calls and future dangerous batches when a receipt cannot be saved", async () => {
     const f = fixture({ serial: true });
@@ -301,7 +357,7 @@ describe("durable checked tool operations", () => {
     };
     const first = await f.run([call(), call("two")]);
     expect(f.effects).toBe(1);
-    expect(first.failure).toBeDefined();
+    expect(first.fatalFailure).toBeDefined();
     expect(first.results[0]?.isError).toBe(true);
     await f.run([call("three")]);
     expect(f.effects).toBe(1);
@@ -325,7 +381,7 @@ describe("durable checked tool operations", () => {
     const pending = f.run([call(), call("two")]);
     await vi.waitFor(() => expect(f.effects).toBe(2));
     release();
-    expect((await pending).failure).toBeDefined();
+    expect((await pending).fatalFailure).toBeDefined();
     expect(settled.sort()).toEqual(["one", "two"]);
   });
   it("saves a late actual result after timeout without delivering it again", async () => {
@@ -450,7 +506,7 @@ it("records a tool's claimed not_started after invocation as unknown", async () 
   const outcome = await f.run();
   expect(f.effects).toBe(1);
   expect(f.saved[0]?.result.executionState).toBe("unknown");
-  expect(outcome.failure).toBeDefined();
+  expect(outcome.fatalFailure).toBeUndefined();
 });
 it("reports late receipt persistence failure through host diagnostic without another model result", async () => {
   vi.useFakeTimers();
@@ -522,7 +578,7 @@ it.each([true, false])(
     );
     const pending = engine.executeTool(call(), { execution });
     if (allow) await expect(pending).resolves.toMatchObject({ executionState: "completed" });
-    else await expect(pending).rejects.toThrow();
+    else await expect(pending).resolves.toMatchObject({ isError: true, failureKind: "policy", executionState: "unknown" });
     expect(externalEffects).toBe(allow ? 1 : 0);
     expect(f.intents).toHaveLength(2);
     expect(f.intents[1]?.parentOperationId).toBe("op-one");
@@ -561,6 +617,6 @@ it.each(["non_replayable", "idempotent_write", "read_only"] as const)(
     expect(f.saved[0]?.result.executionState).toBe(
       kind === "read_only" ? "completed" : "unknown",
     );
-    if (kind !== "read_only") expect(outcome.failure).toBeDefined();
+    expect(outcome.fatalFailure).toBeUndefined();
   },
 );

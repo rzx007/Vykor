@@ -34,7 +34,7 @@ it("returns a running snapshot before the engine deadline without cancelling the
           if (request++ === 0) {
             yield { type: "tool_use_start" as const, toolUse: {
               type: "tool_use" as const, id: "wait-1", name: "JobWait",
-              input: { jobIds: ["terminal-1"], timeoutSeconds: 420 },
+              input: { targets: [{ target: { kind: "terminal", jobId: "terminal-1" } }], timeoutSeconds: 420 },
             } };
             yield { type: "complete" as const, stopReason: "tool_use" };
           } else {

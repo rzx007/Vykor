@@ -45,18 +45,26 @@ export interface CheckedToolExecutionOptions {
   permissionChecker: PermissionChecker;
   hookExecutor: HookExecutor;
   signal?: AbortSignal;
+  /** Parent dispatch gate; stops new work without cancelling calls already running. */
+  dispatchSignal?: AbortSignal;
   execution?: AgentExecutionContext;
   parentOperationId?: string;
   generationId?: string;
   timeoutMs?: number;
   internalTools?: ReadonlySet<string>;
   failedToolCalls?: ToolFailureMemory;
-  createToolContext(toolUse: ToolUseBlock, toolAttemptId: string): ToolContext;
+  /** Nested checked calls report host failures directly, even if a proxy catches their error. */
+  onFatalFailure?(error: unknown): void;
+  createToolContext(toolUse: ToolUseBlock, toolAttemptId: string, control: {
+    reportFatalFailure(error: unknown): void;
+    dispatchSignal: AbortSignal;
+  }): ToolContext;
   isTrustedSummary(toolUse: ToolUseBlock, definition: ToolDefinition): boolean;
 }
 export interface CheckedToolExecutionResult {
   results: ToolExecutionResult[];
-  failure?: { error: unknown };
+  /** Host/Run failure only. Tool errors, including unknown outcomes, stay in results. */
+  fatalFailure?: { error: unknown };
 }
 
 class ToolPreflightError extends Error {}
@@ -131,6 +139,7 @@ export async function executeCheckedTools(
   const batchController = new AbortController();
   const startSignal = AbortSignal.any([
     batchController.signal,
+    ...(options.dispatchSignal ? [options.dispatchSignal] : []),
     ...(signal ? [signal] : []),
     ...(execution?.scope.signal ? [execution.scope.signal] : []),
   ]);
@@ -138,11 +147,14 @@ export async function executeCheckedTools(
     ...(signal ? [signal] : []),
     ...(execution?.scope.signal ? [execution.scope.signal] : []),
   ]);
-  let failure: { error: unknown } | undefined;
-  const failBatch = (error: unknown) => {
-    failure ??= { error };
+  let fatalFailure: { error: unknown } | undefined;
+  const failExecution = (error: unknown) => {
+    if (fatalFailure) return;
+    fatalFailure = { error };
     batchController.abort(error);
+    options.onFatalFailure?.(error);
   };
+  const control = { reportFatalFailure: failExecution, dispatchSignal: startSignal };
   const pendingExecution = execution
     ? {
         ...execution,
@@ -151,7 +163,7 @@ export async function executeCheckedTools(
           try {
             await execution.emit(event);
           } catch (error) {
-            failBatch(error);
+            failExecution(error);
             throw error;
           }
         },
@@ -324,7 +336,7 @@ export async function executeCheckedTools(
               });
               startSignal.throwIfAborted();
               const preflight = execution?.contribution?.tools?.find(item => item.definition === tool)?.beforeDispatch;
-              if (preflight) await validateBeforeDispatch(preflight, toolUse.input, createToolContext(toolUse, toolAttemptId), startSignal, timeoutMs);
+              if (preflight) await validateBeforeDispatch(preflight, toolUse.input, createToolContext(toolUse, toolAttemptId, control), startSignal, timeoutMs);
               if (operation) {
                 const policyVersion = await checkRequiredToolPolicy(
                   operation.safety,
@@ -346,7 +358,7 @@ export async function executeCheckedTools(
                 });
                 toolAttemptId = operation.receipt.toolAttemptId;
               }
-              const context = createToolContext(toolUse, toolAttemptId);
+              const context = createToolContext(toolUse, toolAttemptId, control);
               if (operation) {
                 context.operationId = operation.ticket.operationId;
                 context.parentOperationId = operation.intent.parentOperationId;
@@ -398,7 +410,7 @@ export async function executeCheckedTools(
                           operation!.intent.scope.runId,
                           error,
                         );
-                        failBatch(error);
+                        failExecution(error);
                         try {
                           await execution!.emit({
                             type: "domain.event",
@@ -420,8 +432,13 @@ export async function executeCheckedTools(
                     }
                   : undefined,
                 settled => {
-                  execution?.observeInvocation?.(settled);
-                  operation?.safety.operations.observeInvocation?.({ receipt: operation.receipt!, settled });
+                  try {
+                    execution?.observeInvocation?.(settled);
+                    operation?.safety.operations.observeInvocation?.({ receipt: operation.receipt!, settled });
+                  } catch (error) {
+                    failExecution(error);
+                    throw error;
+                  }
                 },
               );
               result = returnedResult(returned, tool);
@@ -429,14 +446,14 @@ export async function executeCheckedTools(
           }
         }
       } catch (error) {
-        if (isAgentExecutionLimitError(error)) failBatch(error);
+        if (isAgentExecutionLimitError(error)) failExecution(error);
         if (
           !started &&
           !startSignal.aborted &&
           !(error instanceof RequiredToolPolicyError) &&
           !(error instanceof ToolPreflightError)
         )
-          failBatch(error);
+          failExecution(error);
         result = {
           toolUseId: toolUse.id,
           toolName: toolUse.name,
@@ -489,7 +506,7 @@ export async function executeCheckedTools(
             operation.intent.scope.runId,
             error,
           );
-          failBatch(error);
+          failExecution(error);
           result = finishResult({
             ...result,
             isError: true,
@@ -506,12 +523,8 @@ export async function executeCheckedTools(
         }
       }
       finishInitialSettlement();
-      if (operation && result.executionState === "unknown")
-        failBatch(
-          new Error(
-            `Tool operation ${operation.ticket.operationId} has an unknown outcome`,
-          ),
-        );
+      // Outcome uncertainty belongs to the operation ledger, not the Run failure
+      // channel. The host gates future writes; the model receives the full result.
       results[idx] = result;
       try {
         await emitToolLifecycle(
@@ -526,7 +539,7 @@ export async function executeCheckedTools(
           identity(),
         );
       } catch (error) {
-        failBatch(error);
+        failExecution(error);
       }
       return result;
     })();
@@ -543,8 +556,8 @@ export async function executeCheckedTools(
         result: publicToolResult(result),
       });
     } catch (error) {
-      failBatch(error);
+      failExecution(error);
     }
   }
-  return { results, failure };
+  return { results, fatalFailure };
 }

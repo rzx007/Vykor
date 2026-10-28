@@ -156,7 +156,8 @@ export function assertToolOperationDispatchable(
   operation: ToolOperationTicket,
 ): void {
   if (operation.state === "unknown" || operation.state === "dispatching")
-    throw new Error(
+    // A known dispatch refusal is policy feedback, not a broken execution host.
+    throw new RequiredToolPolicyError(
       `Tool operation ${operation.operationId} has an unresolved outcome; dispatch is stopped`,
     );
   if (

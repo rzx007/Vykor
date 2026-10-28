@@ -136,7 +136,7 @@ it("keeps Agent tool capacity refusal under existing unknown write protection", 
     expect(f.modelCalls("tool-capacity-refusal")).toBe(0);
     const stopped = a.handle.waitRun(a.target.runId);
     f.release("occupied"); await stopped;
-    await expect(refused).rejects.toThrow("unknown outcome");
+    await expect(refused).rejects.toThrow("Child agent budget exceeded for activeChildren");
     await expect(f.spawn("guard-still-protects")).rejects.toThrow("Unknown or unresolved write operation");
   } finally { await f.close(); }
 });

@@ -292,15 +292,15 @@ describe("DaemonApplication", () => {
         if (!usedTools.includes("JobWait")) {
           const spawned = JSON.parse(
             toolResultText(params.messages, "spawn-attachment-child"),
-          ) as { jobId?: string };
-          if (!spawned.jobId) throw new Error("Agent tool did not return a child job id");
+          ) as { jobId?: string; runId?: string };
+          if (!spawned.jobId || !spawned.runId) throw new Error("Agent tool did not return a child job and run id");
           yield {
             type: "tool_use_start" as const,
             toolUse: {
               type: "tool_use" as const,
               id: "wait-attachment-child",
               name: "JobWait",
-              input: { jobIds: [spawned.jobId], timeoutSeconds: 5 },
+              input: { targets: [{ target: { kind: "agent", jobId: spawned.jobId, runId: spawned.runId } }], timeoutSeconds: 5 },
             },
           };
           yield { type: "complete" as const, stopReason: "tool_use" };
@@ -405,13 +405,13 @@ describe("DaemonApplication", () => {
       const otherAdmission = await application.interactions.admitPrompt(otherSession.id, {
         items: [{ type: "text", text: "try the other session attachment" }],
       });
-      // Undeclared tools are non-replayable: an error stops the Run, while the
-      // original tool Part must still prove that cross-session access was denied.
+      // Undeclared tools remain non-replayable, but their error is delivered to
+      // the model so it can explain the denial without terminating the Run.
       await expect(
         application.runControl.awaitRun(otherSession.id, otherAdmission.run!.id),
       ).resolves.toMatchObject({
-        status: "failed",
-        error: expect.stringContaining("has an unknown outcome"),
+        status: "completed",
+        output: expect.stringContaining("attachment_resource_access_denied"),
       });
       const deniedPart = store.conversations.listMessageParts(otherSession.id)
         .find((part) => part.toolUseId === "other-read-attachment");

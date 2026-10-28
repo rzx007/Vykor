@@ -10,6 +10,8 @@
 
 `__test__/durable-tool-operations.integration.test.ts` 启动独立 Node worker 和真实临时 SQLite，在三个已知提交位置强制杀进程，再以新 owner 重开数据库。测试分别核对派发意图、未知结果与已确认回执，并用独立效果文件确认没有重复写入；它不验证 S2 的模型检查点续跑。夹具位于 `__test__/fixtures/`。
 
+`__test__/s1-tool-safety-pipeline.integration.test.ts` 将真实 Shell、Core 工具循环和 SQLite 操作服务接在一起：超时及部分输出进入下一次模型请求，可信只读检查可继续，未知写入仍拦截新 ID 的危险调用；读取成功本身不解除保护。真实迟到回执可以恢复后续写入，但不会重复交付原工具结果。回执保存失败仍走致命错误通道。
+
 运行 `pnpm test:agent-integration`；根 `pnpm test` 已包含此命令，普通 CI 的 Test 步骤会继续执行。两个工具测试由 `pnpm --filter @vykor/tools test` 覆盖。跨包测试直接运行，避免沿用 Runtime 包的缓存而遗漏 API 或工具变化。
 
 

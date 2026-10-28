@@ -659,7 +659,7 @@ export class QueryEngine implements IQueryEngine {
       if (toolUses.length > 0) {
         // 执行所有请求的工具调用，并将结果作为工具结果消息加入历史记录
         const recoveringAtTurnStart = recoveryToolTurnsRemaining !== null;
-        const { results, failure, discoveryBlockedCalls } =
+        const { results, fatalFailure, discoveryBlockedCalls } =
           await this.executeTools(
             toolUses,
             options.signal,
@@ -741,7 +741,7 @@ export class QueryEngine implements IQueryEngine {
         // Save the complete batch before a consumer can close this generator on delivery failure.
         for (const result of deliveredResults)
           yield { type: "tool_use_end", toolUseId: result.toolUseId, result };
-        if (failure) throw failure.error;
+        if (fatalFailure) throw fatalFailure.error;
         // Cancellation still owes every committed call its full result, in model order.
         options.signal?.throwIfAborted();
         options.execution?.scope?.signal.throwIfAborted();
@@ -1096,7 +1096,7 @@ export class QueryEngine implements IQueryEngine {
     generationId?: string,
   ): Promise<{
     results: ToolExecutionResult[];
-    failure?: { error: unknown };
+    fatalFailure?: { error: unknown };
     discoveryBlockedCalls: ReadonlySet<string>;
   }> {
     const discoveryBlockedCalls = new Set<string>();
@@ -1113,19 +1113,20 @@ export class QueryEngine implements IQueryEngine {
       timeoutMs: this.options.toolTimeoutMs,
       internalTools,
       failedToolCalls,
-      createToolContext: (toolUse, toolAttemptId) =>
+      createToolContext: (toolUse, toolAttemptId, control) =>
         this.createToolContext(
           toolUse,
           toolAttemptId,
           toolRegistry,
-          signal,
-          execution,
-          requestConfiguration,
-          toolUse.name === toolDiscovery?.searchToolName
-            ? toolDiscovery
-            : undefined,
-          (name) => {
-            if (catalogNames.has(name)) discoveryBlockedCalls.add(toolUse.id);
+          {
+            signal,
+            execution,
+            requestConfiguration,
+            toolDiscovery: toolUse.name === toolDiscovery?.searchToolName ? toolDiscovery : undefined,
+            onUnexposedTool: name => {
+              if (catalogNames.has(name)) discoveryBlockedCalls.add(toolUse.id);
+            },
+            ...control,
           },
         ),
       isTrustedSummary: (toolUse, definition) =>
@@ -1164,7 +1165,7 @@ export class QueryEngine implements IQueryEngine {
       execution.scope.signal,
       ...(options.signal ? [options.signal] : []),
     ]);
-    const { results, failure } = await executeCheckedTools({
+    const { results, fatalFailure } = await executeCheckedTools({
       toolUses: [{ ...toolUse }],
       toolRegistry,
       messages: [],
@@ -1173,13 +1174,12 @@ export class QueryEngine implements IQueryEngine {
       signal,
       execution,
       timeoutMs: this.options.toolTimeoutMs,
-      createToolContext: (call, attemptId) =>
+      createToolContext: (call, attemptId, control) =>
         this.createToolContext(
           call,
           attemptId,
           toolRegistry,
-          signal,
-          execution,
+          { signal, execution, ...control },
         ),
       isTrustedSummary: (call, definition) =>
         this.isTrustedSummary(call, definition, toolRegistry, execution),
@@ -1188,10 +1188,10 @@ export class QueryEngine implements IQueryEngine {
     try {
       await options.onResult?.(result);
     } catch (error) {
-      if (failure) throw new AggregateError([failure.error, error], "Tool result delivery and execution lifecycle failed");
+      if (fatalFailure) throw new AggregateError([fatalFailure.error, error], "Tool result delivery and execution lifecycle failed");
       throw error;
     }
-    if (failure) throw failure.error;
+    if (fatalFailure) throw fatalFailure.error;
     return result;
   }
 
@@ -1278,10 +1278,17 @@ export class QueryEngine implements IQueryEngine {
 
   private createToolContext(
     toolUse: ToolUseBlock, toolAttemptId: string, toolRegistry: IToolRegistry,
-    signal?: AbortSignal, execution?: AgentExecutionContext,
-    requestConfiguration?: ToolContext["requestConfiguration"], toolDiscovery?: ToolDiscovery,
-    onUnexposedTool?: (name: string) => void,
+    options: {
+      signal?: AbortSignal;
+      execution?: AgentExecutionContext;
+      requestConfiguration?: ToolContext["requestConfiguration"];
+      toolDiscovery?: ToolDiscovery;
+      onUnexposedTool?: (name: string) => void;
+      reportFatalFailure?: (error: unknown) => void;
+      dispatchSignal?: AbortSignal;
+    },
   ): ToolContext {
+    const { signal, execution, requestConfiguration, toolDiscovery, onUnexposedTool, reportFatalFailure, dispatchSignal } = options;
     const context = createToolExecutionContext({
       cwd: this.cwd, sessionId: this.sessionId, environment: this.options.executionEnvironment,
       toolUse, toolAttemptId, toolRegistry, signal, execution, requestConfiguration, toolDiscovery,
@@ -1331,7 +1338,7 @@ export class QueryEngine implements IQueryEngine {
               },
             }
           : undefined;
-        const { results, failure } = await executeCheckedTools({
+        const { results, fatalFailure } = await executeCheckedTools({
           toolUses: [{ type: "tool_use", id: execution?.toolSafety ? `nested_${randomUUID()}` : toolUse.id, name, input }],
           toolRegistry,
           messages: [],
@@ -1340,22 +1347,22 @@ export class QueryEngine implements IQueryEngine {
           signal: innerSignal,
           execution: innerExecution,
           parentOperationId: context.operationId,
+          onFatalFailure: reportFatalFailure,
+          dispatchSignal,
           timeoutMs:
             options?.deadlineAt === undefined
               ? this.options.toolTimeoutMs
               : Math.max(1, options.deadlineAt - Date.now()),
-          createToolContext: (call, attemptId) =>
+          createToolContext: (call, attemptId, control) =>
             this.createToolContext(
               call,
               attemptId,
               toolRegistry,
-              innerSignal,
-              innerExecution,
-              requestConfiguration,
+              { signal: innerSignal, execution: innerExecution, requestConfiguration, ...control },
             ),
           isTrustedSummary: () => false,
         });
-        if (failure) throw failure.error;
+        if (fatalFailure) throw fatalFailure.error;
         return results[0]!;
       },
     });
