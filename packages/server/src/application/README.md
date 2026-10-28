@@ -61,3 +61,5 @@
 根目录保留组装入口、共用接口和支持函数；具体业务按下方分类放置，避免继续堆入应用入口。
 
 测试放在本分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移文件时同步导入、公开入口、文档链接与旧引用清单。
+
+`__test__/durable-agent-application.test.ts` 的后台 Shell 回归通过离线模型调用真实 `BackgroundShellCreate`，启动临时目录中的本机进程，再用 `application.jobs` 检查 Shell 归属、输出、取消及 SQLite 终态。它使用真实 Node Agent 和现有 `target`、`{ jobs, errors }` 接口；不从底层能力覆盖中读取旧的 `.value/.jobs`，也不用不会执行工具的 Echo Agent 代替这条链路。

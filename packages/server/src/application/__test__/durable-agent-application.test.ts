@@ -13,10 +13,9 @@ import {
   type VykorAgent,
 } from "@vykor/agent-runtime";
 import { ToolRegistry } from "@vykor/core";
-import type { AgentBackgroundShellHost, CompactContextProvider } from "@vykor/core";
+import type { CompactContextProvider } from "@vykor/core";
 import type { AgentEvent, AgentEventContext, AgentEventInput, AgentRunHandle, AgentRunResult, StreamingMessageClient, ToolDefinition } from "@vykor/agent-contracts";
 import type { Message } from "@vykor/agent-contracts";
-import type { AgentJobHost } from "@vykor/jobs";
 import { AttachmentBlobStore, LightOcrEngine, SessionStore } from "@vykor/services";
 
 import type { CreateDaemonAgent } from "../../daemon/daemon-agent.js";
@@ -513,79 +512,75 @@ describe("DaemonApplication", () => {
   it("让模型工具创建的后台 shell 立即进入统一 Jobs，并可被取消", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vykor-background-shell-"));
     const store = new SessionStore({ path: join(dir, "store.db") });
-    let backgroundShellHost: AgentBackgroundShellHost | undefined;
-    let backgroundShellJobs: AgentJobHost | undefined;
-    let terminalJobs: AgentJobHost | undefined;
+    let agent: VykorAgent | undefined;
+    const callId = "create-background-shell";
+    const client: StreamingMessageClient = {
+      async *streamMessage({ messages }) {
+        if (!messages.some(message => message.type === "tool_result" && message.toolUseId === callId)) {
+          yield { type: "tool_use_start", toolUse: {
+            type: "tool_use", id: callId, name: "BackgroundShellCreate",
+            input: {
+              command: `${JSON.stringify(process.execPath)} -e "process.stdout.write('background-ready\\n'); setInterval(() => {}, 1000)"`,
+              description: "background shell integration test",
+            },
+          } };
+          yield { type: "complete", stopReason: "tool_use" };
+          return;
+        }
+        yield { type: "text_delta", delta: "Background shell dispatched." };
+        yield { type: "complete", stopReason: "end_turn" };
+      },
+    };
     const application = new DaemonApplication({
       store,
-      createAgent: hostedAgentFactory(async (context) => {
-        const backgroundShell = context.options.capabilityOverrides?.backgroundShell;
-        const terminal = context.options.capabilityOverrides?.terminal;
-        if (backgroundShell) {
-          backgroundShellHost = backgroundShell.value;
-          backgroundShellJobs = backgroundShell.jobs;
-        }
-        if (terminal) terminalJobs = terminal.jobs;
-        return await createEchoAgent(context);
-      }),
+      settings: {
+        model: "test-model", apiFormat: "openai", maxTurns: 4,
+        permission: { mode: "full_access" }, sandbox: { enabled: false },
+        plugins: { enabled: false }, memory: { enabled: false },
+      },
+      createAgent: async context => {
+        const node = await createDefaultNodeAgent({ ...context.options, client });
+        agent = node;
+        return { agent: node, host: node.host };
+      },
       log: () => {},
     });
 
     try {
       await application.ready();
-      const session = application.commands.createSession({
-        cwd: process.cwd(),
-        model: "test-model",
-      });
+      const session = application.commands.createSession({ cwd: dir, model: "test-model" });
       const admission = await application.interactions.admitPrompt(session.id, {
-        items: [{ type: "text", text: "initialize" }],
+        items: [{ type: "text", text: "start a background command" }],
       });
-      await application.runControl.awaitRun(session.id, admission.run!.id);
+      await expect(application.runControl.awaitRun(session.id, admission.run!.id))
+        .resolves.toMatchObject({ status: "completed", output: "Background shell dispatched." });
+      expect(store.conversations.listMessageParts(session.id).find(part => part.toolUseId === callId))
+        .toMatchObject({ toolName: "BackgroundShellCreate", status: "completed", output: { executionState: "completed" } });
+      const created = JSON.parse(toolResultText(agent!.getHistory(), callId)) as { jobId: string };
+      expect(created).toMatchObject({ jobId: expect.any(String), target: { kind: "shell", jobId: created.jobId } });
+      const target = { kind: "shell", jobId: created.jobId } as const;
 
-      expect(backgroundShellJobs).not.toBe(terminalJobs);
-
-      const created = await backgroundShellHost!.create({
-        requestId: "tool:durable-shell-test",
-        cwd: session.cwd,
-        sessionId: session.id,
-        command: `${JSON.stringify(process.execPath)} -e "setInterval(() => {}, 1000)"`,
-        description: "long-running test server",
-      });
-
-      await expect(backgroundShellJobs!.list({
-        sessionId: session.id,
-        includeFinished: true,
-      })).resolves.toEqual([
-        expect.objectContaining({ id: created.jobId, kind: "shell" }),
+      await expect(application.jobs.list({ sessionId: session.id, kinds: ["shell"] }))
+        .resolves.toMatchObject({ jobs: [{ id: created.jobId, kind: "shell", ownerSession: session.id }], errors: [] });
+      await expect(application.jobs.list({ sessionId: session.id, kinds: ["terminal"] }))
+        .resolves.toEqual({ jobs: [], errors: [] });
+      await vi.waitFor(async () => {
+        const read = await application.jobs.read({ sessionId: session.id, target });
+        expect(read.text).toContain("background-ready");
+        expect(read.snapshot).toMatchObject({ target, kind: "shell", status: "running", ownerSession: session.id, cwd: dir });
+      }, { timeout: 5_000 });
+      expect(store.runs.listSessionTasks(session.id)).toMatchObject([
+        { id: created.jobId, type: "shell", status: "running" },
       ]);
-      await expect(terminalJobs!.list({
-        sessionId: session.id,
-        includeFinished: true,
-      })).resolves.toEqual([]);
 
-      await expect(application.jobs.read({
-        sessionId: session.id,
-        jobId: created.jobId,
-      })).resolves.toMatchObject({
-        snapshot: {
-          id: created.jobId,
-          kind: "shell",
-          status: "running",
-          ownerSession: session.id,
-        },
-      });
-      await expect(application.jobs.list({ sessionId: session.id })).resolves.toContainEqual(
-        expect.objectContaining({ id: created.jobId, kind: "shell" }),
-      );
-      await expect(application.jobs.cancel({
-        sessionId: session.id,
-        jobId: created.jobId,
-        reason: "test complete",
-      })).resolves.toMatchObject({ id: created.jobId, status: "killed" });
+      const cancelled = await application.jobs.cancel({ sessionId: session.id, target, reason: "test complete" });
+      expect(["stopping", "killed"]).toContain(cancelled.status);
+      await expect(application.jobs.wait({ sessionId: session.id, target, timeoutMs: 5_000 }))
+        .resolves.toMatchObject({ timedOut: false, snapshot: { id: created.jobId, kind: "shell", status: "killed" } });
+      expect(store.runs.getSessionTask(created.jobId)).toMatchObject({ status: "stopped", output: expect.stringContaining("background-ready") });
     } finally {
-      await application.close().catch(() => {});
-      store.close();
-      rmSync(dir, { recursive: true, force: true });
+      try { await application.close(); }
+      finally { store.close(); rmSync(dir, { recursive: true, force: true }); }
     }
   });
 
