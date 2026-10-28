@@ -4,6 +4,7 @@ import { registerDocumentPreviewScheme, installDocumentPreviewProtocol } from ".
 import { electronApp, optimizer, is } from "@electron-toolkit/utils"
 
 import { createAppContext, type AppContext } from "./core/app-context"
+import { configureLinuxInputMethod } from "./core/linux-input-method"
 import { IpcRegistry } from "./core/ipc/registry"
 import { quitApp } from "./core/services/lifecycle"
 import { WindowManager } from "./core/services/window-manager"
@@ -43,6 +44,7 @@ if (daemonMode) {
 }
 
 function startDesktopApplication(): void {
+  configureLinuxInputMethod(app.commandLine, process.platform)
   registerDocumentPreviewScheme()
   registerPluginAppScheme()
   if (process.platform === "linux") {

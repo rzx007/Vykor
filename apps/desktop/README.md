@@ -12,7 +12,7 @@ Electron + React desktop shell for Vykor.
 
 ## Structure
 
-- `src/main/core`: app context, window manager, IPC registry, lifecycle helpers.
+- [src/main/core](src/main/core/README.md)：应用上下文、Linux 输入法启动配置、窗口管理、界面调用注册及退出流程。
 - `src/main/features/main-window`: primary application window behavior.
 - `src/main/features/tray`: system tray menu, notification, and tray flash helpers.
 - `src/main/features/pet`: transparent desktop Pet window, visibility, click-through, and position persistence.
