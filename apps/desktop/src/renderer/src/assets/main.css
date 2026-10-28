@@ -590,6 +590,31 @@ html:is([data-window-shell="transparent"], [data-window-shell="translucent"]) .b
     font-size: var(--chat-font-size);
     line-height: var(--chat-line-height);
     text-indent: 0;
+    line-break: strict;
+  }
+
+  /* em 保留强调语义与英文斜体，中文片段直立并沿用现有强调字重。 */
+  .assistant-markdown [data-cjk-emphasis="true"] {
+    font-style: normal;
+    font-weight: 600;
+  }
+
+  /* 技术内容不继承外层强调或中文标点换行，代码高亮仍可设置自己的字形。 */
+  .assistant-markdown
+    :is(
+      pre,
+      code,
+      kbd,
+      samp,
+      .assistant-file-link,
+      [data-streamdown="code-block"],
+      [data-streamdown="table-wrapper"]
+    ) {
+    line-break: auto;
+  }
+
+  .assistant-markdown :is([data-streamdown="inline-code"], .assistant-file-link) {
+    font-style: normal;
   }
 
   /* 只增加视觉间距，不改消息原文；流式与完成态沿用同一套排版。 */

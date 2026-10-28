@@ -2,6 +2,7 @@ import { cjk } from "@streamdown/cjk"
 import { defaultRehypePlugins, type CustomRenderer, type PluginConfig } from "streamdown"
 
 import { MermaidDiagram } from "./mermaid-diagram"
+import { rehypeCjkEmphasis } from "./markdown-emphasis"
 import { parseFileReference } from "../models/message-render-model"
 
 type LinkNode = {
@@ -35,6 +36,7 @@ function prepareRelativeFileLinks() {
       if (
         !parseFileReference(href) ||
         /^(?:[a-z][a-z0-9+.-]*:|[\\/]|\.{1,2}[\\/]|[#?])/i.test(decoded.trim()) ||
+        // eslint-disable-next-line no-control-regex -- 文件链接需要显式拒绝控制字符。
         /[\u0000-\u001f\u007f]/.test(decoded) ||
         decoded.split(/[\\/]/).includes("..")
       )
@@ -56,10 +58,12 @@ function restoreRelativeFileLinks() {
     })
 }
 
-export const streamdownRehypePlugins = Object.entries(defaultRehypePlugins).flatMap(
-  ([name, plugin]) =>
+export const streamdownRehypePlugins = [
+  ...Object.entries(defaultRehypePlugins).flatMap(([name, plugin]) =>
     name === "harden" ? [prepareRelativeFileLinks, plugin, restoreRelativeFileLinks] : [plugin]
-)
+  ),
+  rehypeCjkEmphasis,
+]
 
 const customRenderers: CustomRenderer[] = [
   {

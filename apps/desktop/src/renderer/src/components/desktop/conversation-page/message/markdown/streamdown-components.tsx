@@ -20,6 +20,15 @@ export function createStreamdownComponents({
   fileLinkMode?: "open" | "text"
 } = {}): StreamdownComponents {
   return {
+    strong: ({ children, className, ...props }) => {
+      // 解析节点只供 Markdown 渲染器使用，不能透传为 DOM 属性。
+      delete props.node
+      return (
+        <strong {...props} data-streamdown="strong" className={cn("font-semibold", className)}>
+          {children}
+        </strong>
+      )
+    },
     a: ({ href, children, ...props }) => {
       const file = href ? parseFileReference(href) : null
       if (file) {
