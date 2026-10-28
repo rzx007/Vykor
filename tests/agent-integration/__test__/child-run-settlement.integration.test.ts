@@ -271,6 +271,8 @@ it.each(["completed", "failed", "max_turns", "timeout", "user_cancelled"] as con
     expect(run.status).toBe(actual.status);
     expect(run.metadata.terminalOutput).toBe(actual.output);
     expect(f.store!.runs.getSessionTask(a.handle.id)?.output).toBe(actual.output);
+    expect(f.store!.runs.getSessionTask(a.handle.id)?.error).toBe(actual.error);
+    expect(run.error).toBe(actual.error);
     expect((run.metadata.childFailure as any)?.failureKind).toBe(actual.failureKind);
     expect((run.metadata.childFailure as any)?.partialResult).toEqual(actual.partialResult);
     await f.redeliverTerminal(a.target.runId);
@@ -352,4 +354,57 @@ it("returns a stopped followup permit after its started projection is rejected",
     expect((await f.wait(next.target)).text).toBe("other-identity-after-ack-fault");
     expect(f.modelCalls("followup-start-fault")).toBe(0);
   } finally { await f.close(); }
+});
+
+it("keeps budget feedback pinned across followup and archive", async () => {
+  const f = await createLifecycleFixture("daemon", {
+    failure: { label: "budget-feedback", kind: "max_turns" },
+  });
+  try {
+    const first = await f.spawn("budget-feedback");
+    await first.handle.waitRun(first.target.runId);
+    const live = await f.wait(first.target);
+    const actual = first.handle.readRun(first.target.runId).result!;
+    expect(actual.failureKind).toBe("max_turns");
+    expect(live.snapshot.metadata?.childFailure).toEqual({
+      failureKind: actual.failureKind, partialResult: actual.partialResult,
+    });
+    const saved = f.store!.runs.getSessionTask(first.handle.id)!;
+    expect(saved.output).toBe(actual.output);
+    expect(saved.error).toBe(actual.error);
+    expect(saved.error).not.toBe(saved.output);
+    expect(f.modelCalls("budget-feedback")).toBe(2);
+
+    f.hold("remaining-checks");
+    const receipt = await f.send(first.target, "remaining-checks");
+    const next = { ...first.target, runId: receipt.runId };
+    expect(next.runId).not.toBe(first.target.runId);
+    await f.entered("remaining-checks");
+    const current = f.store!.runs.getSessionTask(first.handle.id)!;
+    expect(current).toMatchObject({ runId: next.runId, status: "running" });
+    expect(current.error).toBeUndefined();
+    expect(current.metadata.childFailure ?? null).toBeNull();
+    await f.redeliverTerminal(first.target.runId);
+    expect(f.store!.runs.getSessionTask(first.handle.id)?.runId).toBe(next.runId);
+    expect((await f.read(first.target)).snapshot.metadata?.childFailure)
+      .toEqual(live.snapshot.metadata?.childFailure);
+
+    f.release("remaining-checks");
+    const continued = await f.wait(next);
+    expect(continued.snapshot).toMatchObject({ status: "failed", metadata: { childFailure: {
+      failureKind: "max_turns", partialResult: { runId: next.runId, childSessionId: first.handle.sessionId },
+    } } });
+    expect(f.modelCalls("remaining-checks")).toBe(2);
+    await first.handle.close();
+    const archived = await f.read(first.target);
+    expect(archived.snapshot.target).toEqual(first.target);
+    expect(archived.snapshot.detail).toBe(live.snapshot.detail);
+    expect(archived.snapshot.metadata?.childFailure).toEqual(live.snapshot.metadata?.childFailure);
+    expect(archived.text).toBe(live.text);
+    expect(archived.snapshot.capabilities.send).toBe(false);
+    await expect(f.send(first.target, "cannot-send-to-archive")).rejects.toThrow();
+    expect(f.modelCalls("budget-feedback")).toBe(2);
+  } finally {
+    await f.close();
+  }
 });

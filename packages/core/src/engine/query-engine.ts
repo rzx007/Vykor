@@ -482,14 +482,18 @@ export class QueryEngine implements IQueryEngine {
       const turnSystemPrompt = contribution?.systemGuidance
         ? appendSystemGuidance(baseSystemPrompt, contribution.systemGuidance)
         : baseSystemPrompt;
+      const budgetSystem = hardMaxTurns !== undefined && !forcedFinalTurn
+        ? appendSystemGuidance(turnSystemPrompt,
+            `本次运行含当前轮还剩 ${maxTurnsLimit() - turnCount} 轮，其中最后 1 轮只用于无工具收尾。请据此安排必要检查；最终区分已有证据、尚未验证的事项和阻碍。`)
+        : turnSystemPrompt;
       const recoverySystem = forcedFinalTurn
         ? appendSystemGuidance(
-            turnSystemPrompt,
+            budgetSystem,
             childFinalizing
               ? CHILD_FINALIZATION_PROMPT
               : RECOVERY_FINALIZATION_PROMPT,
           )
-        : turnSystemPrompt;
+        : budgetSystem;
       const system = trajectoryControl.guidance
         ? appendSystemGuidance(recoverySystem, trajectoryControl.guidance)
         : recoverySystem;

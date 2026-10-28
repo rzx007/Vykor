@@ -12,6 +12,10 @@ import type { SessionExecutionRecord } from "@vykor/domain-contracts/sessions";
 const DEFAULT_OUTPUT_LIMIT = 12_000;
 
 export function taskSnapshot(task: SessionExecutionRecord): JobSnapshot {
+  const metadata: Record<string, unknown> = { ...task.metadata, ...(task.childSessionId ? { childSessionId: task.childSessionId } : {}) };
+  delete metadata.childFailure;
+  const failure = executionBackend(task) === "child_agent" ? readChildFailure(task) : undefined;
+  if (failure) metadata.childFailure = failure;
   return {
     id: task.id,
     kind: taskKind(task.type),
@@ -38,10 +42,7 @@ export function taskSnapshot(task: SessionExecutionRecord): JobSnapshot {
         Number.isInteger(task.metadata.processExitCode)))
       ? { exitCode: task.metadata.processExitCode as number | null }
       : {}),
-    metadata: {
-      ...task.metadata,
-      ...(task.childSessionId ? { childSessionId: task.childSessionId } : {}),
-    },
+    metadata,
   };
 }
 
@@ -91,12 +92,24 @@ export function limitOutput(
 }
 
 export function readChildFailure(
-  task: SessionExecutionRecord,
+  task: Pick<SessionExecutionRecord, "metadata" | "childSessionId" | "runId">,
 ): Record<string, unknown> | undefined {
   const value = task.metadata.childFailure;
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
+  if (!isRecord(value)) return undefined;
+  const failureKind = typeof value.failureKind === "string" &&
+    ["max_turns", "timeout", "user_cancelled", "parent_interrupted", "model_error", "tool_error", "unknown"].includes(value.failureKind)
+    ? value.failureKind : undefined;
+  const report = value.partialResult;
+  const validReport = Boolean(task.childSessionId && task.runId) && isRecord(report) && report.version === 1 &&
+    report.childSessionId === task.childSessionId && report.runId === task.runId &&
+    (report.source === "committed_assistant_text" || report.source === "limit_finalization") &&
+    typeof report.text === "string" && report.text.trim().length > 0 && typeof report.truncated === "boolean";
+  if (!failureKind && !validReport) return undefined;
+  return { ...(failureKind ? { failureKind } : {}), ...(validReport ? { partialResult: report } : {}) };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function taskTarget(task: SessionExecutionRecord): JobTarget {
@@ -183,11 +196,12 @@ export function createTaskArchive(
         snapshot.target = input.target;
         snapshot.startedAt = run.startedAt ?? run.createdAt;
         snapshot.updatedAt = run.updatedAt;
-        if (run.finishedAt) snapshot.finishedAt = run.finishedAt;
+        if (run.finishedAt) snapshot.finishedAt = run.finishedAt; else delete snapshot.finishedAt;
         if (run.error) snapshot.detail = run.error; else delete snapshot.detail;
         snapshot.metadata ??= {};
         delete snapshot.metadata.childFailure;
-        if (run.metadata.childFailure) snapshot.metadata.childFailure = run.metadata.childFailure;
+        const failure = readChildFailure({ metadata: run.metadata, childSessionId: task.childSessionId, runId: targetRunId });
+        if (failure) snapshot.metadata.childFailure = failure;
         snapshot.status =
           run.status === "completed"
             ? "completed"

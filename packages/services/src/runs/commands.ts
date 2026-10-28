@@ -47,6 +47,7 @@ export interface UpdateSessionTaskInput {
   status?: SessionTaskStatus;
   runId?: string;
   output?: string;
-  error?: string;
+  /** undefined leaves the error unchanged; null explicitly clears it. */
+  error?: string | null;
   metadata?: Record<string, unknown>;
 }

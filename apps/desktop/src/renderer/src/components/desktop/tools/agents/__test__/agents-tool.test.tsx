@@ -244,3 +244,26 @@ it("ignores a detail request that resolves after the panel was hidden", async ()
   expect(container.textContent).toContain("正在加载消息")
   expect(openAux).toHaveBeenCalledTimes(2)
 })
+
+it("uses the same budget explanation in details and list while keeping raw errors expandable", async () => {
+  const current = useDesktopSessionStore.getState().sessionView!
+  const budgetTask = { ...current.tasks[0], runId: "run-A", status: "failed" as const, error: "technical turn limit", metadata: { childFailure: {
+    failureKind: "max_turns", partialResult: { version: 1, childSessionId: "child-1", runId: "run-A", source: "limit_finalization", text: "partial report", truncated: false },
+  } } }
+  useDesktopSessionStore.setState({ sessionView: { ...current, tasks: [budgetTask] } })
+  openAux.mockResolvedValue(emptySessionView("child-1"))
+  await act(async () => { root.render(<AgentsTool {...callbacks} active openRequest={{ id: 99, taskId: "task-1" }} />) })
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)) })
+  expect(container.textContent).toContain("未完成 · 已达轮次上限")
+  expect(container.textContent).toContain("子任务未完成")
+  expect(container.textContent).toContain("已保留部分结果")
+  expect(container.querySelector('[role="alert"]')?.classList.contains("text-destructive")).toBe(false)
+  const trigger = [...container.querySelectorAll("button")].find(button => button.textContent?.includes("查看原始错误记录"))!
+  expect(trigger.getAttribute("aria-expanded")).toBe("false")
+  await act(async () => trigger.click())
+  expect(trigger.getAttribute("aria-expanded")).toBe("true")
+  expect(container.textContent).toContain("technical turn limit")
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="返回子智能体列表"]')!.click())
+  expect(container.textContent).toContain("未完成 · 已达轮次上限")
+  expect(container.textContent).not.toContain("technical turn limit")
+})

@@ -6,6 +6,7 @@ import { AgentAvatar } from "@renderer/components/desktop/shared/agent-avatar/ag
 import { Alert, AlertDescription, AlertTitle } from "@renderer/components/ui/alert"
 import { Badge } from "@renderer/components/ui/badge"
 import { Button } from "@renderer/components/ui/button"
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@renderer/components/ui/collapsible"
 import {
   Empty,
   EmptyDescription,
@@ -36,7 +37,7 @@ import { applySessionPartDeltas } from "@renderer/stores/desktop-session/session
 import { createSessionUpdateDeliveryAcknowledger } from "@renderer/stores/desktop-session/session-update-delivery"
 import type { DesktopSessionTask, DesktopSessionView } from "@shared/session-types"
 import {
-  agentTaskStatusLabel,
+  agentTaskPresentation,
   groupAgentTasks,
   matchesAgentSessionUpdate,
 } from "./agent-task-model"
@@ -184,7 +185,8 @@ function AgentTaskItem({
   onOpen: (task: DesktopSessionTask) => void
 }): React.JSX.Element {
   const running = task.status === "pending" || task.status === "running"
-  const failed = task.status === "failed" || task.status === "interrupted"
+  const presentation = agentTaskPresentation(task)
+  const failed = presentation.tone === "error"
   return (
     <Item
       variant="muted"
@@ -198,13 +200,13 @@ function AgentTaskItem({
       <ItemContent className="min-w-0">
         <ItemTitle className="max-w-full truncate">{task.description}</ItemTitle>
         <ItemDescription className="line-clamp-1">
-          {task.error ?? task.output ?? agentTaskStatusLabel(task.status)}
+          {presentation.reason ?? task.output ?? presentation.label}
         </ItemDescription>
       </ItemContent>
       <ItemActions>
         <Badge variant={failed ? "destructive" : running ? "secondary" : "outline"}>
           {running ? <Spinner className="size-3" aria-hidden="true" /> : null}
-          {agentTaskStatusLabel(task.status)}
+          {presentation.label}
         </Badge>
       </ItemActions>
     </Item>
@@ -308,7 +310,8 @@ function AgentDetails({
   const running = Boolean(
     view?.runs.some((run) => run.status === "pending" || run.status === "running")
   )
-  const failed = task?.status === "failed" || task?.status === "interrupted"
+  const presentation = task ? agentTaskPresentation(task) : undefined
+  const failed = presentation?.tone === "error"
   return (
     <>
       <header className="flex h-12 shrink-0 items-center gap-2 border-b px-3">
@@ -327,16 +330,24 @@ function AgentDetails({
         </h2>
         {task ? (
           <Badge variant={failed ? "destructive" : "outline"}>
-            {agentTaskStatusLabel(task.status)}
+            {presentation?.label}
           </Badge>
         ) : null}
       </header>
-      {task?.error ? (
+      {presentation?.reason ? (
         <div className="px-4 pt-4">
-          <Alert variant="destructive">
+          <Alert variant={failed ? "destructive" : "default"}>
             <AlertCircle />
-            <AlertTitle>子智能体任务失败</AlertTitle>
-            <AlertDescription>{task.error}</AlertDescription>
+            <AlertTitle>{presentation.tone === "warning" ? "子任务未完成" : presentation.label}</AlertTitle>
+            <AlertDescription>
+              {presentation.reason}
+              {task?.error ? (
+                <Collapsible>
+                  <CollapsibleTrigger className="mt-2 cursor-pointer underline underline-offset-4">查看原始错误记录</CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2 whitespace-pre-wrap break-words">{task.error}</CollapsibleContent>
+                </Collapsible>
+              ) : null}
+            </AlertDescription>
           </Alert>
         </div>
       ) : null}

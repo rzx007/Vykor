@@ -1,9 +1,10 @@
 import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/agent-contracts";
-import type { AgentJobAuthorization, AgentJobHost, JobTarget, JobKind, JobStatus } from "@vykor/jobs";
+import type { AgentJobAuthorization, AgentJobHost, JobTarget, JobKind, JobStatus, JobSnapshot } from "@vykor/jobs";
 
 const DEFAULT_JOB_LIST_LIMIT = 100;
 const MAX_JOB_WAIT_IDS = 32;
 const MAX_JOB_WAIT_MS = 60_000;
+const CHILD_RESULT_GUIDANCE = " For a failed child run, inspect snapshot.metadata.childFailure and read any partial report before deciding what remains unverified. A max_turns or child execution timeout does not mean the checked program failed. Explain evidence and missing checks against the original delegation. Continue only within existing authorization and budgets; JobSend requires current capabilities.send, and its new receipt selects a new run. Archives are read-only. Do not create replacement agents to bypass limits.";
 const targetProperty = { type: "object", properties: { kind: { type: "string", enum: ["agent", "shell", "terminal", "workflow", "dream"] }, jobId: { type: "string" }, runId: { type: "string", description: "Required for agent targets; pins one accepted run" } }, required: ["kind", "jobId"] };
 function jobTarget(value: unknown): JobTarget {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("target is required");
@@ -67,7 +68,7 @@ export function createJobTools(port?: AgentJobHost, authorization?: AgentJobAuth
 
   const jobReadTool: ToolDefinition = {
     name: "JobRead",
-    description: "Read output produced after an optional cursor and return the current job snapshot.",
+    description: "Read output produced after an optional cursor and return the current job snapshot." + CHILD_RESULT_GUIDANCE,
     inputSchema: {
       type: "object",
       properties: {
@@ -96,7 +97,7 @@ export function createJobTools(port?: AgentJobHost, authorization?: AgentJobAuth
 
   const jobWaitTool: ToolDefinition = {
     name: "JobWait",
-    description: "Wait briefly for existing jobs without cancelling or restarting them. Defaults to 30 seconds, capped at 60 seconds and the remaining tool deadline. On expiry, returns current snapshots with timedOut=true; this is not a job failure. Use JobRead to inspect output or wait again if still running.",
+    description: "Wait briefly for existing jobs without cancelling or restarting them. Defaults to 30 seconds, capped at 60 seconds and the remaining tool deadline. On expiry, returns current snapshots with timedOut=true; this is not a job failure. Use JobRead to inspect output or wait again if still running." + CHILD_RESULT_GUIDANCE,
     inputSchema: {
       type: "object",
       properties: {
@@ -208,21 +209,47 @@ function resolveHost(context: ToolContext, host?: AgentJobHost): { jobs: AgentJo
   return { jobs, sessionId: context.sessionId };
 }
 
+function childSummaryFacts(snapshot: JobSnapshot): string[] {
+  if (snapshot.kind !== "agent" || snapshot.target.kind !== "agent" ||
+      typeof snapshot.metadata?.childSessionId !== "string" || !snapshot.metadata.childSessionId.trim() ||
+      !["failed", "killed"].includes(snapshot.status)) return [];
+  const failure = snapshot.metadata.childFailure;
+  if (!isRecord(failure)) return [];
+  const kind = typeof failure.failureKind === "string" &&
+    ["max_turns", "timeout", "user_cancelled", "parent_interrupted", "model_error", "tool_error", "unknown"].includes(failure.failureKind)
+    ? failure.failureKind : undefined;
+  const report = failure.partialResult;
+  const available = isRecord(report) && report.version === 1 &&
+    report.childSessionId === snapshot.metadata.childSessionId && report.runId === snapshot.target.runId &&
+    (report.source === "committed_assistant_text" || report.source === "limit_finalization") &&
+    typeof report.text === "string" && report.text.trim().length > 0 && typeof report.truncated === "boolean";
+  return [...(kind ? [`failureKind=${kind}`] : []), `partialResult=${available ? "available" : "none"}`];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function result(action: string, value: object): ToolResult {
-  const job = value as { jobId?: string; cursor?: number; snapshot?: { id?: string; status?: string; exitCode?: number | null }; results?: Array<{ jobId: string; cursor?: number; snapshot?: { id?: string; status?: string; exitCode?: number | null } }> };
-  const all = job.results ?? (job.snapshot?.id ? [job] : []);
+  type Observation = { cursor?: number; snapshot?: JobSnapshot };
+  const job = value as Observation & { jobs?: JobSnapshot[]; results?: Observation[] };
+  const all: Observation[] = job.jobs?.map(snapshot => ({ snapshot })) ?? job.results ?? (job.snapshot?.id ? [job] : []);
   const snapshots = all.filter((item) => item.snapshot?.id);
   const withoutSnapshot = all.length - snapshots.length;
   const facts: string[] = [];
   for (const item of snapshots.slice().reverse()) {
     if (facts.length === 8) break;
-    const id = item.snapshot!.id!;
-    if (!/^[A-Za-z0-9._:-]+$/.test(id)) continue;
+    const snapshot = item.snapshot!;
+    const id = snapshot.id;
+    const runId = snapshot.target?.kind === "agent" ? snapshot.target.runId : undefined;
+    if (!/^[A-Za-z0-9._:-]+$/.test(id) || (runId !== undefined && !/^[A-Za-z0-9._:-]+$/.test(runId))) continue;
     const fact = [
       `jobId=${id}`,
-      item.snapshot?.status ? `status=${item.snapshot.status}` : undefined,
+      runId !== undefined ? `runId=${runId}` : undefined,
+      snapshot.status ? `status=${snapshot.status}` : undefined,
       item.cursor !== undefined ? `cursor=${item.cursor}` : undefined,
-      item.snapshot?.exitCode !== undefined ? `exitCode=${item.snapshot.exitCode}` : undefined,
+      snapshot.exitCode !== undefined ? `exitCode=${snapshot.exitCode}` : undefined,
+      ...childSummaryFacts(snapshot),
     ].filter(Boolean).join("; ");
     if (`Job${action} completed: ${[fact, ...facts].join(" | ")}`.length > 900) continue;
     facts.unshift(fact);

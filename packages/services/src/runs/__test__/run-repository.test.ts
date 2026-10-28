@@ -523,3 +523,21 @@ describe("RunRepository write operations", () => {
       }
     });
   });
+
+it("explicitly clears a saved task error without treating undefined as deletion", () => {
+  const directory = mkdtempSync(join(tmpdir(), "vk-task-error-clear-"));
+  const path = join(directory, "store.db");
+  let store = new SessionStore({ path });
+  try {
+    store.sessions.create({ id: "parent", cwd: directory, model: "m" });
+    store.createSessionTask({ id: "task-1", sessionId: "parent", cwd: directory, type: "agent", description: "check" });
+    store.updateSessionTask("task-1", { status: "failed", error: "old error" });
+    store.updateSessionTask("task-1", { error: undefined });
+    expect(store.getSessionTask("task-1")?.error).toBe("old error");
+    store.updateSessionTask("task-1", { error: null });
+    expect(store.getSessionTask("task-1")).not.toHaveProperty("error");
+    store.close();
+    store = new SessionStore({ path });
+    expect(store.getSessionTask("task-1")).not.toHaveProperty("error");
+  } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
+});

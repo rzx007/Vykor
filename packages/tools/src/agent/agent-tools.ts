@@ -54,7 +54,7 @@ export function createAgentTool(options: CreateAgentToolOptions): ToolDefinition
         maxTurns: {
           type: "integer",
           minimum: 1,
-          description: "Optional turn budget for this child run. It can only tighten the configured budget.",
+          description: "Optional work-loop turn budget for this child run; it can only tighten the configured budget. The last turn is reserved for a tool-free partial summary, so 5 turns allow at most 4 working turns. This is not a count of network attempts or elapsed seconds.",
         },
         timeoutSeconds: {
           type: "integer",

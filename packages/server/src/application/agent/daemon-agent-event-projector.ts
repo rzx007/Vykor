@@ -2,7 +2,7 @@ import type { ToolAppOriginProjector } from "./tool-app-origin-projector.js";
 import type { PluginAppToolOrigin } from "@vykor/plugin-contracts/runtime";
 import type { VykorAgent } from "@vykor/agent-runtime";
 import { isAgentExecutionLimitError } from "@vykor/agent-contracts";
-import type { AgentChildSpawnInput, AgentEvent, StreamEvent } from "@vykor/agent-contracts";
+import type { AgentChildResult, AgentChildSpawnInput, AgentEvent, StreamEvent } from "@vykor/agent-contracts";
 import type {
   ChildFailureKind,
   ChildPartialResult,
@@ -26,6 +26,8 @@ import {
   projectionSettlementInput,
   recoverProjectionSettlements,
 } from "./projection-settlement-recovery.js";
+
+import { childTaskResultPatch } from "./child-task-result.js";
 
 interface ChildProjectionState {
   childId: string;
@@ -844,7 +846,7 @@ export class DaemonAgentEventProjector {
           const child = this.children.get(event.context.childId);
           if (child) this.completeChildTask(child.taskId, event.type === "run.completed"
             ? { status: "completed", output: event.data.output }
-            : { status: interrupted ? "interrupted" : "failed", output: event.data.output ?? error ?? "", ...childFailureFromEvent(event) }, runId);
+            : { status: interrupted ? "interrupted" : "failed", output: event.data.output ?? "", ...(error ? { error } : {}), ...childFailureFromEvent(event) }, runId);
         }
       });
     } catch (projectionError) {
@@ -944,8 +946,9 @@ export class DaemonAgentEventProjector {
       this.completeChildTask(child.taskId, {
         status: "failed",
         output: message,
+        error: message,
         ...childFailureFromEvent(event),
-      });
+      }, runId);
     }
   }
 
@@ -953,13 +956,14 @@ export class DaemonAgentEventProjector {
     const childId = event.context.childId!;
     const childSessionId = event.type === "child.created" ? event.data.sessionId : event.context.sessionId;
     const message = error instanceof Error ? error.message : String(error);
+    const task = this.context.store.getSessionTask(childId);
+    if (task?.runId && task.runId !== event.context.runId) return;
     this.context.liveChildren.unregister(childSessionId, childId);
     this.children.delete(childId);
 
-    const task = this.context.store.getSessionTask(childId);
     const parent = this.context.store.sessions.get(event.context.sessionId);
     if (task && parent) {
-      if (task.status === "pending" || task.status === "running") this.completeChildTask(task.id, { status: "failed", output: message });
+      if (task.status === "pending" || task.status === "running") this.completeChildTask(task.id, { status: "failed", output: message, error: message }, task.runId);
     }
 
     const child = this.context.store.sessions.get(childSessionId);
@@ -1099,17 +1103,18 @@ export class DaemonAgentEventProjector {
 
   private bindChildTask(taskId: string, runId: string): void {
     const before = this.context.events.checkpoint();
-    this.context.store.runs.updateSessionTask(taskId, { status: "running", runId });
+    const task = this.context.store.runs.getSessionTask(taskId);
+    this.context.store.runs.updateSessionTask(taskId, { status: "running", runId,
+      ...(task?.runId !== runId ? { metadata: { childFailure: null } } : {}),
+    });
     this.context.events.publishSince(before);
   }
 
-  private completeChildTask(taskId: string, result: { status: "completed" | "failed" | "interrupted" | "stopped"; output: string; failureKind?: ChildFailureKind; partialResult?: ChildPartialResult }, runId?: string): void {
+  private completeChildTask(taskId: string, result: AgentChildResult, runId?: string): void {
     const task = this.context.store.runs.getSessionTask(taskId);
-    if (runId && task?.runId !== runId) return;
+    if (task?.runId !== runId) return;
     const before = this.context.events.checkpoint();
-    this.context.store.runs.updateSessionTask(taskId, { status: result.status, output: result.output,
-      ...(result.status === "failed" ? { error: result.output } : {}),
-      ...(result.failureKind || result.partialResult ? { metadata: { childFailure: { ...(result.failureKind ? { failureKind: result.failureKind } : {}), ...(result.partialResult ? { partialResult: result.partialResult } : {}) } } } : {}) });
+    this.context.store.runs.updateSessionTask(taskId, childTaskResultPatch(result));
     this.context.events.publishSince(before);
   }
 
@@ -1132,7 +1137,10 @@ export class DaemonAgentEventProjector {
             id: runId, sessionId: state.sessionId, inputId,
             metadata: { parentRunId: state.parentRunId },
           });
-          this.context.store.runs.updateRun(runId, { status: "failed", error: event.data.result.error ?? event.data.result.output });
+          this.context.store.runs.updateRun(runId, { status: "failed",
+            ...(event.data.result.error ? { error: event.data.result.error } : {}),
+            metadata: { terminalOutput: event.data.result.output, childFailure: childTaskResultPatch(event.data.result).metadata?.childFailure },
+          });
         });
         this.context.events.publishSince(before);
         this.bindChildTask(state.taskId, runId);

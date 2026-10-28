@@ -647,3 +647,30 @@ describe("QueryEngine model network retry", () => {
     expect(engine.getTotalUsage()).toMatchObject({ inputTokens: 15, outputTokens: 3 });
   });
 });
+
+it("freezes child remaining rounds across a retry without granting another working round", async () => {
+  const systems: string[] = [];
+  let calls = 0;
+  let executions = 0;
+  const tools = new ToolRegistry();
+  tools.register(makeTool("Read", () => { executions++; }));
+  const client = { async *streamMessage(params: { system?: string; tools?: unknown[] }) {
+    systems.push(params.system ?? "");
+    if (++calls === 1) throw new ModelRequestFailure("reset", { kind: "network", phase: "request", retryable: true });
+    if (params.tools?.length) {
+      yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, id: String(calls), name: "Read", input: {} } };
+      yield { type: "complete" as const, stopReason: "tool_use" };
+    } else { yield { type: "text_delta" as const, delta: "partial" }; yield { type: "complete" as const, stopReason: "end_turn" }; }
+  } };
+  const engine = new QueryEngine(client, tools, allowAll(), noopHooks(), { maxTurns: 3, trajectoryTrackerFactory: false, modelRetry: { baseDelayMs: 0, maxDelayMs: 0 } });
+  const execution: AgentExecutionContext = {
+    scope: { agentId: "agent", sessionId: "session", runId: "run", inputId: "input", traceId: "trace", cwd: "/work", signal: new AbortController().signal },
+    hardMaxTurns: 3, emit: async () => {}, takeSteeredInputs: async () => [], closeSteering() {},
+    effects: { requestPermission: async () => ({ status: "denied" }) },
+    children: { hasChildAgent: () => false, spawnChildAgent: async () => { throw new Error("unused"); },
+      sendChildInput: async () => { throw new Error("unused"); }, interruptChildAgent: async () => {}, awaitChildAgent: async () => { throw new Error("unused"); } },
+  };
+  await expect(async () => { for await (const event of engine.submitMessage("check", { execution })) void event; }).rejects.toMatchObject({ name: "MaxTurnsExceeded" });
+  expect(systems.map(value => value.match(/含当前轮还剩 (\d+) 轮/)?.[1])).toEqual(["3", "3", "2", undefined]);
+  expect(executions).toBe(2);
+});

@@ -27,3 +27,23 @@ it("checks the expected run again when concurrent follow-ups reach admission", a
     expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
   } finally { await f.close(); }
 });
+
+it("returns canonical failure facts through live list, read and wait", async () => {
+  const f = await createLifecycleFixture("sdk", { failure: { label: "budget-shape", kind: "max_turns" } });
+  try {
+    const first = await f.spawn("budget-shape");
+    const waited = await f.wait(first.target);
+    const read = await f.read(first.target);
+    const listed = (await f.list()).jobs.find(job => job.id === first.target.jobId)!;
+    for (const snapshot of [waited.snapshot, read.snapshot, listed]) {
+      expect(snapshot.status).toBe("failed");
+      expect(snapshot.target).toEqual(first.target);
+      expect(snapshot.metadata?.childFailure).toMatchObject({ failureKind: "max_turns", partialResult: { runId: first.target.runId, source: "limit_finalization", truncated: true } });
+      expect(snapshot.metadata).not.toHaveProperty("failureKind");
+      expect(snapshot.metadata).not.toHaveProperty("partialResult");
+    }
+    const emptyWindow = await f.agent.host.jobs.read({ sessionId: f.agent.id, target: first.target, after: read.cursor });
+    expect(emptyWindow.text).toBe("");
+    expect(emptyWindow.snapshot.metadata?.childFailure).toEqual(read.snapshot.metadata?.childFailure);
+  } finally { await f.close(); }
+});

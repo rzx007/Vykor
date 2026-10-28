@@ -8,6 +8,9 @@ import type { SessionStore } from "@vykor/services";
 import type { CreateProjectionSettlementInput } from "@vykor/services";
 import type { ProjectionSettlementRecord } from "@vykor/domain-contracts/sessions";
 
+import { childTaskResultPatch } from "./child-task-result.js";
+import { jsonEqual } from "../support.js";
+
 export const DAEMON_AGENT_PROJECTOR = "daemon-agent";
 
 export interface DaemonAgentSettlementPayload extends Record<string, unknown> {
@@ -131,19 +134,10 @@ function recoverChildTerminalProjection(store: SettlementStore, event: AgentEven
   validateChildResult(result);
   const task = store.getSessionTask(event.data.childId);
   if (!task) throw new Error(`Child task not found during settlement recovery: ${event.data.childId}`);
-  const failure = childFailureMetadata(result);
-
-  if (
-    task.status !== result.status ||
-    task.output !== result.output ||
-    (result.status === "failed" && task.error !== (result.error ?? result.output))
-  ) {
-    store.updateSessionTask(task.id, {
-      status: result.status,
-      output: result.output,
-      ...(result.status === "failed" ? { error: result.error ?? result.output } : {}),
-      ...(failure ? { metadata: { childFailure: failure } } : {}),
-    });
+  // child.closed carries the parent's context, not a child Run identity.
+  // Ordinary runs are repaired by their own terminal events; startup has a fixed saved identity.
+  if (!task.runId || task.runId === result.partialResult?.runId || task.runId === `run_startup_${event.data.childId}`) {
+    updateRecoveredChildTask(store, task, result);
   }
   appendFrameworkEventOnce(store, event, "agent.child.closed", {
     childId: event.data.childId,
@@ -173,8 +167,8 @@ function recoverRunTerminalProjection(store: SettlementStore, event: Extract<Age
       } });
     }
     const task = event.context.childId ? store.runs.getSessionTask(event.context.childId) : undefined;
-    if (task?.runId === runId && (task.status !== status || task.output !== output)) store.updateSessionTask(task.id, {
-      status, output, ...(error ? { error } : {}), ...(childFailureFromEvent(event) ? { metadata: { childFailure: childFailureFromEvent(event) } } : {}),
+    if (task?.runId === runId) updateRecoveredChildTask(store, task, {
+      status, output, ...(error ? { error } : {}), ...childFailureFromEvent(event),
     });
     if (error) appendFrameworkEventOnce(store, event, status === "interrupted" ? "session.run.interrupted" : "session.run.error", { runId, error });
   });
@@ -194,6 +188,11 @@ function recoverProcessTerminalProjection(store: ProcessSettlementStore, settlem
 
 function compensateChildProjection(store: SettlementStore, event: AgentEvent, message: string): void {
   const runId = event.context.runId;
+  // A delayed creation repair must not archive a session already executing a child Run.
+  if (event.type === "child.created") {
+    const task = store.getSessionTask(event.data.childId);
+    if (task?.runId && task.runId !== runId) return;
+  }
   if (runId) {
     const run = store.runs.getRun(runId);
     if (run && (run.status === "pending" || run.status === "running")) {
@@ -207,7 +206,7 @@ function compensateChildProjection(store: SettlementStore, event: AgentEvent, me
   const childId = event.context.childId ?? (event.type === "child.created" ? event.data.childId : undefined);
   if (childId) {
     const task = store.getSessionTask(childId);
-    if (task && (task.status === "pending" || task.status === "running")) {
+    if (task && (!task.runId || task.runId === runId) && (task.status === "pending" || task.status === "running")) {
       const failure = childFailureFromEvent(event);
       store.updateSessionTask(task.id, {
         status: "failed",
@@ -280,11 +279,16 @@ function childFailureFromEvent(event: AgentEvent): ChildFailureMetadata | undefi
   return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
-function childFailureMetadata(result: AgentChildResult): ChildFailureMetadata | undefined {
-  const metadata: ChildFailureMetadata = {};
-  if (result.failureKind !== undefined) metadata.failureKind = result.failureKind;
-  if (result.partialResult !== undefined) metadata.partialResult = result.partialResult;
-  return Object.keys(metadata).length > 0 ? metadata : undefined;
+function updateRecoveredChildTask(
+  store: SettlementStore,
+  task: NonNullable<ReturnType<SettlementStore["getSessionTask"]>>,
+  result: AgentChildResult,
+): void {
+  const patch = childTaskResultPatch(result);
+  if (task.status !== result.status || task.output !== result.output || task.error !== result.error ||
+    !jsonEqual(task.metadata.childFailure ?? null, patch.metadata?.childFailure)) {
+    store.updateSessionTask(task.id, patch);
+  }
 }
 
 function validateChildResult(value: unknown): asserts value is AgentChildResult {  if (

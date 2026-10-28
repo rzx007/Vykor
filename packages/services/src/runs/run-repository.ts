@@ -487,7 +487,8 @@ export class RunRepository {
           task.finishedAt ??= timestamp;
       }
       if (input.output !== undefined) task.output = input.output;
-      if (input.error !== undefined) task.error = input.error;
+      if (input.error === null) delete task.error;
+      else if (input.error !== undefined) task.error = input.error;
       if (input.metadata) task.metadata = { ...task.metadata, ...input.metadata };
       task.updatedAt = updatedAt;
       this.storage.rollback?.capture(this.storage.state.sessions, session.id);

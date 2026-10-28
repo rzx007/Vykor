@@ -115,7 +115,7 @@ it("follows the linked task rather than the completed spawn call", () => {
   expect(container.querySelector("[data-agent-activity]")).toBe(row)
   expect(row?.textContent).toContain("已完成")
   render([call], [{ ...task, status: "failed" }])
-  expect(row?.textContent).toContain("失败")
+  expect(row?.textContent).toContain("执行出错")
 })
 
 it("does not claim completion when the task has not arrived", () => {
@@ -183,4 +183,21 @@ it("shows waiting for input from existing child activity and clears it when the 
   expect(container.querySelector('[role="status"]:not([aria-hidden="true"])')?.textContent).toBe(
     "运行中"
   )
+})
+
+it("shows budget feedback without a destructive row or a report-sized tooltip and follows the next run", () => {
+  const failed: DesktopSessionTask = { ...task, runId: "run-A", status: "failed", error: "private report".repeat(1000), metadata: { childFailure: {
+    failureKind: "max_turns", partialResult: { version: 1, childSessionId: "child-1", runId: "run-A", source: "limit_finalization", text: "partial", truncated: false },
+  } } }
+  render([call], [failed])
+  const row = container.querySelector<HTMLButtonElement>("[data-agent-activity]")!
+  expect(row.textContent).toContain("未完成 · 已达轮次上限")
+  expect(row.title).toContain("已保留部分结果")
+  expect(row.title).not.toContain("private report")
+  expect(row.querySelector('[role="status"]')?.classList.contains("text-destructive")).toBe(false)
+  render([call], [{ ...failed, runId: "run-B", status: "running" }])
+  expect(row.textContent).toContain("运行中")
+  expect(row.title).not.toContain("上限")
+  render([call], [{ ...failed, runId: "run-B", status: "completed" }])
+  expect(row.textContent).toContain("已完成")
 })
