@@ -6,7 +6,6 @@
 | --- | --- |
 | [permissions.ts](permissions.ts) | 授权模式、工作模式、审批证据、权限请求与判定接口 |
 | [hooks.ts](hooks.ts) | 可用 Hook 事件、阻止结果和执行器接口 |
-| [required-policy.ts](required-policy.ts) | 宿主强制规则：授权和实际派发前分别检查，返回版本与允许结果 |
 
 两者经 [../index.ts](../index.ts) 从 `@vykor/agent-contracts` 导出；权限定义也通过 `@vykor/agent-contracts/permissions` 单独公开。
 
@@ -14,4 +13,7 @@
 
 权限记录、当前模式、Hook 注册和执行状态由消费方保存。新增此类定义放本目录，测试建议放同层 `__test__/`。
 
-强制规则独立于普通 Hook：宿主通过 `AgentToolSafety.requiredPolicy` 提供检查能力，检查拒绝、抛错或超时均不允许工具派发。执行层默认等待上限为 5 秒，规则状态与版本由宿主持有。
+
+普通权限与审批通过后，执行入口调用当前 Run 的 `checkToolDispatch`，核对 owner、会话、Run、输入归属、cwd、最终工具绑定和运行修订。检查失败终止本 Run；工具普通错误与 unknown 只反馈本次调用，不限制其他新调用，也不自动重试。实际调用 Promise 一直跟踪到工具真正结束。
+
+宿主可提供 `bindToolDispatch(scope, tools)` 工厂；框架在可靠 Run 启动后用最终工具集合生成检查。模型、手动、嵌套及子 Run 共用入口，替换 preparation 不能删除顶层宿主工厂。子 Run 重新绑定自己的范围。独立 SDK 不需要数据库。

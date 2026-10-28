@@ -28,17 +28,11 @@ describe("durable defaults and launch environment overrides", () => {
     const ref = { current: await loadSettings(), reload: () => loadSettings() };
     return { ref, service: createDefaultSettingsService(ref) };
   }
-  it("updates the opt-in unknown-outcome guard through direct and Config-style patches without restarting runtimes", async () => {
-    const { service, ref } = await productionService();
-    expect(await service.get()).toMatchObject({ blockOnUnknownToolOutcome: false });
-    const enabled = await service.patch({ blockOnUnknownToolOutcome: true });
-    expect(enabled.restartRuntimes).not.toBe(true);
-    expect(enabled.invalidateRuntimes).not.toBe(true);
-    expect(ref.current.blockOnUnknownToolOutcome).toBe(true);
-    await service.patch({ path: "blockOnUnknownToolOutcome", value: "off" });
-    expect(ref.current.blockOnUnknownToolOutcome).toBe(false);
-    expect((await loadSettings()).blockOnUnknownToolOutcome).toBe(false);
-    await expect(service.patch({ blockOnUnknownToolOutcome: "false" })).rejects.toThrow(/boolean/);
+  it("omits the retired setting and rejects both patch forms", async () => {
+    const { service } = await productionService();
+    expect(await service.get()).not.toHaveProperty("blockOnUnknownToolOutcome");
+    await expect(service.patch({ blockOnUnknownToolOutcome: true })).rejects.toThrow(/Unknown/);
+    await expect(service.patch({ path: "blockOnUnknownToolOutcome", value: "off" })).rejects.toThrow(/Unknown/);
   });
   it("saves task limits with a file-lock conflict check and never persists read-only metadata", async () => {
     const { service } = await productionService();

@@ -44,19 +44,14 @@ describe("daemon settings", () => {
     expect((await loadSettings()).workStyle).toBe("practical");
   });
 
-  it("keeps blocking on unknown tool outcomes off unless explicitly enabled", async () => {
-    expect((await loadSettings()).blockOnUnknownToolOutcome).toBe(false);
-    for (const enabled of [true, false]) {
-      writeFileSync(join(configDir, "settings.json"), JSON.stringify({ blockOnUnknownToolOutcome: enabled }));
-      expect((await loadSettings()).blockOnUnknownToolOutcome).toBe(enabled);
-    }
+  it.each([true, false, "false", 1, null])("discards only the retired setting when loading: %j", async value => {
+    const original = JSON.stringify({ blockOnUnknownToolOutcome: value });
+    writeFileSync(join(configDir, "settings.json"), original);
+    expect(await loadSettings()).not.toHaveProperty("blockOnUnknownToolOutcome");
+    expect(readFileSync(join(configDir, "settings.json"), "utf8")).toBe(original);
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({ blockOnUnknownToolOutcome: value, unexpectedField: true }));
+    await expect(loadSettings()).rejects.toThrow();
   });
-
-  it.each(["false", 1, null])("rejects a non-boolean unknown-outcome switch: %j", async value => {
-    writeFileSync(join(configDir, "settings.json"), JSON.stringify({ blockOnUnknownToolOutcome: value }));
-    await expect(loadSettings()).rejects.toMatchObject({ field: "settings.blockOnUnknownToolOutcome" });
-  });
-
   it.each(["docker", "", null, 12])("rejects invalid saved agent environment %j", async (kind) => {
     writeFileSync(join(configDir, "settings.json"), JSON.stringify({ agentEnvironment: { kind } }));
     await expect(loadSettings()).rejects.toThrow(/agentEnvironment.kind/);

@@ -81,7 +81,7 @@ Runtime 不读取 daemon 数据库，不开 HTTP 服务，也不知道界面来�
 
 ```text
 1. 产品调用 client.sessions.admitPrompt(sessionId, input)
-2. Client 在首个业务请求前确认协议版本 6
+2. Client 在首个业务请求前确认协议版本 7
 3. POST /sessions/:id/prompts 进入 SessionInteractionService
 4. SessionOperationRunner 串行该 session，等待 ready 并取得 shared lease
 5. RunAdmissionService 在一个 Transaction 中保存 Input 和 pending Run

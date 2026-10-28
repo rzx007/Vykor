@@ -1,4 +1,3 @@
-import { validateToolSafety } from "./tool-safety.js";
 import { bindPreparedToolResults } from "./tool-results.js";
 import {
   readonlyMap,
@@ -55,7 +54,7 @@ export interface VykorAgentSubmitOptions {
   childRunParent?:
     | (Pick<AgentRunScope, "sessionId" | "runId" | "signal"> & {
         limits?: AgentExecutionLimits;
-        toolSafety?: import("@vykor/agent-contracts").AgentToolSafety;
+        bindToolDispatch?: import("@vykor/agent-contracts").ToolDispatchCheckFactory;
       })
     | null;
   signal?: AbortSignal;
@@ -129,7 +128,7 @@ export interface VykorAgent {
 }
 export interface KernelAgentOptions {
   outputContract?: import("@vykor/agent-contracts").AgentOutputContract;
-  toolSafety?: import("@vykor/agent-contracts").AgentToolSafety;
+  bindToolDispatch?: import("@vykor/agent-contracts").ToolDispatchCheckFactory;
   id: string;
   cwd: string;
   engine: QueryEngine;
@@ -161,7 +160,6 @@ export class KernelAgent implements VykorAgent {
   };
   private closePromise?: Promise<void>;
   constructor(private readonly options: KernelAgentOptions) {
-    validateToolSafety(options.toolSafety);
     this.id = options.id;
     this.children = options.childDirectory;
   }
@@ -195,7 +193,7 @@ export class KernelAgent implements VykorAgent {
       },
       engine: this.options.engine,
       preparation: options.preparation ?? this.options.preparation,
-      toolSafety: this.options.toolSafety ?? options.childRunParent?.toolSafety,
+      bindToolDispatch: this.options.bindToolDispatch ?? options.childRunParent?.bindToolDispatch,
       outputContract: options.outputContract ?? this.options.outputContract,
       tools: options.tools,
       contribution: options.contribution,
@@ -268,10 +266,9 @@ export class KernelAgent implements VykorAgent {
       "tool",
       async () => {
         const prepared = await this.options.preparation.prepare(scope);
-        const toolSafety = this.options.toolSafety ?? prepared.run.toolSafety;
+        const bindToolDispatch = this.options.bindToolDispatch ?? prepared.run.bindToolDispatch;
         const invocations = new Set<Promise<void>>();
         try {
-          validateToolSafety(toolSafety);
           const toolResults = await bindPreparedToolResults(prepared.run, tools, options.toolResults);
           signal.throwIfAborted();
           await options.onToolEvent?.({
@@ -292,12 +289,13 @@ export class KernelAgent implements VykorAgent {
             onResult: deliver,
             execution: {
               scope,
-              toolSafety,
+              bindToolDispatch,
+              checkToolDispatch: bindToolDispatch?.(scope, tools),
               toolResults,
               tools,
               confirmTool: options.confirmTool,
               effects: this.options.effects,
-              children: this.options.childManager.createController({ ...scope, toolSafety }, tools),
+              children: this.options.childManager.createController({ ...scope, bindToolDispatch }, tools),
               emit: options.onToolEvent ?? (async () => {}),
               takeSteeredInputs: async () => [],
               closeSteering: () => {},
@@ -361,12 +359,11 @@ export class KernelAgent implements VykorAgent {
         cwd: this.options.cwd,
         signal: parent.signal ?? new AbortController().signal,
       };
-      const prepared = this.options.toolSafety ? undefined : await this.options.preparation.prepare(scope);
-      const toolSafety = this.options.toolSafety ?? prepared?.run.toolSafety;
+      const prepared = this.options.bindToolDispatch ? undefined : await this.options.preparation.prepare(scope);
+      const bindToolDispatch = this.options.bindToolDispatch ?? prepared?.run.bindToolDispatch;
       try {
-        validateToolSafety(toolSafety);
         const invocation = await this.options.childManager.spawnSystemChild(
-          { ...scope, toolSafety },
+          { ...scope, bindToolDispatch },
           input,
           content,
           tools,

@@ -86,7 +86,7 @@ describe("Run-local tool discovery", () => {
     expect(f.requests[1]!.tools?.map(t => t.name)).toEqual(["Read", "*", "McpToolCall", "Search"]);
     expect(results[1]!.isError).not.toBe(true);
     expect(results.slice(2)).toMatchObject([
-      { isError: true, executionState: "not_started" }, { isError: true, executionState: "not_started" },
+      { isError: true, executionState: "not_started" }, { isError: true, executionState: "unknown" },
     ]);
     expect(f.invoked).toEqual(["*"]);
     expect(f.checked).not.toContain("Deferred");
@@ -183,18 +183,22 @@ describe("Run-local tool discovery", () => {
   it("blocks MCP proxy bypass until the target is exposed", async () => {
     const f = fixture({ batches: [[call("McpToolCall")], [call("Search", { query: "mcp__" })], [call("McpToolCall")]] });
     const results = await f.run();
-    expect(results[0]).toMatchObject({ isError: true, executionState: "not_started" });
+    // The proxy ran; only its unavailable nested target was never invoked.
+    expect(results[0]).toMatchObject({ isError: true, executionState: "unknown" });
     expect(results[2]!.isError).not.toBe(true);
     expect(f.invoked).toEqual(["mcp__server__edit"]);
     expect(f.checked.filter(name => name === "mcp__server__edit")).toHaveLength(1);
+    expect(f.checked.filter(name => name === "McpToolCall")).toHaveLength(2);
   });
 
   it("does not retain an MCP proxy failure after same-batch search changes target availability", async () => {
     const f = fixture({ batches: [[call("Search", { query: "mcp__" }), call("McpToolCall")], [call("McpToolCall")]] });
     const results = await f.run();
-    expect(results[1]).toMatchObject({ isError: true, executionState: "not_started" });
+    expect(results[1]).toMatchObject({ isError: true, executionState: "unknown" });
     expect(results[2]!.isError).not.toBe(true);
     expect(f.invoked).toEqual(["mcp__server__edit"]);
+    expect(f.checked.filter(name => name === "mcp__server__edit")).toHaveLength(1);
+    expect(f.checked.filter(name => name === "McpToolCall")).toHaveLength(2);
   });
 
   it.each(["missing", "replaced"] as const)("keeps normal exposure when trusted search is %s", async search => {

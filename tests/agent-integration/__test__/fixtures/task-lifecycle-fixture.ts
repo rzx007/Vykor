@@ -8,7 +8,6 @@ import type { JobTarget, JobInputReceipt, JobReadResult, JobWaitResult, JobSnaps
 import { decodeJobTarget, decodeJobInputReceipt, decodeJobReadResult, decodeJobWaitResult, decodeJobSnapshot, decodeJobListResult } from "@vykor/protocol";
 import { SessionStore } from "@vykor/services";
 import { DaemonApplication } from "@vykor/server";
-import { markTrustedReadOnlyTool } from "@vykor/core";
 import { recoverProjectionSettlements } from "../../../../packages/server/src/application/agent/projection-settlement-recovery.js";
 
 type AgentTarget = Extract<JobTarget, { kind: "agent" }>;
@@ -65,7 +64,7 @@ function payload(result: ToolResult): Record<string, any> {
   return JSON.parse(body);
 }
 
-export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { childBudget?: Partial<AgentChildBudget>; blockOnUnknownToolOutcome?: boolean; failTerminalSave?: boolean; failStartedAck?: boolean | number; failChildCreated?: boolean; failLeaseReleaseOnce?: boolean; failShellSave?: boolean; catalogModels?: string[]; failCleanupOnce?: string; failure?: { label: string; kind: "failed" | "max_turns"; once?: boolean } } = {}): Promise<LifecycleFixture> {
+export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { childBudget?: Partial<AgentChildBudget>; failTerminalSave?: boolean; failStartedAck?: boolean | number; failChildCreated?: boolean; failLeaseReleaseOnce?: boolean; failShellSave?: boolean; catalogModels?: string[]; failCleanupOnce?: string; failure?: { label: string; kind: "failed" | "max_turns"; once?: boolean } } = {}): Promise<LifecycleFixture> {
   const directory = mkdtempSync(join(tmpdir(), `shared-jobs-${mode}-`));
   if (options.failure?.kind === "max_turns") writeFileSync(join(directory, `${options.failure.label}.txt`), "finalization input");
   let environmentAcquires = 0;
@@ -89,9 +88,7 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
     return result;
   } }) }));
   // This host-controlled fault wrapper adds only waiting to the original Read.
-  // Decorators intentionally lose first-party identity, so explicitly attest its
-  // known read-only behavior while exercising the unchanged S1 ledger.
-  decorators.push({ name: "Read", decorate: (base: ToolDefinition): ToolDefinition => markTrustedReadOnlyTool({ ...base, execute: async (input, context) => {
+  decorators.push({ name: "Read", decorate: (base: ToolDefinition): ToolDefinition => ({ ...base, execute: async (input, context) => {
     const label = String(input.file_path ?? "").split(/[\\/]/).at(-1)?.replace(/\.txt$/, "");
     const hold = label ? holds.get(label) : undefined;
     if (label && context.agent) { labelsByRun.set(context.agent.scope.runId, label); cwds.set(label, context.agent.scope.cwd); }
@@ -142,7 +139,7 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
       yield { type: "complete", stopReason: "end_turn" };
     }
   } };
-  const settings = { model: "offline", apiFormat: "openai" as const, maxTurns: 8, permission: { mode: "full_access" as const }, plugins: { enabled: false }, memory: { enabled: false }, sandbox: { enabled: false }, ...(options.blockOnUnknownToolOutcome === undefined ? {} : { blockOnUnknownToolOutcome: options.blockOnUnknownToolOutcome }), ...(options.childBudget ? { childBudget: options.childBudget } : {}), ...(options.catalogModels ? { provider: customProvider.id, customProviders: [customProvider] } : {}) };
+  const settings = { model: "offline", apiFormat: "openai" as const, maxTurns: 8, permission: { mode: "full_access" as const }, plugins: { enabled: false }, memory: { enabled: false }, sandbox: { enabled: false }, ...(options.childBudget ? { childBudget: options.childBudget } : {}), ...(options.catalogModels ? { provider: customProvider.id, customProviders: [customProvider] } : {}) };
   let node!: DefaultNodeAgent;
   let application: DaemonApplication | undefined;
   let store: SessionStore | undefined;
@@ -244,7 +241,7 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
         const run = await application.runControl.awaitRun(rootSessionId, admitted.run!.id);
         if (run.status !== "completed") throw new Error(`Root run ${run.status}: ${run.error ?? ""}; ${JSON.stringify(script.result)}`);
       } else await node.runMessage(`fixture-call:${id}`);
-      if (!script.result) throw new Error(`Real ${name} tool did not execute: ${JSON.stringify(node.getHistory().slice(-4))}; operations=${JSON.stringify(store?.toolOperations.listSafetyStates().filter(row => row.state === "unknown"))}`);
+      if (!script.result) throw new Error(`Real ${name} tool did not execute: ${JSON.stringify(node.getHistory().slice(-4))}`);
       if (script.probeError) throw script.probeError;
       return payload(script.result);
     } finally { scripts.delete(id); }

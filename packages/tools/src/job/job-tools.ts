@@ -164,7 +164,7 @@ export function createJobTools(port?: AgentJobHost, authorization?: AgentJobAuth
       if ("content" in host) return host;
       try {
         const target = jobTarget(input.target);
-        const receipt = await host.jobs.send({ sessionId: host.sessionId, target, data: String(input.data ?? "") }, { ...(authorization ?? (context.agent?.tools ? { tools: context.agent.tools } : {})), ...(context.agent ? { parent: { ...context.agent.scope, limits: context.agent.limits, toolSafety: context.agent.toolSafety } } : {}) });
+        const receipt = await host.jobs.send({ sessionId: host.sessionId, target, data: String(input.data ?? "") }, { ...(authorization ?? (context.agent?.tools ? { tools: context.agent.tools } : {})), ...(context.agent ? { parent: { ...context.agent.scope, limits: context.agent.limits, bindToolDispatch: context.agent.bindToolDispatch } } : {}) });
         return result("send", { target, ...(receipt ? { receipt } : {}) });
       } catch (error) {
         return failed(error);

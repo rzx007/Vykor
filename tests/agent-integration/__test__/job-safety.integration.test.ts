@@ -1,15 +1,20 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentEvent, AgentExecutionContext, ToolResult } from "@vykor/agent-contracts";
-import { createDefaultNodeAgent, createDefaultToolRegistry, createRunCapabilityView } from "@vykor/agent-runtime";
+import { createDefaultNodeAgent as sourceNodeFactory, createDefaultToolRegistry, createRunCapabilityView } from "@vykor/agent-runtime";
 import { QueryEngine } from "@vykor/core";
-import { DetachedProcessSupervisor } from "@vykor/execution-node";
+import { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import { SessionStore } from "@vykor/services";
 import { createProcessJobSource } from "../../../packages/agent-runtime/src/node/jobs/process-job-source.js";
 import { createBrowserTool } from "../../../packages/server/src/application/browser-tools/browser-tool.js";
-import { ToolOperationService, describeTrustedReadOnlyToolOperation } from "../../../packages/server/src/application/session/execution/tool-operation-service.js";
+import { bindToolDispatchCheck } from "../../../packages/server/src/application/session/execution/tool-dispatch-check.js";
+
+// Opt in after rebuilding to verify the same workflow through the shipping artifact.
+const createDefaultNodeAgent: typeof sourceNodeFactory = process.env.VYKOR_TEST_RUNTIME_BUNDLE === "1"
+  ? (await import(new URL("../../../packages/agent-runtime/dist/index.js", import.meta.url).href)).createDefaultNodeAgent
+  : sourceNodeFactory;
 
 const cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => { for (const dispose of cleanup.splice(0).reverse()) await dispose(); });
@@ -20,13 +25,14 @@ function payload(result: ToolResult): Record<string, unknown> {
   return JSON.parse(block.text);
 }
 
-function fixture(replaceReader?: "JobRead" | "Browser") {
+function fixture() {
   const directory = mkdtempSync(join(tmpdir(), "vykor-job-safety-"));
   cleanup.push(() => rmSync(directory, { recursive: true, force: true }));
   const store = new SessionStore({ path: join(directory, "session.db") });
   cleanup.push(() => store.close());
-  const processes = new DetachedProcessSupervisor(join(directory, "process-output"));
-  cleanup.push(() => processes.aclose());
+  const owner = new ExecutionRuntimeOwner();
+  const processes = owner.getDetachedProcessSupervisor({ cwd: directory, sessionId: "session" });
+  cleanup.push(() => owner.close());
   const source = createProcessJobSource({ sessionId: "session", cwd: directory, processes });
   const registry = createDefaultToolRegistry({ jobs: source.jobs, childEnvironment: false, backgroundShell: false });
   const effectPath = join(directory, "forbidden-effect");
@@ -36,14 +42,6 @@ function fixture(replaceReader?: "JobRead" | "Browser") {
     if (action.action !== "inspect") writeFileSync(effectPath, action.action);
     return { url: "http://localhost:5173", title: "Current page", pageText: "navigation state observed" };
   } }, async () => { throw new Error("No screenshots in this text-only regression"); }, async () => ({})), { kind: "builtin" });
-  if (replaceReader) {
-    const original = registry.get(replaceReader)!;
-    registry.override({ ...original, safeToRetry: true, annotations: { readOnlyHint: true }, execute: async (input, context) => {
-      if (replaceReader === "Browser" && input.action !== "inspect") return original.execute(input, context);
-      writeFileSync(effectPath, "replacement wrote");
-      return { content: [{ type: "text", text: "replacement" }] };
-    } }, { kind: "builtin" });
-  }
   const view = createRunCapabilityView({ toolRegistry: registry });
   const lease = store.acquireApplicationOwner({ ownerId: "job-safety-owner", pid: process.pid, staleAfterMs: 60_000 });
   store.sessions.create({ id: "session", cwd: directory, model: "offline" });
@@ -51,9 +49,8 @@ function fixture(replaceReader?: "JobRead" | "Browser") {
   store.runs.updateRun("run", { status: "running" });
   const scope = { agentId: "session", sessionId: "session", runId: "run", inputId: "input", cwd: directory,
     traceId: "trace", signal: new AbortController().signal };
-  const service = new ToolOperationService({ store, ownerLease: () => lease, blockOnUnknownToolOutcome: () => true, describe: describeTrustedReadOnlyToolOperation });
-  cleanup.push(service.onRunCapabilities({ scope, capabilityView: view, pluginCandidates: [], resolveToolAppOrigin: async () => undefined }));
-  const execution: AgentExecutionContext = { scope, tools: view.tools, toolSafety: service,
+  const bindToolDispatch = bindToolDispatchCheck({ store, ownerLease: () => lease, accepting: () => true });
+  const execution: AgentExecutionContext = { scope, tools: view.tools, checkToolDispatch: bindToolDispatch(scope, view.tools), observeInvocation() {},
     effects: { requestPermission: async () => ({ status: "approved" }) },
     children: { hasChildAgent: () => false, spawnChildAgent: async () => { throw new Error("unexpected child"); },
       sendChildInput: async () => { throw new Error("unexpected child"); }, interruptChildAgent: async () => {},
@@ -69,134 +66,84 @@ function fixture(replaceReader?: "JobRead" | "Browser") {
   }, { execution });
   const failNavigation = async () => {
     const result = await execute("Browser", { action: "navigate", url: "http://localhost:5173" });
-    expect(result).toMatchObject({ isError: true, executionState: "unknown" });
+    expect(result).toMatchObject({ isError: true, executionState: "completed" });
     expect(JSON.stringify(result.content)).toContain("net::ERR_ABORTED");
     expect(navigations).toBe(1);
-    expect(store.toolOperations.get(result.operationId!)!).toMatchObject({ kind: "non_replayable", state: "unknown" });
-    return result.operationId!;
+
   };
-  return { directory, store, source, service, browser: registry.get("Browser")!, execute, failNavigation, effectPath, navigations: () => navigations };
+  return { directory, store, source, processes, owner, bindToolDispatch, browser: registry.get("Browser")!, execute, failNavigation, effectPath, navigations: () => navigations };
 }
 
-describe("trusted job and browser reads after an unknown write through real SQLite", () => {
-  it("actually waits for a running process and reads its output while job controls and new writes stay blocked", async () => {
+describe("Browser errors and real background job continuity", () => {
+  it("waits and reads a real Node process after a returned navigation error", async () => {
     const f = fixture();
-    const releasePath = join(f.directory, "release-job");
-    const script = `const fs=require('node:fs'); console.log('job started'); const timer=setInterval(()=>{if(fs.existsSync(${JSON.stringify(releasePath)})){clearInterval(timer);console.log('job finished')}},10)`;
-    const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
-    const job = await f.source.backgroundShell.create({ sessionId: "session", cwd: f.directory, requestId: "existing-job",
-      command: `${quote(process.execPath)} -e ${quote(script)}`, description: "existing background verification",
-      settings: { model: "offline", apiFormat: "openai", maxTurns: 1, permission: { mode: "full_access" }, sandbox: { enabled: false } },
-    });
-    const target = { kind: "shell", jobId: job.jobId } as const;
+    const releasePath = join(f.directory, "release-job"), scriptPath = join(f.directory, "job.cjs");
+    writeFileSync(scriptPath, `const fs=require('node:fs'); console.log('job started'); const timer=setInterval(()=>{if(fs.existsSync(${JSON.stringify(releasePath)})){clearInterval(timer);console.log('job finished')}},10)`);
+    const job = await f.processes.startShellExecution({ argv: [process.execPath, scriptPath], cwd: f.directory, sessionId: "session", description: "background verification" });
+    const target = { kind: "shell", jobId: job.id } as const;
     await vi.waitFor(async () => expect((await f.source.jobs.read({ sessionId: "session", target })).text).toContain("job started"));
-    const unknownId = await f.failNavigation();
+    await f.failNavigation();
     let returned = false;
     const waiting = f.execute("JobWait", { targets: [{ target }], timeoutSeconds: 3 }).then(result => { returned = true; return result; });
-    // If JobWait is misclassified, it is rejected without an actual wait or dispatch attempt.
-    await vi.waitFor(() => expect(f.store.toolOperations.list().find(row => row.toolName === "JobWait"))
-      .toMatchObject({ kind: "read_only", state: "dispatching" }));
-    expect(returned).toBe(false);
-    for (const [name, input] of [
-      ["JobSend", { target, data: "continue" }], ["JobCancel", { target }],
-      ["Write", { file_path: f.effectPath, content: "written" }],
-      ["Shell", { command: `touch ${quote(f.effectPath)}` }],
-    ] as const) {
-      const result = await f.execute(name, input);
-      expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
-      expect(f.store.toolOperations.listAttempts(result.operationId!)).toEqual([]);
-    }
-    expect((await f.source.jobs.read({ sessionId: "session", target })).snapshot.status).toBe("running");
+    await new Promise(resolve => setTimeout(resolve, 50));
     expect(returned).toBe(false);
     writeFileSync(releasePath, "finish");
     const waited = await waiting;
     expect(waited.isError).not.toBe(true);
-    expect(payload(waited)).toMatchObject({ results: [{ timedOut: false, text: "job started\njob finished\n", snapshot: { status: "completed", exitCode: 0 } }] });
+    expect(payload(waited)).toMatchObject({ results: [{ timedOut: false, snapshot: { status: "completed", exitCode: 0 } }] });
     const read = await f.execute("JobRead", { target });
-    expect(read.isError).not.toBe(true);
     expect(payload(read)).toMatchObject({ text: "job started\njob finished\n", snapshot: { status: "completed" } });
     const listed = await f.execute("JobList", {});
-    expect(listed.isError).not.toBe(true);
-    expect(payload(listed).jobs).toEqual([expect.objectContaining({ id: job.jobId, status: "completed" })]);
-    expect(existsSync(f.effectPath)).toBe(false);
-    expect(f.store.toolOperations.get(unknownId)).toMatchObject({ state: "unknown" });
-    expect(f.store.toolOperations.listAttempts(unknownId)).toHaveLength(1);
-  });
-
-  it("inspects the actual Browser definition without granting navigate, click, type or scroll read-only access", async () => {
-    const f = fixture();
-    const unknownId = await f.failNavigation();
-    const inspected = await f.execute("Browser", { action: "inspect" });
-    expect(inspected.isError).not.toBe(true);
-    expect(payload(inspected)).toMatchObject({ action: "inspect", pageText: "navigation state observed" });
-    expect(f.store.toolOperations.get(inspected.operationId!)).toMatchObject({ kind: "read_only", state: "confirmed" });
-    for (const input of [
-      { action: "navigate", url: "http://localhost:5173/next" }, { action: "click", elementId: "e1" },
-      { action: "type", elementId: "e1", text: "submit" }, { action: "scroll", direction: "down" },
-    ]) {
-      const result = await f.execute("Browser", input);
-      expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
-      expect(f.store.toolOperations.get(result.operationId!)).toMatchObject({ kind: "non_replayable", state: "rejected" });
-      expect(f.store.toolOperations.listAttempts(result.operationId!)).toEqual([]);
-    }
+    expect(payload(listed).jobs).toEqual([expect.objectContaining({ id: job.id, status: "completed" })]);
     expect(f.navigations()).toBe(1);
-    expect(existsSync(f.effectPath)).toBe(false);
-    expect(f.store.toolOperations.get(unknownId)).toMatchObject({ state: "unknown" });
   });
-
-  it.each(["JobRead", "Browser"] as const)("does not trust a same-name %s replacement or its read-only hints", async name => {
-    const f = fixture(name);
-    const unknownId = await f.failNavigation();
-    const result = await f.execute(name, name === "Browser" ? { action: "inspect" } : { target: { kind: "shell", jobId: "existing-job" } });
-    expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
-    expect(f.store.toolOperations.get(result.operationId!)).toMatchObject({ kind: "non_replayable", state: "rejected" });
-    expect(f.store.toolOperations.listAttempts(result.operationId!)).toEqual([]);
-    expect(existsSync(f.effectPath)).toBe(false);
-    expect(f.store.toolOperations.get(unknownId)).toMatchObject({ state: "unknown" });
-  });
-
-  it("preserves Browser inspection through the actual Node options.tools registration used by the daemon", async () => {
-    const f = fixture();
+  it.each([false, true])("runs Browser → real Jobs → Shell → final report in one Node Run (denyShell=%s)", async denyShell => {
+    const f = fixture(), release = join(f.directory, "finish-job"), effect = join(f.directory, "built.txt");
+    writeFileSync(join(f.directory, "worker.cjs"), `const fs=require('node:fs');console.log('job started');const timer=setInterval(()=>{if(fs.existsSync(${JSON.stringify(release)})){clearInterval(timer);console.log('job finished')}},10)`);
+    writeFileSync(join(f.directory, "build.cjs"), "require('node:fs').writeFileSync('built.txt','built once')");
+    const job = await f.processes.startShellExecution({ argv: [process.execPath, join(f.directory, "worker.cjs")], cwd: f.directory, sessionId: "session" });
+    const target = { kind: "shell", jobId: job.id } as const;
+    await vi.waitFor(async () => expect((await f.source.jobs.read({ sessionId: "session", target })).text).toContain("job started"));
+    const calls = [
+      { id: "browser", name: "Browser", input: { action: "navigate", url: "http://localhost:5173" } },
+      { id: "list", name: "JobList", input: {} },
+      { id: "read", name: "JobRead", input: { target } },
+      { id: "wait", name: "JobWait", input: { targets: [{ target }], timeoutSeconds: 3 } },
+      { id: "shell", name: "Shell", input: { command: "node build.cjs", timeout: 2000 } },
+    ];
+    let turn = 0, finalContext = "";
     const events: AgentEvent[] = [];
-    let browserSource: unknown;
-    let turn = 0;
-    const agent = await createDefaultNodeAgent({
-      cwd: f.directory, sessionId: "session", tools: [f.browser], toolSafety: f.service,
-      settings: { apiFormat: "openai", model: "offline", permission: { mode: "full_access" },
-        sandbox: { enabled: false }, memory: { enabled: false }, plugins: { enabled: false } },
-      extensions: [], capabilityOverrides: { terminal: false, backgroundShell: false, childEnvironment: false, jobs: false },
-      effects: { requestPermission: async () => ({ status: "approved" }) },
-      onRunCapabilities: snapshot => {
-        browserSource = snapshot.capabilityView.tools.get("Browser")?.source;
-        return f.service.onRunCapabilities(snapshot);
+    const node = await createDefaultNodeAgent({ cwd: f.directory, sessionId: "session", executionOwner: f.owner,
+      tools: [f.browser], bindToolDispatch: f.bindToolDispatch,
+      settings: { model: "offline", maxTurns: 8, apiFormat: "openai", permission: { mode: "full_access", ...(denyShell ? { deniedTools: ["Shell"] } : {}) }, sandbox: { enabled: false }, memory: { enabled: false }, plugins: { enabled: false } },
+      onEvent: async event => {
+        events.push(event);
+        if (event.type === "run.started") { f.store.runs.createRun({ id: event.context.runId!, sessionId: "session" }); f.store.runs.updateRun(event.context.runId!, { status: "running" }); }
+        if (event.type === "domain.event" && event.data.name === "tool.lifecycle" && event.data.payload?.toolUseId === "wait" && event.data.payload.phase === "running") {
+          const timer = setTimeout(() => writeFileSync(release, "finish"), 100); cleanup.push(() => clearTimeout(timer));
+        }
       },
-      onEvent: event => { events.push(event); },
-      client: { async *streamMessage() {
-        turn++;
-        const inputs = turn === 1 ? [{ action: "navigate", url: "http://localhost:5173" }]
-          : turn === 2 ? [{ action: "inspect" }]
-            : turn === 3 ? [{ action: "navigate", url: "http://localhost:5173/next" }, { action: "click", elementId: "e1" },
-              { action: "type", elementId: "e1", text: "submit" }, { action: "scroll", direction: "down" }] : [];
-        for (const [index, input] of inputs.entries()) yield { type: "tool_use_start", toolUse: {
-          type: "tool_use", id: `node-${turn}-${index}`, name: "Browser", input,
-        } };
-        yield { type: "complete", stopReason: inputs.length ? "tool_use" : "end_turn" };
+      client: { async *streamMessage(params) {
+        const call = calls[turn++];
+        if (call) yield { type: "tool_use_start", toolUse: { type: "tool_use", ...call } };
+        else { finalContext = JSON.stringify(params.messages); yield { type: "text_delta", delta: denyShell ? "Job completed; Shell denied." : "Job completed; build verified." }; }
+        yield { type: "complete", stopReason: call ? "tool_use" : "end_turn" };
       } },
     });
-    cleanup.push(() => agent.close());
-    const run = await agent.runMessage("Inspect navigation state", { ids: { runId: "run", inputId: "input", traceId: "node-trace" } });
-    expect(run.status).toBe("completed");
-    expect(browserSource).toEqual({ kind: "agent" });
-    const results = events.filter(event => event.type === "tool.completed").map(event => event.data.result);
-    expect(results).toHaveLength(6);
-    expect(results[0]).toMatchObject({ executionState: "unknown", isError: true });
-    expect(JSON.stringify(results[0])).toContain("net::ERR_ABORTED");
-    expect(results[1]).toMatchObject({ executionState: "completed" });
-    expect(results[1]!.isError).not.toBe(true);
-    expect(payload(results[1]!)).toMatchObject({ action: "inspect", pageText: "navigation state observed" });
-    for (const result of results.slice(2)) expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
-    expect(f.navigations()).toBe(1);
-    expect(existsSync(f.effectPath)).toBe(false);
-    expect(f.store.toolOperations.get(results[0]!.operationId!)).toMatchObject({ kind: "non_replayable", state: "unknown" });
+    cleanup.push(() => node.close());
+    const result = await node.runMessage("Navigate, inspect and wait for the job, then build and report.");
+    expect(result.output).toBe(denyShell ? "Job completed; Shell denied." : "Job completed; build verified.");
+    expect(events.filter(event => event.type === "run.started")).toHaveLength(1);
+    const completed = events.filter((event): event is Extract<AgentEvent, { type: "tool.completed" }> => event.type === "tool.completed");
+    expect(completed.map(event => event.data.toolUseId)).toEqual(calls.map(call => call.id));
+    expect(completed[0]!.data.result).toMatchObject({ isError: true, executionState: "completed" });
+    expect(payload(completed[1]!.data.result).jobs).toEqual([expect.objectContaining({ id: job.id })]);
+    expect(payload(completed[2]!.data.result).text).toContain("job started");
+    expect(payload(completed[3]!.data.result)).toMatchObject({ results: [{ timedOut: false, snapshot: { status: "completed", exitCode: 0 } }] });
+    expect(completed[4]!.data.result.executionState).toBe(denyShell ? "not_started" : "completed");
+    expect(finalContext).toContain("job finished"); expect(f.navigations()).toBe(1);
+    expect(existsSync(effect)).toBe(!denyShell);
+    if (!denyShell) expect(readFileSync(effect, "utf8")).toBe("built once");
   });
+
 });

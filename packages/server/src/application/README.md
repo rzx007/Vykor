@@ -12,7 +12,6 @@
 
 `createDefaultNodeApplication()` 同步返回应用。返回前，工厂负责回收自己创建但尚未交出的 Store，即使指定了 `ownsStore:false`；外部 Store 默认借用，只有明确 `ownsStore:true` 才在同步构造失败时关闭。构造错误直接返回；如果 Store 关闭也失败，则通过 `AggregateError.errors` 按顺序保留构造错误和关闭错误。成功返回后仍按原有 `ownsStore` 规则关闭，重复调用 `Application.close()` 共用一次关闭过程。`ready()` 的异步恢复失败由已返回的应用负责，调用方仍须关闭应用。
 
-`DaemonApplication` 为 Agent 注入当前 owner 与接纳状态约束下的 S1 结果读取工厂，正文沿用已有工具操作记录。`__test__/daemon-result-reading.integration.test.ts` 通过实际 Node Agent 与真实 SQLite 关闭重开验证长结果尾部补读、查询结果不递归归档、查询错误的只读分类及同名替换边界。
 
 ## 主要文件
 
@@ -63,3 +62,5 @@
 测试放在本分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移文件时同步导入、公开入口、文档链接与旧引用清单。
 
 `__test__/durable-agent-application.test.ts` 的后台 Shell 回归通过离线模型调用真实 `BackgroundShellCreate`，启动临时目录中的本机进程，再用 `application.jobs` 检查 Shell 归属、输出、取消及 SQLite 终态。它使用真实 Node Agent 和现有 `target`、`{ jobs, errors }` 接口；不从底层能力覆盖中读取旧的 `.value/.jobs`，也不用不会执行工具的 Echo Agent 代替这条链路。
+
+普通权限与审批通过后，执行入口调用当前 Run 的 `checkToolDispatch`，核对 owner、会话、Run、输入归属、cwd、最终工具绑定和运行修订。检查失败终止本 Run；工具普通错误与 unknown 只反馈本次调用，不限制其他新调用，也不自动重试。实际调用 Promise 一直跟踪到工具真正结束。

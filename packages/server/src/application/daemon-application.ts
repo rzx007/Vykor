@@ -1,10 +1,9 @@
+import { bindToolDispatchCheck } from "./session/execution/tool-dispatch-check.js";
 import { createNoteApplicationService, type NoteApplicationService } from "./notes/note-application-service.js";
 import { createProjectFactsService, type ProjectFactsService } from "./personalization/project-facts-service.js";
 import { createMaintenanceApplicationService, type MaintenanceApplicationContext } from "./maintenance/maintenance-application-service.js";
-import { ToolOperationReviewService } from "./session/execution/tool-operation-review-service.js";
-import { ToolOperationService, describeTrustedReadOnlyToolOperation } from "./session/execution/tool-operation-service.js";
 import { ToolResultService } from "./session/execution/tool-result-service.js";
-import { createNodeJobBindings, isTrustedReadOnlyTool, markTrustedReadOnlyTool } from "@vykor/agent-runtime";
+import { createNodeJobBindings } from "@vykor/agent-runtime";
 import { GoalModelAttemptService } from "./goals/goal-model-attempt-service.js";
 import {hostedContextUsageAgent} from "./context-usage/assemble-session-context-usage.js";
 import { ToolAppOriginProjector } from "./agent/tool-app-origin-projector.js";
@@ -193,7 +192,6 @@ export interface DurableAgentApplication {
   readonly runControl: RunControlService;
   readonly permissions: StorePermissionBroker;
   /** Optional for custom embedders; the production Daemon always provides manual review. */
-  readonly toolOperationReview?: Pick<ToolOperationReviewService, "list" | "get" | "reconcile">;
   readonly backgroundShells: BackgroundShellService;
   readonly maintenance: SessionMaintenanceService;
   readonly control: DaemonControlService;
@@ -240,7 +238,6 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly facts: ProjectFactsService;
   readonly attachments: AttachmentService;
   readonly permissions: StorePermissionBroker;
-  readonly toolOperationReview: Pick<ToolOperationReviewService, "list" | "get" | "reconcile">;
   readonly backgroundShells: BackgroundShellService;
   readonly interactions: SessionInteractionService;
   readonly goals: SessionGoalService;
@@ -506,16 +503,12 @@ export class DaemonApplication implements DurableAgentApplication {
       // 每个会话第一次用时，在这里造活 Agent，并接上投影。
       const modelAttempts = new GoalModelAttemptService({ store, events: this.eventPublisher,
         requestBudgetStop: (goalId) => this.goals.requestBudgetStop(goalId) });
-      const toolSafety = new ToolOperationService({ store, ownerLease: () => this.ownerLease,
-        accepting: () => this.readyState === "ready" && this.operationGate.accepting,
-        blockOnUnknownToolOutcome: () => (options.getSettings?.() ?? options.settings)?.blockOnUnknownToolOutcome === true,
-        describe: describeTrustedReadOnlyToolOperation });
-      this.toolOperationReview = new ToolOperationReviewService({ store, ownerLease: () => this.ownerLease,
-        accepting: () => this.readyState === "ready" && this.operationGate.accepting, reconcile: input => toolSafety.reconcile(input) });
+      const bindToolDispatch = bindToolDispatchCheck({ store, ownerLease: () => this.ownerLease,
+        accepting: () => this.readyState === "ready" && this.operationGate.accepting });
       const toolResults = new ToolResultService({ store, ownerLease: () => this.ownerLease,
         accepting: () => this.readyState === "ready" && this.operationGate.accepting });
       const loadAgent = createDaemonAgentLoader({
-        toolSafety,
+        bindToolDispatch,
         toolResults: (scope, tools) => toolResults.forRun(scope, tools),
         modelAttempts,
         executionOwner: this.executionOwner,
@@ -582,8 +575,8 @@ export class DaemonApplication implements DurableAgentApplication {
               supportsNativeImageInput(context, await this.modelCatalog.load()),
             localOcr: this.localOcr,
           });
-          // Only this host-owned read wrapper may inherit the verified builtin promise.
-          return isTrustedReadOnlyTool(base) ? markTrustedReadOnlyTool(decorated) : decorated;
+          // Keep the host Read wrapper for session attachments and local OCR.
+          return decorated;
         } }],
         requestPermission: async (request, context) => {
           const owner = store.sessions.get(context.sessionId);
@@ -628,12 +621,8 @@ export class DaemonApplication implements DurableAgentApplication {
           listRuns: async (taskId) => this.schedules.listRuns({ taskId }),
         },
         onRunCapabilities: snapshot => {
-          const releaseToolSafety = toolSafety.onRunCapabilities(snapshot);
-          try {
-            pluginCapabilities.authorizeRun(snapshot);
-            const releaseOrigins = toolAppOrigins.capture(snapshot);
-            return () => { try { releaseOrigins(); } finally { releaseToolSafety(); } };
-          } catch (error) { releaseToolSafety(); throw error; }
+          pluginCapabilities.authorizeRun(snapshot);
+          return toolAppOrigins.capture(snapshot);
         },
         // 这就是投影：Agent 的 onEvent 进这里，写成会话记录再推给窗口。
         createEventSink: (agent, session) => {
@@ -1047,7 +1036,6 @@ export class DaemonApplication implements DurableAgentApplication {
       const recovery = new StartupRecoveryService({
         recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },
         recoverProjectionSettlements: () => { recoverProjectionSettlements(store); },
-        recoverToolOperations: () => { toolSafety.recoverDispatching(); },
         interruptActiveRuns: () => { store.interruptActiveRuns(DAEMON_RESTART_RUN_REASON); },
         reconcileGoalModelAttempts: () => { store.goals.reconcileGoalModelAttempts(); },
         failIncompleteReviewsOnStartup: () => { workspaceChanges.failIncompleteOnStartup(); return autoReview.failIncompleteReviewsOnStartup(); },

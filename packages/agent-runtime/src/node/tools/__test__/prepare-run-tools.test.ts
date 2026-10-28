@@ -6,7 +6,7 @@ import { deriveChildCapabilityView } from "../../children/child-agent-options.js
 import { prepareNodeRunTools } from "../prepare-run-tools.js";
 import { McpClientManager } from "@vykor/mcp";
 import { createDefaultNodeAgent } from "../../agent/default-agent.js";
-import type { AgentToolSafety, ToolDefinition } from "@vykor/agent-contracts";
+import type { ToolDispatchCheckFactory, ToolDefinition } from "@vykor/agent-contracts";
 import { AgentChildManager } from "../../../kernel/children/child-agent.js";
 import { AgentEventBus } from "../../../kernel/event-source.js";
 import {
@@ -19,29 +19,11 @@ import type {
 } from "../../runtime/node-runtime-resources.js";
 
 it.each([false, true])(
-  "preserves preparation-only safety through Node child tool binding: %s",
-  async (withSafety) => {
+  "preserves preparation-only host check through Node child tool binding: %s",
+  async (withCheck) => {
     let effects = 0;
-    let safetyChecks = 0;
-    const safety: AgentToolSafety = {
-      operations: {
-        prepare: async () => {
-          safetyChecks++;
-          throw new Error("denied by safety");
-        },
-        authorize: async () => {
-          throw new Error("unused");
-        },
-        dispatch: async () => {
-          throw new Error("unused");
-        },
-        settle: async () => {},
-        reject: async () => {},
-      },
-      requiredPolicy: {
-        check: async () => ({ allowed: false, policyVersion: "v1" }),
-      },
-    };
+    let dispatchChecks = 0;
+    const check: ToolDispatchCheckFactory = () => async () => { dispatchChecks++; throw new Error("denied by host"); };
     const write: ToolDefinition = {
       name: "Write",
       description: "count a real child tool effect",
@@ -157,16 +139,16 @@ it.each([false, true])(
           cwd: process.cwd(),
           agent: {
             scope,
-            toolSafety: withSafety ? safety : undefined,
+            bindToolDispatch: withCheck ? check : undefined,
             children: manager.createController({
               ...scope,
-              toolSafety: withSafety ? safety : undefined,
+              bindToolDispatch: withCheck ? check : undefined,
             }),
           },
         },
       );
-      expect(effects).toBe(withSafety ? 0 : 1);
-      expect(safetyChecks).toBe(withSafety ? 1 : 0);
+      expect(effects).toBe(withCheck ? 0 : 1);
+      expect(dispatchChecks).toBe(withCheck ? 1 : 0);
     } finally {
       await manager.closeAll();
     }

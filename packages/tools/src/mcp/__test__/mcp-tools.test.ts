@@ -15,6 +15,22 @@ function authTool(host?: McpAuthHost) {
   } : undefined).find(tool => tool.name === "McpAuth")!;
 }
 
+describe("McpToolCall host availability", () => {
+  it.each(["missing_registry", "missing_invoker", "unidentified_visible_target"])("refuses %s without invoking a target", async mode => {
+    const invokeTool = vi.fn(async () => ({ content: [] }));
+    const registry = { get: () => undefined, getAll: () => [], inspect: () => undefined,
+      has: () => mode === "unidentified_visible_target" };
+    const tool = createMcpTools().find(tool => tool.name === "McpToolCall")!;
+    const result = await tool.execute({ serverName: "remote", toolName: "query" }, {
+      cwd: process.cwd(),
+      ...(mode === "missing_registry" ? {} : { toolRegistry: registry }),
+      ...(mode === "missing_invoker" ? {} : { invokeTool }),
+    });
+    expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
+    expect(invokeTool).not.toHaveBeenCalled();
+  });
+});
+
 describe("McpAuth", () => {
   it("does not claim success when the host cannot save and reconnect MCP auth", async () => {
     const configure = vi.fn(async () => ({ message: "must not save" }));

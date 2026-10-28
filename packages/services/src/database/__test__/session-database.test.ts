@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -9,6 +10,7 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { describe, expect, it } from "vitest";
 
 import { sessionEventSequence } from "../../session-runtime/schema.js";
+import { SessionStore } from "../../session-runtime/store.js";
 import { SessionDatabase } from "../session-database.js";
 
 // Regenerated from the current migration chain, including temporary resource sources.
@@ -17,7 +19,7 @@ const expected = JSON.parse(readFileSync(new URL("./fixtures/current-schema-inve
 function inventory(database: Database.Database) {
   const schema = database.prepare(
     "SELECT type,name,tbl_name,sql FROM sqlite_master WHERE name NOT LIKE ? AND name != ? ORDER BY type,name",
-  ).all("sqlite_%", "__drizzle_migrations") as Array<{ type: string; name: string; sql: string }>;
+  ).all("sqlite_%", "__drizzle_migrations") as Array<{ type: string; name: string; tbl_name: string; sql: string }>;
   return {
     schema,
     tables: schema.filter((row) => row.type === "table").map((row) => ({
@@ -44,6 +46,62 @@ function withTempPath(test: (path: string) => void): void {
 }
 
 describe("SessionDatabase", () => {
+  it("drops all legacy S1 rows without importing them and preserves ordinary session data", () => {
+    const directory = mkdtempSync(join(tmpdir(), "tool-result-upgrade-")), path = join(directory, "upgrade.db"), previous = join(directory, "migrations");
+    mkdirSync(join(previous, "meta"), { recursive: true });
+    const source = new URL("../../session-runtime/migrations/", import.meta.url);
+    const journal = JSON.parse(readFileSync(new URL("meta/_journal.json", source), "utf8"));
+    journal.entries = journal.entries.filter((entry: { idx: number }) => entry.idx < 10);
+    writeFileSync(join(previous, "meta/_journal.json"), JSON.stringify(journal));
+    for (const entry of journal.entries) copyFileSync(new URL(`${entry.tag}.sql`, source), join(previous, `${entry.tag}.sql`));
+    const connection = new Database(path);
+    try {
+      migrate(drizzle(connection), { migrationsFolder: previous });
+      // Seed real ordinary records through public repositories in a separate fixture,
+      // then copy their unchanged rows into the pre-0010 schema under test.
+      const seedPath = join(directory, "ordinary.db"), seed = new SessionStore({ path: seedPath });
+      try {
+        seed.sessions.create({ id: "s", cwd: directory, title: "saved", model: "m" });
+        seed.conversationTransactions.admitPrompt({ id: "i", sessionId: "s", items: [{ type: "text", text: "preserved input" }] });
+        seed.runs.createRun({ id: "r", sessionId: "s", inputId: "i" });
+        seed.runs.updateRun("r", { status: "completed", metadata: { evidence: "preserved run" } });
+        seed.conversations.createMessage({ id: "m", sessionId: "s", role: "assistant", runId: "r", inputId: "i" });
+        seed.conversations.upsertMessagePart({ id: "p", sessionId: "s", messageId: "m", type: "text", status: "completed", text: "preserved message body" });
+      } finally { seed.close(); }
+      const ordinary = new Database(seedPath, { readonly: true });
+      const preserved = new Map<string, unknown[]>();
+      try {
+        connection.transaction(() => {
+          // Validate the related public-repository rows together at commit,
+          // keeping foreign keys enabled.
+          connection.pragma("defer_foreign_keys = ON");
+          for (const table of ["project", "session", "session_input", "session_run", "session_message", "session_message_part"]) {
+            const rows = ordinary.prepare(`SELECT * FROM ${table} ORDER BY id`).all() as Record<string, unknown>[];
+            expect(rows.length).toBeGreaterThan(0); preserved.set(table, rows);
+            for (const row of rows) {
+              const keys = Object.keys(row);
+              connection.prepare(`INSERT INTO ${table} (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")})`).run(...Object.values(row));
+            }
+          }
+          expect(connection.pragma("foreign_key_check")).toEqual([]);
+        })();
+      } finally { ordinary.close(); }
+      const before = inventory(connection);
+
+      connection.exec("INSERT INTO execution VALUES ('e','s','r','{}')");
+      for (const state of ["prepared", "dispatching", "unknown"]) connection.prepare("INSERT INTO tool_operation VALUES (?, 's','r',?, ?, ?)").run(state, state, state, JSON.stringify({ result: { content: "old body" } }));
+      connection.exec("INSERT INTO tool_dispatch_attempt VALUES ('a','s','unknown','{}')");
+      migrate(drizzle(connection), { migrationsFolder: fileURLToPath(source) });
+      expect(connection.prepare("SELECT name FROM sqlite_master WHERE name IN ('execution','tool_operation','tool_dispatch_attempt')").all()).toEqual([]);
+      expect(connection.prepare("SELECT count(*) AS count FROM tool_result").get()).toEqual({ count: 0 });
+      for (const [table, rows] of preserved) expect(connection.prepare(`SELECT * FROM ${table} ORDER BY id`).all()).toEqual(rows);
+      const after = inventory(connection), retired = new Set(["execution", "tool_operation", "tool_dispatch_attempt"]);
+      expect(normalize(after.schema.filter(row => row.tbl_name !== "tool_result"))).toEqual(normalize(before.schema.filter(row => !retired.has(row.tbl_name))));
+      expect(normalize(after.tables.filter(row => row.name !== "tool_result"))).toEqual(normalize(before.tables.filter(row => !retired.has(row.name))));
+      expect(normalize(after)).toEqual(normalize(expected));
+    } finally { connection.close(); rmSync(directory, { recursive: true, force: true }); }
+  });
+
   it("rebuilds only Goal tables while preserving existing sessions, messages, Runs, and tool results", () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-goal-migration-"));
     const path = join(directory, "upgrade.db");
@@ -149,7 +207,7 @@ describe("SessionDatabase", () => {
         expect(normalize(inventory(first.connection))).toEqual(normalize(expected));
         first.connection.prepare("UPDATE session_event_sequence SET reserved_through = 42 WHERE id = 1").run();
         journal = first.connection.prepare("SELECT * FROM __drizzle_migrations").all();
-        expect(journal).toHaveLength(10);
+        expect(journal).toHaveLength(11);
       } finally {
         first.close();
       }
@@ -173,6 +231,7 @@ describe("SessionDatabase", () => {
       "0007_goal_simplification.sql",
       "0008_session_plugin_apps.sql",
       "0009_exotic_owl.sql",
+      "0010_tool_results.sql",
     ]);
     const journal = JSON.parse(readFileSync(new URL("meta/_journal.json", directory), "utf8"));
     expect(journal.entries.map((entry: { tag: string }) => entry.tag).sort()).toEqual([
@@ -186,6 +245,7 @@ describe("SessionDatabase", () => {
       "0007_goal_simplification",
       "0008_session_plugin_apps",
       "0009_exotic_owl",
+      "0010_tool_results",
     ]);
   });
 

@@ -91,7 +91,6 @@ export async function executeToolWithTimeout(
   context: ToolContext,
   timeoutMs: number,
   externalSignal?: AbortSignal,
-  onLateOutcome?: (outcome: { returned: Awaited<ReturnType<ToolDefinition["execute"]>> } | { error: unknown }) => Promise<void>,
   observeInvocation?: (settled: Promise<void>) => void,
 ): Promise<Awaited<ReturnType<ToolDefinition["execute"]>>> {
   const controller = new AbortController();
@@ -122,7 +121,6 @@ export async function executeToolWithTimeout(
     }
   });
 
-  let abandoned = false;
   const invocation = Promise.resolve().then(() => {
     controller.signal.throwIfAborted();
     return tool.execute(input, {
@@ -131,22 +129,17 @@ export async function executeToolWithTimeout(
       deadlineAt,
     });
   });
-  // Register after the race is consumed; errors from late auditing remain the host's responsibility.
-  const audited = invocation.then(
-    returned => { if (abandoned) return onLateOutcome?.({ returned }); },
-    error => { if (abandoned) return onLateOutcome?.({ error }); },
-  ).catch(error => { process.emitWarning(`Late tool outcome callback failed: ${String(error)}`); });
+  const settled = invocation.then(() => {}, () => {});
   try {
     const raced = Promise.race([invocation, timeoutPromise]);
     try {
       // Register before the invocation microtask runs; a timeout does not settle this promise.
-      observeInvocation?.(audited);
+      observeInvocation?.(settled);
     } catch (error) {
       controller.abort(error);
     }
     return await raced;
   } catch (error) {
-    abandoned = controller.signal.aborted;
     throw error;
   } finally {
     clearTimeout(timeout);

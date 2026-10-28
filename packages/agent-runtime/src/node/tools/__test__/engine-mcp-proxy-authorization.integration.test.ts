@@ -69,7 +69,7 @@ describe("MCP proxy authorization", () => {
     expect(f.hooks).toContain(`pre_tool_use:${binding.definition.name}`);
     f.execution.tools=modelTools;
     expect((await f.engine.executeTool(call, { execution: f.execution })).executionState).toBe("not_started");
-    expect((await f.call()).executionState).toBe("not_started");
+    expect((await f.call()).executionState).toBe("unknown");
     expect(f.calls).toBe(1);
   });
   it("does not let app visibility override the actual tool permission deny", async () => {
@@ -91,7 +91,8 @@ describe("MCP proxy authorization", () => {
     if (audience !== "app") expect(toolRegistryView(registry).get(binding.definition.name)?.ui).toEqual(binding.definition.ui);
     if(audience==="app")f.execution.tools=new Map([...f.execution.tools!].filter(([name])=>name!==binding.definition.name));
     const result = await f.call();
-    expect(result.executionState).toBe(audience === "app" ? "not_started" : "completed");
+    // The proxy was invoked even when the captured target was unavailable.
+    expect(result.executionState).toBe(audience === "app" ? "unknown" : "completed");
     expect(f.calls).toBe(audience === "app" ? 0 : 1);
     const direct = await f.engine.executeTool({ type: "tool_use", id: "direct", name: binding.definition.name, input: { text: "hi" } }, { execution: f.execution });
     expect(direct.executionState).toBe(audience === "app" ? "not_started" : "completed");
@@ -116,7 +117,7 @@ describe("MCP proxy authorization", () => {
     expect("setMcpManager" in f.engine).toBe(false);
     for await (const _event of f.engine.submitMessage("query MCP", { execution: f.execution })) { /* consume */ }
     const result = f.engine.getHistory().find(message => message.type === "tool_result");
-    expect(result).toMatchObject({ isError: true, failureKind: "permission", executionState: "not_started" });
+    expect(result).toMatchObject({ isError: true, failureKind: "permission", executionState: "unknown" });
     expect(rawCalls).toBe(0);
     expect(f.calls).toBe(0);
     expect(f.checked).toContain("mcp__remote__query");
@@ -149,7 +150,7 @@ describe("MCP proxy authorization", () => {
 
   it.each([{ captured: false }, { source: "agent" as const }])("rejects a missing or non-MCP captured target %j", async options => {
     const f = fixture(options);
-    expect(await f.call()).toMatchObject({ isError: true, executionState: "not_started" });
+    expect(await f.call()).toMatchObject({ isError: true, executionState: "unknown" });
     expect(f.calls).toBe(0);
     expect(f.checked).toEqual(["McpToolCall"]);
   });
@@ -157,14 +158,14 @@ describe("MCP proxy authorization", () => {
   it("honors a formal deny while the target remains visible", async () => {
     const f = fixture({ decision: "deny" });
     expect(f.registry.has("mcp__remote__query")).toBe(true);
-    expect(await f.call()).toMatchObject({ isError: true, failureKind: "permission", executionState: "not_started" });
+    expect(await f.call()).toMatchObject({ isError: true, failureKind: "permission", executionState: "unknown" });
     expect(f.calls).toBe(0);
     expect(f.checked).toContain("mcp__remote__query");
   });
 
   it.each([true, false])("uses ordinary persisted approval (approved=%s)", async approved => {
     const f = fixture({ decision: "ask", approved });
-    expect(await f.call()).toMatchObject(approved ? { executionState: "completed" } : { isError: true, failureKind: "permission", executionState: "not_started" });
+    expect(await f.call()).toMatchObject(approved ? { executionState: "completed" } : { isError: true, failureKind: "permission", executionState: "unknown" });
     expect(f.calls).toBe(approved ? 1 : 0);
     expect(f.events.map(event => event.type)).toContain("permission.requested");
     expect(f.events.map(event => event.type)).toContain("permission.resolved");
@@ -172,7 +173,7 @@ describe("MCP proxy authorization", () => {
 
   it("honors target pre-tool hooks", async () => {
     const f = fixture({ blocked: true });
-    expect(await f.call()).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
+    expect(await f.call()).toMatchObject({ isError: true, failureKind: "policy", executionState: "unknown" });
     expect(f.calls).toBe(0);
   });
 

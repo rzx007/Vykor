@@ -9,7 +9,7 @@ import { isToolResultReader, markToolResultReader, QueryEngine, ToolRegistry } f
 import { SessionStore } from "@vykor/services";
 import { createToolResultTool } from "@vykor/tools";
 import { createRunCapabilityView } from "../../../packages/agent-runtime/src/node/plugins/run-capability-view.js";
-import { ToolOperationService } from "../../../packages/server/src/application/session/execution/tool-operation-service.js";
+import { bindToolDispatchCheck } from "../../../packages/server/src/application/session/execution/tool-dispatch-check.js";
 import { ToolResultService } from "../../../packages/server/src/application/session/execution/tool-result-service.js";
 
 const cleanup: Array<() => void | Promise<void>> = [];
@@ -24,12 +24,6 @@ function deferred<T>() {
   return { promise, resolve };
 }
 type Call = { id: string; name: string; input: Record<string, unknown> };
-function ledger(store: SessionStore) {
-  return store.toolOperations.list({ sessionId: "session" }).map(row => ({
-    call: row.toolCallId, state: row.state, result: row.result,
-    attempts: store.toolOperations.listAttempts(row.id),
-  }));
-}
 async function fixture(options: {
   contract(directory: string): AgentOutputContract;
   next(request: number, messages: readonly Message[], store: SessionStore): Call | undefined;
@@ -49,10 +43,7 @@ async function fixture(options: {
   };
   registry.register(repair, { kind: "builtin" });
   registry.register(markToolResultReader(createToolResultTool()), { kind: "builtin" });
-  const operations = new ToolOperationService({ store, ownerLease: () => lease, describe: intent => {
-    const binding = intent.binding;
-    return binding?.source?.kind === "builtin" && isToolResultReader(binding.definition, binding.definitionIdentity) ? { kind: "read_only" } : undefined;
-  } });
+  const bindToolDispatch = bindToolDispatchCheck({ store, ownerLease: () => lease, accepting: () => true });
   const results = new ToolResultService({ store, ownerLease: () => lease });
   let requests = 0;
   const client: StreamingMessageClient = { async *streamMessage(params) {
@@ -64,12 +55,11 @@ async function fixture(options: {
   const engine = new QueryEngine(client, registry,
     { checkTool: async () => ({ action: "allow" }) }, { execute: async () => ({ blocked: false }) },
     { cwd: directory, sessionId: "session", maxTurns: 6, trajectoryTrackerFactory: false, toolTimeoutMs: 10_000, modelRetry: { maxTotalRetries: 0 } });
-  const agent = await createAgentKernel({ id: "session", cwd: directory, engine, toolSafety: operations,
+  const agent = await createAgentKernel({ id: "session", cwd: directory, engine, bindToolDispatch,
     outputContract: options.contract(directory), effects: { requestPermission: async () => ({ status: "approved" }) },
     preparation: { prepare: async scope => {
       const capabilityView = createRunCapabilityView({ toolRegistry: registry });
-      const release = operations.onRunCapabilities({ scope, capabilityView, pluginCandidates: [], resolveToolAppOrigin: async () => undefined });
-      return { run: { tools: capabilityView.tools, toolResults: results.forRun(scope, capabilityView.tools) }, release };
+      return { run: { tools: capabilityView.tools, bindToolResults: tools => results.forRun(scope, tools) }, release() {} };
     } },
     onEvent: event => {
       events.push(structuredClone(event));
@@ -87,9 +77,8 @@ function completed(events: AgentEvent[], id: string): ToolExecutionResult | unde
   return event?.type === "tool.completed" ? event.data.result as ToolExecutionResult : undefined;
 }
 
-describe("structured delivery and S1 through real SQLite, Kernel and QueryEngine", () => {
+describe("structured delivery and result storage through real SQLite, Kernel and QueryEngine", () => {
   it("rejects invalid structure and missing business output before dispatch, then accepts a corrected receipt", async () => {
-    const snapshots: ReturnType<typeof ledger>[] = [];
     const verified: boolean[] = [];
     const f = await fixture({
       contract: directory => ({ schema, verify: candidate => {
@@ -99,7 +88,6 @@ describe("structured delivery and S1 through real SQLite, Kernel and QueryEngine
         return { ok, reason: "The report file is missing or incomplete" };
       } }),
       next(request, _messages, store) {
-        if (request > 1) snapshots.push(ledger(store));
         if (request === 1) return { id: "invalid-schema", name: "SubmitResult", input: { ...delivery, data: {} } };
         if (request === 2) return { id: "missing-report", name: "SubmitResult", input: delivery };
         if (request === 3) return { id: "repair", name: "RepairReport", input: {} };
@@ -107,22 +95,14 @@ describe("structured delivery and S1 through real SQLite, Kernel and QueryEngine
       },
     });
     const result = await f.agent.runMessage("Create the report and submit its checked result", { ids });
-    expect(snapshots[0]).toEqual([]);
-    expect(snapshots[1]).toMatchObject([{ call: "missing-report", state: "rejected", result: { isError: true, executionState: "not_started", failureKind: "invalid_input" }, attempts: [] }]);
-    expect(snapshots[1]![0]!.result?.toolAttemptId).toBeUndefined();
     expect(completed(f.events, "invalid-schema")).toMatchObject({ isError: true, executionState: "not_started", failureKind: "invalid_input" });
     expect(completed(f.events, "missing-report")).toMatchObject({ isError: true, executionState: "not_started", failureKind: "invalid_input" });
     expect(completed(f.events, "missing-report")?.toolAttemptId).toBeUndefined();
     expect(verified).toEqual([false, true]);
     expect(readFileSync(join(f.directory, "report.md"), "utf8")).toBe("verified report\n");
-    const rows = ledger(f.store);
-    expect(rows.map(row => [row.call, row.state, row.attempts.length])).toEqual([
-      ["missing-report", "rejected", 0], ["repair", "confirmed", 1], ["valid-report", "confirmed", 1],
-    ]);
-    expect(rows.some(row => row.state === "unknown")).toBe(false);
     expect(result.delivery).toEqual({ ...delivery, validation: "schema_valid", verification: "passed" });
     expect(completed(f.events, "repair")?.resultRef).toMatchObject({ id: expect.any(String), toolName: "RepairReport", totalChars: 12 });
-    const savedReceipt = rows[2]!.result!.content[0]!;
+    const savedReceipt = completed(f.events, "valid-report")!.content[0]!;
     expect(savedReceipt.type === "text" && JSON.parse(savedReceipt.text)).toEqual(result.delivery);
     expect(f.events.find(event => event.type === "run.completed")?.data).toHaveProperty("delivery", result.delivery);
     expect(f.store.runs.getRun("run")).toMatchObject({ status: "completed", metadata: { delivery: result.delivery } });
@@ -141,16 +121,16 @@ describe("structured delivery and S1 through real SQLite, Kernel and QueryEngine
     const handle = f.agent.submitMessage("Submit after host verification", { ids });
     const outcome = handle.result.then(result => ({ result, error: undefined }), error => ({ result: undefined, error }));
     await Promise.race([entered.promise, handle.result.then(() => { throw new Error("Run completed before entering host verification"); })]);
-    expect(ledger(f.store)).toMatchObject([{ call: "pending-verification", state: "authorized", attempts: [] }]);
+    expect(f.store.toolResults.list("session")).toEqual([]);
     await handle.interrupt("Cancel pending host verification");
     expect((await outcome).error).toBeDefined();
     expect((await outcome).result).toBeUndefined();
-    const cancelled = ledger(f.store);
-    expect(cancelled).toMatchObject([{ call: "pending-verification", state: "cancelled", result: { isError: true, executionState: "not_started", failureKind: "interrupted" }, attempts: [] }]);
+    const cancelled = f.store.toolResults.list("session");
+    expect(cancelled).toEqual([]);
     answer.resolve({ ok: true });
     await returned.promise;
     await setImmediate();
-    expect(ledger(f.store)).toEqual(cancelled);
+    expect(f.store.toolResults.list("session")).toEqual(cancelled);
     expect(f.store.runs.getRun("run")?.status).toBe("interrupted");
     expect(f.events.filter(event => event.type === "run.completed")).toEqual([]);
     expect(f.events.filter(event => event.type === "run.interrupted")).toHaveLength(1);

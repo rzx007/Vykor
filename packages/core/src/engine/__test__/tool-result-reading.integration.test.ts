@@ -93,14 +93,15 @@ describe("QueryEngine archived tool results", () => {
     expect((await f.execution("later").toolResults!.list()).items).toHaveLength(1);
   });
 
-  it("stops before result delivery or another model request when retaining full output fails", async () => {
+  it("delivers known completed facts without a fake reference then stops on retention failure", async () => {
     const f = fixture({ capacity: 100 });
     f.batches.push([call("long", "Large")]);
     const delivered: StreamEvent[] = [];
     await expect((async () => {
       for await (const event of f.engine.submitMessage("read", { execution: f.execution("first") })) delivered.push(event);
     })()).rejects.toThrow(/capacity/i);
-    expect(delivered.filter(event => event.type === "tool_use_end")).toEqual([]);
+    expect(delivered.filter(event => event.type === "tool_use_end")).toMatchObject([{ result: { executionState: "completed" } }]);
+    expect(delivered.filter(event => event.type === "tool_use_end")[0]?.result.resultRef).toBeUndefined();
     expect(f.requests).toHaveLength(1);
   });
 
@@ -172,6 +173,7 @@ describe("QueryEngine archived tool results", () => {
   it("still rejects explicit calls when full output retention fails in an active Run", async () => {
     const f = fixture({ capacity: 100 }), delivered: unknown[] = [];
     await expect(f.engine.executeTool(call("long", "Large"), { execution: f.execution("active"), onResult: result => { delivered.push(result); } })).rejects.toThrow(/capacity/i);
-    expect(delivered).toEqual([]);
+    expect(delivered).toMatchObject([{ executionState: "completed" }]);
+    expect(delivered[0]).not.toHaveProperty("resultRef");
   });
 });

@@ -54,8 +54,8 @@
 
 ## 当前协议与数据基线
 
-- HTTP 协议版本是 `6`，请求头是 `x-vykor-protocol-version`。
-- `/health` 和 `/capabilities` 是握手例外。Client 在首个业务请求前读取 capabilities；Server 在业务 handler 前拒绝缺失或不等于 5 的版本。
+- HTTP 协议版本是 `7`，请求头是 `x-vykor-protocol-version`。
+- `/health` 和 `/capabilities` 是握手例外。Client 在首个业务请求前读取 capabilities；Server 在业务 handler 前拒绝缺失或不等于 7 的版本。
 - SQLite 以 `packages/services/src/session-runtime/migrations/0000_current_schema.sql` 为基线，其后为 `drizzle-kit generate` 产出的增量迁移链。
 - 每次打开都应用迁移链（基线 + 增量）；不做旧库接管或字段猜测，与当前基线不匹配的库删除重建。
 - Native Plugin 只接受严格 v1 manifest，安装 scope 只有 `user` 与 `managed`；外部格式先通过 `@vykor/plugin-converters` 显式转换。

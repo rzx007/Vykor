@@ -74,10 +74,6 @@
     "./approvals/auto-review": {
       "import": "./src/approvals/auto-review.ts",
       "types": "./src/approvals/auto-review.ts"
-    },
-    "./executions": {
-      "types": "./src/executions/index.ts",
-      "import": "./src/executions/index.ts"
     }
   },
   "scripts": {

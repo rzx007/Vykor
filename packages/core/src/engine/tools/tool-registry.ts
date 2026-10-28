@@ -241,10 +241,13 @@ export function runToolRegistry(
   contribution: AgentExecutionContext["contribution"],
   bindings?: ReadonlyMap<string, RunToolBinding>,
 ): IToolRegistry {
-  const base = bindings
-    ? capturedToolRegistry(bindings)
-    : visibleToolRegistry(inner, allowedTools);
   const contributed = contribution?.tools ?? [];
+  // Runtime's final binding set includes contributions so the host checks the exact
+  // dispatched definition. Keep their original definitions for local preflight.
+  const base = bindings
+    ? capturedToolRegistry(new Map([...bindings].filter(([name, binding]) =>
+        !contributed.some(item => item.definition.name === name && item.definition === binding.definition))))
+    : visibleToolRegistry(inner, allowedTools);
   if (contributed.length === 0) return modelToolRegistry(base);
   const additions = new Map<string, ToolDefinition>();
   for (const { definition } of contributed) {

@@ -17,7 +17,11 @@ export function createMcpTools(port?: McpToolPort): ToolDefinition[] {
     async execute(input, context) {
       const qualifiedName = `mcp__${String(input.serverName ?? "")}__${String(input.toolName ?? "")}`;
       const source = context.toolRegistry?.inspect(qualifiedName)?.source;
-      if (!qualifiedName.startsWith("mcp__") || source?.kind !== "mcp" || !context.invokeTool) {
+      // Let the checked host reject unloaded targets so Search can enable a later call.
+      // A visible target must still be an MCP tool; an absent registry is not authorization.
+      const allowedTarget = source?.kind === "mcp" ||
+        (source === undefined && context.toolRegistry?.has(qualifiedName) === false);
+      if (!allowedTarget || !context.invokeTool) {
         return { content: [{ type: "text", text: `Checked MCP invocation is unavailable: ${qualifiedName}` }], isError: true, failureKind: "policy", executionState: "not_started" };
       }
       try {

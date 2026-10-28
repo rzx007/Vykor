@@ -3,12 +3,10 @@ import type { PermissionRequestRecord, SessionEventRecord, SessionInputRecord, S
 import type { AttachmentLimits, SessionInputAttachmentRecord } from "@vykor/domain-contracts/attachments";
 import type { TransactionCoordinatorHooks } from "../../database/index.js";
 import type { DurableEventRegistry } from "../events/event-registry.js";
-import type { ExecutionRecord, ToolOperationRecord, ToolDispatchAttemptRecord } from "@vykor/domain-contracts/executions";
+import type { ToolResultRecord } from "../../tool-results/tool-result-repository.js";
 
 export interface SessionState {
-  executions: Record<string, ExecutionRecord>;
-  toolOperations: Record<string, ToolOperationRecord>;
-  toolDispatchAttempts: Record<string, ToolDispatchAttemptRecord>;
+  toolResults: Record<string, ToolResultRecord>;
   nextEventSeq: number;
   sessions: Record<string, SessionRecord>;
   inputs: Record<string, SessionInputRecord>;
@@ -42,9 +40,7 @@ export function now(): number {
 
 export function emptyState(): SessionState {
   return {
-    executions: {},
-    toolOperations: {},
-    toolDispatchAttempts: {},
+    toolResults: {},
     nextEventSeq: 1,
     sessions: {},
     inputs: {},

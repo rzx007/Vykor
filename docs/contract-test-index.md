@@ -20,27 +20,23 @@
 
 ## 生命周期契约编号
 
-### S1 工具操作安全
+### 当前派发与真实调用
 
 | 契约 | 自动验证入口 | 检查范围 |
 |---|---|---|
-| P9 强制检查与保存顺序 | [core 操作执行](../packages/core/src/engine/tools/__test__/operation-execution.test.ts)、[真实管道与 SQLite](../tests/agent-integration/__test__/s1-tool-safety-pipeline.integration.test.ts) | 规则失败零调用、真实尝试、结果保存失败停止、未知和迟到回执 |
-| P9 持久记录与原事务 | [操作仓库](../packages/services/src/tool-operations/__test__/tool-operation-repository.test.ts) | 意图冲突、版本、owner、回滚、memory 隔离、核对证据 |
-| P9 崩溃窗口 | [独立 worker 强制退出](../tests/agent-integration/__test__/durable-tool-operations.integration.test.ts) | 派发后、外部生效后、确认后退出；重开 SQLite 并核对独立效果记录 |
-| P9 SDK 与实际消息身份 | [SDK 接线](../packages/agent-runtime/src/__test__/tool-safety-wiring.test.ts)、[操作身份投影](../packages/server/src/application/agent/__test__/tool-lifecycle-identity.test.ts) | root/child/runTool 的宿主能力与真实派发身份，不把等待当成执行 |
-
-这些入口验证 S1，不代替 S2 的模型检查点继续或 S3 的持久审批验收。
+| P9 当前权限 | [宿主检查](../packages/server/src/application/session/execution/__test__/tool-dispatch-check.test.ts)、[SDK 接线](../packages/agent-runtime/src/__test__/tool-dispatch-wiring.test.ts) | owner、Run、来源、修订、模型/手动/child 的当前检查 |
+| P9 错误与收尾 | [受检调用](../packages/core/src/engine/tools/__test__/checked-tool-execution.test.ts)、[实际等待](../packages/core/src/engine/tools/__test__/query-tool-limits.test.ts)、[Browser 与 Job](../tests/agent-integration/__test__/job-safety.integration.test.ts) | 普通错误继续、权限拒绝、超时后真实调用结束 |
 
 ### 长结果补读与结构化交付
 
 | 契约 | 自动验证入口 | 检查范围 |
 | --- | --- | --- |
 | 长结果与读取权限 | [内存存储](../packages/core/src/engine/results/__test__/memory-tool-result-archive.test.ts)、[持久读取](../packages/services/src/tool-results/__test__/tool-result-reader.test.ts)、[宿主权限](../packages/server/src/application/session/execution/__test__/tool-result-service.test.ts) | 超过 300 KB 的正文、分页/字面检索、容量边界、精确会话/来源/owner/权限版本检查 |
-| 实际默认 Agent 补读 | [SDK 跨 Run](../packages/agent-runtime/src/node/agent/__test__/tool-result-reading.test.ts)、[daemon 重启](../packages/server/src/application/__test__/daemon-result-reading.integration.test.ts) | 保存先于截断、历史清理后找回、SQLite 重开、真实只读分类、同名伪造及查询不递归归档 |
-| 交付收尾与业务核验 | [实际 Kernel 循环](../packages/agent-runtime/src/kernel/delivery/__test__/delivery-run.test.ts)、[真实 S1 与产物](../tests/agent-integration/__test__/result-delivery.integration.test.ts) | 结构纠错、派发前业务核验、回执归属、普通文本兼容与取消后的迟到核验 |
+| 实际默认 Agent 补读 | [SDK 跨 Run](../packages/agent-runtime/src/node/agent/__test__/tool-result-reading.test.ts)、[daemon 重启](../packages/server/src/application/__test__/daemon-result-reading.integration.test.ts) | 保存先于截断、历史清理后找回、SQLite 重开、当前来源授权、同名伪造及查询不递归归档 |
+| 交付收尾与业务核验 | [实际 Kernel 循环](../packages/agent-runtime/src/kernel/delivery/__test__/delivery-run.test.ts)、[实际结果与产物](../tests/agent-integration/__test__/result-delivery.integration.test.ts) | 结构纠错、派发前业务核验、回执归属、普通文本兼容与取消后的迟到核验 |
 | 公共交付入口 | [请求解析](../packages/protocol/src/requests/__test__/requests.test.ts)、[准入](../packages/server/src/application/session/execution/__test__/run-admission-service.test.ts)、[客户端](../packages/client/src/resources/session/__test__/structured-delivery.test.ts) | Schema 保留、ID 冲突、格式拒绝、附加能力检查后发送 |
 | 能力简化与旧数据 | [HTTP 编辑/重放](../packages/server/src/http/routes/__test__/run-execution.test.ts)、[执行入口](../packages/server/src/application/session/execution/__test__/session-run-executor.test.ts)、[应用交互](../packages/server/src/application/session/interactions/__test__/session-interaction-service.test.ts) | 只接受显式 schema、旧快照读取、合同冲突与重复编辑 |
-| 查询搬运与绑定顺序 | [安全检查](../packages/server/src/application/session/execution/__test__/tool-operation-service.test.ts)、[结果查询](../packages/server/src/application/session/execution/__test__/tool-result-service.test.ts)、[Kernel 绑定](../packages/agent-runtime/src/kernel/__test__/result-store-binding.test.ts)、[真实子 Run](../packages/server/src/application/__test__/durable-agent-application.test.ts) | 安全判断无完整记录复制、授权后分页、单次文本读取、投影后绑定、旧 store 兼容 |
+| 查询搬运与绑定顺序 | [安全检查](../packages/server/src/application/session/execution/__test__/tool-dispatch-check.test.ts)、[结果查询](../packages/server/src/application/session/execution/__test__/tool-result-service.test.ts)、[Kernel 绑定](../packages/agent-runtime/src/kernel/__test__/result-store-binding.test.ts)、[真实子 Run](../packages/server/src/application/__test__/durable-agent-application.test.ts) | 派发检查不读历史记录、授权后分页、单次文本读取、投影后绑定、最终集合绑定 |
 
 ### 其余生命周期契约
 
@@ -203,9 +199,8 @@ P7–P13 实现与集中验收完成，当前策略的 `stageExceptions` 为零�
 
 | 检查目标 | 具体证据 | 定向入口 |
 | --- | --- | --- |
-| 可信内置读取不继承同名覆盖，未知操作核对检查归属、版本和真实结果 | [daemon 读取](../packages/server/src/application/__test__/daemon-result-reading.integration.test.ts)、[宿主核对](../packages/server/src/application/session/execution/__test__/tool-operation-review.test.ts)、[HTTP 认证与兼容](../packages/server/src/http/__test__/tool-operation-review.test.ts)、[Client 入口](../packages/client/src/resources/session/__test__/tool-operation-review.test.ts) | 对应包的定向 Vitest |
-| Run 结束后实际调用仍受保护，合法迟到回执保存，未保存回执提供恢复提示 | [实际调用跟踪](../packages/server/src/application/session/execution/__test__/tool-operation-invocation.test.ts)、[调用前登记](../packages/core/src/engine/tools/__test__/query-tool-limits.test.ts)、[迟到回执](../packages/services/src/tool-operations/__test__/tool-operation-repository.test.ts)、[待保存列表](../packages/server/src/application/session/execution/__test__/tool-operation-review.test.ts) | Server、Core、Services 对应文件的定向 Vitest |
-| 重开不重发原任务，压缩保留执行状态和结果引用，未知写入继续阻断 | [日常重开](../packages/server/src/application/__test__/daemon-daily-continuation.integration.test.ts)、[摘要原文事实](../packages/core/src/engine/compaction/__test__/compact-continuity.test.ts) | Server、Core 对应文件的定向 Vitest |
+| 重开不重发原任务，压缩保留执行状态和结果引用，新调用重新通过当前权限检查 | [日常重开](../packages/server/src/application/__test__/daemon-daily-continuation.integration.test.ts)、[摘要原文事实](../packages/core/src/engine/compaction/__test__/compact-continuity.test.ts) | Server、Core 对应文件的定向 Vitest |
+| 当前宿主检查、普通错误连续执行和独立结果补读 | [派发前检查](../packages/server/src/application/session/execution/__test__/tool-dispatch-check.test.ts)、[实际 Browser/Shell](../packages/server/src/application/__test__/unknown-outcome-default.test.ts)、[独立结果存储](../packages/services/src/tool-results/__test__/tool-result-reader.test.ts) | Server、Services 对应文件的定向 Vitest |
 | 自动评审消费真实结构化回执，普通文本不能冒充；交付与 Goal 完成矛盾时暂停 | [真实系统子 Agent 评审](../packages/server/src/application/auto-review/__test__/auto-review.integration.test.ts)、[消费与核验](../packages/server/src/application/auto-review/__test__/session-auto-review-service.test.ts)、[Goal 结算](../packages/server/src/application/session/goals/__test__/session-goal-service.test.ts)、[回执投影](../packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts) | Server 对应文件的定向 Vitest |
 
 ## 维护规则

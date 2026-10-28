@@ -8,7 +8,7 @@ import { SessionStore } from "@vykor/services";
 import { DaemonApplication } from "../daemon-application.js";
 
 describe("daemon result reading wiring", () => {
-  it("uses durable full results after restart and classifies the captured builtin reader as read-only", async () => {
+  it("uses durable full results after restart and excludes the captured builtin reader", async () => {
     const directory = mkdtempSync(join(tmpdir(), "daemon-results-")), path = join(directory, "state.db");
     let store = new SessionStore({ path }), application: DaemonApplication | undefined;
     let phase = 0, original: ToolResultRef | undefined, listed: ToolResultRef | undefined, readTail = "", missing = "";
@@ -64,10 +64,7 @@ describe("daemon result reading wiring", () => {
       expect((await run(session.id)).status).toBe("completed");
       expect(relistedNames).toEqual(["Large"]);
       expect(missing).toContain('"isError":true');
-      const operations = store.toolOperations.list({ sessionId: session.id });
-      const readers = operations.filter(operation => operation.toolName === "ToolResult");
-      expect(readers).toHaveLength(4);
-      expect(readers.every(operation => operation.kind === "read_only" && operation.state !== "unknown")).toBe(true);
+      expect(store.toolResults.list(session.id).map(row => row.toolName)).toEqual(["Large"]);
       expect(events.filter(event => event.type === "tool.completed" && event.data.result.resultRef).map(event => event.data.toolUseId)).toEqual(["large"]);
     } finally { await application?.close().catch(() => {}); store.close(); rmSync(directory, { recursive: true, force: true }); }
   });
@@ -92,7 +89,7 @@ describe("daemon result reading wiring", () => {
       const session = application.commands.createSession({ cwd: directory, model: "test-model" });
       const admission = await application.interactions.admitPrompt(session.id, { items: [{ type: "text", text: "use replacement" }] });
       expect((await application.runControl.awaitRun(session.id, admission.run!.id)).status).toBe("completed");
-      expect(store.toolOperations.list({ sessionId: session.id })).toMatchObject([{ toolName: name, kind: "non_replayable", state: "confirmed" }]);
+      expect(store.toolResults.list(session.id)).toMatchObject([{ toolName: name }]);
       const part = store.conversations.listMessageParts(session.id).find(part => part.toolUseId === "impostor")!;
       expect(part.metadata.resultRef).toMatchObject({ toolName: name });
     } finally { await application.close().catch(() => {}); store.close(); rmSync(directory, { recursive: true, force: true }); }
@@ -128,18 +125,10 @@ describe("daemon trusted file reads", () => {
       await application.ready();
       const session = application.commands.createSession({ cwd: directory, model: "test-model" });
       const admitted = await application.interactions.admitPrompt(session.id, { items: [{ type: "text", text: "check then continue" }] });
-      await application.runControl.awaitRun(session.id, admitted.run!.id);
-      if (unknown) {
-        // An unknown execution deliberately ends its Run. The next input may inspect safely.
-        const next = await application.interactions.admitPrompt(session.id, { items: [{ type: "text", text: "inspect the uncertain result before continuing" }] });
-        await application.runControl.awaitRun(session.id, next.run!.id);
-      }
-      const operations = store.toolOperations.list({ sessionId: session.id });
-      expect(operations.filter(row => row.toolName === "Read")).toHaveLength(unknown ? 1 : 2);
-      expect(operations.filter(row => row.toolName === "Read").every(row => row.kind === "read_only" && row.state === "confirmed")).toBe(true);
+      expect((await application.runControl.awaitRun(session.id, admitted.run!.id)).status).toBe("completed");
       expect(reads).toContain("known fact");
-      expect(writeCount).toBe(unknown ? 0 : 1);
-      if (!unknown) expect(readFileSync(join(directory, "effect.txt"), "utf8")).toBe("done");
+      expect(writeCount).toBe(1);
+      expect(readFileSync(join(directory, "effect.txt"), "utf8")).toBe("done");
     } finally {
       await application.close().catch(() => {}); store.close();
       const cleanup = resolve(directory), within = relative(resolve(tmpdir()), cleanup);

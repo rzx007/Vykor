@@ -77,7 +77,7 @@
 - [开发数据重置](./development-data-reset.md)：人工预检及逐项授权的操作说明。
 - [诊断与可观测性](./observability.md)：运行追踪、日志、状态快照和排障。
 - [发布流程](./release-process.md)：Desktop、CLI 与官方插件的发布边界。
-- [契约与测试索引](./contract-test-index.md)：按受影响规则选择自动化测试；S1 的本次验证范围见[工具操作安全验收记录](./superpowers/reviews/2026-10-26-s1-tool-operation-safety.md)。
+- [契约与测试索引](./contract-test-index.md)：按受影响规则选择自动化测试；当前工具派发与结果存储验证入口见索引；[原 S1 验收记录](./superpowers/reviews/2026-10-26-s1-tool-operation-safety.md)仅保留历史语境。
 - [跨任务行为评测](./agent-behavior-evaluation.md)：脚本场景、真实模型证据及费用授权范围。
 - [真实运行验收提示词](./runtime-acceptance-prompts.md)：连接真实环境后的人工验收。
 
@@ -87,10 +87,11 @@
 
 本节描述目标与验收要求，不代表代码已经实现；不能从创建日期或文件名推断完成状态。
 
+- [S1 彻底简化方案](./superpowers/specs/2026-10-28-s1-simplification-design.md)与[实现验收记录](./superpowers/reviews/2026-10-28-s1-remove-control.md)：B 已实施并通过独立 review；移除整个操作状态机，保留正常权限、真实调用收尾与独立补读，不兼容旧 S1 记录与引用。
 - [子代理与工作流生命周期调研及架构建议](./research/2026-10-27-agent-task-lifecycle-comparison.md)：对照五个参考项目，建议明确任务归属、稳定运行身份、分开执行额度与会话保留，并统一 Workflow 收尾；尚未修改生产代码。
 - [SDK 与 daemon 共用执行核心方案](./superpowers/specs/2026-10-27-shared-execution-core-design.md)与[文件级实施计划](./superpowers/plans/2026-10-27-shared-execution-core.md)：已核对当前代码差异，明确状态归属、三阶段替换与删除清单、真实工厂和 child handle 验收；待实施。
 - [存储热路径优化计划](./superpowers/plans/2026-10-27-storage-hot-path-optimization-plan.md)：评估全历史加载、正文常驻和扫描成本；建议先做 Q1 摘要读取与 Q2 先筛选再投影，完整正文按需读取暂缓。附当前版本 12 进程原始基线。
-- [核心 Agent 能力补齐方案](./superpowers/specs/2026-10-26-agent-core-capability-completion-design.md)：S1 工具操作安全已实现；S2 可恢复执行、S3 持久审批与 P1 交付能力仍待实施。
+- [核心 Agent 能力补齐方案](./superpowers/specs/2026-10-26-agent-core-capability-completion-design.md)：原 S1 工具操作控制已由 B 方案替代；S2 可恢复执行、S3 持久审批与 P1 交付能力仍待实施。
 - [桌面设置需求](./desktop-settings-requirements.md)：逐页目标行为和验收要求，具体完成范围需核对实现。
 - [记忆归属与写入规则](./memory-policy.md)：记忆优化目标及验收用例。
 - [真实 LSP 客户端](./lsp-client-design.md)：用语言服务器替换近似搜索的方案。
