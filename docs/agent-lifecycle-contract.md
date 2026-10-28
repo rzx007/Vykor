@@ -158,7 +158,7 @@ stateDiagram-v2
 | D2、T1-T3 | `packages/server/src/application/control/__test__/daemon-control-service.test.ts`, `tests/server-client/http.test.ts` |
 | D3-D5、P1-P5 | `packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts`, `packages/server/src/application/session/execution/__test__/session-run-executor.test.ts` |
 | D6 | `packages/server/src/application/agent/__test__/agent-pool.test.ts` |
-| D1、D7、restart | `tests/server-client/http.test.ts`, `packages/server/src/daemon/__test__/daemon-lifecycle.soak.test.ts` |
+| D1、D7、restart | `tests/server-client/http.test.ts`, `packages/server/src/http/__test__/daemon-lifecycle.soak.test.ts` |
 | P6-P7 | `packages/services/src/session-runtime/events/__test__/event-registry.test.ts` |
 | P8 | `packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts`, `projection-settlement-recovery.test.ts` |
 

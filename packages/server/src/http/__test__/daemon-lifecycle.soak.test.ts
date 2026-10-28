@@ -10,8 +10,8 @@ import type { AgentEvent, AgentEventContext, AgentEventInput, AgentRunHandle, Ag
 import type { Message } from "@vykor/agent-contracts";
 import { CURRENT_PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER } from "@vykor/protocol";
 
-import type { CreateDaemonAgent } from "../daemon-agent.js";
-import { VykorHttpServer } from "../../http/server.js";
+import type { CreateDaemonAgent } from "../../daemon/daemon-agent.js";
+import { VykorHttpServer } from "../server.js";
 
 const fetch: typeof globalThis.fetch = (input, init) => {
   const headers = new Headers(init?.headers);
