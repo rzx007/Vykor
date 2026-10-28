@@ -9,9 +9,33 @@ it("does not let completion of a previous session cancellation invalidate the ne
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
   let releaseCancel!: () => void
   let resolveNew!: (snapshot: DesktopWorkflowSnapshot) => void
-  const read = ({ sessionId }: { sessionId: string }) =>
+  const read = ({ sessionId }: { sessionId: string }): Promise<DesktopWorkflowSnapshot> =>
     sessionId === "old"
-      ? Promise.resolve({ sessionId, runs: [{ jobId: "a", target: { kind: "workflow", jobId: "a" } }], errors: [], hasMore: false } as DesktopWorkflowSnapshot)
+      ? Promise.resolve({
+          sessionId,
+          runs: [
+            {
+              id: "a",
+              jobId: "a",
+              target: { kind: "workflow", jobId: "a" },
+              sessionId,
+              title: "Old session workflow",
+              status: "running",
+              summary: "",
+              startedAt: 1,
+              updatedAt: 1,
+              canCancel: true,
+              tasks: [],
+              detailsAvailable: false,
+              needsReconciliation: false,
+              reconciliationIssues: [],
+              events: [],
+              eventsTruncated: false,
+            },
+          ],
+          errors: [],
+          hasMore: false,
+        })
       : new Promise<DesktopWorkflowSnapshot>((resolve) => {
           resolveNew = resolve
         })

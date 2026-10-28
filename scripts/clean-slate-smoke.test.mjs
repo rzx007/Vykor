@@ -60,7 +60,7 @@ test("runs the fixed empty-environment sequence and always cleans resources", as
     async waitForHealth() { events.push("health"); },
     async createClient() {
       return {
-        async capabilities() { events.push("capabilities:4"); return { protocol: { version: 4 } }; },
+        async capabilities() { events.push("capabilities:6"); return { protocol: { version: 6 } }; },
         async createSession() { events.push("session"); return { id: "session-1" }; },
         async admitPrompt() { events.push("prompt"); return { run: { id: "run-1" } }; },
         async waitForRun() { events.push("run"); return { id: "run-1", status: "completed" }; },
@@ -78,10 +78,10 @@ test("runs the fixed empty-environment sequence and always cleans resources", as
 
   const result = await runCleanSlateSmoke({ ...paths, providerUrl: "http://127.0.0.1:0/v1" }, runtime);
   assert.deepEqual(events, [
-    "provider:start", "daemon:start", "health", "capabilities:4", "session", "prompt",
+    "provider:start", "daemon:start", "health", "capabilities:6", "session", "prompt",
     "run", "state", "cli", "desktop", "daemon:close", "provider:close", "released",
   ]);
-  assert.equal(result.protocolVersion, 4);
+  assert.equal(result.protocolVersion, 6);
   assert.equal(result.sessionId, "session-1");
   assert.equal(result.runId, "run-1");
   assert.equal(existsSync(paths.tempRoot), false);

@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import { mkdir, writeFile, appendFile } from "node:fs/promises";
 import { dirname } from "node:path";
 
-const [file, version = "1.2.3", protocol = "5", delay = "0"] = process.argv.slice(2);
+const [file, version = "1.2.3", protocol = "6", delay = "0"] = process.argv.slice(2);
 const token = "fixture-secret";
 if (process.env.START_RECORD) await appendFile(process.env.START_RECORD, "start\n");
 if (process.env.START_PIDS) await appendFile(process.env.START_PIDS, `${process.pid}\n`);

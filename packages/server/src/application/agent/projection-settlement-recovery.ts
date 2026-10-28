@@ -172,7 +172,7 @@ function recoverRunTerminalProjection(store: SettlementStore, event: Extract<Age
         ...(event.type === "run.completed" ? { ...(event.data.delivery ? { delivery: event.data.delivery } : {}), ...(event.data.stopReason ? { stopReason: event.data.stopReason } : {}) } : { childFailure: childFailureFromEvent(event) }),
       } });
     }
-    const task = event.context.childId ? store.getSessionTask(event.context.childId) : undefined;
+    const task = event.context.childId ? store.runs.getSessionTask(event.context.childId) : undefined;
     if (task?.runId === runId && (task.status !== status || task.output !== output)) store.updateSessionTask(task.id, {
       status, output, ...(error ? { error } : {}), ...(childFailureFromEvent(event) ? { metadata: { childFailure: childFailureFromEvent(event) } } : {}),
     });

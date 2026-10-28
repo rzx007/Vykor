@@ -6,6 +6,7 @@ import { createServer } from "node:http";
 import { fileURLToPath } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CURRENT_PROTOCOL_VERSION } from "@vykor/protocol";
 import { Service } from "../index.js";
 
 const fixture = fileURLToPath(new URL("./service-fixture.mjs", import.meta.url));
@@ -33,7 +34,7 @@ afterEach(async () => {
   await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
 });
 
-async function start(version = "1.2.3", protocol = "5") {
+async function start(version = "1.2.3", protocol = String(CURRENT_PROTOCOL_VERSION)) {
   const child = spawn(process.execPath, [fixture, file, version, protocol], { stdio: "ignore", windowsHide: true });
   children.push(child);
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -100,7 +101,7 @@ describe("local service management", () => {
   });
 
   it("cleans up a startup that times out before registration", async () => {
-    await expect(Service.ensure({ file, command: [process.execPath, fixture, file, "1.2.3", "5", "400"], timeoutMs: 80 })).rejects.toThrow(/timed out/i);
+    await expect(Service.ensure({ file, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION), "400"], timeoutMs: 80 })).rejects.toThrow(/timed out/i);
     await sleep(500);
     expect(await Service.discover({ file })).toBeUndefined();
   });
@@ -129,7 +130,7 @@ describe("local service management", () => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 80);
     try {
-      await expect(Service.ensure({ file, signal: controller.signal, command: [process.execPath, fixture, file, "1.2.3", "5", "400"] })).rejects.toMatchObject({ name: "AbortError" });
+      await expect(Service.ensure({ file, signal: controller.signal, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION), "400"] })).rejects.toMatchObject({ name: "AbortError" });
       await sleep(500);
       expect(await Service.discover({ file })).toBeUndefined();
     } finally { clearTimeout(timer); }
@@ -159,7 +160,7 @@ describe("local service management", () => {
   });
 
   it("cancels a joining caller promptly while keeping the owner's startup alive", async () => {
-    const owner = Service.ensure({ file, command: [process.execPath, fixture, file, "1.2.3", "5", "500"], timeoutMs: 5_000 });
+    const owner = Service.ensure({ file, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION), "500"], timeoutMs: 5_000 });
     await sleep(30);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 50);
@@ -178,7 +179,7 @@ describe("local service management", () => {
     const record = join(directory, "independent-starts.txt");
     const pids = join(directory, "fixture-pids.txt");
     const options = {
-      file, command: [process.execPath, fixture, file, "1.2.3", "5", "300"],
+      file, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION), "300"],
       env: { START_RECORD: record, START_PIDS: pids }, timeoutMs: 5_000,
     };
     try {
