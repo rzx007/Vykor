@@ -44,13 +44,13 @@ export class MemoryToolResultArchive {
     return {
       retain: async (result, claimedSource) => {
         assertRun();
-        if (result.executionState === "unknown") throw new ToolResultAccessError("Unknown execution outcome has no complete tool result reference.");
+        if (result.executionState !== "completed") throw new ToolResultAccessError("Unknown execution outcome has no complete tool result reference.");
         const binding = bindings.get(result.toolName);
         if (!binding) throw new ToolResultAccessError("Tool result source is not authorized for this Run.");
         const actual = source(binding);
         if (claimedSource && !sameSource(actual, claimedSource)) throw new ToolResultAccessError("Tool result source does not match the captured binding.");
         // resultRef comes from untrusted tool output and never chooses storage identity.
-        const key = JSON.stringify([sessionId, runId, result.operationId ?? result.toolAttemptId ?? result.toolUseId, result.toolName, actual.kind, actual.id]);
+        const key = JSON.stringify([sessionId, runId, result.toolAttemptId ?? result.toolUseId, result.toolName, actual.kind, actual.id]);
         const existing = this.keys.get(key);
         if (existing) return { ...get(existing).ref };
         const text = toolResultText(result);
@@ -59,7 +59,7 @@ export class MemoryToolResultArchive {
           const oldest = this.entries.values().next().value as Entry;
           this.entries.delete(oldest.ref.id); this.keys.delete(oldest.key); this.totalChars -= oldest.text.length;
         }
-        const ref = { id: `result_${crypto.randomUUID()}`, toolName: result.toolName, totalChars: text.length };
+        const ref = { id: `result:${crypto.randomUUID()}`, toolName: result.toolName, totalChars: text.length };
         this.entries.set(ref.id, { ref, text, sessionId, source: { ...actual }, key });
         this.keys.set(key, ref.id); this.totalChars += text.length;
         return { ...ref };

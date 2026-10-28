@@ -10,13 +10,13 @@ function deferred() {
 }
 
 describe("Kernel final result-store binding", () => {
-  it("does not bypass failed preparation when manual callers supply both safety and a legacy store", async () => {
+  it("does not bypass failed preparation when manual callers supply both a host check and a result store", async () => {
     const scope: AgentRunScope = { agentId: "manual", sessionId: "manual", runId: "r", inputId: "i", traceId: "t", cwd: "/workspace", signal: new AbortController().signal };
     const unavailable = async (): Promise<never> => { throw new Error("Tool execution must wait for preparation"); };
     const agent = await createAgentKernel({ id: "manual", cwd: "/workspace",
       effects: { requestPermission: async () => ({ status: "approved" }) },
       engine: createBasicAgentKernelRuntime({ cwd: "/workspace", client: { async *streamMessage() { throw new Error("No model request expected"); } } }),
-      toolSafety: { operations: { prepare: unavailable, authorize: unavailable, dispatch: unavailable, settle: unavailable, reject: unavailable }, requiredPolicy: { check: unavailable } },
+      bindToolDispatch: () => unavailable,
       preparation: { async prepare() { throw new Error("Preparation is unavailable"); } },
     });
     try {

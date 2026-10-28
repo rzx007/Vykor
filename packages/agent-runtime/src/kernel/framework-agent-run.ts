@@ -33,7 +33,7 @@ import type { AgentEventBus } from "./event-source.js";
 
 export interface FrameworkAgentRunOptions {
   outputContract?: import("@vykor/agent-contracts").AgentOutputContract;
-  toolSafety?: import("@vykor/agent-contracts").AgentToolSafety;
+  bindToolDispatch?: import("@vykor/agent-contracts").ToolDispatchCheckFactory;
   agentId: string;
   session: {
     id: string;
@@ -244,7 +244,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
     const createExecution = (
       run: import("@vykor/agent-contracts").PreparedAgentRun,
     ): AgentExecutionContext => {
-      const tools = this.options.tools
+      const baseTools = this.options.tools
         ? readonlyMap(
             [...run.tools].filter(
               ([name, binding]) =>
@@ -255,14 +255,21 @@ export class FrameworkAgentRun implements AgentRunHandle {
             ),
           )
         : readonlyMap(run.tools);
-      if (this.delivery && (tools.has("SubmitResult") || [run.contribution, this.options.contribution].some(item => item?.tools?.some(tool => tool.definition.name === "SubmitResult"))))
+      if (this.delivery && (baseTools.has("SubmitResult") || [run.contribution, this.options.contribution].some(item => item?.tools?.some(tool => tool.definition.name === "SubmitResult"))))
         throw new Error("SubmitResult is reserved for this Run's structured delivery contract");
+      const contribution = mergeContribution(mergeContribution(run.contribution, this.options.contribution), this.delivery?.contribution);
+      const contributedNames = new Set<string>();
+      for (const item of contribution?.tools ?? []) {
+        if (baseTools.has(item.definition.name) || contributedNames.has(item.definition.name)) throw new Error(`Run tool conflicts with an existing tool: ${item.definition.name}`);
+        contributedNames.add(item.definition.name);
+      }
+      const tools = readonlyMap([...baseTools, ...(contribution?.tools ?? []).map(item => [item.definition.name, { definition: item.definition, invoke: item.definition.execute, source: { kind: "agent" as const } }] as const)]);
       // The factory is host authority to bind a scope; tools receive only the bound store.
-      const { bindToolResults: _provider, toolResults: _prebound, ...capabilities } = run;
+      const { bindToolResults: _provider, toolResults: _prebound, bindToolDispatch: _dispatch, ...capabilities } = run;
       return {
         scope,
         ...capabilities,
-        toolSafety: this.options.toolSafety ?? run.toolSafety,
+        bindToolDispatch: this.options.bindToolDispatch ?? run.bindToolDispatch,
         limits: this.options.limits ?? run.limits,
         profile:
           this.options.profile || run.profile
@@ -274,14 +281,14 @@ export class FrameworkAgentRun implements AgentRunHandle {
                   this.options.profile?.toolResultReferences,
               }
             : undefined,
-        contribution: mergeContribution(mergeContribution(run.contribution, this.options.contribution), this.delivery?.contribution),
+        contribution,
         tools,
         ...(this.options.hardMaxTurns !== undefined
           ? { hardMaxTurns: this.options.hardMaxTurns }
           : {}),
         effects: this.options.effects,
         children: this.options.children.createController(
-          { ...scope, limits: this.options.limits ?? run.limits, toolSafety: this.options.toolSafety ?? run.toolSafety },
+          { ...scope, limits: this.options.limits ?? run.limits, bindToolDispatch: this.options.bindToolDispatch ?? run.bindToolDispatch },
           tools,
         ),
         emit: (event) => this.emit(event),
@@ -318,6 +325,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
       // Reliable Run projection must create the durable record before archive authorization.
       const execution: AgentExecutionContext = {
         ...preparedExecution,
+        checkToolDispatch: preparedExecution.bindToolDispatch?.(scope, preparedExecution.tools!),
         toolResults: await bindPreparedToolResults(prepared.run, preparedExecution.tools!),
       };
       this.controller.signal.throwIfAborted();

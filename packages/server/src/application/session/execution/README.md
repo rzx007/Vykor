@@ -14,7 +14,7 @@
 
 输入和运行结果通过存储保存；活跃 Agent、取消信号与计时器由注入的运行资源及本目录服务持有。
 
-`ToolOperationService` 通过 SQLite 操作账本决定后续工具是否可以派发。工具超时或返回 `unknown` 不要求模型运行失败；Core 交付错误与已有输出，让模型核实或解释。历史未知结果默认不阻止其他操作，只有宿主全局设置 `blockOnUnknownToolOutcome: true` 才启用整棵会话树的后续危险调用阻断，原因见[决策记录](../../../../../../docs/tool-outcome-blocking-decision.md)。开关在每次检查时读取，并显式传给存储层；旧记录及同一操作的重复执行保护不变。记录保存失败仍会阻止继续危险派发。恢复核对入口和实际调用结束屏障保持不变。
+普通权限与审批通过后，执行入口调用当前 Run 的 `checkToolDispatch`，核对 owner、会话、Run、输入归属、cwd、最终工具绑定和运行修订。检查失败终止本 Run；工具普通错误与 unknown 只反馈本次调用，不限制其他新调用，也不自动重试。实际调用 Promise 一直跟踪到工具真正结束。
 
 ## 主要文件
 
@@ -29,8 +29,6 @@
 | [session-run-assembly.ts](./session-run-assembly.ts) | `SessionRunAssemblyOptions`、`assembleSessionRunServices` |
 | [session-run-engine.ts](./session-run-engine.ts) | `SessionRunEngineContext`、`SessionRunEngine` |
 | [session-run-executor-assembly.ts](./session-run-executor-assembly.ts) | `SessionRunExecutorAssemblyOptions`、`assembleSessionRunExecutor` |
-| [tool-operation-service.ts](./tool-operation-service.ts) | 将操作记录和强制规则接到当前 owner、会话和运行；提供只读证据核对入口 |
-| [tool-operation-review-service.ts](./tool-operation-review-service.ts) | 已认证宿主查看未知操作身份与有界预览，提交人工核对证据，保留原始审计 |
 | [tool-result-service.ts](./tool-result-service.ts) | 将补读能力绑定当前运行和实际工具来源；每次检查会话、运行状态及权限版本 |
 | [session-run-executor.ts](./session-run-executor.ts) | `SessionRunExecutorContext`、`ExecuteSessionRunInput`、`SessionRunExecutor` |
 | [session-workspace-changes.ts](./session-workspace-changes.ts) | `WorkspaceChangeResult`、`WorkspaceBaselineResult`、`WORKSPACE_CAPTURE_BUDGET_MS`、`WORKSPACE_SETTLE_BUDGET_MS` 等 |
@@ -41,55 +39,12 @@
 
 测试放在本分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移文件时同步导入、公开入口、文档链接与旧引用清单。
 
-`ToolOperationService` 在同一存储事务内复核当前 owner、会话归属、运行是否仍接收派发，以及权限配置版本，再授权或记录实际派发。操作记录成功保存后，执行核心才调用工具；完整结果保存后才交付完成事件。运行开始时建立 Execution 头记录（一次运行的操作归属，不是续跑检查点）。
+`tool-dispatch-check.ts` 的工厂绑定当前范围及最终工具对象，不落盘。`ToolResultService.forRun(scope, bindings)` 保存已返回正文，并按当前 owner、Run、运行修订和来源权限提供 list/read/search。父子和兄弟会话不自动互读，补读工具自身不归档。
 
-未获宿主明确验证的工具按 `non_replayable`（不承诺可安全重放）处理，不采信工具名、`safeToRetry` 或 MCP 提示。宿主若提供 `describe`，必须按实际捕获的定义身份或调用函数验证声明。启用未知结果阻断时，只有明确声明的只读核对可穿过保护；未知危险操作会阻止同一根会话及其子会话后续危险派发，包括新调用 ID、其他工具入口和新建兄弟子会话，无关根会话不受影响。结果未提交且所属运行已结束的 `dispatching` 操作也在开关启用时按未决操作阻塞，不必等到重启。关闭该开关不改变操作自身的状态、归属或重复执行校验。取消或运行终态仍可保存属于当前 owner 的合法迟到回执，旧 owner 不可写入。`reconcile` 仅供授权宿主提交只读查询证据，没有对模型开放核对写入口。
-
-Daemon 使用 `describeTrustedReadOnlyToolOperation()` 核验只读身份：允许内置工具的 `builtin` 来源及宿主通过 `options.tools` 追加工具的 `agent` 来源，再检查同一 Runtime 登记的定义身份、原执行函数和实际规范输入。`plugin`、`mcp` 来源不会取得此承诺；本轮捕获绑定仍由 `prepare()` 先行比对，不能把插件来源改写为 `agent` 绕过检查。
-
-S1 不提供重启续跑。默认来源身份含当前宿主捕获的实现身份；重启后的同名实现不会自动继承旧实现的重放承诺。
-
-用户可为排队输入指定 `outputSchema`。准入前验证支持范围并固定快照，保存到 Input/Run 的既有 metadata；相同输入 ID 更换格式会冲突。执行器据此建立本轮 `outputContract`，完成投影保存 `metadata.delivery`。`steer` 与活跃子 Agent 的补充输入不能更换正在运行的合同。重试/重放沿用原输入合同，未配置时仍使用普通聊天。
-
-新请求用 `validateOutputSchemaRequest` 处理显式字段，拒绝 metadata/runMetadata 隐式入口；保存快照使用 `outputSchemaMetadata`。执行、重放使用 `readStoredOutputSchema` 读取旧 Input/Run 快照并拒绝两者冲突，不迁移旧数据。编辑与 resume 的 HTTP 和客户端入口也使用显式字段。
-
-`ToolResultService.forRun(scope, bindings)` 从当前实际工具集合建立只读补读能力。旧记录的来源必须与当前获准工具来源精确相符，历史实现版本不影响读取。每次查询重新检查应用 owner、精确会话、运行是否结束或取消、工作目录及权限配置版本；父子或兄弟会话不能互读。正文仍由 S1 操作记录保存，本服务不复制正文，也不重新执行原操作。
-
-当前捕获的内置结果读取工具自身输出不进入 `list`，也不能通过推测引用再 `read/search`，避免查询结果逐层变成新的补读正文。识别依赖定义身份和执行函数，不按名称屏蔽普通替换工具。历史权限仍按工具名和来源核对：可信宿主以相同 builtin 来源更换实现时，视为同一授权来源；如需区分这类历史实现语义，需另行保存持久能力标记。
-
-回执提交失败时，宿主立即按操作 ID 保存内存阻塞，即使所属运行仍显示运行中，也禁止同树其他运行新派发危险操作，不受 `blockOnUnknownToolOutcome` 开关影响。已开始的调用仍可结算；只有对应操作成功保存确定结果，或可信核对确认已生效/未生效，才清除该项阻塞。一次成功结算不会清除其他操作的失败；重启后持久 `dispatching` 记录转为未知，是否阻止其他操作由当前开关决定。
-
-结算成功、提交失败及人工核对后的状态判断只读取已有 `getSummary()` 摘要，不复制完整输入与结果。完整回执的保存、比较和显式读取仍保留原有复制规则。
-
-`ToolOperationReviewService` 是宿主人工核对入口，通过 daemon 的窄 `toolOperationReview` 属性接到 HTTP。列表返回同根会话树的 unknown，以及原 Run 已结束但仍为 dispatching 的操作身份、状态和版本；按 ID 查询才返回各最多 4000 字符的输入及原始结果预览，以及最近 20 条有界证据。预览可能含原工具数据，仅供已认证宿主人工检查，不能作为模型指令，也不会自动写入模型上下文。
-
-dispatching 尚不能提交人工结论。列表、详情和拒绝响应的 `recoveryHint` 提示先排查存储失败，等待实际调用结束，确认旧 daemon 停止后重启；经过既有启动恢复，再刷新记录进行核对。接口不在线释放这类记录，也不自动重放。
-
-入口先检查当前 owner、服务是否接收请求及请求会话是否可用；提交时还检查操作属于同根树、原 Run 已结束、`expectedRevision` 一致，以及非空且不超过 8192 字符的 `evidence`。`unknown` 仅追加证据；`not_applied` 解除该操作的未知状态；`applied` 没有经人工核实的明确 completed 结果时仍是 unknown。提供的结果最多 65536 字符，身份必须匹配原操作。原 Attempt 的未知结果与审计记录保留，所有核对都不会自动重试工具。
-
-具体 HTTP 调用（地址、token、sessionId 和 operationId 替换为当前值；协议版本用 `/capabilities` 返回的 `protocol.version`）：
-
-```sh
-curl -H "Authorization: Bearer TOKEN" -H "x-vykor-protocol-version: VERSION"   "http://127.0.0.1:PORT/sessions/SESSION/tool-operations"
-curl -H "Authorization: Bearer TOKEN" -H "x-vykor-protocol-version: VERSION"   "http://127.0.0.1:PORT/sessions/SESSION/tool-operations/OPERATION"
-curl -X POST -H "Authorization: Bearer TOKEN" -H "x-vykor-protocol-version: VERSION"   -H "Content-Type: application/json"   -d '{"expectedRevision":4,"outcome":"not_applied","evidence":"人工只读查询确认目标记录不存在"}'   "http://127.0.0.1:PORT/sessions/SESSION/tool-operations/OPERATION/reconcile"
-```
-
-POST 返回新的有限操作信息。若返回 409，重新读取详情并核对新版本，不能沿用旧修订号自动重提；若 `applied` 只有存在性证据，可省略 result 并保留 unknown，等待真实完成回执。
-
-工具超时或取消后，原调用可能仍在本进程执行。`ToolOperationService` 按 Core 登记的实际调用 Promise 暂存未结束操作；此时即使 Run 已终态，也拒绝 `applied` 和 `not_applied`，只允许追加 `unknown` 证据。调用实际返回或拒绝后才移除该保护，正常返回 unknown 不会永久占用它。此追踪不持久化，也不从工具结果 metadata 推断；重启后仍按持久未知状态核对。
-
-活跃父会话可以查看并核对已归档子会话留下的未知操作，只要仍属同一根树且原 Run 已结束；开启未知结果阻断时，归档不会解除保护。请求入口会话本身仍须可用，正在关闭的目标会话不可核对。危险派发被阻断时，错误包含首个未决操作 ID 和同根会话的 GET 核对地址，不包含输入或结果正文。
-
-## 本机合成基准
-
-[tool-operation-hot-path.bench.mjs](./__test__/tool-operation-hot-path.bench.mjs) 使用真实 Service 与独立临时 SQLite，不执行真实工具、模型或用户文件操作。查询夹具保持 10 条候选，派发夹具另行记录 110 次追加与四次安全复查。从仓库根运行单个进程：
-
-    pnpm --filter @vykor/server exec node --expose-gc --import ../../apps/cli/node_modules/tsx/dist/loader.mjs src/application/session/execution/__test__/tool-operation-hot-path.bench.mjs
-
-Q2 两轮收益未达到保留条件，生产改动已撤回；基准与完整材料保留在 docs/superpowers/reviews/2026-10-27-storage-hot-path/，没有新增产品脚本命令。
-
+`tool_result` 保存失败终止当前 Run，不改写已知 completed 事实、不重试工具，也不形成其他 Run 的封锁记录。超时后的工具仍由 Runtime 等待真实结束，不补记迟到审计。
 
 ## 共用执行核心（阶段 A）
 
 BackgroundShellService 只核对会话、提供 SQLite 预留/读取/保存和环境获取端口。进程启动、去重、启动中取消与环境释放归 supervisor；不再保存独立 starting 或 lease 目录。
+
+`tool-dispatch-check.ts` 为每个 Run 绑定执行前检查，验证当前 owner、运行状态、输入、目录和最终工具绑定；自身不保存状态。

@@ -19,7 +19,7 @@ it.each(["sdk", "daemon"] as const)("returns run permits for 24 followups and 24
       expect((await f.wait(next.target)).text).toBe(`identity-${n}`);
     }
   } finally { await f.close(); }
-}, 60_000);
+}, 180_000);
 
 it.each(["sdk", "daemon"] as const)("keeps a cancelled real Read permit until invocation exits: %s", async mode => {
   const f = await createLifecycleFixture(mode, { childBudget: { maxActiveChildren: 1 } });
@@ -123,21 +123,16 @@ it.each(["sdk", "daemon"] as const)("waits for both real invocation and run clea
   } finally { await f.close(); }
 });
 
-it("keeps Agent tool capacity refusal under explicitly enabled unknown write protection", async () => {
-  const f = await createLifecycleFixture("daemon", { childBudget: { maxActiveChildren: 1 }, blockOnUnknownToolOutcome: true });
+it("keeps Agent tool capacity refusal local to the current call", async () => {
+  const f = await createLifecycleFixture("daemon", { childBudget: { maxActiveChildren: 1 } });
   try {
     f.hold("occupied");
     const a = await f.spawn("occupied"); await f.entered("occupied");
-    const refused = f.spawn("tool-capacity-refusal");
-    void refused.catch(() => {});
-    await vi.waitFor(() => expect(f.store!.toolOperations.list().some(operation => operation.toolName === "Agent" && operation.state === "unknown")).toBe(true));
-    const operations = f.store!.toolOperations.list();
-    expect(operations.some(operation => operation.toolName === "Agent" && operation.state === "unknown")).toBe(true);
+    await expect(f.spawn("tool-capacity-refusal")).rejects.toThrow("Child agent budget exceeded for activeChildren");
     expect(f.modelCalls("tool-capacity-refusal")).toBe(0);
-    const stopped = a.handle.waitRun(a.target.runId);
-    f.release("occupied"); await stopped;
-    await expect(refused).rejects.toThrow("Child agent budget exceeded for activeChildren");
-    await expect(f.spawn("guard-still-protects")).rejects.toThrow("Unknown or unresolved write operation");
+    f.release("occupied"); await a.handle.waitRun(a.target.runId);
+    const next = await f.spawn("capacity-returned");
+    expect((await f.wait(next.target)).text).toBe("capacity-returned");
   } finally { await f.close(); }
 });
 

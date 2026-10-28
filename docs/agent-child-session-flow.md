@@ -146,4 +146,4 @@ packages/server/src/application/session/interactions/session-interaction-service
 ```
 
 
-SDK 与 daemon 共用执行核心已接通协议 6 / Jobs 3。ChildManager 按真实 run 占用许可，Framework 的实际停止与可靠保存分开；Workflow 默认只用 childId/runId，coordinator 独占 deadline 和重试。接口见 [Jobs 协议](./jobs-protocol.md)，实施与验收见 [共享核心计划](./superpowers/plans/2026-10-27-shared-execution-core.md)。
+SDK 与 daemon 共用执行核心已接通协议 7 / Jobs 3。ChildManager 按真实 run 占用许可，Framework 的实际停止与可靠保存分开；Workflow 默认只用 childId/runId，coordinator 独占 deadline 和重试。接口见 [Jobs 协议](./jobs-protocol.md)，实施与验收见 [共享核心计划](./superpowers/plans/2026-10-27-shared-execution-core.md)。

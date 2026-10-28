@@ -28,15 +28,6 @@ import {
   toolFeedbackFields,
   validHostFileFacts,
 } from "./tool-result-feedback";
-import {
-  assertToolOperationDispatchable,
-  checkRequiredToolPolicy,
-  operationIntent,
-  rememberToolPersistenceFailure,
-  RequiredToolPolicyError,
-  validateToolSafety,
-  type ActiveToolOperation,
-} from "./operation-execution";
 
 export interface CheckedToolExecutionOptions {
   toolUses: ToolUseBlock[];
@@ -48,7 +39,6 @@ export interface CheckedToolExecutionOptions {
   /** Parent dispatch gate; stops new work without cancelling calls already running. */
   dispatchSignal?: AbortSignal;
   execution?: AgentExecutionContext;
-  parentOperationId?: string;
   generationId?: string;
   timeoutMs?: number;
   internalTools?: ReadonlySet<string>;
@@ -93,18 +83,18 @@ async function validateBeforeDispatch(
 }
 
 function finishResult(result: ToolExecutionResult): ToolExecutionResult {
-  result.executionState ??= result.isError ? "unknown" : "completed";
+  result.executionState ??= "completed";
   if (result.executionState === "unknown") result.isError = true;
   if (result.isError) {
     result.hostFileFacts = undefined;
-    result.failureKind ??= "unknown_outcome";
+    if (result.executionState === "unknown") result.failureKind ??= "unknown_outcome";
     result.recoveryHint ??= defaultRecoveryHint(result);
     result.compactSummary = `Tool feedback data: kind=${result.failureKind}; execution=${result.executionState}`;
   }
   return result;
 }
 
-/** One path for model, explicit, and nested tool calls. Persist before publishing any outcome. */
+/** One path for model, explicit, and nested calls; host dispatch checks run after ordinary permission. */
 export async function executeCheckedTools(
   options: CheckedToolExecutionOptions,
 ): Promise<CheckedToolExecutionResult> {
@@ -184,32 +174,10 @@ export async function executeCheckedTools(
     const previous = group ? groupTails.get(group) : undefined;
     const task = (async (): Promise<ToolExecutionResult> => {
       let toolUse = originalUse;
-      let toolAttemptId = `tool_attempt_${toolUse.id}_1`;
-      let started = false,
-        reused = false;
-      let operation: ActiveToolOperation | undefined;
+      const toolAttemptId = `tool_attempt_${toolUse.id}_1`;
+      let started = false;
       let result: ToolExecutionResult;
-      let finishInitialSettlement!: () => void;
-      const initialSettlement = new Promise<void>((resolve) => {
-        finishInitialSettlement = resolve;
-      });
-      const identity = () =>
-        operation
-          ? {
-              operationId: operation.ticket.operationId,
-              ...(operation.receipt
-                ? { toolAttemptId: operation.receipt.toolAttemptId }
-                : operation.ticket.state === "confirmed" &&
-                    operation.ticket.result?.toolAttemptId
-                  ? { toolAttemptId: operation.ticket.result.toolAttemptId }
-                  : {}),
-              ...(operation.intent.parentOperationId
-                ? { parentOperationId: operation.intent.parentOperationId }
-                : {}),
-            }
-          : execution?.toolSafety !== undefined
-            ? {}
-            : undefined;
+      const identity = () => ({ toolAttemptId, ...(options.generationId ? { generationId: options.generationId } : {}) });
       const returnedResult = (
         returned: Awaited<ReturnType<ToolDefinition["execute"]>>,
         tool: ToolDefinition,
@@ -226,7 +194,6 @@ export async function executeCheckedTools(
           toolUseId: toolUse.id,
           toolName: toolUse.name,
           toolAttemptId,
-          ...(operation ? { operationId: operation.ticket.operationId } : {}),
           metadata: externalToolMetadata(returned.metadata),
           hostFileFacts:
             isTrustedSummary(toolUse, tool) && !returned.isError
@@ -237,21 +204,17 @@ export async function executeCheckedTools(
             : undefined,
         } satisfies ToolExecutionResult;
         // Only the checked host can prove a dispatched tool was never invoked.
-        if (
-          operation &&
-          (normalized.executionState === "not_started" ||
-            (normalized.isError && operation.ticket.kind !== "read_only"))
-        )
-          normalized.executionState = "unknown";
+        if (normalized.executionState === "not_started") normalized.executionState = "unknown";
         return finishResult(normalized);
       };
       try {
-        if (previous && !execution?.toolSafety)
+        if (previous)
           await emitToolLifecycle(
             pendingExecution,
             toolUse.id,
             "queued",
             "not_started",
+            identity(),
           );
         const predecessor = await previous;
         startSignal.throwIfAborted();
@@ -276,173 +239,64 @@ export async function executeCheckedTools(
           };
         } else if (results[idx]) result = results[idx]!;
         else {
-          let prepared = preparedByIndex.get(idx)!;
-          if (execution?.toolSafety !== undefined) {
-            validateToolSafety(execution.toolSafety);
-            const intent = operationIntent(
-              execution,
-              prepared.toolUse,
-              options.parentOperationId,
-              options.generationId,
-            );
-            const ticket =
-              await execution.toolSafety.operations.prepare(intent);
-            operation = { safety: execution.toolSafety, intent, ticket };
-            toolUse = intent.toolUse;
-            prepared = { ...prepared, toolUse };
-            if (ticket.state === "confirmed") {
-              if (!ticket.result)
-                throw new Error("Confirmed tool operation has no saved result");
-              result = structuredClone(ticket.result);
-              reused = true;
-            } else
-              assertToolOperationDispatchable(operation.safety, intent, ticket);
-          }
-          if (!reused) {
-            const denied = await authorizeToolCall(
-              prepared,
-              permissionChecker,
-              hookExecutor,
+          const prepared = preparedByIndex.get(idx)!;
+          toolUse = prepared.toolUse;
+          const denied = await authorizeToolCall(
+            prepared,
+            permissionChecker,
+            hookExecutor,
+            pendingExecution,
+            internalTools,
+            startSignal,
+            identity(),
+          );
+          if (denied) result = denied;
+          else {
+            const tool = prepared.tool;
+            startSignal.throwIfAborted();
+            await execution?.limits?.check("tool", {
+              toolName: tool.name,
+              toolAttemptId,
+            });
+            startSignal.throwIfAborted();
+            const preflight = execution?.contribution?.tools?.find(item => item.definition === tool)?.beforeDispatch;
+            if (preflight) await validateBeforeDispatch(preflight, toolUse.input, createToolContext(toolUse, toolAttemptId, control), startSignal, timeoutMs);
+            const context = createToolContext(toolUse, toolAttemptId, control);
+            await emitToolLifecycle(
               pendingExecution,
-              internalTools,
-              startSignal,
-              operation
-                ? async () => {
-                    const policyVersion = await checkRequiredToolPolicy(
-                      operation!.safety,
-                      operation!.intent,
-                      operation!.ticket,
-                      "authorization",
-                      startSignal,
-                    );
-                    startSignal.throwIfAborted();
-                    operation!.ticket =
-                      await operation!.safety.operations.authorize({
-                        intent: operation!.intent,
-                        operation: operation!.ticket,
-                        policyVersion,
-                      });
-                  }
-                : undefined,
+              toolUse.id,
+              "running",
+              undefined,
               identity(),
             );
-            if (denied) result = denied;
-            else {
-              const tool = prepared.tool;
-              startSignal.throwIfAborted();
-              await execution?.limits?.check("tool", {
-                toolName: tool.name,
-                toolAttemptId,
-              });
-              startSignal.throwIfAborted();
-              const preflight = execution?.contribution?.tools?.find(item => item.definition === tool)?.beforeDispatch;
-              if (preflight) await validateBeforeDispatch(preflight, toolUse.input, createToolContext(toolUse, toolAttemptId, control), startSignal, timeoutMs);
-              if (operation) {
-                const policyVersion = await checkRequiredToolPolicy(
-                  operation.safety,
-                  operation.intent,
-                  operation.ticket,
-                  "dispatch",
-                  startSignal,
-                );
-                startSignal.throwIfAborted();
-                assertToolOperationDispatchable(
-                  operation.safety,
-                  operation.intent,
-                  operation.ticket,
-                );
-                operation.receipt = await operation.safety.operations.dispatch({
-                  intent: operation.intent,
-                  operation: operation.ticket,
-                  policyVersion,
-                });
-                toolAttemptId = operation.receipt.toolAttemptId;
-              }
-              const context = createToolContext(toolUse, toolAttemptId, control);
-              if (operation) {
-                context.operationId = operation.ticket.operationId;
-                context.parentOperationId = operation.intent.parentOperationId;
-                context.toolAttemptId = toolAttemptId;
-              }
-              await emitToolLifecycle(
-                pendingExecution,
-                toolUse.id,
-                "running",
-                undefined,
-                identity(),
-              );
-              startSignal.throwIfAborted();
-              started = true;
-              executedIndexes.add(idx);
-              const returned = await executeToolWithTimeout(
-                tool,
-                toolUse.input,
-                context,
-                timeoutMs,
-                runningSignal,
-                operation
-                  ? async (outcome) => {
-                      await initialSettlement;
-                      let late: ToolExecutionResult;
-                      try {
-                        late =
-                          "returned" in outcome
-                            ? returnedResult(outcome.returned, tool)
-                            : finishResult({
-                                toolUseId: toolUse.id,
-                                toolName: toolUse.name,
-                                toolAttemptId,
-                                operationId: operation!.ticket.operationId,
-                                content: [
-                                  { type: "text", text: String(outcome.error) },
-                                ],
-                                isError: true,
-                                executionState: "unknown",
-                              });
-                        await operation!.safety.operations.settle({
-                          receipt: operation!.receipt!,
-                          result: structuredClone(late),
-                          late: true,
-                        });
-                      } catch (error) {
-                        rememberToolPersistenceFailure(
-                          operation!.safety,
-                          operation!.intent.scope.runId,
-                          error,
-                        );
-                        failExecution(error);
-                        try {
-                          await execution!.emit({
-                            type: "domain.event",
-                            data: {
-                              name: "tool.operation.audit_failed",
-                              payload: {
-                                ...identity(),
-                                error: String(error),
-                                late: true,
-                              },
-                            },
-                          });
-                        } catch (emitError) {
-                          process.emitWarning(
-                            `Late tool receipt and diagnostic delivery failed: ${String(error)}; ${String(emitError)}`,
-                          );
-                        }
-                      }
-                    }
-                  : undefined,
-                settled => {
-                  try {
-                    execution?.observeInvocation?.(settled);
-                    operation?.safety.operations.observeInvocation?.({ receipt: operation.receipt!, settled });
-                  } catch (error) {
-                    failExecution(error);
-                    throw error;
-                  }
-                },
-              );
-              result = returnedResult(returned, tool);
+            startSignal.throwIfAborted();
+            if (execution?.checkToolDispatch) {
+              try {
+                await validateBeforeDispatch(async () => {
+                  await execution.checkToolDispatch!({ scope: execution.scope, toolUse, binding: execution.tools?.get(toolUse.name), cwd: context.cwd });
+                  return undefined;
+                }, toolUse.input, context, startSignal, timeoutMs);
+              } catch (error) { failExecution(error); throw error; }
             }
+            startSignal.throwIfAborted();
+            started = true;
+            executedIndexes.add(idx);
+            const returned = await executeToolWithTimeout(
+              tool,
+              toolUse.input,
+              context,
+              timeoutMs,
+              runningSignal,
+              settled => {
+                try {
+                  execution?.observeInvocation?.(settled);
+                } catch (error) {
+                  failExecution(error);
+                  throw error;
+                }
+              },
+            );
+            result = returnedResult(returned, tool);
           }
         }
       } catch (error) {
@@ -450,7 +304,6 @@ export async function executeCheckedTools(
         if (
           !started &&
           !startSignal.aborted &&
-          !(error instanceof RequiredToolPolicyError) &&
           !(error instanceof ToolPreflightError)
         )
           failExecution(error);
@@ -464,67 +317,17 @@ export async function executeCheckedTools(
             ? "interrupted"
             : error instanceof ToolPreflightError
               ? "invalid_input"
-            : error instanceof RequiredToolPolicyError
-              ? "policy"
               : error instanceof ToolTimeoutError
                 ? "timeout"
                 : "unknown_outcome",
           executionState:
-            started ||
-            operation?.ticket.state === "unknown" ||
-            operation?.ticket.state === "dispatching"
+            started
               ? "unknown"
               : "not_started",
         };
       }
-      result = reused ? result! : finishResult(result!);
-      if (execution?.toolSafety !== undefined && !operation?.receipt && !reused)
-        delete result.toolAttemptId;
-      if (operation && !reused) {
-        result.operationId = operation.ticket.operationId;
-        if (operation.receipt)
-          result.toolAttemptId = operation.receipt.toolAttemptId;
-        try {
-          if (operation.receipt)
-            await operation.safety.operations.settle({
-              receipt: operation.receipt,
-              result: structuredClone(result),
-            });
-          else if (
-            !["unknown", "dispatching", "confirmed"].includes(
-              operation.ticket.state,
-            )
-          )
-            await operation.safety.operations.reject({
-              intent: operation.intent,
-              operation: operation.ticket,
-              result: structuredClone(result),
-            });
-        } catch (error) {
-          rememberToolPersistenceFailure(
-            operation.safety,
-            operation.intent.scope.runId,
-            error,
-          );
-          failExecution(error);
-          result = finishResult({
-            ...result,
-            isError: true,
-            executionState: started ? "unknown" : "not_started",
-            failureKind: "unknown_outcome",
-            content: [
-              {
-                type: "text",
-                text: `Tool operation result could not be saved: ${String(error)}`,
-              },
-            ],
-            hostFileFacts: undefined,
-          });
-        }
-      }
-      finishInitialSettlement();
-      // Outcome uncertainty belongs to the operation ledger, not the Run failure
-      // channel. The host gates future writes; the model receives the full result.
+      result = finishResult(result!);
+      if (!started) delete result.toolAttemptId;
       results[idx] = result;
       try {
         await emitToolLifecycle(

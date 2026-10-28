@@ -45,5 +45,5 @@ export function toolResultSearch(ref: ToolResultRef, text: string, input: { quer
 }
 
 export function assertToolResultId(id: unknown): asserts id is string {
-  if (typeof id !== "string" || id.length === 0 || id.length > 200) throw new ToolResultAccessError("Provide an opaque result reference id.", "invalid_input");
+  if (typeof id !== "string" || !/^result:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) throw new ToolResultAccessError("Provide an opaque result reference id.", "invalid_input");
 }

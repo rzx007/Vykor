@@ -109,18 +109,10 @@ describe("SessionTranscriptProjection", () => {
     try {
       store.sessions.create({ id: "s1", cwd: directory, model: "m" });
       store.runs.createRun({ id: "r1", sessionId: "s1" });
-      const intent = {
-        scope: { sessionId: "s1", runId: "r1", inputId: "i1", agentId: "s1", cwd: directory, traceId: "r1" },
-        toolUse: { id: "call", name: "ReadMcpResource", input: {} },
-      };
-      const operation = store.toolOperations.prepare({ ...intent, toolIdentity: "projection-mcp-fixture" });
-      const authorized = store.toolOperations.authorize({ intent, operation, policyVersion: "p1" });
-      const receipt = store.toolOperations.dispatch({ intent, operation: authorized, policyVersion: "p1", ownerId: "owner" });
       const result = {
         content: [{ type: "text" as const, text: "saved" }], mcpResult: raw, executionState: "completed" as const,
-        toolUseId: "call", toolName: "ReadMcpResource", operationId: operation.operationId, toolAttemptId: receipt.toolAttemptId,
+        toolUseId: "call", toolName: "ReadMcpResource", toolAttemptId: "tool_attempt_call_1",
       };
-      store.toolOperations.settle({ receipt, result });
       const projection = new SessionTranscriptProjection(store);
       const state = projection.beginRun("s1", "i1", "r1", createInput());
       projection.projectStreamEvent(state, { type: "tool_use_end", toolUseId: "call", result });
@@ -128,8 +120,7 @@ describe("SessionTranscriptProjection", () => {
       store = new SessionStore({ path });
       const saved = store.conversations.listMessageParts("s1").find(part => part.type === "tool")!;
       expect((saved.output as { mcpResult: unknown }).mcpResult).toEqual(raw);
-      expect(saved.metadata).toMatchObject({ executionState: "completed", toolFeedbackVersion: 1, operationId: operation.operationId, toolAttemptId: receipt.toolAttemptId });
-      expect(store.toolOperations.listAttempts(operation.operationId)).toMatchObject([{ id: receipt.toolAttemptId, status: "confirmed" }]);
+      expect(saved.metadata).toMatchObject({ executionState: "completed", toolFeedbackVersion: 1, toolAttemptId: "tool_attempt_call_1" });
       expect(saved.metadata.mcpResult).toBeUndefined();
     } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
   });

@@ -201,7 +201,7 @@ Repository/Transaction 返回已经写入当前 read model 的记录。Server Ap
 
 ## 历史增长基准与有界加载评估（2026-10-27）
 
-本批保留现行基准，**未保留有界加载优化**。复查已确认加载器、事务实现及原有加载测试与实施前 `0a9bfb31` 相同，当前生产实现仍一次读取 execution、tool_operation、tool_dispatch_attempt、session_message_part 四张表。
+2026-10-27 的复查保留当时基准，**未保留有界加载优化**。2026-10-28 删除 S1 后，当前加载器一次读取 tool_result 与 session_message_part；基准脚本同步改为这两张表，下列旧数值不适用于新 schema。
 
 下列 baseline/candidate 表格转录自 `31072ee8` 的实施记录，属于历史报告数值，不能代替原始 JSON。原记录描述的候选为 256 行 rowid 键集批次及一致读事务；本轮在明确检索范围内未恢复候选补丁、原始样本或验证日志，记录的脚本 SHA 也与现存脚本不符。因此，回滚和表内算术可以核实，候选的实际性能、256 行上限及完整执行过程尚不能独立复核。检索范围、源码身份及本轮原始样本见[证据复查记录](./superpowers/reviews/2026-10-27-n4-evidence-audit.md)。
 
@@ -211,7 +211,7 @@ Repository/Transaction 返回已经写入当前 read model 的记录。Server Ap
 pnpm --filter @vykor/services exec node --expose-gc --import ../../apps/cli/node_modules/tsx/dist/loader.mjs src/database/persistence/__test__/storage-growth.bench.mjs
 ```
 
-`--output` 是基准脚本输出文件参数，不是产品设置；缺省写入系统临时目录。脚本按四组顺序各启动三个全新 Node 子进程，写出聚合 JSON 和每个 worker 的原始 JSON。重跑当前源码得到的是恢复后的加载器；下文候选列转录自历史报告，原始候选数据尚未恢复，不能把当前源码称为候选实现。
+`--output` 是基准脚本输出文件参数，不是产品设置；缺省写入系统临时目录。脚本按四组顺序各启动三个全新 Node 子进程，写出聚合 JSON 和每个 worker 的原始 JSON。重跑当前源码得到的是新结果表的加载器；下文候选列转录自历史报告，原始候选数据尚未恢复，不能把当前源码称为候选实现。
 
 原实施记录称两轮脚本 SHA256 均为 `469ba2ee93ffd8d3b41319e4264833dcdadcfd0255a4ab669b0280162341757b`，Node 均为 `v24.10.0`，baseline 和 candidate 各 12 个独立进程、顺序运行且未混用早期试跑样本。这些执行过程缺少原件支持。当前 `31072ee8` 中脚本的 Git 内容（LF 换行）SHA256 为 `3d2db8ea4d11e382f48f0a0c942bd1055e078292b661ebaec08c6a0741e9f5d0`；Windows 工作副本 CRLF 换行为 `f43f16f969f7c6366081e7a54406b15ed8a2939d8db2d9a1168605431ab43c0f`，两者均不等于历史值，差异原因未查明。脚本输出的 `sha256` 按实际文件字节计算，因此后续归档应同时记录换行形式和源码提交。
 

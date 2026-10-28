@@ -1,7 +1,5 @@
 export interface MutationBuffer {
-  executions: Set<string>;
-  toolOperations: Set<string>;
-  toolDispatchAttempts: Set<string>;
+  toolResults: Set<string>;
   sessions: Set<string>;
   inputs: Set<string>;
   inputAttachments: Set<string>;
@@ -24,9 +22,7 @@ export interface MutationBuffer {
 
 export function createMutationBuffer(): MutationBuffer {
   return {
-    executions: new Set(),
-    toolOperations: new Set(),
-    toolDispatchAttempts: new Set(),
+    toolResults: new Set(),
     sessions: new Set(),
     inputs: new Set(),
     inputAttachments: new Set(),
@@ -50,9 +46,7 @@ export function createMutationBuffer(): MutationBuffer {
 
 export function cloneMutationBuffer(value: MutationBuffer): MutationBuffer {
   return {
-    executions: new Set(value.executions),
-    toolOperations: new Set(value.toolOperations),
-    toolDispatchAttempts: new Set(value.toolDispatchAttempts),
+    toolResults: new Set(value.toolResults),
     sessions: new Set(value.sessions),
     inputs: new Set(value.inputs),
     inputAttachments: new Set(value.inputAttachments),

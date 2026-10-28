@@ -198,6 +198,6 @@ pnpm release:client:dry -- 0.1.0
 - [产品接入](./product-surface-integration.md)：各产品共用会话与执行记录的规则。
 
 
-## Jobs 协议 6
+## Jobs 协议 7
 
 `client.jobs.list` 返回 `{jobs,errors}`；read/wait/send/cancel 的首参数为快照中的完整 target。Agent target 含 kind、jobId、runId，其他类型含 kind、jobId。send 可返回新轮接纳 receipt。具体请求见 [Jobs 协议](./jobs-protocol.md)，旧版连接会被明确拒绝。

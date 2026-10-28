@@ -4,7 +4,7 @@
 
 ## 数据所有权与通信边界
 
-Protocol 只负责 HTTP/SSE 通信格式、公开 DTO、请求解码、序列化、错误和协议版本。相同的规范数据可以被明确再导出；能力宿主、存储命令、配置默认值和执行策略不从 Protocol 暴露。当前 Jobs 定点目标切换为协议 6；沿用既有错误格式与持久结构。
+Protocol 只负责 HTTP/SSE 通信格式、公开 DTO、请求解码、序列化、错误和协议版本。相同的规范数据可以被明确再导出；能力宿主、存储命令、配置默认值和执行策略不从 Protocol 暴露。当前协议 7 移除 S1 操作人工核对 API，使用新结果引用格式；沿用既有错误格式与持久结构。
 
 | 规范来源 | 正式入口与职责 |
 | --- | --- |
@@ -27,7 +27,7 @@ Client 的源码导出名有一项迁移：旧 `PLUGIN_APP_LIMITS` 聚合对象�
 
 ## 当前版本
 
-当前精确协议版本是 `6`（Jobs 使用完整 target，列表返回来源错误，Agent 输入可返回新轮回执）。客户端先读取：
+当前精确协议版本是 `7`（Jobs 使用完整 target，列表返回来源错误，Agent 输入可返回新轮回执）。客户端先读取：
 
 ```http
 GET /capabilities
@@ -38,7 +38,7 @@ GET /capabilities
 ```json
 {
   "serverVersion": "0.1.0",
-  "protocol": { "version": 6 },
+  "protocol": { "version": 7 },
   "features": {
     "steer": 1,
     "runAttempts": 1,

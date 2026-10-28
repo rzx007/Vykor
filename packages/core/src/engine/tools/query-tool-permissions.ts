@@ -8,9 +8,8 @@ import type { ToolExecutionResult } from "@vykor/agent-contracts";
 import type { PreparedToolCall } from "./query-tool-preparation";
 
 interface ToolLifecycleIdentity {
-  operationId?: string;
+  generationId?: string;
   toolAttemptId?: string;
-  parentOperationId?: string;
 }
 
 export async function authorizeToolCall(
@@ -20,7 +19,6 @@ export async function authorizeToolCall(
   execution: AgentExecutionContext | undefined,
   internalTools: ReadonlySet<string>,
   signal?: AbortSignal,
-  beforeApproval?: () => Promise<void>,
   identity?: ToolLifecycleIdentity,
 ): Promise<ToolExecutionResult | undefined> {
   signal?.throwIfAborted();
@@ -55,9 +53,6 @@ export async function authorizeToolCall(
     };
   }
 
-  // Mandatory host authorization follows ordinary permission, before any approval UI.
-  await beforeApproval?.();
-  signal?.throwIfAborted();
 
   // 处理需要用户确认权限的情况
   const binding = execution?.tools?.get(toolUse.name);

@@ -72,7 +72,7 @@ export function prepareNodeRunTools(
                         {
                           ...agent.scope,
                           limits: agent.limits,
-                          toolSafety: agent.toolSafety,
+                          bindToolDispatch: agent.bindToolDispatch,
                         },
                         delegation,
                       ),

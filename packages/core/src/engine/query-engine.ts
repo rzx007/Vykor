@@ -1146,7 +1146,7 @@ export class QueryEngine implements IQueryEngine {
             }
           : result;
       });
-    outcome.results = await this.retainToolResults(outcome.results, execution);
+    outcome.results = await this.retainToolResults(outcome.results, execution, error => { outcome.fatalFailure ??= { error }; });
     return { ...outcome, discoveryBlockedCalls };
   }
 
@@ -1165,7 +1165,7 @@ export class QueryEngine implements IQueryEngine {
       execution.scope.signal,
       ...(options.signal ? [options.signal] : []),
     ]);
-    const { results, fatalFailure } = await executeCheckedTools({
+    let { results, fatalFailure } = await executeCheckedTools({
       toolUses: [{ ...toolUse }],
       toolRegistry,
       messages: [],
@@ -1184,7 +1184,7 @@ export class QueryEngine implements IQueryEngine {
       isTrustedSummary: (call, definition) =>
         this.isTrustedSummary(call, definition, toolRegistry, execution),
     });
-    const result = (await this.retainToolResults(results, execution))[0]!;
+    const result = (await this.retainToolResults(results, execution, error => { fatalFailure ??= { error }; }))[0]!;
     try {
       await options.onResult?.(result);
     } catch (error) {
@@ -1198,6 +1198,7 @@ export class QueryEngine implements IQueryEngine {
   private async retainToolResults(
     results: ToolExecutionResult[],
     execution?: AgentExecutionContext,
+    onFailure?: (error: unknown) => void,
   ): Promise<ToolExecutionResult[]> {
     const archived: ToolExecutionResult[] = [];
     for (const original of results) {
@@ -1215,7 +1216,7 @@ export class QueryEngine implements IQueryEngine {
           }
         } catch (error) {
           // Cancellation revokes the bound archive, but committed results still need delivery.
-          if (!execution.scope.signal.aborted) throw error;
+          if (!execution.scope.signal.aborted) { if (onFailure) onFailure(error); else throw error; }
         }
       }
       archived.push(result);
@@ -1331,7 +1332,7 @@ export class QueryEngine implements IQueryEngine {
                 // The delegated target is not an additional model-issued tool part.
                 if (
                   event.type === "domain.event" &&
-                  event.data.name === "tool.lifecycle" && !execution.toolSafety
+                  event.data.name === "tool.lifecycle"
                 )
                   return;
                 await execution.emit(event);
@@ -1339,14 +1340,13 @@ export class QueryEngine implements IQueryEngine {
             }
           : undefined;
         const { results, fatalFailure } = await executeCheckedTools({
-          toolUses: [{ type: "tool_use", id: execution?.toolSafety ? `nested_${randomUUID()}` : toolUse.id, name, input }],
+          toolUses: [{ type: "tool_use", id: `nested_${randomUUID()}`, name, input }],
           toolRegistry,
           messages: [],
           permissionChecker: this.permissionChecker,
           hookExecutor: this.hookExecutor,
           signal: innerSignal,
           execution: innerExecution,
-          parentOperationId: context.operationId,
           onFatalFailure: reportFatalFailure,
           dispatchSignal,
           timeoutMs:
@@ -1362,8 +1362,10 @@ export class QueryEngine implements IQueryEngine {
             ),
           isTrustedSummary: () => false,
         });
-        if (fatalFailure) throw fatalFailure.error;
-        return results[0]!;
+        if (fatalFailure && results[0]?.executionState !== "completed") throw fatalFailure.error;
+        // A host failure still stops the parent, but cannot erase a returned fact.
+        if (fatalFailure) reportFatalFailure?.(fatalFailure.error);
+        return (await this.retainToolResults(results, innerExecution, error => reportFatalFailure?.(error)))[0]!;
       },
     });
     return context;

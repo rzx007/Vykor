@@ -145,3 +145,7 @@ Application backup 可以包含：
 - 日志与运行快照：[Observability](./observability.md)
 - 关键边界测试：`packages/server/src/application/__test__/durability-boundaries.test.ts`
 - 启动和关闭测试：`packages/server/src/application/__test__/durable-agent-application.test.ts`
+
+## 工具结果表升级
+
+迁移 0010 删除 S1 execution/tool_operation/tool_dispatch_attempt 并创建 tool_result，不导入旧正文。升级前按上述备份流程保存数据库；回退必须同时恢复备份与旧版程序，不能只回退代码。真实 Run/Task/Job 的启动收束和终态补偿继续执行；工具调用不自动恢复或重放。

@@ -1,4 +1,3 @@
-import { validateToolSafety } from "./tool-safety.js";
 import type {
   AgentEffects,
   AgentRunPreparation,
@@ -23,7 +22,7 @@ import {
 import { AgentChildRegistry } from "./children/child-registry.js";
 export interface AgentKernelOptions {
   outputContract?: import("@vykor/agent-contracts").AgentOutputContract;
-  toolSafety?: import("@vykor/agent-contracts").AgentToolSafety;
+  bindToolDispatch?: import("@vykor/agent-contracts").ToolDispatchCheckFactory;
   id?: string;
   sessionId?: string;
   cwd: string;
@@ -45,7 +44,6 @@ export type AgentKernelRuntimeContext = Pick<
 export async function createAgentKernel(
   options: AgentKernelOptions,
 ): Promise<VykorAgent> {
-  validateToolSafety(options.toolSafety);
   const eventBus = new AgentEventBus(options.onEvent);
   const directory = new AgentChildRegistry(options.childBudget);
   const children = new AgentChildManager({
@@ -69,7 +67,7 @@ export async function createAgentKernel(
     engine: options.engine,
     effects: options.effects,
     preparation: options.preparation,
-    toolSafety: options.toolSafety,
+    bindToolDispatch: options.bindToolDispatch,
     outputContract: options.outputContract,
     eventBus,
     childManager: children,

@@ -71,30 +71,11 @@ export interface HostFileFacts {
 }
 
 export interface ToolExecutionResult extends ToolResult {
-  operationId?: string;
   toolUseId: string;
   toolName: string;
   toolAttemptId?: string;
 }
 
-export type ToolOperationKind = "read_only" | "idempotent_write" | "non_replayable";
-export type ToolOperationState = "prepared" | "authorized" | "dispatching" | "confirmed" | "not_applied" | "unknown" | "rejected" | "cancelled";
-export interface ToolOperationTicket {
-  operationId: string;
-  revision: number;
-  intentRevision: number;
-  intentDigest: string;
-  kind: ToolOperationKind;
-  state: ToolOperationState;
-  businessKey?: string;
-  result?: ToolExecutionResult;
-}
-export interface ToolDispatchReceipt {
-  operationId: string;
-  toolAttemptId: string;
-  revision: number;
-  ownerId: string;
-}
 /** A definite result does not imply success or completion of the user's goal. */
 export type ToolExecutionState = "not_started" | "completed" | "unknown";
 

@@ -7,7 +7,7 @@ import type { IncrementalOutput } from "../../conversations/index.js";
 import {
   sessions, sessionInputs, sessionInputAttachments, sessionMessages,
   sessionMessageParts, sessionRuns, sessionRunAttempts, sessionTasks,
-  permissionRequests, sessionEvents, sessionPluginApps, executions, toolOperations, toolDispatchAttempts,
+  permissionRequests, sessionEvents, sessionPluginApps, toolResults,
 } from "../schema.js";
 import { encode, isDurableEvent } from "./store-state.js";
 
@@ -280,23 +280,9 @@ export function persistSessionChanges(
     upsertPluginApp.run({ id: appId, ...fields });
   }
 
-  for (const id of storage.mutations.executions) {
-    const row = storage.state.executions[id];
-    if (!row) continue;
-    const fields = { id: row.id, sessionId: row.sessionId, runId: row.runId, dataJson: JSON.stringify(row) };
-    database.insert(executions).values(fields).onConflictDoUpdate({ target: executions.id, set: fields }).run();
-  }
-  for (const id of storage.mutations.toolOperations) {
-    const row = storage.state.toolOperations[id];
-    if (!row) continue;
-    const fields = { id: row.id, sessionId: row.sessionId, runId: row.runId, logicalCallId: JSON.stringify([row.generationId ?? null, row.toolCallId]), state: row.state, dataJson: JSON.stringify(row) };
-    database.insert(toolOperations).values(fields).onConflictDoUpdate({ target: toolOperations.id, set: fields }).run();
-  }
-  for (const id of storage.mutations.toolDispatchAttempts) {
-    const row = storage.state.toolDispatchAttempts[id];
-    if (!row) continue;
-    const fields = { id: row.id, sessionId: row.sessionId, operationId: row.operationId, dataJson: JSON.stringify(row) };
-    database.insert(toolDispatchAttempts).values(fields).onConflictDoUpdate({ target: toolDispatchAttempts.id, set: fields }).run();
+  for (const id of storage.mutations.toolResults) {
+    const row = storage.state.toolResults[id];
+    if (row) database.insert(toolResults).values(row).run();
   }
 
   let insertEvent: PreparedInsert<typeof sessionEvents> | undefined;
