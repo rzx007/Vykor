@@ -19,4 +19,4 @@ agent 实例持有配置、会话引用和插件应用操作状态；查询历�
 
 ## 共用执行核心（阶段 A）
 
-DefaultNodeAgent.host.jobs 保留共同执行来源；jobs:false 只关闭模型工具。Terminal 与 Shell 覆盖改为低层 provider/admission 端口，归档通过 jobArchiveForSession 只读接入。
+DefaultNodeAgent.host.jobs 保留共同执行来源；jobs:false 只关闭模型工具。Terminal 与 Shell 覆盖使用按实际会话返回低层 provider/admission 端口的工厂，归档通过 jobArchiveForSession 只读接入。不保留直接借用父端口的旧接线形式。

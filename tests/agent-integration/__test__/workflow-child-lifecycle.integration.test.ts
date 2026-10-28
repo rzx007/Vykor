@@ -42,22 +42,51 @@ describe.each(["sdk", "daemon"] as const)("real Workflow child lifecycle: %s", m
     } finally { await f.close(); }
   }, 30_000);
 
+  it("expires before dispatching Read when model startup outlasts its attempt deadline", async () => {
+    const f = await createLifecycleFixture(mode);
+    const label = "startup-deadline";
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      f.hold(label); f.holdModel(label);
+      let readEntered = false;
+      void f.entered(label).then(() => { readEntered = true; });
+      const run = await workflow(f, [label], { tasks: [{ id: "startup", prompt: label, subagentType: "worker", timeoutSeconds: 0.2 }] });
+      await f.modelEntered(label);
+      await vi.advanceTimersByTimeAsync(200);
+      expect((await f.agent.host.jobs.read({ sessionId: f.agent.id, target: run.target })).snapshot.status).toBe("stopping");
+      f.releaseModel(label);
+      const done = await f.agent.host.jobs.wait({ sessionId: f.agent.id, target: run.target, timeoutMs: 5_000 });
+      expect(done.snapshot.status).toBe("failed");
+      expect((done.details as any).results.startup).toMatchObject({ status: "failed", timedOut: true, attempts: 1 });
+      expect(readEntered).toBe(false);
+      const [child] = f.agent.children.list();
+      expect(f.agent.children.list()).toHaveLength(1);
+      expect((await child!.waitRun(child!.runId!)).result?.status).toBe("interrupted");
+      expect(f.modelCalls(label)).toBe(1);
+      expect(f.agent.host.inspect().childBudget.activeChildren).toBe(0);
+    } finally { vi.useRealTimers(); await f.close(); }
+  }, 30_000);
+
   it.each(["cancel", "deadline"] as const)("keeps %s stopping through the actual Read and cleanup with no overlapping retry", async source => {
     const f = await createLifecycleFixture(mode);
     const label = `held-${source}`;
     let cancellation: Promise<unknown> | undefined;
+    if (source === "deadline") vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     try {
       f.hold(label); f.holdCleanup(label);
       const run = await workflow(f, [label], { tasks: [{ id: "held", prompt: label, subagentType: "worker", retry: { maxAttempts: 2 }, ...(source === "deadline" ? { timeoutSeconds: 0.2 } : {}) }] });
       const target = run.target as JobTarget;
       await f.entered(label);
+      // The deadline includes admission and model startup. Advance it only once
+      // the real Read has entered, so host load cannot cancel before this gate.
+      if (source === "deadline") await vi.advanceTimersByTimeAsync(200);
       if (source === "cancel") { cancellation = f.agent.host.jobs.cancel({ sessionId: f.agent.id, target }); void cancellation.catch(() => {}); }
       await vi.waitFor(async () => expect((await f.agent.host.jobs.read({ sessionId: f.agent.id, target })).snapshot.status).toBe("stopping"));
       expect(f.agent.host.inspect().childBudget.activeChildren).toBe(1);
       expect(f.modelCalls(label)).toBe(1);
       f.release(label);
       await f.cleanupEntered(label);
-      if (source === "deadline") await new Promise(resolve => setTimeout(resolve, 5_100));
+      if (source === "deadline") await vi.advanceTimersByTimeAsync(5_100);
       expect((await f.agent.host.jobs.read({ sessionId: f.agent.id, target })).snapshot.status).toBe("stopping");
       expect(f.agent.host.inspect().childBudget.activeChildren).toBe(1);
       expect(f.agent.children.list()).toHaveLength(1);
@@ -68,7 +97,7 @@ describe.each(["sdk", "daemon"] as const)("real Workflow child lifecycle: %s", m
       expect(["failed", "killed", "completed"]).toContain(done.snapshot.status);
       if (source === "deadline") expect(f.agent.children.list()).toHaveLength(2);
       expect(f.agent.host.inspect().childBudget.activeChildren).toBe(0);
-    } finally { f.release(label); f.releaseCleanup(label); await cancellation?.catch(() => {}); await f.close(); }
+    } finally { vi.useRealTimers(); f.release(label); f.releaseCleanup(label); await cancellation?.catch(() => {}); await f.close(); }
   }, 30_000);
 
   it("keeps a late original attempt observation from replacing the new real run", async () => {
@@ -117,7 +146,7 @@ describe.each(["sdk", "daemon"] as const)("real Workflow child lifecycle: %s", m
     } finally { f.release(label); f.releaseCleanup(label); await f.close(); }
   }, 30_000);
 
-  it("does not retry a query failure while its actual worker invocation and cleanup remain active", async () => {
+  it.each([false, true])("does not retry a query failure while its actual worker invocation and cleanup remain active (deadline: %s)", async deadline => {
     const f = await createLifecycleFixture(mode);
     const label = "query-held";
     let restore = () => {};
@@ -132,11 +161,13 @@ describe.each(["sdk", "daemon"] as const)("real Workflow child lifecycle: %s", m
       });
       restore = () => spy.mockRestore();
       f.hold(label); f.holdCleanup(label);
-      const run = await workflow(f, [label], { tasks: [{ id: "query", prompt: label, subagentType: "worker", retry: { maxAttempts: 2 } }] });
+      if (deadline) vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+      const run = await workflow(f, [label], { tasks: [{ id: "query", prompt: label, subagentType: "worker", retry: { maxAttempts: 2 }, ...(deadline ? { timeoutSeconds: 0.2 } : {}) }] });
       await f.entered(label);
       await vi.waitFor(async () => expect((await f.agent.host.jobs.read({ sessionId: f.agent.id, target: run.target })).snapshot.status).toBe("stopping"));
       expect(f.agent.children.list()).toHaveLength(2);
       expect(f.agent.host.inspect().childBudget.activeChildren).toBe(1);
+      if (deadline) await vi.advanceTimersByTimeAsync(200);
       f.release(label); await f.cleanupEntered(label);
       expect((await f.agent.host.jobs.read({ sessionId: f.agent.id, target: run.target })).snapshot.status).toBe("stopping");
       expect(f.agent.children.list()).toHaveLength(2);
@@ -144,8 +175,9 @@ describe.each(["sdk", "daemon"] as const)("real Workflow child lifecycle: %s", m
       const done = await f.wait(run.target);
       expect(done.snapshot.status).toBe("failed");
       expect((done.details as any).results.query).toMatchObject({ attempts: 1, metadata: { workerQueryFailed: true, retryable: false } });
+      if (deadline) expect((done.details as any).results.query.timedOut).toBe(true);
       expect(f.modelCalls(label)).toBe(1);
-    } finally { restore(); f.release(label); f.releaseCleanup(label); await f.close(); }
+    } finally { vi.useRealTimers(); restore(); f.release(label); f.releaseCleanup(label); await f.close(); }
   }, 30_000);
 
   it("lets repeated Workflow cancellation retry only the original failed cleanup", async () => {

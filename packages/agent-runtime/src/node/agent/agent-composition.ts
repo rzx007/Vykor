@@ -6,6 +6,7 @@ import type { AgentChildManager } from "../../kernel/children/child-agent.js";
 import type { NodeRuntimeResources as RuntimeBundle } from "../runtime/node-runtime-resources.js";
 import type { AgentRequestConfigurationReader } from "@vykor/host-config";
 import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
+import type { TerminalProvider } from "@vykor/terminal";
 import type { TeamRegistry } from "@vykor/coordinator/teams";
 import type { WorkflowHostDirectory } from "../workflow/workflow-host-directory.js";
 import { randomUUID } from "node:crypto";
@@ -83,7 +84,7 @@ export interface AgentCompositionContext {
   identity?: AgentIdentity;
   createAgent: NodeChildManagerOptions["createAgent"];
   resolveDefaultTerminal(input: {
-    override: AgentCapabilityOverrides["terminal"];
+    override: TerminalProvider | false | undefined;
     cwd: string;
     sessionId: string;
   }): Promise<DefaultNodeTerminalResolution>;

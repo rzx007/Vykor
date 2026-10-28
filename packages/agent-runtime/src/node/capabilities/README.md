@@ -13,4 +13,4 @@ agent 组装时确定有哪些能力以及对应的释放责任，提交时将�
 
 ## 共用执行核心（阶段 A）
 
-默认能力解析调用 createNodeJobBindings 一次绑定 child/process/terminal/workflow 来源。低层覆盖不会替换执行规则；SDK 和 daemon 使用相同来源实现。
+默认能力解析调用 createNodeJobBindings 一次绑定 child/process/terminal/workflow 来源。Terminal / Shell 覆盖只接收按实际 `{ sessionId, cwd }` 返回 provider / admission 端口的工厂；每个会话组装时调用一次，child 继承工厂而不继承父会话已绑定的端口。低层覆盖不会替换执行规则；SDK 和 daemon 使用相同来源实现。

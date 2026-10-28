@@ -28,3 +28,7 @@
 受控模型只替换网络响应；Read 包装执行原实际 Read 后等待，继续沿用 S1 工具身份与未知写入保护。期望核心接纳拒绝在真实 JobList 运行范围内探测，不把失败的写工具当成功。没有手写 child/handle、固定成功 Promise 或 mock 默认工厂。
 
 S1 的真实 Shell 超时回归使用宿主可执行的 Node 命令，观察实际输出后再推进超时计时；临时目录清理等待进程的 close 事件，工具返回 timeout 不作为停止确认。
+
+`__test__/child-native-execution.integration.test.ts` 通过真实 SDK / daemon 工厂和实际 child handle，验证子 Shell 的会话归属、不同 cwd 和 SQLite 输出，以及子 Terminal 的打开、读取、取消和实际退出；用户手动 PTY 的已知 ID 也不能由同会话 child 控制，定点拒绝不依赖 list 成功。
+
+`__test__/workflow-timeout.integration.test.ts` 验证顶层时限进入同一 coordinator，并等待真实 Read 与清理完成。生命周期的 deadline 用例使用受控计时器，先确认实际 Read 进入再推进期限；另测模型尚未返回时到期，明确验证 Read 未派发，避免无限等待一个不会发生的 Read 门闩。查询失败跨过期限仍保持原 child / run，不产生额外尝试。

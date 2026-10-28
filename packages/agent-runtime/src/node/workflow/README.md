@@ -24,3 +24,5 @@
 Workflow Jobs 使用原始 runId 作为 jobId。默认 runner 只启动真实 child，记录 childId/runId，再调用同一 handle.waitRun；停止只调固定轮次的 interruptRun。查询错误保留原回执，等待原实际停止后返回不可重试的查询失败；没有回执或无法确认停止时保留 stopping。没有 process 回退或查询失败后另起 worker。显式自定义 WorkflowRunner 仍可由 createRunner 接入。
 
 coordinator 独占 attempt deadline、5 秒诊断宽限和重试。宽限到期仍等待原 worker，不能提前发布完成或重试；迟到进度只影响原 attempt。重复 Workflow cancel 可重新确认同一 worker 清理，并保留原取消 Promise。成功且已保存的一次性 worker 请求固定原 run 的安全卸载，默认 8/64 额度不变。
+
+工具顶层 `timeoutSeconds` 是每个 worker 的额外时限上限。Host 将 `min(顶层上限, task.timeoutSeconds ?? defaultTaskTimeoutSeconds)` 换算为任务的 `timeoutMs`，保存到原 Workflow 规格，仍只由 coordinator 计时。resume 省略上限时沿用保存值，显式上限只能进一步收紧。正常结果与超时后迟到结果使用同一重试判断，`retryable=false` 和未确认清理都不能建立替代 worker。

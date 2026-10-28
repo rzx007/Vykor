@@ -61,7 +61,7 @@ export async function runWorkflowTask(
         cleanupUnconfirmed => recordProgress({ summary: "Waiting for actual worker stop", metadata: { ...lastProgressMetadata, stopping: true, ...(cleanupUnconfirmed ? { cleanupUnconfirmed: true } : {}) } }),
       );
       const status = lastResult.status ?? "completed";
-      if (lastResult.metadata?.cleanupUnconfirmed || lastResult.metadata?.retryable === false || status === "completed" || !retry.retryOn.includes(status) || attempt === retry.maxAttempts) {
+      if (!shouldRetryAttempt(retry, attempt, status, lastResult.metadata)) {
         return {
           ...lastResult,
           taskId: task.id,
@@ -80,7 +80,7 @@ export async function runWorkflowTask(
       if (timeoutError?.lateResult) lastResult = timeoutError.lateResult;
       const uncertain = timeoutError?.cleanupUnconfirmed || hasUnconfirmedCleanup(error);
       const errorMetadata = hasUnconfirmedCleanup(error) ? (error as { metadata?: Record<string, unknown> }).metadata : undefined;
-      if (uncertain || !retry.retryOn.includes("failed") || attempt === retry.maxAttempts) {
+      if (!shouldRetryAttempt(retry, attempt, "failed", timeoutError?.lateResult?.metadata, uncertain)) {
         return {
           taskId: task.id,
           status: "failed",
@@ -198,6 +198,21 @@ function normalizeRetry(policy: WorkflowRetryPolicy | undefined): Required<Workf
     maxAttempts: Math.max(1, Math.floor(policy?.maxAttempts ?? 1)),
     retryOn: policy?.retryOn ?? ["failed"],
   };
+}
+
+function shouldRetryAttempt(
+  retry: Required<WorkflowRetryPolicy>,
+  attempt: number,
+  status: NonNullable<WorkflowWorkerResult["status"]>,
+  metadata: Record<string, unknown> | undefined,
+  cleanupUnconfirmed = false,
+): boolean {
+  return !cleanupUnconfirmed
+    && !metadata?.cleanupUnconfirmed
+    && metadata?.retryable !== false
+    && status !== "completed"
+    && retry.retryOn.includes(status)
+    && attempt < retry.maxAttempts;
 }
 
 function hasUnconfirmedCleanup(error: unknown): boolean {

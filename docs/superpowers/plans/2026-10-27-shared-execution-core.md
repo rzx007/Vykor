@@ -109,7 +109,7 @@ export interface NodeJobBindings {
 
 `archive` 是领域只读持久端口，不是第二个 AgentJobHost 执行器。点查只有在实时索引明确返回不存在时才能用它；存储错误不能吞掉。历史 list 与实时项用 `(kind, jobId, runId)` 合并，实时项优先；这是一次查询的合并，无常驻缓存。Agent 归档找不到 runId 时只提供只读归档项，不伪造可取消 target；这类项以旧持久记录详情返回，正常 Jobs 列表只输出可确定 target 的项，并在 errors 中说明不可定位的旧记录。
 
-低层注入接口同时定为：`AgentCapabilityOverrides.terminal?: CapabilityOverride<TerminalProvider>`，`backgroundShell?: CapabilityOverride<ShellAdmissionPorts>`；其余 childEnvironment/workflowRepository 等既有端口保留。`VykorAgentOptions.jobArchiveForSession?: (sessionId: string) => { agent?: Pick<AgentJobHost,"list"|"read">; process?: Pick<AgentJobHost,"list"|"read"> }` 只用于持久读取。`DaemonApplicationOptions` 的 `createTerminal/createBackgroundShell` 原全 host 工厂分别替换为 `terminalProviderForSession(session: SessionRecord): TerminalProvider` 和 `shellAdmissionForSession(session: SessionRecord): ShellAdmissionPorts`，不保留旧字段。共同工厂用它们创建同一 Terminal bundle 和进程来源，宿主不再提供 Jobs 控制器。
+低层注入接口经 2026-10-28 复核修正为：`AgentCapabilityOverrides.terminal?: CapabilityOverride<SessionCapabilityFactory<TerminalProvider>>`，`backgroundShell?: CapabilityOverride<SessionCapabilityFactory<ShellAdmissionPorts>>`；`SessionCapabilityFactory<T>` 接收实际 `{ sessionId, cwd }` 并返回端口，每个会话组装时调用一次。其余 childEnvironment/workflowRepository 等既有端口保留。`VykorAgentOptions.jobArchiveForSession?: (sessionId: string) => { agent?: Pick<AgentJobHost,"list"|"read">; process?: Pick<AgentJobHost,"list"|"read"> }` 只用于持久读取。`DaemonApplicationOptions` 的 `createTerminal/createBackgroundShell` 原全 host 工厂分别替换为 `terminalProviderForSession(session: SessionRecord): TerminalProvider` 和 `shellAdmissionForSession(session: SessionRecord): ShellAdmissionPorts`，不保留旧字段或父会话端口值形式。共同工厂用实际会话端口创建同一 Terminal bundle 和进程来源，宿主不再提供 Jobs 控制器。
 
 ## A1：Jobs 契约与无全量发现的路由
 
@@ -615,3 +615,30 @@ git diff --check
 - 最终删除审计：909 个生产 TypeScript 文件，18 项文件/符号/控制分支检查通过，`stage-c-deletion-audit.log`；全部 staged/unstaged `git diff HEAD --check` 通过。当前 adapter、process 回退、catch-spawn 和重复停止 timer 零运行引用。
 
 完整失败/修正记录、审查处理与最终限制见本地 `stage-c-report.md`。最终代码经主会话及独立审查代理只读审查，三项生命周期问题及两个尾部分支均已修复并有实际回归证据。
+
+## 2026-10-28 复核修正
+
+复核基线为主仓库 `b714d3e702e4a719a671a33ec438f605abc9231f`。这次只修四项复核缺陷和验收自身的等待问题，不重做外部调研，也不改四类执行器的职责。
+
+- `node/agent/agent-options.ts`、`agent-composition.ts`、`node/capabilities/default-agent-capabilities.ts` 与 daemon loader：Terminal / Shell 只传按实际会话绑定的端口工厂。child.created 已持久投影后，工厂读取原 child SessionRecord，再绑定 provider / admission。删除借用父会话端口值的旧形式，无兼容 union、开关、缓存或新管理器。
+- `terminal-node/src/host/agent-terminal-host.ts`：列表和定点操作共用会话与 `source=agent` 判断。已知手动终端 ID 不代表 Agent 获得操作权，定点拒绝不需要 list。
+- `coordinator/src/workflow/task-runner.ts`：正常返回和超时后迟到结果使用同一重试条件；`retryable=false` 或未确认清理都不建立下一次尝试。
+- `node/workflow/workflow-host.ts`：顶层时限换算到既有 task.timeoutMs 并保存。有效期限为 `min(timeoutSeconds, task.timeoutSeconds ?? defaultTaskTimeoutSeconds)`；resume 保留或收紧原期限，coordinator 仍是唯一计时者。
+
+新增回归先观察到原缺陷：daemon 子 Shell 存到父会话、不同 cwd 被拒绝、子 TerminalOpen 后 JobRead 找不到任务；手动终端可以被定点读取；超时后的不可重试结果建立第二个 attempt；顶层时限到期后 signal 仍未取消。修正后以真实默认工厂、DaemonApplication、实际 child handle、真实 Shell / PTY 和临时 SQLite 验证。
+
+deadline 不稳定的确定性复现：在真实 child 的模型返回前暂停，推进原 200ms 时限，原 Read 从未派发，因此旧用例等待 Read 门闩永远不会结束。现在分别覆盖启动阶段到期，以及原 Read 已进入后推进同一期限/清理宽限；不增加生产 timer 或测试超时。
+
+整体试跑又暴露两项批量验收的累计耗时：48 个 child run 附带 97 个完整根模型/存储 run，64 个身份附带 130 个。将重复观察和准入放进一个仍活跃的真实根工具范围，继续通过真实 controller 和原 handle 顺序执行，首尾保留外部 Agent/JobSend/JobWait 工具检查。真实 child 数量、默认额度和 60/120 秒限制不变；另增加逐轮 activeChildren=0 断言。定向 SDK/daemon 四项通过，daemon 两项约 20/32 秒。
+
+生产改动没有新增文件、运行状态或执行 ID；减少父/子错绑和重试条件的分散判断。新增测试集中在各模块 __test__ 与跨包验收目录，原路径直接替换，执行核心继续只有一套。
+
+### 复核后的验证记录
+
+运行环境为 Windows、Node v24.18.1、pnpm 10.30.2。先保留真实红灯证据，再修正生产代码；首轮整体试跑的累计根运行超时不作为验收通过。修正夹具等待顺序、批量测试范围并冻结源码后，重新完整运行：
+
+- 真实生命周期五文件：`shared-job-composition.integration.test.ts`、`child-run-settlement.integration.test.ts`、`workflow-child-lifecycle.integration.test.ts`、`child-native-execution.integration.test.ts`、`workflow-timeout.integration.test.ts`，同用 `tests/agent-integration/vitest.config.ts`；**79/79，5 文件，无跳过，613.21 秒**。日志位于本机临时目录 `openharness-review-acceptance.log`。SDK / daemon 均执行真实工厂与原 child handle，含实际 Shell、原生 PTY、SQLite、迟到结果、8/64 额度、启动回执失败、停止未确认和保存补偿。Windows node-pty helper 仍输出既有 AttachConsole 噪声，实际创建、读取、取消与退出断言通过。
+- Runtime 定向六文件：78/78；coordinator 的 task-runner / scheduler：36/36；Server 的 loader / terminal：31/31；共同 Terminal bundle：13/13；Workflow 工具适配：4/4。未使用替身 child handle 绕过真实收尾。
+- `pnpm check-types`：72/72 任务成功，server-client 类型检查成功；独立 `agent-runtime build` 和受影响包类型检查也通过。全仓日志为本机临时目录 `openharness-review-check-types.log`。
+- `node --test scripts/architecture-boundaries.test.mjs`：64/64；`pnpm check:retired-ui` 与 `pnpm check-docs` 通过，旧路径批准清单未扩大。
+- 独立只读复核未发现实质性代码缺陷。批量测试补回首尾外部 JobWait 的 completed 状态断言，复用同一次查询结果，不增加根运行次数；补强后的四项定向复验 4/4 通过，113.69 秒，未再次重复整组测试。

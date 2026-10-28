@@ -15,6 +15,9 @@ type AgentTarget = Extract<JobTarget, { kind: "agent" }>;
 export interface LifecycleFixture {
   agent: DefaultNodeAgent;
   store?: SessionStore;
+  terminals?: DaemonApplication["terminals"];
+  /** Offline network script; tools, child admission and returned handles stay real. */
+  scriptChild(prompt: string, steps: Array<{ name: string; input: Record<string, unknown> | ((results: ToolResult[]) => Record<string, unknown>) }>): ToolResult[];
   spawn(prompt: string): Promise<{ handle: AgentChildHandle; target: AgentTarget }>;
   /** Direct admission through the real root's captured child controller. Expected rejection does not dispatch a mutating Agent tool. */
   admit(prompt: string, timeoutSeconds?: number): Promise<{ handle: AgentChildHandle; target: AgentTarget }>;
@@ -22,6 +25,9 @@ export interface LifecycleFixture {
   sendMany(inputs: Array<{ target: AgentTarget; text: string }>): Promise<PromiseSettledResult<JobInputReceipt>[]>;
   sendAccepted(target: AgentTarget, text: string): Promise<JobInputReceipt>;
   modelCalls(label: string): number;
+  holdModel(label: string): void;
+  modelEntered(label: string): Promise<void>;
+  releaseModel(label: string): void;
   observedHistory(label: string): string[];
   observedCwd(label: string): string | undefined;
   environmentAcquires(): number;
@@ -72,12 +78,14 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
   let approval: { entered: ReturnType<typeof gate>; released: ReturnType<typeof gate> } | undefined;
   const customProvider = { id: "fixture-provider", displayName: "Fixture", apiFormat: "openai" as const, baseUrl: "https://fixture.invalid/v1", models: (options.catalogModels ?? []).map(id => ({ id, displayName: id })) };
   const holds = new Map<string, { entered: ReturnType<typeof gate>; released: ReturnType<typeof gate> }>();
+  const modelHolds = new Map<string, { entered: ReturnType<typeof gate>; released: ReturnType<typeof gate> }>();
   const cleanups = new Map<string, { entered: ReturnType<typeof gate>; released: ReturnType<typeof gate> }>();
   const labelsByRun = new Map<string, string>();
   const calls = new Map<string, number>();
   const histories = new Map<string, string[]>();
   const cwds = new Map<string, string>();
   const scripts = new Map<string, { name: string; input: Record<string, unknown>; result?: ToolResult; probe?: (execution: AgentExecutionContext) => Promise<void>; probeError?: unknown }>();
+  const childScripts = new Map<string, { steps: Array<{ name: string; input: Record<string, unknown> | ((results: ToolResult[]) => Record<string, unknown>) }>; results: ToolResult[] }>();
   const names = ["Agent", "JobRead", "JobWait", "JobSend", "JobCancel", "JobList", "BackgroundShellCreate", "TerminalOpen", "Workflow"];
   const decorators = names.map(name => ({ name, decorate: (base: ToolDefinition): ToolDefinition => ({ ...base, execute: async (input, context) => {
     const script = context.toolCallId ? scripts.get(context.toolCallId) : undefined;
@@ -110,8 +118,24 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
     }
     const latestUser = [...params.messages].reverse().find(message => message.type === "user");
     const label = text(latestUser).split("\n")[0]!.trim();
+    const childScript = childScripts.get(label);
+    if (childScript) {
+      if (last?.type === "tool_result") childScript.results.push({ content: last.content, ...(last.isError ? { isError: true } : {}) });
+      const step = childScript.steps[childScript.results.length];
+      if (step) {
+        const input = typeof step.input === "function" ? step.input(childScript.results) : step.input;
+        yield { type: "tool_use_start", toolUse: { type: "tool_use", id: `child-script-${randomUUID()}`, name: step.name, input } };
+        yield { type: "complete", stopReason: "tool_use" };
+      } else {
+        yield { type: "text_delta", delta: `completed:${label}` };
+        yield { type: "complete", stopReason: "end_turn" };
+      }
+      return;
+    }
     histories.set(label, params.messages.map(message => text(message)));
     if (!label.startsWith("fixture-call:")) calls.set(label, (calls.get(label) ?? 0) + 1);
+    const modelHold = modelHolds.get(label);
+    if (modelHold && last?.type !== "tool_result") { modelHold.entered.resolve(); await modelHold.released.promise; }
     if (label === "parent-retained" && last?.type !== "tool_result") {
       yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "real-descendant", name: "Agent", input: { prompt: "descendant-held", description: "retained descendant", subagentType: "worker", allowedTools: ["Read"] } } };
       yield { type: "complete", stopReason: "tool_use" }; return;
@@ -256,7 +280,8 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
     return { handle, target: { kind: "agent" as const, jobId: handle.id, runId: receipt.runId } };
   };
   const fixture: LifecycleFixture = {
-    agent: node, ...(store ? { store } : {}),
+    agent: node, ...(store ? { store } : {}), ...(application ? { terminals: application.terminals } : {}),
+    scriptChild: (prompt, steps) => { const results: ToolResult[] = []; childScripts.set(prompt, { steps, results }); return results; },
     admit: async (prompt, timeoutSeconds) => {
       let result!: Awaited<ReturnType<typeof admit>>;
       await invoke("JobList", {}, async execution => { result = await admit(execution, prompt, timeoutSeconds); });
@@ -278,6 +303,9 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
       return result;
     },
     modelCalls: label => calls.get(label) ?? 0,
+    holdModel: label => modelHolds.set(label, { entered: gate(), released: gate() }),
+    modelEntered: label => modelHolds.get(label)!.entered.promise,
+    releaseModel: label => modelHolds.get(label)!.released.resolve(),
     observedHistory: label => histories.get(label) ?? [],
     observedCwd: label => cwds.get(label),
     environmentAcquires: () => environmentAcquires,
@@ -323,6 +351,7 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
     close: async () => {
       restoreSave();
       approval?.released.resolve();
+      for (const hold of modelHolds.values()) hold.released.resolve();
       for (const hold of holds.values()) hold.released.resolve();
       for (const cleanup of cleanups.values()) cleanup.released.resolve();
       await Promise.allSettled(node.children.list().map(handle => handle.result));

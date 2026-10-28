@@ -21,4 +21,4 @@
 
 ## 共用执行核心（阶段 A）
 
-createAgentTerminalBundle 同时服务 SDK 和 daemon。它把 TerminalProvider 映射为工具与 Jobs；requireOwnedTerminal 通过 get 定点核对所属会话。
+createAgentTerminalBundle 同时服务 SDK 和 daemon。它把 TerminalProvider 映射为工具与 Jobs；列表与 requireOwnedTerminal 共用同一归属判断，要求所属会话相符且 source 为 agent。定点操作通过 get 核对，不依赖列表；用户手动终端即使 ID 已知也不能由 Agent 操作。

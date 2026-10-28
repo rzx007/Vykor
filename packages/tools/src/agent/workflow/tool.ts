@@ -279,7 +279,7 @@ export function createWorkflowTool(port: WorkflowToolPort, definitions?: readonl
         timeoutSeconds: {
           type: "number",
           description:
-            "Optional per-worker wait timeout in seconds. Omit it to let detached workflows continue until workers finish or task-level timeouts fire.",
+            "Optional per-worker timeout cap in seconds. The effective limit is the smaller of this cap and the task override (or defaultTaskTimeoutSeconds). It is saved with the workflow and retained on resume. Omit it to use only task/default limits.",
         },
         waitForCompletion: {
           type: "boolean",

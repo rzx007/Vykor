@@ -559,8 +559,19 @@ export class WorkflowHost {
       if (typeof existing === "string") return toolError(existing);
       const definitions = call.definitions ?? options.definitions ?? [];
       const selectedSpec = existing?.spec ?? spec;
-      if (call.definitions && typeof selectedSpec !== "string")
-        for (const task of selectedSpec.tasks) {
+      if (typeof selectedSpec === "string") return toolError(selectedSpec);
+      // The per-worker limit caps the task override/default. Persist that
+      // effective limit so the coordinator owns the only attempt deadline,
+      // including when a later invocation resumes the saved workflow.
+      const executionSpec: WorkflowSpec = timeoutMs === undefined ? selectedSpec : {
+        ...selectedSpec,
+        tasks: selectedSpec.tasks.map(task => ({
+          ...task,
+          timeoutMs: Math.min(timeoutMs, task.timeoutMs ?? selectedSpec.defaultTaskTimeoutMs ?? timeoutMs),
+        })),
+      };
+      if (call.definitions)
+        for (const task of executionSpec.tasks) {
           const name = task.subagentType ?? "worker";
           if (!getAgentDefinition(name, definitions))
             return toolError(`Agent is not available in this run: ${name}`);
@@ -600,16 +611,22 @@ export class WorkflowHost {
       };
       const id = existing?.runId ?? runOptions.runId ?? createWorkflowRunId();
       const work = existing
-        ? this.resumePersistentWorkflow(existing, runner, runOptions)
+        ? this.resumePersistentWorkflow(
+            existing.status === "running" && executionSpec !== selectedSpec
+              ? { ...existing, spec: executionSpec, plan: createWorkflowPlan(executionSpec) }
+              : existing,
+            runner,
+            runOptions,
+          )
         : input.persist === false
           ? this.start(
-              spec as WorkflowSpec,
+              executionSpec,
               runner,
               { ...runOptions, runId: id },
               undefined,
               new MemoryWorkflowRunRepository(),
             )
-          : this.runPersistentWorkflow(spec as WorkflowSpec, runner, {
+          : this.runPersistentWorkflow(executionSpec, runner, {
               ...runOptions,
               runId: id,
             });

@@ -4,6 +4,26 @@ import { describe, expect, it, vi } from "vitest";
 import { DaemonTerminalService } from "../daemon-terminal-service.js";
 
 describe("DaemonTerminalService scoped environments", () => {
+  it("excludes manual terminals from every Agent Job operation without relying on listing", async () => {
+    const session = { id: "manual-terminal-owner", cwd: process.cwd() } as any;
+    const pty = fakePty();
+    const service = new DaemonTerminalService({ getProject: () => undefined, getSession: () => session }, { spawnPty: () => pty.value });
+    const bundle = createAgentTerminalBundle({ cwd: session.cwd, sessionId: session.id, provider: service.providerForSession(session) });
+    try {
+      const manual = await service.create({ scope: { kind: "session", sessionId: session.id }, runtime: "local", source: "user", cols: 80, rows: 24 });
+      const input = { sessionId: session.id, target: { kind: "terminal" as const, jobId: manual.id } };
+      expect((await bundle.jobs.list({ sessionId: session.id })).jobs).toEqual([]);
+      const listing = vi.spyOn(service, "list").mockRejectedValue(new Error("unavailable listing"));
+      await expect(bundle.jobs.read(input)).rejects.toThrow(/Job not found/);
+      await expect(bundle.jobs.wait({ ...input, timeoutMs: 10 })).rejects.toThrow(/Job not found/);
+      await expect(bundle.jobs.send({ ...input, data: "untrusted-input\r" })).rejects.toThrow(/Job not found/);
+      await expect(bundle.jobs.cancel(input)).rejects.toThrow(/Job not found/);
+      expect(listing).not.toHaveBeenCalled();
+      expect(pty.value.write).not.toHaveBeenCalled();
+      expect((await service.get(manual.id)).status).toBe("running");
+    } finally { await bundle.cleanup(); await service.dispose(); }
+  });
+
   it("runs service commands inside the environment shell, not the WSL launcher", async () => {
     const session = { id: "service-session", cwd: process.cwd() } as any;
     const pty = fakePty();

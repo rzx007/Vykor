@@ -305,8 +305,8 @@ describe("createDaemonAgentLoader", () => {
       effort: "high",
       pluginsEnabled: false,
       capabilityOverrides: {
-        terminal,
-        backgroundShell,
+        terminal: expect.any(Function),
+        backgroundShell: expect.any(Function),
         schedules,
       },
       effects: { requestPermission },
@@ -315,6 +315,8 @@ describe("createDaemonAgentLoader", () => {
       trustedToolOverrides: ["Read"],
     });
     expect(context.options).not.toHaveProperty("attachmentResourceRoot");
+    expect(context.options.capabilityOverrides.terminal({ sessionId: session.id, cwd: session.cwd })).toBe(terminal);
+    expect(context.options.capabilityOverrides.backgroundShell({ sessionId: session.id, cwd: session.cwd })).toBe(backgroundShell);
     expect(context.options.capabilityOverrides).not.toHaveProperty("attachments");
     expect(context.options.capabilityOverrides).not.toHaveProperty("imageToText");
     expect(context.options.tools).toContain(imageGenerationTool);

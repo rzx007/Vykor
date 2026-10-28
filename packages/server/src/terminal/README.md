@@ -26,4 +26,4 @@
 
 ## 共用执行核心（阶段 A）
 
-DaemonTerminalService 提供带会话/环境核对的 TerminalProvider，交给共同 agent-terminal-host bundle 生成 Jobs；不另写 Jobs 状态或 wait/cancel。get 直接查询底层 provider。
+DaemonTerminalService 按实际 root / child 会话提供带环境核对的 TerminalProvider，交给共同 agent-terminal-host bundle 生成 Jobs；不另写 Jobs 状态或 wait/cancel。get 直接查询底层 provider；bundle 用同一判断核对所属会话和 agent 来源，读取、等待、输入、取消不依赖 list。

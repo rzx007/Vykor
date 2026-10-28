@@ -157,7 +157,7 @@ async function ownedTerminals(
   provider: Pick<TerminalProvider, "list" | "get">,
   sessionId: string,
 ): Promise<TerminalSessionInfo[]> {
-  return (await provider.list()).filter((terminal) => terminal.sessionId === sessionId);
+  return (await provider.list()).filter((terminal) => isOwnedAgentTerminal(terminal, sessionId));
 }
 
 async function requireOwnedTerminal(
@@ -166,8 +166,12 @@ async function requireOwnedTerminal(
   sessionId: string,
 ): Promise<TerminalSessionInfo> {
   const terminal = await provider.get(terminalId);
-  if (!terminal || terminal.sessionId !== sessionId) throw new Error(`Job not found: ${terminalId}`);
+  if (!terminal || !isOwnedAgentTerminal(terminal, sessionId)) throw new Error(`Job not found: ${terminalId}`);
   return terminal;
+}
+
+function isOwnedAgentTerminal(terminal: TerminalSessionInfo, sessionId: string): boolean {
+  return terminal.sessionId === sessionId && terminal.source === "agent";
 }
 
 function observationFor(

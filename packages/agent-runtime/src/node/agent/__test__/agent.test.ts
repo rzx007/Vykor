@@ -557,7 +557,7 @@ describe("createDefaultNodeAgent", () => {
     };
     const agent = await createDefaultNodeAgent({
       cwd,
-      capabilityOverrides: { terminal: terminalOverride },
+      capabilityOverrides: { terminal: () => terminalOverride },
       settings: {
         apiKey: "test-key",
         apiFormat: "anthropic",

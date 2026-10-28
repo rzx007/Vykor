@@ -6,18 +6,38 @@ it.each(["sdk", "daemon"] as const)("returns run permits for 24 followups and 24
   try {
     const first = await f.spawn("run-0");
     let target = first.target;
-    for (let n = 0; n < 24; n++) {
-      const result = await f.wait(target);
-      expect(result.snapshot.status).toBe("completed");
-      expect(result.text).toBe(`run-${n}`);
-      if (n < 23) target = { ...target, runId: (await f.send(target, `run-${n + 1}`)).runId };
-    }
+    const initial = await f.wait(target);
+    expect(initial.snapshot.status).toBe("completed");
+    expect(initial.text).toBe("run-0");
+    target = { ...target, runId: (await f.send(target, "run-1")).runId };
+    let lastIdentity = target;
+    // Exercise every real child run inside one captured root scope. Reopening
+    // a model/store Run for every observation measures root history growth,
+    // rather than child permit reuse. The external tool path remains checked
+    // before and after these loops.
+    await f.inRootRun(async execution => {
+      for (let n = 1; n < 24; n++) {
+        const result = await first.handle.waitRun(target.runId);
+        expect(result.result).toMatchObject({ status: "completed", output: `run-${n}` });
+        expect(f.agent.host.inspect().childBudget.activeChildren).toBe(0);
+        if (n < 23) target = { ...target, runId: (await execution.children.sendChildInput(first.handle.id, { content: `run-${n + 1}` })).runId };
+      }
+      for (let n = 0; n < 24; n++) {
+        const receipt = await execution.children.spawnChildAgent({ prompt: `identity-${n}`, description: `identity-${n}`, agent: "worker", cwd: execution.scope.cwd, allowedTools: ["Read"] });
+        const handle = f.agent.children.get(receipt.id)!;
+        expect((await handle.waitRun(receipt.runId)).result).toMatchObject({ status: "completed", output: `identity-${n}` });
+        expect(f.agent.host.inspect().childBudget.activeChildren).toBe(0);
+        lastIdentity = { kind: "agent", jobId: handle.id, runId: receipt.runId };
+      }
+    });
     expect(first.handle.id).toBe(target.jobId);
     expect(first.handle.state).not.toBe("closed");
-    for (let n = 0; n < 24; n++) {
-      const next = await f.spawn(`identity-${n}`);
-      expect((await f.wait(next.target)).text).toBe(`identity-${n}`);
-    }
+    const finalFollowup = await f.wait(target);
+    expect(finalFollowup.snapshot.status).toBe("completed");
+    expect(finalFollowup.text).toBe("run-23");
+    const finalIdentity = await f.wait(lastIdentity);
+    expect(finalIdentity.snapshot.status).toBe("completed");
+    expect(finalIdentity.text).toBe("identity-23");
   } finally { await f.close(); }
 }, 60_000);
 
@@ -57,10 +77,23 @@ it("preserves the actual daemon outcome and releases capacity when terminal stor
 it.each(["sdk", "daemon"] as const)("counts 64 identities without retaining completed run permits: %s", async mode => {
   const f = await createLifecycleFixture(mode, { childBudget: { maxActiveChildren: 1 } });
   try {
-    for (let n = 0; n < 64; n++) {
-      const child = await f.spawn(`total-${n}`);
-      expect((await f.wait(child.target)).text).toBe(`total-${n}`);
-    }
+    const first = await f.spawn("total-0");
+    const initial = await f.wait(first.target);
+    expect(initial.snapshot.status).toBe("completed");
+    expect(initial.text).toBe("total-0");
+    let last = first.target;
+    await f.inRootRun(async execution => {
+      for (let n = 1; n < 64; n++) {
+        const receipt = await execution.children.spawnChildAgent({ prompt: `total-${n}`, description: `total-${n}`, agent: "worker", cwd: execution.scope.cwd, allowedTools: ["Read"] });
+        const handle = f.agent.children.get(receipt.id)!;
+        expect((await handle.waitRun(receipt.runId)).result).toMatchObject({ status: "completed", output: `total-${n}` });
+        expect(f.agent.host.inspect().childBudget.activeChildren).toBe(0);
+        last = { kind: "agent", jobId: handle.id, runId: receipt.runId };
+      }
+    });
+    const final = await f.wait(last);
+    expect(final.snapshot.status).toBe("completed");
+    expect(final.text).toBe("total-63");
     await expect(f.admit("identity-65")).rejects.toThrow("totalChildren");
     expect(f.agent.children.list()).toHaveLength(64);
     expect(f.modelCalls("identity-65")).toBe(0);

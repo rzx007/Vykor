@@ -149,9 +149,19 @@ export class DaemonTerminalService {
     return this.provider.subscribe(listener);
   }
 
-  providerForSession(rootSession: SessionRecord): TerminalProvider {
-    return { create: input => this.create({ ...input, scope: { kind: "session", sessionId: rootSession.id }, runtime: this.options.acquireEnvironment ? "environment" : "local", source: "agent" }),
-      get: id => this.provider.get(id), list: () => this.list({ sessionId: rootSession.id, source: "agent" }), read: input => this.provider.read(input), wait: input => this.provider.wait(input), write: input => this.write(input), resize: input => this.resize(input), signal: input => this.signal(input), kill: id => this.close(id), subscribe: listener => this.subscribe(listener) };
+  providerForSession(session: SessionRecord): TerminalProvider {
+    return {
+      create: input => this.create({ ...input, scope: { kind: "session", sessionId: session.id }, runtime: this.options.acquireEnvironment ? "environment" : "local", source: "agent" }),
+      get: id => this.provider.get(id),
+      list: () => this.list({ sessionId: session.id, source: "agent" }),
+      read: input => this.provider.read(input),
+      wait: input => this.provider.wait(input),
+      write: input => this.write(input),
+      resize: input => this.resize(input),
+      signal: input => this.signal(input),
+      kill: id => this.close(id),
+      subscribe: listener => this.subscribe(listener),
+    };
   }
 
   async dispose(): Promise<void> {

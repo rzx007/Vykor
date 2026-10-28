@@ -10,7 +10,7 @@ import {
   type AgentEffectOverrides,
   type DefaultNodeAgentOptions,
 } from "@vykor/agent-runtime";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import {
   getCoordinatorSystemPrompt,
   getCoordinatorTools,
@@ -213,8 +213,14 @@ export function createDaemonAgentLoader(
       (async () => {
         throw new Error("Daemon question host is not configured");
       });
-    const terminal = options.terminalProviderForSession?.(session);
-    const backgroundShell = options.shellAdmissionForSession?.(session);
+    const executionSession = (scope: { sessionId: string; cwd: string }): SessionRecord => {
+      const owner = options.getSession
+        ? options.getSession(scope.sessionId)
+        : scope.sessionId === session.id ? session : undefined;
+      if (!owner) throw new Error(`Execution session not found: ${scope.sessionId}`);
+      if (resolve(owner.cwd) !== resolve(scope.cwd)) throw new Error("Execution session cwd mismatch");
+      return owner;
+    };
     const tools = (await options.tools?.({ session, settings })) ?? [];
     const modelMetadata = settings
       ? await options.prepareModelMetadata?.(settings, session)
@@ -328,8 +334,8 @@ export function createDaemonAgentLoader(
       reasoningEffort,
       capabilityOverrides: {
         ...(options.schedules ? { schedules: options.schedules } : {}),
-        ...(terminal ? { terminal } : {}),
-        ...(backgroundShell ? { backgroundShell } : {}),
+        ...(options.terminalProviderForSession ? { terminal: (scope: { sessionId: string; cwd: string }) => options.terminalProviderForSession!(executionSession(scope)) } : {}),
+        ...(options.shellAdmissionForSession ? { backgroundShell: (scope: { sessionId: string; cwd: string }) => options.shellAdmissionForSession!(executionSession(scope)) } : {}),
         ...(options.workflowRepository
           ? { workflowRepository: options.workflowRepository }
           : {}),

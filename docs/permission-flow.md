@@ -31,14 +31,14 @@ daemon 注入 `AgentToolSafety`，同时提供操作记录宿主和 `RequiredPol
 ```ts
 const agent = await createDefaultNodeAgent({
   capabilityOverrides: {
-    terminal: { value: terminal, jobs: terminalJobs },
-    backgroundShell: { value: backgroundShell, jobs: shellJobs },
+    terminal: scope => terminalProviderForSession(scope),
+    backgroundShell: scope => shellAdmissionForSession(scope),
   },
   effects: { requestPermission },
 });
 ```
 
-`requestPermission` 是可选 effect；未提供时默认拒绝，不隐式放行。上例的 Terminal 与后台 Shell override 是 Host 借用对象，必须可用于 root session tree 的全部 child session，且由 Host 而不是 `agent.close()` 释放。
+`requestPermission` 是可选 effect；未提供时默认拒绝，不隐式放行。共同 Node 工厂为每个 root / child 会话调用一次上例的端口工厂，传入该会话实际的 `sessionId` 和 `cwd`。工厂返回 `TerminalProvider` / `ShellAdmissionPorts`，不再接收已绑定父会话的端口对象。端口由 Host 持有；Agent 只释放自己的订阅。Terminal Jobs 的列表和定点操作共用同一会话及 `source=agent` 检查，不能操作用户手动终端。
 
 ## Daemon
 

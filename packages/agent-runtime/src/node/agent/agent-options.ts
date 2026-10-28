@@ -41,10 +41,12 @@ export interface AgentRunCapabilitySnapshot {
 }
 
 export type CapabilityOverride<T> = T | false;
+/** Called once for each actual root or child session by the common Node composition. */
+export type SessionCapabilityFactory<T> = (scope: Pick<AgentRunScope, "sessionId" | "cwd">) => T;
 
 export interface AgentCapabilityOverrides {
-  terminal?: CapabilityOverride<TerminalProvider>;
-  backgroundShell?: CapabilityOverride<ShellAdmissionPorts>;
+  terminal?: CapabilityOverride<SessionCapabilityFactory<TerminalProvider>>;
+  backgroundShell?: CapabilityOverride<SessionCapabilityFactory<ShellAdmissionPorts>>;
   jobs?: false;
   memory?: false;
   childEnvironment?: CapabilityOverride<AgentChildEnvironmentProvider>;

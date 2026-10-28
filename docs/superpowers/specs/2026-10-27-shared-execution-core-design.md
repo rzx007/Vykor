@@ -1,10 +1,16 @@
 # SDK 与 daemon 共用执行核心的架构方案
 
-> 状态：已实施并通过真实验收。A/B/C 均已审查并分别提交；三文件真实生命周期 66/66（A7+B31+C28），四大门禁与文档/退役检查通过，尾部审查修正另有定向复验。核对日期：2026-10-28。实施入口：[文件级实施计划](../plans/2026-10-27-shared-execution-core.md)。事实依据：[固定版本调研](../../research/2026-10-27-agent-task-lifecycle-comparison.md)。
+> 状态：A/B/C 已实施。2026-10-28 复核发现四处接线与边界缺陷，以及 deadline 验收的等待竞态；本次修正继续保持同一执行核心。复核后的验收记录见[文件级实施计划](../plans/2026-10-27-shared-execution-core.md)末尾，原阶段验收保留为历史记录。事实依据：[固定版本调研](../../research/2026-10-27-agent-task-lifecycle-comparison.md)。
 
 推荐沿用现有四类执行器，把它们共同放到 Node 组装路径中。SDK 与 daemon 使用相同的执行器、Jobs 路由、子 Agent 名额和收尾规则。daemon 只增加授权、环境接入、持久记录和 HTTP 返回格式。删除重复的 child 执行登记器、daemon Jobs 生命周期分支和按全量列表发现归属的逻辑。
 
 这里的“共同核心”不是再加一个掌管所有任务的管理器。Agent、Shell、Terminal、Workflow 分别保留一个真正运行任务的实现；共同的是两种入口都调用这些实现，以及它们遵守同一套停止确认和结果保存约定。
+
+2026-10-28 复核后的接线约定：`AgentCapabilityOverrides.terminal` / `backgroundShell` 只接收按实际 `{ sessionId, cwd }` 返回 `TerminalProvider` / `ShellAdmissionPorts` 的工厂（或 `false`）。共同组装为每个会话调用一次，child 继承工厂而不继承父会话端口；daemon 从既有 SessionStore 读取该 child 的记录。不保留直接注入父端口的旧形式或兼容分支。
+
+Terminal Jobs 的列表、读取、等待、输入和取消共用“同一会话且来源为 agent”的判断。Workflow 正常结果和超时后迟到结果共用重试条件；查询失败标记不可重试后，不因期限先到而建立替代 worker。工具顶层 `timeoutSeconds` 作为额外上限合入已有任务 `timeoutMs` 后保存，唯一计时器仍归 coordinator。
+
+复杂度变化：新增两个按会话返回端口的函数类型和一个共用重试判断，替换旧的父端口值传递与两处分散判断；没有新增生产模块、ID、状态、缓存、重试器或管理器。deadline 测试将真实准备与实际 Read 分成可观察的阶段，受控推进同一时钟，另验证启动期间到期，不再无限等待不会发生的 Read。
 
 ## 1. 基线核对与本次范围
 

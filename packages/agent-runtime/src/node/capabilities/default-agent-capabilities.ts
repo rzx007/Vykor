@@ -8,7 +8,7 @@ import { createNodeJobBindings } from "../jobs/node-job-bindings.js";
 import type { WorkflowHostDirectory } from "../workflow/workflow-host-directory.js";
 import type { BoundWorkflowHost } from "../workflow/workflow-host.js";
 import type { AgentDefinition } from "@vykor/coordinator/definitions";
-import type { AgentTerminalHost } from "@vykor/terminal";
+import type { AgentTerminalHost, TerminalProvider } from "@vykor/terminal";
 
 import type {
   AgentCapabilityOverrides,
@@ -52,7 +52,7 @@ export interface ResolveDefaultAgentCapabilitiesOptions {
   childDirectory: AgentChildRegistry;
   createAgent: NodeChildManagerOptions["createAgent"];
   resolveDefaultTerminal(input: {
-    override: AgentCapabilityOverrides["terminal"];
+    override: TerminalProvider | false | undefined;
     cwd: string;
     sessionId: string;
   }): Promise<DefaultNodeTerminalResolution>;
@@ -108,7 +108,7 @@ export async function resolveDefaultAgentCapabilities(
   }) : undefined;
   if (workflowTool) options.cleanup.add(() => workflowTool.close(), workflowTool);
   const terminalResolution = await options.resolveDefaultTerminal({
-    override: overrides.terminal,
+    override: overrides.terminal === false ? false : overrides.terminal?.({ cwd: options.cwd, sessionId: options.sessionId }),
     cwd: options.cwd,
     sessionId: options.sessionId,
   });
@@ -134,7 +134,7 @@ export async function resolveDefaultAgentCapabilities(
   const bindings = createNodeJobBindings({
     child: { processes, cwd: options.cwd, sessionId: options.sessionId, children: childManager, archive: archive?.agent,
       sendChildInput: (id, expectedRunId, input, authorization) => childManager.send(id, input, authorization ? new Map([...(authorization.delegatableTools ?? []), ...(authorization.tools ?? [])]) as ReadonlyMap<string, import("@vykor/agent-contracts").RunToolBinding> : undefined, authorization?.parent as import("../../kernel/children/child-agent.js").TrustedChildRunParent | undefined ?? null, expectedRunId) },
-    process: { processes, cwd: options.cwd, sessionId: options.sessionId, admission: overrides.backgroundShell || undefined, archive: archive?.process },
+    process: { processes, cwd: options.cwd, sessionId: options.sessionId, admission: overrides.backgroundShell ? overrides.backgroundShell({ cwd: options.cwd, sessionId: options.sessionId }) : undefined, archive: archive?.process },
     terminal: terminalResolution.status === "available" ? terminalResolution.value.jobs : undefined,
     workflow: workflowTool?.jobs,
   });

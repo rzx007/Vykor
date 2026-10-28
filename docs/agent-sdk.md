@@ -96,8 +96,8 @@ const agent = await createDefaultNodeAgent({
   maxTurns: 20,
   hostToolCeiling: ["Read", "Glob", "Grep"],
   capabilityOverrides: {
-    terminal: { value: terminal, jobs: terminalJobs },
-    backgroundShell: { value: backgroundShell, jobs: shellJobs },
+    terminal: scope => terminalProviderForSession(scope),
+    backgroundShell: scope => shellAdmissionForSession(scope),
   },
   effects: { requestPermission },
   onEvent: async (event) => {
@@ -115,7 +115,7 @@ const agent = await createDefaultNodeAgent({
 | `systemPrompt` / `maxTurns` / `effort` / `fastMode` | 执行行为覆盖 |
 | `hostToolCeiling` / `roleAllowedTools` / `disallowedTools` | 工具范围，见下一节 |
 | `tools` / `toolOverrides` | 增加 Tool，或按精确名称替换默认 Tool；替换仍经过工具范围、权限、Hook、超时和取消流程 |
-| `capabilityOverrides` | 逐项配置默认能力；可接收 Host 对象的能力与只能禁用的 `jobs` / `memory` 见下文 |
+| `capabilityOverrides` | 逐项配置默认能力；Terminal / Shell 接收按 `{ sessionId, cwd }` 绑定低层端口的工厂，`false` 禁用能力；`jobs` / `memory` 只能禁用 |
 | `effects` | 宿主交互副作用；目前 `requestPermission` 是可选 permission effect |
 | `onEvent` | 有序、可靠、可等待的 host sink；失败会终止当前 operation |
 | `extensions` / `mcpServers` | Vykor extension 与 MCP 增量配置 |
