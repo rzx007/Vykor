@@ -93,8 +93,8 @@ function AnimatedBlock(props: BlockProps) {
       !context.corrected
   )
   const plugins = useMemo(
-    () => [...(props.rehypePlugins ?? []), model.plugin],
-    [props.rehypePlugins, model]
+    () => (context.enabled ? [...(props.rehypePlugins ?? []), model.plugin] : props.rehypePlugins),
+    [props.rehypePlugins, model, context.enabled]
   )
   const components = useMemo(() => {
     const Original = props.components?.span ?? "span"

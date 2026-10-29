@@ -19,17 +19,23 @@ export class TextAnimationBlock {
   animateFirst = false
   characters: AnimatedCharacter[] = []
   private previous: string | undefined
+  private wasDisabled = false
   private pending = false
   private timer: ReturnType<typeof setTimeout> | null = null
   private mounted = false
   readonly plugin: () => typeof this.transform
   constructor() {
-    this.plugin = () => this.transform
+    this.plugin = () => (tree) => this.transform(tree)
     Object.defineProperty(this.plugin, "name", { value: `streamingText${++blockSequence}` })
   }
   configure(enabled: boolean, animateFirst: boolean) {
+    if (!enabled) {
+      this.previous = undefined
+      this.wasDisabled = true
+    }
     this.enabled = enabled
-    this.animateFirst = animateFirst
+    // 关闭期间不跟踪正文；重新启用的第一次解析只建立基线。
+    this.animateFirst = animateFirst && !this.wasDisabled
   }
   private clear() {
     this.characters = []
@@ -60,15 +66,18 @@ export class TextAnimationBlock {
     })
   }
   // 插件只遍历当前需要重新解析的块；旧文字只计算长度，不做逐字拆分。
-  transform = (tree: TextNode) => {
+  transform(tree: TextNode) {
     const nodes: Array<{ node: TextNode; parent: TextNode; index: number; start: number }> = []
+    const collectFrom =
+      this.characters[0]?.start ?? this.previous?.length ?? (this.animateFirst ? 0 : Infinity)
     let plain = ""
     const collect = (parent: TextNode) => {
       if (parent.tagName && literalElements.has(parent.tagName)) return
       for (const [index, node] of (parent.children ?? []).entries()) {
         if (node.type === "text") {
-          nodes.push({ node, parent, index, start: plain.length })
+          const start = plain.length
           plain += node.value ?? ""
+          if (plain.length > collectFrom) nodes.push({ node, parent, index, start })
         } else collect(node)
       }
     }
@@ -102,8 +111,12 @@ export class TextAnimationBlock {
       this.characters = this.characters.slice(-maxAnimatedCharacters)
     }
     this.previous = plain
-    // 包装的是 AST 文本叶子；链接、强调、列表和代码的结构不变。
+    // 只包装仍有动画的叶子；旧片段不增加 React 组件或清理订阅。
+    let characterIndex = 0
     for (const { node, parent, index, start } of nodes) {
+      while ((this.characters[characterIndex]?.end ?? Infinity) <= start) characterIndex++
+      const character = this.characters[characterIndex]
+      if (!character || character.start >= start + (node.value?.length ?? 0)) continue
       parent.children![index] = {
         type: "element",
         tagName: "span",

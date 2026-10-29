@@ -2,14 +2,19 @@
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
-import { AppearanceProvider } from "@renderer/components/appearance/appearance-provider"
+import {
+  AppearanceProvider,
+  useAppearance,
+} from "@renderer/components/appearance/appearance-provider"
+import { APPEARANCE_STORAGE_KEY } from "@renderer/components/appearance/appearance-preferences"
 import { CodeHighlightTestWorker } from "../../../../../ui/code-highlight-worker.test-support"
 import { AssistantMarkdown } from "../assistant-markdown"
 import { ConversationTranscript } from "../../../transcript/transcript"
 import type { DesktopSessionPart } from "@shared/session-types"
 
 vi.mock("@pierre/diffs/worker/worker.js?worker", async () => ({
-  default: (await import("../../../../../ui/code-highlight-worker.test-support")).CodeHighlightTestWorker,
+  default: (await import("../../../../../ui/code-highlight-worker.test-support"))
+    .CodeHighlightTestWorker,
 }))
 
 let root: Root
@@ -66,6 +71,67 @@ it("preserves code nodes and colors when the parent supplies a fresh file handle
     )
   ).toHaveLength(1)
   expect(CodeHighlightTestWorker.instances.size).toBe(1)
+})
+
+it("keeps highlighted code mounted while toggling text animation and appending prose", async () => {
+  localStorage.setItem(
+    APPEARANCE_STORAGE_KEY,
+    JSON.stringify({
+      version: 1,
+      reducedMotion: "off",
+      streamingTextAnimation: true,
+    })
+  )
+  function Switch() {
+    const { preferences, setPreference } = useAppearance()
+    return (
+      <button
+        data-toggle-animation
+        onClick={() => setPreference("streamingTextAnimation", !preferences.streamingTextAnimation)}
+      >
+        切换动画
+      </button>
+    )
+  }
+  const update = async (text: string) =>
+    act(async () =>
+      root.render(
+        <AppearanceProvider>
+          <Switch />
+          <AssistantMarkdown
+            text={text}
+            streaming
+            animateInitialText={false}
+            onOpenFile={onOpenFile}
+          />
+        </AppearanceProvider>
+      )
+    )
+  try {
+    let source = "```ts\nconst stable = 42;\n```\n\n已有正文"
+    await update(source)
+    await vi.waitFor(() => expect(container.querySelector("pre code span[style]")).not.toBeNull(), {
+      timeout: 10_000,
+    })
+    const pre = container.querySelector("pre")
+    for (let index = 0; index < 4; index++) {
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>("[data-toggle-animation]")!.click()
+      )
+      source += " 后续文字"
+      await update(source)
+      expect(container.querySelector("pre")).toBe(pre)
+      expect(pre?.querySelector("code span[style]")).not.toBeNull()
+      expect(pre?.textContent).toContain("const stable = 42;")
+    }
+    expect(
+      CodeHighlightTestWorker.requests.filter(
+        (request) => request.type === "file" && request.file.contents === "const stable = 42;"
+      )
+    ).toHaveLength(1)
+  } finally {
+    localStorage.removeItem(APPEARANCE_STORAGE_KEY)
+  }
 })
 
 it("uses the latest file handler even when Markdown text has not changed", async () => {

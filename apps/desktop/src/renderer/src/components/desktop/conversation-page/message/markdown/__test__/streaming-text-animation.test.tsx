@@ -1,8 +1,16 @@
 // @vitest-environment jsdom
-import { act, StrictMode } from "react"
+import { act, Profiler, StrictMode, type ReactNode } from "react"
+import { Streamdown } from "streamdown"
 import { createRoot, type Root } from "react-dom/client"
 import { beforeEach, afterEach, it, expect, vi } from "vitest"
 import { AssistantMarkdown } from "../assistant-markdown"
+import { TextAnimationBlock } from "../streaming-text-animation"
+import { StreamingMarkdownAnimation, StreamingMarkdownBlock } from "../streaming-markdown-block"
+import {
+  AppearanceProvider,
+  useAppearance,
+} from "@renderer/components/appearance/appearance-provider"
+import { APPEARANCE_STORAGE_KEY } from "@renderer/components/appearance/appearance-preferences"
 
 let root: Root
 let container: HTMLDivElement
@@ -33,8 +41,144 @@ afterEach(() => {
   act(() => root.unmount())
   container.remove()
   vi.restoreAllMocks()
+  localStorage.removeItem(APPEARANCE_STORAGE_KEY)
   vi.useRealTimers()
   Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT")
+})
+
+it("leaves thousands of old text fragments untouched and wraps only the animated tail", () => {
+  const model = new TextAnimationBlock()
+  model.configure(true, false)
+  const history = () =>
+    Array.from({ length: 10000 }, () => ({
+      type: "element",
+      tagName: "strong",
+      children: [{ type: "text", value: "旧文字" }],
+    }))
+  const baseline = { type: "root", children: history() }
+  model.transform(baseline)
+  expect(baseline.children.every((node) => node.children[0].type === "text")).toBe(true)
+  const oldNodes = history()
+  const tail = { type: "text", value: "新增" }
+  const tree = { type: "root", children: [...oldNodes, tail] }
+  model.transform(tree)
+  expect(oldNodes.every((node) => node.children[0].type === "text")).toBe(true)
+  expect(model.characters).toHaveLength(2)
+  expect(tree.children.at(-1)).toMatchObject({
+    tagName: "span",
+    children: [{ type: "text", value: "新增" }],
+  })
+  model.dispose()
+})
+
+it("bypasses animation work while disabled and resumes only newly appended text", async () => {
+  localStorage.setItem(
+    APPEARANCE_STORAGE_KEY,
+    JSON.stringify({
+      version: 1,
+      reducedMotion: "off",
+      streamingTextAnimation: false,
+    })
+  )
+  // 统计真实插件调用，不替换插件行为；关闭时不应进入这条处理路径。
+  const transform = vi.spyOn(TextAnimationBlock.prototype, "transform")
+  function Switch() {
+    const { preferences, setPreference } = useAppearance()
+    return (
+      <button
+        onClick={() => setPreference("streamingTextAnimation", !preferences.streamingTextAnimation)}
+      >
+        切换动画
+      </button>
+    )
+  }
+  const update = async (text: string) =>
+    act(async () =>
+      root.render(
+        <AppearanceProvider>
+          <Switch />
+          <AssistantMarkdown text={text} streaming animateInitialText onOpenFile={openFile} />
+        </AppearanceProvider>
+      )
+    )
+  const toggle = async () => act(async () => container.querySelector("button")!.click())
+  let source = "**旧强调** 与 [旧链接](https://example.com) `原样代码` " + "历史文字。".repeat(1000)
+  await update(source)
+  const strong = container.querySelector("strong")
+  source += "关闭期间追加"
+  await update(source)
+  await advance(70)
+  expect(transform).not.toHaveBeenCalled()
+  expect(vi.getTimerCount()).toBe(0)
+  await toggle()
+  expect(container.querySelectorAll("[data-sd-animate]")).toHaveLength(0)
+  source += "新动画"
+  await update(source)
+  await advance(70)
+  expect(
+    [...container.querySelectorAll("[data-sd-animate]")].map((node) => node.textContent).join("")
+  ).toBe("新动画")
+  expect(container.querySelector("strong")).toBe(strong)
+  await toggle()
+  // 排空 React 的微任务，不推进动画时间；不能留下动画计时器。
+  await advance(0)
+  expect(container.querySelectorAll("[data-sd-animate]")).toHaveLength(0)
+  expect(vi.getTimerCount()).toBe(0)
+  transform.mockClear()
+  source += "再次关闭时追加"
+  await update(source)
+  await advance(70)
+  expect(transform).not.toHaveBeenCalled()
+  await toggle()
+  expect(container.querySelectorAll("[data-sd-animate]")).toHaveLength(0)
+  source += "恢复👨‍👩‍👧‍👦"
+  await update(source)
+  await advance(70)
+  expect(
+    [...container.querySelectorAll("[data-sd-animate]")].map((node) => node.textContent)
+  ).toEqual(["恢", "复", "👨‍👩‍👧‍👦"])
+  expect(container.querySelector("code")?.textContent).toBe("原样代码")
+  expect(container.querySelector("a")?.textContent).toBe("旧链接")
+  await advance(160)
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+it("does not notify old inline fragments when the tail animation is cleaned up", async () => {
+  const historyRenders = vi.fn()
+  const components = {
+    strong: ({ children }: { children?: ReactNode }) => (
+      <Profiler id="history" onRender={historyRenders}>
+        <strong>{children}</strong>
+      </Profiler>
+    ),
+  }
+  const blocks = { lastBlockIndex: 0, initialBlocks: 1 }
+  const update = async (text: string) =>
+    act(async () =>
+      root.render(
+        <StreamingMarkdownAnimation blocks={blocks} enabled corrected={false}>
+          <Streamdown
+            animated={false}
+            isAnimating
+            BlockComponent={StreamingMarkdownBlock}
+            components={components}
+          >
+            {text}
+          </Streamdown>
+        </StreamingMarkdownAnimation>
+      )
+    )
+  const history = "**旧强调**文字".repeat(1000)
+  await update(history)
+  const first = container.querySelector("strong")
+  await update(history + "新增")
+  expect(container.querySelectorAll("[data-sd-animate]")).toHaveLength(2)
+  historyRenders.mockClear()
+  await advance(160)
+  expect(historyRenders).not.toHaveBeenCalled()
+  expect(container.querySelector("strong")).toBe(first)
+  expect(container.querySelectorAll("[data-sd-animate]")).toHaveLength(0)
+  expect(vi.getTimerCount()).toBe(0)
 })
 
 it("animates only the appended tail of a huge paragraph and retires its character nodes", async () => {
