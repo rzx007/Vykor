@@ -30,6 +30,7 @@ export function createStreamdownComponents({
       )
     },
     a: ({ href, children, ...props }) => {
+      delete props.node
       const file = href ? parseFileReference(href) : null
       if (file) {
         // Markdown href 是 URL 编码；只在链接转为文件路径时还原一次。
@@ -60,6 +61,7 @@ export function createStreamdownComponents({
       )
     },
     inlineCode: ({ children, className, ...props }) => {
+      delete props.node
       return (
         <code {...props} data-streamdown="inline-code" className={cn("font-mono", className)}>
           {children}

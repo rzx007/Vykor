@@ -92,3 +92,57 @@ it("keeps relative file references noninteractive in read-only text mode", async
   expect(container.querySelector('[title="文档/说明.md"]')?.textContent).toBe("项目文件")
   expect(container.textContent).not.toContain("[blocked]")
 })
+
+it("keeps link and inline-code markup without exposing parser nodes as DOM attributes", async () => {
+  await render('[帮助](https://example.com/docs "文档") 和 `const value = 1`')
+  expect(container.querySelector("a")?.getAttribute("href")).toBe("https://example.com/docs")
+  expect(container.querySelector("a")?.getAttribute("title")).toBe("文档")
+  expect(container.querySelector("a")?.getAttribute("rel")).toBe("noopener noreferrer")
+  expect(container.querySelector("a")?.getAttribute("target")).toBe("_blank")
+  expect(container.querySelector("a")?.textContent).toBe("帮助")
+  expect(container.querySelector("a svg")).not.toBeNull()
+  expect(container.querySelector("code")?.textContent).toBe("const value = 1")
+  expect(container.querySelector("[node]")).toBeNull()
+
+  const records: MutationRecord[] = []
+  const observer = new MutationObserver((mutations) => records.push(...mutations))
+  observer.observe(container, { attributes: true, subtree: true })
+  await render('[帮助](https://example.com/docs "文档") 和 `const value = 1` 追加文字')
+  records.push(...observer.takeRecords())
+  observer.disconnect()
+  expect(records.filter((record) => record.attributeName === "node")).toHaveLength(0)
+  expect(container.querySelector("[node]")).toBeNull()
+})
+
+it("does not parse wildcard link prefixes as URLs while rendering repeated web links", async () => {
+  const attempts: unknown[] = []
+  const OriginalURL = globalThis.URL
+  vi.stubGlobal(
+    "URL",
+    new Proxy(OriginalURL, {
+      construct(target, args, newTarget) {
+        attempts.push(args[0])
+        return Reflect.construct(target, args, newTarget)
+      },
+    })
+  )
+  try {
+    await render(
+      Array.from({ length: 25 }, (_, i) => `${i + 1}. [帮助](https://example.com/docs)`).join("\n")
+    )
+    expect(container.querySelectorAll('a[href="https://example.com/docs"]')).toHaveLength(25)
+    expect(attempts).toContain("https://example.com/docs")
+    expect(attempts).not.toContain("*")
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})
+
+it("still sanitizes raw HTML links and removes executable HTML", async () => {
+  await render(
+    '<a href="https://example.com/docs" title="文档" onclick="alert(1)">帮助</a> <a href="javascript:alert(1)">危险</a><script>alert(1)</script>'
+  )
+  expect(container.querySelector('a[href="https://example.com/docs"]')?.textContent).toBe("帮助")
+  expect(container.querySelector("[onclick], script")).toBeNull()
+  expect(container.querySelector('a[href^="javascript:"]')).toBeNull()
+})
