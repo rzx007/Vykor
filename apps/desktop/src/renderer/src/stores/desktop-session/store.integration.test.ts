@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { emptySessionView, resetDesktopSessionStore } from "./store-test-fixtures"
 import { attachDesktopSessionEvents, useDesktopSessionStore } from "./store"
@@ -17,9 +17,11 @@ function snapshotUpdate(view: ReturnType<typeof emptySessionView>): DesktopSessi
 }
 
 beforeEach(() => {
-  resetDesktopSessionStore()
   vi.unstubAllGlobals()
+  resetDesktopSessionStore()
 })
+
+afterEach(() => vi.unstubAllGlobals())
 
 describe("desktop session store composition", () => {
   it("provides every action from the composed store", () => {
