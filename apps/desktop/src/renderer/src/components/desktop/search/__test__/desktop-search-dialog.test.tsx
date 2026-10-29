@@ -144,7 +144,7 @@ describe("desktop chat search", () => {
     expect(options()[0].textContent).toContain("网络调试")
     expect(options()[0].textContent).toContain("ECONNRESET 连接错误")
     await key("Enter")
-    expect(onOpenConversation).toHaveBeenCalledWith("older")
+    expect(onOpenConversation).toHaveBeenCalledWith("older", { messageId: "message-1", query: "ECONNRESET" })
   })
   it("ignores an older response after the query changes", async () => {
     let resolveOld!: (results: DesktopSessionSearchResult[]) => void

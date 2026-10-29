@@ -10,7 +10,13 @@ import { readPluginUiInstance, type PluginUiInstanceRecord } from "@rzx/client"
 import { isToolGenerationPresentation } from "../activity/tool-generation-presentation"
 
 export type AssistantContentUnit =
-  | { id: string; type: "markdown"; text: string; phase?: "commentary" | "final_answer" }
+  | {
+      id: string
+      type: "markdown"
+      text: string
+      source: { messageId: string; partIds: string[] }
+      phase?: "commentary" | "final_answer"
+    }
   | { id: string; type: "reasoning"; text: string }
   | { id: string; type: "tool"; call: DesktopSessionPart; result?: DesktopSessionPart }
   | {
@@ -74,9 +80,12 @@ export function buildAssistantContent(parts: DesktopSessionPart[]): AssistantCon
     if (part.type === "text" && part.text) {
       const previous = units.at(-1)
       const phase = assistantPhase(part.metadata.phase)
-      if (previous?.type === "markdown" && previous.phase === phase) previous.text += part.text
+      if (previous?.type === "markdown" && previous.phase === phase && previous.source.messageId === part.messageId) {
+        previous.text += part.text
+        previous.source.partIds.push(part.id)
+      }
       else if (part.text.trim()) {
-        units.push({ id: part.id, type: "markdown", text: part.text, ...(phase ? { phase } : {}) })
+        units.push({ id: part.id, type: "markdown", text: part.text, source: { messageId: part.messageId, partIds: [part.id] }, ...(phase ? { phase } : {}) })
       }
       continue
     }

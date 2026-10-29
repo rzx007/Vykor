@@ -199,6 +199,8 @@ export const AssistantMessage = memo(function AssistantMessage({
             <AssistantMarkdown
               key={unit.id}
               text={unit.text}
+              searchMessageId={unit.source.messageId}
+              searchPartIdsJson={JSON.stringify(unit.source.partIds)}
               phase={unit.phase}
               streaming={streaming && index === blocks.length - 1}
               animateInitialText={Boolean(initialPartIds && !initialPartIds.has(unit.id))}

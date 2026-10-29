@@ -1,3 +1,4 @@
+import { useConversationSearchMatch } from "../../transcript/conversation-scroll-context"
 import { PencilLine } from "lucide-react"
 import { useEffect, useState } from "react"
 import { AttachmentGroup } from "@renderer/components/ui/attachment"
@@ -40,6 +41,7 @@ export function UserMessage({
   inputItems?: SessionUserInputItem[]
   userActions?: UserMessageActions
 }): React.JSX.Element {
+  const searchReveal = useConversationSearchMatch(message.id)
   const content = messageTextContent(parts)
   const items = readUserItems(parts)
   const attachmentParts = parts
@@ -48,6 +50,8 @@ export function UserMessage({
   return (
     <UserMessageBlock
       content={content}
+      searchReveal={searchReveal}
+      searchSource={{ messageId: message.id, partIds: parts.filter((part) => part.type === "text").map((part) => part.id) }}
       items={items}
       document={composerDocument(
         inputItems ??
@@ -66,6 +70,8 @@ export function UserMessage({
 
 function UserMessageBlock({
   content,
+  searchReveal,
+  searchSource,
   items,
   document,
   attachmentParts,
@@ -73,6 +79,8 @@ function UserMessageBlock({
   userActions,
 }: {
   content: string
+  searchReveal: ReturnType<typeof useConversationSearchMatch>
+  searchSource: { messageId: string; partIds: string[] }
   items: UserDisplayItem[]
   document: ComposerDocument
   attachmentParts: DesktopAttachmentSessionPart[]
@@ -193,7 +201,7 @@ function UserMessageBlock({
           </AttachmentGroup>
         ) : null}
         {content.trim() || items.length > 0 ? (
-          <UserMessageBubble content={content} items={items} />
+          <UserMessageBubble content={content} items={items} searchReveal={searchReveal} searchSource={searchSource} />
         ) : null}
         <MessageToolbar align="end" timestamp={timestamp}>
           {content.trim() ? (

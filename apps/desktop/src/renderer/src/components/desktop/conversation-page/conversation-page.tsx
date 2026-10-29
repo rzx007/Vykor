@@ -1,3 +1,4 @@
+import { ConversationFind } from "./transcript/conversation-find"
 import { submitConversationDraft } from "./session/submit-conversation-draft"
 import { pluginAppModelContexts } from "../shell/plugin-apps/plugin-app-model-context"
 import { MoreHorizontal, PanelRight } from "lucide-react"
@@ -94,6 +95,8 @@ import { resolveModelLabel } from "./shared/utils"
 
 function ConversationPane({
   panelOpen,
+  searchTarget,
+  onSearchTargetConsumed,
   onTogglePanel,
   onOpenFile,
   canOpenReview,
@@ -696,6 +699,9 @@ function ConversationPane({
                     sessionView && "animate-in duration-200 fade-in-0 motion-reduce:animate-none"
                   )}
                 >
+                  <ConversationFind messages={transcript.messages} parts={transcript.parts}
+                    target={searchTarget?.sessionId === sessionView?.session.id && !openingSession ? searchTarget : undefined}
+                    onTargetConsumed={onSearchTargetConsumed} />
                   <MessageScrollerViewport
                     ref={messageViewportRef}
                     onContextMenu={(event) => void openConversationTextMenu(event)}

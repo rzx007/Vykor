@@ -1,8 +1,10 @@
+import { ConversationFind } from "../conversation-find"
 // @vitest-environment jsdom
 import { act, useLayoutEffect, type ReactNode } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import {
+  ConversationScroller,
   ConversationScrollerProvider,
   ConversationScrollerViewport,
   ConversationScrollerContent,
@@ -692,4 +694,36 @@ it("does not detach following for a wheel consumed by a nested tool output", asy
   output.scrollTop = 0
   act(() => output.dispatchEvent(new WheelEvent("wheel", { deltaY: -40, bubbles: true })))
   expect(scroller.getSnapshot().following).toBe(false)
+})
+
+
+it("opens a global search target outside the virtual window and expands its long user text", async () => {
+  const messages = Array.from({ length: 100 }, (_, index) => ({
+    id: `user-${index}`, sessionId: "chat", role: "user" as const, seq: index,
+    inputId: `input-${index}`, metadata: {}, createdAt: index, updatedAt: index,
+  }))
+  const parts = messages.map((message, index) => ({
+    id: `part-${index}`, sessionId: "chat", messageId: message.id, seq: 1,
+    type: "text" as const, status: "completed" as const,
+    text: index === 40 ? "长正文".repeat(400) + " needle" : "message " + index,
+    metadata: {}, createdAt: index, updatedAt: index,
+  }))
+  act(() => root.render(
+    <ConversationScrollerProvider><Probe /><ConversationScroller>
+      <ConversationFind messages={messages} parts={parts} target={{ sessionId: "chat", messageId: "user-40", query: "needle" }} />
+      <ConversationScrollerViewport><ConversationScrollerContent>
+        <ConversationTranscript messages={messages} parts={parts} runs={[]} running={false}
+          canEditLastUserMessage={false} onEditLastUserMessage={() => {}} onCopyAssistantMessage={() => {}}
+          onOpenFile={() => {}} canOpenReview={false} onOpenReview={() => {}} onOpenTerminal={() => {}} />
+      </ConversationScrollerContent></ConversationScrollerViewport>
+    </ConversationScroller></ConversationScrollerProvider>
+  ))
+  await settle()
+  const target = container.querySelector<HTMLElement>('[data-chat-search-message="user-40"]')
+  expect(target).not.toBeNull()
+  expect(target!.textContent).toContain("needle")
+  expect(target!.classList.contains("max-h-72")).toBe(false)
+  expect(target!.getAttribute("data-search-active")).toBe("true")
+  expect(scroller.getSnapshot().following).toBe(false)
+  expect(container.querySelectorAll("[data-transcript-row]").length).toBeLessThan(25)
 })

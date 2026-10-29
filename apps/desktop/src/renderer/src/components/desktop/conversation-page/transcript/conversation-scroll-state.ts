@@ -1,7 +1,10 @@
+import type { ConversationSearchMatch } from "./conversation-find-model"
+
 // 原生滚动事件与虚拟列表使用相同的底部判定，避免两端各自维护不同阈值。
 export const conversationEndThresholdPx = 8
 
 export interface ConversationScrollSnapshot {
+  searchMatch: ConversationSearchMatch | null
   following: boolean
   atEnd: boolean
   hasNewContent: boolean
@@ -23,6 +26,7 @@ export function createConversationScrollState() {
   const retainedRows = new Map<string, number>()
   const listeners = new Set<() => void>()
   let snapshot: ConversationScrollSnapshot = {
+    searchMatch: null,
     following: true,
     atEnd: true,
     hasNewContent: false,
@@ -36,6 +40,7 @@ export function createConversationScrollState() {
 
   const publish = (next: ConversationScrollSnapshot): void => {
     if (
+      next.searchMatch === snapshot.searchMatch &&
       next.following === snapshot.following &&
       next.atEnd === snapshot.atEnd &&
       next.hasNewContent === snapshot.hasNewContent &&
@@ -49,6 +54,10 @@ export function createConversationScrollState() {
   }
   return {
     viewportRef,
+    setSearchMatch: (searchMatch: ConversationSearchMatch | null) => {
+      if (searchMatch) intent = -1
+      publish({ ...snapshot, searchMatch, following: searchMatch ? false : snapshot.following })
+    },
     turnExpansion,
     presentedTurns,
     retainRow: (id: string) => {

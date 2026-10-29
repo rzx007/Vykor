@@ -1,3 +1,4 @@
+import { ConversationFind } from "../../conversation-page/transcript/conversation-find"
 import { useEffect, useRef, useState } from "react"
 import { MessageCirclePlus, MessageCircleMore, X } from "lucide-react"
 import { Composer } from "../../conversation-page/composer/composer"
@@ -667,6 +668,7 @@ export function SideChatPanel({
     >
       <MessageScrollerProvider key={targetId ?? "new"}>
         <MessageScroller className="min-h-0 flex-1">
+          <ConversationFind messages={transcript.messages} parts={transcript.parts} />
           <MessageScrollerViewport onContextMenu={(event) => void openConversationTextMenu(event)}>
             <MessageScrollerContent className="conversation-content-column min-h-full min-w-0 text-content-foreground">
               {view || submissions.length ? (

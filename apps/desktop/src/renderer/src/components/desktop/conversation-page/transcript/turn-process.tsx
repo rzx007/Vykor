@@ -9,7 +9,7 @@ import { taskTimingLabel, type TaskTiming } from "../message/activity/task-timin
 import type { TurnBlockPlanItem } from "./turn-block-plan"
 import { splitTurnProcess } from "./turn-process-plan"
 import type { DesktopSessionTask } from "@shared/session-types"
-import { useConversationScroller } from "./conversation-scroll-context"
+import { useConversationScroller, useConversationSearchMatch } from "./conversation-scroll-context"
 
 export function TurnProcess({
   turnId,
@@ -31,6 +31,7 @@ export function TurnProcess({
     () => (canCollapse ? splitTurnProcess(plan, tasks) : null),
     [plan, canCollapse, tasks]
   )
+  const reveal = useConversationSearchMatch(undefined, candidate?.process.flatMap((item) => item.parts.map((part) => part.id)) ?? [])
   const eligible = Boolean(candidate)
   // 完成后的第一次提交仍保留原布局，检查阅读状态后才能切换为折叠布局。
   const [allowFold, setAllowFold] = useState(eligible)
@@ -39,8 +40,13 @@ export function TurnProcess({
   const split = allowFold ? candidate : null
   const folded = Boolean(split)
   const [open, setOpen] = useState(
-    () => (turnId ? scroller?.turnExpansion.get(turnId) : undefined) ?? !eligible
+    () => Boolean(reveal) || ((turnId ? scroller?.turnExpansion.get(turnId) : undefined) ?? !eligible)
   )
+  const [previousReveal, setPreviousReveal] = useState(reveal)
+  if (reveal !== previousReveal) {
+    setPreviousReveal(reveal)
+    if (reveal) setOpen(true)
+  }
   const previousEligible = useRef(eligible)
   const manualChoice = useRef(Boolean(turnId && scroller?.turnExpansion.has(turnId)))
   const root = useRef<HTMLDivElement>(null)
