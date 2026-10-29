@@ -17,7 +17,9 @@ Markdown、代码块、图表和流式渲染适配。
 - [markdown-emphasis.ts](markdown-emphasis.ts)：在本次解析的 `<em>` 内标记中文片段，保留英文、链接、嵌套强调及原始文字；跳过代码、键盘输入、公式和 SVG。
 - [mermaid-diagram.tsx](mermaid-diagram.tsx)
 
-正文排版统一由 `src/renderer/src/assets/main.css` 的 `.assistant-markdown` 规则负责：普通段落最多 `40em`，代码块和表格沿用外层消息列宽；支持时开启中英自动间距，代码、文件引用和表格显式排除。排版不改写消息或复制内容，也不随流式状态切换；回合高度继续由 transcript 的虚拟列表测量并处理滚动补偿。辅助文字使用的共享小字号变量保留 `12px` 下限。
+正文排版由 [assets/markdown.css](../../../../../assets/markdown.css) 统一负责，通过 [main.css](../../../../../assets/main.css) 导入。普通预览和消息共用一套元素规则，`.assistant-markdown` 通过参数选择标题、段落、列表、引用和表格的阅读密度。普通顶层段落最多 `40em`；Streamdown 2.5 输出没有专属标记的 `<p>`，使用 `.desktop-streamdown > p` 设置宽度和相邻段距，不再依赖 `data-streamdown="paragraph"`。列表、引用和表格内的段落单独处理，代码块和表格保留外层消息列宽。
+
+消息正文独立使用 `--font-chat`（随应用提供的 Inter / Noto Sans SC），默认 `16px / 1.7`，相邻段距 `0.8em`；文档预览继续使用界面字体，代码沿用 `--font-mono`。支持时开启中英自动间距，代码、文件引用和表格显式排除。排版不改写消息或复制内容，也不随流式状态切换；回合高度继续由 transcript 的虚拟列表测量并处理滚动补偿。辅助文字使用的共享小字号变量保留 `12px` 下限。
 
 `streamdown-plugins.ts` 在默认内容清理后接入中文强调处理，只给 `<em>` 内的中文及全角标点增加显示节点。外层 `<em>` 保留，中文通过 CSS 直立并加重，英文继续使用斜体；汉字与异体字选择符保持完整。`streamdown-components.tsx` 用语义化的 `<strong>` 展示加粗，保留原有样式标记。行内代码和文件引用不继承斜体；正文约束中文标点换行，技术内容沿用原规则。处理不增加组件状态或流式定时器，稳定段落继续由原有分块缓存复用。
 

@@ -14,7 +14,12 @@ import {
 describe("appearance font registry", () => {
   it("distinguishes bundled, generic system, and fixed local fonts", () => {
     expect(UI_FONT_OPTIONS).toEqual([
-      expect.objectContaining({ id: "system", source: "system-generic" }),
+      expect.objectContaining({
+        id: "system",
+        label: "默认（Inter＋Noto Sans SC）",
+        source: "bundled",
+        family: expect.stringMatching(/^"Inter Variable", "Noto Sans SC Variable", /),
+      }),
       expect.objectContaining({ id: "inter", source: "bundled" }),
       expect.objectContaining({ id: "segoe-ui", source: "local" }),
     ])

@@ -1,0 +1,121 @@
+/* 个人资料热图从当前主题色派生色阶。 */
+.profile-activity-cell[data-level="0"] {
+  background: color-mix(in oklab, var(--muted) 72%, var(--background));
+}
+.profile-activity-cell[data-level="1"] {
+  background: color-mix(in oklab, var(--primary) 22%, var(--background));
+}
+.profile-activity-cell[data-level="2"] {
+  background: color-mix(in oklab, var(--primary) 44%, var(--background));
+}
+.profile-activity-cell[data-level="3"] {
+  background: color-mix(in oklab, var(--primary) 67%, var(--background));
+}
+.profile-activity-cell[data-level="4"] {
+  background: color-mix(in oklab, var(--primary) 90%, var(--background));
+}
+
+/* Sparse extension navigation and optional compact rows. */
+.extension-tabs [data-tabs-indicator] {
+  background: var(--muted);
+}
+.extension-tabs [data-tabs-label] {
+  color: var(--foreground);
+}
+.extension-management[data-compact="true"] [data-extension-row] {
+  min-height: 3.5rem;
+  padding-block: 0.5rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .extension-management *,
+  [data-slot="dialog-content"],
+  [data-slot="dialog-overlay"] {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+@layer utilities {
+  .text-ui-caption {
+    font-size: var(--ui-font-size-caption);
+    line-height: 1.4;
+  }
+
+  .text-ui-small {
+    font-size: var(--ui-font-size-sm);
+    line-height: 1.5;
+  }
+
+  /* 对话正文：用户气泡、输入框和助手回复共用同一档字号与行高。 */
+  .text-chat {
+    font-family: var(--font-chat);
+    font-size: var(--chat-font-size);
+    line-height: var(--chat-line-height);
+  }
+
+  /* 消息、骨架、授权与输入区域共用阅读列，避免宽度改变时左右跳动。 */
+  .conversation-surface {
+    container: conversation / inline-size;
+  }
+
+  .conversation-content-column {
+    width: 100%;
+    max-width: calc(var(--chat-content-width) + 2 * var(--chat-column-gutter));
+    margin-inline: auto;
+    padding-inline: var(--chat-column-gutter);
+  }
+
+  .conversation-composer-column {
+    width: calc(100% - 2 * var(--chat-column-gutter));
+    max-width: var(--chat-content-width);
+    margin-inline: auto;
+  }
+
+  @container conversation (max-width: 40rem) {
+    .conversation-content-column,
+    .conversation-composer-column {
+      --chat-column-gutter: 1rem;
+    }
+  }
+
+  .titlebar-drag {
+    -webkit-app-region: drag;
+  }
+
+  .titlebar-no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  .workspace-top-shadow {
+    box-shadow: var(--workspace-top-shadow);
+  }
+
+  [data-panel-animating] > [data-panel] {
+    transition: flex-grow 200ms ease-out;
+  }
+
+  .utility-tab-strip {
+    scrollbar-width: none;
+  }
+
+  .utility-tab-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .utility-tab-title {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
+  }
+}
+
+.desktop-terminal .xterm {
+  height: 100%;
+  padding: 0.125rem;
+}
+
+.desktop-terminal .xterm-viewport {
+  background: transparent !important;
+}
+
+.desktop-terminal .xterm-screen {
+  min-height: 100%;
+}

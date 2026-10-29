@@ -9,13 +9,12 @@ export type AppearanceFontOption<Id extends string> = {
 }
 
 /**
- * 西文字体在前，中文平台字体及 Noto / 思源在后，通用字体最后兜底。
+ * 默认先使用随应用提供的 Inter / Noto Sans SC，再回退到平台字体。
  * 与 assets/main.css 的 @theme 字体栈保持一致。
  */
 const CJK_SANS_FALLBACK =
   '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans CN", sans-serif'
-const SYSTEM_SANS_FAMILY =
-  `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Helvetica, Arial, ${CJK_SANS_FALLBACK}`
+const DEFAULT_SANS_FAMILY = `"Inter Variable", "Noto Sans SC Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Helvetica, Arial, ${CJK_SANS_FALLBACK}`
 const SYSTEM_MONO_FAMILY =
   '"JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, "Liberation Mono", "Courier New", monospace'
 const CJK_MONO_FALLBACK =
@@ -24,15 +23,15 @@ const CJK_MONO_FALLBACK =
 export const UI_FONT_OPTIONS: readonly AppearanceFontOption<UiFontId>[] = [
   {
     id: "system",
-    label: "默认（系统字体）",
-    source: "system-generic",
-    family: SYSTEM_SANS_FAMILY,
+    label: "默认（Inter＋Noto Sans SC）",
+    source: "bundled",
+    family: DEFAULT_SANS_FAMILY,
   },
   {
     id: "inter",
     label: "Inter",
     source: "bundled",
-    family: `"Inter Variable", ${SYSTEM_SANS_FAMILY}`,
+    family: DEFAULT_SANS_FAMILY,
   },
   {
     id: "segoe-ui",

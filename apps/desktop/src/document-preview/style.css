@@ -1,11 +1,15 @@
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/noto-sans-sc";
+
 :root {
   --preview-background: #f6f6f6;
   --preview-foreground: #242424;
   --preview-border: #dedede;
   --font-sans:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Helvetica, Arial,
-    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC",
-    "Noto Sans SC", "Source Han Sans CN", sans-serif;
+    "Inter Variable", "Noto Sans SC Variable", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC",
+    "Source Han Sans CN", sans-serif;
   font-family: var(--font-sans);
   color: var(--preview-foreground);
   background: var(--preview-background);
