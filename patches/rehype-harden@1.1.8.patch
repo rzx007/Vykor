@@ -1,0 +1,14 @@
+diff --git a/dist/index.js b/dist/index.js
+index ac112b644320784debfae4fc004d3fac7ec0086d..efb7aa41967a17e52db22af17703532d086fc3e5 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -145,6 +145,9 @@ function transformUrl(url, allowedPrefixes, defaultOrigin, allowDataImages = fal
+     const inputWasRelative = isPathRelativeUrl(url);
+     if (parsedUrl &&
+         allowedPrefixes.some((prefix) => {
++            // The wildcard is handled below; it is not a URL prefix.
++            if (prefix === "*")
++                return false;
+             const parsedPrefix = parseUrl(prefix, defaultOrigin);
+             if (!parsedPrefix) {
+                 return false;

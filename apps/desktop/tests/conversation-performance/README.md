@@ -10,6 +10,7 @@
 - [markdown.tsx](markdown.tsx)：通过实际 `AssistantMarkdown` 与外观设置运行长文本场景，保留产品现有刷新调度。
 - [markdown-check.ts](markdown-check.ts)：采样 Markdown 更新期间的主线程指标，输出逐轮 JSON。
 - [Streamdown 2.7 对比记录](streamdown-2.7-comparison.md)：本次升级的测量条件、结果和限制。
+- [链接处理优化对比记录](streamdown-link-optimization-comparison.md)：内部属性过滤、通配符解析补丁的回归范围，以及局部校验和完整渲染的分别测量。
 
 默认检查从仓库根目录运行：
 

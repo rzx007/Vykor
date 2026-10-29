@@ -38,3 +38,4 @@ overrides:
 
 patchedDependencies:
   '@annotorious/annotorious@3.9.3': patches/@annotorious__annotorious@3.9.3.patch
+  rehype-harden@1.1.8: patches/rehype-harden@1.1.8.patch
