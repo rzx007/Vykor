@@ -53,7 +53,7 @@ function harness(realWaitVerifier = false) {
   const pluginCapabilities = { admit: vi.fn(async () => ({} as { pluginId?: string })),
     captureScope: vi.fn(async (): Promise<InputPluginScope> => ({ scopeVersion: 2, source: "none", pluginIds: [], candidates: [] })) };
   const service = new SessionGoalService({
-    transaction: store, sessions: store.sessions, runs: store.runs,
+    transaction: store, sessions: store.sessions, runs: store.runs, conversations: store.conversations,
     permissions: store.permissions, goals: store.goals, events, admission, control, pluginCapabilities,
     operationRunner: { run: async (_id, work) => work() },
     waitVerifier: realWaitVerifier ? new GoalWaitVerifier({ store }) : { check: () => waitResult },
@@ -90,6 +90,189 @@ function childRun(h: ReturnType<typeof harness>, parentId: string, id = "child-r
   h.store.runs.updateRun(id, { status: "running" });
   return h.store.runs.getRun(id)!;
 }
+
+function recordResult(h: ReturnType<typeof harness>, text: string, tool?: {
+  name?: string; input?: Record<string, unknown>; output?: unknown; isError?: boolean;
+  metadata?: Record<string, unknown>;
+}) {
+  const run = h.run();
+  h.store.runs.updateRun(run.id, { metadata: { terminalOutput: text } });
+  const message = h.store.conversations.createMessage({ sessionId: "s1", runId: run.id, role: "assistant" });
+  const raw = tool?.output ?? { content: [{ type: "text", text: "unchanged" }] };
+  const body = raw && typeof raw === "object" && "content" in raw ? raw
+    : { content: [{ type: "text", text: JSON.stringify(raw) }] };
+  if (tool) h.store.conversations.upsertMessagePart({
+    sessionId: "s1", messageId: message.id, type: "tool", status: "completed",
+    toolUseId: `tool-${run.id}`, toolName: tool.name ?? "Read", input: tool.input ?? { file_path: "result.txt" },
+    output: { ...body, toolUseId: `tool-${run.id}`, toolName: tool.name ?? "Read",
+      toolAttemptId: `attempt-${run.id}`, resultRef: { id: `result-${run.id}`, toolName: tool.name ?? "Read", totalChars: 9 },
+      executionState: "completed", isError: tool.isError ?? false },
+    isError: tool.isError ?? false, metadata: tool.metadata ?? {},
+  });
+  h.store.conversations.upsertMessagePart({ sessionId: "s1", messageId: message.id,
+    type: "text", status: "completed", text });
+}
+
+describe("Goal automatic continuation progress", () => {
+  it("pauses after three repeated replies instead of admitting another automatic Run", async () => {
+    const h = harness(); await h.create();
+    for (let turn = 0; turn < 4; turn++) {
+      recordResult(h, "M2 仍未完成，是否继续？");
+      await h.finish();
+    }
+    expect(h.current()).toMatchObject({ status: "paused", stopReason: { code: "no_progress" } });
+    expect(h.current().currentRunId).toBeUndefined();
+    expect(h.store.runs.listGoalRuns(h.current().id)).toHaveLength(4);
+    await h.service.settleRun("s1", h.store.runs.listRuns("s1").at(-1)!.id);
+    expect(h.store.runs.listGoalRuns(h.current().id)).toHaveLength(4);
+  });
+
+  it("stops empty successful turns even when there is no final reply to compare", async () => {
+    const h = harness(); await h.create();
+    for (let turn = 0; turn < 3; turn++) await h.finish();
+    expect(h.current()).toMatchObject({ status: "paused", stopReason: { code: "no_progress" } });
+    expect(h.store.runs.listGoalRuns(h.current().id)).toHaveLength(3);
+  });
+
+  it("does not count rewritten summaries or repeated tool results as new execution", async () => {
+    const h = harness(); await h.create();
+    for (let turn = 0; turn < 4; turn++) {
+      recordResult(h, `检查总结 ${turn}`, { input: turn % 2 ? { encoding: "utf8", file_path: "result.txt" }
+        : { file_path: "result.txt", encoding: "utf8" } });
+      await h.finish();
+    }
+    expect(h.current()).toMatchObject({ status: "paused", stopReason: { code: "no_progress" } });
+  });
+
+  it("stops repeated failed tools despite changing error details and summaries", async () => {
+    const h = harness(); await h.create();
+    for (let turn = 0; turn < 3; turn++) {
+      recordResult(h, `重试说明 ${turn}`, { isError: true, output: { error: `request-${turn} failed` } });
+      await h.finish();
+    }
+    expect(h.current()).toMatchObject({ status: "paused", stopReason: { code: "no_progress" } });
+  });
+
+  it("allows fresh tool results even when the final summary is unchanged", async () => {
+    const h = harness(); await h.create();
+    for (let turn = 0; turn < 8; turn++) {
+      recordResult(h, "继续处理下一项", { output: { content: [{ type: "text", text: `result ${turn}` }] } });
+      await h.finish();
+    }
+    expect(h.current().status).toBe("active");
+  });
+
+  it("allows successive text-only deliverables", async () => {
+    const h = harness(); await h.create();
+    for (let turn = 0; turn < 8; turn++) {
+      recordResult(h, `第 ${turn + 1} 节：新的稿件正文。`);
+      await h.finish();
+    }
+    expect(h.current().status).toBe("active");
+  });
+
+  it("stops an alternating cycle of already-seen tool results", async () => {
+    const h = harness(); await h.create();
+    for (let turn = 0; turn < 5; turn++) {
+      recordResult(h, `总结 ${turn}`, { output: { value: turn % 2 ? "B" : "A" } });
+      await h.finish();
+    }
+    expect(h.current()).toMatchObject({ status: "paused", stopReason: { code: "no_progress" } });
+    expect(h.store.runs.listGoalRuns(h.current().id)).toHaveLength(5);
+  });
+
+  it("stops a repeated cycle spanning more rounds than the stalled-turn threshold", async () => {
+    const h = harness(); await h.create();
+    for (let turn = 0; turn < 7; turn++) {
+      recordResult(h, `总结 ${turn}`, { output: { value: ["A", "B", "C", "D"][turn % 4] } });
+      await h.finish();
+    }
+    expect(h.current()).toMatchObject({ status: "paused", stopReason: { code: "no_progress" } });
+    expect(h.store.runs.listGoalRuns(h.current().id)).toHaveLength(7);
+  });
+
+  it("resets the stalled streak when a new result arrives", async () => {
+    const h = harness(); await h.create();
+    for (const value of ["A", "A", "A", "B", "B", "B"]) {
+      recordResult(h, "总结不变", { output: { value } });
+      await h.finish();
+    }
+    expect(h.current().status).toBe("active");
+    recordResult(h, "总结不变", { output: { value: "B" } });
+    await h.finish();
+    expect(h.current().stopReason?.code).toBe("no_progress");
+  });
+
+  it.each([false, true])("ignores changing results from an uncommitted model attempt (superseded=%s)", async superseded => {
+    const h = harness(); await h.create();
+    for (let turn = 0; turn < 4; turn++) {
+      recordResult(h, "最终交付不变", { output: { value: turn }, metadata: {
+        modelGeneration: { generationId: `g-${turn}`, attempt: 1, committed: superseded, superseded },
+      } });
+      await h.finish();
+    }
+    expect(h.current().stopReason?.code).toBe("no_progress");
+  });
+
+  it("starts a new progress segment when the objective changes", async () => {
+    const h = harness(); await h.create();
+    for (let turn = 0; turn < 3; turn++) { recordResult(h, "相同结果"); await h.finish(); }
+    await h.service.update("s1", h.current().id, {
+      requestId: "new-objective", expectedRevision: h.current().revision, objective: "先完成另一个模块",
+    });
+    recordResult(h, "相同结果"); await h.finish();
+    expect(h.current()).toMatchObject({ status: "active", objectiveVersion: 2 });
+  });
+
+  it("starts a new segment after supplemental user work, even if its metadata contains an old counter", async () => {
+    const h = harness(); await h.create();
+    for (let turn = 0; turn < 3; turn++) { recordResult(h, "相同结果"); await h.finish(); }
+    const goal = h.current(), automatic = h.run();
+    h.store.runs.updateRun(automatic.id, { status: "interrupted" });
+    const user = h.store.runs.createRun({ sessionId: "s1", metadata: {
+      goalId: goal.id, goalObjectiveVersion: goal.objectiveVersion, goalRunKind: "user",
+      goalProgress: automatic.metadata.goalProgress,
+    } });
+    h.store.goals.startGoalRun(goal.id, goal.objectiveVersion, user.id, false);
+    h.store.runs.updateRun(user.id, { status: "running" });
+    recordResult(h, "相同结果"); await h.finish();
+    expect(h.current().status).toBe("active");
+  });
+
+  it("does not let GoalRead counters keep repeated replies running", async () => {
+    const h = harness(); await h.create();
+    for (let turn = 0; turn < 4; turn++) {
+      recordResult(h, "仍需继续", { name: "GoalRead", output: { autoTurnsUsed: turn, knownTokens: turn * 100 } });
+      await h.finish();
+    }
+    expect(h.current()).toMatchObject({ status: "paused", stopReason: { code: "no_progress" } });
+  });
+
+  it("persists the automatic Run's progress window and resets it after explicit resume", async () => {
+    const h = harness(); await h.create();
+    for (let turn = 0; turn < 3; turn++) { recordResult(h, "相同结果"); await h.finish(); }
+    const reopened = new SessionStore({ path: join(h.directory, "sessions.db") });
+    try {
+      expect(reopened.runs.getRun(h.run().id)?.metadata.goalProgress).toMatchObject({ noProgressTurns: 2 });
+    } finally { reopened.close(); }
+    recordResult(h, "相同结果"); await h.finish();
+    expect(h.current().status).toBe("paused");
+    await h.service.action("s1", h.current().id, { action: "resume", requestId: "resume-progress", expectedRevision: h.current().revision });
+    recordResult(h, "相同结果"); await h.finish();
+    expect(h.current().status).toBe("active");
+  });
+
+  it.each(["completed", "question", "wait"] as const)("applies explicit %s instead of the repetition guard", async action => {
+    const h = harness(); await h.create();
+    for (let turn = 0; turn < 3; turn++) { recordResult(h, "相同结果"); await h.finish(); }
+    recordResult(h, "相同结果");
+    await h.finish(action === "completed" ? { status: "completed", reason: "已验证" }
+      : action === "question" ? { question: "需要选择哪个版本？" }
+      : { wait: { targetRunId: "external-run", deadlineAt: Date.now() + 30_000 } });
+    expect(h.current().status).toBe(action === "completed" ? "completed" : action === "question" ? "waiting_user" : "active");
+    expect(h.current().stopReason?.code).not.toBe("no_progress");
+  });
+});
 
 describe("SessionGoalService simple lifecycle", () => {
   it.each(["partial", "blocked", "waiting"] as const)("pauses a completed GoalUpdate that contradicts %s delivery", async status => {

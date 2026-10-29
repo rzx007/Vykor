@@ -8,6 +8,24 @@ import { SessionStore } from "../../session-runtime/store.js";
 import { ConversationRepository } from "../conversation-repository.js";
 
 describe("ConversationRepository read operations", () => {
+  it("filters parts by Run before applying pagination without including other sessions", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-conv-run-parts-"));
+    const store = new SessionStore({ path: join(directory, "store.db") });
+    try {
+      store.sessions.create({ id: "s1", cwd: directory, model: "m" });
+      store.sessions.create({ id: "s2", cwd: directory, model: "m" });
+      for (const [id, sessionId, runId] of [["old", "s1", "r1"], ["new-a", "s1", "r2"], ["new-b", "s1", "r2"], ["foreign", "s2", "r2"]]) {
+        store.conversations.createMessage({ id, sessionId, runId, role: "assistant" });
+        store.conversations.upsertMessagePart({ id, sessionId, messageId: id, type: "text", text: id });
+      }
+      expect(store.conversations.listMessageParts("s1", { runId: "r2" }).map(part => part.id)).toEqual(["new-a", "new-b"]);
+      expect(store.conversations.listMessageParts("s1", { runId: "r2", limit: 1 }).map(part => part.id)).toEqual(["new-a"]);
+      expect(store.conversations.listMessageParts("s1", { runId: "r2", messageId: "new-b", afterSeq: 1 }).map(part => part.id)).toEqual(["new-b"]);
+      expect(store.conversations.listMessageParts("s1", { runId: "missing" })).toEqual([]);
+    } finally {
+      store.close(); rmSync(directory, { recursive: true, force: true });
+    }
+  });
   it("reads inputs and input attachments with position ordering", () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-conv-repo-"));
     const store = new SessionStore({ path: join(directory, "store.db") });

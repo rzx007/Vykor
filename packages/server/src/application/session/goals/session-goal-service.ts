@@ -2,7 +2,7 @@ import { DEFAULT_GOAL_AUTO_TURNS } from "../../goals/goal-policy.js";
 import { MAX_GOAL_AUTO_TURNS, parseGoalUpdateInput } from "@vykor/domain-contracts/goals";
 import type { CreateSessionGoalInput, GoalActionInput, GoalExternalWait, SessionGoal, UpdateSessionGoalInput } from "@vykor/domain-contracts/goals";
 import type { PermissionRequestRecord, SessionRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
-import { goalBudgetStopCode, type GoalOperations } from "@vykor/services";
+import { goalBudgetStopCode, type GoalOperations, type SessionStore } from "@vykor/services";
 import { parseGoalActionInput } from "@vykor/domain-contracts/goals";
 import { AgentExecutionLimitError } from "@vykor/agent-contracts";
 import type { SessionOperationRunner } from "../session-operation-runner.js";
@@ -16,6 +16,7 @@ import type { RunAdmissionService } from "../execution/run-admission-service.js"
 import type { RunControlService } from "../execution/run-control-service.js";
 import { GoalExternalWaitObserver, sameGoalExternalWait, type GoalWaitObservationResult } from "./goal-external-wait-observer.js";
 import { emptyPluginScope, readInputPluginScope, type InputPluginScope } from "../plugins/session-plugin-selection.js";
+import { assessGoalRunProgress } from "./goal-run-progress.js";
 
 export class SessionGoalService {
   private readonly requests = new Map<string, { fingerprint: string; promise: Promise<SessionGoal> }>();
@@ -26,6 +27,7 @@ export class SessionGoalService {
     private readonly context: {
       transaction: { transaction<T>(work: () => T): T };
       sessions: { get(sessionId: string): SessionRecord | undefined };
+      conversations: Pick<SessionStore["conversations"], "listMessageParts">;
       runs: {
         getRun(runId: string): SessionRunRecord | undefined;
         updateRun(runId: string, input: Partial<SessionRunRecord>): SessionRunRecord;
@@ -528,11 +530,26 @@ export class SessionGoalService {
         }
         if (this.context.runs.listRuns(sessionId).some(candidate => candidate.id !== runId && candidate.metadata.goalId === goal.id
           && (candidate.status === "pending" || candidate.status === "running"))) return;
+        const progress = assessGoalRunProgress(
+          this.context.conversations.listMessageParts(sessionId, { runId }),
+          run.metadata.goalRunKind === "continuation" && !run.metadata.goalWaitSource ? run.metadata.goalProgress : undefined,
+          run.metadata.terminalOutput,
+        );
+        this.context.runs.updateRun(runId, { metadata: { goalProgress: progress.state } });
+        if (progress.shouldPause) {
+          change({ status: "paused", wait: null,
+            reason: "连续三轮没有新增执行结果或交付内容，已停止自动续跑。请检查当前结果并补充下一步要求后继续。",
+            stopReason: { code: "no_progress", at: Date.now(), runId } });
+          return;
+        }
         const continued = change({ reason: null, stopReason: null, wait: null });
-        const admitted = this.admission.persistGoalRun(sessionId, this.runInput(continued,
+        const input = this.runInput(continued,
           "goal-" + goal.id + "-" + goal.revision + "-" + runId, "continuation", {
             items: [{ type: "text", text: "继续推进完整目标，依据当前状态检查已做工作并执行下一步。" }], transcriptVisibility: "hidden",
-          }));
+          });
+        const admitted = this.admission.persistGoalRun(sessionId, {
+          ...input, runMetadata: { ...input.runMetadata, goalProgress: progress.state },
+        });
         if (!this.context.goals.recordGoalContinuation({ goalId: goal.id, revision: continued.revision, previousRunId: runId,
           inputId: admitted.input.id, runId: admitted.run.id })) throw new Error("目标续跑意图已存在");
         nextRunId = admitted.run.id;

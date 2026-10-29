@@ -953,6 +953,7 @@ export class DaemonApplication implements DurableAgentApplication {
         transaction: store,
         sessions: store.sessions,
         runs: store.runs,
+        conversations: store.conversations,
         permissions: store.permissions,
         goals: store.goals,
         operationRunner: this.operationRunner,

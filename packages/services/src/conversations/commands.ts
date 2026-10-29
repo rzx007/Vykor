@@ -119,5 +119,6 @@ export interface ListMessagesOptions {
 export interface ListMessagePartsOptions {
   afterSeq?: number;
   messageId?: string;
+  runId?: string;
   limit?: number;
 }

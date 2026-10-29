@@ -321,6 +321,8 @@ export class ConversationRepository {
     assertSession(this.storage.state, sessionId);
     let parts = Object.values(this.storage.state.parts)
       .filter((part) => part.sessionId === sessionId)
+      .filter((part) => options.runId === undefined
+        || this.storage.state.messages[part.messageId]?.runId === options.runId)
       .sort((a, b) => a.seq - b.seq);
     if (options.messageId)
       parts = parts.filter((part) => part.messageId === options.messageId);

@@ -6,6 +6,8 @@
 
 Repository 提供查询和常规修改；ConversationTransactions 处理输入准入与跨表变更；IncrementalOutput 累计流式文本，树操作负责复制历史及删除关联记录。
 
+`listMessageParts(sessionId, { runId })` 可只读取一次运行的消息部件；先按会话和运行过滤，再应用消息、位置与数量限制。Goal 续跑保护通过此入口读取本轮结果，不复制整个历史中的工具正文。
+
 ## 状态归属
 
 当前会话记录位于共享内存状态，持久内容通过 ChatPersistence 写入 SQLite；临时会话使用内存保存。

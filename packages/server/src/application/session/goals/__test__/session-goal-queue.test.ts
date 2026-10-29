@@ -49,7 +49,7 @@ async function harness() {
     } },
   });
   goals = new SessionGoalService({
-    transaction: store, sessions: store.sessions, runs: store.runs, goals: store.goals,
+    transaction: store, sessions: store.sessions, runs: store.runs, goals: store.goals, conversations: store.conversations,
     permissions: store.permissions, events, operationRunner: runner,
     admission: services.admission, control: services.control,
     pluginCapabilities: { admit: async () => ({}) },
