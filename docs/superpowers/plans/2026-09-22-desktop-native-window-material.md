@@ -184,7 +184,7 @@ CSS 选择器用 `html[data-window-shell="..."]`。第 1 版 D7 提到的 `data-
 | `apps/desktop/src/renderer/src/components/appearance/window-material-copy.ts` | 外观页「窗口背景」区块的说明文案，按状态返回。 |
 | `apps/desktop/src/renderer/src/components/appearance/window-material-copy.test.ts` | 五种状态的文案覆盖。 |
 | `apps/desktop/src/renderer/src/startup-overlay.ts` | 启动遮罩的卸载时机状态机（入场动画 ∧ React 首帧，各自带兜底超时）。 |
-| `apps/desktop/src/renderer/src/startup-overlay.test.ts` | 两个信号的先后顺序、兜底超时、淡出后真移除。 |
+| `apps/desktop/src/renderer/src/__test__/startup-overlay.test.ts` | 两个信号的先后顺序、兜底超时、淡出后真移除。 |
 
 ### 修改文件
 
@@ -204,7 +204,7 @@ CSS 选择器用 `html[data-window-shell="..."]`。第 1 版 D7 提到的 `data-
 | `apps/desktop/src/renderer/src/apply-startup-theme.test.ts` | 断言 macOS 玻璃 / Windows 玻璃 / 快照缺失三种输入下的属性值。 |
 | `apps/desktop/src/renderer/src/assets/main.css` | 新增 `html[data-window-shell]` 的 `--shell` 分支：`transparent`（Windows/Linux 玻璃）与 `translucent`（macOS 玻璃）。 |
 | `apps/desktop/src/renderer/src/index.html` | 启动遮罩去掉不透明底色，改为「遮罩透明 + 中心徽标自带底色」；加入场动画与拖拽区。 |
-| `apps/desktop/src/renderer/src/startup-loading.test.ts` | 断言遮罩无底色、徽标有底色与入场动画。 |
+| `apps/desktop/src/renderer/src/__test__/startup-loading.test.ts` | 断言遮罩无底色、徽标有底色与入场动画。 |
 | `apps/desktop/src/renderer/src/main.tsx` | `render()` 之后调用 `watchStartupOverlay()`。 |
 | `apps/desktop/src/renderer/src/dismiss-startup-loading.ts` | 改 import `STARTUP_OVERLAY_ELEMENT_ID`（行为不变，仍同步移除）。 |
 
@@ -1819,9 +1819,9 @@ git commit -m "feat(desktop): 外观页新增窗口背景（透明/不透明）�
 
 **文件：**
 - 修改：`apps/desktop/src/renderer/index.html`
-- 修改：`apps/desktop/src/renderer/src/startup-loading.test.ts`
+- 修改：`apps/desktop/src/renderer/src/__test__/startup-loading.test.ts`
 - 创建：`apps/desktop/src/renderer/src/startup-overlay.ts`
-- 创建：`apps/desktop/src/renderer/src/startup-overlay.test.ts`
+- 创建：`apps/desktop/src/renderer/src/__test__/startup-overlay.test.ts`
 - 修改：`apps/desktop/src/renderer/src/main.tsx`
 - 修改：`apps/desktop/src/renderer/src/dismiss-startup-loading.ts`
 - 不修改：`apps/desktop/src/renderer/src/dismiss-startup-loading.test.ts`（行为不变，见步骤 6）
@@ -2037,7 +2037,7 @@ export function watchStartupOverlay(
 
 ```ts
 // @vitest-environment jsdom
-// apps/desktop/src/renderer/src/startup-overlay.test.ts
+// apps/desktop/src/renderer/src/__test__/startup-overlay.test.ts
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import {
@@ -2045,7 +2045,7 @@ import {
   STARTUP_OVERLAY_REACT_READY_FALLBACK_MS,
   STARTUP_OVERLAY_REMOVE_DELAY_MS,
   watchStartupOverlay,
-} from "./startup-overlay"
+} from "../startup-overlay"
 
 function mountDom(): void {
   document.body.innerHTML = `
@@ -2175,14 +2175,14 @@ export function dismissStartupLoading(): void {
 
 - [ ] **步骤 7：运行测试验证通过**
 
-运行：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/startup-loading.test.ts src/renderer/src/startup-overlay.test.ts src/renderer/src/dismiss-startup-loading.test.ts`
+运行：`pnpm --filter @vykor/desktop exec vitest run src/renderer/src/__test__/startup-loading.test.ts src/renderer/src/__test__/startup-overlay.test.ts src/renderer/src/dismiss-startup-loading.test.ts`
 预期：全 PASS。
 
 - [ ] **步骤 8：Commit**
 
 ```bash
-git add apps/desktop/src/renderer/index.html apps/desktop/src/renderer/src/startup-loading.test.ts \
-        apps/desktop/src/renderer/src/startup-overlay.ts apps/desktop/src/renderer/src/startup-overlay.test.ts \
+git add apps/desktop/src/renderer/index.html apps/desktop/src/renderer/src/__test__/startup-loading.test.ts \
+        apps/desktop/src/renderer/src/startup-overlay.ts apps/desktop/src/renderer/src/__test__/startup-overlay.test.ts \
         apps/desktop/src/renderer/src/main.tsx apps/desktop/src/renderer/src/dismiss-startup-loading.ts
 git commit -m "feat(desktop): 启动遮罩去掉不透明底色并接入卸载时机状态机"
 ```

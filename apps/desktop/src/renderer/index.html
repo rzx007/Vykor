@@ -18,113 +18,153 @@
         margin: 0;
       }
 
-      /* 遮罩层本身不设背景色：窗口从第一帧就是原生材质，只有中心徽标自己带底色，
-         这样玻璃在第一帧就可见，且徽标在任意壁纸上都读得清。 */
+      :root {
+        --startup-foreground: #95a7bb;
+        --startup-tint: #7899c3;
+      }
+
+      :root.dark {
+        --startup-foreground: #b3c0cf;
+        --startup-tint: #91b6e4;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root:not(.light) {
+          --startup-foreground: #b3c0cf;
+          --startup-tint: #91b6e4;
+        }
+      }
+
+      /* 保留原生窗口材质；轮廓与光雾直接叠在背景上，不再放进独立徽标。 */
       #startup-loading {
         position: fixed;
         inset: 0;
         z-index: 9999;
         display: grid;
         place-items: center;
-        font-family:
-          "Inter Variable",
-          "Noto Sans SC Variable",
-          -apple-system,
-          BlinkMacSystemFont,
-          "Segoe UI",
-          Roboto,
-          "Helvetica Neue",
-          Helvetica,
-          Arial,
-          "PingFang SC",
-          "Hiragino Sans GB",
-          "Microsoft YaHei UI",
-          "Microsoft YaHei",
-          "Noto Sans CJK SC",
-          "Noto Sans SC",
-          "Source Han Sans CN",
-          sans-serif;
         -webkit-app-region: drag;
+        color: color-mix(
+          in oklab,
+          var(--startup-foreground) 90%,
+          var(--primary, var(--startup-tint))
+        );
+        user-select: none;
         transition: opacity 0.16s ease;
       }
 
       #startup-loading[data-startup-dismissed="true"] {
         opacity: 0;
+        pointer-events: none;
       }
 
       .startup-loading-content {
-        display: grid;
-        justify-items: center;
-        gap: 0.75rem;
-        padding: 1.5rem 1.75rem;
-        border-radius: 1.5rem;
-        background: linear-gradient(180deg, #000000 0%, #151718 100%);
-        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
-        color: #ffffff;
-        -webkit-app-region: no-drag;
-        animation: startup-badge-in 0.72s cubic-bezier(0.22, 1, 0.36, 1) both;
+        width: min(26rem, 80vw);
+        animation: startup-wordmark-in 0.24s ease-out both;
       }
 
       .startup-loading-wordmark {
-        font-size: 0.9375rem;
-        font-weight: 500;
-        letter-spacing: 0.03em;
-      }
-      .startup-loading-dots {
-        display: flex;
-        gap: 0.3125rem;
-      }
-      .startup-loading-dot {
-        width: 0.25rem;
-        height: 0.25rem;
-        border-radius: 999px;
-        background: currentColor;
-        animation: startup-dot 1.5s ease-in-out infinite;
-      }
-      .startup-loading-dot:nth-child(2) {
-        animation-delay: 160ms;
-      }
-      .startup-loading-dot:nth-child(3) {
-        animation-delay: 320ms;
+        display: block;
+        width: 100%;
+        height: auto;
+        overflow: visible;
       }
 
-      @keyframes startup-badge-in {
-        0% {
-          transform: scale(0.72);
-          opacity: 0.2;
+      .startup-loading-wordmark use {
+        fill: none;
+        stroke: currentColor;
+        stroke-linejoin: round;
+      }
+
+      .startup-loading-outline {
+        stroke-width: 0.4;
+        opacity: 0.7;
+      }
+
+      /* 模糊只作用于轮廓副本，主体始终清楚；越向外越淡。 */
+      .startup-loading-haze-near {
+        stroke-width: 0.7;
+        filter: blur(2.5px);
+        opacity: 0.08;
+      }
+
+      .startup-loading-haze-mid {
+        stroke-width: 0.9;
+        filter: blur(7px);
+        opacity: 0.04;
+      }
+
+      .startup-loading-haze-far {
+        stroke-width: 1.2;
+        filter: blur(16px);
+        opacity: 0.02;
+      }
+
+      .startup-loading-light-outline {
+        stroke-width: 0.4;
+        opacity: 0.24;
+      }
+
+      /* 参考 beUI TextShimmer 的连续扫光，用 SVG 遮罩只照亮镂空轮廓。 */
+      .startup-loading-sweep {
+        animation: startup-wordmark-sweep 3s linear -0.7s infinite;
+      }
+
+      @keyframes startup-wordmark-in {
+        from {
+          opacity: 0.4;
         }
-        60% {
-          transform: scale(1.045);
-          opacity: 1;
-        }
-        80% {
-          transform: scale(0.985);
-        }
-        90% {
-          transform: scale(1.008);
-        }
-        100% {
-          transform: scale(1);
+        to {
           opacity: 1;
         }
       }
-      @keyframes startup-dot {
-        0%,
-        100% {
-          opacity: 0.28;
+
+      @keyframes startup-wordmark-sweep {
+        from {
+          transform: translateX(0);
         }
-        50% {
-          opacity: 0.9;
+        to {
+          transform: translateX(520px);
         }
+      }
+
+      :root[data-reduced-motion="true"] .startup-loading-content,
+      :root[data-reduced-motion="true"] .startup-loading-sweep {
+        animation: none;
+      }
+
+      :root[data-reduced-motion="true"] .startup-loading-light {
+        display: none;
+      }
+
+      :root[data-reduced-motion="true"] #startup-loading {
+        transition: none;
       }
 
       @media (prefers-reduced-motion: reduce) {
-        .startup-loading-content {
+        .startup-loading-content,
+        .startup-loading-sweep {
           animation: none;
         }
-        .startup-loading-dot {
-          animation: none;
-          opacity: 0.55;
+        .startup-loading-light {
+          display: none;
+        }
+        #startup-loading {
+          transition: none;
+        }
+      }
+
+      @media (forced-colors: active) {
+        .startup-loading-wordmark use {
+          stroke: CanvasText;
+        }
+        .startup-loading-outline {
+          opacity: 1;
+        }
+        .startup-loading-haze-near,
+        .startup-loading-haze-mid,
+        .startup-loading-haze-far,
+        .startup-loading-light {
+          display: none;
         }
       }
     </style>
@@ -134,13 +174,47 @@
   <body>
     <div id="root"></div>
     <div id="startup-loading" role="status" aria-label="正在启动 Vykor">
-      <div class="startup-loading-content" data-startup-badge="true" aria-hidden="true">
-        <span class="startup-loading-wordmark">Vykor</span>
-        <span class="startup-loading-dots">
-          <span class="startup-loading-dot" data-startup-dot="true"></span>
-          <span class="startup-loading-dot" data-startup-dot="true"></span>
-          <span class="startup-loading-dot" data-startup-dot="true"></span>
-        </span>
+      <div class="startup-loading-content" aria-hidden="true">
+        <svg class="startup-loading-wordmark" viewBox="0 0 320 128" focusable="false">
+          <title>Vykor</title>
+          <defs>
+            <!-- Inter 500：先合并重叠轮廓，再固定为路径，避免描边露出笔画内部的交叉线。 -->
+            <path
+              id="startup-wordmark"
+              d="M83.359 84H92.076L108.687 37.438H100.968L92.173 63.341Q91.203 66.346 89.931 70.631Q88.947 73.943 87.755 78.292Q86.56 74.037 85.559 70.695Q84.257 66.346 83.25 63.341L74.205 37.438H66.504Z M116.654 96.561Q117.278 96.841 118.551 97.077Q119.825 97.312 121.443 97.312Q124.261 97.312 126.395 96.366Q128.53 95.419 130.073 93.533Q131.617 91.646 132.679 88.853L147.854 49.062H140.492L133.442 68.921Q132.297 72.196 131.466 75.483Q131.141 76.767 130.808 78.045Q130.491 76.775 130.193 75.502Q129.429 72.233 128.275 68.921L121.361 49.062H113.939L127.209 84.159L126.451 86.723Q125.827 88.969 124.781 90.084Q123.734 91.198 122.311 91.407Q120.888 91.616 119.107 91.161L118.328 90.954Z M156.123 84H162.996V71.694L166.344 68.336L178.121 84H186.616L171.589 64.118L185.663 49.062H177.406L163.639 63.811H162.996V37.438H156.123Z M208.795 84.728Q213.739 84.728 217.412 82.475Q221.084 80.222 223.11 76.162Q225.135 72.103 225.135 66.728Q225.135 61.276 223.11 57.203Q221.084 53.131 217.412 50.878Q213.739 48.625 208.795 48.625Q203.876 48.625 200.211 50.878Q196.546 53.131 194.52 57.203Q192.495 61.276 192.495 66.728Q192.495 72.103 194.52 76.162Q196.546 80.222 200.211 82.475Q203.876 84.728 208.795 84.728ZM208.795 78.914Q205.627 78.914 203.568 77.243Q201.509 75.571 200.5 72.798Q199.491 70.024 199.491 66.716Q199.491 63.351 200.5 60.574Q201.509 57.796 203.568 56.117Q205.627 54.438 208.795 54.438Q211.983 54.438 214.065 56.117Q216.146 57.796 217.156 60.587Q218.165 63.377 218.165 66.716Q218.165 70.024 217.156 72.798Q216.146 75.571 214.065 77.243Q211.983 78.914 208.795 78.914Z M234.96 84H241.834V62.789Q241.834 60.481 242.905 58.715Q243.977 56.949 245.868 55.941Q247.76 54.934 250.142 54.934Q251.239 54.934 252.303 55.062Q253.368 55.189 253.742 55.302V48.741Q253.197 48.67 252.346 48.622Q251.495 48.574 250.836 48.574Q247.773 48.574 245.362 50.2Q242.951 51.826 241.987 54.674H241.612V49.062H234.96Z"
+            />
+            <linearGradient id="startup-light-gradient">
+              <stop offset="0" stop-color="white" stop-opacity="0" />
+              <stop offset="0.5" stop-color="white" />
+              <stop offset="1" stop-color="white" stop-opacity="0" />
+            </linearGradient>
+            <mask
+              id="startup-light-mask"
+              maskUnits="userSpaceOnUse"
+              x="-64"
+              y="-64"
+              width="448"
+              height="256"
+              style="mask-type: alpha"
+            >
+              <rect
+                class="startup-loading-sweep"
+                x="-200"
+                y="-32"
+                width="200"
+                height="192"
+                fill="url(#startup-light-gradient)"
+              />
+            </mask>
+          </defs>
+          <use class="startup-loading-haze-far" href="#startup-wordmark" />
+          <use class="startup-loading-haze-mid" href="#startup-wordmark" />
+          <use class="startup-loading-haze-near" href="#startup-wordmark" />
+          <use class="startup-loading-outline" href="#startup-wordmark" />
+          <g class="startup-loading-light" mask="url(#startup-light-mask)">
+            <use class="startup-loading-light-outline" href="#startup-wordmark" />
+          </g>
+        </svg>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>

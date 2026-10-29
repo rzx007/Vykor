@@ -1,9 +1,7 @@
 export const STARTUP_OVERLAY_ELEMENT_ID = "startup-loading"
 const STARTUP_OVERLAY_READY_EVENT = "vykor:startup-ready"
-/** 入场动画事件缺失（reduced-motion 把 animation 关掉）时的兜底。 */
-export const STARTUP_OVERLAY_ANIMATION_FALLBACK_MS = 1000
 /** 淡出结束后再 remove（比 CSS 里 #startup-loading 的 0.16s 过渡宽裕）。 */
-export const STARTUP_OVERLAY_REMOVE_DELAY_MS = 500
+export const STARTUP_OVERLAY_REMOVE_DELAY_MS = 200
 
 type Timer = ReturnType<typeof setTimeout>
 
@@ -18,12 +16,8 @@ const defaultClock: StartupOverlayClock = {
 }
 
 /**
- * 启动遮罩卸载条件 = 入场动画结束 ∧ 路由就绪后的页面已提交。
- *
- * - 入场动画结束：`[data-startup-badge]` 的 animationend；reduced-motion 下 CSS 把 animation 关掉，
- *   事件永远不会来，由 STARTUP_OVERLAY_ANIMATION_FALLBACK_MS 兜底。
- * - 页面已就绪：根页面在路由结束等待后的 effect 中调用 markStartupOverlayReady()。
- * 两个信号都满足后写 `data-startup-dismissed="true"` 触发 0.16s 淡出，再等 REMOVE_DELAY 后真正 remove()。
+ * 根页面提交后通过 markStartupOverlayReady() 通知淡出；加载动画不参与就绪判断，
+ * 循环扫光或减少动态效果都不会延长等待。淡出后才真正移除遮罩。
  *
  * 返回值只在测试/中断场景使用，`main.tsx` 丢弃它。
  */
@@ -34,54 +28,23 @@ export function watchStartupOverlay(
   const overlay = doc.getElementById(STARTUP_OVERLAY_ELEMENT_ID)
   if (!overlay) return () => {}
 
-  const badge = overlay.querySelector("[data-startup-badge]")
-
-  let animationSettled = false
-  let applicationSettled = overlay.dataset.startupReady === "true"
   let dismissed = false
-  const timers = new Set<Timer>()
-
-  const schedule = (handler: () => void, delay: number): void => {
-    timers.add(clock.setTimeout(handler, delay))
-  }
-
-  const clearTimers = (): void => {
-    for (const timer of timers) clock.clearTimeout(timer)
-    timers.clear()
-  }
+  let removeTimer: Timer | undefined
 
   const dismiss = (): void => {
-    if (dismissed || !animationSettled || !applicationSettled) return
+    if (dismissed) return
     dismissed = true
-    clearTimers()
+    overlay.removeEventListener(STARTUP_OVERLAY_READY_EVENT, dismiss)
     overlay.dataset.startupDismissed = "true"
-    // 注意：这行必须在 clearTimers() 之后，否则刚排的移除定时器会被自己清掉。
-    schedule(() => overlay.remove(), STARTUP_OVERLAY_REMOVE_DELAY_MS)
+    removeTimer = clock.setTimeout(() => overlay.remove(), STARTUP_OVERLAY_REMOVE_DELAY_MS)
   }
 
-  const onAnimationEnd = (event: Event): void => {
-    if (event.target !== badge) return
-    animationSettled = true
-    dismiss()
-  }
-
-  const onApplicationReady = (): void => {
-    applicationSettled = true
-    dismiss()
-  }
-
-  if (badge) badge.addEventListener("animationend", onAnimationEnd)
-  overlay.addEventListener(STARTUP_OVERLAY_READY_EVENT, onApplicationReady)
-
-  schedule(() => {
-    animationSettled = true
-    dismiss()
-  }, STARTUP_OVERLAY_ANIMATION_FALLBACK_MS)
+  overlay.addEventListener(STARTUP_OVERLAY_READY_EVENT, dismiss)
+  if (overlay.dataset.startupReady === "true") dismiss()
 
   return () => {
-    if (badge) badge.removeEventListener("animationend", onAnimationEnd)
-    overlay.removeEventListener(STARTUP_OVERLAY_READY_EVENT, onApplicationReady)
-    clearTimers()
+    overlay.removeEventListener(STARTUP_OVERLAY_READY_EVENT, dismiss)
+    if (removeTimer !== undefined) clock.clearTimeout(removeTimer)
   }
 }
 

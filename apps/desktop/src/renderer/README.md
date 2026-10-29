@@ -1,0 +1,12 @@
+# 桌面页面入口与启动画面
+
+此目录承载主窗口的 HTML 入口和 React 界面。`index.html` 先显示透明背景上的镂空 Vykor 名称，轮廓外侧逐层模糊、渐隐，柔光扫过轮廓表达加载；不依赖 React 初始化，也不显示独立黑底徽标或三点动画。
+
+- `index.html`：启动画面的 SVG、样式与主题脚本入口。品牌字形取自随应用提供的 Inter 500，将重叠笔画合并后固定为 SVG 路径，避免 V、y、k 内部出现交叉线，也不受启动时字体切换影响。使用细线镂空字与低强度光雾，浅色采用灰蓝、深色采用柔和银蓝，混入少量当前强调色；系统或应用开启减少动态效果时显示静态轮廓。
+- `src/startup-theme.ts` / `src/apply-startup-theme.ts`：在主界面运行前恢复已保存的主题、颜色和窗口材质。
+- `src/main.tsx`：加载全局样式、挂载 React 并开始监听主界面就绪。
+- `src/startup-overlay.ts`：通过遮罩元素的 `data-startup-ready` 保存就绪状态，页面提交后发出事件并开始淡出；等待结束后移除遮罩，不等待动画周期。
+- `src/dismiss-startup-loading.ts`：数据初始化完成或失败时立即移除遮罩的入口。
+- `src/__test__/`：启动文档与退场行为测试。新增入口相关测试放在这里。
+
+业务组件和状态分别放在 `src/components/`、`src/stores/`；全局样式按 [assets/README.md](src/assets/README.md) 的职责分类。新的启动效果继续留在 HTML 中，避免为首帧加载引入额外的界面运行库。
