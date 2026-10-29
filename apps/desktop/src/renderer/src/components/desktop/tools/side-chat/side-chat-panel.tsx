@@ -112,17 +112,32 @@ function moveSideChatDraft(from: string, to: string, merge = false): void {
                 : []),
               ...target.document.items,
             ]),
-            attachmentPreparation: source.attachmentPreparation || target.attachmentPreparation ? {
-              pending: [...(source.attachmentPreparation?.pending ?? []), ...(target.attachmentPreparation?.pending ?? [])],
-              error: source.attachmentPreparation?.error ?? target.attachmentPreparation?.error ?? null,
-            } : undefined,
+            attachmentPreparation:
+              source.attachmentPreparation || target.attachmentPreparation
+                ? {
+                    pending: [
+                      ...(source.attachmentPreparation?.pending ?? []),
+                      ...(target.attachmentPreparation?.pending ?? []),
+                    ],
+                    error:
+                      source.attachmentPreparation?.error ??
+                      target.attachmentPreparation?.error ??
+                      null,
+                  }
+                : undefined,
             attachments: [...source.attachments, ...target.attachments],
             textSelections: [...(source.textSelections ?? []), ...(target.textSelections ?? [])],
           },
         },
       }
     }
-    if (source && target && (target.document.items.length || target.attachments.length || target.attachmentPreparation?.pending.length))
+    if (
+      source &&
+      target &&
+      (target.document.items.length ||
+        target.attachments.length ||
+        target.attachmentPreparation?.pending.length)
+    )
       return state
     const migrated = migrateComposerScope(state, from, to)
     if (!source || !target?.textSelections?.length) return migrated
@@ -280,7 +295,9 @@ export function SideChatPanel({
   const models = useDesktopSessionStore((state) => state.models)
   const sessions = useDesktopSessionStore((state) => state.sessions)
   const defaults = useDesktopSessionStore((state) => state.defaultPermissionMode)
-  const modeChangePending = useDesktopSessionStore((state) => Boolean(targetId && state.pendingModeChanges[targetId]))
+  const modeChangePending = useDesktopSessionStore((state) =>
+    Boolean(targetId && state.pendingModeChanges[targetId])
+  )
   const providerDefault = useDesktopSessionStore((state) => state.defaultProvider)
   const support = useDesktopSessionStore((state) => state.attachmentSupport)
   const runtime = useDesktopSessionStore((state) => selectSessionRuntime(state, verifiedTargetId))
@@ -306,7 +323,9 @@ export function SideChatPanel({
     verifiedTargetId && !preforkDraft ? sessionComposerScope(verifiedTargetId) : preforkScope
   const draft = useDesktopSessionStore((state) => selectDraftDocument(state, scope))
   const attachments = useDesktopSessionStore((state) => selectDraftAttachments(state, scope))
-  const attachmentPreparation = useDesktopSessionStore((state) => state.composerDraftsByScope[scope]?.attachmentPreparation)
+  const attachmentPreparation = useDesktopSessionStore(
+    (state) => state.composerDraftsByScope[scope]?.attachmentPreparation
+  )
   const textSelections = (scope === preforkScope ? preforkDraft : targetDraft)?.textSelections ?? []
   const storedTarget = verifiedTargetId
     ? sessions.find((item) => item.id === verifiedTargetId)
@@ -327,13 +346,14 @@ export function SideChatPanel({
     (session ? sessionPermissionMode(session, defaults) : defaults)
   const effort =
     (!targetId ? preferences.effort : undefined) ?? (session ? sessionEffort(session) : null)
-  const workMode = (!targetId ? preferences.workMode : undefined) ?? (session ? sessionWorkMode(session) : "execute")
+  const workMode =
+    (!targetId ? preferences.workMode : undefined) ??
+    (session ? sessionWorkMode(session) : "execute")
   const running = Boolean(
     view?.runs.some((run) => run.status === "running" || run.status === "pending")
   )
   const archived = view?.session.status === "archived"
-  const permissions =
-    view?.permissions.filter(requiresPermissionReply) ?? []
+  const permissions = view?.permissions.filter(requiresPermissionReply) ?? []
   const submissions = Object.values(runtime.pendingPromptSubmissions)
   const runtimeError = Object.values(runtime.operations)
     .filter((operation) => operation.phase === "failed" && operation.kind !== "reply-permission")
@@ -547,7 +567,11 @@ export function SideChatPanel({
   const isCurrentTarget = (id: string): boolean =>
     sideChatTargets.get(sourceId) === id && !closingSources.has(sourceId)
   const submit = async (): Promise<void> => {
-    if (useDesktopSessionStore.getState().composerDraftsByScope[scope]?.attachmentPreparation?.pending.length) return
+    if (
+      useDesktopSessionStore.getState().composerDraftsByScope[scope]?.attachmentPreparation?.pending
+        .length
+    )
+      return
     if (
       closingSources.has(sourceId) ||
       creating ||
@@ -657,11 +681,16 @@ export function SideChatPanel({
     hasModels: !!models.length,
     hasEffortTiers: !!models.find((item) => item.id === model)?.reasoningEfforts?.length,
   }).filter(
-    (command) => command.id === "compact" || command.id === "model" || command.id === "effort" || command.id === "plan"
+    (command) =>
+      command.id === "compact" ||
+      command.id === "model" ||
+      command.id === "effort" ||
+      command.id === "plan"
   )
   const changeWorkMode = (next: DesktopWorkMode): void => {
     if (creating || unavailable || modeChangePending) return
-    if (targetId) update(actions.updateSessionWorkMode(targetId, next, () => isCurrentTarget(targetId)))
+    if (targetId)
+      update(actions.updateSessionWorkMode(targetId, next, () => isCurrentTarget(targetId)))
     else setPreferences((current) => ({ ...current, workMode: next }))
   }
   return (
@@ -897,9 +926,13 @@ export function SideChatPanel({
               }}
               onCommand={async (command) => {
                 if (command.id === "plan") {
-                  if (creating || unavailable || modeChangePending) throw new Error("模式正在保存或会话尚未就绪。")
+                  if (creating || unavailable || modeChangePending)
+                    throw new Error("模式正在保存或会话尚未就绪。")
                   const next = workMode === "plan" ? "execute" : "plan"
-                  if (targetId) await actions.updateSessionWorkMode(targetId, next, () => isCurrentTarget(targetId))
+                  if (targetId)
+                    await actions.updateSessionWorkMode(targetId, next, () =>
+                      isCurrentTarget(targetId)
+                    )
                   else setPreferences((current) => ({ ...current, workMode: next }))
                   return
                 }

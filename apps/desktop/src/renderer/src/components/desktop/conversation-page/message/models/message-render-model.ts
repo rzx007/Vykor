@@ -80,12 +80,21 @@ export function buildAssistantContent(parts: DesktopSessionPart[]): AssistantCon
     if (part.type === "text" && part.text) {
       const previous = units.at(-1)
       const phase = assistantPhase(part.metadata.phase)
-      if (previous?.type === "markdown" && previous.phase === phase && previous.source.messageId === part.messageId) {
+      if (
+        previous?.type === "markdown" &&
+        previous.phase === phase &&
+        previous.source.messageId === part.messageId
+      ) {
         previous.text += part.text
         previous.source.partIds.push(part.id)
-      }
-      else if (part.text.trim()) {
-        units.push({ id: part.id, type: "markdown", text: part.text, source: { messageId: part.messageId, partIds: [part.id] }, ...(phase ? { phase } : {}) })
+      } else if (part.text.trim()) {
+        units.push({
+          id: part.id,
+          type: "markdown",
+          text: part.text,
+          source: { messageId: part.messageId, partIds: [part.id] },
+          ...(phase ? { phase } : {}),
+        })
       }
       continue
     }

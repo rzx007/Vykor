@@ -12,7 +12,11 @@ import { channelConnectorLabel } from "@shared/channel-types"
 import type { DesktopSessionSearchResult } from "@shared/session-types"
 import { useOnOpen } from "@renderer/lib/hooks/use-on-open"
 import { settingsNavigation } from "../settings-page/navigation/settings-navigation"
-import { getShortcutRevision, shortcutLabel, subscribeShortcutChanges } from "../shell/desktop-shortcuts"
+import {
+  getShortcutRevision,
+  shortcutLabel,
+  subscribeShortcutChanges,
+} from "../shell/desktop-shortcuts"
 
 const GROUP_ORDER = ["聊天", "已归档聊天", "聊天内容", "快捷操作", "设置"]
 const INITIAL_LIMITS = { 聊天: 9, 已归档聊天: 0 }
@@ -75,7 +79,11 @@ export function DesktopSearchDialog({
         description: result.snippet,
         group: "聊天内容",
         badge: result.session.status === "archived" ? "已归档" : undefined,
-        onSelect: () => onOpenConversation(result.session.id, { messageId: result.messageId, query: contentSearch.query }),
+        onSelect: () =>
+          onOpenConversation(result.session.id, {
+            messageId: result.messageId,
+            query: contentSearch.query,
+          }),
       })),
     }),
     [contentSearch, onOpenConversation]
@@ -155,15 +163,14 @@ export function DesktopSearchDialog({
         onSelect: onSearchFiles,
       },
     ]
-    const settings: CommandItem[] = settingsNavigation
-      .map((item) => ({
-        id: "setting:" + item.slug,
-        label: item.label,
-        group: "设置",
-        icon: item.icon,
-        keywords: [item.slug],
-        onSelect: () => onOpenSettings(item.slug),
-      }))
+    const settings: CommandItem[] = settingsNavigation.map((item) => ({
+      id: "setting:" + item.slug,
+      label: item.label,
+      group: "设置",
+      icon: item.icon,
+      keywords: [item.slug],
+      onSelect: () => onOpenSettings(item.slug),
+    }))
     return [...chats, ...actions, ...settings]
   }, [
     sessions,

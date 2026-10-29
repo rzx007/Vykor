@@ -51,7 +51,10 @@ export function UserMessage({
     <UserMessageBlock
       content={content}
       searchReveal={searchReveal}
-      searchSource={{ messageId: message.id, partIds: parts.filter((part) => part.type === "text").map((part) => part.id) }}
+      searchSource={{
+        messageId: message.id,
+        partIds: parts.filter((part) => part.type === "text").map((part) => part.id),
+      }}
       items={items}
       document={composerDocument(
         inputItems ??
@@ -201,7 +204,12 @@ function UserMessageBlock({
           </AttachmentGroup>
         ) : null}
         {content.trim() || items.length > 0 ? (
-          <UserMessageBubble content={content} items={items} searchReveal={searchReveal} searchSource={searchSource} />
+          <UserMessageBubble
+            content={content}
+            items={items}
+            searchReveal={searchReveal}
+            searchSource={searchSource}
+          />
         ) : null}
         <MessageToolbar align="end" timestamp={timestamp}>
           {content.trim() ? (

@@ -36,7 +36,10 @@ import {
 import { AssistantMarkdown } from "../markdown/assistant-markdown"
 import { truncateReasoning } from "../models/reasoning-text"
 import { MessageAttachment } from "../attachments/message-attachment"
-import { GeneratedImageGallery, ImageGenerationMessage } from "../attachments/image-generation-message"
+import {
+  GeneratedImageGallery,
+  ImageGenerationMessage,
+} from "../attachments/image-generation-message"
 import { ContentEntrance } from "./content-entrance"
 import { AgentActivityMessage } from "../activity/agent-activity-message"
 import { toolOutputText } from "../models/message-content"
@@ -132,7 +135,11 @@ export const AssistantMessage = memo(function AssistantMessage({
 
   return (
     <div className="group/assistant min-w-0 space-y-4">
-      {parts.filter(part => part.metadata.pluginAppSource).map(part => <PluginAppToolResultEntry key={`app:${part.id}`} part={part} />)}
+      {parts
+        .filter((part) => part.metadata.pluginAppSource)
+        .map((part) => (
+          <PluginAppToolResultEntry key={`app:${part.id}`} part={part} />
+        ))}
       {blocks.map((block, index) => {
         if (block.type === "tool-group") {
           return (

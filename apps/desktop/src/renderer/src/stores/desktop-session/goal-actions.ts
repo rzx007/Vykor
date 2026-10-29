@@ -86,11 +86,15 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
   const saveGoal = (sessionId: string, goal: SessionGoal | null): void => {
     set((state) => {
       const current = state.goalsBySession[sessionId]
-      if (!goal && current && (current.status === "cancelled" || current.status === "completed")) return state
-      const merged = current && goal && current.id === goal.id
-        ? { ...(current.revision > goal.revision ? current : goal),
-            usage: current.usage.seq > goal.usage.seq ? current.usage : goal.usage }
-        : goal
+      if (!goal && current && (current.status === "cancelled" || current.status === "completed"))
+        return state
+      const merged =
+        current && goal && current.id === goal.id
+          ? {
+              ...(current.revision > goal.revision ? current : goal),
+              usage: current.usage.seq > goal.usage.seq ? current.usage : goal.usage,
+            }
+          : goal
       return { goalsBySession: { ...state.goalsBySession, [sessionId]: merged } }
     })
   }
@@ -205,7 +209,11 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
       )
       const rawBudget = (composer.tokenBudget ?? "").trim()
       const tokenBudget = rawBudget ? Number(rawBudget) : undefined
-      if (!editingGoal && rawBudget && (!/^\d+$/.test(rawBudget) || !Number.isSafeInteger(tokenBudget) || tokenBudget! <= 0)) {
+      if (
+        !editingGoal &&
+        rawBudget &&
+        (!/^\d+$/.test(rawBudget) || !Number.isSafeInteger(tokenBudget) || tokenBudget! <= 0)
+      ) {
         updateComposer(scope, { error: "Token 总预算需为正整数，留空表示不限制。" })
         return
       }
@@ -325,7 +333,10 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
         invalidateRead(sessionId)
         saveGoal(sessionId, saved)
         cancelled = saved.status === "cancelled"
-        updateComposer(scope, { request: undefined, ...(saved.status === "cancelled" ? { dismissedGoalId: saved.id } : {}) })
+        updateComposer(scope, {
+          request: undefined,
+          ...(saved.status === "cancelled" ? { dismissedGoalId: saved.id } : {}),
+        })
       } catch (error) {
         updateComposer(scope, { error: goalErrorMessage(error) })
       } finally {

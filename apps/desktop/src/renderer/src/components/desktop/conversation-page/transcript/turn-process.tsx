@@ -31,7 +31,10 @@ export function TurnProcess({
     () => (canCollapse ? splitTurnProcess(plan, tasks) : null),
     [plan, canCollapse, tasks]
   )
-  const reveal = useConversationSearchMatch(undefined, candidate?.process.flatMap((item) => item.parts.map((part) => part.id)) ?? [])
+  const reveal = useConversationSearchMatch(
+    undefined,
+    candidate?.process.flatMap((item) => item.parts.map((part) => part.id)) ?? []
+  )
   const eligible = Boolean(candidate)
   // 完成后的第一次提交仍保留原布局，检查阅读状态后才能切换为折叠布局。
   const [allowFold, setAllowFold] = useState(eligible)
@@ -40,7 +43,8 @@ export function TurnProcess({
   const split = allowFold ? candidate : null
   const folded = Boolean(split)
   const [open, setOpen] = useState(
-    () => Boolean(reveal) || ((turnId ? scroller?.turnExpansion.get(turnId) : undefined) ?? !eligible)
+    () =>
+      Boolean(reveal) || ((turnId ? scroller?.turnExpansion.get(turnId) : undefined) ?? !eligible)
   )
   const [previousReveal, setPreviousReveal] = useState(reveal)
   if (reveal !== previousReveal) {
