@@ -30,9 +30,15 @@ Desktop 只直接依赖 `@rzx/client` 和 `@vykor/server`。主进程把 server 
 
 ## 日常怎么打
 
+`build` 会先通过 Turbo 按依赖顺序构建 Desktop 的 workspace 依赖，再检查类型并生成 `out/`；未变化的依赖复用构建缓存。`build:unpack`、`build:win`、`build:mac` 和 `build:linux` 都经过这个入口，避免直接打包时读取到 `agent-runtime/dist` 中的旧类型声明。依赖包的构建产物保存在各包的 `dist/`，安装包仍输出到 Desktop 的 `dist/`。
+
 ```bash
-# 只验证 JS 能不能编过
-pnpm --filter @vykor/desktop exec electron-vite build
+# 构建依赖、检查类型并生成桌面 JS
+pnpm --filter @vykor/desktop build
+
+# 单独刷新依赖产物，再运行独立类型检查
+pnpm --filter @vykor/desktop build:deps
+pnpm --filter @vykor/desktop typecheck
 
 # 解包到 dist/win-unpacked，不打 NSIS，够日常看体积和启动
 pnpm --filter @vykor/desktop build:unpack

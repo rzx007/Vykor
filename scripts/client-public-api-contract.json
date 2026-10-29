@@ -2,6 +2,19 @@
   "$schema": "./client-public-api-contract.schema.json",
   "version": 1,
   "entries": [
+    { "name": "mergeNotes", "kind": "runtime-export" },
+    { "name": "moveNoteToDesktop", "kind": "runtime-export" },
+    { "name": "moveNoteToFolder", "kind": "runtime-export" },
+    { "name": "reorderInContainer", "kind": "runtime-export" },
+    { "name": "dissolveFolder", "kind": "runtime-export" },
+    { "name": "renameFolder", "kind": "runtime-export" },
+    { "name": "validateFolderName", "kind": "runtime-export" },
+    { "name": "reconcileOrganization", "kind": "runtime-export" },
+    { "name": "DesktopItem", "kind": "type-export" },
+    { "name": "NoteFolderRecord", "kind": "type-export" },
+    { "name": "NoteOrganizationV1Record", "kind": "type-export" },
+    { "name": "NoteOrganizationSnapshotRecord", "kind": "type-export" },
+    { "name": "SaveNoteOrganizationInput", "kind": "type-export" },
     {
       "name": "getPluginAppToolPolicy",
       "kind": "runtime-export"

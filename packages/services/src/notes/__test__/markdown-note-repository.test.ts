@@ -5,11 +5,13 @@ import {
   writeFileSync,
   existsSync,
   readdirSync,
+  unlinkSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { SessionStore } from "../../session-runtime/store.js";
+import * as markdownFiles from "../markdown-note-files.js";
 
 function withStore(work: (store: SessionStore, path: string) => void): void {
   const directory = mkdtempSync(join(tmpdir(), "vk-file-notes-"));
@@ -38,6 +40,159 @@ function insertLegacy(
 }
 
 describe("Markdown NoteRepository", () => {
+  it("reorders organization without reading Markdown bodies or updating their revisions", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-layout-only-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      store.notes.create({ content: "a" }, { id: "a" });
+      store.notes.create({ content: "b" }, { id: "b" });
+      writeFileSync(join(store.notes.directory, "a.md"), "external edit");
+      const index = () =>
+        Reflect.get(store, "storage")
+          .database.connection.prepare(
+            "SELECT * FROM note_file_index ORDER BY id",
+          )
+          .all();
+      const before = index();
+      const readBody = vi.spyOn(markdownFiles, "readNoteFile");
+      try {
+        const snapshot = store.notes.organization();
+        await store.notes.saveOrganization(
+          {
+            ...snapshot.organization,
+            desktop: [...snapshot.organization.desktop].reverse(),
+          },
+          snapshot.etag,
+        );
+        expect(readBody).not.toHaveBeenCalled();
+        expect(index()).toEqual(before);
+        expect(readFileSync(join(store.notes.directory, "a.md"), "utf8")).toBe(
+          "external edit",
+        );
+      } finally {
+        readBody.mockRestore();
+      }
+      expect(store.notes.get("a")?.revision).toBe(2);
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+  it("scans external additions and deletions again when a queued organization save runs", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-layout-external-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      store.notes.create({ content: "a" }, { id: "a" });
+      store.notes.create({ content: "b" }, { id: "b" });
+      store.notes.organization();
+      unlinkSync(join(store.notes.directory, "a.md"));
+      writeFileSync(join(store.notes.directory, "new.md"), "new");
+      const snapshot = store.notes.organization();
+      expect(snapshot.organization.desktop).toEqual([
+        { type: "note", id: "b" },
+        { type: "note", id: "new" },
+      ]);
+      const deletion = store.notes.saveOrganization(
+        snapshot.organization,
+        snapshot.etag,
+      );
+      unlinkSync(join(store.notes.directory, "b.md"));
+      await expect(deletion).rejects.toThrow("不存在的便签");
+      const latest = store.notes.organization();
+      expect(latest.organization.desktop).toEqual([
+        { type: "note", id: "new" },
+      ]);
+      const addition = store.notes.saveOrganization(
+        latest.organization,
+        latest.etag,
+      );
+      writeFileSync(join(store.notes.directory, "other.md"), "other");
+      await expect(addition).rejects.toThrow("缺少现有便签");
+      expect(
+        JSON.parse(
+          readFileSync(
+            join(store.notes.directory, "organization.json"),
+            "utf8",
+          ),
+        ),
+      ).toEqual(latest.organization);
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+  it("migrates legacy notes on the first organization read and still enforces storage admission", () => {
+    withStore((store, path) => {
+      insertLegacy(store, "legacy", "old idea", 4);
+      expect(store.notes.organization().organization.desktop).toEqual([
+        { type: "note", id: "legacy" },
+      ]);
+      expect(
+        readFileSync(join(dirname(path), "notes", "legacy.md"), "utf8"),
+      ).toBe("old idea");
+      expect(store.notes.get("legacy")?.revision).toBe(4);
+      const storage = Reflect.get(store, "storage");
+      const admission = vi
+        .spyOn(storage, "assertWritable")
+        .mockImplementation(() => {
+          throw new Error("storage blocked");
+        });
+      try {
+        expect(() => store.notes.organization()).toThrow("storage blocked");
+      } finally {
+        admission.mockRestore();
+      }
+    });
+  });
+  it("reconciles folder membership after deletion and retains Markdown deletion on layout failures", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-delete-organization-"));
+    const store = new SessionStore({ path: join(directory, "sessions.db") });
+    try {
+      store.notes.create({ content: "a" }, { id: "a" });
+      store.notes.create({ content: "b" }, { id: "b" });
+      const initial = store.notes.organization();
+      await store.notes.saveOrganization(
+        {
+          version: 1,
+          desktop: [{ type: "folder", id: "f" }],
+          folders: { f: { name: "folder", createdAt: 1, updatedAt: 1 } },
+          folderItems: { f: ["a", "b"] },
+        },
+        initial.etag,
+      );
+      expect(() =>
+        store.transaction(() => {
+          store.notes.remove("a");
+          throw new Error("rollback deletion");
+        }),
+      ).toThrow("rollback deletion");
+      expect(store.notes.organization().organization.folderItems.f).toEqual([
+        "a",
+        "b",
+      ]);
+      expect(store.notes.remove("a")).toBe(true);
+      expect(store.notes.organization().organization.desktop).toEqual([
+        { type: "note", id: "b" },
+      ]);
+      writeFileSync(
+        join(store.notes.directory, "organization.previous.json"),
+        "blocked",
+      );
+      const repository = Reflect.get(store.notes, "organizationRepository");
+      const original = repository.read.bind(repository);
+      repository.read = () => {
+        throw new Error("layout write failed");
+      };
+      expect(store.notes.remove("b")).toBe(true);
+      expect(existsSync(join(store.notes.directory, "b.md"))).toBe(false);
+      repository.read = original;
+      expect(store.notes.organization().warning).toContain("正文已删除");
+      expect(store.notes.organization().organization.desktop).toEqual([]);
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
   it("keeps committed files if an after-commit callback fails", () => {
     withStore((store, path) => {
       expect(() =>

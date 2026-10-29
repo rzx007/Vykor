@@ -25,6 +25,7 @@ import {
   AttachmentIntegrityService,
   DEFAULT_RETENTION_POLICY,
   SessionStore,
+  validateNoteOrganizationFiles,
 } from "@vykor/services";
 
 export interface BackupSourceDirectories {
@@ -105,7 +106,7 @@ export async function createApplicationBackup(input: {
   });
   try {
     copiedStore.notes.list();
-    copiedStore.notes.validateFiles();
+    copiedStore.notes.validateFiles(undefined, true);
   } finally {
     copiedStore.close();
   }
@@ -151,7 +152,7 @@ export async function createApplicationBackup(input: {
       "\n",
     "utf-8",
   );
-  validateBackupAttachmentFiles(destination, manifest);
+  validateBackupAttachmentFiles(destination, manifest, true);
   return manifest;
 }
 
@@ -271,7 +272,9 @@ export function canonicalBackupPath(path: string): string {
   const absolute = resolve(path);
   if (existsSync(absolute)) return realpathSync(absolute);
   const parent = dirname(absolute);
-  return parent === absolute ? absolute : join(canonicalBackupPath(parent), basename(absolute));
+  return parent === absolute
+    ? absolute
+    : join(canonicalBackupPath(parent), basename(absolute));
 }
 
 interface RestoreTarget {
@@ -348,7 +351,10 @@ function validateRestoreTargetLayout(
       throw new Error(`Restore targets must be distinct: ${target.finalPath}`);
     }
     unique.add(normalized);
-    const fromSource = relative(canonicalBackupPath(source), canonicalBackupPath(target.finalPath));
+    const fromSource = relative(
+      canonicalBackupPath(source),
+      canonicalBackupPath(target.finalPath),
+    );
     if (
       fromSource === "" ||
       (!fromSource.startsWith("..") && !isAbsolute(fromSource))
@@ -505,11 +511,29 @@ function checksumsFor(
   return checksums;
 }
 
-export function verifyApplicationBackup(source: string): ApplicationBackupManifest {
+export function verifyApplicationBackup(
+  source: string,
+): ApplicationBackupManifest {
   const root = resolve(source);
-  const manifest = JSON.parse(readFileSync(join(root, "manifest.json"), "utf-8")) as ApplicationBackupManifest;
-  if (![1, 2, 3].includes(manifest.version) || manifest.database !== "database.sqlite" || !isDirectoryManifest(manifest.directories)) throw new Error("Unsupported backup manifest");
+  const manifest = JSON.parse(
+    readFileSync(join(root, "manifest.json"), "utf-8"),
+  ) as ApplicationBackupManifest;
+  if (
+    ![1, 2, 3].includes(manifest.version) ||
+    manifest.database !== "database.sqlite" ||
+    !isDirectoryManifest(manifest.directories)
+  )
+    throw new Error("Unsupported backup manifest");
   verifyChecksums(root);
+  if (manifest.directories.notes) {
+    const notesPath = join(root, "notes");
+    validateNoteOrganizationFiles(
+      notesPath,
+      readdirSync(notesPath)
+        .filter((name) => name.endsWith(".md"))
+        .map((name) => name.slice(0, -3)),
+    );
+  }
   return manifest;
 }
 
@@ -601,11 +625,15 @@ function validateAttachmentFiles(
 function validateBackupAttachmentFiles(
   source: string,
   manifest: ApplicationBackupManifest,
+  allowFutureOrganization = false,
 ): void {
   const database = new SessionStore({ path: join(source, manifest.database) });
   try {
     if (manifest.directories.notes)
-      database.notes.validateFiles(join(source, "notes"));
+      database.notes.validateFiles(
+        join(source, "notes"),
+        allowFutureOrganization,
+      );
     const stats = validateAttachmentFiles(
       database,
       manifest.directories.attachments

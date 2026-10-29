@@ -3,16 +3,30 @@ import { copyFileSync, readdirSync, unlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { eq, sql } from "drizzle-orm";
 import type { CreateNoteInput, UpdateNoteInput } from "./commands.js";
-import type { NoteRecord } from "@vykor/domain-contracts/notes";
-import { parseCreateNoteInput, parseUpdateNoteInput } from "@vykor/domain-contracts/notes";
+import type {
+  NoteRecord,
+  NoteOrganizationV1Record,
+  NoteOrganizationSnapshotRecord,
+} from "@vykor/domain-contracts/notes";
+import {
+  parseCreateNoteInput,
+  parseUpdateNoteInput,
+} from "@vykor/domain-contracts/notes";
 import type { StorageContext } from "../database/storage-context.js";
 import { notes, noteFileIndex } from "../session-runtime/schema.js";
 import {
   ensureNoteDirectory,
   noteFilePath,
   readNoteFile,
+  scanNoteIds,
   replaceNoteFile,
+  readUtf8File,
+  replaceUtf8File,
 } from "./markdown-note-files.js";
+import {
+  NoteOrganizationRepository,
+  validateNoteOrganizationFiles,
+} from "./note-organization-repository.js";
 
 export class NoteRevisionConflictError extends Error {
   constructor(
@@ -31,8 +45,13 @@ const digest = (content: string): string =>
 export class NoteRepository {
   readonly directory: string;
   private initialized = false;
+  private readonly organizationRepository: NoteOrganizationRepository;
+  private organizationWarning: string | undefined;
   constructor(private readonly storage: StorageContext) {
     this.directory = join(dirname(storage.database.path), "notes");
+    this.organizationRepository = new NoteOrganizationRepository(
+      this.directory,
+    );
   }
   private get database() {
     return this.storage.database.orm;
@@ -249,7 +268,7 @@ export class NoteRepository {
     const before = this.get(id);
     if (!before) return false;
     const path = noteFilePath(this.directory, id);
-    return this.read(() => {
+    const removed = this.read(() => {
       unlinkSync(path);
       this.storage.coordinator?.deferUntilRollback(() => {
         if (!readNoteFile(path)) replaceNoteFile(path, before.content);
@@ -261,6 +280,43 @@ export class NoteRepository {
         .run();
       return true;
     });
+    // A layout failure must not undo an already completed Markdown deletion.
+    const reconcileDeletedNote = () => {
+      try {
+        const snapshot = this.organization();
+        if (snapshot.warning) this.organizationWarning = snapshot.warning;
+      } catch (error) {
+        this.organizationWarning = `正文已删除，但整理未保存：${error instanceof Error ? error.message : String(error)}`;
+      }
+    };
+    // An outer transaction can still roll back the deletion. Reconcile only
+    // after that transaction commits, so its folder membership is not lost.
+    if (this.storage.coordinator)
+      this.storage.coordinator.deferUntilCommit(reconcileDeletedNote);
+    else reconcileDeletedNote();
+    return removed;
+  }
+
+  organization(): NoteOrganizationSnapshotRecord {
+    const snapshot = this.organizationRepository.read(
+      this.read(() => scanNoteIds(this.directory)),
+    );
+    if (this.organizationWarning) {
+      snapshot.warning = [snapshot.warning, this.organizationWarning]
+        .filter(Boolean)
+        .join(" ");
+      this.organizationWarning = undefined;
+    }
+    return snapshot;
+  }
+
+  saveOrganization(
+    organization: NoteOrganizationV1Record,
+    expectedEtag: string,
+  ): Promise<NoteOrganizationSnapshotRecord> {
+    return this.organizationRepository.save(organization, expectedEtag, () =>
+      this.read(() => scanNoteIds(this.directory)),
+    );
   }
 
   storageInfo(): { directory: string; format: "markdown" } {
@@ -269,13 +325,17 @@ export class NoteRepository {
   }
 
   backupTo(destination: string): void {
-    this.list();
+    this.organization();
     ensureNoteDirectory(destination);
     for (const name of readdirSync(this.directory)) {
       if (!name.endsWith(".md")) continue;
       const path = noteFilePath(this.directory, name.slice(0, -3));
       readNoteFile(path);
       copyFileSync(path, join(destination, name));
+    }
+    for (const name of ["organization.json", "organization.previous.json"]) {
+      const file = readUtf8File(join(this.directory, name));
+      if (file) replaceUtf8File(join(destination, name), file.content);
     }
   }
 
@@ -296,8 +356,19 @@ export class NoteRepository {
     }
   }
 
-  validateFiles(directory = this.directory): void {
+  validateFiles(
+    directory = this.directory,
+    allowFutureOrganization = false,
+  ): void {
     ensureNoteDirectory(directory);
+    const noteIds = readdirSync(directory)
+      .filter((name) => name.endsWith(".md"))
+      .map((name) => {
+        const id = name.slice(0, -3);
+        readNoteFile(noteFilePath(directory, id));
+        return id;
+      });
+    validateNoteOrganizationFiles(directory, noteIds, allowFutureOrganization);
     const indexed = this.database.all<{ name: string }>(
       sql`SELECT name FROM sqlite_master WHERE type='table' AND name='note_file_index'`,
     );

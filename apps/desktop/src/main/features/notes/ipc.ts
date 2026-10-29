@@ -1,15 +1,28 @@
-import type { CreateDesktopNoteInput, UpdateDesktopNoteInput } from "../../../shared/note-types"
+import type {
+  CreateDesktopNoteInput,
+  UpdateDesktopNoteInput,
+  SaveDesktopNoteOrganizationInput,
+} from "../../../shared/note-types"
 import { IpcChannels } from "../../../shared/ipc-channels"
 import type { IpcContribution } from "../../core/ipc/types"
 import { desktopNoteService, type DesktopNoteService } from "./note-service"
 
 export function createNoteIpcContribution(
-  service: Pick<DesktopNoteService, "list" | "create" | "update" | "remove" | "openDirectory">
+  service: Pick<
+    DesktopNoteService,
+    "list" | "create" | "update" | "remove" | "openDirectory" | "organization" | "saveOrganization"
+  >
 ): IpcContribution {
   return {
     id: "notes",
     register() {
       return [
+        { channel: IpcChannels.noteOrganizationGet, handler: () => service.organization() },
+        {
+          channel: IpcChannels.noteOrganizationSave,
+          handler: (_event, input) =>
+            service.saveOrganization(input as SaveDesktopNoteOrganizationInput),
+        },
         { channel: IpcChannels.noteOpenDirectory, handler: () => service.openDirectory() },
         { channel: IpcChannels.noteList, handler: () => service.list() },
         {

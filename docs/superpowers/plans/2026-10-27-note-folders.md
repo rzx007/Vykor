@@ -8,7 +8,39 @@
 
 **技术栈：** TypeScript、React 19、Electron、Hono、Vitest、dnd-kit、Motion、Node.js 文件 API、pnpm。
 
+**2026-10-29 执行说明：** 文档审核未发现产品规则阻塞。按用户要求先完成编码，再集中验证；不逐任务提交，不搭建预览或截图。组织纯模型放在 `domain-contracts/src/notes/organization.ts`，服务层重导出，并经 protocol/client 提供桌面调用，避免两端重复实现且保留桌面依赖边界。备份中的 previous 是历史版本，允许引用此后删除的正文；当前组织仍必须完整且只引用实际正文。客户端包名沿用当前 `@rzx/client`，测试路径以实际目录为准。未完成的人工验收不标记为通过。
+
 ---
+
+## 本次执行结果（2026-10-29）
+
+本节记录实际执行结果；下方逐任务步骤保留为原计划，不代表执行过其中的先失败验证或 Git 提交。
+
+- [x] 任务 1–5：共享组织模型、安全文件仓库、HTTP/客户端、备份恢复及 Electron 桥接已实现。
+- [x] 任务 6–9：统一桌面、串行乐观保存、拖拽意图、单层文件夹、搜索、置顶、重命名、解散与键盘操作已实现。
+- [x] 任务 10：相关 README、公开 API 契约和历史引用清单已同步。
+- [x] 集中定向测试：services 28、server 15、protocol 6、client 5、desktop 82，共 136 项通过。
+- [x] 五个关联包类型检查及 `check-types:server-client` 通过；客户端浏览器/Node 入口构建通过。
+- [x] 桌面 node、web 和 mcp-apps-sdk 三项类型检查通过；本次功能改动文件的格式检查通过。
+- [x] 独立静态审查及定向复核完成，发现的键盘、置顶重试和恢复警告问题已修复并补回归测试。
+- [ ] 人工交互与样式验收：按协作约定由用户在应用内查看，未启动 UI 预览或截图。
+- [ ] 逐任务提交、合并及推送：本次未请求，保留工作区改动。
+
+键盘整理保留方向键排序；在目标便签上按 M 选择合并，夹内用 Alt + 左方向键取出，再按空格放下，避免与向左排序冲突。恢复提示在本次便签页会话中保留，普通刷新不自动清除。标准文件 API 的跨进程竞态限制仍遵循设计说明。
+
+## Review 后的五项优化（2026-10-29）
+
+先完成两个 P2 修复，再收拢重复逻辑，编码后集中验证。没有新增框架、缓存、索引或额外交互层。
+
+- 置顶失败与重试只回滚置顶字段，不覆盖后来修改的纸色。
+- 合并操作成功返回本次文件夹 ID，重命名不再按时间戳猜目标。
+- `note-drag-state` 统一保存悬停目标、截止时间和意图；桌面只安排计时器并展示合并目标，删除完整意图的重复状态与引用、重复同目标判断和重复阈值选择。
+- 组织读写扫描现有 Markdown ID，不走正文列表、哈希、索引同步及排序。保存队列真正执行时重新扫描，保留首次旧数据迁移和存储准入。
+- 结构解析后直接检查已解析对象的归属，备份校验合并原来的解析与断言。HTTP 与应用入口各自校验，落盘时继续校验最新存在的便签；不引入已校验标记或信任缓存。
+
+原子写入、etag 冲突检查、previous 恢复副本、损坏副本、未来版本只读及旧备份兼容继续保留。备份在复制数据库前和复制 Markdown 后原有的正文同步继续执行。
+
+优化后的集中定向测试共 146 项通过：services 34、server 16、protocol 6、client 5、desktop 85。桌面 node/web/mcp-apps-sdk 和五个相关包的类型检查通过。新增回归覆盖置顶重试不覆盖新纸色、时钟回拨后仍重命名本次创建的文件夹、同目标悬停不延后截止时间、保存排队期间的 Markdown 增删，以及复制数据库前后外部编辑正文仍可备份恢复。独立静态复核未发现本轮 P1/P2 问题。
 
 ## 文件结构
 
@@ -50,6 +82,7 @@
 ## 任务 1：定义组织模型与确定性变换
 
 **文件：**
+
 - 创建：`packages/services/src/notes/note-organization.ts`
 - 创建：`packages/services/src/notes/__test__/note-organization.test.ts`
 - 修改：`packages/services/src/notes/index.ts`
@@ -129,6 +162,7 @@ git commit -m 'feat(notes): add folder organization model'
 ## 任务 2：实现 `organization.json` 安全仓库
 
 **文件：**
+
 - 创建：`packages/services/src/notes/note-organization-repository.ts`
 - 创建：`packages/services/src/notes/__test__/note-organization-repository.test.ts`
 - 修改：`packages/services/src/notes/markdown-note-files.ts`
@@ -144,9 +178,9 @@ git commit -m 'feat(notes): add folder organization model'
 it("rejects a stale baseline without replacing external contents", async () => {
   const first = repository.read(["a", "b"]);
   writeFileSync(repository.path, externalJson, "utf8");
-  await expect(repository.save(first.organization, first.etag)).rejects.toBeInstanceOf(
-    NoteOrganizationConflictError,
-  );
+  await expect(
+    repository.save(first.organization, first.etag),
+  ).rejects.toBeInstanceOf(NoteOrganizationConflictError);
   expect(readFileSync(repository.path, "utf8")).toBe(externalJson);
 });
 
@@ -155,7 +189,9 @@ it("keeps a future version read-only", () => {
   const result = repository.read(["a", "b"]);
   expect(result.readOnly).toBe(true);
   expect(result.warning).toContain("升级应用");
-  expect(readdirSync(repository.directory)).not.toContain("organization.corrupt.json");
+  expect(readdirSync(repository.directory)).not.toContain(
+    "organization.corrupt.json",
+  );
 });
 ```
 
@@ -214,6 +250,7 @@ git commit -m 'feat(notes): persist folder organization beside markdown'
 ## 任务 3：公开协议、应用用例和 HTTP API
 
 **文件：**
+
 - 修改：`packages/domain-contracts/src/notes/records.ts`
 - 修改：`packages/domain-contracts/src/notes/validation.ts`
 - 修改：`packages/domain-contracts/src/notes/index.ts`
@@ -295,6 +332,7 @@ git commit -m 'feat(notes): expose folder organization api'
 ## 任务 4：让备份与恢复携带组织文件
 
 **文件：**
+
 - 修改：`packages/services/src/notes/note-repository.ts`
 - 修改：`packages/services/src/notes/__test__/markdown-note-repository.test.ts`
 - 修改：`packages/server/src/application/backup/application-backup.ts`
@@ -306,7 +344,9 @@ git commit -m 'feat(notes): expose folder organization api'
 
 ```ts
 expect(
-  JSON.parse(readFileSync(join(backupPath, "notes", "organization.json"), "utf8")),
+  JSON.parse(
+    readFileSync(join(backupPath, "notes", "organization.json"), "utf8"),
+  ),
 ).toMatchObject({ version: 1, folderItems: { f1: ["a", "b"] } });
 ```
 
@@ -341,6 +381,7 @@ git commit -m 'feat(backup): include note folder organization'
 ## 任务 5：贯通 Electron IPC
 
 **文件：**
+
 - 修改：`apps/desktop/src/shared/note-types.ts`
 - 修改：`apps/desktop/src/shared/desktop-api-contract.ts`
 - 修改：`apps/desktop/src/shared/ipc-channels.ts`
@@ -356,10 +397,10 @@ git commit -m 'feat(backup): include note folder organization'
 
 ```ts
 await desktopAPI.notes.saveOrganization({ organization, expectedEtag: "e1" });
-expect(invoke).toHaveBeenCalledWith(
-  IpcChannels.noteOrganizationSave,
-  { organization, expectedEtag: "e1" },
-);
+expect(invoke).toHaveBeenCalledWith(IpcChannels.noteOrganizationSave, {
+  organization,
+  expectedEtag: "e1",
+});
 ```
 
 - [ ] **步骤 2：运行测试并确认失败**
@@ -400,6 +441,7 @@ git commit -m 'feat(desktop): bridge note organization api'
 ## 任务 6：实现渲染端组织控制器
 
 **文件：**
+
 - 创建：`apps/desktop/src/renderer/src/components/desktop/notes-page/note-organization.ts`
 - 创建：`apps/desktop/src/renderer/src/components/desktop/notes-page/use-note-organization.ts`
 - 创建：`apps/desktop/src/renderer/src/components/desktop/notes-page/__test__/note-organization.test.ts`
@@ -413,7 +455,9 @@ git commit -m 'feat(desktop): bridge note organization api'
 
 ```ts
 it("rolls back an optimistic move when persistence fails", async () => {
-  await render({ saveOrganization: vi.fn().mockRejectedValue(new Error("conflict")) });
+  await render({
+    saveOrganization: vi.fn().mockRejectedValue(new Error("conflict")),
+  });
   const before = latest.organization;
   await act(async () => latest.mergeNotes("a", "b"));
   expect(latest.organization).toEqual(before);
@@ -472,6 +516,7 @@ git commit -m 'feat(notes): add organization controller'
 ## 任务 7：实现可测试的拖拽意图状态机
 
 **文件：**
+
 - 创建：`apps/desktop/src/renderer/src/components/desktop/notes-page/note-drag-state.ts`
 - 创建：`apps/desktop/src/renderer/src/components/desktop/notes-page/__test__/note-drag-state.test.ts`
 
@@ -484,8 +529,14 @@ it("opens a folder only after continuous 400ms hover", () => {
   const machine = createNoteDragMachine();
   machine.start(pointerDrag("a"));
   machine.enter(folderTarget("f1"), 0);
-  expect(machine.tick(399).intent).toEqual({ type: "hover-folder", folderId: "f1" });
-  expect(machine.tick(400).intent).toEqual({ type: "open-folder", folderId: "f1" });
+  expect(machine.tick(399).intent).toEqual({
+    type: "hover-folder",
+    folderId: "f1",
+  });
+  expect(machine.tick(400).intent).toEqual({
+    type: "open-folder",
+    folderId: "f1",
+  });
 });
 ```
 
@@ -524,6 +575,7 @@ git commit -m 'feat(notes): model folder drag intentions'
 ## 任务 8：接入 dnd-kit 并实现统一桌面
 
 **文件：**
+
 - 修改：`apps/desktop/package.json`
 - 修改：`pnpm-lock.yaml`
 - 创建：`apps/desktop/src/renderer/src/components/desktop/notes-page/note-board.tsx`
@@ -588,6 +640,7 @@ git commit -m 'feat(notes): replace collection mode with folders'
 ## 任务 9：补齐搜索、置顶、重命名、解散和可访问性
 
 **文件：**
+
 - 修改：`apps/desktop/src/renderer/src/components/desktop/notes-page/note-organization.ts`
 - 修改：`apps/desktop/src/renderer/src/components/desktop/notes-page/use-note-organization.ts`
 - 修改：`apps/desktop/src/renderer/src/components/desktop/notes-page/note-board.tsx`
@@ -633,6 +686,7 @@ git commit -m 'feat(notes): complete folder organization behavior'
 ## 任务 10：更新文档并执行最终验证
 
 **文件：**
+
 - 修改：`apps/desktop/src/renderer/src/components/desktop/notes-page/README.md`
 - 修改：`packages/services/src/notes/README.md`
 - 修改：`docs/superpowers/specs/2026-10-27-note-folders-design.md`（仅补实现状态和实际偏差）
