@@ -140,7 +140,7 @@ export function ConversationFind({
       ref={controls}
       role="search"
       aria-label="查找当前聊天"
-      className="absolute top-2 right-3 left-3 z-20 ml-auto max-w-md"
+      className="absolute top-2 right-3 left-3 z-20 ml-auto max-w-sm"
     >
       <style>{`::highlight(${highlightName}) { background-color: var(--selection); color: var(--foreground); } [data-search-active=true] { outline: 2px solid var(--ring); outline-offset: 4px; border-radius: var(--radius); }`}</style>
       <FileSearchControls

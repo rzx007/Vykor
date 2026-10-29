@@ -38,8 +38,8 @@ export function FileSearchControls({
   }, [])
 
   return (
-    <div className="flex h-12 min-w-0 shrink-0 items-center rounded-xl border border-border/70 bg-popover px-2 text-ui-muted shadow-lg shadow-black/12 dark:border-white/12 dark:shadow-black/35">
-      <Search className="ml-0.5 size-4 shrink-0" strokeWidth={1.8} />
+    <div className="flex h-9 min-w-0 items-center gap-0.5 rounded-full border border-border bg-popover px-1.5 text-ui-muted shadow-sm">
+      <Search className="ml-1 size-4 shrink-0" strokeWidth={1.75} />
       <input
         ref={inputRef}
         value={query}
@@ -66,10 +66,10 @@ export function FileSearchControls({
             onClose()
           }
         }}
-        className="text-ui-small h-full w-52 min-w-0 bg-transparent px-2 text-ui-foreground placeholder:text-ui-muted focus:outline-none disabled:cursor-not-allowed disabled:opacity-45"
+        className="text-ui-small h-full min-w-0 flex-1 bg-transparent px-2 text-ui-foreground placeholder:text-ui-muted focus:outline-none disabled:cursor-not-allowed disabled:opacity-45"
       />
       {hasQuery && (
-        <span className="shrink-0 px-2 text-xs text-ui-muted tabular-nums">
+        <span className="shrink-0 px-1 text-xs text-ui-muted tabular-nums">
           {matchCount > 0 ? `${matchIndex + 1}/${matchCount}` : emptyLabel}
         </span>
       )}
@@ -77,33 +77,37 @@ export function FileSearchControls({
         type="button"
         variant="ghost"
         size="icon-sm"
+        shape="circle"
         aria-label="上一个搜索结果"
         title="上一个搜索结果"
         disabled={!canNavigate}
         onClick={onPrevious}
       >
-        <ChevronUp />
+        <ChevronUp className="size-3.5" strokeWidth={1.75} />
       </Button>
       <Button
         type="button"
         variant="ghost"
         size="icon-sm"
+        shape="circle"
         aria-label="下一个搜索结果"
         title="下一个搜索结果"
         disabled={!canNavigate}
         onClick={onNext}
       >
-        <ChevronDown />
+        <ChevronDown className="size-3.5" strokeWidth={1.75} />
       </Button>
+      <span aria-hidden="true" className="mx-1 h-4 w-px shrink-0 bg-border" />
       <Button
         type="button"
+        variant="ghost"
         size="icon-sm"
+        shape="circle"
         aria-label="关闭搜索"
         title="关闭搜索"
         onClick={onClose}
-        className="-mt-9 -mr-4 ml-1 rounded-full bg-muted-foreground text-popover hover:bg-foreground"
       >
-        <X />
+        <X className="size-3.5" strokeWidth={1.75} />
       </Button>
     </div>
   )

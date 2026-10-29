@@ -448,7 +448,7 @@ export function FilesTool({
             className="relative min-h-0 min-w-0 overflow-hidden"
           >
             {searchOpen && !(codeEditing && activeViewMode === "source") && (
-              <div className="absolute top-3 right-3 z-40">
+              <div className="absolute top-3 right-3 left-3 z-40 ml-auto max-w-sm">
                 <FileSearchControls
                   query={searchQuery}
                   matchCount={searchMatches.length}
