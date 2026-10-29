@@ -1,11 +1,13 @@
 import { app, BrowserWindow } from "electron"
 import { join } from "node:path"
 import assert from "node:assert/strict"
+import { checkMarkdownPerformance } from "./markdown-check"
 
 app.setPath("userData", process.env.VYKOR_CONVERSATION_PROFILE!)
 app.setPath("sessionData", process.env.VYKOR_CONVERSATION_PROFILE!)
 app.commandLine.appendSwitch("disable-gpu")
-const deadline = setTimeout(() => app.exit(2), 120_000)
+const markdownOnly = process.env.VYKOR_MARKDOWN_PERFORMANCE === "1"
+const deadline = setTimeout(() => app.exit(2), markdownOnly ? 300_000 : 120_000)
 void (async () => {
   await app.whenReady()
   const window = new BrowserWindow({
@@ -33,6 +35,14 @@ void (async () => {
     const run = (code: string) => window.webContents.executeJavaScript(code)
     await window.webContents.debugger.attach("1.3")
     await window.webContents.debugger.sendCommand("Performance.enable")
+    if (markdownOnly) {
+      await checkMarkdownPerformance(window)
+      console.log(JSON.stringify({ result: "passed" }))
+      clearTimeout(deadline)
+      window.destroy()
+      app.exit(0)
+      return
+    }
     const cpuRate = Number(process.env.VYKOR_CONVERSATION_CPU_RATE ?? 1)
     assert.ok(Number.isFinite(cpuRate) && cpuRate >= 1 && cpuRate <= 20)
     const sample = async () => {

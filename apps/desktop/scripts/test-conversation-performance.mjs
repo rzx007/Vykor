@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process"
 import { createRequire } from "node:module"
-import { mkdtempSync, rmSync } from "node:fs"
+import { mkdtempSync, rmSync, readFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -8,6 +8,9 @@ import { fileURLToPath } from "node:url"
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const profile = mkdtempSync(join(tmpdir(), "vykor-conversation-perf-"))
 const env = { ...process.env, VYKOR_CONVERSATION_PROFILE: profile }
+env.VYKOR_STREAMDOWN_VERSION = JSON.parse(
+  readFileSync(join(root, "node_modules/streamdown/package.json"), "utf8")
+).version
 delete env.ELECTRON_RUN_AS_NODE
 const child = spawn(
   createRequire(import.meta.url)("electron"),
@@ -26,7 +29,10 @@ child.stdout.on("data", (data) => {
 child.stderr.on("data", (data) => {
   errors += data
 })
-const deadline = setTimeout(() => child.kill(), 125_000)
+const deadline = setTimeout(
+  () => child.kill(),
+  env.VYKOR_MARKDOWN_PERFORMANCE === "1" ? 305_000 : 125_000
+)
 child.on("error", (error) => {
   console.error(error)
   process.exitCode = 1

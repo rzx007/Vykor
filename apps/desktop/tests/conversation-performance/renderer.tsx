@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client"
 import { flushSync } from "react-dom"
 import { useLayoutEffect } from "react"
+import "./markdown"
 import {
   VirtualTranscript,
   type TranscriptRow,
