@@ -322,7 +322,7 @@ export function Composer({
           if (item.action.kind === "goal") onGoalModeChange?.(true)
         }}
       />
-      <div className="flex h-12 min-w-0 items-center gap-1 px-3 pb-2">
+      <div className="flex min-h-12 min-w-0 flex-wrap items-center gap-1 px-3 pb-2">
         <Button
           type="button"
           variant="outline"
@@ -486,7 +486,7 @@ export function Composer({
             closePicker()
           }}
         />
-        <div className="ml-auto flex min-w-0 items-center gap-0.5">
+        <div className="ml-auto flex max-w-full min-w-0 items-center gap-0.5">
           <ModelPicker
             open={activePicker === "model"}
             onOpenChange={(open) => setActivePicker(open ? "model" : null)}
