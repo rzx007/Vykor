@@ -47,7 +47,7 @@ import {
   selectProjects,
   selectSessions,
 } from "@renderer/stores/desktop-session/selectors"
-import type { DesktopProject } from "@shared/session-types"
+import type { DesktopProject, DesktopSessionRecord } from "@shared/session-types"
 import { useSessionActionDialogs } from "../../../conversation-page/session/session-action-dialogs"
 import { DaemonAutoStartCard } from "../daemon-autostart-card"
 import { SidebarNavigationButton, SidebarSectionHeader } from "./sidebar-controls"
@@ -145,8 +145,9 @@ export function Sidebar({
   )
   const activeProjectPath = useMemo(() => {
     const session = sessions.find((item) => item.id === activeSessionId)
-    return session ? normalizePath(session.cwd) : null
-  }, [activeSessionId, sessions])
+    const project = session && projects.find((item) => belongsToProject(session, item))
+    return project ? normalizePath(project.path) : null
+  }, [activeSessionId, projects, sessions])
   const runningSessionIds = useMemo(
     () =>
       new Set(
@@ -163,8 +164,7 @@ export function Sidebar({
   const runningProject = projects.some((project) =>
     sessions.some(
       (session) =>
-        session.projectId === project.id &&
-        !isChannelSession(session) &&
+        belongsToProject(session, project) &&
         runningSessionIds.has(session.id)
     )
   )
@@ -386,9 +386,8 @@ export function Sidebar({
                             ? activeProjectPath === path
                             : index === 0
                           const expanded = projectExpansion[path] ?? defaultExpanded
-                          const projectSessions = sessions.filter(
-                            (session) =>
-                              samePath(session.cwd, project.path) && !isChannelSession(session)
+                          const projectSessions = sessions.filter((session) =>
+                            belongsToProject(session, project)
                           )
                           return (
                             <ProjectGroup
@@ -601,6 +600,11 @@ export function Sidebar({
 
 function samePath(left: string, right: string): boolean {
   return normalizePath(left) === normalizePath(right)
+}
+
+function belongsToProject(session: DesktopSessionRecord, project: DesktopProject): boolean {
+  if (session.workspaceMode === "outside_project" || isChannelSession(session)) return false
+  return session.projectId ? session.projectId === project.id : samePath(session.cwd, project.path)
 }
 
 function normalizePath(value: string): string {
