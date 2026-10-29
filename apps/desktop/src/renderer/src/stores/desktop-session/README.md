@@ -198,3 +198,9 @@ operation 的阶段是 `pending`、`acknowledged`、`failed`。
 ### 附件准备与失败反馈
 
 `attachment-actions.ts` 统一处理文件选择、拖放和 `addClipboardFiles` 的准备过程。`DesktopComposerDraft.attachmentPreparation` 仅保存本次运行中的准备数量与错误；稳定标识用于在草稿迁移后找到当前归属，草稿被删除后不重新创建。准备期间输入区阻止发送，正文保持独立。上传回调按 draftId 和 taskId 找到当前草稿，终态忽略迟到结果；重试会创建新的 taskId。图片预览失败只属于卡片本地状态，不改变上传状态。
+
+## 停止与上下文读取反馈
+
+`interrupt` 复用现有运行操作保存停止中状态，同一会话、同一运行的 pending 停止请求只发送一次。带 `expectedRunId` 的请求收到 RPC 应答后仍等待会话更新确认该运行终止，由已有运行态收尾逻辑清除；迟到应答不改变新运行。主聊天与侧聊分别通过各自会话的 selector 读取停止状态。
+
+`refreshContextUsage` 保留最近成功快照，并向显式打开用量面板的调用方返回 true（已更新）或 false（读取失败、不可用或格式无效）。同会话被后台刷新接替时，旧调用等待最新读取结果；会话已切换时返回 undefined。后台刷新仍可忽略结果，面板自身负责短期加载与重试反馈，不增加一份全局加载状态。

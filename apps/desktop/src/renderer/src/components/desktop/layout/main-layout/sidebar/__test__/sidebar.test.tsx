@@ -326,6 +326,50 @@ describe("Sidebar collapsible sections and empty states", () => {
     })
   })
 
+  it("keeps an active worktree session under its owning project", async () => {
+    const projects = [
+      { id: "first", name: "项目 A", path: "/workspace/a", lastOpenedAt: 1, available: true },
+      { id: "owner", name: "项目 B", path: "/workspace/b", lastOpenedAt: 1, available: true },
+    ]
+    const session: DesktopSessionRecord = {
+      id: "worktree-session",
+      projectId: "owner",
+      workspaceMode: "project",
+      cwd: "/workspace/task-worktree",
+      title: "独立目录中的任务",
+      model: "m",
+      status: "running",
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    useDesktopSessionStore.setState({
+      projects,
+      sessions: [session],
+      activeSessionId: session.id,
+    })
+    await act(async () =>
+      root.render(
+        <Sidebar
+          open
+          onOpenSettings={vi.fn()}
+          onOpenScheduled={vi.fn()}
+          onOpenPlugins={vi.fn()}
+          onOpenConversation={vi.fn()}
+        />
+      )
+    )
+
+    const owner = container.querySelector<HTMLButtonElement>('button[title="/workspace/b"]')!
+    expect(owner.getAttribute("aria-expanded")).toBe("true")
+    expect(container.textContent).toContain("独立目录中的任务")
+    expect(
+      container.querySelector('button[title="/workspace/a"]')?.getAttribute("aria-expanded")
+    ).toBe("false")
+    await act(async () => owner.click())
+    expect(container.querySelector('[aria-label="项目 B，有会话正在运行"]')).not.toBeNull()
+  })
+
   it("shows names without counts when project and recent sections are collapsed", async () => {
     const project = {
       id: "project-1",

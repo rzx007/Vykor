@@ -144,7 +144,7 @@ export function NewConversationStart({
   onSelectEffort: (effort: string) => void
   onTogglePanel: () => void
   contextUsage?: DesktopContextUsageSnapshot | null
-  onOpenContextUsage?: () => void
+  onOpenContextUsage?: () => void | Promise<boolean | void>
 }): React.JSX.Element {
   const [activePicker, setActivePicker] = useState<StartPicker | null>(null)
   const [avatarName] = useState(() => crypto.randomUUID())

@@ -233,6 +233,14 @@ export function selectActiveSessionSending(state: DesktopSessionState): boolean 
   return state.activeSessionId ? selectSessionSending(state, state.activeSessionId) : false
 }
 
+export function selectSessionInterrupting(state: DesktopSessionState, sessionId: string): boolean {
+  return hasPendingOperation(selectSessionRuntime(state, sessionId), "interrupt-run")
+}
+
+export function selectActiveSessionInterrupting(state: DesktopSessionState): boolean {
+  return state.activeSessionId ? selectSessionInterrupting(state, state.activeSessionId) : false
+}
+
 export function selectActiveSessionOpening(state: DesktopSessionState): boolean {
   return Boolean(
     state.activeSessionId &&

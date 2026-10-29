@@ -12,12 +12,14 @@ import {
   selectPermissionReplyPending,
   selectActiveSessionPromptSubmissions,
   selectActiveSessionSending,
+  selectActiveSessionInterrupting,
   selectAppOperationError,
   selectNewConversationError,
   selectNewConversationSending,
   selectProjectOperationError,
   selectSessionComposerError,
   selectSessionSending,
+  selectSessionInterrupting,
 } from "./selectors"
 import type { DesktopSessionRecord } from "@shared/session-types"
 import type { DesktopOperationKind, DesktopSessionState } from "./types"
@@ -244,6 +246,19 @@ describe("desktop session selectors", () => {
 
     expect(selectSessionSending(state, "session-a")).toBe(true)
     expect(selectSessionSending(state, "session-b")).toBe(false)
+  })
+
+  it("selects stopping only from pending stops in the requested session", () => {
+    const state = stateWithPendingOperation("session-a", "interrupt-run")
+    expect(selectSessionInterrupting(state, "session-a")).toBe(true)
+    expect(selectSessionInterrupting(state, "session-b")).toBe(false)
+    expect(selectActiveSessionInterrupting({ ...state, activeSessionId: "session-b" })).toBe(false)
+    expect(selectActiveSessionInterrupting({ ...state, activeSessionId: "session-a" })).toBe(true)
+    expect(selectSessionSending(state, "session-a")).toBe(false)
+
+    state.sessionRuntimes["session-a"]!.operations["operation-1"]!.phase = "failed"
+    expect(selectSessionInterrupting(state, "session-a")).toBe(false)
+    expect(selectSessionInterrupting(stateWithPendingOperation("session-a", "send-prompt"), "session-a")).toBe(false)
   })
 
   it("selects new-conversation sending independently", () => {

@@ -6,7 +6,11 @@ import { createEmptySessionRuntime } from "./operation-state"
 import { createQueuedPromptActions } from "./queued-prompt-actions"
 import { emptySessionView, resetDesktopSessionStore, sessionRuntime } from "./store-test-fixtures"
 import { useDesktopSessionStore } from "./store"
-import { selectActiveSessionQueuedPromptActions, selectSessionSending } from "./selectors"
+import {
+  selectActiveSessionQueuedPromptActions,
+  selectSessionInterrupting,
+  selectSessionSending,
+} from "./selectors"
 import type { DesktopSessionRuntime } from "./types"
 import { composerDocument, emptyComposerDocument } from "./composer-document"
 import { readPersistedActiveSessionId, writePersistedActiveSessionId } from "./persistence"
@@ -47,6 +51,17 @@ function viewContainingInput(
     runs: [],
     tasks: [],
     permissions: [],
+  }
+}
+
+function viewWithActiveRun(sessionId: string, runId: string, cursor = 1): DesktopSessionView {
+  const view = emptySessionView(sessionId, cursor)
+  return {
+    ...view,
+    session: { ...view.session, status: "running" },
+    runs: [
+      { id: runId, sessionId, status: "running", metadata: {}, createdAt: 1, updatedAt: cursor },
+    ],
   }
 }
 
@@ -511,6 +526,140 @@ describe("prompt actions session runtime", () => {
     await expect(request).resolves.toBeUndefined()
 
     expect(useDesktopSessionStore.getState().sessionRuntimes["session-1"]!.operations).toEqual({})
+  })
+
+  it("sends a stop only once for a run while it is waiting for confirmation", async () => {
+    let resolveInterrupt!: () => void
+    const interrupt = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveInterrupt = resolve
+        })
+    )
+    vi.stubGlobal("window", { desktop: { sessions: { interrupt } } })
+    useDesktopSessionStore.setState({
+      activeSessionId: "session-1",
+      sessionView: viewWithActiveRun("session-1", "run-1"),
+    })
+
+    const request = useDesktopSessionStore.getState().interrupt()
+    void useDesktopSessionStore.getState().interrupt()
+    expect(interrupt).toHaveBeenCalledTimes(1)
+    expect(Object.values(sessionRuntime("session-1").operations)).toHaveLength(1)
+
+    resolveInterrupt()
+    await request
+    expect(selectSessionInterrupting(useDesktopSessionStore.getState(), "session-1")).toBe(true)
+    await useDesktopSessionStore.getState().interrupt()
+    expect(interrupt).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps stopping after the RPC succeeds until the targeted run is terminal", async () => {
+    const interrupt = vi.fn(async () => undefined)
+    vi.stubGlobal("window", { desktop: { sessions: { interrupt } } })
+    const view = viewWithActiveRun("session-1", "run-1")
+    useDesktopSessionStore.setState({ activeSessionId: "session-1", sessionView: view })
+
+    await useDesktopSessionStore.getState().interrupt()
+    expect(selectSessionInterrupting(useDesktopSessionStore.getState(), "session-1")).toBe(true)
+    useDesktopSessionStore.getState().applySessionUpdate({ ...view, cursor: 2 })
+    expect(selectSessionInterrupting(useDesktopSessionStore.getState(), "session-1")).toBe(true)
+    useDesktopSessionStore.getState().applySessionUpdate({
+      ...view,
+      cursor: 3,
+      runs: [{ ...view.runs[0]!, status: "interrupted", updatedAt: 3 }],
+    })
+    expect(selectSessionInterrupting(useDesktopSessionStore.getState(), "session-1")).toBe(false)
+  })
+
+  it.each(["accepted", "rejected"] as const)(
+    "keeps a new run's stop pending after the previous stop's late %s reply",
+    async (result) => {
+      let finishPrevious!: () => void
+      let resolveNext!: () => void
+      const interrupt = vi
+        .fn()
+        .mockImplementationOnce(
+          () =>
+            new Promise<void>((resolve, reject) => {
+              finishPrevious = () =>
+                result === "accepted" ? resolve() : reject(new Error("old response lost"))
+            })
+        )
+        .mockImplementationOnce(
+          () =>
+            new Promise<void>((resolve) => {
+              resolveNext = resolve
+            })
+        )
+      vi.stubGlobal("window", { desktop: { sessions: { interrupt } } })
+      const oldView = viewWithActiveRun("session-1", "run-old")
+      useDesktopSessionStore.setState({ activeSessionId: "session-1", sessionView: oldView })
+      const previous = useDesktopSessionStore.getState().interrupt()
+      const nextView = viewWithActiveRun("session-1", "run-new", 2)
+      useDesktopSessionStore.getState().applySessionUpdate({
+        ...nextView,
+        runs: [{ ...oldView.runs[0]!, status: "interrupted", updatedAt: 2 }, ...nextView.runs],
+      })
+      const next = useDesktopSessionStore.getState().interrupt()
+      expect(interrupt.mock.calls.map(([input]) => input)).toEqual([
+        { sessionId: "session-1", expectedRunId: "run-old" },
+        { sessionId: "session-1", expectedRunId: "run-new" },
+      ])
+
+      useDesktopSessionStore.setState({
+        activeSessionId: "session-other",
+        sessionView: emptySessionView("session-other"),
+      })
+      finishPrevious()
+      await previous
+      expect(Object.values(sessionRuntime("session-1").operations)).toEqual([
+        expect.objectContaining({ kind: "interrupt-run", target: "run-new", phase: "pending" }),
+      ])
+      expect(selectSessionInterrupting(useDesktopSessionStore.getState(), "session-other")).toBe(
+        false
+      )
+      resolveNext()
+      await next
+      expect(selectSessionInterrupting(useDesktopSessionStore.getState(), "session-1")).toBe(true)
+    }
+  )
+
+  it("allows retrying a failed stop and clears its previous error", async () => {
+    const interrupt = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("stop unavailable"))
+      .mockResolvedValueOnce(undefined)
+    vi.stubGlobal("window", { desktop: { sessions: { interrupt } } })
+    useDesktopSessionStore.setState({
+      activeSessionId: "session-1",
+      sessionView: viewWithActiveRun("session-1", "run-1"),
+    })
+
+    await useDesktopSessionStore.getState().interrupt()
+    expect(selectSessionInterrupting(useDesktopSessionStore.getState(), "session-1")).toBe(false)
+    expect(Object.values(sessionRuntime("session-1").operations)).toEqual([
+      expect.objectContaining({ phase: "failed", error: "stop unavailable" }),
+    ])
+    await useDesktopSessionStore.getState().interrupt()
+    expect(interrupt).toHaveBeenCalledTimes(2)
+    expect(Object.values(sessionRuntime("session-1").operations)).toEqual([
+      expect.objectContaining({ target: "run-1", phase: "pending" }),
+    ])
+    expect(Object.values(sessionRuntime("session-1").operations)[0]!.error).toBeUndefined()
+  })
+
+  it("finishes a session-wide stop without a target run when the RPC settles", async () => {
+    const interrupt = vi.fn(async () => undefined)
+    vi.stubGlobal("window", { desktop: { sessions: { interrupt } } })
+    useDesktopSessionStore.setState({
+      activeSessionId: "session-1",
+      sessionView: emptySessionView("session-1"),
+    })
+
+    await useDesktopSessionStore.getState().interrupt()
+    expect(interrupt).toHaveBeenCalledWith({ sessionId: "session-1" })
+    expect(sessionRuntime("session-1").operations).toEqual({})
   })
 })
 function onlyPendingPromptSubmission(

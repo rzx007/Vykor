@@ -210,6 +210,13 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
           ? (view.runs.find((run) => run.status === "running")?.id ??
             view.runs.find((run) => run.status === "pending")?.id)
           : undefined
+      const alreadyPending = Object.values(getSessionRuntime(get(), sessionId).operations).some(
+        (operation) =>
+          operation.kind === "interrupt-run" &&
+          operation.target === expectedRunId &&
+          operation.phase === "pending"
+      )
+      if (alreadyPending) return
       const operationId = globalThis.crypto.randomUUID()
       replaceRuntime(sessionId, (runtime) =>
         beginOperation(runtime, {
@@ -226,7 +233,9 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
           ...(expectedRunId ? { expectedRunId } : {}),
         })
         if (!get().sessionRuntimes[sessionId]) return
-        replaceRuntime(sessionId, (runtime) => removeOperation(runtime, operationId))
+        // A targeted stop remains pending until the session stream confirms that run ended.
+        if (!expectedRunId)
+          replaceRuntime(sessionId, (runtime) => removeOperation(runtime, operationId))
       } catch (error) {
         if (!get().sessionRuntimes[sessionId]) return
         const message = errorMessage(error)

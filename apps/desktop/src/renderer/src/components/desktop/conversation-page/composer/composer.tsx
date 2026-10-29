@@ -34,6 +34,7 @@ export function Composer({
   draft,
   sending,
   running = false,
+  interrupting = false,
   models,
   selectedModel,
   selectedProvider,
@@ -86,6 +87,7 @@ export function Composer({
   draft: ComposerDocument
   sending: boolean
   running?: boolean
+  interrupting?: boolean
   models: DesktopModel[]
   selectedModel: string | null
   selectedProvider: string | null
@@ -113,7 +115,7 @@ export function Composer({
   rows?: number
   canSubmit?: boolean
   contextUsage?: DesktopContextUsageSnapshot | null
-  onOpenContextUsage?: () => void
+  onOpenContextUsage?: () => void | Promise<boolean | void>
   onDraftChange: (value: ComposerDocument) => void
   onSubmit: () => void
   onCommand?: (command: ComposerPickerCommand) => Promise<void>
@@ -340,7 +342,7 @@ export function Composer({
           if (item.action.kind === "goal") onGoalModeChange?.(true)
         }}
       />
-      <div className="flex h-12 min-w-0 items-center gap-1 px-3 pb-2">
+      <div className="flex min-h-12 min-w-0 flex-wrap items-center gap-1 px-3 pb-2">
         <Button
           type="button"
           variant="outline"
@@ -504,7 +506,7 @@ export function Composer({
             closePicker()
           }}
         />
-        <div className="ml-auto flex min-w-0 items-center gap-0.5">
+        <div className="ml-auto flex max-w-full min-w-0 items-center gap-0.5">
           <ModelPicker
             open={activePicker === "model"}
             onOpenChange={(open) => setActivePicker(open ? "model" : null)}
@@ -529,6 +531,7 @@ export function Composer({
             <ComposerSendButton
               sending={sending}
               running={running && !goalMode}
+              interrupting={interrupting}
               disabled={!allowSubmit}
               onInterrupt={onInterrupt}
             />

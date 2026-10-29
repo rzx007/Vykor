@@ -177,7 +177,7 @@ export interface SessionActions {
   refreshContextUsage: (options?: {
     refresh?: boolean
     previousContextWindow?: number
-  }) => Promise<void>
+  }) => Promise<boolean | void>
 }
 
 export interface GoalComposerState {

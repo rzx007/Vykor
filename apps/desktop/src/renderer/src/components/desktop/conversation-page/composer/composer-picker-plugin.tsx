@@ -32,6 +32,7 @@ import { $createSkillMentionNode, $isSkillMentionNode } from "./skill-mention-no
 import type { ComposerSkill } from "./composer-types"
 
 export function ComposerPickerPlugin({
+  disabled,
   skills,
   commands,
   contextItems,
@@ -42,6 +43,7 @@ export function ComposerPickerPlugin({
   onCommand,
   onCommandError,
 }: {
+  disabled: boolean
   skills: readonly ComposerSkill[]
   commands: readonly ComposerPickerItem[]
   contextItems: readonly ContextPickerItem[]
@@ -87,7 +89,7 @@ export function ComposerPickerPlugin({
 
   const visible =
     manualContextOpen || (trigger && dismissed !== `${trigger.from}:${trigger.to}:${trigger.query}`)
-  if (!visible) return null
+  if (disabled || !visible) return null
   const skillItems: ComposerPickerItem[] = skills.map((skill) => ({
     id: `skill:${skill.path}`,
     kind: "skill",

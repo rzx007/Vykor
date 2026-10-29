@@ -41,7 +41,7 @@ export function ComposerPicker({
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.isComposing || options.length === 0) return
+      if (event.isComposing || event.keyCode === 229 || options.length === 0) return
       if (event.key === "ArrowDown") {
         event.preventDefault()
         setHighlighted((current) => ({

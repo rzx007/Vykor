@@ -1233,9 +1233,56 @@ describe("desktop session actions", () => {
     resolvers[1]!(snapshot("newer", 20))
     await newer
     resolvers[0]!(snapshot("older", 10))
-    await older
+    expect(await older).toBe(true)
 
     expect(useDesktopSessionStore.getState().contextUsageSnapshot?.model).toBe("newer")
+  })
+
+  it("keeps a manual context read pending until a newer background read reports its failure", async () => {
+    const view = emptySessionView("session-usage-background-race")
+    const requests: Array<{ resolve: (value: unknown) => void; reject: (error: Error) => void }> = []
+    const getContextUsage = vi.fn(
+      () => new Promise<unknown>((resolve, reject) => requests.push({ resolve, reject }))
+    )
+    vi.stubGlobal("window", { desktop: { sessions: { getContextUsage } } })
+    useDesktopSessionStore.setState({
+      activeSessionId: view.session.id,
+      sessionView: view,
+      contextUsageSnapshot: null,
+    })
+    let settled = false
+    const manual = useDesktopSessionStore.getState().refreshContextUsage({ refresh: true })
+    void manual.then(() => {
+      settled = true
+    })
+    const background = useDesktopSessionStore.getState().refreshContextUsage({ refresh: true })
+
+    requests[0]!.resolve(null)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(settled).toBe(false)
+    requests[1]!.reject(new Error("offline"))
+    expect(await background).toBe(false)
+    expect(await manual).toBe(false)
+    expect(useDesktopSessionStore.getState().contextUsageSnapshot).toBeNull()
+  })
+
+  it("discards an earlier session's context result without waiting for the new session", async () => {
+    const resolvers: Array<(value: unknown) => void> = []
+    const getContextUsage = vi.fn(
+      () => new Promise<unknown>((resolve) => resolvers.push(resolve))
+    )
+    vi.stubGlobal("window", { desktop: { sessions: { getContextUsage } } })
+    const first = emptySessionView("usage-first")
+    useDesktopSessionStore.setState({ activeSessionId: first.session.id, sessionView: first })
+    const earlier = useDesktopSessionStore.getState().refreshContextUsage()
+
+    const second = emptySessionView("usage-second")
+    useDesktopSessionStore.setState({ activeSessionId: second.session.id, sessionView: second })
+    const current = useDesktopSessionStore.getState().refreshContextUsage()
+    resolvers[0]!(null)
+    expect(await earlier).toBeUndefined()
+    resolvers[1]!(null)
+    expect(await current).toBe(false)
   })
 
   it("keeps the latest permission mode when an older request succeeds late", async () => {
@@ -1889,4 +1936,33 @@ describe("desktop session store outside-project mode", () => {
       sessionView: null,
     })
   })
+})
+
+
+it("reports unavailable context reads to the caller while retaining the last usable snapshot", async () => {
+  resetDesktopSessionStore()
+  const view = emptySessionView("context-read-feedback")
+  const snapshot = {
+    model: "test-model", contextWindow: 100_000, estimatedInputTokens: 20,
+    percentFull: 0.0002, estimator: "heuristic_v1" as const, buckets: [], tips: [],
+    computedAt: "2026-10-29T00:00:00.000Z", source: "session_cache" as const,
+  }
+  const getContextUsage = vi.fn().mockRejectedValue(new Error("unavailable"))
+  vi.stubGlobal("window", { desktop: { sessions: { getContextUsage } } })
+  useDesktopSessionStore.setState({ activeSessionId: view.session.id, sessionView: view, contextUsageSnapshot: null })
+  try {
+    expect(await useDesktopSessionStore.getState().refreshContextUsage()).toBe(false)
+    expect(useDesktopSessionStore.getState().contextUsageSnapshot).toBeNull()
+    getContextUsage.mockResolvedValue(snapshot)
+    expect(await useDesktopSessionStore.getState().refreshContextUsage()).toBe(true)
+    expect(useDesktopSessionStore.getState().contextUsageSnapshot).toEqual(snapshot)
+    getContextUsage.mockResolvedValue(null)
+    expect(await useDesktopSessionStore.getState().refreshContextUsage()).toBe(false)
+    expect(useDesktopSessionStore.getState().contextUsageSnapshot).toEqual(snapshot)
+    getContextUsage.mockRejectedValue(new Error("offline"))
+    expect(await useDesktopSessionStore.getState().refreshContextUsage()).toBe(false)
+    expect(useDesktopSessionStore.getState().contextUsageSnapshot).toEqual(snapshot)
+  } finally {
+    vi.unstubAllGlobals()
+  }
 })

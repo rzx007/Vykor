@@ -1,9 +1,10 @@
 import { LexicalComposer } from "@lexical/react/LexicalComposer"
+import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext"
 import { ContentEditable } from "@lexical/react/LexicalContentEditable"
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary"
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin"
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { cn } from "@renderer/lib/utils"
 import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
@@ -96,6 +97,7 @@ export function RichPromptInput({
   return (
     <PluginMentionIcons.Provider value={pluginIcons}>
       <LexicalComposer key={id} initialConfig={initialConfig}>
+        <ComposerEditablePlugin disabled={disabled} />
         <div
           className={cn("relative", disabled && "pointer-events-none opacity-60")}
           onCompositionStart={() => setIsComposing(true)}
@@ -134,6 +136,7 @@ export function RichPromptInput({
           />
           <SyncDraftPlugin value={value} onChange={onChange} />
           <ComposerPickerPlugin
+            disabled={disabled}
             skills={skills}
             commands={commands}
             contextItems={contextItems}
@@ -154,6 +157,12 @@ export function RichPromptInput({
       </LexicalComposer>
     </PluginMentionIcons.Provider>
   )
+}
+
+function ComposerEditablePlugin({ disabled }: { disabled: boolean }): null {
+  const [editor] = useLexicalComposerContext()
+  useEffect(() => editor.setEditable(!disabled), [disabled, editor])
+  return null
 }
 
 function RichPromptPlaceholder({
