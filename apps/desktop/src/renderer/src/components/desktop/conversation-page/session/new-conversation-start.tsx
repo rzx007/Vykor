@@ -65,6 +65,7 @@ export function NewConversationStart({
   goalError = null,
   onDismissGoalError,
   attachments,
+  attachmentPreparation,
   attachmentInteractionEnabled,
   panelOpen,
   onDraftChange,
@@ -120,18 +121,19 @@ export function NewConversationStart({
   onGoalTokenBudgetChange?: (value: string) => void
   goalError?: string | null
   onDismissGoalError?: () => void
+  attachmentPreparation?: { pending: string[]; error: string | null }
   attachments: readonly DesktopAttachmentDraft[]
   attachmentInteractionEnabled: boolean
   panelOpen: boolean
   onDraftChange: (value: ComposerDocument) => void
   onSubmit: () => void
-  onPickFiles: () => void
-  onDropFiles: (files: readonly File[]) => void
-  onPasteFiles: (files: readonly File[]) => void
-  onPasteTextAttachment: (text: string) => void
-  onCancelAttachment: (draftId: string) => void
-  onRetryAttachment: (draftId: string) => void
-  onRemoveAttachment: (draftId: string) => void
+  onPickFiles: () => void | Promise<void>
+  onDropFiles: (files: readonly File[]) => void | Promise<void>
+  onPasteFiles: (files: readonly File[]) => void | Promise<void>
+  onPasteTextAttachment: (text: string) => void | Promise<void>
+  onCancelAttachment: (draftId: string) => void | Promise<void>
+  onRetryAttachment: (draftId: string) => void | Promise<void>
+  onRemoveAttachment: (draftId: string) => void | Promise<void>
   onChooseProject: () => void
   onSelectProject: (project: DesktopProject) => void
   onSelectOutsideProject: () => void
@@ -464,6 +466,7 @@ export function NewConversationStart({
               (selectedProject || workspaceMode === "outside_project")
             )}
             attachments={attachments}
+            attachmentPreparation={attachmentPreparation}
             attachmentInteractionEnabled={attachmentInteractionEnabled}
             onDraftChange={onDraftChange}
             onSubmit={onSubmit}

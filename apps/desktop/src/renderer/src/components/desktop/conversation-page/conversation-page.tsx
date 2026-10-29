@@ -220,6 +220,7 @@ function ConversationPane({
   const attachments = useDesktopSessionStore((state) =>
     selectDraftAttachments(state, composerScope)
   )
+  const attachmentPreparation = useDesktopSessionStore((state) => state.composerDraftsByScope[composerScope]?.attachmentPreparation)
   const draftText = selectComposerDocumentText(draft)
   const goal = useDesktopSessionStore((state) =>
     activeSessionId ? state.goalsBySession[activeSessionId] : null
@@ -247,6 +248,7 @@ function ConversationPane({
 
   const submitDraft = async (): Promise<void> => {
     const content = selectComposerDocumentText(draft)
+    if (useDesktopSessionStore.getState().composerDraftsByScope[composerScope]?.attachmentPreparation?.pending.length) return
     const ready = areDesktopAttachmentsSendable(attachments)
     return submitConversationDraft(
       {
@@ -386,19 +388,12 @@ function ConversationPane({
       appContextEntries.some((entry) => entry.source.sessionId === activeSessionId)
     )
 
-  const pasteAttachments = async (files: readonly File[]): Promise<void> => {
-    const payloads = await Promise.all(
-      files.map(async (file) => ({
-        bytes: await file.arrayBuffer(),
-        displayName: file.name || "粘贴图片",
-        mediaType: file.type || "application/octet-stream",
-      }))
-    )
-    for (const payload of payloads) void addClipboardAttachment(composerScope, payload)
+  const pasteAttachments = (files: readonly File[]): Promise<void> => {
+    return useDesktopSessionStore.getState().addClipboardFiles(composerScope, files)
   }
 
-  const pasteTextAttachment = (text: string): void => {
-    void addClipboardAttachment(composerScope, {
+  const pasteTextAttachment = (text: string): Promise<void> => {
+    return addClipboardAttachment(composerScope, {
       bytes: new TextEncoder().encode(text).buffer as ArrayBuffer,
       displayName: "pasted-text.txt",
       mediaType: "text/plain",
@@ -609,7 +604,7 @@ function ConversationPane({
                 onOpenFile={onOpenFile}
                 onPickFiles={
                   attachmentSupport.interactionEnabled && !archived
-                    ? () => void pickAttachmentFiles(composerScope)
+                    ? () => pickAttachmentFiles(composerScope)
                     : undefined
                 }
               />
@@ -658,19 +653,20 @@ function ConversationPane({
             plugins={pluginCatalog}
             pluginMentionsEnabled={pluginMentionsEnabled}
             attachments={attachments}
+            attachmentPreparation={attachmentPreparation}
             attachmentInteractionEnabled={attachmentSupport.interactionEnabled}
             panelOpen={panelOpen}
             onDraftChange={setDraft}
             onSubmit={() => void submitDraft()}
-            onPickFiles={() => void pickAttachmentFiles(composerScope)}
-            onDropFiles={(files) => void addDroppedAttachments(composerScope, files)}
-            onPasteFiles={(files) => void pasteAttachments(files)}
+            onPickFiles={() => pickAttachmentFiles(composerScope)}
+            onDropFiles={(files) => addDroppedAttachments(composerScope, files)}
+            onPasteFiles={(files) => pasteAttachments(files)}
             onPasteTextAttachment={pasteTextAttachment}
-            onCancelAttachment={(draftId) => void cancelAttachment(composerScope, draftId)}
-            onRetryAttachment={(draftId) => void retryAttachment(composerScope, draftId)}
+            onCancelAttachment={(draftId) => cancelAttachment(composerScope, draftId)}
+            onRetryAttachment={(draftId) => retryAttachment(composerScope, draftId)}
             onRemoveAttachment={(draftId) => {
               setComposerValidationError(null)
-              void removeAttachment(composerScope, draftId)
+              return removeAttachment(composerScope, draftId)
             }}
             onChooseProject={() => void chooseProject()}
             onSelectProject={(project) => void selectProject(project)}
@@ -908,19 +904,20 @@ function ConversationPane({
                   }
                   contextUsage={contextUsageSnapshot}
                   attachments={attachments}
+                  attachmentPreparation={attachmentPreparation}
                   attachmentInteractionEnabled={attachmentSupport.interactionEnabled}
                   onDraftChange={setDraft}
                   onSubmit={() => void submitDraft()}
                   onCommand={executeComposerCommand}
-                  onPickFiles={() => void pickAttachmentFiles(composerScope)}
-                  onDropFiles={(files) => void addDroppedAttachments(composerScope, files)}
-                  onPasteFiles={(files) => void pasteAttachments(files)}
+                  onPickFiles={() => pickAttachmentFiles(composerScope)}
+                  onDropFiles={(files) => addDroppedAttachments(composerScope, files)}
+                  onPasteFiles={(files) => pasteAttachments(files)}
                   onPasteTextAttachment={pasteTextAttachment}
-                  onCancelAttachment={(draftId) => void cancelAttachment(composerScope, draftId)}
-                  onRetryAttachment={(draftId) => void retryAttachment(composerScope, draftId)}
+                  onCancelAttachment={(draftId) => cancelAttachment(composerScope, draftId)}
+                  onRetryAttachment={(draftId) => retryAttachment(composerScope, draftId)}
                   onRemoveAttachment={(draftId) => {
                     setComposerValidationError(null)
-                    void removeAttachment(composerScope, draftId)
+                    return removeAttachment(composerScope, draftId)
                   }}
                   onInterrupt={() => void interrupt()}
                   onOpenContextUsage={() => void refreshContextUsage({ refresh: true })}

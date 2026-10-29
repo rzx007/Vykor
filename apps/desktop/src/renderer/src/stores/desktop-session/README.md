@@ -194,3 +194,7 @@ operation 的阶段是 `pending`、`acknowledged`、`failed`。
 | `permission-card.test.ts`                                  | 单个授权项 pending 时禁用两种决定，并在卡片内显示该项错误。                                              |
 
 修改这些规则时，优先在对应职责测试中增加断言；跨模块竞态才放入 `store.integration.test.ts`。
+
+### 附件准备与失败反馈
+
+`attachment-actions.ts` 统一处理文件选择、拖放和 `addClipboardFiles` 的准备过程。`DesktopComposerDraft.attachmentPreparation` 仅保存本次运行中的准备数量与错误；稳定标识用于在草稿迁移后找到当前归属，草稿被删除后不重新创建。准备期间输入区阻止发送，正文保持独立。上传回调按 draftId 和 taskId 找到当前草稿，终态忽略迟到结果；重试会创建新的 taskId。图片预览失败只属于卡片本地状态，不改变上传状态。

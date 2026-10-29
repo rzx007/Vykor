@@ -18,6 +18,7 @@ export const NEW_CONVERSATION_SCOPE = "new-conversation"
 export interface DesktopComposerDraft {
   document: ComposerDocument
   attachments: DesktopAttachmentDraft[]
+  attachmentPreparation?: { pending: string[]; error: string | null }
   textSelections?: Array<{ id: string; text: string }>
 }
 
@@ -120,7 +121,7 @@ export function applyUploadEvent(
   const attachment = selectDraftAttachments(state, scope).find(
     (item) => item.draftId === event.draftId
   )
-  if (!attachment || attachment.taskId !== event.taskId) return state
+  if (!attachment || attachment.taskId !== event.taskId || attachment.status !== "uploading") return state
   return updateAttachment(state, scope, event.draftId, (current) => {
     if (event.type === "progress") {
       const totalBytes = event.totalBytes > 0 ? event.totalBytes : current.sizeBytes

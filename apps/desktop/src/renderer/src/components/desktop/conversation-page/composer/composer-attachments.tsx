@@ -39,20 +39,39 @@ export function ComposerAttachments({
   const containsFile = attachments.some((attachment) => !isImageAttachment(attachment))
   const alignMixedAttachmentHeights = containsImage && containsFile
 
+  const preparing = attachments.filter((item) => item.status === "uploading").length
+  const attention = attachments.filter(
+    (item) =>
+      item.status === "failed" ||
+      item.status === "cancelled" ||
+      (item.status === "ready" && !resolveDesktopAttachmentCompatibility(item).supported)
+  ).length
+  const feedback =
+    [
+      preparing ? `${preparing} 个附件正在准备` : "",
+      attention ? `${attention} 个附件需要处理${readOnly ? "" : "，请重试或移除后发送"}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ") || `${attachments.length} 个附件已就绪`
   return (
-    <AttachmentGroup aria-label="待发送附件" className="px-3 pt-2">
-      {attachments.map((attachment) => (
-        <ComposerAttachmentCard
-          key={attachment.draftId}
-          attachment={attachment}
-          readOnly={readOnly}
-          onCancel={onCancel}
-          onRetry={onRetry}
-          onRemove={onRemove}
-          alignMixedAttachmentHeights={alignMixedAttachmentHeights}
-        />
-      ))}
-    </AttachmentGroup>
+    <div className="space-y-1 px-3 pt-2">
+      <AttachmentGroup aria-label="待发送附件">
+        {attachments.map((attachment) => (
+          <ComposerAttachmentCard
+            key={attachment.draftId}
+            attachment={attachment}
+            readOnly={readOnly}
+            onCancel={onCancel}
+            onRetry={onRetry}
+            onRemove={onRemove}
+            alignMixedAttachmentHeights={alignMixedAttachmentHeights}
+          />
+        ))}
+      </AttachmentGroup>
+      <p role="status" className="text-xs text-ui-muted">
+        {feedback}
+      </p>
+    </div>
   )
 }
 
@@ -72,9 +91,16 @@ function ComposerAttachmentCard({
   alignMixedAttachmentHeights: boolean
 }): React.JSX.Element {
   const viewer = useImageViewer()
-  const previewUrl = useAttachmentPreviewUrl(attachment)
+  const preview = useAttachmentPreviewUrl(attachment)
+  const previewUrl = preview.url
   const [failedPreviewUrl, setFailedPreviewUrl] = useState<string | null>(null)
   const visiblePreviewUrl = previewUrl && previewUrl !== failedPreviewUrl ? previewUrl : null
+  const previewFailed = preview.failed || Boolean(previewUrl && previewUrl === failedPreviewUrl)
+  const previewMessage = previewFailed
+    ? "预览读取失败，附件仍已就绪"
+    : preview.loading
+      ? "正在读取预览，附件已就绪"
+      : null
   const state =
     attachment.status === "uploading"
       ? "uploading"
@@ -146,8 +172,12 @@ function ComposerAttachmentCard({
       </AttachmentMedia>
       <AttachmentContent>
         <AttachmentTitle title={attachment.displayName}>{attachment.displayName}</AttachmentTitle>
-        <AttachmentDescription aria-live={errorMessage ? "polite" : undefined}>
-          {errorMessage ?? attachmentDescription(attachment, mediaType)}
+        <AttachmentDescription
+          title={errorMessage ?? previewMessage ?? undefined}
+          className={errorMessage || previewFailed ? "whitespace-normal" : undefined}
+          aria-live={errorMessage || previewFailed ? "polite" : undefined}
+        >
+          {errorMessage ?? previewMessage ?? attachmentDescription(attachment, mediaType)}
         </AttachmentDescription>
         {attachment.status === "uploading" && attachment.progress !== null ? (
           <AttachmentProgress
@@ -158,6 +188,18 @@ function ComposerAttachmentCard({
       </AttachmentContent>
       {!readOnly ? (
         <AttachmentActions>
+          {previewFailed ? (
+            <AttachmentAction
+              aria-label={`重试预览 ${attachment.displayName}`}
+              title="重试预览"
+              onClick={() => {
+                setFailedPreviewUrl(null)
+                preview.retry()
+              }}
+            >
+              <RotateCcw />
+            </AttachmentAction>
+          ) : null}
           {attachment.status === "uploading" ? (
             <AttachmentAction
               aria-label={`取消上传 ${attachment.displayName}`}
@@ -195,8 +237,14 @@ function isImageAttachment(attachment: DesktopAttachmentDraft): boolean {
   return (attachment.mediaType ?? attachment.declaredMediaType).startsWith("image/")
 }
 
-function useAttachmentPreviewUrl(attachment: DesktopAttachmentDraft): string | null {
-  const [preview, setPreview] = useState<{ assetId: string; url: string } | null>(null)
+function useAttachmentPreviewUrl(attachment: DesktopAttachmentDraft) {
+  const [attempt, setAttempt] = useState(0)
+  const [preview, setPreview] = useState<{
+    assetId: string
+    attempt: number
+    url: string | null
+    failed?: boolean
+  } | null>(null)
   const mediaType = attachment.mediaType ?? attachment.declaredMediaType
   const previewable =
     attachment.status === "ready" && Boolean(attachment.assetId) && mediaType.startsWith("image/")
@@ -213,30 +261,41 @@ function useAttachmentPreviewUrl(attachment: DesktopAttachmentDraft): string | n
       .then((preview) => {
         if (disposed) return
         objectUrl = URL.createObjectURL(new Blob([preview.bytes], { type: preview.mediaType }))
-        setPreview({ assetId: attachment.assetId!, url: objectUrl })
+        setPreview({ assetId: attachment.assetId!, attempt, url: objectUrl })
       })
       .catch(() => {
-        if (!disposed) setPreview(null)
+        if (!disposed)
+          setPreview({ assetId: attachment.assetId!, attempt, url: null, failed: true })
       })
 
     return () => {
       disposed = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [attachment.assetId, previewable])
+  }, [attachment.assetId, previewable, attempt])
 
-  return previewable && preview && preview.assetId === attachment.assetId ? preview.url : null
+  const current =
+    previewable && preview && preview.assetId === attachment.assetId && preview.attempt === attempt
+      ? preview
+      : null
+  return {
+    url: current?.url ?? null,
+    loading: previewable && !current,
+    failed: Boolean(current?.failed),
+    retry: () => setAttempt((value) => value + 1),
+  }
 }
 
 function attachmentDescription(attachment: DesktopAttachmentDraft, mediaType: string): string {
   const kind = fileKind(mediaType)
   if (attachment.status === "uploading") {
     const percent = attachment.progress === null ? null : Math.round(attachment.progress * 100)
+    if (percent === 100) return "正在确认附件，请稍候"
     return percent === null
       ? `正在上传 · ${formatBytes(attachment.sizeBytes)}`
       : `正在上传 ${percent}%`
   }
-  return `${kind} · ${formatBytes(attachment.sizeBytes)}`
+  return `${attachment.status === "ready" ? "已就绪 · " : ""}${kind} · ${formatBytes(attachment.sizeBytes)}`
 }
 
 function fileKind(mediaType: string): string {

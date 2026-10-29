@@ -25,6 +25,25 @@ describe("Composer attach button", () => {
     Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT")
   })
 
+  it("blocks submit from restored preparation state and keeps text when attachment reading fails", async () => {
+    const onSubmit = vi.fn(), onDraftChange = vi.fn()
+    const props = {
+      id: "attachment-feedback", draft: { version: 1 as const, items: [{ type: "text" as const, text: "保留这段正文" }] },
+      sending: false, canSubmit: true, models: [], selectedModel: null, selectedProvider: null,
+      modelLabel: "模型", permissionMode: "ask" as const, effort: null,
+      onDraftChange, onSubmit, onSelectModel: vi.fn(), onSelectPermissionMode: vi.fn(), onSelectEffort: vi.fn(),
+    }
+    await act(async () => root.render(createElement(Composer, { ...props, attachmentPreparation: { pending: ["reading"], error: null } })))
+    expect(container.textContent).toContain("正在准备附件")
+    await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })))
+    expect(onSubmit).not.toHaveBeenCalled()
+    await act(async () => root.render(createElement(Composer, { ...props, attachmentPreparation: { pending: [], error: "读取失败，正文草稿已保留" } })))
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("正文草稿已保留")
+    expect(container.querySelector('[role="textbox"]')?.textContent).toContain("保留这段正文")
+    expect(onDraftChange).not.toHaveBeenCalled()
+    await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })))
+    expect(onSubmit).toHaveBeenCalledOnce()
+  })
   it("opens the context picker and then reuses the file picker", async () => {
     const onPickFiles = vi.fn()
 

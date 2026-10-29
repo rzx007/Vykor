@@ -1189,6 +1189,7 @@ it("merges the expired target draft with a new source draft entered while its sn
   }
   useDesktopSessionStore.setState({ composerDraftsByScope: {
     "session:side-main": {
+      attachmentPreparation: { pending: ["old-read"], error: null },
       document: composerDocument([{ type: "text", text: "old question" }]),
       attachments: [attachment], textSelections: [{ id: "old-quote", text: "old quote" }],
     },
@@ -1202,6 +1203,7 @@ it("merges the expired target draft with a new source draft entered while its sn
     useDesktopSessionStore.setState((state) => ({ composerDraftsByScope: {
       ...state.composerDraftsByScope,
       "linked-chat:main": { ...state.composerDraftsByScope["linked-chat:main"]!,
+        attachmentPreparation: { pending: ["new-read"], error: null },
         attachments: [{ ...attachment, draftId: "new-file", assetId: "new-asset", displayName: "new.txt" }],
       },
     } }))
@@ -1215,6 +1217,7 @@ it("merges the expired target draft with a new source draft entered while its sn
   expect(useDesktopSessionStore.getState().composerDraftsByScope["linked-chat:main"]?.attachments.map((item) => item.assetId))
     .toEqual(["old-asset", "new-asset"])
   expect(useDesktopSessionStore.getState().composerDraftsByScope["session:side-main"]).toBeUndefined()
+  expect(useDesktopSessionStore.getState().composerDraftsByScope["linked-chat:main"]?.attachmentPreparation?.pending).toEqual(["old-read", "new-read"])
   expect(sideChatTargets.has("main")).toBe(false)
   expect(fork).not.toHaveBeenCalled()
 })
@@ -1399,6 +1402,20 @@ it("an ordinary click clearing selection closes an older menu", async () => {
   expect(
     [...document.querySelectorAll("button")].find((item) => item.textContent === "在侧边聊天中提问")
   ).toBeUndefined()
+})
+
+it("reports a target preparation conflict even before it has attachment cards", async () => {
+  draft("main", "source draft")
+  useDesktopSessionStore.setState((state) => ({ composerDraftsByScope: {
+    ...state.composerDraftsByScope,
+    "session:side-main": { document: composerDocument([]), attachments: [], attachmentPreparation: { pending: ["reading"], error: null } },
+  } }))
+  await mount()
+  await submit()
+  expect(container.textContent).toContain("两份草稿")
+  expect(sendPrompt).not.toHaveBeenCalled()
+  expect(selectDraftText(useDesktopSessionStore.getState(), "linked-chat:main")).toBe("source draft")
+  expect(useDesktopSessionStore.getState().composerDraftsByScope["session:side-main"]?.attachmentPreparation?.pending).toEqual(["reading"])
 })
 
 it("a rare target draft collision preserves both drafts, reports it and reuses the target after resolution", async () => {

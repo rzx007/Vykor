@@ -70,6 +70,7 @@ export function Composer({
   onSelectPermissionMode,
   onSelectEffort,
   attachments = [],
+  attachmentPreparation,
   attachmentInteractionEnabled = false,
   attachmentReadOnly = false,
   onPickFiles,
@@ -120,18 +121,29 @@ export function Composer({
   onSelectModel: (model: DesktopModel) => void
   onSelectPermissionMode: (mode: DesktopPermissionMode) => void
   onSelectEffort: (effort: string) => void
+  attachmentPreparation?: { pending: string[]; error: string | null }
   attachments?: readonly DesktopAttachmentDraft[]
   attachmentInteractionEnabled?: boolean
   attachmentReadOnly?: boolean
-  onPickFiles?: () => void
-  onDropFiles?: (files: readonly File[]) => void
-  onPasteFiles?: (files: readonly File[]) => void
-  onPasteTextAttachment?: (text: string) => void
-  onCancelAttachment?: (draftId: string) => void
-  onRetryAttachment?: (draftId: string) => void
-  onRemoveAttachment?: (draftId: string) => void
+  onPickFiles?: () => void | Promise<void>
+  onDropFiles?: (files: readonly File[]) => void | Promise<void>
+  onPasteFiles?: (files: readonly File[]) => void | Promise<void>
+  onPasteTextAttachment?: (text: string) => void | Promise<void>
+  onCancelAttachment?: (draftId: string) => void | Promise<void>
+  onRetryAttachment?: (draftId: string) => void | Promise<void>
+  onRemoveAttachment?: (draftId: string) => void | Promise<void>
   contextContent?: ReactNode
 }): React.JSX.Element {
+  const preparingAttachments = Boolean(attachmentPreparation?.pending.length)
+  const [attachmentActionError, setAttachmentActionError] = useState<string | null>(null)
+  const attachmentAction = async (action: () => void | Promise<void>, label: string): Promise<void> => {
+    setAttachmentActionError(null)
+    try {
+      await action()
+    } catch {
+      setAttachmentActionError(`${label}失败，请重试。正文草稿已保留。`)
+    }
+  }
   const [activePicker, setActivePicker] = useState<
     "model" | "permission" | "effort" | "goal" | null
   >(null)
@@ -155,7 +167,7 @@ export function Composer({
   const permissionLabel = resolvePermissionModeLabel(permissionMode)
   const PermissionIcon = permissionModeIcons[permissionMode]
   const closePicker = (): void => setActivePicker(null)
-  const allowSubmit = !modeChangePending && (canSubmit ?? draft.items.length > 0)
+  const allowSubmit = !preparingAttachments && !modeChangePending && (canSubmit ?? draft.items.length > 0)
   const attachDisabled = attachmentReadOnly || sending
   const contextItems: ContextPickerItem[] = [
     {
@@ -242,11 +254,11 @@ export function Composer({
         event.dataTransfer.dropEffect = "copy"
       }}
       onDrop={(event) => {
-        if (!attachmentInteractionEnabled || sending) return
+        if (!attachmentInteractionEnabled || attachDisabled) return
         const files = readComposerDrop(event.dataTransfer.files)
         if (files.length === 0) return
         event.preventDefault()
-        onDropFiles?.(files)
+        void attachmentAction(() => onDropFiles?.(files), "添加附件")
       }}
     >
       <label htmlFor={id} className="sr-only">
@@ -276,12 +288,20 @@ export function Composer({
       ) : null}
       {contextContent}
       {!goalEditing && !goalMode && <PluginAppComposerContext sessionId={activeSessionId} readOnly={sending} />}
+      {preparingAttachments ? (
+        <p role="status" className="px-3 pt-2 text-xs text-ui-muted">正在准备附件，完成后可发送</p>
+      ) : null}
+      {attachmentActionError || attachmentPreparation?.error ? (
+        <p role="alert" className="px-3 pt-2 text-xs text-destructive">
+          {attachmentActionError ?? attachmentPreparation?.error}
+        </p>
+      ) : null}
       <ComposerAttachments
         attachments={attachments}
         readOnly={attachmentReadOnly || sending}
-        onCancel={(draftId) => onCancelAttachment?.(draftId)}
-        onRetry={(draftId) => onRetryAttachment?.(draftId)}
-        onRemove={(draftId) => onRemoveAttachment?.(draftId)}
+        onCancel={(draftId) => void attachmentAction(() => onCancelAttachment?.(draftId), "取消上传")}
+        onRetry={(draftId) => void attachmentAction(() => onRetryAttachment?.(draftId), "重试附件")}
+        onRemove={(draftId) => void attachmentAction(() => onRemoveAttachment?.(draftId), "移除附件")}
       />
       <RichPromptInput
         key={id}
@@ -302,9 +322,9 @@ export function Composer({
         onChange={onDraftChange}
         onSubmit={submit}
         onCommand={executeCommand}
-        onPasteFiles={attachmentInteractionEnabled && !sending ? onPasteFiles : undefined}
+        onPasteFiles={attachmentInteractionEnabled && !attachDisabled && onPasteFiles ? (files) => void attachmentAction(() => onPasteFiles(files), "读取附件") : undefined}
         onPasteTextAttachment={
-          attachmentInteractionEnabled && !sending ? onPasteTextAttachment : undefined
+          attachmentInteractionEnabled && !attachDisabled && onPasteTextAttachment ? (text) => void attachmentAction(() => onPasteTextAttachment(text), "添加附件") : undefined
         }
         contextItems={
           onGoalModeChange
@@ -315,7 +335,7 @@ export function Composer({
         contextPickerOpen={contextPickerOpen}
         onContextPickerOpenChange={setContextPickerOpen}
         onContextAction={(item) => {
-          if (item.action.kind === "files") onPickFiles?.()
+          if (item.action.kind === "files" && !attachDisabled) void attachmentAction(() => onPickFiles?.(), "添加附件")
           if (item.action.kind === "plan" && !modeChangePending) onWorkModeChange?.("plan")
           if (item.action.kind === "goal") onGoalModeChange?.(true)
         }}
