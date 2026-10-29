@@ -1,5 +1,5 @@
-import { ConversationFind } from "../conversation-find"
 // @vitest-environment jsdom
+import { ConversationFind } from "../conversation-find"
 import { act, useLayoutEffect, type ReactNode } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
@@ -11,6 +11,7 @@ import {
   ConversationScrollerButton,
 } from "../conversation-scroller"
 import { useConversationScroller } from "../conversation-scroll-context"
+import type { ScrollerAgentStatus } from "../scroller-agent-status"
 import { VirtualTranscript, type TranscriptRow } from "../virtual-transcript"
 import { ConversationPreviewRail } from "../conversation-preview-rail"
 import { MessageBlock } from "../../message/blocks/message-block"
@@ -110,7 +111,8 @@ function render(
   items: TranscriptRow[],
   key = "chat",
   withRail = false,
-  renderRow?: (index: number) => ReactNode
+  renderRow?: (index: number) => ReactNode,
+  status?: ScrollerAgentStatus
 ) {
   root.render(
     <ConversationScrollerProvider key={key}>
@@ -123,7 +125,7 @@ function render(
           />
         </ConversationScrollerContent>
       </ConversationScrollerViewport>
-      <ConversationScrollerButton />
+      <ConversationScrollerButton status={status} />
       {withRail ? (
         <ConversationPreviewRail
           messages={items.map((item, index) => ({
@@ -664,15 +666,18 @@ it("reuses measured heights after offscreen remounts and rebuilding rows with th
 })
 
 it("shows unread updates without moving the reader and clears them on return to latest", async () => {
-  act(() => render(rows(100)))
+  act(() => render(rows(100), "chat", false, undefined, { kind: "processing", title: "正在处理" }))
   await settle()
   act(() => scroller.scrollToMessage("prompt-40"))
   await settle()
   const before = viewport().scrollTop
   act(() => scroller.notifyContentChanged())
   expect(viewport().scrollTop).toBe(before)
-  expect(container.textContent).toContain("有新内容")
-  act(() => container.querySelector<HTMLButtonElement>("button")!.click())
+  const button = container.querySelector<HTMLButtonElement>("button")!
+  expect(button.textContent).toBe("回到最新")
+  expect(button.getAttribute("aria-label")).toContain("有新内容")
+  expect(button.getAttribute("aria-label")).toContain("正在处理")
+  act(() => button.click())
   await settle()
   expect(scroller.getSnapshot().following).toBe(true)
   expect(container.textContent).not.toContain("有新内容")
@@ -696,6 +701,25 @@ it("does not detach following for a wheel consumed by a nested tool output", asy
   expect(scroller.getSnapshot().following).toBe(false)
 })
 
+it("does not counter a backward gesture when an already measured row above it changes height", async () => {
+  act(() => render(rows(1000)))
+  await settle()
+  act(() => scroller.scrollToMessage("prompt-400"))
+  await settle()
+  act(() => {
+    viewport().dispatchEvent(new WheelEvent("wheel", { deltaY: -30, bubbles: true }))
+    scroll(viewport().scrollTop - 30)
+  })
+  const before = viewport().scrollTop
+  expect(row(397)).not.toBeNull()
+  heights.set("turn-397", 320)
+  await act(async () => {
+    for (const observer of [...observers]) observer.flush()
+    await vi.advanceTimersByTimeAsync(16)
+  })
+  expect(scroller.getSnapshot().following).toBe(false)
+  expect(viewport().scrollTop).toBe(before)
+})
 
 it("opens a global search target outside the virtual window and expands its long user text", async () => {
   const messages = Array.from({ length: 100 }, (_, index) => ({

@@ -734,7 +734,7 @@ function ConversationPane({
                       )}
                     </MessageScrollerContent>
                   </MessageScrollerViewport>
-                  <MessageScrollerButton className="bottom-5" title={scrollerAgentStatus?.title} />
+                  <MessageScrollerButton className="bottom-5" status={scrollerAgentStatus} />
                 </MessageScroller>
                 <ConversationPreviewRail
                   messages={transcript.messages}

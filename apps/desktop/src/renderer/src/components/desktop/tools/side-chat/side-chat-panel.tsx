@@ -705,7 +705,7 @@ export function SideChatPanel({
               )}
             </MessageScrollerContent>
           </MessageScrollerViewport>
-          <MessageScrollerButton title={status?.title} />
+          <MessageScrollerButton status={status} />
         </MessageScroller>
       </MessageScrollerProvider>
       <div className="conversation-composer-column mb-4 flex shrink-0 flex-col gap-2">

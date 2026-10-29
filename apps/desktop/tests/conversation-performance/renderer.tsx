@@ -30,6 +30,7 @@ export function Probe() {
 }
 let rows: TranscriptRow[] = []
 let height = 120
+let resizedHistoryRow: number | null = null
 let chat = 0
 let markdown: string | null = null
 let streaming = true
@@ -61,7 +62,16 @@ function render() {
                     />
                   </AppearanceProvider>
                 ) : (
-                  <div style={{ height: index === rows.length - 1 ? height : 120 }}>
+                  <div
+                    style={{
+                      height:
+                        index === resizedHistoryRow
+                          ? 320
+                          : index === rows.length - 1
+                            ? height
+                            : 120,
+                    }}
+                  >
                     {rows[index].id}
                   </div>
                 )
@@ -82,6 +92,7 @@ const api = {
     chat++
     markdown = null
     height = 120
+    resizedHistoryRow = null
     rows = Array.from({ length: count }, (_, index) => ({
       id: `turn-${index}`,
       messageIds: [`prompt-${index}`],
@@ -90,6 +101,27 @@ const api = {
     render()
     await settle()
     require(controller.getSnapshot().following, "initial follow missing")
+  },
+  async historyResize(count: number) {
+    await api.prepare(count)
+    require(controller.scrollToMessage("prompt-400"), "history navigation unavailable")
+    await settle()
+    viewport().dispatchEvent(new WheelEvent("wheel", { deltaY: -30, bubbles: true }))
+    viewport().scrollTop -= 30
+    await frame()
+    await frame()
+    const before = viewport().scrollTop
+    require(!!document.querySelector(
+      '[data-transcript-row="turn-397"]'
+    ), "overscan row unavailable")
+    resizedHistoryRow = 397
+    render()
+    await frame()
+    await frame()
+    return {
+      correctionPx: viewport().scrollTop - before,
+      following: controller.getSnapshot().following,
+    }
   },
   async grow(updates: number) {
     let maxSettledGap = 0

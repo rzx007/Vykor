@@ -32,3 +32,13 @@ Remove-Item Env:VYKOR_MARKDOWN_PERFORMANCE
 主线程耗时来自 Chromium `Performance.getMetrics` 的增量，其中 `TaskDuration` 包含主线程任务，`ScriptDuration`、`LayoutDuration` 和 `RecalcStyleDuration` 分别记录脚本、布局和样式计算。每轮还记录可见更新时间、超过 50ms 的任务数量、动画节点数、列表项数量和完成后的正文一致性。
 
 新增用例应补充到现有场景，不修改产品解析、刷新或动画逻辑来配合基准。不能只用总运行时间判断性能：必须检查每次追加实际显示、Markdown 结构完整、动画开关有效，且完成时没有残留动画节点。
+
+只验证向上翻历史时的高度补偿，以及停止跟随和返回最新的 PowerShell 入口：
+
+```powershell
+$env:VYKOR_HISTORY_SCROLL_PERFORMANCE = "1"
+pnpm --filter @vykor/desktop test:conversation-performance
+Remove-Item Env:VYKOR_HISTORY_SCROLL_PERFORMANCE
+```
+
+此场景在 1,000 和 10,000 行中模拟上滚，并让视口上方已测量的行增高 200px，记录实际 `scrollTop` 被反向修正的距离；正确结果为 0。随后检查历史阅读位置保持和恢复底部跟随。

@@ -152,9 +152,9 @@ function VirtualTranscriptViewport({
   useLayoutEffect(() => onChange(virtualizer), [onChange, virtualizer, snapshot.viewportVersion])
 
   useLayoutEffect(() => {
-    // 只补偿阅读点上方整行的高度变化；正在阅读的长回复向下增长时不移动阅读点。
+    // 只补偿阅读点上方的整行；上滚时不反向修正，避免测高与用户的滚动相互抵消。
     virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) =>
-      item.end <= (instance.scrollOffset ?? 0)
+      instance.scrollDirection !== "backward" && item.end <= (instance.scrollOffset ?? 0)
   }, [virtualizer])
 
   useLayoutEffect(
