@@ -87,6 +87,7 @@ export function MainLayout(): React.JSX.Element {
   const utilityPanelRef = usePanelRef()
   const workspaceGroupRef = useGroupRef()
   const contentRef = useRef<HTMLDivElement>(null)
+  const workspaceTopShadowRef = useRef<HTMLDivElement>(null)
   const outerGroupElementRef = useRef<HTMLDivElement | null>(null)
   const innerGroupElementRef = useRef<HTMLDivElement | null>(null)
   const sidebarTransitionCancelRef = useRef<(() => void) | null>(null)
@@ -283,15 +284,20 @@ export function MainLayout(): React.JSX.Element {
       className="relative min-h-0 flex-1 overflow-visible"
       style={
         {
-          "--sidebar-width": `${sidebarDefaultSizePx}px`,
           "--sidebar-content-width": `${sidebarDefaultSizePx}px`,
         } as React.CSSProperties
       }
     >
       <div
+        ref={workspaceTopShadowRef}
         aria-hidden="true"
         className="workspace-top-shadow pointer-events-none absolute top-0 right-0 z-20 h-px"
-        style={{ left: "calc(var(--sidebar-width) + 1px)" }}
+        style={
+          {
+            "--sidebar-width": `${sidebarDefaultSizePx}px`,
+            left: "calc(var(--sidebar-width) + 1px)",
+          } as React.CSSProperties
+        }
       />
       <Group
         id="desktop-shell"
@@ -313,7 +319,11 @@ export function MainLayout(): React.JSX.Element {
           className="h-full min-h-0 overflow-hidden"
           style={{ overflow: "hidden" }}
           onResize={(size) => {
-            contentRef.current?.style.setProperty("--sidebar-width", `${size.inPixels}px`)
+            // 宽度变量只用于顶部阴影，避免让整片工作区逐帧重算样式。
+            workspaceTopShadowRef.current?.style.setProperty(
+              "--sidebar-width",
+              `${size.inPixels}px`
+            )
             // During an explicit open/close the sidebar content is held at its expanded
             // width so it gets clipped by the shrinking panel instead of reflowing under
             // the pointer; only live pointer/keyboard resizes update the content width.
