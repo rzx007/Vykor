@@ -8,7 +8,7 @@ export function EditorSettings() {
     <SettingsGroup title="编辑器" separated>
       <SettingsRow
         title="只读模式"
-        description="开启后禁止修改代码，已有草稿仍会保留。"
+        description="已有草稿仍会保留。"
         control={
           <Switch
             aria-label="只读模式"
@@ -19,7 +19,7 @@ export function EditorSettings() {
       />
       <SettingsRow
         title="自动换行"
-        description="长行按编辑区域宽度换行，不修改文件内容。"
+        description="仅影响显示，不修改文件。"
         control={
           <Switch
             aria-label="自动换行"
@@ -30,7 +30,6 @@ export function EditorSettings() {
       />
       <SettingsRow
         title="Tab 宽度"
-        description="设置代码中 Tab 字符的显示宽度。"
         control={
           <SettingsSelect
             label="Tab 宽度"

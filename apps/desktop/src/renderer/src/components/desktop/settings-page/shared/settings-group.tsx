@@ -2,6 +2,7 @@ import { useId, type ReactNode } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@renderer/components/ui/card"
 import { cn } from "@renderer/lib/utils"
 import { ChevronDown } from "lucide-react"
+import { FieldHelp } from "./field-help"
 import {
   Select,
   SelectContent,
@@ -132,24 +133,29 @@ export function SettingsSelect({
 export function SettingsRow({
   title,
   description,
+  help,
   control,
   labelFor,
 }: {
   title: string
   description?: string
+  help?: string
   control: ReactNode
   labelFor?: string
 }) {
   return (
     <div className="flex min-h-16 flex-wrap items-center justify-between gap-x-6 gap-y-3 py-3">
       <div className="min-w-44 flex-1">
-        {labelFor ? (
-          <label htmlFor={labelFor} className="text-sm font-medium">
-            {title}
-          </label>
-        ) : (
-          <h3 className="text-sm font-medium">{title}</h3>
-        )}
+        <div className="flex items-center gap-1">
+          {labelFor ? (
+            <label htmlFor={labelFor} className="text-sm font-medium">
+              {title}
+            </label>
+          ) : (
+            <h3 className="text-sm font-medium">{title}</h3>
+          )}
+          {help ? <FieldHelp label={`${title}说明`}>{help}</FieldHelp> : null}
+        </div>
         {description ? (
           <p className="mt-1 max-w-xl text-xs leading-5 text-muted-foreground">{description}</p>
         ) : null}

@@ -63,12 +63,12 @@ export function GeneralSettings() {
         <div key={`tasks-${revision}`} className="divide-y divide-border">
           <SettingsRow
             title="工作风格"
-            description="务实：关键节点同步；高效：必要时回复。"
+            help="务实：关键节点同步；高效：必要时回复。"
             control={<WorkStyleControl />}
           />
           <SettingsRow
             title="思考过程"
-            description="默认关闭；开启后在对话中显示，可按需展开。"
+            help="在对话中显示思考过程，可按需展开。"
             control={<ReasoningVisibilityControl />}
           />
           <SettingsRow
@@ -99,12 +99,12 @@ export function GeneralSettings() {
           <SettingsRow title="界面主题" control={<ThemePreferenceControl />} />
           <SettingsRow
             title="系统通知"
-            description="任务完成、失败或需要你处理时提醒。"
+            description="完成、失败或等待处理时提醒。"
             control={<NotificationModeControl />}
           />
           <SettingsRow
             title="默认打开应用"
-            description="打开代码文件和文件夹时使用。"
+            description="用于代码文件与文件夹。"
             control={<DefaultOpenerControl />}
           />
           <SettingsRow
@@ -153,7 +153,7 @@ export function GeneralSettings() {
             <div key={`advanced-${revision}`} className="divide-y divide-border">
               <SettingsRow
                 title="默认任务轮数上限"
-                description="每轮进行一次模型请求；默认不限制，留空或填 0 表示不限制。项目可单独设置。"
+                description="留空或 0 表示不限制；项目可单独设置。"
                 control={<TaskLimitControl />}
               />
               <SettingsRow

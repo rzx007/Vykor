@@ -1,3 +1,4 @@
+import { useId } from "react"
 import { CircleHelp } from "lucide-react"
 
 import { Button } from "@renderer/components/ui/button"
@@ -14,6 +15,7 @@ interface FieldHelpProps {
  * 表单标签旁的小问号：把较长的说明收进 tooltip，减少界面上的文字噪点。
  */
 export function FieldHelp({ children, label }: FieldHelpProps): React.JSX.Element {
+  const descriptionId = useId()
   return (
     <Tooltip>
       <TooltipTrigger
@@ -24,12 +26,15 @@ export function FieldHelp({ children, label }: FieldHelpProps): React.JSX.Elemen
             size="icon-sm"
             className="text-muted-foreground"
             aria-label={label}
+            aria-describedby={descriptionId}
           />
         }
       >
         <CircleHelp className="size-3.5" />
       </TooltipTrigger>
-      <TooltipContent>{children}</TooltipContent>
+      <TooltipContent id={descriptionId} role="tooltip">
+        {children}
+      </TooltipContent>
     </Tooltip>
   )
 }
