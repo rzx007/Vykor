@@ -6,10 +6,13 @@ import {
   type ComponentProps,
   type ReactNode,
 } from "react"
-import { ArrowDownIcon } from "lucide-react"
+import { ArrowDownIcon, ShieldAlertIcon } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
+import { Spinner } from "@renderer/components/ui/spinner"
+import { Tooltip, TooltipTrigger, TooltipContent } from "@renderer/components/ui/tooltip"
 import { cn } from "@renderer/lib/utils"
 import { createConversationScrollState } from "./conversation-scroll-state"
+import type { ScrollerAgentStatus } from "./scroller-agent-status"
 import { ConversationScrollContext, useConversationScroller } from "./conversation-scroll-context"
 
 // 工具输出和代码块有自己的滚动区域，只有滚动将传给外层时才改变阅读意图。
@@ -177,37 +180,63 @@ export function ConversationScrollerButton({
   children,
   onClick,
   title,
+  status,
   ...props
-}: ComponentProps<typeof Button>) {
+}: ComponentProps<typeof Button> & { status?: ScrollerAgentStatus | null }) {
   const state = useConversationScroller()!
   const snapshot = useSyncExternalStore(state.subscribe, state.getSnapshot, state.getSnapshot)
   if (snapshot.atEnd) return null
+  const hint = [status?.title ?? title, snapshot.hasNewContent ? "有新内容" : undefined, "回到最新"]
+    .filter(Boolean)
+    .join("，")
   return (
-    <Button
-      type="button"
-      variant="secondary"
-      size="sm"
-      shape="pill"
-      title={title}
-      className={cn(
-        "absolute inset-s-1/2 bottom-5 max-w-[calc(100%-2rem)] -translate-x-1/2 border-border bg-background text-foreground transition-opacity duration-200 motion-reduce:transition-none",
-        className
-      )}
-      onClick={(event) => {
-        onClick?.(event)
-        if (!event.defaultPrevented) state.scrollToEnd()
-      }}
-      {...props}
-    >
-      {children ?? (
-        <>
-          <ArrowDownIcon aria-hidden="true" data-icon="inline-start" />
-          <span className="truncate">
-            {title ? `${title} · ` : ""}
-            {snapshot.hasNewContent ? "有新内容，回到最新" : "回到最新"}
-          </span>
-        </>
-      )}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            shape="pill"
+            aria-label={hint}
+            className={cn(
+              "absolute inset-s-1/2 bottom-5 max-w-[calc(100%_-_2rem)] -translate-x-1/2 border-border bg-background font-normal text-foreground transition-opacity duration-200 motion-reduce:transition-none",
+              className
+            )}
+            onClick={(event) => {
+              onClick?.(event)
+              if (!event.defaultPrevented) state.scrollToEnd()
+            }}
+            {...props}
+          />
+        }
+      >
+        {children ?? (
+          <>
+            {status?.kind === "permission" ? (
+              <ShieldAlertIcon aria-hidden="true" data-icon="inline-start" className="size-3.5" />
+            ) : status ? (
+              <Spinner
+                aria-hidden="true"
+                role={undefined}
+                aria-label={undefined}
+                data-icon="inline-start"
+                className="size-3.5 [animation-duration:2s] motion-reduce:animate-none"
+              />
+            ) : (
+              <ArrowDownIcon aria-hidden="true" data-icon="inline-start" className="size-3.5" />
+            )}
+            <span>回到最新</span>
+            {!status && snapshot.hasNewContent ? (
+              <span
+                aria-hidden="true"
+                className="size-1.5 shrink-0 rounded-full bg-current opacity-60"
+              />
+            ) : null}
+          </>
+        )}
+      </TooltipTrigger>
+      <TooltipContent>{hint}</TooltipContent>
+    </Tooltip>
   )
 }

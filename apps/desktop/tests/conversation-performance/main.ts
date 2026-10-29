@@ -43,6 +43,26 @@ void (async () => {
       app.exit(0)
       return
     }
+    if (process.env.VYKOR_HISTORY_SCROLL_PERFORMANCE === "1") {
+      for (const count of [1000, 10000]) {
+        const result = await run(`window.transcriptPerformance.historyResize(${count})`)
+        console.log(
+          JSON.stringify({ scenario: "backward-history-resize", history: count, ...result })
+        )
+        assert.equal(result.following, false)
+        assert.equal(result.correctionPx, 0, "a row resize must not oppose the backward gesture")
+        const regression = await run("window.transcriptPerformance.regress()")
+        assert.equal(regression.passed, true)
+        console.log(
+          JSON.stringify({ scenario: "history-read-and-resume", history: count, ...regression })
+        )
+      }
+      console.log(JSON.stringify({ result: "passed" }))
+      clearTimeout(deadline)
+      window.destroy()
+      app.exit(0)
+      return
+    }
     const cpuRate = Number(process.env.VYKOR_CONVERSATION_CPU_RATE ?? 1)
     assert.ok(Number.isFinite(cpuRate) && cpuRate >= 1 && cpuRate <= 20)
     const sample = async () => {
