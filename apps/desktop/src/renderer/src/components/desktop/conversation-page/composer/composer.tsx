@@ -1,5 +1,4 @@
-import { ChevronDown, Goal, Mic, ShieldCheck, X, Undo2 } from "lucide-react"
-import { IconPlus } from "@tabler/icons-react"
+import { ChevronDown, Goal, Plus, ShieldCheck, X, Undo2 } from "lucide-react"
 import { useState, type ReactNode } from "react"
 
 import { Button } from "@renderer/components/ui/button"
@@ -18,7 +17,7 @@ import type { ComposerDocument } from "@renderer/stores/desktop-session/composer
 import { PluginAppComposerContext } from "../../shell/plugin-apps/composer-context"
 import { ComposerAttachments } from "./composer-attachments"
 import { readComposerDrop } from "./composer-file-input"
-import { ComposerIconButton, ComposerSendButton, PermissionModeMenu, permissionModeIcons } from "./controls"
+import { ComposerSendButton, PermissionModeMenu, permissionModeIcons } from "./controls"
 import { ContextUsageControl } from "./context-usage-control"
 import { EffortPicker, resolveEffortTiers } from "./effort-picker"
 import { ModelPicker } from "./model-picker"
@@ -228,7 +227,7 @@ export function Composer({
   return (
     <form
       className={cn(
-        "relative min-w-0 overflow-visible rounded-2xl bg-background shadow-composer ring-1 ring-black/7 dark:bg-card dark:ring-white/12",
+        "@container/composer relative min-w-0 overflow-visible rounded-2xl bg-background shadow-composer ring-1 ring-black/7 dark:bg-card dark:ring-white/12",
         className
       )}
       onSubmit={(event) => {
@@ -342,12 +341,12 @@ export function Composer({
           if (item.action.kind === "goal") onGoalModeChange?.(true)
         }}
       />
-      <div className="flex min-h-12 min-w-0 flex-wrap items-center gap-1 px-3 pb-2">
+      <div className="flex min-h-12 min-w-0 flex-wrap items-center gap-1 gap-y-2 px-3 pb-2">
         <Button
           type="button"
           variant="outline"
           size="icon"
-          className="rounded-full"
+          className="size-8 shrink-0 rounded-full"
           aria-label="添加上下文"
           data-context-picker-toggle
           aria-expanded={contextPickerOpen}
@@ -359,7 +358,7 @@ export function Composer({
             setContextPickerRequest((value) => value + 1)
           }}
         >
-          <IconPlus className="size-5" />
+          <Plus strokeWidth={1.75} />
         </Button>
         {goalMode && !goalEditing ? (
           <div className="ml-1 flex h-8 shrink-0 items-center rounded-full bg-secondary">
@@ -392,7 +391,7 @@ export function Composer({
                   }
                 >
                   <Goal className="size-3.5" />
-                  目标
+                  <span className="@max-[36rem]/composer:sr-only">目标</span>
                   <ChevronDown className="size-3" />
                 </PopoverTrigger>
                 <PopoverContent
@@ -458,16 +457,21 @@ export function Composer({
                 variant="ghost"
                 shape="pill"
                 className={cn(
-                  "ml-1 h-8 max-w-36 min-w-0 shrink overflow-hidden px-2 text-xs font-normal text-muted-foreground",
+                  "h-8 max-w-36 min-w-0 shrink-0 overflow-hidden px-2 text-xs font-normal text-muted-foreground @max-[36rem]/composer:gap-1",
                   permissionMode === "full_access" && "text-status-warning hover:text-status-warning aria-expanded:text-status-warning"
                 )}
+                aria-label={`授权模式：${permissionLabel}`}
+                title={`授权模式：${permissionLabel}`}
                 disabled={modeChangePending}
               />
             }
           >
             <PermissionIcon data-icon="inline-start" />
-            <span className="min-w-0 truncate">{permissionLabel}</span>
-            <ChevronDown data-icon="inline-end" />
+            <span className="min-w-0 truncate @max-[36rem]/composer:sr-only">{permissionLabel}</span>
+            {permissionMode === "full_access" ? (
+              <span aria-hidden="true" className="hidden @max-[36rem]/composer:inline">完全访问</span>
+            ) : null}
+            <ChevronDown data-icon="inline-end" className="@max-[36rem]/composer:hidden" />
           </PopoverTrigger>
           <PopoverContent
             side="top"
@@ -488,17 +492,19 @@ export function Composer({
         {workMode === "plan" ? (
           <div className="ml-1 flex h-8 shrink-0 items-center gap-1 rounded-full bg-secondary pr-3 text-xs">
             <Button type="button" variant="ghost" size="icon-sm" className="rounded-full"
-              disabled={sending || modeChangePending} aria-label="退出计划模式"
+              disabled={sending || modeChangePending} aria-label="退出计划模式" title="当前为计划模式，点击退出"
               onClick={() => onWorkModeChange?.("execute")}>
               <X className="size-3.5" />
             </Button>
             <ShieldCheck className="size-3.5" />
-            计划模式
+            <span className="@max-[36rem]/composer:sr-only">计划模式</span>
+            <span aria-hidden="true" className="hidden @max-[36rem]/composer:inline">计划</span>
           </div>
         ) : null}
         <EffortPicker
           open={activePicker === "effort"}
           onOpenChange={(open) => setActivePicker(open ? "effort" : null)}
+          triggerClassName="shrink-0 rounded-full @max-[36rem]/composer:size-8 @max-[36rem]/composer:p-0 @max-[36rem]/composer:[&_[data-slot=effort-label]]:sr-only @max-[36rem]/composer:[&_[data-slot=effort-chevron]]:hidden"
           tiers={effortTiers}
           value={effort}
           onSelect={(nextEffort) => {
@@ -506,7 +512,7 @@ export function Composer({
             closePicker()
           }}
         />
-        <div className="ml-auto flex max-w-full min-w-0 items-center gap-0.5">
+        <div className="ml-auto flex min-w-0 max-w-full basis-40 grow shrink-0 items-center justify-end gap-0.5">
           <ModelPicker
             open={activePicker === "model"}
             onOpenChange={(open) => setActivePicker(open ? "model" : null)}
@@ -514,14 +520,12 @@ export function Composer({
             selectedModel={selectedModel}
             selectedProvider={selectedProvider}
             modelLabel={modelLabel}
+            triggerClassName="max-w-52 rounded-full @max-[36rem]/composer:max-w-36"
             onSelectModel={(model) => {
               onSelectModel(model)
               closePicker()
             }}
           />
-          <ComposerIconButton label="语音输入">
-            <Mic />
-          </ComposerIconButton>
           <ContextUsageControl snapshot={contextUsage} onOpen={onOpenContextUsage} />
           {goalEditing ? (
             <Button type="submit" size="sm" shape="pill" disabled={sending || !allowSubmit}>

@@ -25,7 +25,12 @@ import { selectGoalObjective } from "@renderer/stores/desktop-session/goal-actio
 import type { ComposerPickerCommand, ComposerPickerItem } from "../composer/composer-picker"
 import { Composer } from "../composer/composer"
 import type { ComposerSkill } from "../composer/rich-prompt-input"
-import { HeaderIconButton, PickerMenuItem, StartPickerButton } from "../composer/controls"
+import {
+  handlePickerMenuKeyDown,
+  HeaderIconButton,
+  PickerMenuItem,
+  StartPickerButton,
+} from "../composer/controls"
 import { ScopedOperationError } from "./scoped-operation-errors"
 import type { LoadStatus, StartPicker } from "../shared/types"
 import { resolveModelLabel } from "../shared/utils"
@@ -234,6 +239,7 @@ export function NewConversationStart({
                 />
                 <PopoverContent
                   role="menu"
+                  onKeyDown={handlePickerMenuKeyDown}
                   side="top"
                   align="start"
                   sideOffset={8}
@@ -316,6 +322,7 @@ export function NewConversationStart({
                 />
                 <PopoverContent
                   role="menu"
+                  onKeyDown={handlePickerMenuKeyDown}
                   side="top"
                   align="start"
                   sideOffset={8}
@@ -356,6 +363,7 @@ export function NewConversationStart({
                   />
                   <PopoverContent
                     role="menu"
+                    onKeyDown={handlePickerMenuKeyDown}
                     side="top"
                     align="start"
                     sideOffset={8}

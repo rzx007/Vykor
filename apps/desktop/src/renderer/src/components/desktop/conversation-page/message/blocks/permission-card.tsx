@@ -4,6 +4,7 @@ import { cn } from "@renderer/lib/utils"
 import type { DesktopPermissionRequest } from "@shared/session-types"
 import {
   readDeveloperScope,
+  readPermissionOperation,
   readPermissionReview,
   requiresPermissionReply,
 } from "./permission-presentation"
@@ -23,6 +24,7 @@ export function PermissionCard({
 }): React.JSX.Element | null {
   if (!requiresPermissionReply(permission)) return null
   const developerScope = readDeveloperScope(permission)
+  const operation = readPermissionOperation(permission)
   const review = readPermissionReview(permission)
   return (
     <section
@@ -36,12 +38,31 @@ export function PermissionCard({
           <h3 className="text-ui-small font-semibold text-foreground">
             {review?.label ?? "需要你的批准"}
           </h3>
-          <p className="mt-1 text-xs text-ui-muted">
-            {"Vykor 请求运行 "}
-            {permission.toolName}
+          <p className="mt-1 text-xs break-words text-ui-muted">
+            {"Vykor 请求"}
+            {operation.summary}
+            {" · "}
+            {operation.toolName}
           </p>
           {review?.reason ? (
             <p className="mt-2 text-xs leading-snug break-words text-foreground">{review.reason}</p>
+          ) : null}
+          {operation.fields.length ? (
+            <dl className="mt-2 flex flex-col gap-1 text-xs">
+              {operation.fields.map((field) => (
+                <div key={field.key} className="flex min-w-0 flex-wrap gap-x-2 gap-y-0.5">
+                  <dt className="shrink-0 text-ui-muted">{field.label}</dt>
+                  <dd className="min-w-0 flex-[1_1_12rem] font-mono leading-snug break-words whitespace-pre-wrap text-foreground">
+                    {field.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+          {operation.reason && !developerScope ? (
+            <p className="mt-2 text-xs leading-snug break-words text-foreground">
+              {operation.reason}
+            </p>
           ) : null}
           {developerScope ? (
             <div className="mt-2 space-y-1">
@@ -64,6 +85,17 @@ export function PermissionCard({
               </p>
             </div>
           ) : null}
+          <details className="mt-2 text-xs text-ui-muted">
+            <summary className="w-fit cursor-pointer rounded-md py-1 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+              原始详情
+            </summary>
+            <pre className="mt-1 max-h-56 overflow-auto font-mono leading-5 break-words whitespace-pre-wrap">
+              {operation.details}
+            </pre>
+            {operation.detailsTruncated ? (
+              <p className="mt-1">详情过长，已截断，仅显示前 12000 个字符。</p>
+            ) : null}
+          </details>
           {replyError ? (
             <p role="alert" className="mt-1 text-xs leading-snug text-destructive">
               {replyError}
@@ -87,7 +119,7 @@ export function PermissionCard({
             disabled={replyPending}
             onClick={() => onReply("approved", "once")}
           >
-            {replyPending ? "正在提交" : developerScope ? "允许本次" : "允许"}
+            {replyPending ? "正在提交" : "允许本次"}
           </Button>
         </div>
       </div>

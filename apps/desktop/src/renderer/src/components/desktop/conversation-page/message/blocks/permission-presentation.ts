@@ -1,5 +1,78 @@
 import type { DesktopPermissionRequest } from "@shared/session-types"
 
+const operationLabels: Record<string, string> = {
+  shell: "运行命令",
+  write: "写入文件",
+  edit: "修改文件",
+  applypatch: "应用文件补丁",
+  read: "读取文件",
+  browser: "操作浏览器",
+  browserdeveloper: "检查网页",
+  jobcancel: "停止任务",
+}
+
+const operationFields = [
+  ["command", "命令"],
+  ["workdir", "工作目录"],
+  ["file_path", "文件路径"],
+  ["path", "路径"],
+  ["url", "网址"],
+  ["target", "目标"],
+  ["action", "操作"],
+] as const
+
+function boundedPermissionText(value: unknown, limit: number): string {
+  if (typeof value !== "string") return ""
+  const text = value.trim()
+  return text.length > limit ? `${text.slice(0, limit - 1)}…` : text
+}
+
+/** Summarizes supplied operation fields only; missing paths and scopes stay missing. */
+export function readPermissionOperation(permission: DesktopPermissionRequest): {
+  summary: string
+  toolName: string
+  reason: string
+  fields: { key: string; label: string; value: string }[]
+  details: string
+  detailsTruncated: boolean
+} {
+  const rawInput = permission.payload.input
+  const input =
+    rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
+      ? (rawInput as Record<string, unknown>)
+      : {}
+  const fields = operationFields.flatMap(([key, label]) => {
+    let rawValue = input[key]
+    if (key === "target" && rawValue && typeof rawValue === "object" && !Array.isArray(rawValue)) {
+      const target = rawValue as Record<string, unknown>
+      rawValue =
+        typeof target.kind === "string" && typeof target.jobId === "string"
+          ? `${target.kind}: ${target.jobId}`
+          : undefined
+    }
+    const value = boundedPermissionText(rawValue, 600)
+    return value ? [{ key, label, value }] : []
+  })
+  let details: string
+  try {
+    details = JSON.stringify(permission.payload, null, 2)
+  } catch {
+    details = "无法显示原始详情"
+  }
+  const toolName = boundedPermissionText(permission.toolName, 120)
+  const normalizedName = permission.toolName.toLowerCase()
+  return {
+    summary: Object.hasOwn(operationLabels, normalizedName)
+      ? operationLabels[normalizedName]!
+      : "运行工具",
+    toolName,
+    reason: boundedPermissionText(permission.payload.reason, 1000),
+    fields,
+    details: details.slice(0, 12000),
+    detailsTruncated: details.length > 12000,
+  }
+}
+
 const developerActionLabels: Record<string, string> = {
   inspect_dom: "DOM 结构",
   inspect_styles: "计算样式",
@@ -18,7 +91,7 @@ export function readDeveloperScope(
     rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
       ? (rawInput as Record<string, unknown>).action
       : undefined
-  if (typeof action !== "string" || !(action in developerActionLabels)) return null
+  if (typeof action !== "string" || !Object.hasOwn(developerActionLabels, action)) return null
   const rawReason = permission.payload.reason
   const reason = typeof rawReason === "string" ? rawReason.trim().slice(0, 600) : ""
   return { reason, action, label: developerActionLabels[action]! }

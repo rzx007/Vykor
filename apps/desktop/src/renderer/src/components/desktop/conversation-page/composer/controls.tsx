@@ -34,6 +34,69 @@ export const permissionModeOptions: PermissionModeOption[] = [
   },
 ]
 
+// Popover owns dismissal and focus restoration; only list navigation belongs here.
+// eslint-disable-next-line react-refresh/only-export-components -- Shared behavior stays with the composer controls.
+export function handlePickerMenuKeyDown(event: React.KeyboardEvent<HTMLElement>): void {
+  if (
+    event.defaultPrevented ||
+    event.nativeEvent.isComposing ||
+    event.nativeEvent.keyCode === 229 ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey
+  )
+    return
+  const { currentTarget: menu, target, key } = event
+  const scopeSelector = '[role="menu"], [data-slot="popover-content"], [data-slot="dialog-content"]'
+  if (
+    !(target instanceof HTMLElement) ||
+    !menu.contains(target) ||
+    target.closest(scopeSelector) !== menu
+  )
+    return
+  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(key)) return
+  const editing = target.closest('input, textarea, [contenteditable="true"]')
+  if (editing && (key === "Home" || key === "End")) return
+
+  const items = [
+    ...menu.querySelectorAll<HTMLElement>('[role="menuitem"], [role="menuitemradio"]'),
+  ].filter((item) => {
+    if (item.closest(scopeSelector) !== menu || item.matches(':disabled, [aria-disabled="true"]'))
+      return false
+    for (let element: HTMLElement | null = item; element; element = element.parentElement) {
+      const style = getComputedStyle(element)
+      if (
+        element.hidden ||
+        element.hasAttribute("inert") ||
+        element.getAttribute("aria-hidden") === "true" ||
+        style.display === "none" ||
+        style.visibility === "hidden"
+      )
+        return false
+      if (element === menu) break
+    }
+    return true
+  })
+  if (items.length === 0) return
+  const current = items.indexOf(
+    target.closest<HTMLElement>('[role="menuitem"], [role="menuitemradio"]')!
+  )
+  const next =
+    key === "Home"
+      ? 0
+      : key === "End"
+        ? items.length - 1
+        : current < 0
+          ? key === "ArrowDown"
+            ? 0
+            : items.length - 1
+          : (current + (key === "ArrowDown" ? 1 : -1) + items.length) % items.length
+  event.preventDefault()
+  items[next]?.focus()
+  items[next]?.scrollIntoView?.({ block: "nearest" })
+}
+
 export function PermissionModeMenu({
   selected,
   onSelect,
@@ -48,7 +111,7 @@ export function PermissionModeMenu({
   const [confirm, setConfirm] = useState(false)
   return (
     <>
-    <div role="menu" className={cn("text-popover-foreground", className)}>
+    <div role="menu" onKeyDown={handlePickerMenuKeyDown} className={cn("text-popover-foreground", className)}>
       {permissionModeOptions.map((mode) => {
         const ModeIcon = permissionModeIcons[mode.value]
         const warning = mode.value === "full_access"
@@ -152,6 +215,7 @@ export const StartPickerButton = forwardRef<
       ref={ref}
       type="button"
       variant="ghost"
+      shape="pill"
       aria-expanded={expanded}
       aria-haspopup="menu"
       className={cn(
@@ -171,12 +235,14 @@ export function PickerMenuItem({
   selected,
   disabled,
   title,
+  className,
   onClick,
   children,
 }: {
   selected?: boolean
   disabled?: boolean
   title?: string
+  className?: string
   onClick: () => void
   children: React.ReactNode
 }): React.JSX.Element {
@@ -189,7 +255,8 @@ export function PickerMenuItem({
       title={title}
       className={cn(
         "h-8 w-full flex-nowrap justify-start bg-transparent text-left text-xs font-normal [&_svg]:shrink-0 [&_svg]:text-muted-foreground [&_svg:not([class*='size-'])]:size-3.5",
-        selected && "bg-muted"
+        selected && "bg-muted",
+        className
       )}
     >
       {children}

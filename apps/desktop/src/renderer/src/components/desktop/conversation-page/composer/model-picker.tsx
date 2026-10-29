@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router"
 import { ChevronDown, Search, Settings2 } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 
 import { Button } from "@renderer/components/ui/button"
 import {
@@ -14,8 +14,9 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@renderer/compone
 import { Popover, PopoverContent, PopoverTrigger } from "@renderer/components/ui/popover"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Separator } from "@renderer/components/ui/separator"
+import { cn } from "@renderer/lib/utils"
 import type { DesktopModel } from "@shared/session-types"
-import { PickerMenuItem } from "./controls"
+import { handlePickerMenuKeyDown, PickerMenuItem } from "./controls"
 
 const PROVIDER_PREVIEW_LIMIT = 6
 
@@ -211,6 +212,7 @@ export function ModelPicker({
   selectedProvider,
   modelLabel,
   onSelectModel,
+  triggerClassName,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -219,8 +221,10 @@ export function ModelPicker({
   selectedProvider: string | null
   modelLabel: string
   onSelectModel: (model: DesktopModel) => void
+  triggerClassName?: string
 }): React.JSX.Element {
   const navigate = useNavigate()
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const [query, setQuery] = useState("")
   const [expandedProvider, setExpandedProvider] = useState<string | null>(null)
   const [dialogQuery, setDialogQuery] = useState("")
@@ -265,11 +269,19 @@ export function ModelPicker({
         }}
       >
         <PopoverTrigger
+          ref={triggerRef}
+          aria-haspopup="menu"
           render={
             <Button
               type="button"
               variant="ghost"
-              className="h-8 max-w-52 min-w-0 shrink overflow-hidden px-2 text-xs font-normal text-muted-foreground"
+              shape="pill"
+              title={modelLabel}
+              aria-label={`模型：${modelLabel}`}
+              className={cn(
+                "h-8 max-w-52 min-w-0 shrink overflow-hidden px-2 text-xs font-normal text-muted-foreground",
+                triggerClassName
+              )}
             />
           }
         >
@@ -277,6 +289,8 @@ export function ModelPicker({
           <ChevronDown data-icon="inline-end" />
         </PopoverTrigger>
         <PopoverContent
+          role="menu"
+          onKeyDown={handlePickerMenuKeyDown}
           side="top"
           align="end"
           sideOffset={8}
@@ -318,6 +332,7 @@ export function ModelPicker({
                     <Button
                       type="button"
                       variant="ghost"
+                      role="menuitem"
                       className="h-8 w-full justify-start px-2 text-xs font-normal text-muted-foreground"
                       onClick={() => openProviderDialog(group.id)}
                     >
@@ -357,7 +372,11 @@ export function ModelPicker({
           }
         }}
       >
-        <DialogContent className="flex flex-col gap-0 p-1.5 sm:max-w-md">
+        <DialogContent
+          finalFocus={triggerRef}
+          onKeyDown={handlePickerMenuKeyDown}
+          className="flex flex-col gap-0 p-1.5 sm:max-w-md"
+        >
           <DialogHeader className="px-2 pt-1.5 pr-10 pb-1">
             <DialogTitle className="text-sm">{`${expandedProviderName} 的模型`}</DialogTitle>
             <DialogDescription className="sr-only">搜索并选择该供应商的模型</DialogDescription>

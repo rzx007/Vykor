@@ -7,7 +7,10 @@ import {
   useUtilityPanelController,
   type UtilityPanelController,
 } from "../use-utility-panel-controller"
-import { readUtilityPanelViewStates, writeUtilityPanelViewStates } from "../utility-panel-repository"
+import {
+  readUtilityPanelViewStates,
+  writeUtilityPanelViewStates,
+} from "../utility-panel-repository"
 
 let root: Root
 let container: HTMLDivElement
@@ -125,6 +128,19 @@ it("keeps the live pre-maximize split instead of replacing it with the saved fal
   expect(workspace.layout()).toEqual({ conversation: 0, utility: 100 })
   workspace.toggle()
   expect(workspace.layout()).toEqual({ conversation: 55, utility: 45 })
+})
+
+it("restores an earlier resize split while the panel is already open", () => {
+  const workspace = mount(false, { conversation: 35, utility: 65 })
+  act(() => workspace.controller().restore({ conversation: 60, utility: 40 }))
+  expect(workspace.layout()).toEqual({ conversation: 60, utility: 40 })
+  expect(workspace.controller().open).toBe(true)
+})
+
+it("uses the saved open split when reset has no earlier expanded resize", () => {
+  const workspace = mount(false, { conversation: 35, utility: 65 })
+  act(() => workspace.controller().restore(null))
+  expect(workspace.layout()).toEqual({ conversation: 60, utility: 40 })
 })
 
 it("repeated side chat requests activate a new request even within the same clock tick", () => {

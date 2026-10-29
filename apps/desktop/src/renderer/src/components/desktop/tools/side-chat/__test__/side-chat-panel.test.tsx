@@ -819,7 +819,7 @@ it("normal authorization cards send approval to the side session and retain repl
   await emit(view)
   replyPermission.mockRejectedValueOnce(new Error("permission offline"))
   const allow = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-    (button) => button.textContent === "允许"
+    (button) => button.textContent === "允许本次"
   )!
   await act(async () => allow.click())
   expect(replyPermission).toHaveBeenCalledWith({
@@ -848,8 +848,8 @@ it("keeps automatic review quiet and only shows an approval card when the review
     }],
   }
   await emit(view)
-  expect(container.textContent).not.toContain("Vykor 请求运行 Shell")
-  expect([...container.querySelectorAll("button")].some((button) => button.textContent === "允许")).toBe(false)
+  expect(container.textContent).not.toContain("Vykor 请求运行命令 · Shell")
+  expect([...container.querySelectorAll("button")].some((button) => button.textContent === "允许本次")).toBe(false)
 
   await emit({
     ...view, cursor: 2,
@@ -858,9 +858,9 @@ it("keeps automatic review quiet and only shows an approval card when the review
       payload: { approvalReview: { status: "ask_user", startedAt: 1, reason: "需要你确认操作范围" } },
     })),
   })
-  expect(container.textContent).toContain("Vykor 请求运行 Shell")
+  expect(container.textContent).toContain("Vykor 请求运行命令 · Shell")
   expect(container.textContent).toContain("需要你确认操作范围")
-  expect([...container.querySelectorAll("button")].some((button) => button.textContent === "允许")).toBe(true)
+  expect([...container.querySelectorAll("button")].some((button) => button.textContent === "允许本次")).toBe(true)
 })
 
 it.each(["ask_user", "timed_out"])("removes a %s approval banner after confirmation while retaining other pending requests", async (reviewStatus) => {
@@ -882,9 +882,9 @@ it.each(["ask_user", "timed_out"])("removes a %s approval banner after confirmat
     ],
   }
   await emit(view)
-  expect(container.textContent).toContain("Vykor 请求运行 Shell")
+  expect(container.textContent).toContain("Vykor 请求运行命令 · Shell")
   const allow = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-    (button) => button.textContent === "允许"
+    (button) => button.textContent === "允许本次"
   )!
   await act(async () => allow.click())
   expect(replyPermission).toHaveBeenCalledWith({
@@ -897,10 +897,10 @@ it.each(["ask_user", "timed_out"])("removes a %s approval banner after confirmat
       ? { ...permission, status: "approved", updatedAt: 2 }
       : permission),
   })
-  expect(container.textContent).not.toContain("Vykor 请求运行 Shell")
+  expect(container.textContent).not.toContain("Vykor 请求运行命令 · Shell")
   expect(container.textContent).not.toContain("已批准")
-  expect(container.textContent).toContain("Vykor 请求运行 WebFetch")
-  expect([...container.querySelectorAll("button")].filter((button) => button.textContent === "允许")).toHaveLength(1)
+  expect(container.textContent).toContain("Vykor 请求运行工具 · WebFetch")
+  expect([...container.querySelectorAll("button")].filter((button) => button.textContent === "允许本次")).toHaveLength(1)
 
   await emit({
     ...view, cursor: 3,
@@ -1685,7 +1685,7 @@ it("model and effort selections update the explicit side session and leave prima
   )
   await act(async () =>
     [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')]
-      .find((item) => item.textContent === "高high")!
+      .find((item) => item.textContent?.startsWith("高high"))!
       .click()
   )
   expect(updateEffort).toHaveBeenCalledWith({ sessionId: "side-main", effort: "high" })

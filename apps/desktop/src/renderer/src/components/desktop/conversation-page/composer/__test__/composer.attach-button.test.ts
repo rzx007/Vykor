@@ -163,8 +163,7 @@ describe("Composer attach button", () => {
     await act(async () => option!.click())
     expect(onWorkModeChange).toHaveBeenCalledWith("plan")
     await act(async () => root.render(createElement(Composer, { ...props, workMode: "plan" })))
-    const permissionTrigger = [...container.querySelectorAll<HTMLButtonElement>("button")]
-      .find((button) => button.textContent?.trim() === "完全访问权限")
+    const permissionTrigger = container.querySelector<HTMLButtonElement>('[aria-label="授权模式：完全访问权限"]')
     const planExit = container.querySelector<HTMLButtonElement>('[aria-label="退出计划模式"]')!
     expect(permissionTrigger).toBeDefined()
     expect(permissionTrigger!.compareDocumentPosition(planExit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()

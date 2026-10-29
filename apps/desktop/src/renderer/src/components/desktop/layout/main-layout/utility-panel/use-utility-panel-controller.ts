@@ -70,7 +70,7 @@ export type UtilityPanelController = {
   toolOpenRequest: Omit<ScopedToolRequest, "scopeId"> | null
   reviewOpenRequest: Omit<ScopedReviewRequest, "scopeId"> | null
   imageOpenRequest: ImageOpenRequest | null
-  restore: () => void
+  restore: (previousLayout?: Layout | null) => void
   collapse: () => void
   toggle: () => void
   toggleMaximized: () => void
@@ -254,27 +254,32 @@ export function useUtilityPanelController({
     return () => window.cancelAnimationFrame(frame)
   }, [groupElementRef, utilityPanelRef])
 
-  const restore = useCallback((): void => {
-    if (window.innerWidth < 1180) onCollapseSidebar()
-    const group = workspaceGroupRef.current
-    const panel = utilityPanelRef.current
-    const nextLayout = lastOpenLayoutRef.current ?? defaultLayout
-    if (panel?.isCollapsed()) {
-      runAnimatedLayoutChange(() => {
-        panel.expand()
-        group?.setLayout(nextLayout)
-      })
-    }
-    persistActiveView({ open: true })
-    setOpen(true)
-  }, [
-    defaultLayout,
-    onCollapseSidebar,
-    persistActiveView,
-    runAnimatedLayoutChange,
-    utilityPanelRef,
-    workspaceGroupRef,
-  ])
+  const restore = useCallback(
+    (previousLayout?: Layout | null): void => {
+      if (window.innerWidth < 1180) onCollapseSidebar()
+      const group = workspaceGroupRef.current
+      const panel = utilityPanelRef.current
+      const nextLayout = isOpenLayout(previousLayout)
+        ? previousLayout
+        : (lastOpenLayoutRef.current ?? defaultLayout)
+      if (panel?.isCollapsed() || previousLayout !== undefined) {
+        runAnimatedLayoutChange(() => {
+          panel?.expand()
+          group?.setLayout(nextLayout)
+        })
+      }
+      persistActiveView({ open: true })
+      setOpen(true)
+    },
+    [
+      defaultLayout,
+      onCollapseSidebar,
+      persistActiveView,
+      runAnimatedLayoutChange,
+      utilityPanelRef,
+      workspaceGroupRef,
+    ]
+  )
 
   const collapse = useCallback((): void => {
     const currentLayout = workspaceGroupRef.current?.getLayout()

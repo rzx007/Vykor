@@ -9,6 +9,13 @@ describe("effort picker", () => {
     expect(effortLabel("weird")).toBe("weird")
   })
 
+  it.each(["constructor", "__proto__", "toString"])(
+    "preserves the unknown provider tier %s instead of inheriting an object property",
+    (tier) => {
+      expect(effortLabel(tier)).toBe(tier)
+    }
+  )
+
   it("resolves tiers from the selected model", () => {
     const models = [
       { id: "m", label: "M", provider: "P", providerName: "p", reasoningEfforts: ["low", "high"] },

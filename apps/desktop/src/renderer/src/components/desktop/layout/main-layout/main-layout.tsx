@@ -88,6 +88,7 @@ export function MainLayout(): React.JSX.Element {
   const sidebarPanelRef = usePanelRef()
   const conversationPanelRef = usePanelRef()
   const utilityPanelRef = usePanelRef()
+  const outerGroupRef = useGroupRef()
   const workspaceGroupRef = useGroupRef()
   const contentRef = useRef<HTMLDivElement>(null)
   const workspaceTopShadowRef = useRef<HTMLDivElement>(null)
@@ -201,7 +202,10 @@ export function MainLayout(): React.JSX.Element {
   }, [sidebarPanelRef, syncSidebarContentWidth])
 
   const openConversationRoute = useCallback(
-    (destination: string | null | undefined, match?: { messageId: string; query: string }): void => {
+    (
+      destination: string | null | undefined,
+      match?: { messageId: string; query: string }
+    ): void => {
       const sessionId = destination === undefined ? activeSessionId : destination
       setMessageSearchTarget(sessionId && match ? { sessionId, ...match } : undefined)
       if (sessionId) {
@@ -305,6 +309,7 @@ export function MainLayout(): React.JSX.Element {
       />
       <Group
         id="desktop-shell"
+        groupRef={outerGroupRef}
         orientation="horizontal"
         className="h-full min-h-0"
         elementRef={outerGroupElementRef}
@@ -357,7 +362,7 @@ export function MainLayout(): React.JSX.Element {
             />
           </div>
         </Panel>
-        <PanelResizeHandle label="调整侧边栏宽度" />
+        <PanelResizeHandle label="调整侧边栏宽度" groupRef={outerGroupRef} />
         <Panel
           id="workspace"
           minSize={workspaceMinimumWidth}
@@ -412,7 +417,14 @@ export function MainLayout(): React.JSX.Element {
             onOpenAgents={(taskId) => openUtilityTool("agents", taskId)}
           />
         </Panel>
-        {!utilityMaximized && <PanelResizeHandle label="调整工具面板宽度" />}
+        {!utilityMaximized && (
+          <PanelResizeHandle
+            key={utilityPanelScopeId}
+            label="调整工具面板宽度"
+            groupRef={workspaceGroupRef}
+            onReset={utilityPanel.restore}
+          />
+        )}
         <Panel
           id="utility"
           panelRef={utilityPanelRef}
@@ -473,6 +485,7 @@ export function MainLayout(): React.JSX.Element {
       utilityPanelInstanceKey,
       reviewOpenRequest,
       utilityPanelScopeId,
+      utilityPanel.restore,
       terminalOpenRequest,
       toggleUtilityMaximized,
       toolOpenRequest,
