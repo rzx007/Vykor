@@ -5,6 +5,9 @@ import { Button } from "@renderer/components/ui/button"
 
 export function FileSearchControls({
   query,
+  placeholder = "搜索当前文件",
+  maxLength,
+  emptyLabel = "No results",
   matchCount,
   matchIndex,
   disabled,
@@ -14,6 +17,9 @@ export function FileSearchControls({
   onClose,
 }: {
   query: string
+  placeholder?: string
+  maxLength?: number
+  emptyLabel?: string
   matchCount: number
   matchIndex: number
   disabled: boolean
@@ -38,9 +44,12 @@ export function FileSearchControls({
         ref={inputRef}
         value={query}
         disabled={disabled}
-        placeholder="搜索当前文件"
+        placeholder={placeholder}
+        aria-label={placeholder}
+        maxLength={maxLength}
         onChange={(event) => onQueryChange(event.target.value)}
         onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing || event.keyCode === 229) return
           if (event.key === "Enter") {
             event.preventDefault()
             if (!canNavigate) return
@@ -61,7 +70,7 @@ export function FileSearchControls({
       />
       {hasQuery && (
         <span className="shrink-0 px-2 text-xs text-ui-muted tabular-nums">
-          {matchCount > 0 ? `${matchIndex + 1}/${matchCount}` : "No results"}
+          {matchCount > 0 ? `${matchIndex + 1}/${matchCount}` : emptyLabel}
         </span>
       )}
       <Button

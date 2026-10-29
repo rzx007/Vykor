@@ -37,6 +37,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
   openReadImage.mockClear()
   container.remove()
+  delete document.documentElement.dataset.reducedMotion
   delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean })
     .IS_REACT_ACT_ENVIRONMENT
 })
@@ -87,6 +88,173 @@ function click(text: string) {
   return button!
 }
 
+it.each([true, false])(
+  "leaves empty assistant status to TaskDuration (streaming=%s)",
+  (streaming) => {
+    render([], streaming)
+    expect(container.textContent).toBe("")
+    expect(container.querySelector('[role="status"]')).toBeNull()
+  }
+)
+
+describe("inline tool group status", () => {
+  beforeEach(() => {
+    document.documentElement.dataset.reducedMotion = "true"
+  })
+  const status = () => container.querySelector('section[aria-label="工具活动组"] [role="status"]')
+
+  it.each([
+    { names: ["Shell", "Shell"], label: "运行了命令" },
+    { names: ["Edit", "Write"], label: "编辑了文件" },
+    { names: ["Write", "Shell", "Read"], label: "编辑了文件，运行了命令" },
+    { names: ["Read", "Read"], label: "查看了内容" },
+    { names: ["TeamCreate", "TeamDelete"], label: "操作已结束" },
+    { names: ["ScheduleCreate", "Shell"], label: "运行了命令" },
+  ])("summarizes completed actions without counts: $label", ({ names, label }) => {
+    render(
+      names.map((name, index) =>
+        part(name, {}, { id: `tool-${index}`, toolUseId: `call-${index}`, seq: index + 1 })
+      )
+    )
+    expect(status()?.getAttribute("aria-label")).toBe(label)
+    expect(container.textContent).not.toMatch(/文件编辑|命令调用|工具查看|\d+ 次/)
+    expect(container.querySelector("canvas, .shimmer")).toBeNull()
+    click(label)
+    expect(container.querySelector('button[aria-expanded="true"]')).not.toBeNull()
+  })
+
+  it("keeps the existing OCR status wording in the live group header", () => {
+    render(
+      [
+        part("Read", { file_path: "a.png" }),
+        part(
+          "ImageToText",
+          { image_path: "a.png" },
+          {
+            id: "ocr",
+            toolUseId: "ocr",
+            seq: 2,
+            status: "running",
+          }
+        ),
+      ],
+      true
+    )
+    expect(status()?.getAttribute("aria-label")).toBe("正在使用本地 OCR 识别文字")
+    expect(container.textContent).not.toContain("正在正在")
+  })
+
+  it("follows the executing operation, permission wait and completion without losing expansion", () => {
+    const read = part("Read", { file_path: "README.md" })
+    const command = part(
+      "Shell",
+      { command: "pnpm test" },
+      { id: "cmd", toolUseId: "cmd", seq: 2, status: "running" }
+    )
+    const write = part(
+      "Edit",
+      { file_path: "src/app.ts" },
+      {
+        id: "edit",
+        toolUseId: "edit",
+        seq: 3,
+        status: "pending",
+        metadata: { toolProgress: { phase: "queued" } },
+      }
+    )
+    render([read, command, write], true)
+    expect(status()?.getAttribute("aria-label")).toBe("正在运行命令 · pnpm test")
+    const heading = click("正在运行命令")
+    const finishedCommand = { ...command, status: "completed" as const }
+    const waitingWrite = {
+      ...write,
+      status: "running" as const,
+      metadata: { toolProgress: { phase: "waiting_permission" } },
+    }
+    render([read, finishedCommand, waitingWrite], true)
+    expect(status()?.getAttribute("aria-label")).toBe("等待你的确认 · 编辑文件 · src/app.ts")
+    expect(heading.getAttribute("aria-expanded")).toBe("true")
+    expect(heading.isConnected).toBe(true)
+    render(
+      [
+        read,
+        finishedCommand,
+        { ...waitingWrite, metadata: { toolProgress: { phase: "running" } } },
+      ],
+      true
+    )
+    expect(status()?.getAttribute("aria-label")).toBe("正在编辑文件 · src/app.ts")
+    render([read, finishedCommand, { ...waitingWrite, status: "completed", metadata: {} }])
+    expect(status()?.getAttribute("aria-label")).toBe("编辑了文件，运行了命令")
+    expect(status()?.querySelector("canvas, .shimmer")).toBeNull()
+    expect(heading.getAttribute("aria-expanded")).toBe("true")
+  })
+
+  it("shows an executing command ahead of an earlier preparing tool", () => {
+    render(
+      [
+        part(
+          "Write",
+          { file_path: "a.ts" },
+          { status: "running", metadata: { toolProgress: { phase: "preparing" } } }
+        ),
+        part(
+          "Shell",
+          { command: "pnpm test" },
+          { id: "cmd", toolUseId: "cmd", seq: 2, status: "running" }
+        ),
+      ],
+      true
+    )
+    expect(status()?.getAttribute("aria-label")).toBe("正在运行命令 · pnpm test")
+  })
+
+  it("does not describe failed, unexecuted or uncertain operations as completed edits", () => {
+    render([
+      part("Edit", { file_path: "a.ts" }, { metadata: { executionState: "not_started" } }),
+      part(
+        "Shell",
+        { command: "test" },
+        { id: "failed", toolUseId: "failed", seq: 2, status: "failed" }
+      ),
+      part(
+        "Write",
+        { file_path: "b.ts" },
+        { id: "unknown", toolUseId: "unknown", seq: 3, metadata: { executionState: "unknown" } }
+      ),
+    ])
+    expect(status()?.getAttribute("aria-label")).toBe("操作已结束")
+    expect(status()?.querySelector("canvas, .shimmer")).toBeNull()
+  })
+
+  it("keeps the same live indicator when only tool output changes", () => {
+    document.documentElement.dataset.reducedMotion = "false"
+    const read = part("Read", { file_path: "README.md" })
+    const command = part(
+      "Shell",
+      { command: "pnpm test" },
+      { id: "cmd", toolUseId: "cmd", seq: 2, status: "running" }
+    )
+    render([read, command], true)
+    const indicator = status()?.querySelector("canvas")
+    expect(indicator).toBeInstanceOf(HTMLCanvasElement)
+    render(
+      [
+        read,
+        {
+          ...command,
+          output: "new output",
+          updatedAt: 10,
+          metadata: { toolProgress: { phase: "running", receivedChars: 4096 } },
+        },
+      ],
+      true
+    )
+    expect(status()?.getAttribute("aria-label")).toBe("正在运行命令 · pnpm test")
+    expect(status()?.querySelector("canvas")).toBe(indicator)
+  })
+})
+
 describe("Read image previews", () => {
   it("uses the canonical Read record when a legacy result has a null body", async () => {
     const readToolImagePreview = vi.fn().mockResolvedValue({ bytes: new ArrayBuffer(8), mediaType: "image/png" })
@@ -106,7 +274,7 @@ describe("Read image previews", () => {
     const second = { ...part("Read", { file_path: "second.png" }), id: "read-2", seq: 2 }
     render([first, second])
     expect(readToolImagePreview).not.toHaveBeenCalled()
-    act(() => click("工具查看"))
+    act(() => click("查看了内容"))
     await act(async () => click("first.png"))
     expect(readToolImagePreview).toHaveBeenCalledWith({ sessionId: first.sessionId, messageId: first.messageId, partId: first.id })
     expect(container.querySelector('img[alt="first.png"]')).not.toBeNull()
@@ -372,7 +540,7 @@ describe("tool parameter and result display", () => {
       expect(container.textContent).not.toContain("结果不确定")
       expect(Boolean(container.querySelector("[data-tool-diagnostic]"))).toBe(dev)
       expect(container.querySelector(".shimmer")).toBeNull()
-      click("命令调用 2 次")
+      click("操作已结束")
       expect(container.textContent).not.toContain("结果不确定")
       expect(
         Boolean(container.querySelector('[data-tool-diagnostic][aria-label*="结果不确定"]'))
@@ -415,9 +583,7 @@ describe("tool parameter and result display", () => {
     render([first], true)
     const firstButton = click("运行命令")
     render([first, second], true)
-    const heading = [...container.querySelectorAll("button")].find((button) =>
-      button.textContent?.includes("命令调用 1 次，工具查看 1 次")
-    )
+    const heading = container.querySelector('section[aria-label="工具活动组"] button[aria-expanded]')
     expect(heading?.getAttribute("aria-expanded")).toBe("true")
     expect(firstButton.isConnected).toBe(true)
     expect(firstButton.getAttribute("aria-expanded")).toBe("true")
@@ -440,8 +606,8 @@ describe("tool parameter and result display", () => {
     expect(container.querySelector("button[aria-expanded]")?.getAttribute("aria-expanded")).toBe(
       "false"
     )
-    expect(container.textContent).toContain("命令调用 2 次")
-    expect(container.textContent).not.toContain("运行命令")
+    expect(container.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe("正在运行命令 · first")
+    expect(container.textContent).not.toContain("命令调用")
   })
 
   it("keeps calls separated by narrative as independent tool rows", () => {
@@ -592,9 +758,8 @@ describe("tool parameter and result display", () => {
     expect(group!.getAttribute("aria-label")).toBe("工具活动组")
     const heading = group!.querySelector<HTMLButtonElement>("button[aria-expanded]")
     expect(heading?.getAttribute("aria-expanded")).toBe("false")
-    expect(heading?.textContent).toContain("工具查看 1 次")
-    expect(heading?.textContent).toContain("写入文件")
-    expect(heading?.textContent).toContain("index.html")
+    expect(heading?.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe("正在准备写入文件")
+    expect(heading?.getAttribute("aria-describedby")).toBeTruthy()
     expect(heading?.textContent).not.toMatch(/9337|字符|生成参数|准备中/)
     expect(heading?.textContent).not.toMatch(/文件编辑|工具调用 2 次/)
     expect(group!.querySelectorAll("pre")).toHaveLength(0)
@@ -640,8 +805,7 @@ describe("tool parameter and result display", () => {
     const group = container.querySelector('section[aria-label="工具活动组"]')
     expect(group).not.toBeNull()
     const heading = group!.querySelector<HTMLButtonElement>("button[aria-expanded]")
-    expect(heading?.textContent).toContain("写入文件")
-    expect(heading?.textContent).toContain("读取文件")
+    expect(heading?.querySelector('[role="status"]')?.getAttribute("aria-label")).toMatch(/^正在准备(?:写入|读取)文件$/)
     expect(heading?.textContent).not.toMatch(/Write|Read|生成参数|字符/)
     expect(heading?.textContent).not.toMatch(/工具调用|工具查看|文件编辑/)
     act(() => heading!.click())
@@ -694,13 +858,14 @@ describe("tool parameter and result display", () => {
     expect(container.textContent).not.toContain("文件编辑")
   })
 
-  it("keeps command, edit and read counts separate in a mixed group", () => {
+  it("summarizes background commands and file edits without read counts", () => {
     render([
       part("BackgroundShellCreate", { command: "npm run dev" }),
       part("Read", { file_path: "index.html" }, { id: "tool-2", seq: 2, toolUseId: "call-2" }),
       part("Write", { file_path: "style.css" }, { id: "tool-3", seq: 3, toolUseId: "call-3" }),
     ])
-    expect(container.textContent).toContain("文件编辑 1 次，命令调用 1 次，工具查看 1 次")
+    expect(container.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe("编辑了文件，运行了命令")
+    expect(container.textContent).not.toMatch(/文件编辑|命令调用|工具查看/)
   })
 
   it("shows a wrapped failed edit's path, original parameters and result separately", () => {

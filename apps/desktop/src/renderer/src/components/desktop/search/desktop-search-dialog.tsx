@@ -28,7 +28,7 @@ export function DesktopSearchDialog({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onOpenConversation: (sessionId: string) => void
+  onOpenConversation: (sessionId: string, match?: { messageId: string; query: string }) => void
   onNewConversation: () => void
   onChooseProject: () => void
   onSearchFiles: () => void
@@ -75,7 +75,7 @@ export function DesktopSearchDialog({
         description: result.snippet,
         group: "聊天内容",
         badge: result.session.status === "archived" ? "已归档" : undefined,
-        onSelect: () => onOpenConversation(result.session.id),
+        onSelect: () => onOpenConversation(result.session.id, { messageId: result.messageId, query: contentSearch.query }),
       })),
     }),
     [contentSearch, onOpenConversation]

@@ -1,0 +1,71 @@
+diff --git a/lib/handlers/list-item.js b/lib/handlers/list-item.js
+index eca0db3ce774dd87a388efecb428731bffc1ac9e..8b3cf180ac6e9e10c97e5560e97e30e04f3fb96c 100644
+--- a/lib/handlers/list-item.js
++++ b/lib/handlers/list-item.js
+@@ -18,7 +18,7 @@
+  */
+ export function listItem(state, node, parent) {
+   const results = state.all(node)
+-  const loose = parent ? listLoose(parent) : listItemLoose(node)
++  const loose = parent ? listLoose(state, parent) : listItemLoose(node)
+   /** @type {Properties} */
+   const properties = {}
+   /** @type {Array<ElementContent>} */
+@@ -88,10 +88,14 @@ export function listItem(state, node, parent) {
+ }
+ 
+ /**
++ * @param {State} state
+  * @param {Parents} node
+  * @return {Boolean}
+  */
+-function listLoose(node) {
++function listLoose(state, node) {
++  const cached = state.listLooseByNode.get(node)
++  if (cached !== undefined) return cached
++
+   let loose = false
+   if (node.type === 'list') {
+     loose = node.spread || false
+@@ -103,6 +107,7 @@ function listLoose(node) {
+     }
+   }
+ 
++  state.listLooseByNode.set(node, loose)
+   return loose
+ }
+ 
+diff --git a/lib/state.d.ts b/lib/state.d.ts
+index e6e270617a6cbb2ba7284e8a15a596b40e478a27..ebe3e438a94e9ab263c5bd85e6a4d0dca1961114 100644
+--- a/lib/state.d.ts
++++ b/lib/state.d.ts
+@@ -172,6 +172,8 @@ export type Options = {
+  * Info passed around.
+  */
+ export type State = {
++    /** List spacing decisions for this conversion only. */
++    listLooseByNode: WeakMap<MdastParents, boolean>;
+     /**
+      *   Transform the children of an mdast parent to hast.
+      */
+diff --git a/lib/state.js b/lib/state.js
+index 0d9c9dff22022c7199b26551fdd831422f761e98..f46f140315e35b8958eddee3622ab223eaeec8d1 100644
+--- a/lib/state.js
++++ b/lib/state.js
+@@ -165,6 +165,8 @@
+  *   Identifiers of order when footnote calls first appear in tree order.
+  * @property {Handlers} handlers
+  *   Applied handlers.
++ * @property {WeakMap<MdastParents, boolean>} listLooseByNode
++ *   List spacing decisions for this conversion only.
+  * @property {(node: MdastNodes, parent: MdastParents | undefined) => Array<HastElementContent> | HastElementContent | undefined} one
+  *   Transform an mdast node to hast.
+  * @property {Options} options
+@@ -217,6 +219,7 @@ export function createState(tree, options) {
+     footnoteCounts,
+     footnoteOrder: [],
+     handlers,
++    listLooseByNode: new WeakMap(),
+     one,
+     options: settings,
+     patch,

@@ -244,6 +244,11 @@ describe("goal actions", () => {
   it("preserves ordinary attachment upload results while goal editing uses a separate draft", async () => {
     const scope = sessionComposerScope("s1")
     draft(scope, "原草稿", [{ ...attachment(), status: "uploading", assetId: undefined }])
+    useDesktopSessionStore.setState((state) => ({ composerDraftsByScope: {
+      ...state.composerDraftsByScope, [scope]: { ...state.composerDraftsByScope[scope]!,
+        attachmentPreparation: { pending: ["reading"], error: null },
+      },
+    } }))
     useDesktopSessionStore.setState({ goalsBySession: { s1: goal() } })
     useDesktopSessionStore.getState().setGoalMode(scope, true)
     useDesktopSessionStore.getState().applyAttachmentUploadEvent({
@@ -255,6 +260,7 @@ describe("goal actions", () => {
       mediaType: "image/png",
       sizeBytes: 1,
     })
+    expect(useDesktopSessionStore.getState().composerDraftsByScope[`goal-ordinary:${scope}`]?.attachmentPreparation?.pending).toEqual(["reading"])
     await useDesktopSessionStore.getState().submitGoal(scope)
     expect(window.desktop.sessions.updateGoal).toHaveBeenCalledWith(
       expect.objectContaining({ attachments: [], objective: "完成测试", expectedRevision: 0 })
@@ -262,6 +268,7 @@ describe("goal actions", () => {
     expect(
       selectComposerDocumentText(selectDraftDocument(useDesktopSessionStore.getState(), scope))
     ).toBe("原草稿")
+    expect(useDesktopSessionStore.getState().composerDraftsByScope[scope]?.attachmentPreparation?.pending).toEqual(["reading"])
     expect(selectDraftAttachments(useDesktopSessionStore.getState(), scope)).toEqual([
       expect.objectContaining({ status: "ready", assetId: "uploaded" }),
     ])

@@ -259,6 +259,7 @@ export interface AttachmentActions {
   pickAttachmentFiles: (scope: string) => Promise<void>
   pickAttachmentImages: (scope: string) => Promise<void>
   addDroppedAttachments: (scope: string, files: readonly File[]) => Promise<void>
+  addClipboardFiles: (scope: string, files: readonly File[]) => Promise<void>
   addClipboardAttachment: (
     scope: string,
     input: Omit<UploadDesktopAttachmentMemoryInput, "draftId" | "taskId">

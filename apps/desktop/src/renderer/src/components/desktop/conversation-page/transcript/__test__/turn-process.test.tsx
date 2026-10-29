@@ -101,6 +101,19 @@ describe("turn process disclosure", () => {
     showVirtualRow(true)
     expect(container.textContent).toContain("执行过程")
   })
+  it("reveals a matched folded process without resetting its manual disclosure", async () => {
+    let scroller: NonNullable<ReturnType<typeof useConversationScroller>>
+    function Probe() { scroller = useConversationScroller()!; return null }
+    act(() => root.render(<ConversationScrollerProvider><Probe /><TurnProcess turnId="turn" plan={plan} canCollapse timing={timing}>{render}</TurnProcess></ConversationScrollerProvider>))
+    expect(container.textContent).not.toContain("执行过程")
+    act(() => scroller.setSearchMatch({ messageId: "m", partIds: ["commentary"], tokens: ["执行过程"] }))
+    expect(container.textContent).toContain("执行过程")
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>("button")!.click()
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    })
+    expect(container.querySelector("button")?.getAttribute("aria-expanded")).toBe("false")
+  })
   it("keeps running work visible, then collapses it under its duration", () => {
     show(false)
     expect(container.textContent).toContain("执行过程")

@@ -67,6 +67,17 @@ describe("ComposerAttachments preview", () => {
     expect(container.querySelector("svg")).not.toBeNull()
   })
 
+  it("reports a preview failure separately and retries only the preview read", async () => {
+    const read = vi.mocked(window.desktop.attachments.readPreview)
+    read.mockRejectedValueOnce(new Error("read failed"))
+    await act(async () => root.render(createElement(ComposerAttachments, { attachments:[readyImage], onCancel:vi.fn(), onRetry:vi.fn(), onRemove:vi.fn() })))
+    expect(container.textContent).toContain("预览读取失败")
+    const retry=container.querySelector<HTMLButtonElement>('[aria-label="重试预览 runtime-map.jpeg"]')
+    expect(retry).not.toBeNull()
+    await act(async () => retry!.click())
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(container.querySelector("img")).not.toBeNull()
+  })
   it("shows a ready image as a standalone thumbnail", async () => {
     await act(async () =>
       root.render(

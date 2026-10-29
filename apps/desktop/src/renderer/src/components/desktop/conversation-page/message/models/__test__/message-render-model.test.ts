@@ -19,8 +19,8 @@ describe("message render model", () => {
       { ...base, id: "answer", text: "检查完成", metadata: { phase: "final_answer" } },
       { ...base, id: "answer-2", text: "。", metadata: { phase: "final_answer" } },
     ])).toEqual([
-      { id: "progress", type: "markdown", text: "检查中", phase: "commentary" },
-      { id: "answer", type: "markdown", text: "检查完成。", phase: "final_answer" },
+      { id: "progress", type: "markdown", text: "检查中", source: { messageId: "message-1", partIds: ["progress"] }, phase: "commentary" },
+      { id: "answer", type: "markdown", text: "检查完成。", source: { messageId: "message-1", partIds: ["answer", "answer-2"] }, phase: "final_answer" },
     ]);
   });
   it("shows the number of ordered edits in the existing tool summary", () => {
@@ -128,6 +128,7 @@ describe("message render model", () => {
         id: "part-1",
         type: "markdown",
         text: "I will inspect it.",
+        source: { messageId: "message-1", partIds: ["part-1"] },
         phase: "commentary",
       },
     ])
@@ -361,3 +362,10 @@ function imageToolPart(options: {
     updatedAt: 1,
   }
 }
+
+
+it("keeps adjacent messages separate so a later message can be located precisely", () => {
+ const first = { ...toolPart("Read", {}), id: "first", type: "text" as const, messageId: "m1", text: "same keyword", metadata: {} }
+ const second = { ...first, id: "second", messageId: "m2" }
+ expect(buildAssistantContent([first, second])).toHaveLength(2)
+})

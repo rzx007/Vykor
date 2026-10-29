@@ -10,7 +10,13 @@ import { readPluginUiInstance, type PluginUiInstanceRecord } from "@rzx/client"
 import { isToolGenerationPresentation } from "../activity/tool-generation-presentation"
 
 export type AssistantContentUnit =
-  | { id: string; type: "markdown"; text: string; phase?: "commentary" | "final_answer" }
+  | {
+      id: string
+      type: "markdown"
+      text: string
+      source: { messageId: string; partIds: string[] }
+      phase?: "commentary" | "final_answer"
+    }
   | { id: string; type: "reasoning"; text: string }
   | { id: string; type: "tool"; call: DesktopSessionPart; result?: DesktopSessionPart }
   | {
@@ -74,9 +80,12 @@ export function buildAssistantContent(parts: DesktopSessionPart[]): AssistantCon
     if (part.type === "text" && part.text) {
       const previous = units.at(-1)
       const phase = assistantPhase(part.metadata.phase)
-      if (previous?.type === "markdown" && previous.phase === phase) previous.text += part.text
+      if (previous?.type === "markdown" && previous.phase === phase && previous.source.messageId === part.messageId) {
+        previous.text += part.text
+        previous.source.partIds.push(part.id)
+      }
       else if (part.text.trim()) {
-        units.push({ id: part.id, type: "markdown", text: part.text, ...(phase ? { phase } : {}) })
+        units.push({ id: part.id, type: "markdown", text: part.text, source: { messageId: part.messageId, partIds: [part.id] }, ...(phase ? { phase } : {}) })
       }
       continue
     }
@@ -349,6 +358,78 @@ export function toolGroupActivityLabel(
   tools: { call: DesktopSessionPart; result?: DesktopSessionPart }[]
 ): string | undefined {
   return toolGroupActivity(tools)?.label
+}
+
+/** 工具组标题只表达当前操作或已完成的操作类别，不统计调用次数。 */
+export function toolGroupInlineStatus(
+  tools: { call: DesktopSessionPart; result?: DesktopSessionPart }[]
+): ActivityStep & { active: boolean } {
+  const active = tools.filter((tool) => isToolActivityActive(tool.call, tool.result))
+  const current =
+    active.find(
+      (tool) => recordValue(tool.call.metadata.toolProgress)?.phase === "waiting_permission"
+    ) ??
+    active.find(
+      (tool) =>
+        toolCallStatus(tool.call, tool.result) === "running" &&
+        recordValue(tool.call.metadata.toolProgress)?.phase !== "queued" &&
+        recordValue(tool.call.metadata.toolProgress)?.phase !== "preparing" &&
+        !isToolGenerationPresentation(tool.call)
+    ) ??
+    active.find(
+      (tool) =>
+        isToolGenerationPresentation(tool.call) ||
+        recordValue(tool.call.metadata.toolProgress)?.phase === "preparing"
+    ) ??
+    active.at(-1)
+  if (current) {
+    const summary = summarizeToolCall(current.call)
+    const activity = toolActivity(current.call, current.result)
+    const preparing = isToolGenerationPresentation(current.call)
+    const label = preparing
+      ? `正在准备${summary.name}`
+      : activity?.label
+        ? `${activity.label} · ${summary.name}`
+        : current.call.toolName?.toLowerCase().replace(/[-_]/g, "") === "imagetotext"
+          ? summary.name
+          : `正在${summary.name}`
+    return {
+      label: !preparing && summary.detail ? `${label} · ${summary.detail}` : label,
+      orb: activity?.orb ?? "solving",
+      active: true,
+    }
+  }
+
+  let edits = false,
+    commands = false,
+    reads = false
+  for (const tool of tools) {
+    if (isToolGenerationPresentation(tool.call)) continue
+    const execution = toolExecutionState(tool.call, tool.result)
+    if (execution === "not_started" || execution === "unknown") continue
+    const status = toolCallStatus(tool.call, tool.result)
+    const phase = recordValue(tool.call.metadata.toolProgress)?.phase
+    if (
+      status !== "completed" &&
+      !(phase === "completed" && (status === "running" || status === "pending"))
+    )
+      continue
+    const name = (tool.call.toolName ?? "").toLowerCase().replace(/[-_]/g, "")
+    if (/^(?:bash|shell|terminal|terminalopen|exec|command|backgroundshellcreate)$/.test(name))
+      commands = true
+    else if (
+      /^(?:write|writefile|createfile|edit|editfile|replace|applypatch|todowrite)$/.test(name)
+    )
+      edits = true
+    else if (
+      /^(?:read|readfile|glob|listfiles|findfiles|grep|search|websearch|webfetch|fetch|imagetotext|skill|listskills)$/.test(
+        name
+      )
+    )
+      reads = true
+  }
+  const label = [edits ? "编辑了文件" : "", commands ? "运行了命令" : ""].filter(Boolean).join("，")
+  return { label: label || (reads ? "查看了内容" : "操作已结束"), orb: "working", active: false }
 }
 
 export function conversationActivity(

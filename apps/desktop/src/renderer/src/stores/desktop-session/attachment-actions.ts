@@ -19,10 +19,66 @@ import {
   setDraftText,
 } from "./composer-draft-state"
 import type { AttachmentActions, DesktopStoreContext } from "./types"
-import { composerDocument, type ComposerDocument } from "./composer-document"
+import { emptyComposerDocument, composerDocument, type ComposerDocument } from "./composer-document"
 
 export function createAttachmentActions(context: DesktopStoreContext): AttachmentActions {
   const { get, set } = context
+
+  // Keep intake feedback with the draft so switching chats cannot clear the send guard.
+  const prepare = async (
+    scope: string,
+    action: (currentScope: () => string | null) => Promise<void>
+  ): Promise<void> => {
+    const id = crypto.randomUUID()
+    const currentScope = (): string | null =>
+      Object.entries(get().composerDraftsByScope).find(([, draft]) =>
+        draft.attachmentPreparation?.pending.includes(id)
+      )?.[0] ?? null
+    set((state) => {
+      const draft = state.composerDraftsByScope[scope] ?? {
+        document: emptyComposerDocument,
+        attachments: [],
+      }
+      return {
+        composerDraftsByScope: {
+          ...state.composerDraftsByScope,
+          [scope]: {
+            ...draft,
+            attachmentPreparation: {
+              pending: [...(draft.attachmentPreparation?.pending ?? []), id],
+              error: null,
+            },
+          },
+        },
+      }
+    })
+    let error: string | null = null
+    try {
+      await action(currentScope)
+    } catch {
+      error = "添加或读取附件失败，请重新添加。正文草稿已保留。"
+    } finally {
+      set((state) => {
+        const targetScope = currentScope()
+        if (!targetScope) return state
+        const draft = state.composerDraftsByScope[targetScope]!
+        return {
+          composerDraftsByScope: {
+            ...state.composerDraftsByScope,
+            [targetScope]: {
+              ...draft,
+              attachmentPreparation: {
+                pending: (draft.attachmentPreparation?.pending ?? []).filter(
+                  (value) => value !== id
+                ),
+                error: error ?? draft.attachmentPreparation?.error ?? null,
+              },
+            },
+          },
+        }
+      })
+    }
+  }
 
   const startCandidates = async (
     scope: string,
@@ -39,14 +95,18 @@ export function createAttachmentActions(context: DesktopStoreContext): Attachmen
             taskId,
             sourceToken: candidate.sourceToken,
           })
-        } catch {
+        } catch (cause) {
           set((state) =>
-            applyUploadEvent(state, scope, {
-              type: "failed",
-              draftId: candidate.draftId,
-              taskId,
-              error: actionError(),
-            })
+            applyUploadEvent(
+              state,
+              findUploadEventScope(state, candidate.draftId, taskId) ?? scope,
+              {
+                type: "failed",
+                draftId: candidate.draftId,
+                taskId,
+                error: actionError(cause),
+              }
+            )
           )
         }
       })
@@ -99,17 +159,47 @@ export function createAttachmentActions(context: DesktopStoreContext): Attachmen
 
     async pickAttachmentFiles(scope) {
       if (!get().attachmentSupport?.interactionEnabled) return
-      await startCandidates(scope, await window.desktop.attachments.pickFiles())
+      await prepare(scope, async (currentScope) => {
+        const candidates = await window.desktop.attachments.pickFiles()
+        const targetScope = currentScope()
+        if (targetScope) await startCandidates(targetScope, candidates)
+      })
     },
 
     async pickAttachmentImages(scope) {
       if (!get().attachmentSupport?.interactionEnabled) return
-      await startCandidates(scope, await window.desktop.attachments.pickImages())
+      await prepare(scope, async (currentScope) => {
+        const candidates = await window.desktop.attachments.pickImages()
+        const targetScope = currentScope()
+        if (targetScope) await startCandidates(targetScope, candidates)
+      })
     },
 
     async addDroppedAttachments(scope, files) {
       if (!get().attachmentSupport?.interactionEnabled || files.length === 0) return
-      await startCandidates(scope, await window.desktop.attachments.stageDroppedFiles(files))
+      await prepare(scope, async (currentScope) => {
+        const candidates = await window.desktop.attachments.stageDroppedFiles(files)
+        const targetScope = currentScope()
+        if (targetScope) await startCandidates(targetScope, candidates)
+      })
+    },
+
+    async addClipboardFiles(scope, files) {
+      if (!get().attachmentSupport?.interactionEnabled || files.length === 0) return
+      await prepare(scope, async (currentScope) => {
+        const payloads = await Promise.all(
+          files.map(async (file) => ({
+            bytes: await file.arrayBuffer(),
+            displayName: file.name || "粘贴图片",
+            mediaType: file.type || "application/octet-stream",
+          }))
+        )
+        const targetScope = currentScope()
+        if (targetScope)
+          await Promise.all(
+            payloads.map((input) => get().addClipboardAttachment(targetScope, input))
+          )
+      })
     },
 
     async addClipboardAttachment(scope, input) {
@@ -127,13 +217,13 @@ export function createAttachmentActions(context: DesktopStoreContext): Attachmen
       const uploadInput: UploadDesktopAttachmentMemoryInput = { ...input, draftId, taskId }
       try {
         await window.desktop.attachments.uploadClipboardImage(uploadInput)
-      } catch {
+      } catch (cause) {
         set((state) =>
-          applyUploadEvent(state, scope, {
+          applyUploadEvent(state, findUploadEventScope(state, draftId, taskId) ?? scope, {
             type: "failed",
             draftId,
             taskId,
-            error: actionError(),
+            error: actionError(cause),
           })
         )
       }
@@ -146,7 +236,7 @@ export function createAttachmentActions(context: DesktopStoreContext): Attachmen
       if (!attachment || attachment.status !== "uploading") return
       await window.desktop.attachments.cancelUpload({ taskId: attachment.taskId })
       set((state) =>
-        applyUploadEvent(state, scope, {
+        applyUploadEvent(state, findUploadEventScope(state, draftId, attachment.taskId) ?? scope, {
           type: "cancelled",
           draftId,
           taskId: attachment.taskId,
@@ -163,13 +253,13 @@ export function createAttachmentActions(context: DesktopStoreContext): Attachmen
       set((state) => beginUpload(state, scope, draftId, taskId))
       try {
         await window.desktop.attachments.retryUpload({ draftId, taskId })
-      } catch {
+      } catch (cause) {
         set((state) =>
-          applyUploadEvent(state, scope, {
+          applyUploadEvent(state, findUploadEventScope(state, draftId, taskId) ?? scope, {
             type: "failed",
             draftId,
             taskId,
-            error: actionError(),
+            error: actionError(cause),
           })
         )
       }
@@ -211,7 +301,18 @@ export function createAttachmentActions(context: DesktopStoreContext): Attachmen
   }
 }
 
-function actionError(): DesktopAttachmentError {
+function actionError(cause: unknown): DesktopAttachmentError {
+  const message = cause instanceof Error ? cause.message : String(cause)
+  if (
+    message.includes("attachment_retry_unavailable") ||
+    message.includes("attachment_source_expired")
+  ) {
+    return {
+      code: "attachment_source_expired",
+      message: "附件来源已失效，请移除后重新添加。",
+      retryable: false,
+    }
+  }
   return {
     code: "attachment_action_failed",
     message: "附件操作失败，请重试。",

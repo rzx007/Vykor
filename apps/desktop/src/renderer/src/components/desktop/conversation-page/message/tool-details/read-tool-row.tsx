@@ -34,7 +34,7 @@ export function ReadToolRow({
           : "读取文件"
   return (
     <div
-      className={cn("group/read-tool flex h-7 min-w-0 items-center gap-2", calling && "shimmer")}
+      className={cn("group/read-tool flex min-h-7 min-w-0 items-center gap-2", calling && "shimmer")}
     >
       <BookOpen className="size-3.5 shrink-0" strokeWidth={1.75} />
       <span className="shrink-0">{label}</span>
@@ -46,7 +46,7 @@ export function ReadToolRow({
       >
         {name}
       </button>
-      {activity ? <span className="shrink-0 text-xs text-ui-muted">{activity}</span> : null}
+      {activity ? <span className="shrink-0 text-ui-muted">{activity}</span> : null}
       <Button
         variant="ghost"
         size="icon-sm"

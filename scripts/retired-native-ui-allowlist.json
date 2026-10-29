@@ -462,19 +462,19 @@
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx",
-      "line": 55,
+      "line": 50,
       "text": "import { PluginUiHistoryCard } from \"../tool-details/plugin-ui-history-card\"",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx",
-      "line": 172,
+      "line": 167,
       "text": "        if (unit.type === \"plugin-ui\") {",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx",
-      "line": 174,
+      "line": 169,
       "text": "            <PluginUiHistoryCard",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
@@ -486,25 +486,25 @@
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/message-render-model.ts",
-      "line": 18,
+      "line": 24,
       "text": "      type: \"plugin-ui\"",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/message-render-model.ts",
-      "line": 21,
+      "line": 27,
       "text": "      instance: PluginUiInstanceRecord",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/message-render-model.ts",
-      "line": 112,
+      "line": 121,
       "text": "      const source = readPluginUiInstance(part.metadata) ?? readPluginUiInstance(result?.metadata)",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/message-render-model.ts",
-      "line": 120,
+      "line": 129,
       "text": "        units.push({ id: part.id, type: \"plugin-ui\", call: part, result, instance: source })",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },

@@ -105,6 +105,7 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
       const goal = scope.startsWith("session:") ? state.goalsBySession[scope.slice(8)] : null
       if (active && isOpenGoal(goal)) {
         const ordinaryDraft = {
+          ...state.composerDraftsByScope[scope],
           document: selectDraftDocument(state, scope),
           attachments: selectDraftAttachments(state, scope),
         }

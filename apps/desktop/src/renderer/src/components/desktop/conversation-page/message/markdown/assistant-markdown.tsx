@@ -17,6 +17,8 @@ const codeFence = /(?:^|\n)[ \t]{0,3}(?:`{3,}|~{3,})/
 
 export const AssistantMarkdown = memo(function AssistantMarkdown({
   text,
+  searchMessageId,
+  searchPartIdsJson,
   phase,
   streaming,
   animateInitialText,
@@ -24,6 +26,8 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
   fileLinkMode = "open",
 }: {
   text: string
+  searchMessageId?: string
+  searchPartIdsJson?: string
   phase?: "commentary" | "final_answer"
   streaming: boolean
   animateInitialText: boolean
@@ -81,6 +85,9 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
 
   return (
     <div
+      data-chat-search-text
+      data-chat-search-message={searchMessageId}
+      data-chat-search-parts={searchPartIdsJson}
       className="assistant-markdown min-w-0"
       data-phase={phase}
       data-stream-initial={streaming && rendered.text === initialText ? "true" : undefined}

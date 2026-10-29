@@ -1,3 +1,4 @@
+import type { ConversationSearchTarget } from "../../conversation-page/transcript/conversation-find-model"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Outlet, useNavigate, useRouter, useRouterState } from "@tanstack/react-router"
 import {
@@ -82,6 +83,8 @@ export function MainLayout(): React.JSX.Element {
   const sessionIds = useMemo(() => sessions.map((session) => session.id), [sessions])
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [messageSearchTarget, setMessageSearchTarget] = useState<ConversationSearchTarget>()
+  const consumeMessageSearchTarget = useCallback(() => setMessageSearchTarget(undefined), [])
   const sidebarPanelRef = usePanelRef()
   const conversationPanelRef = usePanelRef()
   const utilityPanelRef = usePanelRef()
@@ -198,8 +201,9 @@ export function MainLayout(): React.JSX.Element {
   }, [sidebarPanelRef, syncSidebarContentWidth])
 
   const openConversationRoute = useCallback(
-    (destination: string | null | undefined): void => {
+    (destination: string | null | undefined, match?: { messageId: string; query: string }): void => {
       const sessionId = destination === undefined ? activeSessionId : destination
+      setMessageSearchTarget(sessionId && match ? { sessionId, ...match } : undefined)
       if (sessionId) {
         void navigate({
           to: "/conversation/$sessionId",
@@ -396,6 +400,8 @@ export function MainLayout(): React.JSX.Element {
           className="h-full min-h-0 overflow-hidden"
         >
           <ConversationPane
+            searchTarget={messageSearchTarget}
+            onSearchTargetConsumed={consumeMessageSearchTarget}
             panelOpen={panelOpen}
             onTogglePanel={togglePanel}
             onOpenFile={openWorkspaceFile}
@@ -447,6 +453,8 @@ export function MainLayout(): React.JSX.Element {
       </Group>
     ),
     [
+      messageSearchTarget,
+      consumeMessageSearchTarget,
       activeWorkspaceIsGit,
       conversationPanelRef,
       innerGroupElementRef,

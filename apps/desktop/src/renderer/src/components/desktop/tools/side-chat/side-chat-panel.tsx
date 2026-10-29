@@ -1,3 +1,4 @@
+import { ConversationFind } from "../../conversation-page/transcript/conversation-find"
 import { useEffect, useRef, useState } from "react"
 import { MessageCirclePlus, MessageCircleMore, X } from "lucide-react"
 import { Composer } from "../../conversation-page/composer/composer"
@@ -111,13 +112,17 @@ function moveSideChatDraft(from: string, to: string, merge = false): void {
                 : []),
               ...target.document.items,
             ]),
+            attachmentPreparation: source.attachmentPreparation || target.attachmentPreparation ? {
+              pending: [...(source.attachmentPreparation?.pending ?? []), ...(target.attachmentPreparation?.pending ?? [])],
+              error: source.attachmentPreparation?.error ?? target.attachmentPreparation?.error ?? null,
+            } : undefined,
             attachments: [...source.attachments, ...target.attachments],
             textSelections: [...(source.textSelections ?? []), ...(target.textSelections ?? [])],
           },
         },
       }
     }
-    if (source && target && (target.document.items.length || target.attachments.length))
+    if (source && target && (target.document.items.length || target.attachments.length || target.attachmentPreparation?.pending.length))
       return state
     const migrated = migrateComposerScope(state, from, to)
     if (!source || !target?.textSelections?.length) return migrated
@@ -294,12 +299,14 @@ export function SideChatPanel({
     targetDraft &&
     (targetDraft.document.items.length ||
       targetDraft.attachments.length ||
+      targetDraft.attachmentPreparation?.pending.length ||
       targetDraft.textSelections?.length)
   )
   const scope =
     verifiedTargetId && !preforkDraft ? sessionComposerScope(verifiedTargetId) : preforkScope
   const draft = useDesktopSessionStore((state) => selectDraftDocument(state, scope))
   const attachments = useDesktopSessionStore((state) => selectDraftAttachments(state, scope))
+  const attachmentPreparation = useDesktopSessionStore((state) => state.composerDraftsByScope[scope]?.attachmentPreparation)
   const textSelections = (scope === preforkScope ? preforkDraft : targetDraft)?.textSelections ?? []
   const storedTarget = verifiedTargetId
     ? sessions.find((item) => item.id === verifiedTargetId)
@@ -540,6 +547,7 @@ export function SideChatPanel({
   const isCurrentTarget = (id: string): boolean =>
     sideChatTargets.get(sourceId) === id && !closingSources.has(sourceId)
   const submit = async (): Promise<void> => {
+    if (useDesktopSessionStore.getState().composerDraftsByScope[scope]?.attachmentPreparation?.pending.length) return
     if (
       closingSources.has(sourceId) ||
       creating ||
@@ -667,6 +675,7 @@ export function SideChatPanel({
     >
       <MessageScrollerProvider key={targetId ?? "new"}>
         <MessageScroller className="min-h-0 flex-1">
+          <ConversationFind messages={transcript.messages} parts={transcript.parts} />
           <MessageScrollerViewport onContextMenu={(event) => void openConversationTextMenu(event)}>
             <MessageScrollerContent className="conversation-content-column min-h-full min-w-0 text-content-foreground">
               {view || submissions.length ? (
@@ -900,25 +909,15 @@ export function SideChatPanel({
                 }
               }}
               attachments={attachments}
+              attachmentPreparation={attachmentPreparation}
               attachmentInteractionEnabled={support.interactionEnabled}
               attachmentReadOnly={unavailable}
-              onPickFiles={() => update(actions.pickAttachmentFiles(scope))}
-              onDropFiles={(files) => update(actions.addDroppedAttachments(scope, files))}
-              onPasteFiles={(files) => {
-                for (const file of files)
-                  update(
-                    file.arrayBuffer().then((bytes) =>
-                      actions.addClipboardAttachment(scope, {
-                        bytes,
-                        displayName: file.name || "粘贴图片",
-                        mediaType: file.type || "application/octet-stream",
-                      })
-                    )
-                  )
-              }}
-              onCancelAttachment={(id) => update(actions.cancelAttachment(scope, id))}
-              onRetryAttachment={(id) => update(actions.retryAttachment(scope, id))}
-              onRemoveAttachment={(id) => update(actions.removeAttachment(scope, id))}
+              onPickFiles={() => actions.pickAttachmentFiles(scope)}
+              onDropFiles={(files) => actions.addDroppedAttachments(scope, files)}
+              onPasteFiles={(files) => actions.addClipboardFiles(scope, files)}
+              onCancelAttachment={(id) => actions.cancelAttachment(scope, id)}
+              onRetryAttachment={(id) => actions.retryAttachment(scope, id)}
+              onRemoveAttachment={(id) => actions.removeAttachment(scope, id)}
             />
           </>
         )}

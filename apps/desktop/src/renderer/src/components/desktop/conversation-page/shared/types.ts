@@ -1,7 +1,10 @@
+import type { ConversationSearchTarget } from "../transcript/conversation-find-model"
 import type { DesktopPermissionMode } from "@shared/session-types"
 import type { DesktopGitDiffScope } from "@shared/git-types"
 
 export type ConversationPaneProps = {
+  searchTarget?: ConversationSearchTarget
+  onSearchTargetConsumed?: () => void
   panelOpen: boolean
   onTogglePanel: () => void
   onOpenFile: (path: string, line?: number) => void
