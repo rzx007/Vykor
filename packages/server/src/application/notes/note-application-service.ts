@@ -1,16 +1,39 @@
 import {
   NoteRevisionConflictError,
+  NoteOrganizationConflictError,
   type NoteRepository,
 } from "@vykor/services";
 import { DomainValidationError as ProtocolValidationError } from "@vykor/domain-contracts/inputs";
-import type { CreateNoteInput, UpdateNoteInput } from "@vykor/domain-contracts/notes";
+import {
+  parseSaveNoteOrganizationInput,
+  type CreateNoteInput,
+  type UpdateNoteInput,
+  type NoteOrganizationV1Record,
+} from "@vykor/domain-contracts/notes";
 import { ApplicationError } from "../../shared/application-error.js";
 export interface NoteApplicationContext {
   notes: Pick<NoteRepository, "list" | "create" | "update" | "remove"> &
-    Partial<Pick<NoteRepository, "storageInfo">>;
+    Partial<
+      Pick<NoteRepository, "storageInfo" | "organization" | "saveOrganization">
+    >;
   readiness?(): { phase: string; accepting: boolean };
 }
 export function createNoteApplicationService(context: NoteApplicationContext) {
+  function mapError(error: unknown): never {
+    if (error instanceof ApplicationError) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    throw new ApplicationError(
+      error instanceof ProtocolValidationError
+        ? 400
+        : error instanceof NoteRevisionConflictError ||
+            error instanceof NoteOrganizationConflictError
+          ? 409
+          : message.includes("Note not found")
+            ? 404
+            : 500,
+      message,
+    );
+  }
   function call<T>(write: boolean, operation: () => T): T {
     const state = context.readiness?.();
     if (write && state && (state.phase !== "ready" || !state.accepting))
@@ -19,23 +42,35 @@ export function createNoteApplicationService(context: NoteApplicationContext) {
         "后台尚未就绪或已停止准入，拒绝便签写操作",
       );
     try {
-      return operation();
+      const result = operation();
+      return (result instanceof Promise ? result.catch(mapError) : result) as T;
     } catch (error) {
-      if (error instanceof ApplicationError) throw error;
-      const message = error instanceof Error ? error.message : String(error);
-      throw new ApplicationError(
-        error instanceof ProtocolValidationError
-          ? 400
-          : error instanceof NoteRevisionConflictError
-            ? 409
-            : message.includes("Note not found")
-              ? 404
-              : 500,
-        message,
-      );
+      return mapError(error);
     }
   }
   return {
+    organization: () =>
+      call(false, () => {
+        if (!context.notes.organization)
+          throw new ApplicationError(503, "便签组织存储尚未就绪");
+        return context.notes.organization();
+      }),
+    saveOrganization: (
+      organization: NoteOrganizationV1Record,
+      expectedEtag: string,
+    ) =>
+      call(true, () => {
+        const input = parseSaveNoteOrganizationInput({
+          organization,
+          expectedEtag,
+        });
+        if (!context.notes.saveOrganization)
+          throw new ApplicationError(503, "便签组织存储尚未就绪");
+        return context.notes.saveOrganization(
+          input.organization,
+          input.expectedEtag,
+        );
+      }),
     list: () => call(false, () => context.notes.list()),
     create: (input: CreateNoteInput) =>
       call(true, () => context.notes.create(input)),

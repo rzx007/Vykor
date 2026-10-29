@@ -18,11 +18,13 @@ export function NoteActions({
   label = "便签操作",
   onAppearanceChange,
   onDelete,
+  pinDisabled = false,
 }: {
   note: NoteView
   label?: string
   onAppearanceChange?: (patch: Partial<NoteAppearance>) => void
   onDelete: () => void
+  pinDisabled?: boolean
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -78,6 +80,7 @@ export function NoteActions({
                 shape="pill"
                 size="sm"
                 className="justify-start"
+                disabled={pinDisabled}
                 onClick={() => {
                   onAppearanceChange({ pinned: !note.pinned })
                   close()

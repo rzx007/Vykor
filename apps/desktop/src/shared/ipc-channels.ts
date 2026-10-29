@@ -110,7 +110,13 @@ import type {
   ListDesktopScheduledRunsInput,
   UpdateDesktopScheduledTaskInput,
 } from "./schedule-types"
-import type { CreateDesktopNoteInput, DesktopNote, UpdateDesktopNoteInput } from "./note-types"
+import type {
+  CreateDesktopNoteInput,
+  DesktopNote,
+  UpdateDesktopNoteInput,
+  DesktopNoteOrganizationSnapshot,
+  SaveDesktopNoteOrganizationInput,
+} from "./note-types"
 import type {
   ActivateDesktopProviderInput,
   ConnectDesktopProviderInput,
@@ -366,6 +372,8 @@ export const IpcChannels = {
   scheduleSetRunUnread: "schedule:set-run-unread",
 
   noteList: "note:list",
+  noteOrganizationGet: "note:organization:get",
+  noteOrganizationSave: "note:organization:save",
   noteCreate: "note:create",
   noteUpdate: "note:update",
   noteRemove: "note:remove",
@@ -1062,6 +1070,11 @@ export interface IpcInvokeMap
     result: DesktopScheduledRun
   }
   [IpcChannels.noteList]: { args: []; result: DesktopNote[] }
+  [IpcChannels.noteOrganizationGet]: { args: []; result: DesktopNoteOrganizationSnapshot }
+  [IpcChannels.noteOrganizationSave]: {
+    args: [input: SaveDesktopNoteOrganizationInput]
+    result: DesktopNoteOrganizationSnapshot
+  }
   [IpcChannels.noteCreate]: {
     args: [input: CreateDesktopNoteInput]
     result: DesktopNote

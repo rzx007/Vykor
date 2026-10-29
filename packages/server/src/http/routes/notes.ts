@@ -1,4 +1,9 @@
-import { parseCreateNoteInput, parseUpdateNoteInput, ProtocolValidationError } from "@vykor/protocol";
+import {
+  parseCreateNoteInput,
+  parseUpdateNoteInput,
+  parseSaveNoteOrganizationInput,
+  ProtocolValidationError,
+} from "@vykor/protocol";
 import type { NoteApplicationService } from "../../application/notes/note-application-service.js";
 import { ApplicationError } from "../../shared/application-error.js";
 import { Hono } from "hono";
@@ -11,11 +16,39 @@ import {
 } from "../support.js";
 
 export interface NoteRoutesContext {
-  notes: Pick<NoteApplicationService, "list" | "create" | "update" | "remove" | "storageInfo">;
+  notes: Pick<
+    NoteApplicationService,
+    "list" | "create" | "update" | "remove" | "storageInfo"
+  > &
+    Partial<Pick<NoteApplicationService, "organization" | "saveOrganization">>;
 }
 
 export function createNoteRoutes(context: NoteRoutesContext): Hono {
   return new Hono()
+    .get("/organization", () => {
+      try {
+        if (!context.notes.organization)
+          return errorResponse(503, "便签组织存储尚未就绪");
+        return jsonResponse(context.notes.organization());
+      } catch (error) {
+        return noteError(error);
+      }
+    })
+    .put("/organization", async (c) => {
+      try {
+        const input = parseSaveNoteOrganizationInput(await readJson(c));
+        if (!context.notes.saveOrganization)
+          return errorResponse(503, "便签组织存储尚未就绪");
+        return jsonResponse(
+          await context.notes.saveOrganization(
+            input.organization,
+            input.expectedEtag,
+          ),
+        );
+      } catch (error) {
+        return noteError(error);
+      }
+    })
     .get("/storage", () => {
       try {
         if (!context.notes.storageInfo)
@@ -70,6 +103,7 @@ function noteError(error: unknown): Response {
     return protocolValidationErrorResponse(error);
   }
   const message = error instanceof Error ? error.message : String(error);
-  if (error instanceof ApplicationError) return errorResponse(error.status, message);
+  if (error instanceof ApplicationError)
+    return errorResponse(error.status, message);
   return errorResponse(500, message);
 }

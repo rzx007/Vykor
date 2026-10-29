@@ -1,4 +1,10 @@
-import type { CreateNoteInput, NoteRecord, UpdateNoteInput } from "@rzx/client"
+import type {
+  CreateNoteInput,
+  NoteRecord,
+  UpdateNoteInput,
+  NoteOrganizationSnapshotRecord,
+  SaveNoteOrganizationInput,
+} from "@rzx/client"
 import { IpcChannels } from "../../../shared/ipc-channels"
 import { describe, expect, it, vi } from "vitest"
 
@@ -8,6 +14,8 @@ interface NoteService {
   update(id: string, input: UpdateNoteInput): Promise<NoteRecord>
   remove(id: string): Promise<void>
   openDirectory(): Promise<void>
+  organization(): Promise<NoteOrganizationSnapshotRecord>
+  saveOrganization(input: SaveNoteOrganizationInput): Promise<NoteOrganizationSnapshotRecord>
 }
 
 async function loadContribution(service: NoteService) {
@@ -34,6 +42,16 @@ describe("note IPC contribution", () => {
       updatedAt: 1,
     }
     const service = {
+      organization: vi.fn(async () => ({
+        organization: { version: 1 as const, folders: {}, desktop: [], folderItems: {} },
+        etag: "e1",
+        readOnly: false,
+      })),
+      saveOrganization: vi.fn(async (input: SaveNoteOrganizationInput) => ({
+        organization: input.organization,
+        etag: "e2",
+        readOnly: false,
+      })),
       list: vi.fn(async () => [note]),
       create: vi.fn(async () => note),
       update: vi.fn(async () => ({ ...note, content: "changed", revision: 2 })),
@@ -45,6 +63,14 @@ describe("note IPC contribution", () => {
       registrations.find((registration) => registration.channel === channel)!.handler
 
     await expect(handler(IpcChannels.noteList)({})).resolves.toEqual([note])
+    const snapshot = (await handler(IpcChannels.noteOrganizationGet)(
+      {}
+    )) as NoteOrganizationSnapshotRecord
+    const input = { organization: snapshot.organization, expectedEtag: snapshot.etag }
+    await expect(handler(IpcChannels.noteOrganizationSave)({}, input)).resolves.toMatchObject({
+      etag: "e2",
+    })
+    expect(service.saveOrganization).toHaveBeenCalledWith(input)
     await handler(IpcChannels.noteCreate)({}, { content: "idea" })
     await handler(IpcChannels.noteUpdate)({}, "n1", {
       content: "changed",

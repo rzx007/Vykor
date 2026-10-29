@@ -1,9 +1,28 @@
-import type { CreateNoteInput, NoteRecord, UpdateNoteInput } from "@vykor/protocol";
+import type {
+  CreateNoteInput,
+  NoteRecord,
+  UpdateNoteInput,
+  NoteOrganizationSnapshotRecord,
+  SaveNoteOrganizationInput,
+} from "@vykor/protocol";
 
 import type { HttpTransport } from "../../transport/http-transport.js";
 
 export class NoteResource {
   constructor(private readonly transport: HttpTransport) {}
+
+  organization(): Promise<NoteOrganizationSnapshotRecord> {
+    return this.transport.request("/notes/organization");
+  }
+
+  saveOrganization(
+    input: SaveNoteOrganizationInput,
+  ): Promise<NoteOrganizationSnapshotRecord> {
+    return this.transport.request("/notes/organization", {
+      method: "PUT",
+      body: input,
+    });
+  }
 
   storageInfo(): Promise<{ directory: string; format: "markdown" }> {
     return this.transport.request("/notes/storage");

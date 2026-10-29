@@ -4,12 +4,23 @@ import type {
   CreateDesktopNoteInput,
   DesktopNote,
   UpdateDesktopNoteInput,
+  DesktopNoteOrganizationSnapshot,
+  SaveDesktopNoteOrganizationInput,
 } from "../../../shared/note-types"
 import { desktopSessionService } from "../session/session-service"
 
 type NoteClient = Pick<VykorClient, "notes">
 
 export class DesktopNoteService {
+  organization(): Promise<DesktopNoteOrganizationSnapshot> {
+    return withDaemonRetry((client) => client.notes.organization())
+  }
+
+  saveOrganization(
+    input: SaveDesktopNoteOrganizationInput
+  ): Promise<DesktopNoteOrganizationSnapshot> {
+    return withDaemonRetry((client) => client.notes.saveOrganization(input))
+  }
   async openDirectory(): Promise<void> {
     const client = await desktopSessionService.daemonClient()
     const { directory } = await client.notes.storageInfo()
