@@ -4,7 +4,6 @@ import type { WorkspaceChangesMetadata } from "@rzx/client"
 import type { DesktopGitDiffScope } from "@shared/git-types"
 
 import { Button } from "@renderer/components/ui/button"
-import { LoadingState } from "@renderer/components/ui/loading-state"
 import { AttachmentGroup } from "@renderer/components/ui/attachment"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@renderer/components/ui/tooltip"
 import { queryGitChanges } from "@renderer/lib/git-changes-query"
@@ -28,7 +27,7 @@ import {
   toolCallStatus,
   toolActivityLabel,
   toolGroupActivityLabel,
-  toolGroupInlineStatus,
+  toolGroupHeaderLabel,
   isToolActivityActive,
   type AssistantContentUnit,
   type ChangedFile,
@@ -67,6 +66,8 @@ type AssistantMessageProps = {
   summaryParts?: DesktopSessionPart[]
   observations?: WorkspaceChangesMetadata[]
   showObservations?: boolean
+  /** 到本轮结束或下一轮为纯文本时，工具组标题才切换为完成摘要。 */
+  showToolSummary?: boolean
   streaming: boolean
   /** 打开聊天时已有的内容，不重复播放入场。 */
   initialPartIds?: ReadonlySet<string>
@@ -83,6 +84,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   summaryParts = parts,
   observations,
   showObservations = true,
+  showToolSummary = true,
   streaming,
   initialPartIds,
   tasks = emptyAgentTasks,
@@ -142,6 +144,7 @@ export const AssistantMessage = memo(function AssistantMessage({
         ))}
       {blocks.map((block, index) => {
         if (block.type === "tool-group") {
+          const latestMessageId = block.tools.at(-1)!.call.messageId
           return (
             <ContentEntrance
               key={block.id}
@@ -149,7 +152,11 @@ export const AssistantMessage = memo(function AssistantMessage({
                 streaming && Boolean(initialPartIds && !initialPartIds.has(block.tools[0]!.id))
               }
             >
-              <ToolActivityGroup tools={block.tools} onOpenFile={onOpenFile} />
+              <ToolActivityGroup
+                tools={block.tools}
+                showSummary={showToolSummary || nextMessageIsTextOnly(parts, latestMessageId)}
+                onOpenFile={onOpenFile}
+              />
             </ContentEntrance>
           )
         }
@@ -297,6 +304,7 @@ function areAssistantMessagePropsEqual(
 
   return (
     previous.streaming === next.streaming &&
+    (previous.showToolSummary ?? true) === (next.showToolSummary ?? true) &&
     previousShowsObservations === nextShowsObservations &&
     previous.initialPartIds === next.initialPartIds &&
     previous.onOpenAgents === next.onOpenAgents &&
@@ -328,6 +336,24 @@ type ContentBlock =
 
 function isToolInFlight(tool: ToolUnit): boolean {
   return isToolActivityActive(tool.call, tool.result)
+}
+
+function hasToolCalls(parts: DesktopSessionPart[]): boolean {
+  return parts.some((part) => part.type === "tool" || part.type === "tool_result")
+}
+
+/** 合并在同一展示块里的后续 assistant 消息才是下一轮。 */
+function nextMessageIsTextOnly(parts: DesktopSessionPart[], messageId: string): boolean {
+  const messageIds = [...new Set(parts.map((part) => part.messageId))]
+  const index = messageIds.indexOf(messageId)
+  if (index < 0 || index >= messageIds.length - 1) return false
+  const nextParts = parts.filter((part) => part.messageId === messageIds[index + 1])
+  const settled = nextParts.every((part) => part.status !== "running" && part.status !== "pending")
+  return (
+    settled &&
+    nextParts.some((part) => part.type === "text" && Boolean(part.text?.trim())) &&
+    !hasToolCalls(nextParts)
+  )
 }
 
 function groupToolUnits(units: AssistantContentUnit[]): ContentBlock[] {
@@ -408,9 +434,11 @@ function ToolGenerationIcon({ toolName }: { toolName?: string }): React.JSX.Elem
 
 function ToolActivityGroup({
   tools,
+  showSummary,
   onOpenFile,
 }: {
   tools: ToolUnit[]
+  showSummary: boolean
   onOpenFile: (path: string, line?: number) => void
 }): React.JSX.Element {
   const groupTooltipId = useId()
@@ -451,7 +479,7 @@ function ToolActivityGroup({
     if (tools.length === 1) changeOpen(!active)
   }
   const grouped = tools.length > 1
-  const status = toolGroupInlineStatus(tools)
+  const label = toolGroupHeaderLabel(tools, showSummary)
   const activityLabel = import.meta.env.DEV ? toolGroupActivityLabel(tools) : undefined
   const failures = import.meta.env.DEV
     ? tools.filter(
@@ -482,17 +510,12 @@ function ToolActivityGroup({
               />
             }
           >
-            <LoadingState
-              label={status.label}
-              state={status.orb}
-              size={20}
-              showElapsed={false}
-              showIndicator={status.active}
-              paused={!status.active}
-              className="gap-2 text-[length:inherit] font-normal"
-            />
+            <span data-slot="tool-group-label" className="min-w-0 truncate">
+              {label}
+            </span>
             {diagnosticLabel ? <ToolDiagnosticDot label={diagnosticLabel} /> : null}
             <ChevronDown
+              aria-hidden="true"
               className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-180")}
             />
           </TooltipTrigger>

@@ -64,18 +64,30 @@ function part(
   } as DesktopSessionPart
 }
 
-function render(parts: DesktopSessionPart[], streaming = false, onOpenFile = vi.fn()) {
+function render(
+  parts: DesktopSessionPart[],
+  streaming = false,
+  onOpenFile = vi.fn(),
+  showToolSummary = true
+) {
   act(() =>
     root.render(
       <ImageViewerProvider onOpenImage={openReadImage}><TooltipProvider><AssistantMessage
         parts={parts}
         streaming={streaming}
+        showToolSummary={showToolSummary}
         onOpenFile={onOpenFile}
         canOpenReview={false}
         onOpenReview={vi.fn()}
         onOpenTerminal={vi.fn()}
       /></TooltipProvider></ImageViewerProvider>
     )
+  )
+}
+
+function groupLabel(): Element | null {
+  return container.querySelector(
+    'section[aria-label="工具活动组"] [data-slot="tool-group-label"]'
   )
 }
 
@@ -101,7 +113,7 @@ describe("inline tool group status", () => {
   beforeEach(() => {
     document.documentElement.dataset.reducedMotion = "true"
   })
-  const status = () => container.querySelector('section[aria-label="工具活动组"] [role="status"]')
+  const label = groupLabel
 
   it.each([
     { names: ["Shell", "Shell"], label: "运行了命令" },
@@ -110,17 +122,80 @@ describe("inline tool group status", () => {
     { names: ["Read", "Read"], label: "查看了内容" },
     { names: ["TeamCreate", "TeamDelete"], label: "操作已结束" },
     { names: ["ScheduleCreate", "Shell"], label: "运行了命令" },
-  ])("summarizes completed actions without counts: $label", ({ names, label }) => {
+  ])("summarizes completed actions without counts: $label", ({ names, label: expected }) => {
     render(
       names.map((name, index) =>
         part(name, {}, { id: `tool-${index}`, toolUseId: `call-${index}`, seq: index + 1 })
       )
     )
-    expect(status()?.getAttribute("aria-label")).toBe(label)
+    expect(label()?.textContent).toBe(expected)
     expect(container.textContent).not.toMatch(/文件编辑|命令调用|工具查看|\d+ 次/)
     expect(container.querySelector("canvas, .shimmer")).toBeNull()
-    click(label)
+    click(expected)
     expect(container.querySelector('button[aria-expanded="true"]')).not.toBeNull()
+  })
+
+  it("switches to the completed summary only when the next message is text-only", () => {
+    const command = part(
+      "Shell",
+      { command: "pnpm test" },
+      { id: "tool", toolUseId: "call", messageId: "m1", status: "completed" }
+    )
+    const second = part(
+      "Shell",
+      { command: "pnpm lint" },
+      { id: "tool-2", toolUseId: "call-2", messageId: "m1", seq: 2, status: "completed" }
+    )
+    const answer = {
+      ...part("", {}, { id: "answer", seq: 3, messageId: "m2", type: "text" as const }),
+      text: "已经检查完成",
+    }
+    render([command, second, answer], false, vi.fn(), false)
+    expect(label()?.textContent).toBe("运行了命令")
+  })
+
+  it("waits for the next text-only message to finish before summarizing", () => {
+    const command = part(
+      "Shell",
+      { command: "pnpm test" },
+      { id: "tool", toolUseId: "call", messageId: "m1", status: "completed" }
+    )
+    const second = part(
+      "Shell",
+      { command: "pnpm lint" },
+      { id: "tool-2", toolUseId: "call-2", messageId: "m1", seq: 2, status: "completed" }
+    )
+    const answer = {
+      ...part("", {}, { id: "answer", seq: 3, messageId: "m2", type: "text" as const }),
+      text: "正在完成",
+      status: "running" as const,
+    }
+    render([command, second, answer], true, vi.fn(), false)
+    expect(label()?.textContent).toBe("运行命令 · pnpm lint")
+  })
+
+  it("keeps the latest tool while the next message still calls tools", () => {
+    const first = part(
+      "Shell",
+      { command: "pnpm test" },
+      { id: "tool", toolUseId: "call", messageId: "m1", status: "completed" }
+    )
+    const second = part(
+      "Shell",
+      { command: "pnpm lint" },
+      { id: "tool-2", toolUseId: "call-2", messageId: "m1", seq: 2, status: "completed" }
+    )
+    const narrative = {
+      ...part("", {}, { id: "narrative", seq: 3, messageId: "m2", type: "text" as const }),
+      text: "继续检查结果",
+    }
+    const next = part(
+      "Read",
+      { file_path: "result.txt" },
+      { id: "next", toolUseId: "next-call", messageId: "m2", seq: 4 }
+    )
+    render([first, second, narrative, next], false, vi.fn(), false)
+    expect(label()?.textContent).toBe("运行命令 · pnpm lint")
   })
 
   it("keeps the existing OCR status wording in the live group header", () => {
@@ -138,13 +213,15 @@ describe("inline tool group status", () => {
           }
         ),
       ],
-      true
+      true,
+      vi.fn(),
+      false
     )
-    expect(status()?.getAttribute("aria-label")).toBe("正在使用本地 OCR 识别文字")
+    expect(label()?.textContent).toBe("正在使用本地 OCR 识别文字")
     expect(container.textContent).not.toContain("正在正在")
   })
 
-  it("follows the executing operation, permission wait and completion without losing expansion", () => {
+  it("shows the latest tool before the boundary and the summary after it without losing expansion", () => {
     const read = part("Read", { file_path: "README.md" })
     const command = part(
       "Shell",
@@ -162,17 +239,20 @@ describe("inline tool group status", () => {
         metadata: { toolProgress: { phase: "queued" } },
       }
     )
-    render([read, command, write], true)
-    expect(status()?.getAttribute("aria-label")).toBe("正在运行命令 · pnpm test")
-    const heading = click("正在运行命令")
+    render([read, command, write], true, vi.fn(), false)
+    expect(label()?.textContent).toBe("编辑文件 · src/app.ts")
+    const heading = click("编辑文件")
+    expect(heading.querySelector('[role="status"]')).toBeNull()
+    expect(heading.querySelector(".shimmer")).toBeNull()
+    expect(heading.querySelector("canvas")).toBeNull()
     const finishedCommand = { ...command, status: "completed" as const }
     const waitingWrite = {
       ...write,
       status: "running" as const,
       metadata: { toolProgress: { phase: "waiting_permission" } },
     }
-    render([read, finishedCommand, waitingWrite], true)
-    expect(status()?.getAttribute("aria-label")).toBe("等待你的确认 · 编辑文件 · src/app.ts")
+    render([read, finishedCommand, waitingWrite], true, vi.fn(), false)
+    expect(label()?.textContent).toBe("编辑文件 · src/app.ts")
     expect(heading.getAttribute("aria-expanded")).toBe("true")
     expect(heading.isConnected).toBe(true)
     render(
@@ -181,16 +261,18 @@ describe("inline tool group status", () => {
         finishedCommand,
         { ...waitingWrite, metadata: { toolProgress: { phase: "running" } } },
       ],
-      true
+      true,
+      vi.fn(),
+      false
     )
-    expect(status()?.getAttribute("aria-label")).toBe("正在编辑文件 · src/app.ts")
+    expect(label()?.textContent).toBe("编辑文件 · src/app.ts")
     render([read, finishedCommand, { ...waitingWrite, status: "completed", metadata: {} }])
-    expect(status()?.getAttribute("aria-label")).toBe("编辑了文件，运行了命令")
-    expect(status()?.querySelector("canvas, .shimmer")).toBeNull()
+    expect(label()?.textContent).toBe("编辑了文件，运行了命令")
+    expect(container.querySelector("canvas, .shimmer")).toBeNull()
     expect(heading.getAttribute("aria-expanded")).toBe("true")
   })
 
-  it("shows an executing command ahead of an earlier preparing tool", () => {
+  it("uses the latest tool instead of an earlier preparing tool", () => {
     render(
       [
         part(
@@ -204,9 +286,11 @@ describe("inline tool group status", () => {
           { id: "cmd", toolUseId: "cmd", seq: 2, status: "running" }
         ),
       ],
-      true
+      true,
+      vi.fn(),
+      false
     )
-    expect(status()?.getAttribute("aria-label")).toBe("正在运行命令 · pnpm test")
+    expect(label()?.textContent).toBe("运行命令 · pnpm test")
   })
 
   it("does not describe failed, unexecuted or uncertain operations as completed edits", () => {
@@ -223,11 +307,11 @@ describe("inline tool group status", () => {
         { id: "unknown", toolUseId: "unknown", seq: 3, metadata: { executionState: "unknown" } }
       ),
     ])
-    expect(status()?.getAttribute("aria-label")).toBe("操作已结束")
-    expect(status()?.querySelector("canvas, .shimmer")).toBeNull()
+    expect(label()?.textContent).toBe("操作已结束")
+    expect(container.querySelector("canvas, .shimmer")).toBeNull()
   })
 
-  it("keeps the same live indicator when only tool output changes", () => {
+  it("keeps the latest tool label stable when only tool output changes", () => {
     document.documentElement.dataset.reducedMotion = "false"
     const read = part("Read", { file_path: "README.md" })
     const command = part(
@@ -235,9 +319,9 @@ describe("inline tool group status", () => {
       { command: "pnpm test" },
       { id: "cmd", toolUseId: "cmd", seq: 2, status: "running" }
     )
-    render([read, command], true)
-    const indicator = status()?.querySelector("canvas")
-    expect(indicator).toBeInstanceOf(HTMLCanvasElement)
+    render([read, command], true, vi.fn(), false)
+    expect(label()?.textContent).toBe("运行命令 · pnpm test")
+    expect(container.querySelector("canvas")).toBeNull()
     render(
       [
         read,
@@ -248,10 +332,12 @@ describe("inline tool group status", () => {
           metadata: { toolProgress: { phase: "running", receivedChars: 4096 } },
         },
       ],
-      true
+      true,
+      vi.fn(),
+      false
     )
-    expect(status()?.getAttribute("aria-label")).toBe("正在运行命令 · pnpm test")
-    expect(status()?.querySelector("canvas")).toBe(indicator)
+    expect(label()?.textContent).toBe("运行命令 · pnpm test")
+    expect(container.querySelector("canvas")).toBeNull()
   })
 })
 
@@ -600,13 +686,15 @@ describe("tool parameter and result display", () => {
         first,
         { ...first, id: "tool-2", toolUseId: "call-2", seq: 2, input: { command: "second" } },
       ],
-      true
+      true,
+      vi.fn(),
+      false
     )
     expect(container.querySelectorAll("button[aria-expanded]")).toHaveLength(1)
     expect(container.querySelector("button[aria-expanded]")?.getAttribute("aria-expanded")).toBe(
       "false"
     )
-    expect(container.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe("正在运行命令 · first")
+    expect(groupLabel()?.textContent).toBe("运行命令 · second")
     expect(container.textContent).not.toContain("命令调用")
   })
 
@@ -751,14 +839,14 @@ describe("tool parameter and result display", () => {
           },
         }
       ),
-    ])
+    ], false, vi.fn(), false)
     const group = container.querySelector("section")
     expect(group).not.toBeNull()
     expect(group!.textContent).toContain("写入文件")
     expect(group!.getAttribute("aria-label")).toBe("工具活动组")
     const heading = group!.querySelector<HTMLButtonElement>("button[aria-expanded]")
     expect(heading?.getAttribute("aria-expanded")).toBe("false")
-    expect(heading?.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe("正在准备写入文件")
+    expect(heading?.textContent).toContain("写入文件")
     expect(heading?.getAttribute("aria-describedby")).toBeTruthy()
     expect(heading?.textContent).not.toMatch(/9337|字符|生成参数|准备中/)
     expect(heading?.textContent).not.toMatch(/文件编辑|工具调用 2 次/)
@@ -798,14 +886,19 @@ describe("tool parameter and result display", () => {
         },
       }
     )
-    render([
-      generated,
-      { ...generated, id: "ui-tool-generation:r:g:1:1", seq: 2, toolName: "Read" },
-    ])
+    render(
+      [
+        generated,
+        { ...generated, id: "ui-tool-generation:r:g:1:1", seq: 2, toolName: "Read" },
+      ],
+      false,
+      vi.fn(),
+      false
+    )
     const group = container.querySelector('section[aria-label="工具活动组"]')
     expect(group).not.toBeNull()
     const heading = group!.querySelector<HTMLButtonElement>("button[aria-expanded]")
-    expect(heading?.querySelector('[role="status"]')?.getAttribute("aria-label")).toMatch(/^正在准备(?:写入|读取)文件$/)
+    expect(heading?.textContent).toContain("读取文件")
     expect(heading?.textContent).not.toMatch(/Write|Read|生成参数|字符/)
     expect(heading?.textContent).not.toMatch(/工具调用|工具查看|文件编辑/)
     act(() => heading!.click())
@@ -817,7 +910,7 @@ describe("tool parameter and result display", () => {
     expect(group!.querySelector("pre")).toBeNull()
   })
 
-  it("shows permission and queue phases in the collapsed heading and ignores stale terminal progress", () => {
+  it("keeps permission feedback on a single tool row and ignores stale terminal progress", () => {
     render([
       part(
         "Write",
@@ -864,7 +957,7 @@ describe("tool parameter and result display", () => {
       part("Read", { file_path: "index.html" }, { id: "tool-2", seq: 2, toolUseId: "call-2" }),
       part("Write", { file_path: "style.css" }, { id: "tool-3", seq: 3, toolUseId: "call-3" }),
     ])
-    expect(container.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe("编辑了文件，运行了命令")
+    expect(groupLabel()?.textContent).toBe("编辑了文件，运行了命令")
     expect(container.textContent).not.toMatch(/文件编辑|命令调用|工具查看/)
   })
 

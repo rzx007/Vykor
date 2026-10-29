@@ -16,7 +16,7 @@ import { ContextCompactionDivider } from "../message/notices/context-compaction-
 import { ModelRetryNotice } from "../message/notices/model-retry-notice"
 import { ModelUsageNotice } from "../message/notices/model-usage-notice"
 import { visibleTranscriptParts } from "./transcript-visibility"
-import { planTurnBlocks } from "./turn-block-plan"
+import { planTurnBlocks, type TurnBlockPlanItem } from "./turn-block-plan"
 import { TurnProcess } from "./turn-process"
 import { selectRunNotices } from "./run-notices"
 import { pluginPreparationLabel } from "./plugin-preparation-label"
@@ -283,6 +283,7 @@ export const ConversationTranscript = memo(function ConversationTranscript({
             streamingPart={entry === lastTurn ? streamingPart : undefined}
             userMessageIsAnchor={userMessageIsAnchor}
             canEditUserMessage={canEditLastUserMessage && userMessageIsAnchor}
+            running={running}
             showRunning={entry === runningTurn}
             runningLabel={data.finished ? undefined : runningActivity.label}
             runningState={data.finished ? undefined : runningActivity.orb}
@@ -374,6 +375,21 @@ function buildTurnData(
   return result
 }
 
+/** 工具组之后的下一条 assistant 消息已结束且不含工具调用时，当前组才显示完成摘要。 */
+function nextAssistantIsTextOnly(items: TurnBlockPlanItem[], index: number): boolean {
+  for (let next = index + 1; next < items.length; next++) {
+    const item = items[next]!
+    if (item.kind !== "assistant") continue
+    return (
+      !item.streaming &&
+      item.parts.some((part) => part.type === "text" && Boolean(part.text?.trim())) &&
+      item.parts.every((part) => part.status !== "running" && part.status !== "pending") &&
+      !item.parts.some((part) => part.type === "tool" || part.type === "tool_result")
+    )
+  }
+  return false
+}
+
 type TranscriptTurnProps = Pick<
   ConversationTranscriptProps,
   | "onEditLastUserMessage"
@@ -390,6 +406,7 @@ type TranscriptTurnProps = Pick<
   streamingPart?: DesktopSessionPart
   userMessageIsAnchor: boolean
   canEditUserMessage: boolean
+  running: boolean
   showRunning: boolean
   runningLabel?: string
   runningState?: OrbState
@@ -402,6 +419,7 @@ const TranscriptTurn = memo(function TranscriptTurn({
   streamingPart,
   userMessageIsAnchor,
   canEditUserMessage,
+  running,
   showRunning,
   runningLabel,
   runningState,
@@ -482,7 +500,7 @@ const TranscriptTurn = memo(function TranscriptTurn({
         }
       >
         {(items, folded) =>
-          items.map((item) =>
+          items.map((item, itemIndex) =>
             item.kind === "divider" && item.phase ? (
               <MessageScrollerItem key={item.key} messageId={item.messageId}>
                 <ContextCompactionDivider
@@ -503,6 +521,12 @@ const TranscriptTurn = memo(function TranscriptTurn({
                   summaryParts={item.summaryParts}
                   observations={data.observations}
                   showObservations={item.key === lastAssistantKey}
+                  showToolSummary={
+                    !running ||
+                    finished ||
+                    !showRunning ||
+                    nextAssistantIsTextOnly(items, itemIndex)
+                  }
                   streaming={item.streaming}
                   initialPartIds={animationBaseline}
                   tasks={tasks}

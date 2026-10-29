@@ -369,46 +369,20 @@ export function toolGroupActivityLabel(
   return toolGroupActivity(tools)?.label
 }
 
-/** 工具组标题只表达当前操作或已完成的操作类别，不统计调用次数。 */
-export function toolGroupInlineStatus(
+/** 未到汇总时机时，工具组标题只显示最后一条工具的名称和参数。 */
+export function toolGroupLatestLabel(
   tools: { call: DesktopSessionPart; result?: DesktopSessionPart }[]
-): ActivityStep & { active: boolean } {
-  const active = tools.filter((tool) => isToolActivityActive(tool.call, tool.result))
-  const current =
-    active.find(
-      (tool) => recordValue(tool.call.metadata.toolProgress)?.phase === "waiting_permission"
-    ) ??
-    active.find(
-      (tool) =>
-        toolCallStatus(tool.call, tool.result) === "running" &&
-        recordValue(tool.call.metadata.toolProgress)?.phase !== "queued" &&
-        recordValue(tool.call.metadata.toolProgress)?.phase !== "preparing" &&
-        !isToolGenerationPresentation(tool.call)
-    ) ??
-    active.find(
-      (tool) =>
-        isToolGenerationPresentation(tool.call) ||
-        recordValue(tool.call.metadata.toolProgress)?.phase === "preparing"
-    ) ??
-    active.at(-1)
-  if (current) {
-    const summary = summarizeToolCall(current.call)
-    const activity = toolActivity(current.call, current.result)
-    const preparing = isToolGenerationPresentation(current.call)
-    const label = preparing
-      ? `正在准备${summary.name}`
-      : activity?.label
-        ? `${activity.label} · ${summary.name}`
-        : current.call.toolName?.toLowerCase().replace(/[-_]/g, "") === "imagetotext"
-          ? summary.name
-          : `正在${summary.name}`
-    return {
-      label: !preparing && summary.detail ? `${label} · ${summary.detail}` : label,
-      orb: activity?.orb ?? "solving",
-      active: true,
-    }
-  }
+): string {
+  const latest = tools.at(-1)
+  if (!latest) return "操作已结束"
+  const summary = summarizeToolCall(latest.call)
+  return summary.detail ? `${summary.name} · ${summary.detail}` : summary.name
+}
 
+/** 到汇总时机后，工具组标题只表达已完成的操作类别，不统计调用次数。 */
+export function toolGroupCompletedLabel(
+  tools: { call: DesktopSessionPart; result?: DesktopSessionPart }[]
+): string {
   let edits = false,
     commands = false,
     reads = false
@@ -438,7 +412,14 @@ export function toolGroupInlineStatus(
       reads = true
   }
   const label = [edits ? "编辑了文件" : "", commands ? "运行了命令" : ""].filter(Boolean).join("，")
-  return { label: label || (reads ? "查看了内容" : "操作已结束"), orb: "working", active: false }
+  return label || (reads ? "查看了内容" : "操作已结束")
+}
+
+export function toolGroupHeaderLabel(
+  tools: { call: DesktopSessionPart; result?: DesktopSessionPart }[],
+  showCompletedSummary: boolean
+): string {
+  return showCompletedSummary ? toolGroupCompletedLabel(tools) : toolGroupLatestLabel(tools)
 }
 
 export function conversationActivity(

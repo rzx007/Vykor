@@ -8,7 +8,9 @@ import {
   conversationActivity,
   summarizeToolCall,
   toolActivityLabel,
-  toolGroupInlineStatus,
+  toolGroupCompletedLabel,
+  toolGroupHeaderLabel,
+  toolGroupLatestLabel,
 } from "../message-render-model"
 
 const run: DesktopSessionRun = {
@@ -52,26 +54,26 @@ describe("inline tool group wording", () => {
     "mcp__remote__exec_query",
     "CustomTool",
   ])("keeps non-file operations neutral: %s", (toolName) => {
-    expect(
-      toolGroupInlineStatus([{ call: { ...part, toolName, status: "completed" } }])
-    ).toMatchObject({ label: "操作已结束", active: false })
+    expect(toolGroupCompletedLabel([{ call: { ...part, toolName, status: "completed" } }])).toBe(
+      "操作已结束"
+    )
   })
 
   it.each(["Write", "Edit", "ApplyPatch", "TodoWrite", "write_file"])(
     "still summarizes known file operations: %s",
     (toolName) => {
-      expect(
-        toolGroupInlineStatus([{ call: { ...part, toolName, status: "completed" } }]).label
-      ).toBe("编辑了文件")
+      expect(toolGroupCompletedLabel([{ call: { ...part, toolName, status: "completed" } }])).toBe(
+        "编辑了文件"
+      )
     }
   )
 
   it.each(["Shell", "BackgroundShellCreate", "TerminalOpen"])(
     "still summarizes known command operations: %s",
     (toolName) => {
-      expect(
-        toolGroupInlineStatus([{ call: { ...part, toolName, status: "completed" } }]).label
-      ).toBe("运行了命令")
+      expect(toolGroupCompletedLabel([{ call: { ...part, toolName, status: "completed" } }])).toBe(
+        "运行了命令"
+      )
     }
   )
 
@@ -81,10 +83,36 @@ describe("inline tool group wording", () => {
       { attachmentOcr: { status: "completed", cached: true } },
       "已使用本地 OCR 提取文字 · 已复用识别结果",
     ],
-  ])("preserves the complete OCR wording: %j", (metadata, label) => {
+  ])("preserves the complete OCR wording before the summary boundary: %j", (metadata, label) => {
+    expect(toolGroupLatestLabel([{ call: { ...part, toolName: "ImageToText", metadata } }])).toBe(
+      label
+    )
+  })
+
+  it("uses the latest tool and its parameters before the summary boundary", () => {
     expect(
-      toolGroupInlineStatus([{ call: { ...part, toolName: "ImageToText", metadata } }])
-    ).toMatchObject({ label, active: true })
+      toolGroupLatestLabel([
+        { call: { ...part, toolName: "Edit", input: { path: "a.ts" }, status: "completed" } },
+        { call: { ...part, id: "shell", toolName: "Shell", input: { command: "pnpm test" } } },
+      ])
+    ).toBe("运行命令 · pnpm test")
+  })
+
+  it("switches from the latest tool to the completed summary at the boundary", () => {
+    const tools = [
+      { call: { ...part, toolName: "Edit", input: { path: "a.ts" }, status: "completed" } },
+      {
+        call: { ...part, id: "shell", toolName: "Shell", input: { command: "pnpm test" } },
+        result: {
+          ...part,
+          id: "shell-result",
+          type: "tool_result" as const,
+          status: "completed" as const,
+        },
+      },
+    ]
+    expect(toolGroupHeaderLabel(tools, false)).toBe("运行命令 · pnpm test")
+    expect(toolGroupHeaderLabel(tools, true)).toBe("编辑了文件，运行了命令")
   })
 })
 
