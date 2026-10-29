@@ -88,6 +88,15 @@ function click(text: string) {
   return button!
 }
 
+it.each([true, false])(
+  "leaves empty assistant status to TaskDuration (streaming=%s)",
+  (streaming) => {
+    render([], streaming)
+    expect(container.textContent).toBe("")
+    expect(container.querySelector('[role="status"]')).toBeNull()
+  }
+)
+
 describe("inline tool group status", () => {
   beforeEach(() => {
     document.documentElement.dataset.reducedMotion = "true"

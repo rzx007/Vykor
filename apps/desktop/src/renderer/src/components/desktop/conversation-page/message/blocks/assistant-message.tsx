@@ -88,7 +88,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   canOpenReview,
   onOpenReview,
   onOpenTerminal,
-}: AssistantMessageProps): React.JSX.Element {
+}: AssistantMessageProps): React.JSX.Element | null {
   const units = useMemo(() => buildAssistantContent(parts), [parts])
   const blocks = useMemo(() => groupToolUnits(units), [units])
   const changedFiles = useMemo(() => collectChangedFiles(summaryParts), [summaryParts])
@@ -128,7 +128,7 @@ export const AssistantMessage = memo(function AssistantMessage({
         )
       : changedFiles
   const changedFileList = [...observedFiles, ...toolFiles]
-  if (parts.length === 0) return <span className="text-xs text-ui-muted">正在生成回复...</span>
+  if (parts.length === 0) return null
 
   return (
     <div className="group/assistant min-w-0 space-y-4">

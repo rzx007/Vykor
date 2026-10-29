@@ -165,6 +165,34 @@ it("restores live elapsed time from the stored start instead of the mount time",
   expect(render([live], true)).toContain("1分0秒")
 })
 
+it("keeps the pre-token status only in TaskDuration for an empty assistant message", () => {
+  const html = render([{ ...run, status: "running", finishedAt: undefined }], true, [])
+  expect(html.match(/data-task-duration/g)).toHaveLength(1)
+  expect(html).toContain('aria-label="等待模型响应"')
+  expect(html).not.toContain("正在生成回复...")
+})
+
+it("shows the streaming reply status only in TaskDuration", () => {
+  const html = render([{ ...run, status: "running", finishedAt: undefined }], true, [
+    {
+      id: "reply",
+      messageId: "assistant",
+      sessionId: "chat",
+      seq: 1,
+      type: "text",
+      text: "新的回复",
+      status: "running",
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 2,
+    },
+  ])
+  expect(html.match(/data-task-duration/g)).toHaveLength(1)
+  expect(html).toContain('aria-label="正在生成回复"')
+  expect(html).toContain("新的回复")
+  expect(html).not.toContain("正在生成回复...")
+})
+
 it("shows one wall-clock duration across multiple runs of the same input", () => {
   expect(
     render([
