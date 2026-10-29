@@ -603,6 +603,9 @@ export const desktopAPI = {
     close: () => invoke(IpcChannels.sessionClose),
     sendPrompt: (input: IpcInvokeMap[typeof IpcChannels.sessionSendPrompt]["args"][0]) =>
       invoke(IpcChannels.sessionSendPrompt, input),
+    checkPromptAccepted: (
+      input: IpcInvokeMap[typeof IpcChannels.sessionCheckPromptAccepted]["args"][0]
+    ) => invoke(IpcChannels.sessionCheckPromptAccepted, input),
     editLatestPrompt: (
       input: IpcInvokeMap[typeof IpcChannels.sessionEditLatestPrompt]["args"][0]
     ) => invoke(IpcChannels.sessionEditLatestPrompt, input),

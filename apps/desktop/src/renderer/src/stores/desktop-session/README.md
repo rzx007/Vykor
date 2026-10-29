@@ -23,7 +23,7 @@
 | 目录层                | `projects`、`sessions`、`archivedSessions`、项目/分支字段、`projectOperations` | 记录有哪些项目和会话，以及某个项目操作是否失败；不保存某个会话正在发送的消息。             |
 | 导航与 primary 视图层 | `activeSessionId`、`sessionView`、新会话页的已选模型/provider/权限模式         | `sessionView` 只保存当前 active 会话的权威 SSE 快照。                                      |
 | 会话运行态层          | `newConversationRuntime` 与 `sessionRuntimes[sessionId]`                       | 保存本地 operation、待 SSE 确认的 prompt、编辑和队列动作；新建会话未拿到 ID 时先用前者。   |
-| 输入框草稿层          | `composerDraftsByScope`                                                        | 保存 `new-conversation` 或 `session:<id>` 的文字与附件卡片；只在内存中存在，不写入持久化。 |
+| 输入框草稿层          | `composerDraftsByScope`                                                        | 保存 `new-conversation` 或 `session:<id>` 的结构化文字、引用与附件卡片；由 `composer-recovery.ts` 在本机保存并恢复。 |
 
 `operation` 是一次异步动作的本地记录，带稳定 ID、所属会话和阶段；它不是完整会话数据。页面一律通过 `selectors.ts` 的 selector（把原始状态转换成页面语义的函数）读取 sending、opening 与作用域错误，不能跨会话遍历 operation 表自行判断。
 
@@ -49,6 +49,8 @@
 | `composer-draft-state.ts`        | 纯状态转移：按 scope 保存文字/卡片，处理上传进度、成功、失败、取消、重试和 scope 迁移。                                                                                                                                |
 | `attachment-actions.ts`          | picker、图片选择、拖放、剪贴板、上传、取消、重试和移除的副作用入口；真实路径不会进入 store。                                                                                                                           |
 | `queued-prompt-actions.ts`       | 提升或取消某一条已进入服务端队列的消息。                                                                                                                                                                               |
+| `composer-recovery.ts` | 草稿、未确认提交的本机保存与校验恢复；集中筛掉临时会话，写入返回成功或失败。 |
+| `prompt-submission.ts` | 共用提交入口：合并重复点击、重试前核对、发送前确认保存、按结果清理草稿与运行态。 |
 | `persistence.ts`                 | 安全读写 active session 的 `localStorage`；存储失败不会阻断聊天。                                                                                                                                                      |
 | `helpers.ts`                     | 跨模块的无状态工具，如稳定排序、路径比较、标题与会话工作区推导。                                                                                                                                                       |
 | `store-test-fixtures.ts`         | 仅给测试构造稳定的 bootstrap、会话和 window mock，不参与生产运行。                                                                                                                                                     |
@@ -60,7 +62,7 @@
 1. **入口 → 创建。** `session-actions.ts` 先在 `newConversationRuntime.operations` 写入 `create-session`，随后调用 `sessions.create`。
 2. **调用返回 → 绑定状态。** main process 返回真实 `sessionId` 后，创建 operation 从 `newConversationRuntime` 原子移动到 `sessionRuntimes[sessionId]`；首条普通消息同时写为 `placement: transcript` 的本地 submission。
 3. **是否接管页面 → 打开 primary。** 只有这次创建仍拥有当前导航代次时，才调用 `sessions.open(sessionId)`，并把返回 snapshot 写到 `activeSessionId/sessionView`；用户期间改去别的会话时，首条消息仍会发送，但不会抢回 primary。
-4. **发送 → 等待 SSE。** 首条消息统一调用 `sendPrompt` 后标成 `accepted`；Skill 引用与正文按顺序放在 `items` 中，由运行时按引用的真实名称和路径加载。打开失败会把错误留在新 session 的 `open-session` owner、向 composer 返回失败并保留草稿。IPC 只表示请求已接收，不能伪造 cursor 或 transcript。
+4. **发送 → 等待 SSE。** 首条消息统一调用 `sendPrompt` 后标成 `accepted`；Skill 引用与正文按顺序放在 `items` 中，由运行时按引用的真实名称和路径加载。首条消息在确认接收前保留迁移后的草稿，与普通发送一致。打开失败会把错误留在新 session 的 `open-session` owner、向 composer 返回失败并保留草稿。IPC 只表示请求已接收，不能伪造 cursor 或 transcript。
 5. **SSE 返回 → 清理。** `applySessionUpdate` 接受同会话、cursor 不倒退的快照；`reconcileRuntimeWithView` 按 input/run ID 清掉已经确认的 submission 与 operation。
 6. **失败 → 留给所属页面。** 创建尚未返回 session 时，失败写回 `newConversationRuntime`；已拿到 session 后，失败写到对应 `sessionRuntimes[sessionId]`。SSE 已确认首条消息时，迟到的 IPC 失败不改写为失败。
 
@@ -77,7 +79,15 @@
 7. **历史展示。** 权威消息中的 `attachment`/`transformation` part 直接进入 transcript。安全位图缩略图从 daemon 副本读取，并校验媒体类型和真实文件头；SVG、HTML 或伪装内容只显示文件图标。打开和另存为都走专用附件 IPC，不生成 `file://` 或裸下载 URL。
 8. **编辑。** 最近一条用户消息可以只改文字。附件卡片只读，提交时从权威 input 重新取得原有 ordered refs，不从页面反推、不重新上传。
 
-附件草稿不写入 `localStorage`，应用重启后不恢复；已经发送的附件由 daemon 资产和会话引用恢复。支持图片的模型直接接收原生图片；不支持或图片能力未知的模型收到受控附件资源提示，由主 Agent 按需调用 `ImageToText` 做纯本地 OCR。OCR 只能提取可见文字，不能描述图片。PDF/Word/文本提取、工具挂载、分片上传、文件夹遍历和 Blob GC 仍属于后续阶段。
+草稿按 scope 保存在 `localStorage` 的 `vykor.desktop.composer-recovery.v1` 中，输入变化延迟 250ms 保存，页面关闭时立即保存；发送记录在 IPC 调用前立即保存原输入 ID、正文和有序附件快照。重启不自动发送，上传完成的附件保留资产引用，上传未完成或已失败的卡片提示移除后重新选择文件。临时会话不写入；删除会话和切换数据目录时清理对应记录。草稿保存失败会提示复制重要内容；发送记录保存失败会停止提交，保留原 ID 和草稿，避免重启后以新 ID 重复执行。已经发送的附件由 daemon 资产和会话引用恢复。支持图片的模型直接接收原生图片；不支持或图片能力未知的模型收到受控附件资源提示，由主 Agent 按需调用 `ImageToText` 做纯本地 OCR。OCR 只能提取可见文字，不能描述图片。PDF/Word/文本提取、工具挂载、分片上传、文件夹遍历和 Blob GC 仍属于后续阶段。
+
+## 发送失败恢复
+
+`composer-recovery.ts` 校验本地记录，保留原输入 ID，将关闭时仍未确认的提交恢复为待核对状态。`prompt-submission.ts` 是普通发送、首条消息和重试的共用发送与结果处理入口。`retryPromptSubmission` 先通过 `sessions.checkPromptAccepted` 读取服务端记录：已接收就清理匹配草稿并等待真实消息；明确未接收时才使用原 ID、原有序内容和附件重新提交。读取失败时不发送，不因错误生成新 ID；服务端的输入 ID 去重继续防住查询与提交之间的并发。快速重复点击同一提交只发一次，正文、附件和当前应用上下文均相同的失败发送会复用原 ID；普通发送严格使用当前上下文，显式“核对并重试”保留原请求快照。
+
+权威快照确认输入时，只清理仍与提交内容一致的草稿和已发送附件；发送后新写的文字与新加附件保留。不同内容、附件顺序或新选择的上下文仍视为用户的新消息。错误通知的刷新入口只读状态，编辑入口只打开原消息编辑框；用户明确提交编辑后才开始新的执行。重复打开编辑入口只聚焦同一编辑状态，保留未提交文字。
+
+本机记录分别保存当前草稿和未确认提交；恢复时不从提交记录反填草稿，因此手动清空的内容不会重现。提交记录不重复保存可由 `items` 推导的 `content`，相同的 `draftDocument` 也不重复写入。纯草稿清理与快照对账统一放在 `composer-draft-state.ts`。
 
 ## 普通发送与排队发送流程
 

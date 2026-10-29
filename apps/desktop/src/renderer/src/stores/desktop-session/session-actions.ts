@@ -1,4 +1,5 @@
 import { toast } from "@renderer/lib/toast"
+import { reconcileSubmittedDrafts } from "./composer-draft-state"
 import type { UpdateDesktopSessionPermissionModeInput } from "@shared/session-types"
 import { forgetSessionActivity } from "./activity-state"
 import { saveActivityPersistence } from "./activity-persistence"
@@ -123,6 +124,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
         )
         return {
           ...(ownsProjectSelection ? workspace : {}),
+          ...reconcileSubmittedDrafts(state, view),
           sessionView: view,
           selectedModel: view.session.model,
           selectedProvider: sessionProvider(view.session, state.defaultProvider),
@@ -260,7 +262,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
           selectedModel: previous?.model ?? state.selectedModel ?? state.defaultModel,
           selectedProvider: previous
             ? sessionProvider(previous, state.selectedProvider)
-            : state.selectedProvider ?? state.defaultProvider,
+            : (state.selectedProvider ?? state.defaultProvider),
           selectedPermissionMode: state.defaultPermissionMode,
           selectedWorkMode: "execute",
           selectedEffort: previous ? sessionEffort(previous) : state.selectedEffort,
@@ -387,7 +389,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
       await openPrimarySession(sessionId)
     },
 
-    async resyncActiveSessionSnapshot() {
+    async resyncActiveSessionSnapshot(options) {
       const sessionId = get().activeSessionId
       if (!sessionId) return
       const runtime = get().sessionRuntimes[sessionId]
@@ -400,8 +402,9 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
       try {
         const view = await window.desktop.sessions.open(sessionId)
         if (get().activeSessionId === sessionId) get().applySessionUpdate(view)
-      } catch {
+      } catch (error) {
         // A resync is only a recovery read. It must not replace a user-owned open error.
+        if (options?.throwOnError) throw error
       }
     },
 
@@ -533,6 +536,11 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
         sessionView:
           state.sessionView && deleted.has(state.sessionView.session.id) ? null : state.sessionView,
         sessionRuntimes: removeSessionRuntimes(state.sessionRuntimes, deleted),
+        composerDraftsByScope: Object.fromEntries(
+          Object.entries(state.composerDraftsByScope).filter(
+            ([scope]) => !deleted.has(scope.replace(/^session:/, ""))
+          )
+        ),
         selectedModel: isActive ? existing.model : state.selectedModel,
         selectedProvider: isActive
           ? sessionProvider(existing, state.defaultProvider)

@@ -1,4 +1,5 @@
 import type { DesktopBootstrapData, DesktopSessionView } from "@shared/session-types"
+import { vi } from "vitest"
 
 import { createInitialRuntimeState } from "./initial-state"
 import { createEmptySessionRuntime } from "./operation-state"
@@ -48,6 +49,15 @@ export const refreshedBootstrap: DesktopBootstrapData = {
 const initialState = useDesktopSessionStore.getState()
 
 export function resetDesktopSessionStore(): void {
+  if (typeof localStorage === "undefined") {
+    const values = new Map<string, string>()
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => { values.set(key, value) },
+      removeItem: (key: string) => { values.delete(key) },
+      clear: () => values.clear(),
+    })
+  }
   useDesktopSessionStore.setState({ ...initialState, ...createInitialRuntimeState() }, true)
 }
 

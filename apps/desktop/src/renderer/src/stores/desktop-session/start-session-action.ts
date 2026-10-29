@@ -1,12 +1,21 @@
-import type { CreateDesktopSessionInput, DesktopSessionView } from "@shared/session-types"
-import type { DesktopAttachmentDraft } from "@shared/attachment-types"
+import type { CreateDesktopSessionInput } from "@shared/session-types"
 import { errorMessage } from "./error-state"
 import { formatSessionTitle, upsertSession } from "./helpers"
-import { acknowledgeOperation, beginOperation, bindOperationToSession, createEmptySessionRuntime, failOperation, removeOperation } from "./operation-state"
-import { removePendingPromptSubmission, updatePendingPromptSubmission } from "./pending-prompt-state"
-import { migrateComposerScope, NEW_CONVERSATION_SCOPE, sessionComposerScope } from "./composer-draft-state"
-import { composerDocument, emptyComposerDocument, sameComposerDocument, selectComposerDocumentText, type ComposerDocument } from "./composer-document"
-import type { DesktopSessionRuntime, DesktopStoreContext, PendingPromptSubmission, SessionActions } from "./types"
+import {
+  acknowledgeOperation,
+  beginOperation,
+  bindOperationToSession,
+  createEmptySessionRuntime,
+  failOperation,
+} from "./operation-state"
+import { settlePromptSubmission } from "./prompt-submission"
+import {
+  migrateComposerScope,
+  NEW_CONVERSATION_SCOPE,
+  sessionComposerScope,
+} from "./composer-draft-state"
+import { composerDocument, selectComposerDocumentText } from "./composer-document"
+import type { DesktopStoreContext, PendingPromptSubmission, SessionActions } from "./types"
 
 interface StartSessionContext extends DesktopStoreContext {
   scheduleSelectedProjectGitRefresh: (force: boolean) => void
@@ -79,7 +88,7 @@ export function createStartSessionAction(
       startedAt: Date.now(),
     }
     let startedSessionId: string | null = null
-    let clearedFirstPromptDraft = false
+    let pendingSubmission: PendingPromptSubmission | null = null
     set((state) => {
       const newConversationRuntime = beginOperation(state.newConversationRuntime, createOperation)
       return {
@@ -115,18 +124,22 @@ export function createStartSessionAction(
         sessionId: session.id,
         content: prompt,
         items,
+        draftDocument: document,
+        draftAttachmentIds: attachmentDrafts.map((attachment) => attachment.draftId),
         attachments,
         createdAt: Date.now(),
         phase: "submitting",
         placement: "transcript",
       }
+      pendingSubmission = firstSubmission
       // 判断是否拥有当前页面
       let ownsCurrentPage = false
       set((state) => {
         const ownsNewConversationRuntime =
           state.newConversationRuntime.operations[promptSubmissionId]?.phase === "pending"
         ownsCurrentPage =
-          navigationOwnerGeneration === controls.navigationGeneration() && ownsNewConversationRuntime
+          navigationOwnerGeneration === controls.navigationGeneration() &&
+          ownsNewConversationRuntime
         if (ownsCurrentPage) controls.advancePrimaryNavigation()
         const bound = ownsNewConversationRuntime
           ? bindOperationToSession(
@@ -159,7 +172,6 @@ export function createStartSessionAction(
               sessionComposerScope(session.id)
             )
           : { composerDraftsByScope: state.composerDraftsByScope }
-        clearedFirstPromptDraft = ownsNewConversationRuntime
         return {
           sessions: upsertSession(state.sessions, session),
           newConversationRuntime: bound.source,
@@ -175,60 +187,18 @@ export function createStartSessionAction(
             : {}),
         }
       })
-      if (clearedFirstPromptDraft) {
-        clearFirstPromptDraft(session.id, document, attachmentDrafts)
-      }
-      const openResult = ownsCurrentPage ? await controls.openPrimarySession(session.id) : "cancelled"
+      const openResult = ownsCurrentPage
+        ? await controls.openPrimarySession(session.id)
+        : "cancelled"
       if (openResult === "failed") {
         const openError = Object.values(get().sessionRuntimes[session.id]?.operations ?? {}).find(
           (operation) => operation.kind === "open-session" && operation.phase === "failed"
         )
         throw new Error(openError?.error ?? "无法打开新会话")
       }
-      // 发送第一个提交
-      await window.desktop.sessions.sendPrompt({
-        id: promptSubmissionId,
-        sessionId: session.id,
-        items,
-        attachments: attachments.map(({ assetId, intent, displayName }) => ({
-          assetId,
-          intent,
-          displayName,
-        })),
-      })
-      // 清除第一个提交的草稿
-      clearFirstPromptDraft(session.id, document, attachmentDrafts)
-      const keepLocalAcknowledgement = get().activeSessionId === session.id
-      set((state) => {
-        // 更新会话运行时
-        const sessionRuntimes = updateSessionRuntime(
-          state.sessionRuntimes,
-          session.id,
-          (runtime) => {
-            const acceptedRuntime = {
-              ...runtime,
-              pendingPromptSubmissions: updatePendingPromptSubmission(
-                runtime.pendingPromptSubmissions,
-                promptSubmissionId,
-                (submission) => ({ ...submission, phase: "accepted", error: undefined })
-              ),
-            }
-            return keepLocalAcknowledgement
-              ? acceptedRuntime
-              : removeOperation(
-                  {
-                    ...acceptedRuntime,
-                    pendingPromptSubmissions: removePendingPromptSubmission(
-                      acceptedRuntime.pendingPromptSubmissions,
-                      promptSubmissionId
-                    ),
-                  },
-                  promptSubmissionId
-                )
-          }
-        )
-        return { sessionRuntimes }
-      })
+      // Switching pages keeps the runtime; confirmed deletion removes it.
+      if (!get().sessionRuntimes[session.id]) return null
+      await get().submitPromptSubmission(firstSubmission)
       // 设置会话标题
       const title = prompt
         ? formatSessionTitle(prompt)
@@ -249,50 +219,18 @@ export function createStartSessionAction(
       })
     } catch (error) {
       const message = errorMessage(error)
-      const currentState = get()
-      const currentSessionRuntime = startedSessionId
-        ? currentState.sessionRuntimes[startedSessionId]
-        : null
-      const confirmed = Boolean(
-        startedSessionId &&
-        currentSessionRuntime &&
-        (!currentSessionRuntime.pendingPromptSubmissions[promptSubmissionId] ||
-          (currentState.activeSessionId === startedSessionId &&
-            sessionViewContainsInput(currentState.sessionView, promptSubmissionId)))
-      )
-      set((state) => {
-        const ownsNewConversation =
-          navigationOwnerGeneration === controls.navigationGeneration() &&
-          state.newConversationRuntime.operations[promptSubmissionId]?.phase === "pending"
-        const sessionRuntimes = startedSessionId
-          ? updateSessionRuntime(state.sessionRuntimes, startedSessionId, (runtime) => {
-              return {
-                ...runtime,
-                pendingPromptSubmissions: confirmed
-                  ? removePendingPromptSubmission(
-                      runtime.pendingPromptSubmissions,
-                      promptSubmissionId
-                    )
-                  : updatePendingPromptSubmission(
-                      runtime.pendingPromptSubmissions,
-                      promptSubmissionId,
-                      (submission) => ({ ...submission, phase: "failed", error: message })
-                    ),
-              }
-            })
-          : state.sessionRuntimes
-        const newConversationRuntime = ownsNewConversation
-          ? failOperation(state.newConversationRuntime, promptSubmissionId, message, Date.now())
-          : state.newConversationRuntime
-        return {
-          newConversationRuntime,
-          sessionRuntimes,
-        }
-      })
-      if (confirmed && startedSessionId) {
-        clearFirstPromptDraft(startedSessionId, document, attachmentDrafts)
-      } else if (startedSessionId && clearedFirstPromptDraft) {
-        restoreFirstPromptDraft(startedSessionId, document, attachmentDrafts)
+      const confirmed = pendingSubmission
+        ? settlePromptSubmission(context, pendingSubmission, message)
+        : false
+      if (!startedSessionId) {
+        set((state) => ({
+          newConversationRuntime: failOperation(
+            state.newConversationRuntime,
+            promptSubmissionId,
+            message,
+            Date.now()
+          ),
+        }))
       }
       if (confirmed) return startedSessionId
       throw error
@@ -301,79 +239,6 @@ export function createStartSessionAction(
     }
     return startedSessionId
   }
-
-  function clearFirstPromptDraft(
-    sessionId: string,
-    submittedDocument: ComposerDocument,
-    submittedAttachments: readonly DesktopAttachmentDraft[]
-  ): void {
-    const scope = sessionComposerScope(sessionId)
-    set((state) => {
-      const current = state.composerDraftsByScope[scope]
-      if (!current) return state
-      const submittedByDraftId = new Map(
-        submittedAttachments.map((attachment) => [attachment.draftId, attachment.assetId])
-      )
-      return {
-        composerDraftsByScope: {
-          ...state.composerDraftsByScope,
-          [scope]: {
-            document: sameComposerDocument(current.document, submittedDocument)
-              ? emptyComposerDocument
-              : current.document,
-            attachments: current.attachments.filter(
-              (attachment) =>
-                submittedByDraftId.get(attachment.draftId) !== attachment.assetId ||
-                attachment.status !== "ready"
-            ),
-          },
-        },
-      }
-    })
-  }
-
-  function restoreFirstPromptDraft(
-    sessionId: string,
-    submittedDocument: ComposerDocument,
-    submittedAttachments: readonly DesktopAttachmentDraft[]
-  ): void {
-    const scope = sessionComposerScope(sessionId)
-    set((state) => {
-      const current = state.composerDraftsByScope[scope] ?? {
-        document: emptyComposerDocument,
-        attachments: [],
-      }
-      const currentDraftIds = new Set(current.attachments.map((attachment) => attachment.draftId))
-      return {
-        composerDraftsByScope: {
-          ...state.composerDraftsByScope,
-          [scope]: {
-            document: current.document.items.length === 0 ? submittedDocument : current.document,
-            attachments: [
-              ...submittedAttachments.filter(
-                (attachment) => !currentDraftIds.has(attachment.draftId)
-              ),
-              ...current.attachments,
-            ],
-          },
-        },
-      }
-    })
-  }
-}
-
-function updateSessionRuntime(
-  runtimes: Record<string, DesktopSessionRuntime>,
-  sessionId: string,
-  update: (runtime: DesktopSessionRuntime) => DesktopSessionRuntime
-): Record<string, DesktopSessionRuntime> {
-  const runtime = runtimes[sessionId]
-  if (!runtime) return runtimes
-  return { ...runtimes, [sessionId]: update(runtime) }
-}
-
-function sessionViewContainsInput(view: DesktopSessionView | null, inputId: string): boolean {
-  return Boolean(view?.inputs.some((input) => input.id === inputId))
 }
 
 function hasMeaningfulItems(

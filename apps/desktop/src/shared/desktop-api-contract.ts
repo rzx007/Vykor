@@ -509,6 +509,7 @@ export type DesktopAPI = {
     fork: (input: ForkDesktopSessionInput) => Promise<DesktopSessionRecord>
     close: () => Promise<void>
     sendPrompt: (input: SendDesktopPromptInput) => Promise<void>
+    checkPromptAccepted: (input: { sessionId: string; inputId: string }) => Promise<boolean>
     editLatestPrompt: (input: EditLatestDesktopPromptInput) => Promise<void>
     promoteQueuedPrompt: (input: PromoteDesktopQueuedPromptInput) => Promise<void>
     cancelQueuedPrompt: (input: CancelDesktopQueuedPromptInput) => Promise<void>

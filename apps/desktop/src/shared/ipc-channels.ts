@@ -299,6 +299,7 @@ export const IpcChannels = {
   sessionFork: "session:fork",
   sessionClose: "session:close",
   sessionSendPrompt: "session:send-prompt",
+  sessionCheckPromptAccepted: "session:check-prompt-accepted",
   sessionEditLatestPrompt: "session:edit-latest-prompt",
   sessionPromoteQueuedPrompt: "session:promote-queued-prompt",
   sessionCancelQueuedPrompt: "session:cancel-queued-prompt",
@@ -850,6 +851,7 @@ export interface IpcInvokeMap
   }
   [IpcChannels.sessionClose]: { args: []; result: void }
   [IpcChannels.sessionSendPrompt]: { args: [input: SendDesktopPromptInput]; result: void }
+  [IpcChannels.sessionCheckPromptAccepted]: { args: [input: { sessionId: string; inputId: string }]; result: boolean }
   [IpcChannels.sessionEditLatestPrompt]: {
     args: [input: EditLatestDesktopPromptInput]
     result: void

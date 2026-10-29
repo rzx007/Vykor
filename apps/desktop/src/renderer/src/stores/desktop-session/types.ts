@@ -40,6 +40,9 @@ export interface PendingPromptAttachmentSnapshot extends DesktopPromptAttachment
 }
 
 export interface PendingPromptSubmission {
+  draftAttachmentIds?: string[]
+  dismissed?: boolean
+  draftDocument?: ComposerDocument
   pluginAppContextIds?: string[]
   id: string
   sessionId: string
@@ -160,7 +163,7 @@ export interface SessionActions {
     isCurrent?: () => boolean
   ) => Promise<void>
   openSession: (sessionId: string) => Promise<void>
-  resyncActiveSessionSnapshot: () => Promise<void>
+  resyncActiveSessionSnapshot: (options?: { throwOnError?: boolean }) => Promise<void>
   startConversationFrom: (session: DesktopSessionRecord) => Promise<void>
   forkSession: (
     sessionId: string,
@@ -202,12 +205,19 @@ export interface GoalActions {
     sessionId: string,
     input: Pick<
       DesktopSessionGoalActionInput,
-      "action" | "additionalAutoTurns" | "questionId" | "response" | "tokenBudget" | "objectiveVersion"
+      | "action"
+      | "additionalAutoTurns"
+      | "questionId"
+      | "response"
+      | "tokenBudget"
+      | "objectiveVersion"
     >
   ) => Promise<void>
 }
 
 export interface PromptActions {
+  submitPromptSubmission: (submission: PendingPromptSubmission, mode?: "retry") => Promise<void>
+  retryPromptSubmission: (inputId: string, targetSessionId?: string) => Promise<void>
   dismissPromptSubmission: (inputId: string) => void
   sendMessage: (content: string, options?: SubmitPromptOptions) => Promise<void>
   editLatestMessage: (

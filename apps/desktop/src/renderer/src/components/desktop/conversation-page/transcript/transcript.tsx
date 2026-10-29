@@ -39,7 +39,7 @@ import type {
 import type { ConversationTurn, ConversationEntry } from "../message/models/conversation-turn-model"
 import { AssistantMessageActions } from "../message/blocks/message-actions"
 import { MessageBlock } from "../message/blocks/message-block"
-import { RunErrorNotice } from "../message/notices/run-error-notice"
+import { RunErrorNotice, type RunErrorAction } from "../message/notices/run-error-notice"
 import { ContentEntrance } from "../message/blocks/content-entrance"
 import { usePluginAppResults } from "../../shell/plugin-apps/use-plugin-app-results"
 
@@ -62,6 +62,7 @@ interface ConversationTranscriptProps {
   onOpenTerminal: (terminalId: string) => void
   showReasoning?: boolean
   tasks?: DesktopSessionTask[]
+  onRunErrorAction?: (action: RunErrorAction) => void | Promise<void>
   onOpenAgents?: (taskId?: string) => void
 }
 
@@ -82,6 +83,7 @@ export const ConversationTranscript = memo(function ConversationTranscript({
   showReasoning = false,
   tasks = emptyTasks,
   onOpenAgents,
+  onRunErrorAction,
 }: ConversationTranscriptProps): React.JSX.Element {
   usePluginAppResults(parts)
   const workflowScroller = useConversationScroller()
@@ -270,6 +272,7 @@ export const ConversationTranscript = memo(function ConversationTranscript({
             runningState={data.finished ? undefined : runningActivity.orb}
             initialPartIds={initialPartIds}
             tasks={tasks}
+            onRunErrorAction={onRunErrorAction}
             onOpenAgents={onOpenAgents}
             onEditLastUserMessage={onEditLastUserMessage}
             onCopyAssistantMessage={onCopyAssistantMessage}
@@ -365,6 +368,7 @@ type TranscriptTurnProps = Pick<
   | "onOpenReview"
   | "onOpenTerminal"
   | "onOpenAgents"
+  | "onRunErrorAction"
 > & {
   data: TranscriptTurnData
   streamingPart?: DesktopSessionPart
@@ -388,6 +392,7 @@ const TranscriptTurn = memo(function TranscriptTurn({
   initialPartIds,
   tasks,
   onOpenAgents,
+  onRunErrorAction,
   onEditLastUserMessage,
   onCopyAssistantMessage,
   onForkAssistantMessage,
@@ -398,6 +403,14 @@ const TranscriptTurn = memo(function TranscriptTurn({
 }: TranscriptTurnProps): React.JSX.Element {
   const { turn, turnRuns, timing, finished, turnFailures, turnUsageRuns } = data
   const scroller = useConversationScroller()
+  const [editingUserMessage, setEditingUserMessage] = useState(false)
+  const handleRunErrorAction = (action: RunErrorAction): void | Promise<void> => {
+    if (action !== "input") return onRunErrorAction?.(action)
+    if (turn.userMessage) {
+      scroller?.scrollToMessage(turn.userMessage.id)
+      if (canEditUserMessage) setEditingUserMessage(true)
+    } else return onRunErrorAction?.(action)
+  }
   const [animationBaseline] = useState(() =>
     scroller?.presentedTurns.has(turn.id)
       ? new Set([...initialPartIds, ...turn.assistantParts.map((part) => part.id)])
@@ -429,6 +442,8 @@ const TranscriptTurn = memo(function TranscriptTurn({
               streaming={false}
               userActions={{
                 canEdit: canEditUserMessage,
+                editing: editingUserMessage,
+                onEditingChange: setEditingUserMessage,
                 onEdit: (content) => onEditLastUserMessage(userMessage.id, content),
               }}
               onOpenFile={onOpenFile}
@@ -502,7 +517,11 @@ const TranscriptTurn = memo(function TranscriptTurn({
                       <ModelUsageNotice key={run.id} metadata={run.metadata} />
                     ))}
                     {turnFailures.map((run) => (
-                      <RunErrorNotice key={run.id} error={run.error} />
+                      <RunErrorNotice
+                        key={run.id}
+                        error={run.error}
+                        onAction={onRunErrorAction ? handleRunErrorAction : undefined}
+                      />
                     ))}
                   </div>
                 ) : null}
@@ -530,7 +549,10 @@ const TranscriptTurn = memo(function TranscriptTurn({
           ))}
           {turnFailures.map((run) => (
             <MessageScrollerItem key={run.id} messageId={`run-error-${run.id}`}>
-              <RunErrorNotice error={run.error} />
+              <RunErrorNotice
+                error={run.error}
+                onAction={onRunErrorAction ? handleRunErrorAction : undefined}
+              />
             </MessageScrollerItem>
           ))}
         </>

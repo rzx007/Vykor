@@ -162,6 +162,7 @@ function ConversationPane({
   const dismissGoalError = useDesktopSessionStore((state) => state.dismissGoalError)
   const dismissGoalBanner = useDesktopSessionStore((state) => state.dismissGoalBanner)
   const sendMessage = useDesktopSessionStore((state) => state.sendMessage)
+  const retryPromptSubmission = useDesktopSessionStore((state) => state.retryPromptSubmission)
   const dismissPromptSubmission = useDesktopSessionStore((state) => state.dismissPromptSubmission)
   const editLatestMessage = useDesktopSessionStore((state) => state.editLatestMessage)
   const promoteQueuedPrompt = useDesktopSessionStore((state) => state.promoteQueuedPrompt)
@@ -188,6 +189,15 @@ function ConversationPane({
   const refreshContextUsage = useDesktopSessionStore((state) => state.refreshContextUsage)
   const resyncActiveSessionSnapshot = useDesktopSessionStore(
     (state) => state.resyncActiveSessionSnapshot
+  )
+  const resolveRunError = useCallback(
+    async (action: "providers" | "input" | "refresh") => {
+      if (action === "providers")
+        await navigate({ to: "/settings/$section", params: { section: "providers" } })
+      else if (action === "refresh") await resyncActiveSessionSnapshot({ throwOnError: true })
+      else document.getElementById("message-composer")?.focus()
+    },
+    [navigate, resyncActiveSessionSnapshot]
   )
   const contextUsageSnapshot = useDesktopSessionStore((state) => state.contextUsageSnapshot)
   const interrupt = useDesktopSessionStore((state) => state.interrupt)
@@ -696,6 +706,7 @@ function ConversationPane({
                       {openingSession && !sessionView ? null : (
                         <ConversationTranscript
                           tasks={sessionView?.tasks}
+                          onRunErrorAction={resolveRunError}
                           onOpenAgents={onOpenAgents}
                           inputs={sessionView?.inputs ?? []}
                           messages={transcript.messages}
@@ -820,6 +831,9 @@ function ConversationPane({
                     if (activeRun) void promoteQueuedPrompt(inputId, queuedRunId, activeRun.id)
                   }}
                   onCancel={(inputId, queuedRunId) => void cancelQueuedPrompt(inputId, queuedRunId)}
+                  onRetryLocal={(inputId) => {
+                    void retryPromptSubmission(inputId).catch(() => undefined)
+                  }}
                   onDismissLocal={dismissPromptSubmission}
                 />
                 {!hasSession && selectedProject && !goalMode ? (

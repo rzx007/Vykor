@@ -64,6 +64,7 @@ import {
 import { areDesktopAttachmentsSendable } from "@shared/attachment-types"
 import { applySessionPartDeltas } from "@renderer/stores/desktop-session/session-view-state"
 import { createSessionUpdateDeliveryAcknowledger } from "@renderer/stores/desktop-session/session-update-delivery"
+import { markComposerSessionTransient } from "@renderer/stores/desktop-session/composer-recovery"
 import type {
   DesktopSessionView,
   DesktopSessionRecord,
@@ -89,6 +90,7 @@ export function sideChatDraftScope(sourceId: string): string {
     : prefork
 }
 function bindValidatedTarget(sourceId: string, targetId: string): void {
+  markComposerSessionTransient(targetId)
   if (boundTargets.has(sourceId)) boundTargets.set(sourceId, targetId)
   moveSideChatDraft(`linked-chat:${sourceId}`, sessionComposerScope(targetId))
 }

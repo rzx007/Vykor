@@ -128,6 +128,7 @@ beforeEach(() => {
         requestUpdateResync,
         delete: deleteSession,
         sendPrompt,
+        checkPromptAccepted: vi.fn().mockResolvedValue(false),
         interrupt,
         replyPermission,
         onAuxUpdated: (callback: (update: DesktopAuxSessionUpdate) => void) => {

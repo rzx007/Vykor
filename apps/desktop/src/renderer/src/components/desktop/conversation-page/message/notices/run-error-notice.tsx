@@ -1,5 +1,8 @@
 import { AlertCircle, ChevronRight } from "lucide-react"
 import { useState } from "react"
+import { Button } from "@renderer/components/ui/button"
+
+export type RunErrorAction = "providers" | "input" | "refresh"
 
 const leadingHttpReasonPhrases: Partial<Record<number, readonly string[]>> = {
   400: ["bad request"],
@@ -25,10 +28,27 @@ const leadingHttpReasonPhrases: Partial<Record<number, readonly string[]>> = {
   511: ["network authentication required"],
 }
 
-export function RunErrorNotice({ error }: { error?: string }): React.JSX.Element | null {
+export function RunErrorNotice({
+  error,
+  onAction,
+}: {
+  error?: string
+  onAction?: (action: RunErrorAction) => void | Promise<void>
+}): React.JSX.Element | null {
   const [dismissed, setDismissed] = useState<{ error?: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   if (dismissed?.error === error && dismissed !== null) return null
   const detail = error?.trim()
+  const status = detail ? httpStatusFromError(detail) : null
+  const action: RunErrorAction =
+    (status !== null && [401, 402, 403, 404, 422, 501].includes(status)) ||
+    detail?.includes("supported API model names") ||
+    detail?.includes("not supported when using Codex")
+      ? "providers"
+      : status !== null && [400, 413].includes(status)
+        ? "input"
+        : "refresh"
   const statusMessage = detail
     ? (runFailureGuidance(detail) ?? "这次请求没有完成")
     : "这次请求没有完成，暂时没有更多错误信息。"
@@ -54,30 +74,62 @@ export function RunErrorNotice({ error }: { error?: string }): React.JSX.Element
       aria-label="请求未完成"
       className="flex max-w-xl items-start gap-2 text-xs text-foreground/80"
     >
-      {detail ? (
-        <details className="group">
-          <summary
+      <div className="min-w-0">
+        {detail ? (
+          <details className="group">
+            <summary
+              data-run-error-status-row
+              aria-live="polite"
+              aria-atomic="true"
+              className="w-fit cursor-pointer list-none rounded-md py-1.5 pr-1 leading-5 select-none hover:text-foreground [&::-webkit-details-marker]:hidden"
+            >
+              {statusRow}
+            </summary>
+            <pre className="text-ui-caption mt-1 ml-6 max-h-40 overflow-auto rounded-lg bg-muted/40 px-3 py-2 leading-relaxed whitespace-pre-wrap text-ui-muted">
+              {detail}
+            </pre>
+          </details>
+        ) : (
+          <div
             data-run-error-status-row
             aria-live="polite"
             aria-atomic="true"
-            className="w-fit cursor-pointer list-none rounded-md py-1.5 pr-1 leading-5 select-none hover:text-foreground [&::-webkit-details-marker]:hidden"
+            className="w-fit py-1.5 leading-5"
           >
             {statusRow}
-          </summary>
-          <pre className="text-ui-caption mt-1 ml-6 max-h-40 overflow-auto rounded-lg bg-muted/40 px-3 py-2 leading-relaxed whitespace-pre-wrap text-ui-muted">
-            {detail}
-          </pre>
-        </details>
-      ) : (
-        <div
-          data-run-error-status-row
-          aria-live="polite"
-          aria-atomic="true"
-          className="w-fit py-1.5 leading-5"
-        >
-          {statusRow}
-        </div>
-      )}
+          </div>
+        )}
+        {onAction ? (
+          <div className="ml-6 flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="link"
+              size="xs"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true)
+                setActionError(null)
+                void Promise.resolve()
+                  .then(() => onAction(action))
+                  .catch(() => setActionError("暂时无法完成此操作，请检查连接后再试。"))
+                  .finally(() => setBusy(false))
+              }}
+            >
+              {busy
+                ? "正在处理…"
+                : action === "providers"
+                  ? "检查供应商设置"
+                  : action === "input"
+                    ? "检查输入与附件"
+                    : "刷新任务状态"}
+            </Button>
+            {action === "refresh" ? (
+              <span className="text-ui-muted">只核对状态，不会重新执行</span>
+            ) : null}
+            {actionError ? <span role="alert">{actionError}</span> : null}
+          </div>
+        ) : null}
+      </div>
       <button
         type="button"
         aria-label="关闭运行错误"

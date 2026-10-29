@@ -390,6 +390,14 @@ export class DesktopSessionService {
     return await this.subscriptions.openSession(client, webContents, sessionIdInput)
   }
 
+  async checkPromptAccepted(input: { sessionId: string; inputId: string }): Promise<boolean> {
+    const sessionId = requireString(input.sessionId, "会话 ID")
+    const inputId = requireString(input.inputId, "输入 ID")
+    const client = await this.getClient()
+    const snapshot = await client.sessions.getState(sessionId)
+    return snapshot.inputs.some((value) => value.id === inputId)
+  }
+
   acknowledgeSessionUpdate(
     ownerId: number,
     ack: DesktopSessionUpdateAck

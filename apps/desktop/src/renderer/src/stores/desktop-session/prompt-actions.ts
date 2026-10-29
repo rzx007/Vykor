@@ -1,17 +1,14 @@
 import { pluginAppModelContexts } from "@renderer/components/desktop/shell/plugin-apps/plugin-app-model-context"
 import { errorMessage } from "./error-state"
+import { createPromptSubmissionSender } from "./prompt-submission"
+import { markComposerSessionTransient } from "./composer-recovery"
 import {
-  acknowledgeOperation,
   beginOperation,
   createEmptySessionRuntime,
   failOperation,
   removeOperation,
 } from "./operation-state"
-import {
-  classifyPromptPlacement,
-  removePendingPromptSubmission,
-  updatePendingPromptSubmission,
-} from "./pending-prompt-state"
+import { classifyPromptPlacement, updatePendingPromptSubmission } from "./pending-prompt-state"
 import type {
   DesktopSessionRuntime,
   DesktopStoreContext,
@@ -19,18 +16,7 @@ import type {
   PendingPromptSubmission,
   PromptActions,
 } from "./types"
-import {
-  removeDraftAttachment,
-  selectDraftDocument,
-  sessionComposerScope,
-  setDraftDocument,
-} from "./composer-draft-state"
-import {
-  composerDocument,
-  emptyComposerDocument,
-  sameComposerDocument,
-  selectComposerDocumentText,
-} from "./composer-document"
+import { composerDocument, selectComposerDocumentText } from "./composer-document"
 
 interface PromptActionsContext extends DesktopStoreContext {
   scheduleSelectedProjectGitRefresh: (force: boolean) => void
@@ -38,8 +24,14 @@ interface PromptActionsContext extends DesktopStoreContext {
 
 export function createPromptActions(context: PromptActionsContext): PromptActions {
   const { get, set } = context
-
   return {
+    submitPromptSubmission: createPromptSubmissionSender(context),
+    async retryPromptSubmission(inputId, targetSessionId) {
+      const sessionId = targetSessionId ?? get().activeSessionId
+      if (!sessionId || get().pendingModeChanges[sessionId]) return
+      const pending = get().sessionRuntimes[sessionId]?.pendingPromptSubmissions[inputId]
+      if (pending) await get().submitPromptSubmission(pending, "retry")
+    },
     dismissPromptSubmission(inputId) {
       const sessionId = get().activeSessionId
       if (!sessionId) return
@@ -47,9 +39,10 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
         removeOperation(
           {
             ...runtime,
-            pendingPromptSubmissions: removePendingPromptSubmission(
+            pendingPromptSubmissions: updatePendingPromptSubmission(
               runtime.pendingPromptSubmissions,
-              inputId
+              inputId,
+              (value) => ({ ...value, dismissed: true })
             ),
           },
           inputId
@@ -61,6 +54,8 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       const items = [...(options?.contextItems ?? []), ...document.items]
       const prompt = selectComposerDocumentText({ ...document, items })
       const sessionId = options?.target?.sessionId ?? get().activeSessionId
+      if (options?.target?.view?.session.storage === "memory")
+        markComposerSessionTransient(options.target.sessionId)
       if (sessionId && get().pendingModeChanges[sessionId]) return
       const appContexts = pluginAppModelContexts.forSession(sessionId ?? null)
       const attachmentDrafts = [...(options?.attachments ?? [])]
@@ -87,132 +82,40 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
 
       const current = get()
       const runtime = getSessionRuntime(current, sessionId)
-      const retry = Object.values(runtime.pendingPromptSubmissions).find(
+      const matching = Object.values(runtime.pendingPromptSubmissions).find(
         (submission) =>
           submission.content === prompt &&
-          JSON.stringify(submission.pluginAppContextIds ?? []) === JSON.stringify(appContexts.map(entry => entry.id)) &&
-          submission.phase === "failed" &&
+          JSON.stringify(submission.pluginAppContextIds ?? []) ===
+            JSON.stringify(appContexts.map((entry) => entry.id)) &&
           sameInputItems(submission.items, items) &&
           sameAttachmentSnapshot(submission.attachments, attachments)
       )
-      const submission: PendingPromptSubmission = retry
-        ? { ...retry, phase: "submitting", error: undefined }
-        : {
-            id: globalThis.crypto.randomUUID(),
-            sessionId,
-            content: prompt,
-            ...(appContexts.length ? { pluginAppContextIds: appContexts.map(entry => entry.id) } : {}),
-            items,
-            attachments,
-            createdAt: Date.now(),
-            phase: "submitting",
-            placement: classifyPromptPlacement(
-              options?.target ? options.target.view : current.sessionView,
-              runtime,
-              sessionId
-            ),
-          }
-
-      replaceRuntime(sessionId, (currentRuntime) =>
-        beginOperation(
-          {
-            ...currentRuntime,
-            pendingPromptSubmissions: {
-              ...currentRuntime.pendingPromptSubmissions,
-              [submission.id]: submission,
-            },
-          },
-          {
-            id: submission.id,
-            kind: "send-prompt",
-            sessionId,
-            startedAt: Date.now(),
-          }
-        )
-      )
-
-      try {
-        await window.desktop.sessions.sendPrompt({
-          id: submission.id,
-          sessionId,
-          items,
-          ...(appContexts.length ? { pluginAppContextIds: appContexts.map(entry => entry.id) } : {}),
-          attachments: attachments.map(({ assetId, intent, displayName }) => ({
-            assetId,
-            intent,
-            displayName,
-          })),
-        })
-        for (const entry of appContexts) pluginAppModelContexts.remove(entry.id)
-        if (!get().sessionRuntimes[sessionId]) return
-        clearSubmittedDraft(sessionId, document, attachmentDrafts)
-        const keepLocalAcknowledgement = get().activeSessionId === sessionId
-        replaceRuntime(sessionId, (currentRuntime) =>
-          settleSubmittedPrompt(
-            {
-              ...currentRuntime,
-              pendingPromptSubmissions: updatePendingPromptSubmission(
-                currentRuntime.pendingPromptSubmissions,
-                submission.id,
-                (pendingSubmission) => ({
-                  ...pendingSubmission,
-                  phase: "accepted",
-                  error: undefined,
-                })
-              ),
-            },
-            submission.id,
-            keepLocalAcknowledgement
-          )
-        )
-      } catch (error) {
-        if (!get().sessionRuntimes[sessionId]) throw error
-        const message = errorMessage(error)
-        const confirmed = promptSubmissionConfirmed(get(), sessionId, submission.id)
-        const keepLocalAcknowledgement = get().activeSessionId === sessionId
-        if (confirmed) {
-          clearSubmittedDraft(sessionId, document, attachmentDrafts)
-          for (const entry of appContexts) pluginAppModelContexts.remove(entry.id)
-        }
-        replaceRuntime(sessionId, (currentRuntime) => {
-          if (confirmed) {
-            const acceptedSubmissions = updatePendingPromptSubmission(
-              currentRuntime.pendingPromptSubmissions,
-              submission.id,
-              (pendingSubmission) => ({
-                ...pendingSubmission,
-                phase: "accepted",
-                error: undefined,
-              })
-            )
-            return removeOperation(
-              {
-                ...currentRuntime,
-                pendingPromptSubmissions: keepLocalAcknowledgement
-                  ? acceptedSubmissions
-                  : removePendingPromptSubmission(acceptedSubmissions, submission.id),
-              },
-              submission.id
-            )
-          }
-          return failOperation(
-            {
-              ...currentRuntime,
-              pendingPromptSubmissions: updatePendingPromptSubmission(
-                currentRuntime.pendingPromptSubmissions,
-                submission.id,
-                (pendingSubmission) => ({ ...pendingSubmission, phase: "failed", error: message })
-              ),
-            },
-            submission.id,
-            message,
-            Date.now()
-          )
-        })
-        if (!confirmed) throw error
-      } finally {
-        context.scheduleSelectedProjectGitRefresh(true)
+      if (matching) {
+        if (matching.phase === "failed") await get().retryPromptSubmission(matching.id, sessionId)
+        else await get().submitPromptSubmission(matching)
+        return
       }
+      const submission: PendingPromptSubmission = {
+        id: globalThis.crypto.randomUUID(),
+        sessionId,
+        content: prompt,
+        ...(appContexts.length
+          ? { pluginAppContextIds: appContexts.map((entry) => entry.id) }
+          : {}),
+        items,
+        draftDocument: document,
+        draftAttachmentIds: attachmentDrafts.map((attachment) => attachment.draftId),
+        attachments,
+        createdAt: Date.now(),
+        phase: "submitting",
+        placement: classifyPromptPlacement(
+          options?.target ? options.target.view : current.sessionView,
+          runtime,
+          sessionId
+        ),
+      }
+
+      return get().submitPromptSubmission(submission)
     },
 
     async editLatestMessage(
@@ -384,36 +287,6 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       return next
     })
   }
-
-  function clearSubmittedDraft(
-    sessionId: string,
-    submittedDocument: import("./composer-document").ComposerDocument,
-    submitted: readonly { draftId: string; assetId?: string }[]
-  ): void {
-    const scope = sessionComposerScope(sessionId)
-    set((state) => {
-      let composerState = { composerDraftsByScope: state.composerDraftsByScope }
-      for (const attachment of submitted) {
-        const current = composerState.composerDraftsByScope[scope]?.attachments.find(
-          (candidate) => candidate.draftId === attachment.draftId
-        )
-        if (current?.status === "ready" && current.assetId === attachment.assetId) {
-          composerState = removeDraftAttachment(composerState, scope, attachment.draftId)
-        }
-      }
-      const currentDocument = selectDraftDocument(composerState, scope)
-      return {
-        ...state,
-        ...setDraftDocument(
-          composerState,
-          scope,
-          sameComposerDocument(currentDocument, submittedDocument)
-            ? emptyComposerDocument
-            : currentDocument
-        ),
-      }
-    })
-  }
 }
 
 function sameAttachmentSnapshot(
@@ -444,39 +317,4 @@ function getSessionRuntime(
   sessionId: string
 ): DesktopSessionRuntime {
   return state.sessionRuntimes[sessionId] ?? createEmptySessionRuntime()
-}
-
-function promptSubmissionConfirmed(
-  state: Pick<import("./types").DesktopSessionState, "sessionRuntimes" | "sessionView">,
-  sessionId: string,
-  inputId: string
-): boolean {
-  const submission = getSessionRuntime(state, sessionId).pendingPromptSubmissions[inputId]
-  return (
-    !submission ||
-    submission.phase === "accepted" ||
-    Boolean(
-      state.sessionView?.session.id === sessionId &&
-      state.sessionView.inputs.some((input) => input.id === inputId)
-    )
-  )
-}
-
-function settleSubmittedPrompt(
-  runtime: DesktopSessionRuntime,
-  submissionId: string,
-  keepLocalAcknowledgement: boolean
-): DesktopSessionRuntime {
-  const acknowledged = acknowledgeOperation(runtime, submissionId, Date.now())
-  if (keepLocalAcknowledgement) return acknowledged
-  return removeOperation(
-    {
-      ...acknowledged,
-      pendingPromptSubmissions: removePendingPromptSubmission(
-        acknowledged.pendingPromptSubmissions,
-        submissionId
-      ),
-    },
-    submissionId
-  )
 }

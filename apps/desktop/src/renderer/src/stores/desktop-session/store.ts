@@ -6,6 +6,8 @@ import { normalizeNotificationSounds } from "@shared/settings-types"
 import { applyActivityUpdate as reduceActivity, markSessionRead } from "./activity-state"
 import { saveActivityPersistence } from "./activity-persistence"
 import { clearPersistedActiveSessionId } from "./persistence"
+import { readComposerRecovery, saveComposerRecovery } from "./composer-recovery"
+import { toast } from "@renderer/lib/toast"
 import { isTopLevelSession, upsertSession } from "./helpers"
 import { createAttachmentActions } from "./attachment-actions"
 import { attachDesktopDaemonStatusEvents, createBootstrapActions } from "./bootstrap-actions"
@@ -50,6 +52,7 @@ export const useDesktopSessionStore = create<DesktopSessionState>((set, get) => 
 
   return {
     ...createInitialState(),
+    ...readComposerRecovery(),
     ...createBootstrapActions(context),
     ...createProjectActions(context),
     ...createSessionActions(context),
@@ -77,6 +80,18 @@ export const useDesktopSessionStore = create<DesktopSessionState>((set, get) => 
       })
       set((current) => ({
         activity,
+        ...(removedSessions.size
+          ? {
+              composerDraftsByScope: Object.fromEntries(
+                Object.entries(current.composerDraftsByScope).filter(
+                  ([scope]) => !removedSessions.has(scope.replace(/^session:/, ""))
+                )
+              ),
+              sessionRuntimes: Object.fromEntries(
+                Object.entries(current.sessionRuntimes).filter(([id]) => !removedSessions.has(id))
+              ),
+            }
+          : {}),
         sessions: acceptedSessions
           .reduce(
             (sessions, session) =>
@@ -131,6 +146,27 @@ export const useDesktopSessionStore = create<DesktopSessionState>((set, get) => 
     },
   }
 })
+
+// Background saves cover edits and reconciliation; the sender explicitly saves identity before IPC.
+let recoveryTimer: ReturnType<typeof setTimeout> | undefined
+let warnedRecoveryStorage = false
+function flushComposerRecovery(): void {
+  clearTimeout(recoveryTimer)
+  recoveryTimer = undefined
+  const state = useDesktopSessionStore.getState()
+  const saved = saveComposerRecovery(state)
+  if (!saved && !warnedRecoveryStorage) {
+    warnedRecoveryStorage = true
+    toast.error("草稿暂时无法保存到本机，请在关闭窗口前复制重要内容。")
+  }
+}
+useDesktopSessionStore.subscribe((state, previous) => {
+  if (state.composerDraftsByScope !== previous.composerDraftsByScope || state.sessionRuntimes !== previous.sessionRuntimes) {
+    clearTimeout(recoveryTimer)
+    recoveryTimer = setTimeout(flushComposerRecovery, 250)
+  }
+})
+if (typeof window !== "undefined") window.addEventListener("pagehide", flushComposerRecovery)
 
 export function attachDesktopSessionEvents(): () => void {
   if (desktopSessionEventSubscriptionCount === 0) {

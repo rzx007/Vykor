@@ -1,4 +1,6 @@
 import { shallow } from "zustand/shallow"
+import { markComposerSessionTransient } from "./composer-recovery"
+import { reconcileSubmittedDrafts } from "./composer-draft-state"
 
 import {
   isPlaceholderTitle,
@@ -29,10 +31,12 @@ export function createApplySessionUpdate(
   const { get, set } = context
 
   return (view) => {
+    if (view.session.storage === "memory") markComposerSessionTransient(view.session.id)
     const current = get().sessionView
 
     if (get().activeSessionId !== view.session.id) {
       set((state) => ({
+        ...reconcileSubmittedDrafts(state, view),
         sessionRuntimes: {
           ...state.sessionRuntimes,
           [view.session.id]: reconcileRuntimeWithView(
@@ -68,6 +72,7 @@ export function createApplySessionUpdate(
       )
 
       return {
+        ...reconcileSubmittedDrafts(state, view),
         sessionView: { ...view, session },
 
         sessionRuntimes: { ...state.sessionRuntimes, [view.session.id]: runtime },

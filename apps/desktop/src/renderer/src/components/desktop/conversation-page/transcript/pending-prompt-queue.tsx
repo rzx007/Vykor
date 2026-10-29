@@ -24,7 +24,7 @@ interface PendingPrompt {
 
 type LocalPendingSubmission = Pick<
   PendingPromptSubmission,
-  "id" | "sessionId" | "content" | "phase" | "placement" | "error"
+  "id" | "sessionId" | "content" | "phase" | "placement" | "error" | "dismissed"
 >
 
 export function PendingPromptQueue({
@@ -34,6 +34,7 @@ export function PendingPromptQueue({
   onPromote,
   onCancel,
   onDismissLocal = () => {},
+  onRetryLocal,
 }: {
   prompts: PendingPrompt[]
   activeRunId?: string
@@ -41,10 +42,12 @@ export function PendingPromptQueue({
   onPromote: (inputId: string, queuedRunId: string) => void
   onCancel: (inputId: string, queuedRunId: string) => void
   onDismissLocal?: (inputId: string) => void
+  onRetryLocal?: (inputId: string) => void
 }): React.JSX.Element | null {
   const authorityInputIds = new Set(prompts.map(({ input }) => input.id))
   const visibleLocalSubmissions = localSubmissions.filter(
     (submission) =>
+      !submission.dismissed &&
       !authorityInputIds.has(submission.id) &&
       (submission.placement === "queue" || submission.phase === "failed")
   )
@@ -97,16 +100,28 @@ export function PendingPromptQueue({
                   : "发送失败"}
             </span>
             {visibleLocalSubmission.phase === "failed" ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                aria-label="关闭发送错误"
-                title="关闭"
-                onClick={() => onDismissLocal(visibleLocalSubmission.id)}
-              >
-                <Trash2 />
-              </Button>
+              <>
+                {onRetryLocal ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => onRetryLocal(visibleLocalSubmission.id)}
+                  >
+                    核对并重试
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="关闭发送错误"
+                  title="关闭"
+                  onClick={() => onDismissLocal(visibleLocalSubmission.id)}
+                >
+                  <Trash2 />
+                </Button>
+              </>
             ) : null}
           </ItemActions>
         </Item>

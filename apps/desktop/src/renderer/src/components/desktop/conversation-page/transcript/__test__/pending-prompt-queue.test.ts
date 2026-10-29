@@ -6,6 +6,27 @@ import type { DesktopSessionInput, DesktopSessionRun } from "@shared/session-typ
 import { PendingPromptQueue } from "../pending-prompt-queue"
 
 describe("PendingPromptQueue", () => {
+  it("offers recovery for failed sends and keeps dismissed records out of the UI", () => {
+    const failed = {
+      id: "failed",
+      sessionId: "s",
+      content: "recoverable",
+      phase: "failed" as const,
+      placement: "transcript" as const,
+    }
+    const props = { prompts: [], onPromote: vi.fn(), onCancel: vi.fn(), onRetryLocal: vi.fn() }
+    const html = renderToStaticMarkup(
+      createElement(PendingPromptQueue, { ...props, localSubmissions: [failed] })
+    )
+    expect(html).toContain("核对并重试")
+    const hidden = renderToStaticMarkup(
+      createElement(PendingPromptQueue, {
+        ...props,
+        localSubmissions: [{ ...failed, dismissed: true }],
+      })
+    )
+    expect(hidden).toBe("")
+  })
   it("only shows local submissions that were sent while another run was active", () => {
     const html = renderToStaticMarkup(
       createElement(PendingPromptQueue, {

@@ -2,13 +2,38 @@
 
 import { act, createElement } from "react"
 import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { RunErrorNotice } from "../run-error-notice"
 
 describe("RunErrorNotice", () => {
   let container: HTMLDivElement
   let root: Root
+
+  it("opens provider settings from authentication errors without retrying work", async () => {
+    const onAction = vi.fn()
+    act(() => root.render(createElement(RunErrorNotice, { error: "HTTP 401", onAction })))
+    const button = [...container.querySelectorAll("button")].find(
+      (value) => value.textContent === "检查供应商设置"
+    )!
+    expect(button).toBeDefined()
+    await act(async () => button.click())
+    expect(onAction).toHaveBeenCalledExactlyOnceWith("providers")
+  })
+
+  it.each([
+    ["HTTP 413", "检查输入与附件", "input"],
+    ["HTTP 503", "刷新任务状态", "refresh"],
+  ])("provides a direct recovery action for %s", async (error, label, action) => {
+    const onAction = vi.fn()
+    act(() => root.render(createElement(RunErrorNotice, { error, onAction })))
+    const button = [...container.querySelectorAll("button")].find(
+      (value) => value.textContent === label
+    )!
+    expect(button).toBeDefined()
+    await act(async () => button.click())
+    expect(onAction).toHaveBeenCalledWith(action)
+  })
 
   beforeEach(() => {
     ;(

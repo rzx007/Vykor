@@ -321,7 +321,7 @@ describe("desktop session actions", () => {
     )
   })
 
-  it("clears the migrated first-prompt draft while sending is still pending", async () => {
+  it("keeps the migrated first-prompt draft until acceptance", async () => {
     const session = emptySessionView("session-created").session
     let resolveSend!: () => void
     const sendPrompt = vi.fn(
@@ -356,7 +356,8 @@ describe("desktop session actions", () => {
     resolveSend()
     await starting
 
-    expect(draftWhileSending).toEqual({ document: emptyComposerDocument, attachments: [] })
+    expect(draftWhileSending).toEqual({ document: composerDocument([{ type: "text", text: "说明" }]), attachments: [attachment] })
+    expect(useDesktopSessionStore.getState().composerDraftsByScope[`session:${session.id}`]).toEqual({ document: emptyComposerDocument, attachments: [] })
   })
 
   it("keeps the new-conversation attachment draft when create fails", async () => {
@@ -1534,6 +1535,7 @@ function onlyPendingPromptSubmission(
 }
 
 describe("desktop session store outside-project mode", () => {
+  beforeEach(() => resetDesktopSessionStore())
   it("lets the main process allocate the directory for a session without a project id", async () => {
     const session = {
       id: "session-outside-project",

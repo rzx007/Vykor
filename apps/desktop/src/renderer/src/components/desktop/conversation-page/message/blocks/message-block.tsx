@@ -3,9 +3,8 @@ import type {
   DesktopSessionPart,
   SessionUserInputItem,
 } from "@shared/session-types"
-import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
 import { AssistantMessage } from "./assistant-message"
-import { UserMessage } from "./user-message"
+import { UserMessage, type UserMessageActions } from "./user-message"
 import { ModelSwitchDivider, readModelSwitchPresentation } from "../notices/model-switch-divider"
 import { ContextCompactionDivider } from "../notices/context-compaction-divider"
 import { readContextCompactionPresentation } from "../notices/compaction-presentation"
@@ -25,10 +24,7 @@ export function MessageBlock({
   parts: DesktopSessionPart[]
   inputItems?: SessionUserInputItem[]
   streaming: boolean
-  userActions?: {
-    canEdit: boolean
-    onEdit: (document: ComposerDocument) => void
-  }
+  userActions?: UserMessageActions
   onOpenFile: (path: string, line?: number) => void
   canOpenReview: boolean
   onOpenReview: (path?: string) => void

@@ -21,4 +21,6 @@
 
 主会话和侧聊用 `requiresPermissionReply` 筛选请求，再展示权限或提问卡片。自动审查进行中、已经自动决定或请求结束时不显示人工批准卡片。卡片通过原回调返回操作；提交状态、错误、会话记录和实际授权由宿主管理。权限批准仍使用 `once`，仅针对当前请求。
 
+错误提示通过 `userActions.editing` 与 `onEditingChange` 控制最新用户消息的原编辑表单，不重建编辑器；重复打开保留未提交修改。打开和取消都不发送请求，只有用户明确提交才调用 `onEdit`。
+
 新增消息组合和交互放在本目录，通用数据整理放 [models](../models/README.md)，完整工具内容的读取放 [tool-details](../tool-details/README.md)。测试放同层 [测试目录](__test__/)，涉及虚拟滚动或输入框的完整场景继续在 transcript、composer 中验证。返回[消息展示导航](../README.md)。

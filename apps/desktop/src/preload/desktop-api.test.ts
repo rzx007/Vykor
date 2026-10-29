@@ -261,3 +261,9 @@ describe("desktop MCP preload bridge", () => {
     expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.mcpCancelLogin, { loginId: "login-1" })
   })
 })
+
+it("checks a prompt identity through the read-only recovery channel", async () => {
+  const input = { sessionId: "s", inputId: "original" }
+  await desktopAPI.sessions.checkPromptAccepted(input)
+  expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.sessionCheckPromptAccepted, input)
+})

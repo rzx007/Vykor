@@ -1,3 +1,5 @@
+import type { DesktopSessionView } from "@shared/session-types"
+import type { DesktopSessionState, PendingPromptSubmission } from "./types"
 import type {
   DesktopAttachmentCandidate,
   DesktopAttachmentDraft,
@@ -7,6 +9,7 @@ import {
   composerDocument,
   emptyComposerDocument,
   selectComposerDocumentText,
+  sameComposerDocument,
   type ComposerDocument,
 } from "./composer-document"
 
@@ -227,4 +230,47 @@ function updateAttachment(
   const attachments = [...current.attachments]
   attachments[index] = update(attachments[index]!)
   return replaceScope(state, scope, { ...current, attachments })
+}
+
+// Only clear the exact submitted text/assets. A reply or snapshot can arrive after the user starts a new draft.
+export function clearSubmittedDraft(
+  state: ComposerDraftState,
+  pending: PendingPromptSubmission
+): ComposerDraftState {
+  const scope = sessionComposerScope(pending.sessionId)
+  const current = state.composerDraftsByScope[scope]
+  if (!current) return state
+  const sentDocument = pending.draftDocument ?? composerDocument(pending.items)
+  const assets = new Set(pending.attachments.map((value) => value.assetId))
+  const draftIds = pending.draftAttachmentIds ? new Set(pending.draftAttachmentIds) : null
+  const updated: DesktopComposerDraft = {
+    ...current,
+    document: sameComposerDocument(current.document, sentDocument)
+      ? composerDocument([])
+      : current.document,
+    attachments: current.attachments.filter(
+      (value) =>
+        value.status !== "ready" ||
+        !value.assetId ||
+        !assets.has(value.assetId) ||
+        (draftIds !== null &&
+          !draftIds.has(value.draftId) &&
+          value.draftId !== `recovered:${value.assetId}`)
+    ),
+  }
+  return { composerDraftsByScope: { ...state.composerDraftsByScope, [scope]: updated } }
+}
+
+export function reconcileSubmittedDrafts(
+  state: Pick<DesktopSessionState, "composerDraftsByScope" | "sessionRuntimes">,
+  view: DesktopSessionView
+): ComposerDraftState {
+  let result: ComposerDraftState = state
+  const ids = new Set(view.inputs.map((value) => value.id))
+  for (const pending of Object.values(
+    state.sessionRuntimes[view.session.id]?.pendingPromptSubmissions ?? {}
+  )) {
+    if (ids.has(pending.id)) result = clearSubmittedDraft(result, pending)
+  }
+  return { composerDraftsByScope: result.composerDraftsByScope }
 }

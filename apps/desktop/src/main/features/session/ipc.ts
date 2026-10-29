@@ -249,6 +249,13 @@ export const sessionIpcContribution: IpcContribution = {
         },
       },
       {
+        channel: IpcChannels.sessionCheckPromptAccepted,
+        handler: (_event, input) =>
+          desktopSessionService.checkPromptAccepted(
+            input as { sessionId: string; inputId: string }
+          ),
+      },
+      {
         channel: IpcChannels.sessionEditLatestPrompt,
         handler: (_event, input) =>
           desktopSessionService.editLatestPrompt(input as EditLatestDesktopPromptInput),

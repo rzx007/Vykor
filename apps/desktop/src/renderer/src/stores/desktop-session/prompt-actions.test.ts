@@ -106,7 +106,7 @@ describe("prompt actions session runtime", () => {
 
   it("preserves a failed plugin draft and retries the same structured submission", async () => {
     const received: SendDesktopPromptInput[] = []
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt: async (input: SendDesktopPromptInput) => {
+    vi.stubGlobal("window", { desktop: { sessions: { checkPromptAccepted: vi.fn().mockResolvedValue(false), sendPrompt: async (input: SendDesktopPromptInput) => {
       received.push(input)
       if (received.length === 1) throw new Error("session_plugin_capability_unavailable")
     } } } })
@@ -655,7 +655,7 @@ describe("prompt actions with an explicit ordinary session target", () => {
 
   it("reuses B's failed structured input id with the same automatic context", async () => {
     const received: SendDesktopPromptInput[] = []
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt: async (input: SendDesktopPromptInput) => {
+    vi.stubGlobal("window", { desktop: { sessions: { checkPromptAccepted: vi.fn().mockResolvedValue(false), sendPrompt: async (input: SendDesktopPromptInput) => {
       received.push(input)
       if (received.length === 1) throw new Error("offline")
     } } } })
@@ -1113,7 +1113,7 @@ describe("desktop session store prompt intent boundaries", () => {
       .fn()
       .mockRejectedValueOnce(new Error("response lost"))
       .mockResolvedValueOnce(undefined)
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { sessions: { checkPromptAccepted: vi.fn().mockResolvedValue(false), sendPrompt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
     })

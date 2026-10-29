@@ -22,6 +22,13 @@ import { messageTextContent } from "../models/message-content"
 import { UserMessageBubble } from "./user-message-bubble"
 import { renderUserItems, type UserDisplayItem } from "./user-display-items"
 
+export interface UserMessageActions {
+  canEdit: boolean
+  onEdit: (document: ComposerDocument) => void
+  editing?: boolean
+  onEditingChange?: (editing: boolean) => void
+}
+
 export function UserMessage({
   message,
   parts,
@@ -31,7 +38,7 @@ export function UserMessage({
   message: DesktopSessionMessage
   parts: DesktopSessionPart[]
   inputItems?: SessionUserInputItem[]
-  userActions?: { canEdit: boolean; onEdit: (document: ComposerDocument) => void }
+  userActions?: UserMessageActions
 }): React.JSX.Element {
   const content = messageTextContent(parts)
   const items = readUserItems(parts)
@@ -70,9 +77,11 @@ function UserMessageBlock({
   document: ComposerDocument
   attachmentParts: DesktopAttachmentSessionPart[]
   timestamp: number
-  userActions?: { canEdit: boolean; onEdit: (document: ComposerDocument) => void }
+  userActions?: UserMessageActions
 }): React.JSX.Element {
-  const [editing, setEditing] = useState(false)
+  const [localEditing, setLocalEditing] = useState(false)
+  const editing = userActions?.editing ?? localEditing
+  const setEditing = userActions?.onEditingChange ?? setLocalEditing
   useRetainTranscriptRow(editing)
   const [draft, setDraft] = useState(document)
   const canEdit = Boolean(userActions?.canEdit && (content.trim() || attachmentParts.length > 0))
@@ -142,7 +151,10 @@ function UserMessageBlock({
                 size="sm"
                 shape="pill"
                 aria-label="取消编辑"
-                onClick={() => setEditing(false)}
+                onClick={() => {
+                  setDraft(document)
+                  setEditing(false)
+                }}
               >
                 取消
               </Button>

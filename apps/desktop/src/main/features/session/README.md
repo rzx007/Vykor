@@ -17,3 +17,5 @@
 新增会话或项目动作放在 `session-operations.ts` 或其对应职责的辅助文件，服务入口负责获取 client 和转交输入。连接缓存、重建与关闭逻辑保留在连接服务中，不在操作类保存临时 client。
 
 新测试放在 `__test__/`；已有测试可就地补充。`__test__/session-branch-client.test.ts` 暂停 Git 步骤，验证交错的分支调用和迟到连接各自返回所属 client 的项目详情。现有 `session-operations-worktree.test.ts`、`session-service*.test.ts` 和 `daemon-connection-service.lifecycle.test.ts` 覆盖工作目录补偿、输入转交、切换失败恢复和安全关闭。
+
+`session-service.ts` 的 `checkPromptAccepted` 只读取 daemon 的会话输入记录，返回指定输入 ID 是否已被接收；不打开订阅、不创建或重跑任务。renderer 在失败重试前调用对应 IPC，读取失败不能被解释为“未接收”。
