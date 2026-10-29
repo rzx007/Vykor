@@ -127,7 +127,7 @@ describe("composer picker keyboard navigation", () => {
     expect(trigger.title).toContain("低")
   })
 
-  it("shows and selects an unknown effort tier with its fallback description", async () => {
+  it("shows and selects an unknown effort tier", async () => {
     const onSelect = vi.fn()
     await act(async () =>
       root.render(
@@ -142,7 +142,6 @@ describe("composer picker keyboard navigation", () => {
     )
     const option = document.body.querySelectorAll<HTMLElement>('[role="menuitemradio"]')[1]!
     expect(button("推理强度", container).title).toContain("constructor")
-    expect(option.textContent).toContain("使用此模型提供的分析档位。")
     await click(option)
     expect(onSelect).toHaveBeenCalledExactlyOnceWith("constructor")
   })

@@ -17,18 +17,6 @@ const EFFORT_LABELS: Record<string, string> = {
   default: "默认",
 }
 
-const EFFORT_DESCRIPTIONS: Record<string, string> = {
-  default: "由模型提供商决定分析程度。",
-  none: "不启用额外推理。",
-  minimal: "尽量减少额外分析，通常更快。",
-  low: "较少分析，适合简单任务。",
-  medium: "平衡分析程度与响应时间。",
-  high: "更充分地分析，可能等待更久。",
-  xhigh: "深入分析复杂问题，可能等待更久。",
-  max: "尽可能深入分析，可能等待更久。",
-  ultra: "尽可能深入分析，可能等待更久。",
-}
-
 export function effortLabel(value: string): string {
   return Object.hasOwn(EFFORT_LABELS, value) ? EFFORT_LABELS[value] : value
 }
@@ -91,38 +79,15 @@ export function EffortPicker({
         side="top"
         align="end"
         sideOffset={8}
-        className="w-64 gap-0 rounded-xl p-1.5 shadow-lg ring-1 ring-black/10"
+        className="w-44 gap-0 rounded-xl p-1.5 shadow-lg ring-1 ring-black/10"
       >
-        <PickerMenuItem
-          selected={!value || !tiers.includes(value)}
-          onClick={() => onSelect("")}
-          className="h-auto min-h-8 items-start"
-        >
-          <span className="min-w-0 flex-1">
-            <span className="block">默认</span>
-            <span className="text-ui-caption mt-0.5 block text-muted-foreground">
-              {EFFORT_DESCRIPTIONS.default}
-            </span>
-          </span>
+        <PickerMenuItem selected={!value || !tiers.includes(value)} onClick={() => onSelect("")}>
+          <span>默认</span>
         </PickerMenuItem>
         {tiers.map((tier) => (
-          <PickerMenuItem
-            key={tier}
-            selected={value === tier}
-            onClick={() => onSelect(tier)}
-            className="h-auto min-h-8 items-start"
-          >
-            <span className="min-w-0 flex-1">
-              <span className="flex items-center justify-between gap-2">
-                <span>{effortLabel(tier)}</span>
-                <span className="text-ui-caption text-muted-foreground">{tier}</span>
-              </span>
-              <span className="text-ui-caption mt-0.5 block text-muted-foreground">
-                {Object.hasOwn(EFFORT_DESCRIPTIONS, tier)
-                  ? EFFORT_DESCRIPTIONS[tier]
-                  : "使用此模型提供的分析档位。"}
-              </span>
-            </span>
+          <PickerMenuItem key={tier} selected={value === tier} onClick={() => onSelect(tier)}>
+            <span className="min-w-0 flex-1 truncate">{effortLabel(tier)}</span>
+            <span className="text-ui-caption ml-auto text-muted-foreground">{tier}</span>
           </PickerMenuItem>
         ))}
       </PopoverContent>

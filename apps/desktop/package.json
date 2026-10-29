@@ -1,7 +1,7 @@
 {
   "name": "@vykor/desktop",
   "private": true,
-  "version": "1.2.24",
+  "version": "1.2.25",
   "description": "Vykor desktop application",
   "main": "./out/main/index.js",
   "author": "Vykor",
