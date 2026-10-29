@@ -114,7 +114,7 @@ export function Composer({
   rows?: number
   canSubmit?: boolean
   contextUsage?: DesktopContextUsageSnapshot | null
-  onOpenContextUsage?: () => void
+  onOpenContextUsage?: () => void | Promise<boolean | void>
   onDraftChange: (value: ComposerDocument) => void
   onSubmit: () => void
   onCommand?: (command: ComposerPickerCommand) => Promise<void>

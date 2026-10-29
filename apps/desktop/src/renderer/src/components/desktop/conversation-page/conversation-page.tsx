@@ -687,7 +687,7 @@ function ConversationPane({
             }}
             onTogglePanel={onTogglePanel}
             contextUsage={contextUsageSnapshot}
-            onOpenContextUsage={() => void refreshContextUsage({ refresh: true })}
+            onOpenContextUsage={() => refreshContextUsage({ refresh: true })}
           />
         ) : (
           <>
@@ -926,7 +926,7 @@ function ConversationPane({
                     void removeAttachment(composerScope, draftId)
                   }}
                   onInterrupt={() => void interrupt()}
-                  onOpenContextUsage={() => void refreshContextUsage({ refresh: true })}
+                  onOpenContextUsage={() => refreshContextUsage({ refresh: true })}
                   onSelectModel={(model) => {
                     if (activeSessionId) void updateSessionModel(activeSessionId, model)
                   }}

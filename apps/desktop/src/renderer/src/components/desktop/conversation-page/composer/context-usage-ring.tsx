@@ -1,4 +1,4 @@
-import { forwardRef } from "react"
+import { forwardRef, type ComponentProps } from "react"
 
 import { Button } from "@renderer/components/ui/button"
 import { cn } from "@renderer/lib/utils"
@@ -12,12 +12,10 @@ import {
 
 export const ContextUsageRing = forwardRef<
   HTMLButtonElement,
-  {
+  ComponentProps<typeof Button> & {
     snapshot: DesktopContextUsageSnapshot | null
-    className?: string
-    onClick?: () => void
   }
->(function ContextUsageRing({ snapshot, className, onClick }, ref) {
+>(function ContextUsageRing({ snapshot, className, ...buttonProps }, ref) {
   const percentFull = snapshot?.percentFull ?? null
   const overflow = percentFull != null && percentFull > 1
   const percentLabel = formatContextPercentLabel(percentFull)
@@ -55,8 +53,7 @@ export const ContextUsageRing = forwardRef<
         })
       : null
 
-  const aria =
-    percentLabel != null ? `上下文占用 ${percentLabel}` : "上下文占用"
+  const aria = percentLabel != null ? `上下文占用 ${percentLabel}` : "上下文占用"
 
   return (
     <Button
@@ -66,7 +63,7 @@ export const ContextUsageRing = forwardRef<
       size="icon"
       aria-label={aria}
       title={aria}
-      onClick={onClick}
+      {...buttonProps}
       className={cn(
         "text-muted-foreground",
         overflow && "text-destructive hover:text-destructive",

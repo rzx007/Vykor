@@ -47,6 +47,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
   let primaryNavigationGeneration = 0
   let defaultSettingsGeneration = 0
   let contextUsageGeneration = 0
+  let latestContextUsageRequest: Promise<boolean | void> | undefined
   const runtimeConfigGeneration = new Map<string, number>()
   const pluginSelectionGeneration = new Map<string, number>()
   const nextRuntimeConfigGeneration = (sessionId: string): number => {
@@ -565,34 +566,41 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
       openPrimarySession,
     }),
 
-    async refreshContextUsage(options) {
+    refreshContextUsage(options) {
       const generation = ++contextUsageGeneration
       const state = get()
       const cwd =
         state.sessionView?.session.cwd ??
         state.selectedProject?.path ??
         state.outsideProjectWorkspaceRoot
-      if (!cwd) return
       const sessionId = state.activeSessionId ?? undefined
-      try {
-        if (typeof window.desktop.sessions.getContextUsage !== "function") return
-        const snapshot = await window.desktop.sessions.getContextUsage({
-          cwd,
-          ...(sessionId ? { sessionId } : {}),
-          ...(options?.refresh !== undefined ? { refresh: options.refresh } : {}),
-          ...(options?.previousContextWindow !== undefined
-            ? { previousContextWindow: options.previousContextWindow }
-            : {}),
-        })
-        const parsed = parseDesktopContextUsageSnapshot(snapshot)
-        // Ignore stale responses if the active session changed mid-flight.
-        const latest = get()
-        if (generation !== contextUsageGeneration) return
-        if ((latest.activeSessionId ?? undefined) !== sessionId) return
-        if (parsed) set({ contextUsageSnapshot: parsed })
-      } catch {
-        // 环保留上次成功快照；不阻断 composer。
-      }
+      const request = (async (): Promise<boolean | void> => {
+        let parsed: ReturnType<typeof parseDesktopContextUsageSnapshot> = null
+        try {
+          if (cwd && typeof window.desktop.sessions.getContextUsage === "function") {
+            parsed = parseDesktopContextUsageSnapshot(
+              await window.desktop.sessions.getContextUsage({
+                cwd,
+                ...(sessionId ? { sessionId } : {}),
+                ...(options?.refresh !== undefined ? { refresh: options.refresh } : {}),
+                ...(options?.previousContextWindow !== undefined
+                  ? { previousContextWindow: options.previousContextWindow }
+                  : {}),
+              })
+            )
+          }
+        } catch {
+          // 保留上次成功快照，由显式打开面板的调用方显示失败。
+        }
+        if ((get().activeSessionId ?? undefined) !== sessionId) return
+        // 后台刷新接替了同会话读取时，让面板等待最新结果，不能提前结束加载。
+        if (generation !== contextUsageGeneration) return latestContextUsageRequest
+        if (!parsed) return false
+        set({ contextUsageSnapshot: parsed })
+        return true
+      })()
+      latestContextUsageRequest = request
+      return request
     },
   }
 
