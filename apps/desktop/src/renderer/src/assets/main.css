@@ -92,13 +92,14 @@
 }
 
 .assistant-markdown[data-stream-initial="true"] [data-sd-animate],
+:root[data-streaming-text-animation="false"] [data-sd-animate],
 :root[data-reduced-motion="true"] [data-sd-animate],
 :root[data-reduced-motion="true"] [data-content-enter] {
   animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-sd-animate],
+  :root:not([data-reduced-motion="false"]) [data-sd-animate],
   [data-content-enter] {
     animation: none;
   }

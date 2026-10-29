@@ -2,6 +2,8 @@
 
 此目录负责主题、颜色、字体、字号、减少动态效果和窗口材质偏好。外观设置入口为 `appearance-settings.tsx`，应用根部通过 `appearance-provider.tsx` 读取并应用设置。
 
+「动效」中的「Agent 逐字输出动画」默认开启，保存后立即影响新增回复文字；减少动态效果优先，暂停动画但保留开关选择。消息通过 `useStreamingTextAnimation` 读取生效值，关闭时停止创建逐字动画节点。长回复不再按正文长度关闭动画，而是限制每条回复最多 512 个活动字符，淡入结束后回收节点；正文超过 4096 字符仍沿用合并刷新，不额外延迟真实输出。
+
 - `appearance-preferences.ts` 定义默认值并校验已保存的数据；偏好保存在当前窗口的 `localStorage`，键名为 `vykor-desktop-appearance-v1`。
 - `appearance-fonts.ts` 定义字体选项和后备顺序，检测固定本地字体是否可用；缺少已选本地字体时回到随应用携带的字体。
 - `appearance-provider.tsx` 把偏好写入根元素的 CSS 变量。正文读取 `--font-sans`，代码读取 `--font-mono`；终端和插件页面复用这些变量。

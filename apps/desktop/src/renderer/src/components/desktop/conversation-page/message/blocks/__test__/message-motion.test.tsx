@@ -6,6 +6,11 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import type { DesktopSessionPart } from "@shared/session-types"
 import { AssistantMessage } from "../assistant-message"
 import { ContentEntrance } from "../content-entrance"
+import {
+  AppearanceProvider,
+  useAppearance,
+} from "@renderer/components/appearance/appearance-provider"
+import { APPEARANCE_STORAGE_KEY } from "@renderer/components/appearance/appearance-preferences"
 
 let container: HTMLDivElement
 let root: Root
@@ -105,13 +110,10 @@ it("keeps a restored streaming prefix settled while revealing only appended text
   await renderReply("已经显示新增", true, initialPartIds)
   expect(container.querySelector('[data-stream-initial="true"]')).toBeNull()
   const spans = [...container.querySelectorAll<HTMLElement>("[data-sd-animate]")]
-  expect(
-    spans.slice(0, 4).every((span) => span.style.getPropertyValue("--sd-duration") === "0ms")
-  ).toBe(true)
-  expect(spans.slice(4).map((span) => span.textContent)).toEqual(["新", "增"])
-  expect(
-    spans.slice(4).every((span) => parseFloat(span.style.getPropertyValue("--sd-duration")) > 0)
-  ).toBe(true)
+  expect(spans.map((span) => span.textContent)).toEqual(["新", "增"])
+  expect(spans.every((span) => parseFloat(span.style.getPropertyValue("--sd-duration")) > 0)).toBe(
+    true
+  )
 })
 
 it("does not animate completed history", async () => {
@@ -120,21 +122,73 @@ it("does not animate completed history", async () => {
   expect(container.textContent).toContain("历史正文")
 })
 
+it("applies the saved animation switch immediately and lets reduced motion override it", async () => {
+  localStorage.setItem(
+    APPEARANCE_STORAGE_KEY,
+    JSON.stringify({ version: 1, reducedMotion: "off", streamingTextAnimation: true })
+  )
+  function Controls() {
+    const { setPreference } = useAppearance()
+    return (
+      <>
+        <button onClick={() => setPreference("streamingTextAnimation", false)}>关闭逐字动画</button>
+        <button onClick={() => setPreference("streamingTextAnimation", true)}>开启逐字动画</button>
+        <button onClick={() => setPreference("reducedMotion", "on")}>减少动态效果</button>
+      </>
+    )
+  }
+  const render = async (text: string) =>
+    act(async () =>
+      root.render(
+        <AppearanceProvider>
+          <Controls />
+          <AssistantMessage
+            {...callbacks}
+            parts={[part(text)]}
+            streaming
+            initialPartIds={new Set()}
+          />
+        </AppearanceProvider>
+      )
+    )
+  try {
+    await render("正在输出")
+    expect(container.querySelector("[data-sd-animate]")).not.toBeNull()
+    await act(async () => (container.querySelector("button") as HTMLButtonElement).click())
+    await render("正在输出新的文字")
+    expect(container.querySelector("[data-sd-animate]")).toBeNull()
+    expect(JSON.parse(localStorage.getItem(APPEARANCE_STORAGE_KEY)!).streamingTextAnimation).toBe(
+      false
+    )
+    await act(async () => (container.querySelectorAll("button")[1] as HTMLButtonElement).click())
+    await act(async () => (container.querySelectorAll("button")[2] as HTMLButtonElement).click())
+    await render("正在输出新的文字，减少动态效果优先")
+    expect(container.querySelector("[data-sd-animate]")).toBeNull()
+    expect(JSON.parse(localStorage.getItem(APPEARANCE_STORAGE_KEY)!).streamingTextAnimation).toBe(
+      true
+    )
+  } finally {
+    localStorage.removeItem(APPEARANCE_STORAGE_KEY)
+  }
+})
+
 it("keeps character animation for long streaming replies and preserves appended Markdown", async () => {
+  vi.useFakeTimers()
   await renderReply("简短开头", true)
   expect(container.querySelector("[data-sd-animate]")).not.toBeNull()
 
-  const longText = "长正文内容。".repeat(400)
-  await renderReply(`${longText}\n\n1. 普通列表文字与 \`inlineCode\``, true)
+  const longText = "简短开头" + "长正文内容。".repeat(400)
+  const markdown = `${longText}\n\n1. 普通列表文字与 \`inlineCode\``
+  await renderReply(markdown, true)
   expect(container.querySelector("[data-sd-animate]")).not.toBeNull()
   expect(container.textContent).toContain(longText)
   expect(container.querySelector("li")?.textContent).toContain("普通列表文字")
   expect(container.querySelector("code")?.textContent).toBe("inlineCode")
 
-  await renderReply(`${longText}\n\n后续内容`, true)
+  await renderReply(`${markdown}\n\n后续内容`, true)
   expect(container.querySelector("[data-sd-animate]")).not.toBeNull()
   expect(container.textContent).toContain("后续内容")
-  await renderReply(`${longText}\n\n最终内容`, false)
+  await renderReply(`${markdown}\n\n后续内容\n\n最终内容`, false)
   expect(container.querySelector("[data-sd-animate]")).toBeNull()
   expect(container.textContent).toContain("最终内容")
 })

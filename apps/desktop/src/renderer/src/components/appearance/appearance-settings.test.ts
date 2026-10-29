@@ -93,6 +93,16 @@ describe("AppearanceSettings", () => {
     expect(setPreference).toHaveBeenCalledWith("accent", { kind: "preset", id: "blue" })
   })
 
+  it("lets the user turn off Agent streaming text animation", async () => {
+    await renderSettings()
+    const toggle = container.querySelector<HTMLButtonElement>(
+      '[role="switch"][aria-label="Agent 逐字输出动画"]'
+    )
+    expect(toggle).not.toBeNull()
+    act(() => toggle?.click())
+    expect(setPreference).toHaveBeenCalledWith("streamingTextAnimation", false)
+  })
+
   it("keeps incomplete custom color text and commits only a complete HEX value", async () => {
     await renderSettings()
     const input = container.querySelector<HTMLInputElement>('[aria-label="自定义强调色"]')

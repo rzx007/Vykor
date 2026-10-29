@@ -1,18 +1,13 @@
 import { memo, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { Streamdown } from "streamdown"
+import { useStreamingTextAnimation } from "@renderer/components/appearance/appearance-provider"
 import { createStreamdownComponents } from "./streamdown-components"
 import { streamdownPlugins, streamdownRehypePlugins } from "./streamdown-plugins"
 import { createIncrementalMarkdownParser } from "./incremental-markdown"
-import { longMarkdownCharacters, useStreamingMarkdown } from "./use-streaming-markdown"
+import { useStreamingMarkdown } from "./use-streaming-markdown"
+import { TextAnimationPool } from "./streaming-text-animation"
+import { StreamingMarkdownAnimation, StreamingMarkdownBlock } from "./streaming-markdown-block"
 import { CodeFenceActivityContext, createCodeFenceActivity } from "../activity/code-fence-activity"
-
-const streamingTextAnimation = {
-  animation: "fadeIn",
-  duration: 150,
-  easing: "ease-out",
-  sep: "char",
-  stagger: 0,
-} as const
 
 // 行首（最多缩进三个空格）的三反引号或三波浪号表示代码围栏。
 const codeFence = /(?:^|\n)[ \t]{0,3}(?:`{3,}|~{3,})/
@@ -32,6 +27,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
   onOpenFile: (path: string, line?: number) => void
   fileLinkMode?: "open" | "text"
 }): React.JSX.Element {
+  const textAnimationEnabled = useStreamingTextAnimation()
   const openFileRef = useRef(onOpenFile)
   useLayoutEffect(() => {
     openFileRef.current = onOpenFile
@@ -53,13 +49,21 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
     codeActivity.getSnapshot
   )
   const rendered = useStreamingMarkdown(text, streaming, liveCode)
-  const [parseBlocks] = useState(createIncrementalMarkdownParser)
+  const [animationPool] = useState(() => new TextAnimationPool())
+  const [parseBlocks] = useState(() => {
+    const parse = createIncrementalMarkdownParser()
+    return (source: string) => {
+      const blocks = parse(source)
+      animationPool.lastBlockIndex = blocks.length - 1
+      animationPool.initialBlocks ??= animateInitialText ? 0 : blocks.length
+      return blocks
+    }
+  })
   // 让 Streamdown 记住已有文字，重新打开进行中的回复时不重播历史。
   const [initialText] = useState(() => (animateInitialText ? "" : text))
   // streaming/static 是两棵不同的组件树。完成或恢复时保留已经显示的块和后台颜色。
   const [hasStreamed, setHasStreamed] = useState(streaming)
   if (streaming && !hasStreamed) setHasStreamed(true)
-  const animated = streaming && rendered.text.length <= longMarkdownCharacters
   // 可能含引用定义/脚注时保守沿用全文路径，避免自行识别嵌套、跨行等 Markdown 语法。
   // 只在完成时检查，流式 token 不重复扫描全文。
   const fullDocument = !streaming && hasStreamed && rendered.text.includes("]:")
@@ -75,24 +79,31 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
       data-phase={phase}
       data-stream-initial={streaming && rendered.text === initialText ? "true" : undefined}
     >
-      <CodeFenceActivityContext value={codeActivity}>
-        <Streamdown
-          key={rendered.revision}
-          className="desktop-streamdown space-y-0"
-          animated={animated ? streamingTextAnimation : false}
-          isAnimating={streaming}
-          mode={keepStreamingTree ? "streaming" : "static"}
-          controls
-          lineNumbers={false}
-          parseIncompleteMarkdown={streaming}
-          parseMarkdownIntoBlocksFn={parseBlocks}
-          plugins={streamdownPlugins}
-          rehypePlugins={streamdownRehypePlugins}
-          components={components}
-        >
-          {rendered.text}
-        </Streamdown>
-      </CodeFenceActivityContext>
+      <StreamingMarkdownAnimation
+        pool={animationPool}
+        corrected={rendered.revision > 0}
+        enabled={streaming && textAnimationEnabled}
+      >
+        <CodeFenceActivityContext value={codeActivity}>
+          <Streamdown
+            key={rendered.revision}
+            className="desktop-streamdown space-y-0"
+            animated={false}
+            BlockComponent={StreamingMarkdownBlock}
+            isAnimating={streaming}
+            mode={keepStreamingTree ? "streaming" : "static"}
+            controls
+            lineNumbers={false}
+            parseIncompleteMarkdown={streaming}
+            parseMarkdownIntoBlocksFn={parseBlocks}
+            plugins={streamdownPlugins}
+            rehypePlugins={streamdownRehypePlugins}
+            components={components}
+          >
+            {rendered.text}
+          </Streamdown>
+        </CodeFenceActivityContext>
+      </StreamingMarkdownAnimation>
     </div>
   )
 })

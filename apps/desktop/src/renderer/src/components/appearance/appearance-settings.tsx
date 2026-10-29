@@ -366,7 +366,18 @@ export function AppearanceSettings(): React.JSX.Element {
       </AppearanceSection>
 
       <AppearanceSection title="动效">
-        <Button variant="ghost" className="self-end" onClick={() => setPreference("reducedMotion", DEFAULT_APPEARANCE_PREFERENCES.reducedMotion)}>恢复默认动效</Button>
+        <Button
+          variant="ghost"
+          className="self-end"
+          onClick={() =>
+            patchPreferences({
+              reducedMotion: DEFAULT_APPEARANCE_PREFERENCES.reducedMotion,
+              streamingTextAnimation: DEFAULT_APPEARANCE_PREFERENCES.streamingTextAnimation,
+            })
+          }
+        >
+          恢复默认动效
+        </Button>
         <FieldGroup>
           <Field orientation="responsive">
             <FieldContent>
@@ -389,6 +400,18 @@ export function AppearanceSettings(): React.JSX.Element {
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
+          </Field>
+          <Field orientation="horizontal">
+            <FieldContent>
+              <FieldLabel htmlFor="streaming-text-animation">Agent 逐字输出动画</FieldLabel>
+              <FieldDescription>新文字逐字淡入；开启减少动态效果时暂停，长回复保留性能保护。</FieldDescription>
+            </FieldContent>
+            <Switch
+              id="streaming-text-animation"
+              aria-label="Agent 逐字输出动画"
+              checked={preferences.streamingTextAnimation}
+              onCheckedChange={(checked) => setPreference("streamingTextAnimation", checked)}
+            />
           </Field>
         </FieldGroup>
       </AppearanceSection>

@@ -7,6 +7,17 @@ import {
 } from "./appearance-preferences"
 
 describe("appearance preferences", () => {
+  it("remembers the streaming text animation switch and defaults older settings to enabled", () => {
+    expect(parseAppearancePreferences('{"version":1}').streamingTextAnimation).toBe(true)
+    expect(
+      parseAppearancePreferences('{"version":1,"streamingTextAnimation":false}')
+        .streamingTextAnimation
+    ).toBe(false)
+    expect(
+      parseAppearancePreferences('{"version":1,"streamingTextAnimation":"false"}')
+        .streamingTextAnimation
+    ).toBe(true)
+  })
   it("restores per-mode colors independently and normalizes valid values", () => {
     const parsed = parseAppearancePreferences(
       JSON.stringify({
@@ -47,39 +58,44 @@ describe("appearance preferences", () => {
       codeFontSize: 14,
       reducedMotion: "system",
       glassStrength: 35,
+      streamingTextAnimation: true,
     })
   })
 
-  it.each(["system", "geist-mono", "cascadia-code", "cascadia-mono", "consolas"] as const)("restores the saved %s code font from version 1 JSON", (codeFont) => {
-    expect(
-      parseAppearancePreferences(
-        JSON.stringify({
-          version: 1,
-          theme: "dark",
-          accent: { kind: "custom", value: "#0a6aff" },
-          uiFont: "inter",
-          codeFont,
-          uiFontSize: 16,
-          codeFontSize: 15,
-          reducedMotion: "on",
-        })
-      )
-    ).toEqual({
-      version: 1,
-      theme: "dark",
-      accent: { kind: "custom", value: "#0A6AFF" },
-      colors: {
-        light: { background: null, foreground: null },
-        dark: { background: null, foreground: null },
-      },
-      uiFont: "inter",
-      codeFont,
-      uiFontSize: 16,
-      codeFontSize: 15,
-      reducedMotion: "on",
-      glassStrength: 35,
-    })
-  })
+  it.each(["system", "geist-mono", "cascadia-code", "cascadia-mono", "consolas"] as const)(
+    "restores the saved %s code font from version 1 JSON",
+    (codeFont) => {
+      expect(
+        parseAppearancePreferences(
+          JSON.stringify({
+            version: 1,
+            theme: "dark",
+            accent: { kind: "custom", value: "#0a6aff" },
+            uiFont: "inter",
+            codeFont,
+            uiFontSize: 16,
+            codeFontSize: 15,
+            reducedMotion: "on",
+          })
+        )
+      ).toEqual({
+        version: 1,
+        theme: "dark",
+        accent: { kind: "custom", value: "#0A6AFF" },
+        colors: {
+          light: { background: null, foreground: null },
+          dark: { background: null, foreground: null },
+        },
+        uiFont: "inter",
+        codeFont,
+        uiFontSize: 16,
+        codeFontSize: 15,
+        reducedMotion: "on",
+        glassStrength: 35,
+        streamingTextAnimation: true,
+      })
+    }
+  )
 
   it("recovers invalid fields independently without discarding valid fields", () => {
     expect(
@@ -109,6 +125,7 @@ describe("appearance preferences", () => {
       codeFontSize: 14,
       reducedMotion: "system",
       glassStrength: 35,
+      streamingTextAnimation: true,
     })
   })
 
@@ -129,6 +146,7 @@ describe("appearance preferences", () => {
     expect(parseAppearancePreferences('{"version":1,"theme":"dark"}')).toMatchObject({
       theme: "dark",
       glassStrength: 35,
+      streamingTextAnimation: true,
     })
     expect(parseAppearancePreferences('{"version":1,"glassStrength":999}')).toMatchObject({
       glassStrength: 100,
@@ -138,6 +156,7 @@ describe("appearance preferences", () => {
     })
     expect(parseAppearancePreferences('{"version":1,"glassStrength":"80"}')).toMatchObject({
       glassStrength: 35,
+      streamingTextAnimation: true,
     })
   })
 

@@ -24,6 +24,7 @@ export type AppearancePreferences = {
   uiFontSize: number
   codeFontSize: number
   reducedMotion: ReducedMotionPreference
+  streamingTextAnimation: boolean
   glassStrength: number
 }
 
@@ -40,13 +41,20 @@ export const DEFAULT_APPEARANCE_PREFERENCES: AppearancePreferences = {
   uiFontSize: 14,
   codeFontSize: 14,
   reducedMotion: "system",
+  streamingTextAnimation: true,
   glassStrength: 35,
 }
 
 const THEMES = new Set<AppearanceTheme>(["system", "light", "dark"])
 const ACCENT_PRESETS = new Set<AccentPresetId>(["neutral", "blue", "violet", "terracotta", "green"])
 const UI_FONTS = new Set<UiFontId>(["system", "segoe-ui", "inter"])
-const CODE_FONTS = new Set<CodeFontId>(["system", "cascadia-code", "cascadia-mono", "geist-mono", "consolas"])
+const CODE_FONTS = new Set<CodeFontId>([
+  "system",
+  "cascadia-code",
+  "cascadia-mono",
+  "geist-mono",
+  "consolas",
+])
 const REDUCED_MOTION_VALUES = new Set<ReducedMotionPreference>(["system", "on", "off"])
 
 function createDefaultPreferences(): AppearancePreferences {
@@ -163,5 +171,9 @@ export function parseAppearancePreferences(raw: string | null): AppearancePrefer
     reducedMotion: isSetMember(REDUCED_MOTION_VALUES, value.reducedMotion)
       ? value.reducedMotion
       : defaults.reducedMotion,
+    streamingTextAnimation:
+      typeof value.streamingTextAnimation === "boolean"
+        ? value.streamingTextAnimation
+        : defaults.streamingTextAnimation,
   }
 }

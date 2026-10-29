@@ -99,6 +99,7 @@ function applyAppearanceToRoot(
   root.classList.remove("light", "dark")
   root.classList.add(resolvedTheme)
   root.dataset.reducedMotion = String(resolvedReducedMotion)
+  root.dataset.streamingTextAnimation = String(preferences.streamingTextAnimation)
   root.style.setProperty(
     "--window-glass-strength",
     `${preferences.glassStrength ?? DEFAULT_APPEARANCE_PREFERENCES.glassStrength}%`
@@ -164,7 +165,12 @@ export function AppearanceProvider({ children }: { children: ReactNode }): React
   )
 
   const patchPreferences = useCallback<AppearanceContextValue["patchPreferences"]>(
-    (patch) => persistPreferences(parseAppearancePreferences(JSON.stringify({ ...preferencesRef.current, ...patch, version: 1 }))),
+    (patch) =>
+      persistPreferences(
+        parseAppearancePreferences(
+          JSON.stringify({ ...preferencesRef.current, ...patch, version: 1 })
+        )
+      ),
     [persistPreferences]
   )
 
@@ -333,4 +339,13 @@ export function useAppearance(): AppearanceContextValue {
     throw new Error("useAppearance must be used within AppearanceProvider")
   }
   return context
+}
+
+/** 独立消息预览没有外观 Provider 时沿用默认值。 */
+export function useStreamingTextAnimation(): boolean {
+  const appearance = useContext(AppearanceContext)
+  return (
+    (appearance?.preferences.streamingTextAnimation ?? true) &&
+    !(appearance?.resolvedReducedMotion ?? false)
+  )
 }
