@@ -68,6 +68,7 @@ export function LoadingState({
   speed,
   paused = false,
   showElapsed = true,
+  showIndicator = true,
   className,
 }: {
   label?: string
@@ -79,6 +80,8 @@ export function LoadingState({
   /** freeze the orb on its current frame */
   paused?: boolean
   showElapsed?: boolean
+  /** 已结束的内联摘要只保留文字，不创建画布。 */
+  showIndicator?: boolean
   className?: string
 }) {
   const elapsed = useElapsed(showElapsed)
@@ -89,36 +92,43 @@ export function LoadingState({
 
   const indicator = (
     <>
-      <ThinkingOrb
-        state={state}
-        size={size}
-        speed={speed}
-        paused={frozen}
-        aria-hidden
-        data-orb-state={state}
-        data-orb-paused={String(frozen)}
-        className="shrink-0"
-      />
+      {showIndicator ? (
+        <ThinkingOrb
+          state={state}
+          size={size}
+          speed={speed}
+          paused={frozen}
+          aria-hidden
+          data-orb-state={state}
+          data-orb-paused={String(frozen)}
+          className="shrink-0"
+        />
+      ) : null}
       {label ? (
-        <span className="shimmer text-[13px] font-medium text-muted-foreground">{label}</span>
+        <span className={cn("min-w-0 truncate text-muted-foreground", !paused && "shimmer")}>
+          {label}
+        </span>
       ) : null}
     </>
   )
 
   return (
-    <div
+    <span
       role="status"
       aria-label={label || undefined}
-      className={cn("flex w-fit items-center gap-2.5", className)}
+      className={cn(
+        "flex w-fit max-w-full min-w-0 items-center gap-2.5 text-[13px] font-medium",
+        className
+      )}
     >
-      <span aria-hidden className="inline-grid items-center">
+      <span aria-hidden className="inline-grid max-w-full min-w-0 items-center">
         {reducedMotion ? (
-          <span className="inline-flex items-center gap-2.5">{indicator}</span>
+          <span className="inline-flex min-w-0 items-center gap-2.5">{indicator}</span>
         ) : (
           <AnimatePresence initial={false}>
             <motion.span
               key={`${state}:${label}`}
-              className="col-start-1 row-start-1 inline-flex items-center gap-2.5"
+              className="col-start-1 row-start-1 inline-flex min-w-0 items-center gap-2.5"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -130,11 +140,11 @@ export function LoadingState({
         )}
       </span>
       {showElapsed ? (
-        <span className="font-mono text-[12px] text-muted-foreground/70 tabular-nums">
+        <span className="font-mono text-[12px] font-normal text-muted-foreground/70 tabular-nums">
           {elapsed}
         </span>
       ) : null}
-    </div>
+    </span>
   )
 }
 
