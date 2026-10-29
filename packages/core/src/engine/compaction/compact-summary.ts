@@ -1,4 +1,4 @@
-import type { Message } from "@vykor/agent-contracts";
+import { isContextLengthExceededMessage, ModelRequestFailure, type Message } from "@vykor/agent-contracts";
 import type { CompactClient } from "./compact-types";
 import { isTextBlock, toolFactsText } from "./compact-messages";
 import { COMPACT_PROMPT } from "./compact-prompt";
@@ -11,34 +11,19 @@ import { COMPACT_PROMPT } from "./compact-prompt";
 // 错误分类：识别 llama.cpp / OpenAI 兼容接口的「上下文溢出」类错误
 // ---------------------------------------------------------------------------
 
-/** 错误消息中常见的「prompt 过长 / context 超限」关键词（小写匹配）。 */
-const PTL_NEEDLES = [
-  "prompt too long",
-  "context_length_exceeded",
-  "context length",
-  "maximum context",
-  "context window",
-  "input tokens exceed",
-  "messages resulted in",
-  "reduce the length of the messages",
-  "configured limit",
-  "too many tokens",
-  "too large for the model",
-  "maximum context length",
-  "exceed_context",
-  "exceeds the available context size",
-  "available context size",
-];
-
 /**
  * 判断错误是否属于 Prompt Too Long（上下文溢出）。
- * 命中后 llmCompact 会对摘要输入做头部截断并重试，而不是直接失败。
+ * 主请求与摘要共用这一窄匹配；有提供商结构化标记时由调用方优先使用。
  */
 export function isPromptTooLongError(err: unknown): boolean {
+  if (err instanceof ModelRequestFailure) {
+    if (err.info.kind !== "invalid_request") return false;
+    if (err.info.contextLengthExceeded !== undefined) return err.info.contextLengthExceeded;
+  }
   const text = String(
     err instanceof Error ? err.message : err,
   ).toLowerCase();
-  return PTL_NEEDLES.some((needle) => text.includes(needle));
+  return isContextLengthExceededMessage(text);
 }
 
 export async function collectSummary(

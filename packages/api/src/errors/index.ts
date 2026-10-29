@@ -1,5 +1,6 @@
 import {
   ModelRequestFailure,
+  isContextLengthExceededMessage,
   type ModelFailureInfo,
   type ModelFailureKind,
 } from "@vykor/agent-contracts";
@@ -201,7 +202,7 @@ function extractStatus(chain: unknown[]): number | undefined {
   return undefined;
 }
 
-function extractCodes(chain: unknown[]): string[] {
+function extractCodes(chain: unknown[], includeTypes = true): string[] {
   const codes: string[] = [];
   for (const item of chain) {
     if (!isRecord(item)) continue;
@@ -209,13 +210,13 @@ function extractCodes(chain: unknown[]): string[] {
     if (direct) codes.push(direct);
     const nestedError = item.error;
     if (isRecord(nestedError)) {
-      for (const value of [nestedError.code, nestedError.type]) {
+      for (const value of includeTypes ? [nestedError.code, nestedError.type] : [nestedError.code]) {
         const nested = readString(value);
         if (nested) codes.push(nested);
       }
     }
     const type = readString(item.type);
-    if (type) codes.push(type);
+    if (includeTypes && type) codes.push(type);
   }
   return codes;
 }
@@ -227,6 +228,19 @@ function extractMessage(chain: unknown[]): string {
   }
   const first = chain[0];
   return first === undefined ? "Model request failed" : String(first);
+}
+
+/** SDK 展示文字可能是整段 JSON；分类时优先读取结构化的实际错误说明。 */
+function extractProviderMessage(chain: unknown[]): string | undefined {
+  for (const item of chain) {
+    let payload = isRecord(item) ? item.error : undefined;
+    for (let depth = 0; depth < 3 && isRecord(payload); depth++) {
+      const message = readString(payload.message);
+      if (message) return message;
+      payload = payload.error;
+    }
+  }
+  return undefined;
 }
 
 function isCertificateError(chain: unknown[]): boolean {
@@ -377,11 +391,19 @@ export function toModelRequestFailure(
   const chain = collectCauseChain(error);
   const classification = classifyChain(chain, now, phase);
   const message = extractMessage(chain);
+  const specificCodes = extractCodes(chain, false).map(code => code.toLowerCase())
+    .filter(code => code !== "invalid_request" && code !== "invalid_request_error");
+  const contextLengthExceeded = classification.kind === "invalid_request"
+    ? specificCodes.length > 0
+      ? specificCodes.includes("context_length_exceeded")
+      : isContextLengthExceededMessage(extractProviderMessage(chain) ?? message) || undefined
+    : undefined;
   const hasDns = extractCodes(chain).some((code) => /EAI_AGAIN|ENOTFOUND/i.test(code));
   const info: ModelFailureInfo = {
     kind: classification.kind,
     phase,
     retryable: classification.retryable,
+    ...(contextLengthExceeded !== undefined ? { contextLengthExceeded } : {}),
     ...(classification.statusCode !== undefined ? { statusCode: classification.statusCode } : {}),
     ...(classification.retryAfterMs !== undefined ? { retryAfterMs: classification.retryAfterMs } : {}),
     ...(classification.requestId ? { requestId: classification.requestId } : {}),

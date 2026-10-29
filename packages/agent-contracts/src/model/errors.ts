@@ -25,6 +25,21 @@ export interface ModelFailureInfo {
   statusCode?: number;
   retryAfterMs?: number;
   requestId?: string;
+  /** 上下文超长分类；false 表示具体错误码已确认是其他错误。未分类时缺省。不是零用量证明。 */
+  contextLengthExceeded?: boolean;
+}
+
+/** 无具体错误码时，只识别实际错误说明开头的上下文溢出，不读取被引用的工具名或字段。 */
+export function isContextLengthExceededMessage(message: string): boolean {
+  const text = message.trim().replace(/^\d{3}(?:\s+|:\s*)/, "");
+  return [
+    /^(?:context_length_exceeded|exceed_context)(?:\s*:.*)?\s*$/i,
+    /^(?:Upstream request failed:\s*)?\[(?:context_length_exceeded|exceed_context)\](?:\s|:|$)/i,
+    /^(?:the\s+)?(?:prompt|input)\s+(?:is\s+)?too\s+long\b/i,
+    /^(?:(?:the\s+)?(?:input|prompt|request|messages?)\s+)?exceed(?:s|ed)?\s+(?:the\s+)?(?:(?:available|maximum|model(?:'s)?)\s+)?context(?:\s+(?:length|window|size))?\b/i,
+    /^(?:(?:the|maximum)\s+)?context (?:length|window|size)\s+(?:limit\s+)?(?:(?:has been|is|was)\s+)?(?:exceeded|overflow(?:ed)?)\b/i,
+    /^(?:This model's\s+)?maximum context length\s+(?:is|of)\s+[\d,]+\s+tokens?\b.{0,120}\b(?:requested|resulted in)\s+[\d,]+/i,
+  ].some(pattern => pattern.test(text));
 }
 
 /**

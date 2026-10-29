@@ -178,7 +178,9 @@ export class CompactService {
   /**
    * 主入口：估算 token，若超过阈值则按阶梯压缩。
    *
-   * 阈值 = maxTokens - outputReserve - AUTOCOMPACT_BUFFER_TOKENS
+   * 阈值 = maxTokens - outputReserve - AUTOCOMPACT_BUFFER_TOKENS - inputTokenOverhead
+   * inputTokenOverhead 是本轮系统提示、工具定义等历史以外的输入估算。
+   * reactive 用于接口已确认超长的请求，即使估算未超阈值也尝试压缩。
    *
    * 流程：
    * 1. 未超阈值 → 原样返回
@@ -190,10 +192,15 @@ export class CompactService {
     messages: Message[],
     trigger: CompactTrigger = "auto",
     signal?: AbortSignal,
+    inputTokenOverhead = 0,
   ): Promise<Message[]> {
     const estimated = this.estimateTokens(messages);
-    const threshold =
-      this.maxTokens - this.outputReserve - AUTOCOMPACT_BUFFER_TOKENS;
+    const inputBudget =
+      this.maxTokens - this.outputReserve - AUTOCOMPACT_BUFFER_TOKENS - inputTokenOverhead;
+    // 接口已确认超长时，不能继续相信本地估算；至少尝试缩小 20%。
+    const threshold = trigger === "reactive"
+      ? Math.min(inputBudget, estimated * 0.8)
+      : inputBudget;
 
     // 空间还够，跳过压缩。
     if (estimated < threshold) return messages;

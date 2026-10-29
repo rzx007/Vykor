@@ -19,8 +19,10 @@ import type { MutableToolRegistry as IToolRegistry } from "@vykor/agent-contract
 import type { ToolContext, ToolDiscovery, ToolDefinition, ToolExecutionResult } from "@vykor/agent-contracts";
 import {
   CompactService,
+  isPromptTooLongError,
   type CompactClient,
   type CompactContextProvider,
+  type CompactTrigger,
 } from "./compaction/compact-service";
 import { CostTracker } from "./usage/cost-tracker";
 import { ModelRequestFailure } from "@vykor/agent-contracts";
@@ -374,15 +376,6 @@ export class QueryEngine implements IQueryEngine {
       if (turnCount >= maxTurnsLimit() && !forceFinalResponse) {
         throw new MaxTurnsExceeded(maxTurnsLimit());
       }
-      this.compactService.setClient(
-        this.createCompactClient(
-          requestConfiguration.client,
-          requestConfiguration.model,
-          options.execution,
-          requestConfiguration.provider,
-          requestConfiguration.maxOutputTokens,
-        ),
-      );
       if (requestConfiguration.contextWindow !== undefined) {
         this.compactService.setContextWindow(
           requestConfiguration.contextWindow,
@@ -393,44 +386,6 @@ export class QueryEngine implements IQueryEngine {
           requestConfiguration.maxOutputTokens,
         );
       }
-      // 自动压缩消息历史以控制上下文长度
-      try {
-        this.compactService.setHookExecutor(
-          options.execution?.profile?.executableHooks === false
-            ? undefined
-            : this.hookExecutor,
-        );
-        this.compactService.setProgressCallback((event) =>
-          options.execution?.emit({
-            type: "domain.event",
-            data: {
-              name: "context_compaction",
-              payload: event as unknown as Record<string, unknown>,
-            },
-          }),
-        );
-        this.messages = await this.compactService.autoCompact(
-          this.messages,
-          "auto",
-          options.signal,
-        );
-      } catch (error) {
-        if (isAgentExecutionLimitError(error) || isModelAttemptControlFailure(error)) throw error;
-        if (options.signal?.aborted) throw options.signal.reason;
-        // compact failure is non-fatal; continue with current messages
-      } finally {
-        this.compactService.setHookExecutor(this.hookExecutor);
-        // Manual compaction after this turn must keep the resolved client/model
-        // without retaining an emitter bound to this run.
-        this.compactService.setClient(
-          this.createCompactClient(
-            requestConfiguration.client,
-            requestConfiguration.model,
-          ),
-        );
-      }
-      this.messages = sanitizeMessageHistory(this.messages);
-
       // Reserve the last request under a frozen child cap for a tool-free
       // partial summary. Do not make an extra request after reaching the cap.
       if (hardMaxTurns !== undefined && turnCount + 1 >= maxTurnsLimit()) {
@@ -497,6 +452,14 @@ export class QueryEngine implements IQueryEngine {
       const system = trajectoryControl.guidance
         ? appendSystemGuidance(recoverySystem, trajectoryControl.guidance)
         : recoverySystem;
+      // 历史以外的输入也占用上下文：使用本轮实际系统提示和可见工具定义。
+      const inputTokenOverhead = this.compactService.estimateTokens([
+        { type: "system", content: system ?? "" },
+        { type: "system", content: tools.length ? JSON.stringify(tools.map(tool => ({
+          name: tool.name, description: tool.description, inputSchema: tool.inputSchema,
+        }))) : "" },
+      ]);
+      await this.compactHistory(requestConfiguration, options, "auto", inputTokenOverhead);
       this.appliedRequestConfiguration = requestConfiguration;
       if (this.options.resolveRequestConfiguration) {
         await options.execution?.emit({
@@ -521,12 +484,13 @@ export class QueryEngine implements IQueryEngine {
       const retryCounters: RetryCounters = { request: 0, stream: 0, total: 0 };
       let recoveryDeadlineAt: number | undefined;
       let attempt = 1;
+      let contextRecoveryAttempted = false;
 
       let assistantText = "";
       let toolUses: ToolUseBlock[] = [];
       let stopReason = "end_turn";
 
-      const request = createTurnRequest({
+      const buildRequest = () => createTurnRequest({
         model: requestConfiguration.model,
         messages: this.messages,
         system,
@@ -535,9 +499,10 @@ export class QueryEngine implements IQueryEngine {
         reasoningEffort: requestConfiguration.reasoningEffort,
         supportsImageInput: requestConfiguration.supportsImageInput,
       });
+      let request = buildRequest();
 
-      // 只把「当前模型调用」包进重试。工具执行、权限请求、压缩和整个 Run
-      // 都在循环之外；每次重试冻结同一份请求参数与已确认输入。
+      // 网络重试冻结请求；接口明确报超长时，仅允许压缩后重建请求一次。
+      // 工具执行和整个 Run 不重跑。
       while (true) {
         yield { type: "generation_started", generationId, attempt };
 
@@ -571,6 +536,18 @@ export class QueryEngine implements IQueryEngine {
           );
 
           if (options.signal?.aborted) throw options.signal.reason;
+          if (!contextRecoveryAttempted && attemptFailed.info.kind === "invalid_request"
+            && isPromptTooLongError(attemptFailed)) {
+            contextRecoveryAttempted = true;
+            const before = this.compactService.estimateTokens(this.messages);
+            await this.compactHistory(requestConfiguration, options, "reactive", inputTokenOverhead);
+            if (this.compactService.estimateTokens(this.messages) < before) {
+              request = buildRequest();
+              attempt++;
+              continue;
+            }
+            throw attemptFailed;
+          }
           if (!attemptFailed.info.retryable) throw attemptFailed;
 
           if (recoveryDeadlineAt === undefined) {
@@ -935,6 +912,43 @@ export class QueryEngine implements IQueryEngine {
       : configuration;
   }
 
+  private async compactHistory(
+    configuration: QueryRequestConfiguration,
+    options: SubmitMessageOptions,
+    trigger: CompactTrigger,
+    inputTokenOverhead: number,
+  ): Promise<void> {
+    this.compactService.setClient(this.createCompactClient(
+      configuration.client, configuration.model, options.execution,
+      configuration.provider, configuration.maxOutputTokens,
+    ));
+    this.compactService.setHookExecutor(
+      options.execution?.profile?.executableHooks === false ? undefined : this.hookExecutor,
+    );
+    this.compactService.setProgressCallback((event) => options.execution?.emit({
+      type: "domain.event",
+      data: { name: "context_compaction", payload: event as unknown as Record<string, unknown> },
+    }));
+    try {
+      this.messages = await this.compactService.autoCompact(
+        this.messages, trigger, options.signal, inputTokenOverhead,
+      );
+    } catch (error) {
+      if (isAgentExecutionLimitError(error) || isModelAttemptControlFailure(error)) throw error;
+      if (options.signal?.aborted) throw options.signal.reason;
+      if (trigger === "reactive") throw error;
+      // 保留自动压缩失败时继续当前请求的既有行为。
+    } finally {
+      this.compactService.setHookExecutor(this.hookExecutor);
+      this.compactService.setProgressCallback(this.options.compactProgressCallback);
+      this.compactService.setClient(this.createCompactClient(
+        configuration.client, configuration.model, undefined,
+        configuration.provider, configuration.maxOutputTokens,
+      ));
+    }
+    this.messages = sanitizeMessageHistory(this.messages);
+  }
+
   /**
    * 每次实际请求恰好结算一次用量：已知快照累加一次，未知/不完整标记保留。
    * 不把适配器每次请求的累计快照重复相加。
@@ -979,6 +993,18 @@ export class QueryEngine implements IQueryEngine {
    * 用于手动调用压缩消息历史，以控制上下文长度
    */
   async compact(): Promise<void> {
+    // 手动维护可能发生在模型或客户端切换后，不能沿用上次运行的摘要配置。
+    const configuration = await this.resolveRequestConfiguration({});
+    if (configuration.contextWindow !== undefined) {
+      this.compactService.setContextWindow(configuration.contextWindow);
+    }
+    if (configuration.maxOutputTokens !== undefined) {
+      this.compactService.setOutputReserve(configuration.maxOutputTokens);
+    }
+    this.compactService.setClient(this.createCompactClient(
+      configuration.client, configuration.model, undefined,
+      configuration.provider, configuration.maxOutputTokens,
+    ));
     const microResult = this.compactService.microCompact(this.messages);
     if (
       this.compactService.estimateTokens(microResult) <
@@ -1034,7 +1060,7 @@ export class QueryEngine implements IQueryEngine {
       modelAttempts: execution?.modelAttempts,
       maxOutputTokens:
         execution?.profile?.maxOutputTokens === undefined
-          ? undefined
+          ? maxOutputTokens
           : Math.min(
               execution.profile.maxOutputTokens,
               maxOutputTokens ?? execution.profile.maxOutputTokens,

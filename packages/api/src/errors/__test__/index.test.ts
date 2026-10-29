@@ -25,6 +25,33 @@ describe("requestFailure", () => {
 describe("toModelRequestFailure", () => {
   const terminated = "Upstream stream terminated unexpectedly before completion";
 
+  it.each(["request", "stream"] as const)("retains a structured context overflow independently of %s message wording", phase => {
+    const failure = toModelRequestFailure({ message: "Request rejected", error: { code: "context_length_exceeded" } }, phase);
+    expect(failure.info).toMatchObject({ kind: "invalid_request", phase, retryable: false, contextLengthExceeded: true });
+  });
+
+  it.each([
+    { message: "Tool schema exceeds configured limit", status: 400 },
+    { message: "Invalid credentials", status: 401, error: { code: "context_length_exceeded" } },
+    { message: "Quota exhausted", error: { code: "context_length_exceeded", type: "insufficient_quota" } },
+  ])("does not grant context recovery for another failure: %j", error => {
+    expect(toModelRequestFailure(error, "request").info).not.toHaveProperty("contextLengthExceeded");
+  });
+
+  it("lets a specific non-context provider code override quoted overflow wording", () => {
+    const failure = toModelRequestFailure({ status: 400, error: {
+      code: "invalid_function_parameters", message: "Invalid schema: In context=('properties', 'input too long'), additionalProperties is required.",
+    } }, "request");
+    expect(failure.info).toMatchObject({ kind: "invalid_request", contextLengthExceeded: false });
+  });
+
+  it("recognizes overflow in the provider message inside an SDK display wrapper", () => {
+    const failure = toModelRequestFailure(Object.assign(new Error('400 {"error":{"message":"prompt is too long: 210000 tokens > 200000 maximum"}}'), {
+      status: 400, error: { type: "invalid_request_error", message: "prompt is too long: 210000 tokens > 200000 maximum" },
+    }), "request");
+    expect(failure.info).toMatchObject({ kind: "invalid_request", contextLengthExceeded: true });
+  });
+
   it("recognizes the upstream termination message only while consuming a stream", () => {
     expect(toModelRequestFailure(new Error(terminated), "stream").info)
       .toMatchObject({ kind: "stream_incomplete", phase: "stream", retryable: true });

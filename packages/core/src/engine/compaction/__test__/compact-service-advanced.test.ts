@@ -7,7 +7,7 @@ import {
 } from "../compact-service.js";
 import type { Message, HookResult } from "@vykor/agent-contracts";
 import type { StreamEvent, HookExecutor as IHookExecutor } from "@vykor/agent-contracts";
-import { AgentExecutionLimitError } from "@vykor/agent-contracts";
+import { AgentExecutionLimitError, ModelRequestFailure } from "@vykor/agent-contracts";
 
 it("counts replayable reasoning but not display-only think text", () => {
   const service = new CompactService();
@@ -259,6 +259,27 @@ describe("microCompact clearing policy", () => {
 // ---------------------------------------------------------------------------
 
 describe("PTL detection", () => {
+  it("uses structured context errors but does not reinterpret authentication failures", () => {
+    expect(isPromptTooLongError(new ModelRequestFailure("Input rejected", {
+      kind: "invalid_request", phase: "stream", retryable: false, contextLengthExceeded: true,
+    }))).toBe(true);
+    expect(isPromptTooLongError(new ModelRequestFailure("Context length exceeded for an unauthorized account", {
+      kind: "authentication", phase: "request", retryable: false,
+    }))).toBe(false);
+    expect(isPromptTooLongError(new ModelRequestFailure("prompt is too long", {
+      kind: "invalid_request", phase: "request", retryable: false, contextLengthExceeded: false,
+    }))).toBe(false);
+  });
+
+  it.each([
+    "prompt is too long: 210000 tokens > 200000 maximum",
+    "This model's maximum context length is 4096 tokens. However, you requested 5000 tokens.",
+    "The input exceeds the available context size of the model",
+    "context length exceeded",
+  ])("recognizes explicit context overflow wording: %s", message => {
+    expect(isPromptTooLongError(new Error(message))).toBe(true);
+  });
+
   it("recognizes llama.cpp / OpenAI context-overflow errors", () => {
     expect(isPromptTooLongError(new Error("prompt too long for the model"))).toBe(true);
     expect(isPromptTooLongError(new Error("context_length_exceeded"))).toBe(true);
