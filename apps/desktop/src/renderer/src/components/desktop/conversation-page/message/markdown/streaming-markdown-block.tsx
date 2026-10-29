@@ -5,57 +5,54 @@ import {
   useContext,
   useLayoutEffect,
   useMemo,
+  useReducer,
   useState,
-  useSyncExternalStore,
   type CSSProperties,
   type ReactNode,
   type ComponentProps,
 } from "react"
 import { Block, type BlockProps, type ExtraProps } from "streamdown"
-import { TextAnimationBlock, type TextAnimationPool } from "./streaming-text-animation"
+import { TextAnimationBlock } from "./streaming-text-animation"
+
+export type StreamingAnimationState = { lastBlockIndex: number; initialBlocks: number | null }
 
 const AnimationContext = createContext<{
-  pool: TextAnimationPool
+  blocks: StreamingAnimationState
   enabled: boolean
   corrected: boolean
 } | null>(null)
-const BlockContext = createContext<TextAnimationBlock | null>(null)
+const BlockContext = createContext<{ model: TextAnimationBlock; revision: number } | null>(null)
 
 export function StreamingMarkdownAnimation({
   children,
-  pool,
+  blocks,
   enabled,
   corrected,
 }: {
   children: ReactNode
-  pool: TextAnimationPool
+  blocks: StreamingAnimationState
   enabled: boolean
   corrected: boolean
 }) {
-  const context = useMemo(() => ({ pool, enabled, corrected }), [pool, enabled, corrected])
+  const context = useMemo(() => ({ blocks, enabled, corrected }), [blocks, enabled, corrected])
   return <AnimationContext value={context}>{children}</AnimationContext>
 }
 
 function TextLeaf({ text, offset }: { text: string; offset: number }) {
-  const block = useContext(BlockContext)!
+  const { model: block } = useContext(BlockContext)!
   const enabled = useContext(AnimationContext)!.enabled
-  useSyncExternalStore(block.subscribe, block.getSnapshot, block.getSnapshot)
   if (!enabled || !block.characters.length) return <>{text}</>
   const parts: ReactNode[] = []
   let cursor = 0
   for (const character of block.characters) {
-    if (
-      character.end <= offset ||
-      character.start >= offset + text.length ||
-      !block.pool.has(character.id)
-    )
-      continue
+    if (character.end <= offset) continue
+    if (character.start >= offset + text.length) break
     const start = Math.max(0, character.start - offset)
     const end = Math.min(text.length, character.end - offset)
     if (start > cursor) parts.push(text.slice(cursor, start))
     parts.push(
       <span
-        key={character.id}
+        key={character.start}
         data-sd-animate=""
         style={
           {
@@ -76,7 +73,7 @@ function TextLeaf({ text, offset }: { text: string; offset: number }) {
 
 export const StreamingMarkdownBlock = memo(function StreamingMarkdownBlock(props: BlockProps) {
   const context = useContext(AnimationContext)!
-  const isTail = props.index === context.pool.lastBlockIndex
+  const isTail = props.index === context.blocks.lastBlockIndex
   const [wasTail, setWasTail] = useState(isTail)
   if (isTail && !wasTail) setWasTail(true)
   // 打开长历史时，已稳定的块直接使用原组件，不创建动画状态或独立解析插件。
@@ -86,11 +83,13 @@ export const StreamingMarkdownBlock = memo(function StreamingMarkdownBlock(props
 
 function AnimatedBlock(props: BlockProps) {
   const context = useContext(AnimationContext)!
-  const [model] = useState(() => new TextAnimationBlock(context.pool))
+  const [model] = useState(() => new TextAnimationBlock())
+  const [revision, refresh] = useReducer((value: number) => value + 1, 0)
+  const leafState = useMemo(() => ({ model, revision }), [model, revision])
   model.configure(
     context.enabled,
-    props.index >= (context.pool.initialBlocks ?? 0) &&
-      props.index === context.pool.lastBlockIndex &&
+    props.index >= (context.blocks.initialBlocks ?? 0) &&
+      props.index === context.blocks.lastBlockIndex &&
       !context.corrected
   )
   const plugins = useMemo(
@@ -112,11 +111,11 @@ function AnimatedBlock(props: BlockProps) {
     return { ...props.components, span: AnimationSpan }
   }, [props.components])
   useLayoutEffect(() => {
-    model.commit()
+    model.commit(refresh)
   })
   useLayoutEffect(() => () => model.dispose(), [model])
   return (
-    <BlockContext value={model}>
+    <BlockContext value={leafState}>
       <Block {...props} animatePlugin={null} components={components} rehypePlugins={plugins} />
     </BlockContext>
   )

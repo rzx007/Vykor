@@ -5,8 +5,11 @@ import { createStreamdownComponents } from "./streamdown-components"
 import { streamdownPlugins, streamdownRehypePlugins } from "./streamdown-plugins"
 import { createIncrementalMarkdownParser } from "./incremental-markdown"
 import { useStreamingMarkdown } from "./use-streaming-markdown"
-import { TextAnimationPool } from "./streaming-text-animation"
-import { StreamingMarkdownAnimation, StreamingMarkdownBlock } from "./streaming-markdown-block"
+import {
+  StreamingMarkdownAnimation,
+  StreamingMarkdownBlock,
+  type StreamingAnimationState,
+} from "./streaming-markdown-block"
 import { CodeFenceActivityContext, createCodeFenceActivity } from "../activity/code-fence-activity"
 
 // 行首（最多缩进三个空格）的三反引号或三波浪号表示代码围栏。
@@ -49,13 +52,16 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
     codeActivity.getSnapshot
   )
   const rendered = useStreamingMarkdown(text, streaming, liveCode)
-  const [animationPool] = useState(() => new TextAnimationPool())
+  const [animationBlocks] = useState<StreamingAnimationState>(() => ({
+    lastBlockIndex: -1,
+    initialBlocks: null,
+  }))
   const [parseBlocks] = useState(() => {
     const parse = createIncrementalMarkdownParser()
     return (source: string) => {
       const blocks = parse(source)
-      animationPool.lastBlockIndex = blocks.length - 1
-      animationPool.initialBlocks ??= animateInitialText ? 0 : blocks.length
+      animationBlocks.lastBlockIndex = blocks.length - 1
+      animationBlocks.initialBlocks ??= animateInitialText ? 0 : blocks.length
       return blocks
     }
   })
@@ -80,7 +86,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
       data-stream-initial={streaming && rendered.text === initialText ? "true" : undefined}
     >
       <StreamingMarkdownAnimation
-        pool={animationPool}
+        blocks={animationBlocks}
         corrected={rendered.revision > 0}
         enabled={streaming && textAnimationEnabled}
       >

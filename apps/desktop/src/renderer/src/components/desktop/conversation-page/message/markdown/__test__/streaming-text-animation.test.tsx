@@ -32,6 +32,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount())
   container.remove()
+  vi.restoreAllMocks()
   vi.useRealTimers()
   Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT")
 })
@@ -39,6 +40,7 @@ afterEach(() => {
 it("animates only the appended tail of a huge paragraph and retires its character nodes", async () => {
   const prefix = "已有正文。".repeat(5000)
   await render(prefix)
+  const segment = vi.spyOn(Intl.Segmenter.prototype, "segment")
   const paragraph = container.querySelector("p")
   expect(container.querySelectorAll("[data-sd-animate]")).toHaveLength(0)
   await render(prefix + "新增👨‍👩‍👧‍👦文字")
@@ -47,6 +49,8 @@ it("animates only the appended tail of a huge paragraph and retires its characte
   expect(nodes.map((n) => n.textContent)).toEqual(["新", "增", "👨‍👩‍👧‍👦", "文", "字"])
   expect(container.querySelector("p")).toBe(paragraph)
   expect(container.textContent).toBe(prefix + "新增👨‍👩‍👧‍👦文字")
+  // 实际分字只接收有限尾部，不能把几万字历史再次送进分字器。
+  expect(segment.mock.calls.every(([input]) => (input?.length ?? 0) <= 576)).toBe(true)
   await advance(180)
   expect(container.querySelectorAll("[data-sd-animate]")).toHaveLength(0)
   expect(vi.getTimerCount()).toBe(0)
@@ -62,6 +66,26 @@ it("keeps in-flight nodes and their duration when more text arrives", async () =
   expect(first.style.getPropertyValue("--sd-duration")).toBe("150ms")
   await advance(180)
   expect(container.querySelectorAll("[data-sd-animate]")).toHaveLength(0)
+})
+
+it("keeps revealing the newest tail when continuous long-paragraph output fills the window", async () => {
+  const prefix = "长段落。".repeat(5000)
+  await render(prefix)
+  let source = prefix
+  for (let index = 0; index < 8; index++) {
+    const tail = `第${index}批新文字`
+    source += "新".repeat(600) + tail
+    await render(source)
+    await advance(70)
+    const characters = [...container.querySelectorAll("[data-sd-animate]")]
+    expect(characters.length).toBeLessThanOrEqual(512)
+    expect(characters.map((node) => node.textContent).join("")).toContain(tail)
+    expect(container.textContent).toBe(source)
+    expect(vi.getTimerCount()).toBeLessThanOrEqual(2)
+  }
+  await advance(160)
+  expect(container.querySelectorAll("[data-sd-animate]")).toHaveLength(0)
+  expect(vi.getTimerCount()).toBe(0)
 })
 
 it("keeps split emoji additions in a single settled text run", async () => {
@@ -96,7 +120,22 @@ it("keeps its restored baseline through StrictMode effect replay and cleans up o
   root = createRoot(container)
 })
 
-it("bounds animated nodes across blocks, leaves settled blocks mounted, and cancels on completion", async () => {
+it("lets adjacent blocks animate independently without starving the new paragraph", async () => {
+  await render("开头")
+  const source = "开头\n\n" + "甲".repeat(600)
+  await render(source)
+  await advance(70)
+  await render(source + "\n\n" + "乙".repeat(600))
+  const paragraphs = [...container.querySelectorAll("p")]
+  expect(paragraphs[1].querySelectorAll("[data-sd-animate]")).toHaveLength(512)
+  expect(paragraphs[2].querySelectorAll("[data-sd-animate]")).toHaveLength(512)
+  expect(vi.getTimerCount()).toBeLessThanOrEqual(2)
+  await advance(160)
+  expect(container.querySelectorAll("[data-sd-animate]")).toHaveLength(0)
+  expect(vi.getTimerCount()).toBe(0)
+})
+
+it("bounds animated nodes per block, leaves settled blocks mounted, and cancels on completion", async () => {
   let source = "开头\n\n"
   await render(source)
   const first = container.querySelector("p")
@@ -104,7 +143,10 @@ it("bounds animated nodes across blocks, leaves settled blocks mounted, and canc
     source += `段落${i}${"新文字".repeat(200)}\n\n`
     await render(source)
     await advance(70)
-    expect(container.querySelectorAll("[data-sd-animate]").length).toBeLessThanOrEqual(512)
+    for (const paragraph of container.querySelectorAll("p")) {
+      expect(paragraph.querySelectorAll("[data-sd-animate]").length).toBeLessThanOrEqual(512)
+    }
+    expect(container.querySelectorAll("[data-sd-animate]").length).toBeLessThanOrEqual(1024)
     expect(container.querySelector("p")).toBe(first)
   }
   await render(source, false)
@@ -126,6 +168,32 @@ it("settles corrections and preserves Markdown semantics and source text", async
   root = createRoot(container)
 })
 
+it("preserves incomplete Markdown, nested lists, tables and references through streaming completion", async () => {
+  await render("开头 **强调", true, true)
+  expect(container.querySelector("strong")?.textContent).toBe("强调")
+  const source =
+    "开头 **强调** 与 [文档](https://example.com)\n\n" +
+    "- 一级项目\n  - *嵌套强调* 和 `原样代码`\n\n" +
+    "| 名称 | 数值 |\n| --- | --- |\n| 中文 | 42 |"
+  await render(source)
+  expect(container.querySelector("strong")?.textContent).toBe("强调")
+  expect(container.querySelector("a")?.getAttribute("href")).toBe("https://example.com/")
+  expect(container.querySelector("li li em")?.textContent).toBe("嵌套强调")
+  expect(container.querySelector("code")?.textContent).toBe("原样代码")
+  expect(container.querySelector("code [data-sd-animate]")).toBeNull()
+  expect(container.querySelector("tbody tr")?.textContent).toBe("中文42")
+  const final =
+    source +
+    "\n\n参考 [说明][ref] 和脚注[^note]\n\n[ref]: https://example.com/reference\n\n[^note]: 最终注释"
+  await render(final, false)
+  expect(container.querySelector('a[href="https://example.com/reference"]')?.textContent).toBe(
+    "说明"
+  )
+  expect(container.textContent).toContain("最终注释")
+  expect(container.querySelectorAll("[data-sd-animate]")).toHaveLength(0)
+  expect(vi.getTimerCount()).toBe(0)
+})
+
 it("keeps history DOM compact and bounds timers and nodes through continuous long-text output", async () => {
   let source = Array.from(
     { length: 250 },
@@ -141,7 +209,7 @@ it("keeps history DOM compact and bounds timers and nodes through continuous lon
     await advance(70)
     expect(container.textContent).toContain("连续追加正文。".repeat(index + 1))
     expect(container.querySelectorAll("[data-sd-animate]").length).toBeLessThanOrEqual(512)
-    // 原有长正文刷新任务 + 回复共用的动画清理任务，不随块数、字符数增长。
+    // 原有长正文刷新任务 + 当前活动块的清理任务，不随历史长度、字符数增长。
     expect(vi.getTimerCount()).toBeLessThanOrEqual(2)
     expect(container.querySelector("p")).toBe(first)
   }

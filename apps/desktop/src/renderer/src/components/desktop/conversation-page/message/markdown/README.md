@@ -12,7 +12,7 @@ Markdown、代码块、图表和流式渲染适配。
 
 - [assistant-markdown.tsx](assistant-markdown.tsx)
 - [streaming-markdown-block.tsx](streaming-markdown-block.tsx)：保留 Streamdown 的块和语法树，只在解析后的新增文本叶子上创建淡入节点；历史稳定块直接复用原组件。
-- [streaming-text-animation.ts](streaming-text-animation.ts)：每条回复共享 512 个动画字符额度和一个清理计时器。150ms 后释放逐字节点，合并回普通文本；计时器只通知仍有活动文字的块。开启长回复动画不再受 4096 字符限制，正文的 64ms 合并刷新与代码源码更新策略保持不变。
+- [streaming-text-animation.ts](streaming-text-animation.ts)：每块独立保留最近最多 512 个动画字符的位置，追加时淘汰更早的包裹，停顿 150ms 后整批恢复普通文本；每个活动块最多一个清理计时器，不再分配全局逐字额度或记录逐字过期时间。清理只更新文本叶子，不重新解析 Markdown。长回复动画没有 4096 字符限制，正文的 64ms 合并刷新与代码源码更新策略保持不变。
 - [incremental-markdown.ts](incremental-markdown.ts)
 - [markdown-emphasis.ts](markdown-emphasis.ts)：在本次解析的 `<em>` 内标记中文片段，保留英文、链接、嵌套强调及原始文字；跳过代码、键盘输入、公式和 SVG。
 - [mermaid-diagram.tsx](mermaid-diagram.tsx)
@@ -23,6 +23,6 @@ Markdown、代码块、图表和流式渲染适配。
 
 ## 维护约定
 
-动画不切分 Markdown 源码，不接管解析、高亮或复制；跳过代码、公式、SVG 等内容。块内的旧文字只计算长度，不逐字拆分；新字符用 `Intl.Segmenter` 保持 emoji 和组合字符完整。初次收到大量段落时，已稳定的段落直接显示，末尾块在剩余额度内动画；单批超额部分直接显示，不排队。修正、截断、关闭动效和完成时停止动画，卸载释放额度与定时任务。独立块的解析插件使用不同缓存标识，避免 Streamdown 的共享处理器缓存混用块状态。
+动画不切分 Markdown 源码，不接管解析、高亮或复制；跳过代码、公式、SVG 等内容。块内的旧文字只计算长度，不逐字拆分；新字符用 `Intl.Segmenter` 保持 emoji 和组合字符完整。初次收到大量段落时，已稳定的段落直接显示，只为末尾块创建动画状态；单批超额部分直接显示，不排队。连续换段时，前一个块可以短暂收尾，各块互不抢占额度；节点和计时器随近期活动块数变化，不随历史正文长度积累。清理时通过块内 React 上下文更新文本叶子，无外部订阅或共享调度器。修正、截断、关闭动效和完成时停止动画，卸载释放定时任务和正文基线。独立块的解析插件使用不同缓存标识，避免 Streamdown 的共享处理器缓存混用块状态。
 
 新增独立子功能时同步补充 README 和父级导航。移动文件时更新导入、动态导入与测试 mock，不保留旧路径转发文件。完整规则见 [Desktop 协作约定](../../../AGENTS.md)。

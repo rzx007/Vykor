@@ -1,5 +1,5 @@
 let blockSequence = 0
-// 只给解析后的新增文本分配短期动画额度，不缓存旧版全文或逐字历史。
+// 每块仅保留最近的少量动画字符；停顿后整批恢复为普通文本。
 export const maxAnimatedCharacters = 512
 export const textAnimationMs = 150
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" })
@@ -12,80 +12,18 @@ type TextNode = {
   properties?: Record<string, unknown>
   children?: TextNode[]
 }
-export type AnimatedCharacter = { id: number; start: number; end: number }
-
-export class TextAnimationPool {
-  lastBlockIndex = -1
-  initialBlocks: number | null = null
-  private sequence = 0
-  private leases = new Map<number, number>()
-  private active = new Set<TextAnimationBlock>()
-  private timer: ReturnType<typeof setTimeout> | null = null
-
-  available() {
-    this.expire()
-    return maxAnimatedCharacters - this.leases.size
-  }
-  reserve(start: number, end: number): AnimatedCharacter | undefined {
-    if (this.leases.size >= maxAnimatedCharacters) return
-    const id = ++this.sequence
-    this.leases.set(id, performance.now() + textAnimationMs)
-    return { id, start, end }
-  }
-  has(id: number) {
-    return this.leases.has(id)
-  }
-  release(id: number) {
-    this.leases.delete(id)
-  }
-  private expire() {
-    const now = performance.now()
-    for (const [id, deadline] of this.leases) if (deadline <= now) this.leases.delete(id)
-  }
-  commit(block: TextAnimationBlock) {
-    this.active.add(block)
-    this.expire()
-    for (const item of this.active) {
-      item.prune()
-      if (!item.characters.length) this.active.delete(item)
-    }
-    this.schedule()
-  }
-  remove(block: TextAnimationBlock) {
-    this.active.delete(block)
-    for (const character of block.characters) this.release(character.id)
-    this.schedule()
-  }
-  private schedule() {
-    if (this.timer !== null) clearTimeout(this.timer)
-    this.timer = null
-    if (!this.leases.size || !this.active.size) return
-    const deadline = Math.min(...this.leases.values())
-    this.timer = setTimeout(
-      () => {
-        this.timer = null
-        this.expire()
-        for (const item of this.active) {
-          item.prune()
-          if (!item.characters.length) this.active.delete(item)
-        }
-        this.schedule()
-      },
-      Math.max(1, deadline - performance.now())
-    )
-  }
-}
+type AnimatedCharacter = { start: number; end: number }
 
 export class TextAnimationBlock {
   enabled = false
   animateFirst = false
   characters: AnimatedCharacter[] = []
   private previous: string | undefined
-  private version = 0
+  private pending = false
+  private timer: ReturnType<typeof setTimeout> | null = null
   private mounted = false
-  private listeners = new Set<() => void>()
   readonly plugin: () => typeof this.transform
-  constructor(readonly pool: TextAnimationPool) {
+  constructor() {
     this.plugin = () => this.transform
     Object.defineProperty(this.plugin, "name", { value: `streamingText${++blockSequence}` })
   }
@@ -93,40 +31,31 @@ export class TextAnimationBlock {
     this.enabled = enabled
     this.animateFirst = animateFirst
   }
-  subscribe = (listener: () => void) => {
-    this.listeners.add(listener)
-    return () => {
-      this.listeners.delete(listener)
-    }
-  }
-  getSnapshot = () => this.version
   private clear() {
-    for (const character of this.characters) this.pool.release(character.id)
     this.characters = []
+    this.pending = false
+    if (this.timer !== null) clearTimeout(this.timer)
+    this.timer = null
   }
-  prune() {
-    const kept = this.characters.filter((c) => this.pool.has(c.id))
-    if (kept.length === this.characters.length) return
-    this.characters = kept
-    this.version++
-    for (const listener of this.listeners) listener()
-  }
-  commit() {
+  commit(refresh: () => void) {
     this.mounted = true
-    if (!this.enabled) {
+    if (!this.enabled) return this.clear()
+    if (!this.characters.length || (!this.pending && this.timer !== null)) return
+    if (this.timer !== null) clearTimeout(this.timer)
+    this.pending = false
+    this.timer = setTimeout(() => {
       this.clear()
-      this.version++
-      for (const listener of this.listeners) listener()
-    }
-    this.pool.commit(this)
+      refresh()
+    }, textAnimationMs)
   }
   dispose() {
     this.mounted = false
-    this.pool.remove(this)
+    if (this.timer !== null) clearTimeout(this.timer)
+    this.timer = null
     // StrictMode 会同步重放挂载；保留到微任务再释放，既保留基线也不让处理器缓存持有旧正文。
     queueMicrotask(() => {
       if (this.mounted) return
-      this.characters = []
+      this.clear()
       this.previous = undefined
     })
   }
@@ -156,7 +85,7 @@ export class TextAnimationBlock {
     if (!appended || !this.enabled) this.clear()
     if (appended && this.enabled) {
       // 一大批文字只拆尾部有限数量的字符，避免对整个超长字符串做 Segmenter 分词。
-      const tail = Math.max(from, plain.length - this.pool.available())
+      const tail = Math.max(from, plain.length - maxAnimatedCharacters)
       for (const { node, start } of nodes) {
         const value = node.value ?? ""
         const offset = Math.max(0, tail - start)
@@ -166,13 +95,13 @@ export class TextAnimationBlock {
           if (scanOffset + segment.index < offset) continue
           if (!segment.segment.trim()) continue
           const begin = start + scanOffset + segment.index
-          const character = this.pool.reserve(begin, begin + segment.segment.length)
-          if (character) this.characters.push(character)
+          this.characters.push({ start: begin, end: begin + segment.segment.length })
+          this.pending = true
         }
       }
+      this.characters = this.characters.slice(-maxAnimatedCharacters)
     }
     this.previous = plain
-    this.version++
     // 包装的是 AST 文本叶子；链接、强调、列表和代码的结构不变。
     for (const { node, parent, index, start } of nodes) {
       parent.children![index] = {
