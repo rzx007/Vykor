@@ -52,6 +52,11 @@ function id(value: unknown): string {
     invalid("无效的便签或文件夹 ID");
   return value;
 }
+function folderId(value: unknown): string {
+  const result = id(value);
+  if (result === "desktop") invalid("无效的文件夹 ID");
+  return result;
+}
 export function validateFolderName(value: unknown): string {
   if (typeof value !== "string") invalid("文件夹名称须为 1–80 个字符");
   const name = value.trim();
@@ -82,7 +87,7 @@ export function parseOrganizationShape(
     folderItems: {},
   };
   for (const [key, raw] of Object.entries(folders)) {
-    id(key);
+    folderId(key);
     const folder = record(raw);
     fields(folder, ["name", "createdAt", "updatedAt"]);
     if (
@@ -104,10 +109,13 @@ export function parseOrganizationShape(
     fields(item, ["type", "id"]);
     if (item.type !== "note" && item.type !== "folder")
       invalid("无效的桌面项目");
-    result.desktop.push({ type: item.type, id: id(item.id) });
+    result.desktop.push({
+      type: item.type,
+      id: item.type === "folder" ? folderId(item.id) : id(item.id),
+    });
   }
   for (const [key, raw] of Object.entries(items)) {
-    id(key);
+    folderId(key);
     if (!Array.isArray(raw) || (count += raw.length) > MAX_ORGANIZATION_ITEMS)
       invalid("组织项目过多");
     result.folderItems[key] = raw.map(id);
@@ -280,7 +288,7 @@ export function mergeNotes(
     Object.hasOwn(next.folders, input.folderId)
   )
     invalid("无法合成文件夹");
-  id(input.folderId);
+  folderId(input.folderId);
   detach(next, input.activeNoteId);
   const position = next.desktop.findIndex(
     (item) => item.type === "note" && item.id === input.targetNoteId,

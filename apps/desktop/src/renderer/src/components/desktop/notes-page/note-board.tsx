@@ -135,6 +135,7 @@ export function NoteBoard({
     over: string | null
     leftFolder: boolean
     exitedFolder: string | null
+    pinned: boolean
   } | null>(null)
   const machine = useRef(createNoteDragMachine())
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -228,8 +229,10 @@ export function NoteBoard({
   const hover = useCallback(
     (target: NoteDragTarget | null): void => {
       const session = drag.current
-      if (!session) return
-      const next = machine.current.enter(target, Date.now())
+     if (!session) return
+     if (session.pinned) target = null
+     const next = machine.current.enter(target, Date.now())
+
       showHoverIntent()
       if (!next.changed) return
       if (hoverTimer.current) clearTimeout(hoverTimer.current)
@@ -265,6 +268,8 @@ export function NoteBoard({
   const start = (event: DragStartEvent): void => {
     if (!original || controller.readOnly) return
     const item = parseId(String(event.active.id))
+    const pinned =
+      item.type === "note" && Boolean(notes.find((note) => note.noteId === item.id)?.pinned)
     const keyboard = event.activatorEvent.type === "keydown"
     drag.current = {
       item,
@@ -274,6 +279,7 @@ export function NoteBoard({
       over: null,
       leftFolder: false,
       exitedFolder: null,
+      pinned,
     }
     machine.current.start({ keyboard })
     setActive(item)
@@ -425,7 +431,11 @@ export function NoteBoard({
       announce("未越过文件夹边界，已恢复原位置")
       return
     }
-    if (session.item.type === "note" && folderReady) {
+    if (
+      session.item.type === "note" &&
+      !session.pinned &&
+      folderReady
+    ) {
       const ids = original.folderItems[destination] ?? []
       const index = target?.type === "note" ? ids.indexOf(target.id) : ids.length
       const position = index < 0 ? ids.length : index

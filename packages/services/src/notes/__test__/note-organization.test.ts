@@ -22,6 +22,17 @@ const folder = () =>
     now: 10,
   });
 describe("note organization pure model", () => {
+  it("rejects the reserved desktop container name as a folder id", () => {
+    expect(() =>
+      mergeNotes(desktop("a", "b"), {
+        activeNoteId: "a",
+        targetNoteId: "b",
+        folderId: "desktop",
+        folderName: "冲突",
+        now: 1,
+      })
+    ).toThrow("无效的文件夹 ID")
+  })
   it("creates a default desktop and merges at the target's surviving position", () => {
     const before = desktop("a", "b", "c"),
       next = folder();

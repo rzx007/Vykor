@@ -51,6 +51,25 @@ const notes = Array.from({ length: 7 }, (_, index) => ({
   recovered: false,
 }))
 
+function DragClosingCollection(): React.JSX.Element {
+  const [expanded, setExpanded] = useState(true)
+  const [dragging, setDragging] = useState(true)
+  return (
+    <>
+      <ProjectFolder
+        title="拖拽夹"
+        ariaLabel="打开拖拽夹"
+        expanded={expanded}
+        dragging={dragging}
+        onExpandedChange={setExpanded}
+        expandedContent={<button>夹内便签</button>}
+      />
+      <button onClick={() => setExpanded(false)}>自动关闭</button>
+      <button onClick={() => setDragging(false)}>结束拖拽</button>
+    </>
+  )
+}
+
 function Collection(): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
   return (
@@ -115,6 +134,25 @@ describe("folder paper motion bridge", () => {
         ?.querySelectorAll('button[aria-label^="打开便签："]')
     ).toHaveLength(7)
   })
+  it("restores focus after an automatic close finishes during a drag", async () => {
+    probe.reduced = true
+    await act(async () => {
+      root.render(<DragClosingCollection />)
+    })
+    ;(document.querySelector("[role=dialog] button") as HTMLButtonElement).focus()
+    await act(async () => {
+      ;(container.querySelector("button:nth-of-type(2)") as HTMLButtonElement).click()
+    })
+    expect(document.activeElement?.getAttribute("aria-label")).not.toBe("打开拖拽夹")
+    await act(async () => {
+      ;(container.querySelector("button:nth-of-type(3)") as HTMLButtonElement).click()
+      await new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve))
+      )
+    })
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("打开拖拽夹")
+  })
+
   it("keeps all papers usable without spatial movement when reduced motion is requested", async () => {
     probe.reduced = true
     await act(async () => {

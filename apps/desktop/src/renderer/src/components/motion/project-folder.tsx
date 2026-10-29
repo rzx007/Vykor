@@ -145,6 +145,7 @@ export function ProjectFolder({
   const hoveredRef = useRef(false)
   const focusedRef = useRef(false)
   const restoringFocusRef = useRef(false)
+  const pendingDragFocusRef = useRef(false)
   const folderButtonRef = useRef<HTMLButtonElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -155,6 +156,7 @@ export function ProjectFolder({
   const openControlled = open !== undefined
   const expandedControlled = expanded !== undefined
   const isExpanded = expanded ?? internalExpanded
+  const wasExpandedRef = useRef(isExpanded)
   const isOpen = (open ?? internalOpen) || isExpanded
   const previewItems = previews.slice(0, MAX_PREVIEWS)
   const hasExpandedContent = expandedContent != null
@@ -191,12 +193,30 @@ export function ProjectFolder({
     [disabled, expandedControlled, onExpandedChange, previewItems.length, hasExpandedContent]
   )
 
-  const finishClose = useCallback(() => {
-    setIsClosing(false)
-    if (dragging) return
+  const restoreFolderFocus = useCallback(() => {
     restoringFocusRef.current = true
     requestAnimationFrame(() => folderButtonRef.current?.focus())
-  }, [dragging])
+  }, [])
+  const finishClose = useCallback(() => {
+    setIsClosing(false)
+    if (dragging) {
+      pendingDragFocusRef.current = true
+      return
+    }
+    restoreFolderFocus()
+  }, [dragging, restoreFolderFocus])
+  useEffect(() => {
+    const wasExpanded = wasExpandedRef.current
+    wasExpandedRef.current = isExpanded
+    if (!wasExpanded || isExpanded) return
+    if (dragging) pendingDragFocusRef.current = true
+    else restoreFolderFocus()
+  }, [dragging, isExpanded, restoreFolderFocus])
+  useEffect(() => {
+    if (dragging || !pendingDragFocusRef.current) return
+    pendingDragFocusRef.current = false
+    restoreFolderFocus()
+  }, [dragging, restoreFolderFocus])
 
   const closeOverlay = useCallback(() => {
     setIsClosing(!reduce)

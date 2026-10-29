@@ -78,12 +78,7 @@ export class NoteOrganizationRepository {
     ) {
       this.writeBlockedWarning =
         "组织文件在保存后又被外部修改，已暂停整理写入。请打开便签目录检查 organization.json 与 organization.previous.json，再重启应用。";
-      return {
-        organization,
-        etag: etagOf(after),
-        readOnly: true,
-        warning: this.writeBlockedWarning,
-      };
+      throw new NoteOrganizationConflictError(this.writeBlockedWarning);
     }
     return {
       organization,
