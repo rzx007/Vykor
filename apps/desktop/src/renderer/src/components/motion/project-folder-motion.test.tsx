@@ -38,8 +38,8 @@ vi.mock("motion/react", async (importOriginal) => {
   }
 })
 
-import { ProjectFolder } from "./project-folder"
-import { NoteList } from "../desktop/notes-page/note-list"
+import { ProjectFolder, ProjectFolderItem } from "./project-folder"
+import { NotePaperCard } from "../desktop/notes-page/note-list"
 
 const notes = Array.from({ length: 7 }, (_, index) => ({
   draftId: "paper-" + index,
@@ -62,16 +62,19 @@ function Collection(): React.JSX.Element {
       count={notes.length}
       previews={notes.slice(0, 5).map((note) => ({ id: note.draftId, content: note.content }))}
       expandedContent={
-        <NoteList
-          notes={notes}
-          selectedKey={null}
-          query=""
-          loading={false}
-          onCreate={() => {}}
-          onSelect={() => {}}
-          onAppearanceChange={() => {}}
-          onDelete={() => {}}
-        />
+        <div>
+          {notes.map((note, index) => (
+            <ProjectFolderItem key={note.draftId} id={note.draftId} index={index}>
+              <NotePaperCard
+                note={note}
+                selectedKey={null}
+                onSelect={() => {}}
+                onAppearanceChange={() => {}}
+                onDelete={() => {}}
+              />
+            </ProjectFolderItem>
+          ))}
+        </div>
       }
     />
   )

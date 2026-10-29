@@ -41,6 +41,7 @@ export function NoteEditor({
   onExpand,
   onAppearanceChange,
   layoutId,
+  pinDisabled,
 }: {
   selected: NoteView | undefined
   content: string
@@ -56,6 +57,7 @@ export function NoteEditor({
   onExpand: () => void
   onAppearanceChange?: (patch: Partial<NoteAppearance>) => void
   layoutId?: string
+  pinDisabled?: boolean
 }): React.JSX.Element {
   const editorRef = useRef<HTMLTextAreaElement | null>(null)
   const reduced = useReducedMotion()
@@ -108,6 +110,7 @@ export function NoteEditor({
             {selected && (selected.noteId || content.trim()) ? (
               <NoteActions
                 note={{ ...selected, content }}
+                pinDisabled={pinDisabled}
                 onAppearanceChange={onAppearanceChange}
                 onDelete={onDelete}
               />

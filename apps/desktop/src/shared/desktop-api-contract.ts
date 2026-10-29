@@ -101,7 +101,13 @@ import type {
   ListDesktopScheduledRunsInput,
   UpdateDesktopScheduledTaskInput,
 } from "./schedule-types"
-import type { CreateDesktopNoteInput, DesktopNote, UpdateDesktopNoteInput } from "./note-types"
+import type {
+  CreateDesktopNoteInput,
+  DesktopNote,
+  UpdateDesktopNoteInput,
+  DesktopNoteOrganizationSnapshot,
+  SaveDesktopNoteOrganizationInput,
+} from "./note-types"
 import type {
   ActivateDesktopProviderInput,
   ConnectDesktopProviderInput,
@@ -332,6 +338,10 @@ export type DesktopAPI = {
     setRunUnread: (id: string, unread: boolean) => Promise<DesktopScheduledRun>
   }
   notes: {
+    organization: () => Promise<DesktopNoteOrganizationSnapshot>
+    saveOrganization: (
+      input: SaveDesktopNoteOrganizationInput
+    ) => Promise<DesktopNoteOrganizationSnapshot>
     list: () => Promise<DesktopNote[]>
     create: (input: CreateDesktopNoteInput) => Promise<DesktopNote>
     update: (id: string, input: UpdateDesktopNoteInput) => Promise<DesktopNote>

@@ -1,0 +1,20 @@
+// Browser-safe types and operations are shared with the renderer.
+export {
+  NOTE_ORGANIZATION_VERSION,
+  assertOrganizationInvariants,
+  reconcileOrganization,
+  reorderInContainer,
+  mergeNotes,
+  moveNoteToFolder,
+  moveNoteToDesktop,
+  dissolveFolder,
+  renameFolder,
+  validateFolderName,
+  parseNoteOrganization,
+  type DesktopItem,
+  type NoteFolderRecord,
+  type NoteOrganizationV1,
+  type NoteOrganizationV1Record,
+  type NoteOrganizationSnapshotRecord,
+  type SaveNoteOrganizationInput,
+} from "@vykor/domain-contracts/notes";

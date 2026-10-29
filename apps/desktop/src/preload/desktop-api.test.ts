@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
 const electron = vi.hoisted(() => ({
-  invoke: vi.fn(async () => []),
+  invoke: vi.fn(async (): Promise<unknown> => []),
   on: vi.fn(),
   removeListener: vi.fn(),
   getPathForFile: vi.fn((file: { name: string }) =>
@@ -22,7 +22,7 @@ import { IpcChannels, IpcEvents } from "../shared/ipc-channels"
 import { desktopAPI } from "./desktop-api"
 it("does not expose retired UI IPC", () => {
   expect(desktopAPI).not.toHaveProperty("pluginUi")
-  expect(Object.values(IpcChannels).some(channel => channel.startsWith("plugin-ui:"))).toBe(false)
+  expect(Object.values(IpcChannels).some((channel) => channel.startsWith("plugin-ui:"))).toBe(false)
 })
 
 describe("desktop activity preload bridge", () => {
@@ -110,6 +110,19 @@ describe("desktop attachment preload bridge", () => {
 })
 
 describe("desktop note preload bridge", () => {
+  it("reads and conditionally saves organization through fixed channels", async () => {
+    const snapshot = {
+      organization: { version: 1 as const, folders: {}, desktop: [], folderItems: {} },
+      etag: "e1",
+      readOnly: false,
+    }
+    electron.invoke.mockResolvedValueOnce(snapshot)
+    await expect(desktopAPI.notes.organization()).resolves.toEqual(snapshot)
+    const input = { organization: snapshot.organization, expectedEtag: "e1" }
+    await desktopAPI.notes.saveOrganization(input)
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.noteOrganizationGet)
+    expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.noteOrganizationSave, input)
+  })
   it("opens the notes directory without accepting a renderer-supplied path", async () => {
     await desktopAPI.notes.openDirectory()
     expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.noteOpenDirectory)
@@ -144,8 +157,15 @@ describe("desktop window preload bridge", () => {
   it("转发权威材质状态并移除订阅", () => {
     const listener = vi.fn()
     const release = desktopAPI.window.onMaterialChanged(listener)
-    const wrapped = electron.on.mock.calls.find(([channel]) => channel === IpcEvents.windowMaterialChanged)?.[1]
-    const state = { preference: "glass", active: "opaque", shell: "solid", unavailableReason: "unsupported-system" }
+    const wrapped = electron.on.mock.calls.find(
+      ([channel]) => channel === IpcEvents.windowMaterialChanged
+    )?.[1]
+    const state = {
+      preference: "glass",
+      active: "opaque",
+      shell: "solid",
+      unavailableReason: "unsupported-system",
+    }
     wrapped({}, state)
     expect(listener).toHaveBeenCalledWith(state)
     release()

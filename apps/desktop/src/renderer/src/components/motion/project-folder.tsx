@@ -15,6 +15,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
@@ -47,6 +48,10 @@ export interface ProjectFolderProps {
   className?: string
   /** 完整内容用 ProjectFolderItem 接续纸片转场；五张限制只用于封面。 */
   expandedContent?: ReactNode
+  /** 拖拽悬停展开时不移动焦点、不阻断桌面的落点。 */
+  dragging?: boolean
+  inPlace?: boolean
+  boundaryId?: string
 }
 
 const MAX_PREVIEWS = 5
@@ -129,6 +134,9 @@ export function ProjectFolder({
   ariaLabel,
   className,
   expandedContent,
+  dragging = false,
+  inPlace = false,
+  boundaryId,
 }: ProjectFolderProps) {
   const reduce = useReducedMotion()
   const canHover = useHoverCapable()
@@ -143,6 +151,7 @@ export function ProjectFolder({
   const [internalOpen, setInternalOpen] = useState(defaultOpen)
   const [internalExpanded, setInternalExpanded] = useState(defaultExpanded)
   const [isClosing, setIsClosing] = useState(false)
+  const [anchor, setAnchor] = useState<{ left: number; top: number; width: number }>()
   const openControlled = open !== undefined
   const expandedControlled = expanded !== undefined
   const isExpanded = expanded ?? internalExpanded
@@ -151,6 +160,18 @@ export function ProjectFolder({
   const hasExpandedContent = expandedContent != null
   const transition: Transition = reduce ? { duration: 0 } : SPRING_LAYOUT
   const countText = `${count} ${itemLabel}`
+
+  useLayoutEffect(() => {
+    if (!isExpanded || !inPlace) return
+    const rect = folderButtonRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const width = Math.min(880, window.innerWidth - 32)
+    setAnchor({
+      left: Math.max(16, Math.min(rect.left, window.innerWidth - width - 16)),
+      top: Math.max(16, Math.min(rect.top, window.innerHeight / 2)),
+      width,
+    })
+  }, [isExpanded, inPlace])
 
   const setOpen = useCallback(
     (next: boolean) => {
@@ -172,9 +193,10 @@ export function ProjectFolder({
 
   const finishClose = useCallback(() => {
     setIsClosing(false)
+    if (dragging) return
     restoringFocusRef.current = true
     requestAnimationFrame(() => folderButtonRef.current?.focus())
-  }, [])
+  }, [dragging])
 
   const closeOverlay = useCallback(() => {
     setIsClosing(!reduce)
@@ -184,7 +206,7 @@ export function ProjectFolder({
   }, [finishClose, reduce, setExpanded, setOpen])
 
   useEffect(() => {
-    if (!isExpanded) return
+    if (!isExpanded || dragging) return
 
     const previousOverflow = document.body.style.overflow
     const focusFrame = requestAnimationFrame(() => closeButtonRef.current?.focus())
@@ -221,7 +243,7 @@ export function ProjectFolder({
       document.body.style.overflow = previousOverflow
       document.removeEventListener("keydown", handleKeyDown)
     }
-  }, [closeOverlay, isExpanded])
+  }, [closeOverlay, isExpanded, dragging])
 
   const handleFolderClick = () => {
     setIsClosing(false)
@@ -262,7 +284,8 @@ export function ProjectFolder({
               transition={reduce ? { duration: 0 } : { duration: 0.18 }}
               className={cn(
                 "fixed inset-0 z-50 cursor-default bg-background/95",
-                isClosing && "pointer-events-none"
+                (isClosing || dragging) && "pointer-events-none",
+                dragging && "bg-transparent"
               )}
             />
           ) : null}
@@ -273,17 +296,27 @@ export function ProjectFolder({
           layoutScroll
           ref={dialogRef}
           role="dialog"
-          aria-modal="true"
+          aria-modal={dragging ? undefined : "true"}
           aria-labelledby={dialogTitleId}
           aria-hidden={isExpanded ? undefined : "true"}
           inert={isClosing}
-          className="pointer-events-none fixed inset-x-6 inset-y-8 z-50 flex items-start justify-center overflow-y-auto sm:items-center"
+          className={cn(
+            "pointer-events-none fixed z-50 flex items-start justify-center overflow-y-auto",
+            !inPlace && "inset-x-6 inset-y-8 sm:items-center"
+          )}
+          style={
+            inPlace && anchor
+              ? { ...anchor, maxHeight: `calc(100vh - ${anchor.top + 16}px)` }
+              : undefined
+          }
         >
           {/* 61rem, not `max-w-5xl`: the cap is on a padding-free box, so it has to
             be the 64rem border box less the 3rem the gutters take. */}
           <div
+            data-note-folder-boundary={boundaryId}
             className={cn(
               "pointer-events-auto relative z-10 w-full max-w-[61rem]",
+              inPlace && "rounded-2xl border border-border bg-popover p-5 shadow-lg",
               isClosing && "pointer-events-none"
             )}
           >

@@ -303,6 +303,9 @@ export const desktopAPI = {
       invoke(IpcChannels.scheduleSetRunUnread, id, unread),
   },
   notes: {
+    organization: () => invoke(IpcChannels.noteOrganizationGet),
+    saveOrganization: (input: IpcInvokeMap[typeof IpcChannels.noteOrganizationSave]["args"][0]) =>
+      invoke(IpcChannels.noteOrganizationSave, input),
     list: () => invoke(IpcChannels.noteList),
     create: (input: IpcInvokeMap[typeof IpcChannels.noteCreate]["args"][0]) =>
       invoke(IpcChannels.noteCreate, input),

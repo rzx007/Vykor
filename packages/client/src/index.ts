@@ -44,7 +44,8 @@ export type { ApprovalMode, WorkMode, ApprovalReviewRecord } from "@vykor/protoc
 export { readWorkspaceChangesMetadata } from "@vykor/protocol";
 export type { UsageFilter, UsageRequest, UsagePrice, UsageSettings, UsageReport, StorageCategory, StorageReport, CleanupCandidate, CleanupPreview, CleanupResult, MaintenanceBackupManifest, StorageRetentionPolicy } from "@vykor/protocol";
 export type { WorkspaceChangesMetadata, WorkspaceChangeFile } from "@vykor/protocol";
-export type { PluginCatalogEntry, AgentEnvironmentCapabilities, AttachmentAssetRecord, CreateNoteInput, NoteRecord, UpdateNoteInput, ClientProtocolSupport, ProtocolCompatibility, ServerCapabilities, SearchSessionsOptions, SessionSearchResult } from "@vykor/protocol";
+export type { PluginCatalogEntry, AgentEnvironmentCapabilities, AttachmentAssetRecord, CreateNoteInput, NoteRecord, UpdateNoteInput, DesktopItem, NoteFolderRecord, NoteOrganizationV1Record, NoteOrganizationSnapshotRecord, SaveNoteOrganizationInput, ClientProtocolSupport, ProtocolCompatibility, ServerCapabilities, SearchSessionsOptions, SessionSearchResult } from "@vykor/protocol";
+export { mergeNotes, moveNoteToDesktop, moveNoteToFolder, reorderInContainer, dissolveFolder, renameFolder, validateFolderName, reconcileOrganization } from "@vykor/protocol";
 export { checkProtocolCompatibility, CURRENT_PROTOCOL_VERSION, readSessionModelRetryState, readSessionModelUsage, isSupersededModelPart, supportsFeature } from "@vykor/protocol";
 export type { SessionModelRetryState, SessionModelUsageSummary } from "@vykor/protocol";
 export {

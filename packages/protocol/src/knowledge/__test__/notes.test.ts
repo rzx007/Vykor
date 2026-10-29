@@ -25,6 +25,64 @@ function noteApi(): {
 }
 
 describe("note request parsing", () => {
+  it("validates conditional organization saves before storage", () => {
+    const organization = {
+      version: 1,
+      folders: {},
+      desktop: [{ type: "note", id: "a" }],
+      folderItems: {},
+    };
+    expect(
+      protocol.parseSaveNoteOrganizationInput({
+        organization,
+        expectedEtag: "e1",
+      }),
+    ).toEqual({ organization, expectedEtag: "e1" });
+    expect(() =>
+      protocol.parseSaveNoteOrganizationInput({ organization }),
+    ).toThrow();
+    expect(() =>
+      protocol.parseSaveNoteOrganizationInput({
+        organization: {
+          ...organization,
+          desktop: [...organization.desktop, ...organization.desktop],
+        },
+        expectedEtag: "e1",
+      }),
+    ).toThrow("重复归属");
+    expect(() =>
+      protocol.parseSaveNoteOrganizationInput({
+        organization: {
+          version: 1,
+          folders: { f: { name: "x", createdAt: 0, updatedAt: 0 } },
+          desktop: [{ type: "folder", id: "f" }],
+          folderItems: { f: ["a"] },
+        },
+        expectedEtag: "e1",
+      }),
+    ).toThrow("至少需要两张");
+    expect(() =>
+      protocol.parseSaveNoteOrganizationInput({
+        organization: {
+          ...organization,
+          desktop: [{ type: "note", id: "../outside" }],
+        },
+        expectedEtag: "e1",
+      }),
+    ).toThrow("ID");
+    expect(() =>
+      protocol.parseSaveNoteOrganizationInput({
+        organization: {
+          ...organization,
+          desktop: Array.from({ length: 10_001 }, () => ({
+            type: "note",
+            id: "a",
+          })),
+        },
+        expectedEtag: "e1",
+      }),
+    ).toThrow("过多");
+  });
   it("preserves nonblank create content exactly", () => {
     expect(noteApi().parseCreate({ content: "  idea  " })).toEqual({
       content: "  idea  ",

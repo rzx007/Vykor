@@ -8,6 +8,7 @@ import {
   mkdirSync,
   openSync,
   readFileSync,
+  readdirSync,
   renameSync,
   unlinkSync,
   writeFileSync,
@@ -31,9 +32,49 @@ export function noteFilePath(directory: string, id: string): string {
   return join(directory, `${id}.md`);
 }
 
+/** Check Markdown identities without reading bodies or updating their index. */
+export function scanNoteIds(directory: string): string[] {
+  ensureNoteDirectory(directory);
+  const ids: string[] = [];
+  for (const name of readdirSync(directory)) {
+    if (!name.endsWith(".md")) continue;
+    const id = name.slice(0, -3);
+    const path = noteFilePath(directory, id);
+    let stat;
+    try {
+      stat = lstatSync(path);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw error;
+    }
+    if (!stat.isFile() || stat.isSymbolicLink())
+      throw new Error(`便签不是普通文件：${path}`);
+    ids.push(id);
+  }
+  return ids;
+}
+
 export function readNoteFile(
   path: string,
 ): { content: string; modifiedAt: number; createdAt: number } | undefined {
+  const file = readUtf8File(path, MAX_NOTE_CONTENT_LENGTH * 4);
+  if (file && file.content.length > MAX_NOTE_CONTENT_LENGTH)
+    throw new Error(`便签文件过大：${path}`);
+  return file;
+}
+
+export function readUtf8File(
+  path: string,
+  maxBytes = 4_000_000,
+):
+  | {
+      content: string;
+      modifiedAt: number;
+      createdAt: number;
+      identity: string;
+      fileKey: string;
+    }
+  | undefined {
   let before;
   try {
     before = lstatSync(path);
@@ -43,8 +84,7 @@ export function readNoteFile(
   }
   if (!before.isFile() || before.isSymbolicLink())
     throw new Error(`便签不是普通文件：${path}`);
-  if (before.size > MAX_NOTE_CONTENT_LENGTH * 4)
-    throw new Error(`便签文件过大：${path}`);
+  if (before.size > maxBytes) throw new Error(`便签文件过大：${path}`);
   const handle = openSync(
     path,
     constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
@@ -66,12 +106,12 @@ export function readNoteFile(
     } catch {
       throw new Error(`便签文件不是 UTF-8 文本：${path}`);
     }
-    if (content.length > MAX_NOTE_CONTENT_LENGTH)
-      throw new Error(`便签文件过大：${path}`);
     return {
       content,
       modifiedAt: actual.mtimeMs,
       createdAt: actual.birthtimeMs || actual.mtimeMs,
+      identity: `${actual.dev}:${actual.ino}:${actual.size}:${actual.mtimeMs}:${actual.ctimeMs}`,
+      fileKey: `${actual.dev}:${actual.ino}`,
     };
   } finally {
     closeSync(handle);
@@ -79,15 +119,29 @@ export function readNoteFile(
 }
 
 export function replaceNoteFile(path: string, content: string): void {
+  replaceUtf8File(path, content);
+}
+
+export function replaceUtf8File(path: string, content: string): string {
+  // Reject existing links before replacement, including dangling links.
+  try {
+    const target = lstatSync(path);
+    if (!target.isFile() || target.isSymbolicLink())
+      throw new Error(`不是普通文件：${path}`);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
   const temporary = `${path}.${randomUUID()}.tmp`;
   let handle: number | undefined;
   try {
     handle = openSync(temporary, "wx");
     writeFileSync(handle, content, "utf8");
     fsyncSync(handle);
+    const written = fstatSync(handle);
     closeSync(handle);
     handle = undefined;
     renameSync(temporary, path);
+    return `${written.dev}:${written.ino}`;
   } finally {
     if (handle !== undefined) closeSync(handle);
     try {
