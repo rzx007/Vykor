@@ -98,3 +98,20 @@ function toolPart({
     updatedAt: 1,
   }
 }
+
+it("recognizes a streaming answer and a settled tool result instead of reporting a stale call", () => {
+  const call = toolPart({ toolName: "Bash", status: "running" })
+  call.toolUseId = "call"
+  const result = {
+    ...call,
+    id: "result",
+    type: "tool_result" as const,
+    status: "completed" as const,
+    seq: 2,
+  }
+  const text = { ...call, id: "answer", type: "text" as const, seq: 3, text: "正在回答" }
+  expect(resolveScrollerAgentStatus({ running: true, parts: [call, result, text] })).toEqual({
+    kind: "generating",
+    title: "正在生成回复",
+  })
+})

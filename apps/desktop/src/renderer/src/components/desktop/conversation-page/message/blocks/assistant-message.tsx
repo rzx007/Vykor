@@ -48,6 +48,7 @@ import { toolOutputText } from "../models/message-content"
 import { isToolGenerationPresentation } from "../activity/tool-generation-presentation"
 import { readImagePath } from "../attachments/read-image-preview"
 import { ToolDetails } from "../tool-details"
+import { useConversationScroller } from "../../transcript/conversation-scroll-context"
 import { WorkflowSummary } from "../../../tools/workflows/workflow-summary"
 import { ReadToolRow } from "../tool-details/read-tool-row"
 import { readFileReference } from "../tool-details/read-tool-model"
@@ -409,9 +410,42 @@ function ToolActivityGroup({
   onOpenFile: (path: string, line?: number) => void
 }): React.JSX.Element {
   const groupTooltipId = useId()
-  const [open, setOpen] = useState(false)
-  const [activeId, setActiveId] = useState<string | null>(null)
-  const [expandedImages, setExpandedImages] = useState<ReadonlySet<string>>(new Set())
+  const expansion = useConversationScroller()?.turnExpansion
+  const groupKey = `tool-group:${tools[0]!.id}`
+  const [open, setOpen] = useState(() => expansion?.get(groupKey) ?? false)
+  const [activeId, setActiveId] = useState<string | null>(
+    () =>
+      tools.find((tool) => !readImagePath(tool.call) && expansion?.get(`tool:${tool.id}`))?.id ??
+      null
+  )
+  const [expandedImages, setExpandedImages] = useState<ReadonlySet<string>>(
+    () =>
+      new Set(
+        tools
+          .filter((tool) => readImagePath(tool.call) && expansion?.get(`tool:${tool.id}`))
+          .map((tool) => tool.id)
+      )
+  )
+  const changeOpen = (value: boolean) => {
+    expansion?.set(groupKey, value)
+    setOpen(value)
+  }
+  const toggleTool = (id: string, active: boolean, image: boolean) => {
+    expansion?.set(`tool:${id}`, !active)
+    if (image)
+      setExpandedImages((previous) => {
+        const next = new Set(previous)
+        if (active) next.delete(id)
+        else next.add(id)
+        return next
+      })
+    else {
+      if (activeId && activeId !== id) expansion?.set(`tool:${activeId}`, false)
+      setActiveId(active ? null : id)
+    }
+    // 单行详情打开后追加相邻工具时，保留当前展开。
+    if (tools.length === 1) changeOpen(!active)
+  }
   const grouped = tools.length > 1
   const active = tools.some(isToolInFlight)
   const activityLabel = toolGroupActivityLabel(tools)
@@ -459,7 +493,7 @@ function ToolActivityGroup({
             render={
               <button
                 type="button"
-                onClick={() => setOpen((value) => !value)}
+                onClick={() => changeOpen(!open)}
                 aria-expanded={open}
                 className={cn(
                   "flex h-7 max-w-full items-center gap-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
@@ -555,26 +589,12 @@ function ToolActivityGroup({
                     active={active}
                     calling={calling}
                     onOpenFile={onOpenFile}
-                    onToggle={() => {
-                      setActiveId(active ? null : tool.id)
-                      if (!grouped) setOpen(!active)
-                    }}
+                    onToggle={() => toggleTool(tool.id, active, false)}
                   />
                 ) : (
                   <button
                     type="button"
-                    onClick={() => {
-                      if (imagePath)
-                        setExpandedImages((previous) => {
-                          const next = new Set(previous)
-                          if (active) next.delete(tool.id)
-                          else next.add(tool.id)
-                          return next
-                        })
-                      else setActiveId(active ? null : tool.id)
-                      // 单行详情已打开时，随后归组仍保留当前展开状态。
-                      if (!grouped) setOpen(!active)
-                    }}
+                    onClick={() => toggleTool(tool.id, active, Boolean(imagePath))}
                     aria-expanded={active}
                     className={cn(
                       "group/tool-row flex h-7 w-full min-w-0 items-center gap-2 text-left hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",

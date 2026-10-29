@@ -4,6 +4,7 @@ export const conversationEndThresholdPx = 8
 export interface ConversationScrollSnapshot {
   following: boolean
   atEnd: boolean
+  hasNewContent: boolean
   activeMessageId: string | null
   viewportVersion: number
   retainedRowIds: readonly string[]
@@ -24,6 +25,7 @@ export function createConversationScrollState() {
   let snapshot: ConversationScrollSnapshot = {
     following: true,
     atEnd: true,
+    hasNewContent: false,
     activeMessageId: null,
     viewportVersion: 0,
     retainedRowIds: [],
@@ -36,6 +38,7 @@ export function createConversationScrollState() {
     if (
       next.following === snapshot.following &&
       next.atEnd === snapshot.atEnd &&
+      next.hasNewContent === snapshot.hasNewContent &&
       next.activeMessageId === snapshot.activeMessageId &&
       next.viewportVersion === snapshot.viewportVersion &&
       next.retainedRowIds === snapshot.retainedRowIds
@@ -79,8 +82,16 @@ export function createConversationScrollState() {
         if (navigation === next) navigation = null
       }
     },
+    notifyContentChanged: () => {
+      if (!snapshot.following) publish({ ...snapshot, hasNewContent: true })
+    },
     setPosition: (atEnd: boolean, activeMessageId: string | null) =>
-      publish({ ...snapshot, atEnd, activeMessageId }),
+      publish({
+        ...snapshot,
+        atEnd,
+        activeMessageId,
+        hasNewContent: atEnd && snapshot.following ? false : snapshot.hasNewContent,
+      }),
     setIntent: (direction: number) => {
       intent = direction
       if (direction <= 0) publish({ ...snapshot, following: false })
@@ -103,7 +114,12 @@ export function createConversationScrollState() {
       // 高度增长可能产生位置未变的 scroll 回读，它不代表用户离开底部。
       const following =
         atEnd && intent >= 0 ? true : movedUp || intent < 0 ? false : snapshot.following
-      publish({ ...snapshot, atEnd, following })
+      publish({
+        ...snapshot,
+        atEnd,
+        following,
+        hasNewContent: atEnd && following ? false : snapshot.hasNewContent,
+      })
     },
     scrollToMessage: (id: string): boolean => {
       if (!navigation?.hasMessage(id)) return false
@@ -114,7 +130,7 @@ export function createConversationScrollState() {
     },
     scrollToEnd: () => {
       intent = 1
-      publish({ ...snapshot, following: true })
+      publish({ ...snapshot, following: true, hasNewContent: false })
       navigation?.scrollToEnd()
     },
   }

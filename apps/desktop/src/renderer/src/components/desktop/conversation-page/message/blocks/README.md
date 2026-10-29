@@ -24,3 +24,5 @@
 错误提示通过 `userActions.editing` 与 `onEditingChange` 控制最新用户消息的原编辑表单，不重建编辑器；重复打开保留未提交修改。打开和取消都不发送请求，只有用户明确提交才调用 `onEdit`。
 
 新增消息组合和交互放在本目录，通用数据整理放 [models](../models/README.md)，完整工具内容的读取放 [tool-details](../tool-details/README.md)。测试放同层 [测试目录](__test__/)，涉及虚拟滚动或输入框的完整场景继续在 transcript、composer 中验证。返回[消息展示导航](../README.md)。
+
+工具组与单条工具详情的展开偏好复用 transcript 的会话内 `turnExpansion`，只保存是否展开，不保存完整结果。默认仍显示工具摘要；主动展开后按需读取历史详情，虚拟行重挂载不会丢失选择，也不会触发工具执行。

@@ -1,6 +1,6 @@
 import { submitConversationDraft } from "./session/submit-conversation-draft"
 import { pluginAppModelContexts } from "../shell/plugin-apps/plugin-app-model-context"
-import { Bot, MoreHorizontal, PanelRight, ShieldAlert } from "lucide-react"
+import { MoreHorizontal, PanelRight } from "lucide-react"
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { useNavigate } from "@tanstack/react-router"
 
@@ -89,10 +89,7 @@ import { useShowReasoning } from "./shared/use-show-reasoning"
 import { useTaskLocation } from "./session/use-task-location"
 import { openConversationTextMenu } from "./shared/conversation-text-actions"
 import type { AddToComposerEventDetail, ConversationPaneProps } from "./shared/types"
-import {
-  resolveScrollerAgentStatus,
-  type ScrollerAgentStatusKind,
-} from "./transcript/scroller-agent-status"
+import { resolveScrollerAgentStatus } from "./transcript/scroller-agent-status"
 import { resolveModelLabel } from "./shared/utils"
 
 function ConversationPane({
@@ -347,6 +344,8 @@ function ConversationPane({
   const scrollerAgentStatus = resolveScrollerAgentStatus({
     running,
     parts: sessionView?.parts ?? [],
+    messages: sessionView?.messages,
+    runs: sessionView?.runs,
     pendingPermissionCount: pendingPermissions.length,
     agentTaskRunning: sessionView?.tasks.some(
       (task) => task.type === "agent" && (task.status === "pending" || task.status === "running")
@@ -724,18 +723,12 @@ function ConversationPane({
                           onOpenReview={onOpenReview}
                           onOpenTerminal={onOpenTerminal}
                           showReasoning={showReasoning}
+                          pendingPermissionCount={pendingPermissions.length}
                         />
                       )}
                     </MessageScrollerContent>
                   </MessageScrollerViewport>
-                  <MessageScrollerButton className="bottom-5" title={scrollerAgentStatus?.title}>
-                    {scrollerAgentStatus ? (
-                      <>
-                        <ScrollerAgentStatusIcon kind={scrollerAgentStatus.kind} />
-                        <span className="sr-only">滚动到最新</span>
-                      </>
-                    ) : undefined}
-                  </MessageScrollerButton>
+                  <MessageScrollerButton className="bottom-5" title={scrollerAgentStatus?.title} />
                 </MessageScroller>
                 <ConversationPreviewRail
                   messages={transcript.messages}
@@ -969,12 +962,6 @@ function ConversationPane({
       </section>
     </MessagePluginCatalog.Provider>
   )
-}
-
-function ScrollerAgentStatusIcon({ kind }: { kind: ScrollerAgentStatusKind }): React.JSX.Element {
-  if (kind === "permission") return <ShieldAlert />
-  if (kind === "agent") return <Bot />
-  return <Spinner />
 }
 
 export { ConversationPane }

@@ -79,14 +79,16 @@ describe("turn process disclosure", () => {
       scroller = useConversationScroller()!
       return null
     }
-    const showVirtualRow = (finished: boolean) =>
+    const showVirtualRow = (finished: boolean, visible = true) =>
       act(() =>
         root.render(
           <ConversationScrollerProvider>
             <Reader />
-            <TurnProcess turnId="turn" plan={plan} canCollapse={finished} timing={timing}>
-              {render}
-            </TurnProcess>
+            {visible ? (
+              <TurnProcess turnId="turn" plan={plan} canCollapse={finished} timing={timing}>
+                {render}
+              </TurnProcess>
+            ) : null}
           </ConversationScrollerProvider>
         )
       )
@@ -95,6 +97,9 @@ describe("turn process disclosure", () => {
     showVirtualRow(true)
     expect(container.textContent).toContain("执行过程")
     expect(container.querySelector("button")).toBeNull()
+    showVirtualRow(true, false)
+    showVirtualRow(true)
+    expect(container.textContent).toContain("执行过程")
   })
   it("keeps running work visible, then collapses it under its duration", () => {
     show(false)

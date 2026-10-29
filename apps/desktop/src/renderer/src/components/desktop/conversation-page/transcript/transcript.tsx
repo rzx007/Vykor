@@ -52,6 +52,7 @@ interface ConversationTranscriptProps {
   parts: DesktopSessionPart[]
   runs: DesktopSessionRun[]
   running: boolean
+  pendingPermissionCount?: number
   canEditLastUserMessage: boolean
   onEditLastUserMessage: (sourceMessageId: string, document: ComposerDocument) => void
   onCopyAssistantMessage: (content: string) => void | Promise<void>
@@ -72,6 +73,7 @@ export const ConversationTranscript = memo(function ConversationTranscript({
   parts,
   runs,
   running,
+  pendingPermissionCount = 0,
   canEditLastUserMessage,
   onEditLastUserMessage,
   onCopyAssistantMessage,
@@ -87,6 +89,17 @@ export const ConversationTranscript = memo(function ConversationTranscript({
 }: ConversationTranscriptProps): React.JSX.Element {
   usePluginAppResults(parts)
   const workflowScroller = useConversationScroller()
+  const previousContent = useRef({ messages, parts, runs })
+  useLayoutEffect(() => {
+    const previous = previousContent.current
+    if (
+      !sameReferences(previous.messages, messages) ||
+      !sameReferences(previous.parts, parts) ||
+      !sameReferences(previous.runs, runs)
+    )
+      workflowScroller?.notifyContentChanged()
+    previousContent.current = { messages, parts, runs }
+  }, [messages, parts, runs, workflowScroller])
   useEffect(() => {
     const reveal = (event: Event) => {
       const detail = (event as CustomEvent<{ sessionId: string; runId: string }>).detail
@@ -136,11 +149,14 @@ export const ConversationTranscript = memo(function ConversationTranscript({
   }, [runs])
   const preparationLabel = pluginPreparationLabel(activeRun, { messages, parts, inputs, tasks })
   // 这行文字和 orb 动画来自同一个判断，防止文案和动效各说各话。
-  const runningActivity: ActivityStep = modelRetry
-    ? { label: "等待重试", orb: "breathing" }
-    : preparationLabel !== undefined
-      ? { label: preparationLabel, orb: "connecting" }
-      : (activity ?? { label: "进行中", orb: "working" })
+  const runningActivity: ActivityStep =
+    pendingPermissionCount > 0
+      ? { label: "等待你确认", orb: "breathing" }
+      : modelRetry
+        ? { label: "等待重试", orb: "breathing" }
+        : preparationLabel !== undefined
+          ? { label: preparationLabel, orb: "connecting" }
+          : (activity ?? { label: "进行中", orb: "working" })
   const turnDataById = useMemo(
     () => buildTurnData(entries, inputs, runs, noticeRuns, running, lastTurn),
     [entries, inputs, runs, noticeRuns, running, lastTurn]
@@ -642,7 +658,7 @@ function useTranscriptModel(
     ? withToolGenerationPresentation(input.runs, input.messages, visibleParts)
     : { messages: input.messages, parts: visibleParts }
   const entries = buildConversationEntries(presentation.messages, presentation.parts, input.runs)
-  const activity = conversationActivity(input.runs, input.messages, visibleParts)
+  const activity = conversationActivity(input.runs, input.messages, input.parts)
   const activeRun =
     input.runs.find((run) => run.status === "running") ??
     input.runs.find((run) => run.status === "pending")

@@ -97,6 +97,9 @@ beforeEach(() => {
     toJSON() {},
   })
   Range.prototype.getClientRects = () => [] as unknown as DOMRectList
+  // jsdom 不计算布局，为实际虚拟列表提供可见视口。
+  vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(480)
+  vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(640)
   HTMLElement.prototype.scrollTo = () => {}
   HTMLElement.prototype.getAnimations = () => []
   localStorage.clear()
@@ -158,6 +161,7 @@ afterEach(() => {
   act(() => root.unmount())
   container.remove()
   window.getSelection()?.removeAllRanges()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 async function mount(sourceId = "main", active = true) {

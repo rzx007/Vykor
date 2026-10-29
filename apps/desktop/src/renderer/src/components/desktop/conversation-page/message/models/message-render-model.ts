@@ -369,6 +369,15 @@ export function conversationActivity(
   const tools = currentParts
     .filter((part) => part.type === "tool")
     .map((call) => ({ call, result: call.toolUseId ? results.get(call.toolUseId) : undefined }))
+  const writing = currentParts
+    .filter(
+      (part) => (part.type === "text" || part.type === "reasoning") && part.status === "running"
+    )
+    .at(-1)
+  if (writing && !tools.some(({ call, result }) => isToolActivityActive(call, result)))
+    return writing.type === "text"
+      ? { label: "正在生成回复", orb: "composing" }
+      : { label: "正在思考", orb: "working" }
   const tool = toolGroupActivity(tools)
   // 工具行可省略执行文案，但会话底部始终保留状态说明。
   if (tool?.label === "准备中") return { label: "正在处理", orb: tool.orb }

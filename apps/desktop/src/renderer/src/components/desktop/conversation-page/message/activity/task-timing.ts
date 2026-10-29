@@ -60,7 +60,7 @@ export function taskTimingLabel(timing: TaskTiming): string | undefined {
     return elapsed ? `执行在 ${elapsed}后中断` : "执行已中断"
   }
   if (timing.status === "failed") return elapsed ? `执行失败，用时 ${elapsed}` : "执行失败"
-  if (timing.status === "completed" && elapsed) return `用时 ${elapsed}`
+  if (timing.status === "completed" && elapsed) return `已完成，用时 ${elapsed}`
   return undefined
 }
 

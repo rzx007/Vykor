@@ -126,7 +126,10 @@ describe("real tool activity labels", () => {
   })
   it("ignores a phase that only exists on Object.prototype", () => {
     const tool = { ...part, metadata: { toolProgress: { phase: "constructor" } } }
-    expect(conversationActivity([run], [message], [tool])).toEqual({ label: "正在处理", orb: "solving" })
+    expect(conversationActivity([run], [message], [tool])).toEqual({
+      label: "正在处理",
+      orb: "solving",
+    })
   })
   it("waits with breathing and thinks with working when no tool is involved", () => {
     expect(conversationActivity([run], [message], [])).toEqual({
@@ -158,4 +161,13 @@ describe("real tool activity labels", () => {
       "等待模型响应"
     )
   })
+})
+
+it.each([
+  ["text", "正在生成回复"],
+  ["reasoning", "正在思考"],
+] as const)("reports %s streaming after a returned tool", (type, label) => {
+  const call = { ...part, toolUseId: "call", metadata: { toolProgress: { phase: "completed" } } }
+  const text = { ...part, id: "writing", seq: 2, type, text: "content", metadata: {} }
+  expect(conversationActivity([run], [message], [call, text])?.label).toBe(label)
 })

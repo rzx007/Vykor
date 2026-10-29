@@ -30,12 +30,12 @@ import {
   PopoverTitle,
 } from "@renderer/components/ui/popover"
 import {
-  MessageScroller,
-  MessageScrollerProvider,
-  MessageScrollerViewport,
-  MessageScrollerContent,
-  MessageScrollerButton,
-} from "@renderer/components/ui/message-scroller"
+  ConversationScroller as MessageScroller,
+  ConversationScrollerProvider as MessageScrollerProvider,
+  ConversationScrollerViewport as MessageScrollerViewport,
+  ConversationScrollerContent as MessageScrollerContent,
+  ConversationScrollerButton as MessageScrollerButton,
+} from "../../conversation-page/transcript/conversation-scroller"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
@@ -336,6 +336,8 @@ export function SideChatPanel({
   const status = resolveScrollerAgentStatus({
     running,
     parts: view?.parts ?? [],
+    messages: view?.messages,
+    runs: view?.runs,
     pendingPermissionCount: permissions.length,
     agentTaskRunning: view?.tasks.some(
       (task) => task.type === "agent" && (task.status === "running" || task.status === "pending")
@@ -663,10 +665,10 @@ export function SideChatPanel({
         active ? "flex" : "hidden"
       )}
     >
-      <MessageScrollerProvider autoScroll defaultScrollPosition="end">
+      <MessageScrollerProvider key={targetId ?? "new"}>
         <MessageScroller className="min-h-0 flex-1">
           <MessageScrollerViewport onContextMenu={(event) => void openConversationTextMenu(event)}>
-            <MessageScrollerContent className="conversation-content-column min-h-full min-w-0 gap-6 pt-7 pb-5 text-content-foreground">
+            <MessageScrollerContent className="conversation-content-column min-h-full min-w-0 text-content-foreground">
               {view || submissions.length ? (
                 <ConversationTranscript
                   inputs={view?.inputs ?? []}
@@ -675,6 +677,7 @@ export function SideChatPanel({
                   parts={transcript.parts}
                   runs={view?.runs ?? []}
                   running={running}
+                  pendingPermissionCount={permissions.length}
                   canEditLastUserMessage={false}
                   onEditLastUserMessage={() => {}}
                   onCopyAssistantMessage={(content) => window.desktop.clipboard.writeText(content)}

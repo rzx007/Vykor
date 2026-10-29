@@ -94,8 +94,11 @@ export function TurnProcess({
     if (!readingHistory && !selecting && !interacting) {
       setAllowFold(true)
       setOpen(false)
+    } else if (turnId) {
+      // 阅读时保留的展开也要跨过虚拟行卸载，不能回来时又自动折叠。
+      scroller?.turnExpansion.set(turnId, true)
     }
-  }, [eligible, scroller])
+  }, [eligible, scroller, turnId])
 
   const label = (timing && taskTimingLabel(timing)) ?? "过程说明"
 

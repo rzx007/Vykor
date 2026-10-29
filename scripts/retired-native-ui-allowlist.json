@@ -462,19 +462,19 @@
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx",
-      "line": 54,
+      "line": 55,
       "text": "import { PluginUiHistoryCard } from \"../tool-details/plugin-ui-history-card\"",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx",
-      "line": 171,
+      "line": 172,
       "text": "        if (unit.type === \"plugin-ui\") {",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/blocks/assistant-message.tsx",
-      "line": 173,
+      "line": 174,
       "text": "            <PluginUiHistoryCard",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },

@@ -594,6 +594,7 @@ it("keeps rail selection on the preceding turn for system rows and does not repl
   act(() =>
     renderTranscript([...parts, { ...livePart, text: "new reply appended", updatedAt: 201 }])
   )
+  expect(scroller.getSnapshot().hasNewContent).toBe(true)
   act(() => scroller.scrollToMessage("prompt-199"))
   await settle()
   expect(
@@ -658,4 +659,37 @@ it("reuses measured heights after offscreen remounts and rebuilding rows with th
   expect(row(400)).not.toBeNull()
   expect(viewport().scrollHeight).toBe(measuredTotal)
   expect(scroller.getSnapshot().activeMessageId).toBe("prompt-400")
+})
+
+it("shows unread updates without moving the reader and clears them on return to latest", async () => {
+  act(() => render(rows(100)))
+  await settle()
+  act(() => scroller.scrollToMessage("prompt-40"))
+  await settle()
+  const before = viewport().scrollTop
+  act(() => scroller.notifyContentChanged())
+  expect(viewport().scrollTop).toBe(before)
+  expect(container.textContent).toContain("有新内容")
+  act(() => container.querySelector<HTMLButtonElement>("button")!.click())
+  await settle()
+  expect(scroller.getSnapshot().following).toBe(true)
+  expect(container.textContent).not.toContain("有新内容")
+})
+
+it("does not detach following for a wheel consumed by a nested tool output", async () => {
+  act(() =>
+    render(rows(100), "chat", false, () => <pre style={{ overflowY: "auto" }}>tool output</pre>)
+  )
+  await settle()
+  const output = row(99)!.querySelector("pre")!
+  Object.defineProperties(output, {
+    clientHeight: { configurable: true, value: 100 },
+    scrollHeight: { configurable: true, value: 500 },
+  })
+  output.scrollTop = 200
+  act(() => output.dispatchEvent(new WheelEvent("wheel", { deltaY: -40, bubbles: true })))
+  expect(scroller.getSnapshot().following).toBe(true)
+  output.scrollTop = 0
+  act(() => output.dispatchEvent(new WheelEvent("wheel", { deltaY: -40, bubbles: true })))
+  expect(scroller.getSnapshot().following).toBe(false)
 })

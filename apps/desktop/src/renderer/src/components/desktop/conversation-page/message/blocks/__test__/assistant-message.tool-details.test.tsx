@@ -17,6 +17,8 @@ import { buildAssistantContent } from "../../models/message-render-model"
 import { useToolDetails } from "../../tool-details/use-tool-details"
 import { ImageViewerProvider } from "@renderer/components/desktop/image-viewer/image-viewer-provider"
 
+import { ConversationScrollerProvider } from "../../../transcript/conversation-scroller"
+
 const openReadImage = vi.fn()
 
 let container: HTMLDivElement
@@ -888,4 +890,40 @@ describe("tool parameter and result display", () => {
     expect(container.textContent).toContain("exit code 1")
     expect(container.querySelector("[data-shell-command]")?.textContent).toBe("exit 1")
   })
+})
+
+
+it("keeps expanded tool details across virtual row unmounts without executing the tool", () => {
+  const call = part("Bash", { command: "pnpm test" }, { output: "a long saved tool result" })
+  function show(visible: boolean) {
+    act(() =>
+      root.render(
+        <ConversationScrollerProvider>
+          <TooltipProvider>
+            {visible ? (
+              <AssistantMessage
+                parts={[call]}
+                streaming={false}
+                onOpenFile={vi.fn()}
+                canOpenReview={false}
+                onOpenReview={vi.fn()}
+                onOpenTerminal={vi.fn()}
+              />
+            ) : null}
+          </TooltipProvider>
+        </ConversationScrollerProvider>
+      )
+    )
+  }
+  show(true)
+  expect(container.textContent).not.toContain("a long saved tool result")
+  click("运行命令")
+  expect(container.textContent).toContain("a long saved tool result")
+  show(false)
+  show(true)
+  expect(container.textContent).toContain("a long saved tool result")
+  click("运行命令")
+  show(false)
+  show(true)
+  expect(container.textContent).not.toContain("a long saved tool result")
 })

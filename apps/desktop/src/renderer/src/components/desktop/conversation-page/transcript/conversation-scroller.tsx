@@ -12,6 +12,32 @@ import { cn } from "@renderer/lib/utils"
 import { createConversationScrollState } from "./conversation-scroll-state"
 import { ConversationScrollContext, useConversationScroller } from "./conversation-scroll-context"
 
+// 工具输出和代码块有自己的滚动区域，只有滚动将传给外层时才改变阅读意图。
+function consumesScroll(
+  target: EventTarget | null,
+  viewport: HTMLElement,
+  direction: number
+): boolean {
+  for (
+    let element = target instanceof Element ? target : null;
+    element && element !== viewport;
+    element = element.parentElement
+  ) {
+    if (!(element instanceof HTMLElement)) continue
+    const style = window.getComputedStyle(element)
+    if (!/auto|scroll/.test(style.overflowY)) continue
+    if (element.scrollHeight <= element.clientHeight) continue
+    if (style.overscrollBehaviorY === "contain" || style.overscrollBehaviorY === "none") return true
+    if (
+      direction < 0
+        ? element.scrollTop > 0
+        : element.scrollTop + element.clientHeight < element.scrollHeight
+    )
+      return true
+  }
+  return false
+}
+
 export function ConversationScrollerProvider({ children }: { children?: ReactNode }) {
   const [state] = useState(createConversationScrollState)
   return <ConversationScrollContext value={state}>{children}</ConversationScrollContext>
@@ -59,11 +85,16 @@ export function ConversationScrollerViewport({
         className
       )}
       onScroll={(event) => {
-        state.onScroll()
+        if (event.target === event.currentTarget) state.onScroll()
         onScroll?.(event)
       }}
       onWheel={(event) => {
-        if (event.deltaY) state.setIntent(event.deltaY < 0 ? -1 : 1)
+        if (
+          event.deltaY &&
+          !event.defaultPrevented &&
+          !consumesScroll(event.target, event.currentTarget, event.deltaY)
+        )
+          state.setIntent(event.deltaY < 0 ? -1 : 1)
         onWheel?.(event)
       }}
       onKeyDown={(event) => {
@@ -72,6 +103,14 @@ export function ConversationScrollerViewport({
           event.defaultPrevented ||
           target.closest("input, textarea, select, button, [contenteditable=true], [role=textbox]")
         ) {
+          onKeyDown?.(event)
+          return
+        }
+        const direction =
+          ["ArrowUp", "PageUp", "Home"].includes(event.key) || (event.key === " " && event.shiftKey)
+            ? -1
+            : 1
+        if (consumesScroll(event.target, event.currentTarget, direction)) {
           onKeyDown?.(event)
           return
         }
@@ -89,7 +128,12 @@ export function ConversationScrollerViewport({
       }}
       onTouchMove={(event) => {
         const nextY = event.touches[0]?.clientY
-        if (nextY !== undefined && touchY.current !== null && nextY !== touchY.current)
+        if (
+          nextY !== undefined &&
+          touchY.current !== null &&
+          nextY !== touchY.current &&
+          !consumesScroll(event.target, event.currentTarget, touchY.current - nextY)
+        )
           state.setIntent(nextY > touchY.current ? -1 : 1)
         touchY.current = nextY ?? null
         onTouchMove?.(event)
@@ -132,6 +176,7 @@ export function ConversationScrollerButton({
   className,
   children,
   onClick,
+  title,
   ...props
 }: ComponentProps<typeof Button>) {
   const state = useConversationScroller()!
@@ -141,9 +186,11 @@ export function ConversationScrollerButton({
     <Button
       type="button"
       variant="secondary"
-      size="icon-sm"
+      size="sm"
+      shape="pill"
+      title={title}
       className={cn(
-        "absolute inset-s-1/2 bottom-5 -translate-x-1/2 border-border bg-background text-foreground transition-opacity duration-200 motion-reduce:transition-none",
+        "absolute inset-s-1/2 bottom-5 max-w-[calc(100%-2rem)] -translate-x-1/2 border-border bg-background text-foreground transition-opacity duration-200 motion-reduce:transition-none",
         className
       )}
       onClick={(event) => {
@@ -154,8 +201,11 @@ export function ConversationScrollerButton({
     >
       {children ?? (
         <>
-          <ArrowDownIcon />
-          <span className="sr-only">滚动到最新</span>
+          <ArrowDownIcon aria-hidden="true" data-icon="inline-start" />
+          <span className="truncate">
+            {title ? `${title} · ` : ""}
+            {snapshot.hasNewContent ? "有新内容，回到最新" : "回到最新"}
+          </span>
         </>
       )}
     </Button>
