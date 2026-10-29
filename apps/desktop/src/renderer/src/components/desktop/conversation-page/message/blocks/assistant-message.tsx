@@ -480,6 +480,7 @@ function ToolActivityGroup({
   }
   const grouped = tools.length > 1
   const label = toolGroupHeaderLabel(tools, showSummary)
+  const shimmering = !showSummary && tools.some(isToolInFlight)
   const activityLabel = import.meta.env.DEV ? toolGroupActivityLabel(tools) : undefined
   const failures = import.meta.env.DEV
     ? tools.filter(
@@ -510,7 +511,10 @@ function ToolActivityGroup({
               />
             }
           >
-            <span data-slot="tool-group-label" className="min-w-0 truncate">
+            <span
+              data-slot="tool-group-label"
+              className={cn("min-w-0 truncate", shimmering && "shimmer")}
+            >
               {label}
             </span>
             {diagnosticLabel ? <ToolDiagnosticDot label={diagnosticLabel} /> : null}

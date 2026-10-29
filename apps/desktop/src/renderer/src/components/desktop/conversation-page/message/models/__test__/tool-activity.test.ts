@@ -99,7 +99,7 @@ describe("inline tool group wording", () => {
   })
 
   it("switches from the latest tool to the completed summary at the boundary", () => {
-    const tools = [
+    const tools: { call: DesktopSessionPart; result?: DesktopSessionPart }[] = [
       { call: { ...part, toolName: "Edit", input: { path: "a.ts" }, status: "completed" } },
       {
         call: { ...part, id: "shell", toolName: "Shell", input: { command: "pnpm test" } },

@@ -243,7 +243,7 @@ describe("inline tool group status", () => {
     expect(label()?.textContent).toBe("编辑文件 · src/app.ts")
     const heading = click("编辑文件")
     expect(heading.querySelector('[role="status"]')).toBeNull()
-    expect(heading.querySelector(".shimmer")).toBeNull()
+    expect(label()?.classList.contains("shimmer")).toBe(true)
     expect(heading.querySelector("canvas")).toBeNull()
     const finishedCommand = { ...command, status: "completed" as const }
     const waitingWrite = {
@@ -337,7 +337,11 @@ describe("inline tool group status", () => {
       false
     )
     expect(label()?.textContent).toBe("运行命令 · pnpm test")
+    expect(label()?.classList.contains("shimmer")).toBe(true)
     expect(container.querySelector("canvas")).toBeNull()
+    render([read, { ...command, status: "completed" }], true, vi.fn(), false)
+    expect(label()?.textContent).toBe("运行命令 · pnpm test")
+    expect(label()?.classList.contains("shimmer")).toBe(false)
   })
 })
 
