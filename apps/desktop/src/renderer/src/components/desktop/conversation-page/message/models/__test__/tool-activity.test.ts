@@ -4,7 +4,12 @@ import type {
   DesktopSessionPart,
   DesktopSessionRun,
 } from "@shared/session-types"
-import { conversationActivity, summarizeToolCall, toolActivityLabel } from "../message-render-model"
+import {
+  conversationActivity,
+  summarizeToolCall,
+  toolActivityLabel,
+  toolGroupInlineStatus,
+} from "../message-render-model"
 
 const run: DesktopSessionRun = {
   id: "run",
@@ -36,6 +41,52 @@ const part: DesktopSessionPart = {
   createdAt: 1,
   updatedAt: 1,
 }
+
+describe("inline tool group wording", () => {
+  it.each([
+    "TeamCreate",
+    "TeamDelete",
+    "ScheduleCreate",
+    "ScheduleDelete",
+    "mcp__calendar__create_event",
+    "mcp__remote__exec_query",
+    "CustomTool",
+  ])("keeps non-file operations neutral: %s", (toolName) => {
+    expect(
+      toolGroupInlineStatus([{ call: { ...part, toolName, status: "completed" } }])
+    ).toMatchObject({ label: "操作已结束", active: false })
+  })
+
+  it.each(["Write", "Edit", "ApplyPatch", "TodoWrite", "write_file"])(
+    "still summarizes known file operations: %s",
+    (toolName) => {
+      expect(
+        toolGroupInlineStatus([{ call: { ...part, toolName, status: "completed" } }]).label
+      ).toBe("编辑了文件")
+    }
+  )
+
+  it.each(["Shell", "BackgroundShellCreate", "TerminalOpen"])(
+    "still summarizes known command operations: %s",
+    (toolName) => {
+      expect(
+        toolGroupInlineStatus([{ call: { ...part, toolName, status: "completed" } }]).label
+      ).toBe("运行了命令")
+    }
+  )
+
+  it.each([
+    [{}, "正在使用本地 OCR 识别文字"],
+    [
+      { attachmentOcr: { status: "completed", cached: true } },
+      "已使用本地 OCR 提取文字 · 已复用识别结果",
+    ],
+  ])("preserves the complete OCR wording: %j", (metadata, label) => {
+    expect(
+      toolGroupInlineStatus([{ call: { ...part, toolName: "ImageToText", metadata } }])
+    ).toMatchObject({ label, active: true })
+  })
+})
 
 describe("real tool activity labels", () => {
   it("labels a terminal unknown outcome as uncertain", () => {

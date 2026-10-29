@@ -67,7 +67,37 @@ it("switches immediately with reduced motion and announces only the current stat
   expect(container.querySelectorAll("canvas")).toHaveLength(1)
   expect(orb()?.dataset.orbState).toBe("solving")
   expect(orb()?.dataset.orbPaused).toBe("true")
-  act(() => root.render(<LoadingState label="等待你的确认" state="breathing" showElapsed={false} />))
-  expect(container.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe("等待你的确认")
+  act(() =>
+    root.render(<LoadingState label="等待你的确认" state="breathing" showElapsed={false} />)
+  )
+  expect(container.querySelector('[role="status"]')?.getAttribute("aria-label")).toBe(
+    "等待你的确认"
+  )
   expect(container.textContent).toBe("等待你的确认")
+})
+
+it("can settle as inline text without an orb, shimmer or elapsed timer", () => {
+  document.documentElement.dataset.reducedMotion = "true"
+  act(() =>
+    root.render(
+      <LoadingState
+        label="编辑了文件，运行了命令"
+        showElapsed={false}
+        showIndicator={false}
+        paused
+      />
+    )
+  )
+  expect(container.querySelector('[role="status"]')?.tagName).toBe("SPAN")
+  expect(container.textContent).toBe("编辑了文件，运行了命令")
+  expect(container.querySelector("canvas, .shimmer")).toBeNull()
+})
+
+it("keeps the accessible label current while visual states crossfade", () => {
+  act(() => root.render(<LoadingState label="正在读取文件" state="working" showElapsed={false} />))
+  const status = container.querySelector('[role="status"]')
+  act(() => root.render(<LoadingState label="正在编辑文件" state="solving" showElapsed={false} />))
+  expect(container.querySelector('[role="status"]')).toBe(status)
+  expect(status?.getAttribute("aria-label")).toBe("正在编辑文件")
+  expect(container.querySelectorAll('[role="status"]')).toHaveLength(1)
 })

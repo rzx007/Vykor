@@ -1,16 +1,10 @@
-import {
-  AlertCircle,
-  ChevronDown,
-  FileCode2,
-  Layers,
-  LoaderCircle,
-  TerminalSquare,
-} from "lucide-react"
+import { AlertCircle, ChevronDown, FileCode2, LoaderCircle, TerminalSquare } from "lucide-react"
 import { memo, useEffect, useId, useMemo, useState } from "react"
 import type { WorkspaceChangesMetadata } from "@rzx/client"
 import type { DesktopGitDiffScope } from "@shared/git-types"
 
 import { Button } from "@renderer/components/ui/button"
+import { LoadingState } from "@renderer/components/ui/loading-state"
 import { AttachmentGroup } from "@renderer/components/ui/attachment"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@renderer/components/ui/tooltip"
 import { queryGitChanges } from "@renderer/lib/git-changes-query"
@@ -34,6 +28,7 @@ import {
   toolCallStatus,
   toolActivityLabel,
   toolGroupActivityLabel,
+  toolGroupInlineStatus,
   isToolActivityActive,
   type AssistantContentUnit,
   type ChangedFile,
@@ -449,16 +444,8 @@ function ToolActivityGroup({
     if (tools.length === 1) changeOpen(!active)
   }
   const grouped = tools.length > 1
-  const active = tools.some(isToolInFlight)
-  const activityLabel = toolGroupActivityLabel(tools)
-  const counts = { edits: 0, commands: 0, reads: 0 }
-  for (const tool of tools) {
-    if (isToolGenerationPresentation(tool.call)) continue
-    const name = tool.call.toolName ?? ""
-    if (/bash|shell|terminal|exec|command/i.test(name)) counts.commands++
-    else if (/write|edit|patch|create|delete/i.test(name)) counts.edits++
-    else counts.reads++
-  }
+  const status = toolGroupInlineStatus(tools)
+  const activityLabel = import.meta.env.DEV ? toolGroupActivityLabel(tools) : undefined
   const failures = import.meta.env.DEV
     ? tools.filter(
         (tool) =>
@@ -466,20 +453,7 @@ function ToolActivityGroup({
           toolCallStatus(tool.call, tool.result) === "failed"
       ).length
     : 0
-  const activityHeading = [
-    counts.edits ? `文件编辑 ${counts.edits} 次` : "",
-    counts.commands ? `命令调用 ${counts.commands} 次` : "",
-    counts.reads ? `工具查看 ${counts.reads} 次` : "",
-  ]
-    .filter(Boolean)
-    .join("，")
   const generatingTools = tools.filter((tool) => isToolGenerationPresentation(tool.call))
-  const heading = [
-    activityHeading,
-    !open ? generatingTools.map((tool) => generationSummary(tool).label).join("、") : "",
-  ]
-    .filter(Boolean)
-    .join(" · ")
   const diagnosticLabel = [
     failures ? `${failures} 次失败` : "",
     activityLabel && diagnosticToolLabels.has(activityLabel) ? activityLabel : "",
@@ -487,7 +461,7 @@ function ToolActivityGroup({
     .filter(Boolean)
     .join(" · ")
   return (
-    <section aria-label="工具活动组" className="text-ui-small text-ui-muted">
+    <section aria-label="工具活动组" className="text-chat text-ui-muted">
       {grouped ? (
         <Tooltip disabled={open || !generatingTools.length}>
           <TooltipTrigger
@@ -497,30 +471,19 @@ function ToolActivityGroup({
                 type="button"
                 onClick={() => changeOpen(!open)}
                 aria-expanded={open}
-                className={cn(
-                  "flex h-7 max-w-full items-center gap-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
-                  active && !generatingTools.length && "shimmer"
-                )}
+                className="flex min-h-7 max-w-full items-center gap-2 text-left hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               />
             }
           >
-            {!open && generatingTools.length ? (
-              <ToolGenerationIcon
-                toolName={
-                  generatingTools.length === 1 ? generatingTools[0]?.call.toolName : undefined
-                }
-              />
-            ) : (
-              <Layers aria-hidden="true" className="size-3.5 shrink-0" strokeWidth={1.75} />
-            )}
-            <span className="truncate">
-              {heading || "工具活动"}
-              {activityLabel &&
-              !diagnosticToolLabels.has(activityLabel) &&
-              !(generatingTools.length && activityLabel === "准备中")
-                ? ` · ${activityLabel}`
-                : ""}
-            </span>
+            <LoadingState
+              label={status.label}
+              state={status.orb}
+              size={20}
+              showElapsed={false}
+              showIndicator={status.active}
+              paused={!status.active}
+              className="gap-2 text-[length:inherit] font-normal"
+            />
             {diagnosticLabel ? <ToolDiagnosticDot label={diagnosticLabel} /> : null}
             <ChevronDown
               className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-180")}
@@ -542,7 +505,7 @@ function ToolActivityGroup({
                     render={
                       <div
                         tabIndex={0}
-                        className="flex h-7 min-w-0 items-center gap-2 text-ui-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                        className="flex min-h-7 min-w-0 items-center gap-2 text-ui-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                       />
                     }
                   >
@@ -599,7 +562,7 @@ function ToolActivityGroup({
                     onClick={() => toggleTool(tool.id, active, Boolean(imagePath))}
                     aria-expanded={active}
                     className={cn(
-                      "group/tool-row flex h-7 w-full min-w-0 items-center gap-2 text-left hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+                      "group/tool-row flex min-h-7 w-full min-w-0 items-center gap-2 text-left hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
                       calling && "shimmer"
                     )}
                   >
@@ -612,7 +575,7 @@ function ToolActivityGroup({
                       diagnosticToolLabels.has(statusText) ? (
                         <ToolDiagnosticDot label={statusText} />
                       ) : (
-                        <span className="shrink-0 text-xs text-ui-muted">{statusText}</span>
+                        <span className="shrink-0 text-ui-muted">{statusText}</span>
                       )
                     ) : null}
                     <ChevronDown
