@@ -6,6 +6,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@renderer/components/ui
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Separator } from "@renderer/components/ui/separator"
 import { Spinner } from "@renderer/components/ui/spinner"
+import { Alert, AlertDescription } from "@renderer/components/ui/alert"
+import { Button } from "@renderer/components/ui/button"
 import type {
   DesktopDaemonStatus,
   DesktopModel,
@@ -24,6 +26,7 @@ import type { ComposerDocument } from "@renderer/stores/desktop-session/composer
 import { selectGoalObjective } from "@renderer/stores/desktop-session/goal-actions"
 import type { ComposerPickerCommand, ComposerPickerItem } from "../composer/composer-picker"
 import { Composer } from "../composer/composer"
+import { ModelPicker } from "../composer/model-picker"
 import type { ComposerSkill } from "../composer/rich-prompt-input"
 import {
   handlePickerMenuKeyDown,
@@ -35,6 +38,16 @@ import { ScopedOperationError } from "./scoped-operation-errors"
 import type { LoadStatus, StartPicker } from "../shared/types"
 import { resolveModelLabel } from "../shared/utils"
 import { pluginMentionsEnabled as defaultPluginMentionsEnabled } from "../composer/plugin-mentions-feature"
+
+type SetupAction =
+  "loading" | "retry" | "diagnostics" | "providers" | "model" | "project" | "directory"
+const setupActionLabels = {
+  retry: "重新加载",
+  diagnostics: "检查连接",
+  providers: "配置模型",
+  project: "选择项目",
+  directory: "重新选择项目",
+}
 
 export function NewConversationStart({
   draft,
@@ -91,6 +104,8 @@ export function NewConversationStart({
   onSelectPermissionMode,
   onSelectEffort,
   onTogglePanel,
+  onRetryLoad,
+  onOpenSettings,
   contextUsage = null,
   onOpenContextUsage,
 }: {
@@ -148,10 +163,12 @@ export function NewConversationStart({
   onSelectPermissionMode: (mode: DesktopPermissionMode) => void
   onSelectEffort: (effort: string) => void
   onTogglePanel: () => void
+  onRetryLoad: () => void
+  onOpenSettings: (section: "providers" | "diagnostics") => void
   contextUsage?: DesktopContextUsageSnapshot | null
   onOpenContextUsage?: () => void | Promise<boolean | void>
 }): React.JSX.Element {
-  const [activePicker, setActivePicker] = useState<StartPicker | null>(null)
+  const [activePicker, setActivePicker] = useState<StartPicker | "model" | null>(null)
   const [avatarName] = useState(() => crypto.randomUUID())
   const [projectQuery, setProjectQuery] = useState("")
   const [branchQuery, setBranchQuery] = useState("")
@@ -170,6 +187,33 @@ export function NewConversationStart({
   const modelLabel = resolveModelLabel(models, selectedModel, selectedProvider)
 
   const closePicker = (): void => setActivePicker(null)
+  let setupStep: { message: string; action: SetupAction } | null = null
+  if (loadStatus === "error") {
+    setupStep = { message: "工作区加载失败，草稿已保留。", action: "retry" }
+  } else if (daemonStatus.phase === "error") {
+    setupStep = { message: "后台连接中断，请检查连接。", action: "diagnostics" }
+  } else if (
+    loadStatus !== "ready" ||
+    ["discovering", "connecting", "starting"].includes(daemonStatus.phase)
+  ) {
+    setupStep = { message: "正在加载项目与模型…", action: "loading" }
+  } else if (models.length === 0) {
+    setupStep = { message: "连接模型服务后即可开始对话。", action: "providers" }
+  } else if (
+    !models.some(
+      (model) =>
+        model.id === selectedModel && (!selectedProvider || model.providerName === selectedProvider)
+    )
+  ) {
+    setupStep = {
+      message: selectedModel ? "当前模型不可用，请重新选择。" : "选择模型后即可开始。",
+      action: "model",
+    }
+  } else if (workspaceMode === "project" && !selectedProject) {
+    setupStep = { message: "选择工作位置后即可开始。", action: "project" }
+  } else if (workspaceMode === "project" && !selectedProject?.available) {
+    setupStep = { message: "项目目录不可用，请重新选择。", action: "directory" }
+  }
 
   return (
     <div className="relative min-h-0 min-w-0 flex-1 overflow-x-hidden px-5 py-5">
@@ -200,20 +244,63 @@ export function NewConversationStart({
           </h2>
         </div>
 
-        {loadStatus === "loading" ? (
-          <div
-            className="mb-4 flex max-w-full items-center gap-2 rounded-full border bg-background/80 px-3 py-1.5 text-xs text-ui-muted shadow-sm"
-            aria-live="polite"
-          >
-            <Spinner className="size-3.5" />
-            <span className="truncate">{daemonStatus.message}</span>
-          </div>
-        ) : null}
-
         <div className="relative w-full min-w-0">
           <div className="mx-3 mb-2 space-y-2">
             <ScopedOperationError error={operationError} />
             <ScopedOperationError error={goalError} onDismiss={onDismissGoalError} />
+            {setupStep ? (
+              <Alert
+                role={
+                  setupStep.action === "retry" || setupStep.action === "diagnostics"
+                    ? "alert"
+                    : "status"
+                }
+                aria-label="开始前准备"
+              >
+                <AlertDescription className="flex flex-wrap items-center gap-2">
+                  {setupStep.action === "loading" ? <Spinner /> : null}
+                  <span className="min-w-0 flex-1">{setupStep.message}</span>
+                  {setupStep.action === "model" ? (
+                    <ModelPicker
+                      open={activePicker === "model"}
+                      onOpenChange={(open) => setActivePicker(open ? "model" : null)}
+                      models={models}
+                      selectedModel={selectedModel}
+                      selectedProvider={selectedProvider}
+                      modelLabel="选择模型"
+                      onSelectModel={onSelectModel}
+                    />
+                  ) : setupStep.action !== "loading" ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        switch (setupStep.action) {
+                          case "retry":
+                            onRetryLoad()
+                            break
+                          case "diagnostics":
+                            onOpenSettings("diagnostics")
+                            break
+                          case "providers":
+                            onOpenSettings("providers")
+                            break
+                          case "project":
+                            setActivePicker("project")
+                            break
+                          case "directory":
+                            onChooseProject()
+                            break
+                        }
+                      }}
+                    >
+                      {setupActionLabels[setupStep.action]}
+                    </Button>
+                  ) : null}
+                </AlertDescription>
+              </Alert>
+            ) : null}
           </div>
           <div className="mx-3 flex h-10 min-w-0 items-center gap-0.5 overflow-hidden rounded-t-2xl bg-muted-foreground/5 px-2.5 pt-1">
             <div className="min-w-0">
@@ -467,6 +554,7 @@ export function NewConversationStart({
             goalTokenBudget={goalTokenBudget}
             onGoalTokenBudgetChange={onGoalTokenBudgetChange}
             canSubmit={Boolean(
+              !setupStep &&
               (goalMode
                 ? selectGoalObjective(draft)
                 : draft.items.length > 0 || attachments.length > 0) &&

@@ -380,6 +380,8 @@ describe("composer picker keyboard navigation", () => {
           onSelectPermissionMode={noop}
           onSelectEffort={noop}
           onTogglePanel={noop}
+          onRetryLoad={noop}
+          onOpenSettings={noop}
           {...overrides}
         />
       )

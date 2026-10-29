@@ -154,6 +154,7 @@ function ConversationPane({
   const sessions = useDesktopSessionStore((state) => state.sessions)
   const loadStatus = useDesktopSessionStore((state) => state.loadStatus)
   const daemonStatus = useDesktopSessionStore((state) => state.daemonStatus)
+  const initialize = useDesktopSessionStore((state) => state.initialize)
   const startSession = useDesktopSessionStore((state) => state.startSession)
   const submitGoal = useDesktopSessionStore((state) => state.submitGoal)
   const setGoalMode = useDesktopSessionStore((state) => state.setGoalMode)
@@ -682,6 +683,10 @@ function ConversationPane({
               else selectEffort(effort)
             }}
             onTogglePanel={onTogglePanel}
+            onRetryLoad={() => void initialize()}
+            onOpenSettings={(section) => {
+              void navigate({ to: "/settings/$section", params: { section } })
+            }}
             contextUsage={contextUsageSnapshot}
             onOpenContextUsage={() => refreshContextUsage({ refresh: true })}
           />
