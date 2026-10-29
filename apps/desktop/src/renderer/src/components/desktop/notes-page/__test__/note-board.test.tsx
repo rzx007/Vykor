@@ -236,6 +236,31 @@ describe("note board drag sessions", () => {
     expect(controller.moveToFolder).toHaveBeenCalledWith("a", "f1", 2)
   })
 
+  it("keeps pinned notes on the desktop instead of merging or filing them", async () => {
+    controller.snapshot!.organization = mergeNotes(controller.snapshot!.organization, {
+      activeNoteId: "b",
+      targetNoteId: "c",
+      folderId: "f1",
+      folderName: "工作",
+      now: 1,
+    })
+    await show([{ ...notes[0]!, pinned: true }, notes[1]!, notes[2]!])
+    act(() => {
+      start("note:a")
+      over("folder:f1")
+    })
+    await act(async () => vi.advanceTimersByTimeAsync(400))
+    await act(async () => drop("folder:f1"))
+    expect(controller.moveToFolder).not.toHaveBeenCalled()
+    act(() => {
+      start("note:a")
+      over("note:b")
+    })
+    await act(async () => vi.advanceTimersByTimeAsync(250))
+    await act(async () => drop("note:b"))
+    expect(controller.mergeNotes).not.toHaveBeenCalled()
+  })
+
   it("keeps the active keyboard target when picked up and put down without moving", async () => {
     await show()
     act(() => start("note:a", true))

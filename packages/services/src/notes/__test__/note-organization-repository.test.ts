@@ -57,7 +57,7 @@ afterEach(() => {
     rmSync(dir, { force: true, recursive: true });
 });
 describe("NoteOrganizationRepository", () => {
-  it("locks writes when a save is replaced before verification and keeps both recovery files", async () => {
+  it("rejects a save replaced before verification and keeps both recovery files", async () => {
     const repo = repository(),
       first = repo.read(["a", "b"]);
     const next = reorderInContainer(first.organization, {
@@ -66,14 +66,14 @@ describe("NoteOrganizationRepository", () => {
       toIndex: 0,
     });
     faults.overwriteAfterRename = repo.path;
-    const result = await repo.save(next, first.etag, ["a", "b"]);
-    expect(result.readOnly).toBe(true);
-    expect(result.warning).toContain("暂停整理写入");
+    await expect(repo.save(next, first.etag, ["a", "b"])).rejects.toThrow(
+      "暂停整理写入",
+    );
     expect(JSON.parse(readFileSync(repo.previousPath, "utf8"))).toEqual(
       first.organization,
     );
     await expect(
-      repo.save(next, result.etag, ["a", "b"]),
+      repo.save(next, first.etag, ["a", "b"]),
     ).rejects.toBeInstanceOf(NoteOrganizationConflictError);
     expect(repo.read(["a", "b"]).readOnly).toBe(true);
     expect(readFileSync(repo.path, "utf8")).toBe('{"version":2}');
@@ -199,6 +199,9 @@ describe("NoteOrganizationRepository", () => {
     expect(() => scanNoteIds(repo.directory)).toThrow("普通文件");
     rmdirSync(join(repo.directory, "folder.md"));
     writeFileSync(join(repo.directory, "unsafe!.md"), "unsafe");
+    expect(() => scanNoteIds(repo.directory)).toThrow("Invalid note file ID");
+    rmSync(join(repo.directory, "unsafe!.md"));
+    writeFileSync(join(repo.directory, "__proto__.md"), "unsafe");
     expect(() => scanNoteIds(repo.directory)).toThrow("Invalid note file ID");
   });
   it("validates restored organizations without repairing backups and accepts absent old files", () => {

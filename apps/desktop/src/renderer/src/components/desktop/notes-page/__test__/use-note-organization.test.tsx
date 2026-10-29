@@ -170,6 +170,60 @@ describe("note organization persistence", () => {
     expect(window.desktop.notes.organization).toHaveBeenCalledTimes(2)
   })
 
+  it("keeps the newest concurrent refresh and clears a recovered read error", async () => {
+    let resolveOld!: (value: NoteOrganizationSnapshotRecord) => void
+    const old = new Promise<NoteOrganizationSnapshotRecord>((resolve) => {
+      resolveOld = resolve
+    })
+    const organization = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockImplementationOnce(() => old)
+      .mockResolvedValueOnce({ ...disk, etag: "newest" })
+    window.desktop.notes.organization = organization
+    await mount()
+    expect(latest.error).toContain("offline")
+    let older!: Promise<void>
+    let newer!: Promise<void>
+    act(() => {
+      older = latest.refresh()
+      newer = latest.refresh()
+    })
+    await act(async () => newer)
+    expect(latest.snapshot?.etag).toBe("newest")
+    await act(async () => {
+      resolveOld({ ...disk, etag: "old" })
+      await older
+    })
+    expect(latest.snapshot?.etag).toBe("newest")
+    expect(latest.error).toBeNull()
+  })
+
+  it("ignores an older refresh failure after a newer refresh succeeds", async () => {
+    await mount()
+    let rejectOld!: (cause: Error) => void
+    const old = new Promise<NoteOrganizationSnapshotRecord>((_resolve, reject) => {
+      rejectOld = reject
+    })
+    window.desktop.notes.organization = vi
+      .fn()
+      .mockImplementationOnce(() => old)
+      .mockResolvedValueOnce({ ...disk, etag: "newest" })
+    let older!: Promise<void>
+    let newer!: Promise<void>
+    act(() => {
+      older = latest.refresh()
+      newer = latest.refresh()
+    })
+    await act(async () => newer)
+    await act(async () => {
+      rejectOld(new Error("stale failure"))
+      await older
+    })
+    expect(latest.snapshot?.etag).toBe("newest")
+    expect(latest.error).toBeNull()
+  })
+
   it("clears a failed response after retry confirms the already persisted layout", async () => {
     await mount()
     save.mockImplementationOnce(async (input: SaveNoteOrganizationInput) => {

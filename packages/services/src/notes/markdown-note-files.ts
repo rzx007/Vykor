@@ -26,7 +26,8 @@ export function ensureNoteDirectory(directory: string): void {
 export function noteFilePath(directory: string, id: string): string {
   if (
     !/^[\p{L}\p{N}_ -]{1,120}$/u.test(id) ||
-    /^(con|prn|aux|nul|com\d|lpt\d)$/iu.test(id)
+    /^(con|prn|aux|nul|com\d|lpt\d)$/iu.test(id) ||
+    ["__proto__", "constructor", "prototype"].includes(id)
   )
     throw new Error("Invalid note file ID");
   return join(directory, `${id}.md`);

@@ -24,6 +24,7 @@ export function useNoteOrganization(notes: readonly NoteView[]) {
   const queue = useRef(Promise.resolve())
   const pending = useRef(new Set<Operation>())
   const generation = useRef(0)
+  const refreshSequence = useRef(0)
   const refreshLater = useRef(false)
   const mounted = useRef(true)
   const retryChange = useRef<Operation | null>(null)
@@ -40,13 +41,27 @@ export function useNoteOrganization(notes: readonly NoteView[]) {
       return
     }
     const revision = generation.current
+    const sequence = ++refreshSequence.current
     try {
       const value = await window.desktop.notes.organization()
-      if (!mounted.current || pending.current.size || revision !== generation.current) return
+      if (
+        !mounted.current ||
+        pending.current.size ||
+        revision !== generation.current ||
+        sequence !== refreshSequence.current
+      )
+        return
       confirmed.current = value
+      if (!retryChange.current) setError(null)
       publish(value)
     } catch (cause) {
-      if (mounted.current) setError("无法读取便签分类：" + String(cause))
+      if (
+        mounted.current &&
+        !pending.current.size &&
+        revision === generation.current &&
+        sequence === refreshSequence.current
+      )
+        setError("无法读取便签分类：" + String(cause))
     }
   }, [publish])
   const noteIds = notes
