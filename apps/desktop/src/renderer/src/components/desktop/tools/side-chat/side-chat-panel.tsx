@@ -59,6 +59,7 @@ import {
 import {
   selectSessionRuntime,
   selectSessionSending,
+  selectSessionInterrupting,
   selectPermissionReplyError,
   selectPermissionReplyPending,
 } from "@renderer/stores/desktop-session/selectors"
@@ -282,6 +283,9 @@ export function SideChatPanel({
   const runtime = useDesktopSessionStore((state) => selectSessionRuntime(state, verifiedTargetId))
   const sending = useDesktopSessionStore((state) =>
     verifiedTargetId ? selectSessionSending(state, verifiedTargetId) : false
+  )
+  const interrupting = useDesktopSessionStore((state) =>
+    verifiedTargetId ? selectSessionInterrupting(state, verifiedTargetId) : false
   )
   const preforkScope = `linked-chat:${sourceId}`
   const preforkDraft = useDesktopSessionStore((state) => state.composerDraftsByScope[preforkScope])
@@ -835,6 +839,7 @@ export function SideChatPanel({
               draft={draft}
               sending={sending || creating}
               running={running}
+              interrupting={interrupting}
               models={models}
               selectedModel={model}
               selectedProvider={provider}

@@ -34,6 +34,7 @@ export function Composer({
   draft,
   sending,
   running = false,
+  interrupting = false,
   models,
   selectedModel,
   selectedProvider,
@@ -85,6 +86,7 @@ export function Composer({
   draft: ComposerDocument
   sending: boolean
   running?: boolean
+  interrupting?: boolean
   models: DesktopModel[]
   selectedModel: string | null
   selectedProvider: string | null
@@ -509,6 +511,7 @@ export function Composer({
             <ComposerSendButton
               sending={sending}
               running={running && !goalMode}
+              interrupting={interrupting}
               disabled={!allowSubmit}
               onInterrupt={onInterrupt}
             />

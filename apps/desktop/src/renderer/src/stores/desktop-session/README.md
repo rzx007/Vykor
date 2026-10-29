@@ -194,3 +194,7 @@ operation 的阶段是 `pending`、`acknowledged`、`failed`。
 | `permission-card.test.ts`                                  | 单个授权项 pending 时禁用两种决定，并在卡片内显示该项错误。                                              |
 
 修改这些规则时，优先在对应职责测试中增加断言；跨模块竞态才放入 `store.integration.test.ts`。
+
+## 停止与上下文读取反馈
+
+`interrupt` 复用现有运行操作保存停止中状态，同一会话、同一运行的 pending 停止请求只发送一次。带 `expectedRunId` 的请求收到 RPC 应答后仍等待会话更新确认该运行终止，由已有运行态收尾逻辑清除；迟到应答不改变新运行。主聊天与侧聊分别通过各自会话的 selector 读取停止状态。

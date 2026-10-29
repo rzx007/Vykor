@@ -253,23 +253,25 @@ export function ComposerIconButton({
 export function ComposerSendButton({
   sending,
   running = false,
+  interrupting = false,
   disabled,
   onInterrupt,
 }: {
   sending: boolean
   running?: boolean
+  interrupting?: boolean
   disabled: boolean
   onInterrupt?: () => void
 }): React.JSX.Element {
-  if (sending) {
+  if (interrupting || sending) {
     return (
       <Button
         type="button"
         size="icon"
         disabled
         aria-busy
-        aria-label="正在发送"
-        title="正在发送"
+        aria-label={interrupting ? "正在停止" : "正在发送"}
+        title={interrupting ? "正在停止" : "正在发送"}
         className="ml-1 size-8 rounded-full disabled:opacity-100"
       >
         <Spinner />

@@ -49,6 +49,7 @@ import {
   selectActiveSessionPromptSubmissions,
   selectActiveSessionQueuedPromptActions,
   selectActiveSessionSending,
+  selectActiveSessionInterrupting,
   selectCommandCatalogCwd,
   selectNewConversationError,
   selectNewConversationSending,
@@ -125,6 +126,7 @@ function ConversationPane({
   const activeSessionError = useDesktopSessionStore(selectActiveSessionComposerError)
   const newConversationError = useDesktopSessionStore(selectNewConversationError)
   const activeSessionSending = useDesktopSessionStore(selectActiveSessionSending)
+  const interrupting = useDesktopSessionStore(selectActiveSessionInterrupting)
   const newConversationSending = useDesktopSessionStore(selectNewConversationSending)
   const models = useDesktopSessionStore((state) => state.models)
   const selectedModel = useDesktopSessionStore((state) => state.selectedModel)
@@ -873,6 +875,7 @@ function ConversationPane({
                   draft={draft}
                   sending={sending}
                   running={Boolean(activeRun)}
+                  interrupting={interrupting}
                   models={models}
                   selectedModel={currentModel}
                   selectedProvider={selectedProvider}
