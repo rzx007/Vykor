@@ -47,10 +47,16 @@ export function reconcilePendingPromptSubmissions(
         : []
     )
   )
+  // 取消的排队任务不会生成正文，收到任务结束状态后也应清理本地占位。
+  const finishedInputIds = new Set(
+    view.runs
+      .filter((run) => run.status !== "pending" && run.status !== "running")
+      .map((run) => run.inputId)
+  )
   return Object.fromEntries(
     Object.entries(submissions).flatMap(([id, submission]) => {
       if (submission.sessionId !== view.session.id) return [[id, submission]]
-      if (projectedInputIds.has(id)) return []
+      if (projectedInputIds.has(id) || finishedInputIds.has(id)) return []
       if (confirmedInputIds.has(id)) {
         return [[id, { ...submission, phase: "accepted" as const, error: undefined }]]
       }

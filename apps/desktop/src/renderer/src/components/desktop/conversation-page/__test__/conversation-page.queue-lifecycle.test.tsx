@@ -190,3 +190,129 @@ it("reconciles sending, accepted and queued snapshots into one queue without rem
     errors.mock.calls.filter((args) => args.some((value) => String(value).includes("same key")))
   ).toHaveLength(0)
 })
+
+it.each(["stop", "remove"] as const)(
+  "%s clears a cancelled queue entry before the send reply arrives without resending or losing a new draft",
+  async (action) => {
+    const view = emptySessionView(`cancel-${action}`)
+    const sessionId = view.session.id
+    const active: DesktopSessionRun = {
+      id: "active",
+      sessionId,
+      status: "running",
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    }
+    let finishSend!: () => void
+    let failSend!: (error: Error) => void
+    let finishCancel!: () => void
+    const sendReply = new Promise<void>((resolve, reject) => {
+      finishSend = resolve
+      failSend = reject
+    })
+    const cancelReply = new Promise<void>((resolve) => {
+      finishCancel = resolve
+    })
+    const sendPrompt = vi.fn(() => sendReply)
+    const interrupt = vi.fn(() => cancelReply)
+    const cancelQueuedPrompt = vi.fn(() => cancelReply)
+    vi.stubGlobal("desktop", { sessions: { sendPrompt, interrupt, cancelQueuedPrompt } })
+    useDesktopSessionStore.setState({
+      activeSessionId: sessionId,
+      sessions: [view.session],
+      loadStatus: "idle",
+      sessionView: { ...view, runs: [active] },
+      refreshGoal: vi.fn(async () => {}),
+      refreshContextUsage: vi.fn(async () => {}),
+    })
+    let sending!: Promise<void>
+    await act(async () => {
+      sending = useDesktopSessionStore.getState().sendMessage("已排队正文")
+    })
+    const pending = Object.values(
+      useDesktopSessionStore.getState().sessionRuntimes[sessionId]!.pendingPromptSubmissions
+    )[0]!
+    const input: DesktopSessionInput = {
+      id: pending.id,
+      sessionId,
+      seq: 2,
+      delivery: "queue",
+      content: pending.content,
+      items: pending.items,
+      attachments: [],
+      metadata: {},
+      createdAt: 2,
+    }
+    const queued: DesktopSessionRun = {
+      ...active,
+      id: "queued",
+      inputId: input.id,
+      status: "pending",
+      createdAt: 2,
+    }
+    await act(async () => {
+      useDesktopSessionStore
+        .getState()
+        .setComposerDraftText(`session:${sessionId}`, "继续编辑的新草稿")
+      useDesktopSessionStore
+        .getState()
+        .applySessionUpdate({ ...view, cursor: 1, inputs: [input], runs: [active, queued] })
+      root.render(
+        <ConversationPane
+          panelOpen
+          canOpenReview={false}
+          onTogglePanel={vi.fn()}
+          onOpenFile={vi.fn()}
+          onOpenReview={vi.fn()}
+          onOpenTerminal={vi.fn()}
+          onOpenAgents={vi.fn()}
+        />
+      )
+    })
+    const composer = host.querySelector<HTMLTextAreaElement>('[aria-label="正文草稿"]')!
+    expect(host.querySelectorAll('[data-slot="item"]')).toHaveLength(1)
+    let stopping: Promise<void> | undefined
+    try {
+      await act(async () => {
+        if (action === "stop") stopping = useDesktopSessionStore.getState().interrupt()
+        else host.querySelector<HTMLButtonElement>('[aria-label="删除待处理消息"]')!.click()
+      })
+      expect(interrupt).toHaveBeenCalledTimes(action === "stop" ? 1 : 0)
+      expect(cancelQueuedPrompt).toHaveBeenCalledTimes(action === "remove" ? 1 : 0)
+      const ended = {
+        ...view,
+        cursor: 2,
+        inputs: [input],
+        runs: [
+          action === "stop" ? { ...active, status: "interrupted" as const } : active,
+          { ...queued, status: "interrupted" as const },
+        ],
+      }
+      await act(async () => useDesktopSessionStore.getState().applySessionUpdate(ended))
+      expect(host.querySelector('[aria-label="待处理消息"]')).toBeNull()
+      // Repeated snapshots and an obsolete retry callback must not re-admit the cancelled input.
+      await act(async () => {
+        useDesktopSessionStore.getState().applySessionUpdate(ended)
+        await useDesktopSessionStore.getState().retryPromptSubmission(input.id)
+      })
+      expect(sendPrompt).toHaveBeenCalledTimes(1)
+      expect(host.querySelector('[aria-label="正文草稿"]')).toBe(composer)
+      expect(composer.value).toBe("继续编辑的新草稿")
+    } finally {
+      await act(async () => {
+        finishCancel()
+        if (action === "stop") finishSend()
+        else failSend(new Error("late send response lost"))
+        await sending
+        await stopping
+      })
+    }
+    expect(
+      useDesktopSessionStore.getState().sessionRuntimes[sessionId]!.pendingPromptSubmissions
+    ).toEqual({})
+    expect(host.querySelector('[aria-label="待处理消息"]')).toBeNull()
+    expect(composer.value).toBe("继续编辑的新草稿")
+    expect(sendPrompt).toHaveBeenCalledTimes(1)
+  }
+)
