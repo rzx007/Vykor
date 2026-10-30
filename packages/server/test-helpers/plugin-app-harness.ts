@@ -7,7 +7,7 @@ import * as runtime from "@vykor/agent-runtime";
 import { CURRENT_PROTOCOL_VERSION, type ApprovalReviewInput, type PluginAppToolRequest } from "@vykor/protocol";
 import { updateSettings } from "@vykor/host-config";
 import { SessionStore } from "@vykor/services";
-import { VykorClient } from "../../client/src/index.js";
+import { VykorClient } from "../../application-client/src/index.js";
 import { VykorHttpServer } from "../src/http/server.js";
 import { installAppFixture, appFixtureSettings } from "../../agent-runtime/test-helpers/plugin-app-fixture.js";
 import { createDefaultPluginService } from "../src/application/default-services/extensions/plugin-service.js";

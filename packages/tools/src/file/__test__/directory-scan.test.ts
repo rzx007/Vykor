@@ -96,7 +96,7 @@ describe("bounded directory scans", () => {
     expect(result.truncated).toBe(true);
   });
 
-  it.skipIf(!realScanAvailable)("stops the WSL producer instead of collecting every entry before truncating", async () => {
+  it.skipIf(!realScanAvailable).each([false,true])("stops the WSL producer instead of collecting every entry before truncating (POSIX wrapper: %s)", async posixWrapper => {
     const root=await directory();
     const progress=join(root,"progress"), initialization=join(root,"initialize.sh");
     // A controlled stream at the external program boundary records how far the real pipeline reads.
@@ -109,7 +109,8 @@ describe("bounded directory scans", () => {
     }`);
     let outputBytes=0;
     const files=realShellOperations({
-      env:{BASH_ENV:executionPath(initialization),SCAN_PROGRESS:executionPath(progress)},
+      initialization:executionPath(initialization),posixWrapper,
+      env:{SCAN_PROGRESS:executionPath(progress)},
       output:bytes=>{outputBytes=bytes.byteLength;},
     });
     const result=await files.scanDirectory(executionPath(root),{maxEntries:2});
@@ -149,13 +150,20 @@ describe("bounded directory scans", () => {
   });
 });
 
-function realShellOperations(options: {native?:boolean;env?:Record<string,string>;output?:(bytes:Uint8Array)=>void} = {}): any {
+function realShellOperations(options: {native?:boolean;initialization?:string;posixWrapper?:boolean;env?:Record<string,string>;output?:(bytes:Uint8Array)=>void} = {}): any {
   return new WslFileOperations({workspace:{executionRoot:"/"},process:{
     async execProcess(argv: string[]) {
+      // Load the producer mock in the same Bash process as the fixed script, without relying on BASH_ENV startup behavior.
+      const initialized=options.initialization
+        ? [argv[0]!,"-c",`. "$1"\nshift\n${argv[2]}`,argv[3]!,options.initialization,...argv.slice(4)]
+        : argv;
+      const command=options.posixWrapper
+        ? ["/bin/sh","-c",'exec /bin/bash "$@"',"vk-script-test",...initialized.slice(1)]
+        : initialized;
       // Git for Windows may ship old coreutils; use a supported default WSL installation when available.
       const result=nativeNulScan || options.native
-        ? spawnSync(shell!,["-c",'exec /bin/bash "$@"',"vk-script-test",...argv.slice(1)],{windowsHide:true,env:{...process.env,...options.env}})
-        : spawnSync("wsl.exe",["--distribution",wslDistribution!,"--exec","/usr/bin/env",...Object.entries(options.env ?? {}).map(([key,value])=>`${key}=${value}`),...argv],{windowsHide:true});
+        ? spawnSync(shell!,["-c",'exec "$@"',"vk-script-test",...command],{windowsHide:true,env:{...process.env,...options.env}})
+        : spawnSync("wsl.exe",["--distribution",wslDistribution!,"--exec","/usr/bin/env",...Object.entries(options.env ?? {}).map(([key,value])=>`${key}=${value}`),...command],{windowsHide:true});
       if(result.error) throw result.error;
       options.output?.(result.stdout);
       return {write() {},end() {},onOutput(listener:(chunk:Uint8Array)=>void) {listener(result.stdout);return ()=>{};},
