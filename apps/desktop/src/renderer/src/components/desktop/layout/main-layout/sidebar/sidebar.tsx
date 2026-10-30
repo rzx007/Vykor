@@ -224,6 +224,7 @@ export function Sidebar({
     onRename: sessionActionsDialogs.beginRename,
     onArchive: sessionActionsDialogs.beginArchive,
     onDelete: sessionActionsDialogs.beginDelete,
+    onFork: sessionActionsDialogs.beginFork,
   }
   const projectActions: ProjectActions = {
     onNewConversation: (project) => beginNewConversation(project),

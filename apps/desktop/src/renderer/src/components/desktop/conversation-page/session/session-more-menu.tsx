@@ -10,7 +10,7 @@ import {
   PinOff,
   Trash2,
 } from "lucide-react"
-import type { ReactNode } from "react"
+import { useRef, useState, type ReactNode } from "react"
 
 import { Button } from "@renderer/components/ui/button"
 import {
@@ -26,6 +26,7 @@ import {
 } from "@renderer/components/ui/dropdown-menu"
 import { isSessionPinned, useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type { DesktopSessionRecord } from "@shared/session-types"
+import { toast } from "@renderer/lib/toast"
 
 export function SessionMoreMenu({
   session,
@@ -37,6 +38,7 @@ export function SessionMoreMenu({
   onRename,
   onArchive,
   onDelete,
+  onFork,
 }: {
   session: DesktopSessionRecord
   archived?: boolean
@@ -47,14 +49,29 @@ export function SessionMoreMenu({
   onRename: () => void
   onArchive: () => void
   onDelete: () => void
+  onFork: () => void
 }): React.JSX.Element {
   const pinned = isSessionPinned(session)
   const togglePinSession = useDesktopSessionStore((state) => state.togglePinSession)
   const startConversationFrom = useDesktopSessionStore((state) => state.startConversationFrom)
-  const forkSession = useDesktopSessionStore((state) => state.forkSession)
+  const copyInFlight = useRef(false)
+  const [copying, setCopying] = useState(false)
 
   const copyText = (value: string): void => {
-    void window.desktop.clipboard.writeText(value)
+    if (copyInFlight.current) return
+    copyInFlight.current = true
+    setCopying(true)
+    void (async () => {
+      try {
+        await window.desktop.clipboard.writeText(value)
+        toast.success("已复制")
+      } catch {
+        toast.error("复制失败", "请重试。")
+      } finally {
+        copyInFlight.current = false
+        setCopying(false)
+      }
+    })()
   }
 
   const revealProject = (): void => {
@@ -102,22 +119,24 @@ export function SessionMoreMenu({
         ) : null}
         <DropdownMenuGroup>
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger disabled={copying}>
               <Copy />
               复制
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent className="min-w-48">
-              <DropdownMenuItem onClick={() => copyText(sessionTitle(session))}>
+              <DropdownMenuItem disabled={copying} onClick={() => copyText(sessionTitle(session))}>
                 复制标题
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => copyText(session.cwd)}>
+              <DropdownMenuItem disabled={copying} onClick={() => copyText(session.cwd)}>
                 复制工作目录
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => copyText(session.id)}>复制会话 ID</DropdownMenuItem>
+              <DropdownMenuItem disabled={copying} onClick={() => copyText(session.id)}>
+                复制会话 ID
+              </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           {!archived ? (
-            <DropdownMenuItem onClick={() => void forkSession(session.id)}>
+            <DropdownMenuItem onClick={onFork}>
               <GitBranch />
               创建会话分支
             </DropdownMenuItem>

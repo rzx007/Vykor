@@ -1,6 +1,8 @@
 import { Check, Copy, GitBranchPlus } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@renderer/components/ui/button"
+import { Spinner } from "@renderer/components/ui/spinner"
+import { toast } from "@renderer/lib/toast"
 import { cn } from "@renderer/lib/utils"
 import type { DesktopSessionMessage } from "@shared/session-types"
 import { formatMessageTime } from "./format-message-time"
@@ -23,6 +25,7 @@ export function AssistantMessageActions({
     <MessageToolbar align="start" timestamp={message.updatedAt}>
       {content.trim() ? (
         <CopyActionButton
+          key={message.id}
           label="复制回复"
           copiedLabel="已复制"
           disabled={disabled}
@@ -79,11 +82,13 @@ export function MessageActionButton({
   label,
   onClick,
   disabled,
+  busy = false,
   children,
 }: {
   label: string
   onClick: () => void
   disabled?: boolean
+  busy?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
   return (
@@ -95,6 +100,7 @@ export function MessageActionButton({
       title={label}
       aria-label={label}
       disabled={disabled}
+      aria-busy={busy || undefined}
       onClick={onClick}
       className="text-muted-foreground [&_svg]:size-3.5"
     >
@@ -115,22 +121,45 @@ export function CopyActionButton({
   onCopy: () => void | Promise<void>
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false)
+  const [copying, setCopying] = useState(false)
+  const busy = useRef(false)
+  const timer = useRef<number | null>(null)
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      if (timer.current !== null) window.clearTimeout(timer.current)
+    }
+  }, [])
   const handleCopy = async (): Promise<void> => {
+    if (disabled || busy.current) return
+    busy.current = true
+    if (timer.current !== null) window.clearTimeout(timer.current)
+    setCopying(true)
+    setCopied(false)
     try {
       await onCopy()
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1400)
+      toast.success(copiedLabel)
+      if (mounted.current) {
+        setCopied(true)
+        timer.current = window.setTimeout(() => setCopied(false), 1400)
+      }
     } catch {
-      setCopied(false)
+      toast.error("复制失败", "请重试。")
+    } finally {
+      busy.current = false
+      if (mounted.current) setCopying(false)
     }
   }
   return (
     <MessageActionButton
-      label={copied ? copiedLabel : label}
+      label={copying ? "正在复制" : copied ? copiedLabel : label}
       onClick={() => void handleCopy()}
-      disabled={disabled}
+      disabled={disabled || copying}
+      busy={copying}
     >
-      {copied ? <Check /> : <Copy />}
+      {copying ? <Spinner /> : copied ? <Check /> : <Copy />}
     </MessageActionButton>
   )
 }
