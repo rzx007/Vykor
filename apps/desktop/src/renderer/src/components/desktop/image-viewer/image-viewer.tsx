@@ -43,6 +43,8 @@ import "@annotorious/annotorious/annotorious.css"
 import "./image-viewer.css"
 
 const BUSY_NAVIGATION_ERROR = "正在处理图片，请完成后再切换。"
+const MIN_SCALE = 0.01
+const MAX_SCALE = 8
 
 export function ImageViewer({
   bytes,
@@ -141,6 +143,31 @@ export function ImageViewer({
 
   useEffect(() => {
     const element = viewport.current
+    if (!element) return
+    const zoom = (event: WheelEvent) => {
+      const controls = transform.current
+      if (!controls || pointers.current.size || !Number.isFinite(event.deltaY) || !event.deltaY)
+        return
+      event.preventDefault()
+      event.stopPropagation()
+      const box = element.getBoundingClientRect()
+      const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? box.height : 1
+      // 统一像素、行、页单位；触控板捏合的 Ctrl+wheel 位移更小。
+      const pixels = event.deltaY * unit * (event.ctrlKey ? 10 : 1)
+      const delta = Math.max(-100, Math.min(100, pixels))
+      const { scale, positionX, positionY } = controls.state
+      const nextScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale * Math.exp(-delta * 0.001)))
+      const ratio = nextScale / scale
+      const x = event.clientX - box.left,
+        y = event.clientY - box.top
+      controls.setTransform(x - (x - positionX) * ratio, y - (y - positionY) * ratio, nextScale, 0)
+    }
+    element.addEventListener("wheel", zoom, { passive: false })
+    return () => element.removeEventListener("wheel", zoom)
+  }, [])
+
+  useEffect(() => {
+    const element = viewport.current
     if (!element || !annotation.ready) return
     const fit = () => {
       const size = element.getBoundingClientRect()
@@ -148,7 +175,7 @@ export function ImageViewer({
       // 依据图片面板而不是应用窗口宽度，避免文件树挤窄画布后仍展开所有文字。
       setExpandedTools(size.width >= 640)
       const nextScale = Math.max(
-        0.01,
+        MIN_SCALE,
         Math.min(
           1,
           (size.width - 48) / annotation.dimensions.width,
@@ -169,7 +196,7 @@ export function ImageViewer({
     const box = element.getBoundingClientRect()
     transform.current?.centerView(
       Math.max(
-        0.01,
+        MIN_SCALE,
         Math.min(
           1,
           (box.width - 48) / annotation.dimensions.width,
@@ -301,10 +328,11 @@ export function ImageViewer({
       >
         <TransformWrapper
           ref={transform}
-          minScale={0.01}
-          maxScale={8}
+          minScale={MIN_SCALE}
+          maxScale={MAX_SCALE}
           limitToBounds={false}
           panning={{ disabled: drawing }}
+          wheel={{ disabled: true }}
           doubleClick={{ disabled: true }}
           smooth={!reduced}
           zoomAnimation={{ disabled: Boolean(reduced) }}

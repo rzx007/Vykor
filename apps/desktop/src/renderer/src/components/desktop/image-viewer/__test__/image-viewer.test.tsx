@@ -98,6 +98,91 @@ async function mount(onFeedback = vi.fn(async () => {}), openComments = true) {
   return key
 }
 
+function imageTransform() {
+  const style = host.querySelector<HTMLElement>(".react-transform-component")!.style.transform
+  const [, x, y, scale] = style.match(
+    /translate\(([-\d.e+]+)px, ([-\d.e+]+)px\) scale\(([-\d.e+]+)\)/
+  )!
+  return { x: Number(x), y: Number(y), scale: Number(scale) }
+}
+
+function wheelImage(options: WheelEventInit) {
+  const event = new WheelEvent("wheel", {
+    bubbles: true,
+    cancelable: true,
+    clientX: 140,
+    clientY: 70,
+    ...options,
+  })
+  host.querySelector(".react-transform-wrapper")!.dispatchEvent(event)
+  return event
+}
+
+it.each([
+  { deltaY: 100 },
+  { deltaY: 10000 },
+  { deltaY: 3, deltaMode: 1 },
+  { deltaY: 1, deltaMode: 2 },
+  { deltaY: 2, ctrlKey: true },
+])("keeps an already fitted image visible after one wheel event %j", async (options) => {
+  await showImage()
+  const viewport = host.querySelector<HTMLElement>('[aria-label="图片画布"]')!
+  viewport.getBoundingClientRect = () => ({ left: 40, top: 20, width: 68, height: 170 }) as DOMRect
+  await act(async () => resizeCallbacks.get(viewport)!([], {} as ResizeObserver))
+  expect(imageTransform().scale).toBeCloseTo(0.1)
+  await act(async () => {
+    wheelImage(options)
+  })
+  expect(imageTransform().scale).toBeGreaterThan(0.088)
+  expect(imageTransform().scale).toBeLessThan(0.1)
+})
+
+it("uses the live zoom for rapid wheel events and keeps the point under the cursor fixed", async () => {
+  await showImage()
+  const viewport = host.querySelector<HTMLElement>('[aria-label="图片画布"]')!
+  viewport.getBoundingClientRect = () => ({ left: 40, top: 20, width: 800, height: 600 }) as DOMRect
+  await act(async () => {
+    wheelImage({ deltaY: 100 })
+    wheelImage({ deltaY: 100 })
+  })
+  const state = imageTransform()
+  expect(state.scale).toBeGreaterThan(0.8)
+  expect(state.scale).toBeLessThan(0.85)
+  expect((100 - state.x) / state.scale).toBeCloseTo(100)
+  expect((50 - state.y) / state.scale).toBeCloseTo(50)
+  await act(async () => {
+    wheelImage({ deltaY: -100 })
+    wheelImage({ deltaY: -100 })
+  })
+  expect(imageTransform().scale).toBeCloseTo(1)
+})
+
+it("keeps tiny trackpad deltas gentle and ignores horizontal scrolling", async () => {
+  await showImage()
+  await act(async () => {
+    for (let index = 0; index < 10; index++) wheelImage({ deltaY: 1 })
+  })
+  expect(imageTransform().scale).toBeGreaterThan(0.97)
+  expect(imageTransform().scale).toBeLessThan(1)
+  const before = imageTransform()
+  await act(async () => {
+    wheelImage({ deltaY: 0, deltaX: 100 })
+  })
+  expect(imageTransform()).toEqual(before)
+})
+
+it("keeps repeated wheel zoom within the viewer's scale limits", async () => {
+  await showImage()
+  await act(async () => {
+    for (let index = 0; index < 100; index++) wheelImage({ deltaY: 100 })
+  })
+  expect(imageTransform().scale).toBe(0.01)
+  await act(async () => {
+    for (let index = 0; index < 100; index++) wheelImage({ deltaY: -100 })
+  })
+  expect(imageTransform().scale).toBe(8)
+})
+
 function canNavigate(keyboard = false): boolean {
   expect(navigationGuard.current).toBeTypeOf("function")
   let allowed = false
