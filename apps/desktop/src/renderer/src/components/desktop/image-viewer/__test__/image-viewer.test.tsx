@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { setTimeout as delay } from "node:timers/promises"
 import { act } from "react"
 import { createRoot } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
@@ -82,7 +83,12 @@ async function showImage(
   )
   const image = host.querySelector("img")!
   Object.defineProperties(image, { naturalWidth: { value: 200 }, naturalHeight: { value: 100 } })
-  await act(async () => image.dispatchEvent(new Event("load")))
+  // 摘要计算使用真实异步任务；推进假计时器不代表批注工具已初始化。
+  await act(async () => {
+    image.dispatchEvent(new Event("load"))
+    await vi.waitFor(() => expect(host.querySelector("svg.a9s-annotationlayer")).not.toBeNull())
+  })
+  expect(host.querySelector<HTMLButtonElement>('[aria-label="添加批注"]')!.disabled).toBe(false)
   await act(async () => vi.advanceTimersByTimeAsync(100))
 }
 
@@ -117,6 +123,17 @@ function wheelImage(options: WheelEventInit) {
   host.querySelector(".react-transform-wrapper")!.dispatchEvent(event)
   return event
 }
+
+it("waits for asynchronous annotation initialization before enabling image tools", async () => {
+  const digest = crypto.subtle.digest.bind(crypto.subtle)
+  vi.spyOn(crypto.subtle, "digest").mockImplementation(async (...args) => {
+    await delay(50)
+    return digest(...args)
+  })
+  await showImage()
+  expect(host.querySelector<HTMLButtonElement>('[aria-label="添加批注"]')!.disabled).toBe(false)
+  expect(resizeCallbacks.has(host.querySelector('[aria-label="图片画布"]')!)).toBe(true)
+})
 
 it.each([
   { deltaY: 100 },
