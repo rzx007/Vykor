@@ -116,6 +116,71 @@ describe("inline tool group wording", () => {
   })
 })
 
+describe("built-in tool Chinese names", () => {
+  it.each([
+    ["Grep", "搜索文件内容"],
+    ["JobList", "查看任务列表"],
+    ["JobRead", "读取任务输出"],
+    ["JobWait", "等待任务"],
+    ["JobSend", "发送任务输入"],
+    ["JobCancel", "停止任务"],
+    ["Skill", "读取技能"],
+    ["ListSkills", "查看技能列表"],
+    ["ToolSearch", "查找工具"],
+    ["ToolResult", "查看工具结果"],
+    ["TodoWrite", "更新待办清单"],
+    ["AskUser", "询问用户"],
+    ["Config", "管理配置"],
+    ["Brief", "精简文本"],
+    ["Sleep", "等待"],
+    ["Lsp", "查询代码信息"],
+    ["NotebookEdit", "编辑笔记本"],
+    ["Workflow", "运行工作流"],
+    ["TeamCreate", "创建协作团队"],
+    ["TeamDelete", "删除协作团队"],
+    ["ScheduleCreate", "创建定时任务"],
+    ["ScheduleList", "查看定时任务"],
+    ["ScheduleUpdate", "更新定时任务"],
+    ["ScheduleDelete", "删除定时任务"],
+    ["ScheduleRunNow", "立即运行定时任务"],
+    ["EnterPlanMode", "进入规划模式"],
+    ["ExitPlanMode", "退出规划模式"],
+    ["EnterWorktree", "创建独立工作区"],
+    ["ExitWorktree", "移除独立工作区"],
+    ["McpToolCall", "调用外部工具"],
+    ["ListMcpResources", "查看外部资源"],
+    ["ReadMcpResource", "读取外部资源"],
+    ["McpAuth", "配置外部工具认证"],
+    ["FeishuPush", "发送飞书消息"],
+  ])("uses the same Chinese name for %s in rows and group titles", (toolName, name) => {
+    const call = { ...part, toolName }
+    expect(summarizeToolCall(call)).toEqual({ name, detail: undefined })
+    expect(toolGroupLatestLabel([{ call }])).toBe(name)
+    expect(
+      summarizeToolCall({
+        ...call,
+        id: "ui-tool-generation:test",
+        input: { path: "unfinished" },
+        metadata: { uiToolGeneration: true, toolProgress: { phase: "generating" } },
+      })
+    ).toEqual({ name })
+  })
+
+  it.each(["job_read", "JOB-READ", "JobRead"])("accepts normalized tool names: %s", (toolName) => {
+    expect(summarizeToolCall({ ...part, toolName, input: { description: "task-1" } })).toEqual({
+      name: "读取任务输出",
+      detail: "task-1",
+    })
+  })
+
+  it("keeps external and unknown tool names on the existing fallback", () => {
+    expect(summarizeToolCall({ ...part, toolName: "mcp__custom__JobRead" }).name).toBe(
+      "Mcp custom Job Read"
+    )
+    expect(summarizeToolCall({ ...part, toolName: "CustomAction" }).name).toBe("Custom Action")
+  })
+})
+
 describe("real tool activity labels", () => {
   it("labels a terminal unknown outcome as uncertain", () => {
     expect(

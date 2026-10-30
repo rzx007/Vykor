@@ -1061,7 +1061,7 @@ describe("tool parameter and result display", () => {
       { type: "text", text: "second block" },
     ], executionState: "completed" }
     render([part("Grep", { pattern: "needle" }, { output })])
-    click("Grep")
+    click("搜索文件内容")
     const blocks = [...container.querySelectorAll("[data-tool-output]")].map(element => element.textContent)
     expect(blocks).toEqual(["first\nline", expect.stringContaining("result.png"), "second block"])
     expect(container.querySelector("details")?.textContent).toContain("executionState")

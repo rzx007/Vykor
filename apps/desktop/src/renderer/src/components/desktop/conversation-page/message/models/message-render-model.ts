@@ -488,27 +488,63 @@ function toolResultsById(parts: DesktopSessionPart[]): Map<string, DesktopSessio
   )
 }
 
+const toolNames: ReadonlyArray<readonly [RegExp, string]> = [
+  [/^agent$/, "调用子智能体"],
+  [/^imagegeneration$/, "生成图片"],
+  [/^backgroundshellcreate$/, "创建后台终端"],
+  [/^imagetotext$/, "识别图片文字"],
+  [/^grep$/, "搜索文件内容"],
+  [/^joblist$/, "查看任务列表"],
+  [/^jobread$/, "读取任务输出"],
+  [/^jobwait$/, "等待任务"],
+  [/^jobsend$/, "发送任务输入"],
+  [/^jobcancel$/, "停止任务"],
+  [/^skill$/, "读取技能"],
+  [/^listskills$/, "查看技能列表"],
+  [/^toolsearch$/, "查找工具"],
+  [/^toolresult$/, "查看工具结果"],
+  [/^todowrite$/, "更新待办清单"],
+  [/^askuser$/, "询问用户"],
+  [/^config$/, "管理配置"],
+  [/^brief$/, "精简文本"],
+  [/^sleep$/, "等待"],
+  [/^lsp$/, "查询代码信息"],
+  [/^notebookedit$/, "编辑笔记本"],
+  [/^workflow$/, "运行工作流"],
+  [/^teamcreate$/, "创建协作团队"],
+  [/^teamdelete$/, "删除协作团队"],
+  [/^schedulecreate$/, "创建定时任务"],
+  [/^schedulelist$/, "查看定时任务"],
+  [/^scheduleupdate$/, "更新定时任务"],
+  [/^scheduledelete$/, "删除定时任务"],
+  [/^schedulerunnow$/, "立即运行定时任务"],
+  [/^enterplanmode$/, "进入规划模式"],
+  [/^exitplanmode$/, "退出规划模式"],
+  [/^enterworktree$/, "创建独立工作区"],
+  [/^exitworktree$/, "移除独立工作区"],
+  [/^mcptoolcall$/, "调用外部工具"],
+  [/^listmcpresources$/, "查看外部资源"],
+  [/^readmcpresource$/, "读取外部资源"],
+  [/^mcpauth$/, "配置外部工具认证"],
+  [/^feishupush$/, "发送飞书消息"],
+  [/^(?:glob|listfiles|findfiles)/, "查找文件"],
+  [/^(?:read|readfile)/, "读取文件"],
+  [/^(?:write|writefile|createfile)/, "写入文件"],
+  [/^(?:edit|editfile|replace)/, "编辑文件"],
+  [/applypatch/, "应用补丁"],
+  [/^(?:bash|shell|terminal|exec|command)/, "运行命令"],
+  [/search/, "搜索内容"],
+  [/browser|navigate|openurl/, "浏览网页"],
+  [/fetch|http|request/, "请求网络"],
+]
+
 export function summarizeToolCall(part: DesktopSessionPart): { name: string; detail?: string } {
   const rawName = part.toolName || "tool"
   const preparing = isToolGenerationPresentation(part)
   const normalized = rawName.toLocaleLowerCase().replace(/[-_]/g, "")
   if (normalized === "imagetotext" && !preparing) return summarizeLocalOcr(part)
-  const names: Array<[RegExp, string]> = [
-    [/^agent$/, "调用子智能体"],
-    [/^imagegeneration$/, "生成图片"],
-    [/^backgroundshellcreate$/, "创建后台终端"],
-    [/^imagetotext$/, "识别图片文字"],
-    [/^(?:glob|listfiles|findfiles)/, "查找文件"],
-    [/^(?:read|readfile)/, "读取文件"],
-    [/^(?:write|writefile|createfile)/, "写入文件"],
-    [/^(?:edit|editfile|replace)/, "编辑文件"],
-    [/applypatch/, "应用补丁"],
-    [/^(?:bash|shell|terminal|exec|command)/, "运行命令"],
-    [/search/, "搜索内容"],
-    [/browser|navigate|openurl/, "浏览网页"],
-    [/fetch|http|request/, "请求网络"],
-  ]
-  const name = names.find(([pattern]) => pattern.test(normalized))?.[1] ?? humanizeToolName(rawName)
+  const name =
+    toolNames.find(([pattern]) => pattern.test(normalized))?.[1] ?? humanizeToolName(rawName)
   if (preparing) return { name }
   return {
     name,
