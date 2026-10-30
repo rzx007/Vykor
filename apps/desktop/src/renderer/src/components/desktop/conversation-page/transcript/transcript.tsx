@@ -60,7 +60,7 @@ interface ConversationTranscriptProps {
   canEditLastUserMessage: boolean
   onEditLastUserMessage: (sourceMessageId: string, document: ComposerDocument) => void
   onCopyAssistantMessage: (content: string) => void | Promise<void>
-  onForkAssistantMessage?: (messageId: string) => void
+  onForkAssistantMessage?: (messageId: string) => void | Promise<void>
   onOpenFile: (path: string, line?: number) => void
   canOpenReview: boolean
   onOpenReview: (path?: string) => void

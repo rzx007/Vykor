@@ -409,7 +409,7 @@ function ConversationPane({
 
   const forkFromAssistantMessage = useCallback(
     async (messageId: string): Promise<void> => {
-      if (!activeSessionId || archived || running) return
+      if (!activeSessionId || archived || running) throw new Error("当前聊天暂不能创建分叉")
       await forkSession(activeSessionId, { afterMessageId: messageId })
     },
     [activeSessionId, archived, running, forkSession]
@@ -727,7 +727,9 @@ function ConversationPane({
                           }
                           onEditLastUserMessage={editLatestUserMessage}
                           onCopyAssistantMessage={copyAssistantMessage}
-                          onForkAssistantMessage={forkFromAssistantMessage}
+                          onForkAssistantMessage={
+                            !archived && !running ? forkFromAssistantMessage : undefined
+                          }
                           onOpenFile={onOpenFile}
                           canOpenReview={canOpenReview}
                           onOpenReview={onOpenReview}
@@ -827,6 +829,7 @@ function ConversationPane({
                   error={composerValidationError ?? activeSessionError ?? pluginCatalogError}
                 />
                 <PendingPromptQueue
+                  key={composerScope}
                   prompts={pendingPrompts}
                   activeRunId={activeRun?.id}
                   localSubmissions={localPromptSubmissions}

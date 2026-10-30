@@ -44,6 +44,7 @@ type OpenSessionResult = "applied" | "cancelled" | "failed"
 
 export function createSessionActions(context: SessionActionsContext): SessionActions {
   const { get, set, projectDetailsCoordinator } = context
+  const pendingForks = new Map<string, ReturnType<SessionActions["forkSession"]>>()
   let primaryNavigationGeneration = 0
   let defaultSettingsGeneration = 0
   let contextUsageGeneration = 0
@@ -436,24 +437,35 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
 
     async forkSession(sessionId, options) {
       if (!sessionId) throw new Error("会话 ID 不能为空")
-      const navigationOwnerSessionId = get().activeSessionId
-      const navigationOwnerGeneration = primaryNavigationGeneration
-      const session = await window.desktop.sessions.fork({
-        sessionId,
-        ...(options?.beforeMessageId ? { beforeMessageId: options.beforeMessageId } : {}),
-        ...(options?.afterMessageId ? { afterMessageId: options.afterMessageId } : {}),
-      })
-      set((state) => ({
-        sessions: upsertSession(state.sessions, session),
-        archivedSessions: state.archivedSessions.filter((item) => item.id !== session.id),
-      }))
-      if (
-        primaryNavigationGeneration === navigationOwnerGeneration &&
-        get().activeSessionId === navigationOwnerSessionId
-      ) {
-        await get().openSession(session.id)
+      const key = JSON.stringify([sessionId, options?.beforeMessageId, options?.afterMessageId])
+      const existing = pendingForks.get(key)
+      if (existing) return existing
+      const request = (async () => {
+        const navigationOwnerSessionId = get().activeSessionId
+        const navigationOwnerGeneration = primaryNavigationGeneration
+        const session = await window.desktop.sessions.fork({
+          sessionId,
+          ...(options?.beforeMessageId ? { beforeMessageId: options.beforeMessageId } : {}),
+          ...(options?.afterMessageId ? { afterMessageId: options.afterMessageId } : {}),
+        })
+        set((state) => ({
+          sessions: upsertSession(state.sessions, session),
+          archivedSessions: state.archivedSessions.filter((item) => item.id !== session.id),
+        }))
+        if (
+          primaryNavigationGeneration === navigationOwnerGeneration &&
+          get().activeSessionId === navigationOwnerSessionId
+        ) {
+          await get().openSession(session.id)
+        }
+        return session
+      })()
+      pendingForks.set(key, request)
+      try {
+        return await request
+      } finally {
+        pendingForks.delete(key)
       }
-      return session
     },
 
     async renameSession(sessionId, title) {
