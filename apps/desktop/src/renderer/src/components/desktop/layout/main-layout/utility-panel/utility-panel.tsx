@@ -157,10 +157,15 @@ export function UtilityPanel({
       const source = imageOpenRequest.source
       const gallery = imageOpenRequest.gallery?.sources.some(
         (item) => imageSourceKey(item) === imageSourceKey(source)
-      ) ? imageOpenRequest.gallery : undefined
+      )
+        ? imageOpenRequest.gallery
+        : undefined
       const id = gallery ? `image-gallery:${gallery.id}` : imageSourceKey(source)
       const imageTab: UtilityTab = {
-        id, tool: "image", title: source.name, imageSource: source,
+        id,
+        tool: "image",
+        title: source.name,
+        imageSource: source,
         ...(gallery ? { imageGallery: gallery } : {}),
       }
       setTabs((current) =>
@@ -456,10 +461,11 @@ export function UtilityPanel({
     setFileTabs,
     closeOrdinaryTabs,
     persistFileTabs,
-    closeTerminals: (terminalIds) => setTerminalCommands((current) => [
-      ...current,
-      { id: ++terminalCommandSequenceRef.current, type: "close", terminalIds },
-    ]),
+    closeTerminals: (terminalIds) =>
+      setTerminalCommands((current) => [
+        ...current,
+        { id: ++terminalCommandSequenceRef.current, type: "close", terminalIds },
+      ]),
   })
   const closeTabs = close.closeTabs
   const closeTab = (tabId: string): void => closeTabs([tabId])
@@ -769,14 +775,17 @@ export function UtilityPanel({
               navigationGuardRef={imageNavigationGuardRef}
               onNavigate={(direction) => {
                 if (!close.isCurrentContext()) return
-                setTabs((current) => current.map((tab) => {
-                  if (tab.id !== activeTab.id || !tab.imageGallery || !tab.imageSource) return tab
-                  const index = tab.imageGallery.sources.findIndex(
-                    (item) => imageSourceKey(item) === imageSourceKey(tab.imageSource!)
-                  )
-                  const source = index < 0 ? undefined : tab.imageGallery.sources[index + direction]
-                  return source ? { ...tab, imageSource: source, title: source.name } : tab
-                }))
+                setTabs((current) =>
+                  current.map((tab) => {
+                    if (tab.id !== activeTab.id || !tab.imageGallery || !tab.imageSource) return tab
+                    const index = tab.imageGallery.sources.findIndex(
+                      (item) => imageSourceKey(item) === imageSourceKey(tab.imageSource!)
+                    )
+                    const source =
+                      index < 0 ? undefined : tab.imageGallery.sources[index + direction]
+                    return source ? { ...tab, imageSource: source, title: source.name } : tab
+                  })
+                )
               }}
             />
           )}
