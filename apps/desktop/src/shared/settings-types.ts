@@ -1,3 +1,5 @@
+import { DEFAULT_REPLY_STYLE, isReplyStyle, type ReplyStyle } from "@vykor/application-client"
+
 export type DesktopWorkStyle = "practical" | "efficient"
 export type DesktopNotificationMode = "never" | "when_unfocused" | "always"
 export type DesktopNotificationSound = "completed" | "needs_input" | "failed"
@@ -43,6 +45,7 @@ export interface DesktopDaemonAutoStartSnapshot {
 }
 
 export interface DesktopSettingsSnapshot {
+  replyStyle: ReplyStyle
   workStyle: DesktopWorkStyle
   notificationMode: DesktopNotificationMode
   notificationSounds: DesktopNotificationSounds
@@ -60,6 +63,10 @@ export interface DesktopSettingsSnapshot {
 
 export interface UpdateDesktopWorkStyleInput {
   workStyle: DesktopWorkStyle
+}
+
+export interface UpdateDesktopReplyStyleInput {
+  replyStyle: ReplyStyle
 }
 
 export interface UpdateDesktopCustomInstructionsInput {
@@ -139,6 +146,7 @@ export function buildDesktopSettingsSnapshot(
 ): DesktopSettingsSnapshot {
   const memory = isRecord(settings.memory) ? settings.memory : {}
   return {
+    replyStyle: isReplyStyle(settings.replyStyle) ? settings.replyStyle : DEFAULT_REPLY_STYLE,
     workStyle: isDesktopWorkStyle(settings.workStyle) ? settings.workStyle : "practical",
     notificationMode: isDesktopNotificationMode(preferences.notificationMode)
       ? preferences.notificationMode

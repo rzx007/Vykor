@@ -15,4 +15,6 @@ agent 组装层调用 `createVykorRuntime()`，构造器收集各项能力，返
 
 每轮读取实际请求配置后，default-runtime 调用宿主可选 validateModelSelection，复查当前模型目录与权限，再准备客户端与派发。目录容量元数据可保持创建快照，授权校验使用现有 settings/catalog reader 读取当前值，不把旧 root 配置当永久许可。
 
+同一请求快照中的 `replyStyle`、`workStyle` 和自定义指令一起进入提示词构建。切换后下一次请求替换风格段，已有消息历史保持原样；不叠加旧风格。完整 `systemPrompt` 优先并原样交给模型，不暗中附加回复风格。`__test__/reply-style.test.ts` 使用真实组装与模拟模型接收端覆盖这条路径。
+
 宿主提供 `resolveModelImageSupport` 时，每轮按实际选择的供应商、模型和 API 格式读取图片能力，随请求快照交给查询引擎。切换模型后的下一次请求因此会重新处理历史图片；未提供该查询的自定义客户端保留原有行为。

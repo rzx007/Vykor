@@ -461,7 +461,7 @@ describe("buildRuntimeSystemPrompt", () => {
 });
 
 describe("prompt layers with SOUL.md and USER.md", () => {
-  it("keeps the default base prompt byte-for-byte when SOUL.md is absent", async () => {
+  it("keeps the default identity and invariant guidance byte-for-byte when SOUL.md is absent", async () => {
     const { mkdtempSync, rmSync } = await import("node:fs");
     const { join } = await import("node:path");
     const { tmpdir } = await import("node:os");
@@ -475,7 +475,7 @@ describe("prompt layers with SOUL.md and USER.md", () => {
         cwd: cwdDir,
         includeDelegation: false,
       });
-      expect(result.startsWith(getBaseSystemPrompt())).toBe(true);
+      expect(result.startsWith(`${getDefaultIdentity()}\n\n${getInvariantGuidance()}`)).toBe(true);
     } finally {
       if (oldConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
       else process.env.VYKOR_CONFIG_DIR = oldConfigDir;

@@ -1,4 +1,5 @@
 import type { ContextLedgerSegment } from "@vykor/agent-contracts";
+import type { ReplyStyle } from "@vykor/agent-contracts";
 import type { WorkStyle } from "@vykor/host-config";
 import type { PromptPermissionMode } from "./index.js";
 import {
@@ -12,6 +13,7 @@ export interface BuildPromptLedgerSegmentsOptions {
   permissionMode?: PromptPermissionMode;
   fastMode?: boolean;
   workStyle?: WorkStyle;
+  replyStyle?: ReplyStyle;
   effort?: string;
   passes?: number;
   /** Full project memory preview — excluded from ledger segments by design. */

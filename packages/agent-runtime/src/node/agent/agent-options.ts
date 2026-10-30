@@ -86,6 +86,8 @@ export interface VykorAgentConfiguration {
   provider?: string;
   model?: string;
   systemPrompt?: string;
+  /** Default expression preference; a complete systemPrompt remains an exact override. */
+  replyStyle?: import("@vykor/agent-contracts").ReplyStyle;
   permissionMode?: PermissionMode;
   approvalMode?: ApprovalMode;
   workMode?: WorkMode;

@@ -19,6 +19,7 @@ Electron + React desktop shell for Vykor.
 - `src/main/features/tray`: system tray menu, notification, and tray flash helpers.
 - `src/main/features/pet`: transparent desktop Pet window, visibility, click-through, and position persistence.
 - [src/main/features/session](src/main/features/session/README.md)：会话与项目操作、后台连接、订阅和恢复流程。
+- [src/main/features/settings](src/main/features/settings/README.md)：桌面设置读写、输入校验和快照；回复风格与进度通知分别保存。
 - [src/main/features/plugin](src/main/features/plugin/README.md): 插件列表、归档和市场安装、权限确认及操作结果。
 - `src/preload`: safe renderer-facing desktop API exposed as `window.desktop`.
 - [src/renderer](src/renderer/README.md)：主窗口页面入口、镂空名称启动画面、主题恢复与就绪退场。

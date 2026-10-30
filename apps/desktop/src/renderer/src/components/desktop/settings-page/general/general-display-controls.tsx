@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { DEFAULT_REPLY_STYLE, isReplyStyle, type ReplyStyle } from "@vykor/application-client"
 import {
   Select,
   SelectContent,
@@ -11,6 +12,82 @@ import { Switch } from "@renderer/components/ui/switch"
 import { useAppearance } from "@renderer/components/appearance/appearance-provider"
 import { isDesktopWorkStyle, type DesktopWorkStyle } from "@shared/settings-types"
 import { errorMessage } from "../shared/settings-error-message"
+
+const replyStyleLabels: Record<ReplyStyle, string> = {
+  collaborative: "协作",
+  direct: "直接",
+  explanatory: "讲解",
+}
+
+export function ReplyStyleControl(): React.JSX.Element {
+  const [style, setStyle] = useState<ReplyStyle>(DEFAULT_REPLY_STYLE)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    void window.desktop.settings
+      .snapshot()
+      .then((snapshot) => {
+        if (!cancelled) setStyle(snapshot.replyStyle)
+      })
+      .catch((loadError: unknown) => {
+        if (!cancelled) setError(errorMessage(loadError))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const update = (nextStyle: ReplyStyle): void => {
+    if (loading || saving || nextStyle === style) return
+    const previous = style
+    setStyle(nextStyle)
+    setSaving(true)
+    setError(null)
+    void window.desktop.settings
+      .updateReplyStyle({ replyStyle: nextStyle })
+      .then((snapshot) => setStyle(snapshot.replyStyle))
+      .catch((saveError: unknown) => {
+        setStyle(previous)
+        setError(errorMessage(saveError))
+      })
+      .finally(() => setSaving(false))
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <Select
+        value={style}
+        onValueChange={(value) => {
+          if (isReplyStyle(value)) update(value)
+        }}
+      >
+        <SelectTrigger aria-label="回复风格" disabled={loading || saving} className="min-w-28">
+          <SelectValue>{replyStyleLabels[style]}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {Object.entries(replyStyleLabels).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+      {error ? (
+        <p role="alert" className="text-ui-caption max-w-56 text-right text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  )
+}
 
 export function WorkStyleControl(): React.JSX.Element {
   const [style, setStyle] = useState<DesktopWorkStyle>("practical")
@@ -60,13 +137,13 @@ export function WorkStyleControl(): React.JSX.Element {
           if (isDesktopWorkStyle(value)) update(value)
         }}
       >
-        <SelectTrigger aria-label="工作风格" disabled={loading || saving} className="min-w-28">
-          <SelectValue>{style === "practical" ? "务实" : "高效"}</SelectValue>
+        <SelectTrigger aria-label="进度通知" disabled={loading || saving} className="min-w-28">
+          <SelectValue>{style === "practical" ? "关键节点" : "必要时"}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectGroup>
-            <SelectItem value="practical">务实</SelectItem>
-            <SelectItem value="efficient">高效</SelectItem>
+            <SelectItem value="practical">关键节点</SelectItem>
+            <SelectItem value="efficient">必要时</SelectItem>
           </SelectGroup>
         </SelectContent>
       </Select>

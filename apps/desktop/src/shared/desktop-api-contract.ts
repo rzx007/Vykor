@@ -156,6 +156,7 @@ import type {
   UpdateDesktopNotificationSoundsInput,
   UpdateDesktopMemorySettingsInput,
   UpdateDesktopReasoningVisibilityInput,
+  UpdateDesktopReplyStyleInput,
   UpdateDesktopWorkStyleInput,
 } from "./settings-types"
 import type {
@@ -405,6 +406,7 @@ export type DesktopAPI = {
       input: UpdateDesktopMemorySettingsInput
     ) => Promise<DesktopSettingsSnapshot>
     updateWorkStyle: (input: UpdateDesktopWorkStyleInput) => Promise<DesktopSettingsSnapshot>
+    updateReplyStyle: (input: UpdateDesktopReplyStyleInput) => Promise<DesktopSettingsSnapshot>
     updateNotificationMode: (
       input: UpdateDesktopNotificationModeInput
     ) => Promise<DesktopSettingsSnapshot>

@@ -109,6 +109,7 @@ const openers: WorkspaceOpener[] = [
 
 function settingsSnapshot(defaultOpenerId: string | null): DesktopSettingsSnapshot {
   return {
+    replyStyle: "collaborative",
     workStyle: "practical",
     notificationMode: "when_unfocused",
     notificationSounds: {

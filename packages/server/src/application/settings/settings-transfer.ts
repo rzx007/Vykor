@@ -7,9 +7,10 @@ import {
   type Settings,
 } from "@vykor/host-config";
 import { isDeepStrictEqual } from "node:util";
+import { isReplyStyle } from "@vykor/agent-contracts";
 
 export const SETTINGS_TRANSFER_GROUPS = {
-  general: ["workStyle", "showReasoning", "maxTurns", "autoReview"],
+  general: ["workStyle", "replyStyle", "showReasoning", "maxTurns", "autoReview"],
   permission: ["permission"], memory: ["memory", "systemPrompt"],
   model: ["model", "provider", "effort", "modelDisabled"], environment: ["agentEnvironment"],
 } as const;
@@ -29,6 +30,7 @@ export function parsePortableSettings(value: unknown): PortableSettings {
       if (environment.env !== undefined || environment.secretEnv !== undefined) throw new Error("普通配置导入不接受环境变量或机密引用。");
     }
     if (raw.workStyle !== undefined && raw.workStyle !== "practical" && raw.workStyle !== "efficient") throw new Error("工作风格无效。");
+    if (Object.hasOwn(raw, "replyStyle") && !isReplyStyle(raw.replyStyle)) throw new Error("回复风格无效。");
     if (raw.showReasoning !== undefined && typeof raw.showReasoning !== "boolean") throw new Error("思考展示开关无效。");
     if (raw.modelDisabled !== undefined && typeof raw.modelDisabled !== "boolean") throw new Error("默认模型开关无效。");
     if (raw.maxTurns !== undefined && (!Number.isInteger(raw.maxTurns) || (raw.maxTurns as number) < 0 || (raw.maxTurns as number) > 1000)) throw new Error("任务轮数上限必须是 0–1000 的整数，0 表示不限制。");

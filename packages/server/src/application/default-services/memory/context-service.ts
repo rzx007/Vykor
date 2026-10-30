@@ -1,4 +1,5 @@
 import { access } from "node:fs/promises";
+import { DEFAULT_REPLY_STYLE } from "@vykor/agent-contracts";
 
 import {
   assembleContextUsageSnapshot,
@@ -90,6 +91,7 @@ export function createDefaultContextService(
         cwd,
         permissionMode: settings.permission.mode,
         workStyle: settings.workStyle,
+        replyStyle: settings.replyStyle,
         fastMode: settings.fastMode,
         effort: settings.effort,
         passes: settings.passes,
@@ -161,6 +163,13 @@ export function createDefaultContextService(
           written: "/config, CLI args, session runtime metadata",
           injected: "system prompt context Custom Instructions",
           purpose: "extra user-configured instructions",
+        },
+        {
+          source: "settings.replyStyle",
+          status: settings.replyStyle ?? DEFAULT_REPLY_STYLE,
+          written: "settings or explicit session runtime override",
+          injected: "system prompt stable Reply Style",
+          purpose: "default communication and explanation preferences",
         },
         {
           source: "Environment",
@@ -277,6 +286,7 @@ export function createDefaultContextService(
         cwd,
         permissionMode: settings.permission.mode,
         workStyle: settings.workStyle,
+        replyStyle: settings.replyStyle,
         fastMode: settings.fastMode,
         effort: settings.effort,
         passes: settings.passes,

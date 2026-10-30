@@ -6,6 +6,7 @@
 | --- | --- |
 | [messages.ts](messages.ts) | 用户、助手、工具结果消息，以及文字、图片、工具调用内容块 |
 | [collections.ts](collections.ts) | `readonlySet`、`readonlyMap`，复制集合并仅暴露读取能力 |
+| [reply-style.ts](reply-style.ts) | `ReplyStyle`、默认回复风格及跨端共用的合法值校验 |
 
 公开入口是 `@vykor/agent-contracts`，由 [../index.ts](../index.ts) 汇总。消费方按消息类型构造内容，再交给模型客户端、展示层或存储层。消息定义本身不追加历史、不读取图片文件。
 

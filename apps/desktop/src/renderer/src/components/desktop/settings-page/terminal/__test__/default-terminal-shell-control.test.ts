@@ -133,6 +133,7 @@ const shells: DesktopDetectedTerminalShell[] = [
 
 function settingsSnapshot(defaultTerminalShellId: string | null): DesktopSettingsSnapshot {
   return {
+    replyStyle: "collaborative",
     workStyle: "practical",
     notificationMode: "when_unfocused",
     notificationSounds: {

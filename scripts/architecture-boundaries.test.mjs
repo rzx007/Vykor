@@ -664,6 +664,20 @@ test("Client may consume canonical data through Protocol but cannot import contr
   });
 });
 
+test("reply preferences cross protocol and domain boundaries only through their pure data entry", () => {
+  const resolvedFile = "packages/agent-contracts/src/conversation/reply-style.ts";
+  for (const fromFile of ["packages/protocol/src/index.ts", "packages/domain-contracts/src/sessions/runtime-config.ts"]) {
+    assert.deepEqual(checkModuleDependency({ fromFile, specifier: "@vykor/agent-contracts/reply-style", resolvedFile,
+      importedNames: ["ReplyStyle", "isReplyStyle"] }, strictPolicy()), []);
+  }
+  assert.deepEqual(checkModuleDependency({ fromFile: "packages/client/src/session.ts", specifier: "@vykor/protocol", resolvedFile,
+    importedNames: ["ReplyStyle"], declarationOrigin: true, typeOnly: true }, strictPolicy()), []);
+  assert.ok(checkModuleDependency({ fromFile: "packages/protocol/src/index.ts", specifier: "@vykor/agent-contracts",
+    importedNames: ["ReplyStyle"], typeOnly: true }, strictPolicy()).length > 0);
+  assert.ok(checkModuleDependency({ fromFile: "packages/client/src/session.ts", specifier: "@vykor/agent-contracts/reply-style", resolvedFile,
+    importedNames: ["ReplyStyle"], typeOnly: true }, strictPolicy()).length > 0);
+});
+
 test("Protocol can only consume the canonical data entry, including relative paths", () => {
   const fromFile = "packages/protocol/src/events.ts";
   for (const input of [

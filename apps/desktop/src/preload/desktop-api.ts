@@ -384,6 +384,9 @@ export const desktopAPI = {
     ) => invoke(IpcChannels.settingsUpdateMemorySettings, input),
     updateWorkStyle: (input: IpcInvokeMap[typeof IpcChannels.settingsUpdateWorkStyle]["args"][0]) =>
       invoke(IpcChannels.settingsUpdateWorkStyle, input),
+    updateReplyStyle: (
+      input: IpcInvokeMap[typeof IpcChannels.settingsUpdateReplyStyle]["args"][0]
+    ) => invoke(IpcChannels.settingsUpdateReplyStyle, input),
     updateNotificationMode: (
       input: IpcInvokeMap[typeof IpcChannels.settingsUpdateNotificationMode]["args"][0]
     ) => invoke(IpcChannels.settingsUpdateNotificationMode, input),

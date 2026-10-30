@@ -1,4 +1,5 @@
 import type { SessionRecord } from "@vykor/domain-contracts/sessions";
+import { isReplyStyle } from "@vykor/agent-contracts";
 import { readRuntimeMetadata, type SessionApiFormat, type SessionRuntimeConfig, type SessionRuntimeConfigPatch } from "@vykor/domain-contracts/sessions/runtime-config";
 import { isWorkMode, normalizeApprovalMode } from "@vykor/host-config";
 import { effectivePermissionMode } from "@vykor/permissions";
@@ -14,6 +15,7 @@ const RUNTIME_CONFIG_KEYS: Array<keyof SessionRuntimeConfig> = [
   "effort",
   "sessionMode",
   "systemPrompt",
+  "replyStyle",
   "allowedTools",
   "disallowedTools",
   "pluginsEnabled",
@@ -69,6 +71,9 @@ export function readSessionRuntimeConfig(
     : runtime.permissionMode === "plan" ? "plan" : defaults?.workMode ?? "execute";
   return {
     model,
+    ...(runtime.replyStyle !== undefined || defaults?.replyStyle !== undefined
+      ? { replyStyle: isReplyStyle(runtime.replyStyle) ? runtime.replyStyle : defaults?.replyStyle ?? "inherit" }
+      : {}),
     ...(approvalMode ? { approvalMode } : {}),
     ...(approvalMode || isWorkMode(runtime.workMode) || defaults?.workMode ? { workMode } : {}),
     ...(stringValue(runtime.provider) ?? defaults?.provider

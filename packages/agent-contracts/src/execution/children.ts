@@ -67,6 +67,8 @@ export interface AgentChildSpawnInput {
   sessionId?: string;
   model?: string;
   systemPrompt?: string;
+  /** Explicit child reply preference; omitted means inherit the parent's current preference. */
+  replyStyle?: import("../conversation/reply-style.js").ReplyStyle;
   permissionMode?: "default" | "plan" | "full_auto";
   /** Host-derived constrained modes for durable child projection; never caller authorization. */
   approvalMode?: ApprovalMode;

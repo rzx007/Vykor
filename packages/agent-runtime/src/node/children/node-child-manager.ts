@@ -139,6 +139,7 @@ export class NodeChildManager extends AgentChildManager {
           ...input.spawn,
           model: resolved.model,
           effort: resolved.effort,
+          replyStyle: resolved.replyStyle,
           approvalMode: resolved.approvalMode,
           workMode: resolved.workMode,
           permissionMode:

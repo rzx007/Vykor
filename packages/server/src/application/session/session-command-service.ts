@@ -107,6 +107,7 @@ const LIVE_REQUEST_CONFIGURATION_KEYS = new Set([
   "model", "provider", "baseUrl", "apiFormat", "effort",
   "maxTurns",
   "systemPrompt",
+  "replyStyle",
 ]);
 const MODEL_REQUEST_CONFIGURATION_KEYS = new Set([
   "model",

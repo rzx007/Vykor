@@ -1,4 +1,5 @@
 import type { AgentRequestConfiguration, AgentRequestConfigurationPatch, AgentRequestConfigurationSnapshot, AgentRequestConfigurationStore } from "@vykor/host-config";
+import { isReplyStyle } from "@vykor/agent-contracts";
 
 
 export type ValidateRequestConfiguration = (
@@ -17,6 +18,7 @@ export function createMemoryRequestConfigurationStore(
   initial: AgentRequestConfiguration,
   validate: ValidateRequestConfiguration,
 ): MemoryRequestConfigurationStore {
+  assertValidRequestConfiguration(initial);
   let current = copyConfiguration(initial);
   let revision = 0;
   let tail: Promise<unknown> = Promise.resolve();
@@ -76,6 +78,9 @@ export function createMemoryRequestConfigurationStore(
 }
 
 function assertValidRequestConfiguration(configuration: AgentRequestConfiguration): void {
+  if (configuration.replyStyle !== undefined && !isReplyStyle(configuration.replyStyle)) {
+    throw new Error("replyStyle must be collaborative, direct, or explanatory");
+  }
   if (typeof configuration.model !== "string" || !configuration.model.trim()) {
     throw new Error("model is required");
   }

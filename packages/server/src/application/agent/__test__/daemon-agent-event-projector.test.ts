@@ -88,6 +88,18 @@ function projectorStore(flat: Record<string, any>) {
 }
 
 describe("DaemonAgentEventProjector", () => {
+  it("persists the child's explicit reply style before the captured parent style", async () => {
+    const { store, projector } = goalProjector();
+    const cwd = store.sessions.get("parent")!.cwd;
+    await projector.apply(event("child.created", { childId: "style-handle", sessionId: "style-child", cwd,
+      parentRequestConfiguration: { model: "m", replyStyle: "explanatory" },
+      spawn: { agent: "worker", prompt: "inspect", description: "check", cwd, replyStyle: "direct" } }, { runId: "P1" }));
+    expect(store.sessions.get("style-child")?.metadata.runtime).toMatchObject({ replyStyle: "direct" });
+    await projector.apply(event("child.created", { childId: "inherit-style-handle", sessionId: "inherit-style-child", cwd,
+      parentRequestConfiguration: { model: "m", replyStyle: "explanatory" },
+      spawn: { agent: "worker", prompt: "inspect", description: "check", cwd } }, { runId: "P1" }));
+    expect(store.sessions.get("inherit-style-child")?.metadata.runtime).toMatchObject({ replyStyle: "explanatory" });
+  });
   it("clears a caller-supplied delivery claim when the Kernel completes without a receipt", async () => {
     const { store, projector } = goalProjector();
     store.runs.createRun({ id: "forged-delivery", sessionId: "parent", metadata: {

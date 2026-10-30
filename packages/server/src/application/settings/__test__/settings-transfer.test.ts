@@ -13,6 +13,18 @@ beforeEach(async () => {
 afterEach(async () => { vi.unstubAllEnvs(); await rm(directory, { recursive: true, force: true }); });
 
 describe("portable settings boundaries", () => {
+  it("round trips reply styles in the general group and preserves them during other imports", async () => {
+    await updateSettings(current => ({ ...current, replyStyle: "direct" }), { includeEnvironment: false });
+    const expected = await exportPortableSettings();
+    expect(expected.groups.general?.replyStyle).toBe("direct");
+    await importPortableSettings({ version: 1, groups: { general: { replyStyle: "explanatory" } } }, ["general"], expected);
+    expect((await exportPortableSettings()).groups.general?.replyStyle).toBe("explanatory");
+    await importPortableSettings({ version: 1, groups: { general: { showReasoning: false } } }, ["general"], await exportPortableSettings());
+    expect((await exportPortableSettings()).groups.general?.replyStyle).toBe("explanatory");
+    for (const replyStyle of ["inherit", "chatty", null, 1]) {
+      expect(() => parsePortableSettings({ version: 1, groups: { general: { replyStyle } } })).toThrow();
+    }
+  });
   it("round trips unlimited task limits", async () => {
     const expected = await exportPortableSettings();
     await importPortableSettings({ version: 1, groups: { general: { maxTurns: 0 } } }, ["general"], expected);

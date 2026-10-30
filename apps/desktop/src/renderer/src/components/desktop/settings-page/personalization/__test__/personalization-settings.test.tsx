@@ -38,6 +38,7 @@ const memoryConfiguration = {
 }
 
 const snapshot = {
+  replyStyle: "collaborative",
   workStyle: "practical",
   notificationMode: "when_unfocused",
   agentEnvironment: "native",

@@ -24,6 +24,13 @@ function settingsRef(overrides: Partial<Settings> = {}): DaemonSettingsRef {
 }
 
 describe("ContextService.usage", () => {
+  it("includes the configured reply style in static context usage", async () => {
+    const direct = createDefaultContextService(settingsRef({ replyStyle: "direct" }), new ContextUsageCache());
+    const explanatory = createDefaultContextService(settingsRef({ replyStyle: "explanatory" }), new ContextUsageCache());
+    const directUsage = await direct.usage({ cwd: process.cwd() });
+    const explanatoryUsage = await explanatory.usage({ cwd: process.cwd() });
+    expect(directUsage.snapshot.estimatedInputTokens).not.toBe(explanatoryUsage.snapshot.estimatedInputTokens);
+  });
   it("returns conversation_omitted tip without sessionId", async () => {
     const contextService = createDefaultContextService(settingsRef(), new ContextUsageCache());
     const result = await contextService.usage({ cwd: process.cwd() });

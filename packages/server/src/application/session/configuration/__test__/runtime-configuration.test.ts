@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { SessionStore } from "@vykor/services";
 
 import {
   patchSessionRuntimeMetadata,
@@ -24,6 +27,40 @@ function session(metadata: Record<string, unknown>): SessionRecord {
 }
 
 describe("session runtime metadata", () => {
+  it("persists a reply style override and an explicit reset that resolves current defaults", () => {
+    const original = { runtime: { model: "m" } };
+    const override = patchSessionRuntimeMetadata(original, { replyStyle: "direct" });
+    expect(readSessionRuntimeConfig(session(override), { replyStyle: "explanatory" }).replyStyle).toBe("direct");
+    const reset = patchSessionRuntimeMetadata(override, { replyStyle: "inherit" });
+    expect(reset).toMatchObject({ runtime: { replyStyle: "inherit" } });
+    expect(readSessionRuntimeConfig(session(reset)).replyStyle).toBe("inherit");
+    expect(readSessionRuntimeConfig(session(reset), { replyStyle: "explanatory" }).replyStyle).toBe("explanatory");
+    expect(readSessionRuntimeConfig(session(reset), { replyStyle: "collaborative" }).replyStyle).toBe("collaborative");
+    expect(changedSessionRuntimeKeys(readSessionRuntimeConfig(session(override)), readSessionRuntimeConfig(session(reset)))).toEqual(["replyStyle"]);
+    for (const replyStyle of ["chatty", "", null, 1]) {
+      expect(() => patchSessionRuntimeMetadata(original, { replyStyle } as never)).toThrow();
+    }
+  });
+  it("keeps a reply style choice and reset when the durable session store reopens", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vykor-session-reply-style-"));
+    const path = join(directory, "sessions.db");
+    let store = new SessionStore({ path });
+    try {
+      store.sessions.create({ id: "style", cwd: directory, model: "m",
+        metadata: patchSessionRuntimeMetadata({}, { model: "m", replyStyle: "direct" }) });
+      store.close();
+      store = new SessionStore({ path });
+      expect(readSessionRuntimeConfig(store.sessions.get("style")!, { replyStyle: "explanatory" }).replyStyle).toBe("direct");
+      store.sessions.update("style", { metadata: patchSessionRuntimeMetadata(store.sessions.get("style")!.metadata, { replyStyle: "inherit" }) });
+      store.close();
+      store = new SessionStore({ path });
+      expect(store.sessions.get("style")!.metadata).toMatchObject({ runtime: { replyStyle: "inherit" } });
+      expect(readSessionRuntimeConfig(store.sessions.get("style")!, { replyStyle: "explanatory" }).replyStyle).toBe("explanatory");
+    } finally {
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
   it("preserves explicit unlimited limits instead of dropping zero or inheriting a positive default", () => {
     expect(readSessionRuntimeConfig(session({ runtime: { model: "m", maxTurns: 0 } }), { maxTurns: 50 }).maxTurns).toBe(0);
     expect(readSessionRuntimeConfig(session({ runtime: { model: "m" } }), { maxTurns: 0 }).maxTurns).toBe(0);

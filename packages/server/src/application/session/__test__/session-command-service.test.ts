@@ -128,6 +128,16 @@ describe("SessionCommandService", () => {
   });
 
   describe("updateSession", () => {
+    it("updates and resets reply styles during a run without replacing the warm agent", async () => {
+      const { service, runtimeControl, sessions } = createService({ hasWork: true, persistSession: true });
+      const chosen = await service.updateSession("s1", { metadata: { runtime: { replyStyle: "direct" } } });
+      expect(chosen.metadata).toMatchObject({ runtime: { replyStyle: "direct" }, runtimeRevision: 1 });
+      const reset = await service.updateSession("s1", { metadata: { runtime: { replyStyle: "inherit" } } });
+      expect(reset.metadata).toMatchObject({ runtime: { replyStyle: "inherit" }, runtimeRevision: 2 });
+      await expect(service.updateSession("s1", { metadata: { runtime: { replyStyle: "chatty" } } })).rejects.toThrow();
+      expect(sessions.getSession()?.metadata).toMatchObject({ runtime: { replyStyle: "inherit" }, runtimeRevision: 2 });
+      expect(runtimeControl.closeAgent).not.toHaveBeenCalled();
+    });
     it("stops following the default effort after an explicit session choice", async () => {
       const { service } = createService({
         sessionRecord: {

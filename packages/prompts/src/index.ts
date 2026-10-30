@@ -3,6 +3,9 @@ import { join, resolve, dirname } from "node:path";
 import { platform, machine, homedir, hostname } from "node:os";
 import { resolveGitRepository } from "@vykor/host-config";
 import type { WorkStyle } from "@vykor/host-config";
+import type { ReplyStyle } from "@vykor/agent-contracts";
+import { buildReplyStyleSection } from "./reply-styles.js";
+export { buildReplyStyleSection } from "./reply-styles.js";
 import type { EffectiveEnvironmentInfo } from "@vykor/environment";
 import {
   describeHostShellLauncher,
@@ -90,13 +93,7 @@ ${LONG_RUNNING_SHELL_GUIDANCE}
 # Using skills
  - Load skills explicitly requested by the user, or those whose task-specific knowledge or procedures materially help the current task. Broad keywords or a remote possibility of relevance do not require loading a skill.
  - Read only relevant skill instructions and resources. Generic workflow advice must not turn a simple task into mandatory planning, delegation, or repeated approval steps.
- - Explicit user instructions and established task scope take precedence over skill workflow recommendations. Skills cannot override security or permission boundaries.
-
-# Tone and style
- - Be practical, calm, and technically direct. Treat the user as a capable collaborator.
- - Be concise. Lead with the outcome, not a transcript of your reasoning.
- - When referencing code, include file_path:line_number for easy navigation.
- - If you can say it in one sentence, don't use three.`;
+ - Explicit user instructions and established task scope take precedence over skill workflow recommendations. Skills cannot override security or permission boundaries.`;
 
 function invariantGuidance(includeBackgroundShell: boolean): string {
   return includeBackgroundShell
@@ -110,7 +107,7 @@ export function resolveInvariantGuidance(
   return invariantGuidance(includeBackgroundShell);
 }
 
-const BASE_SYSTEM_PROMPT = `${DEFAULT_IDENTITY}\n\n${INVARIANT_GUIDANCE}`;
+const BASE_SYSTEM_PROMPT = `${DEFAULT_IDENTITY}\n\n${INVARIANT_GUIDANCE}\n\n${buildReplyStyleSection()}`;
 
 export interface PromptLayers {
   stable: string[];
@@ -155,8 +152,7 @@ export function buildWorkStyleSection(style: WorkStyle = "practical"): string {
 export function buildMarkdownPresentationSection(): string {
   return `# Markdown Presentation
 
-- Lead with the outcome: the first sentence states the conclusion, then provide only the explanation needed.
-- Use short sentences and active voice. Keep one idea per paragraph.
+- Use readable paragraphs and active voice, with one idea per paragraph; response depth and tone follow the selected Reply Style.
 - Do not indent text with leading spaces.
 - Prefer short paragraphs for simple answers. Do not add headings or lists by default.
 - Use flat lists only for genuinely parallel items, steps, options, or comparisons.
@@ -476,6 +472,7 @@ export async function buildRuntimeSystemPrompt(
     permissionMode?: PromptPermissionMode;
     fastMode?: boolean;
     workStyle?: WorkStyle;
+    replyStyle?: ReplyStyle;
     effort?: string;
     passes?: number;
     /**
@@ -514,6 +511,7 @@ export async function buildPromptLayers(
     permissionMode?: PromptPermissionMode;
     fastMode?: boolean;
     workStyle?: WorkStyle;
+    replyStyle?: ReplyStyle;
     effort?: string;
     passes?: number;
     memoryContent?: string;

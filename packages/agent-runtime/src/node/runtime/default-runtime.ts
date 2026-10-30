@@ -27,6 +27,7 @@ import { assertNoRemovedLifecycleToolNames } from "@vykor/host-config";
 import {
   normalizeToolNames,
   resolveAllowedToolNames,
+  DEFAULT_REPLY_STYLE,
 } from "@vykor/agent-contracts";
 import { CredentialStorage } from "@vykor/auth";
 import {
@@ -312,10 +313,12 @@ export async function createVykorRuntime(
       promptSettings: {
         systemPrompt?: string;
         workStyle?: Settings["workStyle"];
+        replyStyle?: Settings["replyStyle"];
         fastMode?: boolean;
       } = {
         systemPrompt: settings.systemPrompt,
         workStyle: settings.workStyle,
+        replyStyle: configuration.replyStyle ?? settings.replyStyle,
         fastMode: configuration.fastMode ?? settings.fastMode,
       },
       tools: readonly ToolDefinition[] = toolRegistry.getAll(),
@@ -330,6 +333,7 @@ export async function createVykorRuntime(
             ? "plan"
             : (configuration.approvalMode ?? permissionChecker.getMode()),
         workStyle: promptSettings.workStyle,
+        replyStyle: promptSettings.replyStyle,
         fastMode: promptSettings.fastMode,
         effort,
         passes: settings.passes,
@@ -425,6 +429,7 @@ export async function createVykorRuntime(
             {
               systemPrompt: settingsPrompt,
               workStyle: snapshot.configuration.workStyle ?? settings.workStyle,
+              replyStyle: snapshot.configuration.replyStyle ?? configuration.replyStyle ?? settings.replyStyle ?? DEFAULT_REPLY_STYLE,
               fastMode:
                 snapshot.configuration.fastMode ??
                 configuration.fastMode ??
@@ -477,6 +482,7 @@ export async function createVykorRuntime(
           return {
             revision: snapshot.revision,
             ...snapshot.configuration,
+            replyStyle: snapshot.configuration.replyStyle ?? configuration.replyStyle ?? settings.replyStyle ?? DEFAULT_REPLY_STYLE,
             effort,
             client: resolvedClient!,
             systemPromptForTools,

@@ -1,4 +1,5 @@
 import type { WorkStyle } from "./settings-types.js";
+import type { ReplyStyle } from "@vykor/agent-contracts";
 /** The user-selected values that are safe to change between model requests. */
 export type AgentRequestConfiguration = {
   model: string;
@@ -11,6 +12,7 @@ export type AgentRequestConfiguration = {
   systemPrompt?: string;
   settingsPrompt?: string;
   workStyle?: WorkStyle;
+  replyStyle?: ReplyStyle;
   fastMode?: boolean;
 };
 

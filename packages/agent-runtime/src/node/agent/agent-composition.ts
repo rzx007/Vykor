@@ -5,6 +5,7 @@ import {
 import type { AgentChildManager } from "../../kernel/children/child-agent.js";
 import type { NodeRuntimeResources as RuntimeBundle } from "../runtime/node-runtime-resources.js";
 import type { AgentRequestConfigurationReader } from "@vykor/host-config";
+import { DEFAULT_REPLY_STYLE } from "@vykor/agent-contracts/reply-style";
 import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import type { TerminalProvider } from "@vykor/terminal";
 import type { TeamRegistry } from "@vykor/coordinator/teams";
@@ -228,6 +229,7 @@ async function composeVykorAgentInternal(
               baseUrl: applied.baseUrl,
               effort: applied.effort,
               reasoningEffort: applied.reasoningEffort,
+              replyStyle: applied.replyStyle,
             }
           : {}),
       };
@@ -248,6 +250,7 @@ async function composeVykorAgentInternal(
     createMemoryRequestConfigurationStore(
       {
         model: options.model ?? settings.model,
+        replyStyle: options.replyStyle ?? settings.replyStyle ?? DEFAULT_REPLY_STYLE,
         ...((options.provider ?? settings.provider)
           ? { provider: options.provider ?? settings.provider }
           : {}),

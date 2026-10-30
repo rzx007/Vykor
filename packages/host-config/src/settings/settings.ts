@@ -1,5 +1,6 @@
 import { readFile, mkdir, unlink } from "node:fs/promises";
 import { isDeepStrictEqual } from "node:util";
+import { DEFAULT_REPLY_STYLE, isReplyStyle } from "@vykor/agent-contracts";
 import type { McpServerConfig, Settings } from "./settings-types.js";
 import {
   getConfigDir,
@@ -73,6 +74,7 @@ const DEFAULT_SETTINGS: Settings = {
   passes: 1,
   outputStyle: "default",
   workStyle: "practical",
+  replyStyle: DEFAULT_REPLY_STYLE,
 };
 
 type SettingsPatch = Partial<Omit<Settings, "sandbox" | "terminal" | "daemon" | "plugins">> & {
@@ -100,6 +102,7 @@ export async function loadSettings(
 ): Promise<Settings> {
   assertPluginAppsEnabled(cliOverrides?.plugins?.uiEnabled, "CLI overrides");
   assertAgentEnvironment(cliOverrides?.agentEnvironment, "CLI overrides");
+  assertReplyStyle(cliOverrides?.replyStyle, "CLI overrides");
   // 从环境变量加载配置
   const envSettings = options.includeEnvironment === false ? {} : loadFromEnv();
   // 从配置文件异步加载配置
@@ -177,6 +180,7 @@ export async function loadSettings(
  * @returns 无返回值（Promise<void>），表示保存操作完成。
  */
 export async function saveSettings(settings: Settings): Promise<void> {
+  assertReplyStyle(settings.replyStyle, "settings");
   // 构建配置目录和文件路径
   const configDir = getConfigDir();
   const configPath = getConfigFilePath();
@@ -220,6 +224,7 @@ export async function saveProjectSettings(
   settings: Partial<Settings>,
   projectRoot?: string,
 ): Promise<void> {
+  assertReplyStyle(settings.replyStyle, "project settings");
   const configDir = getProjectConfigDir(projectRoot);
   const configPath = getProjectSettingsFilePath(projectRoot);
   await mkdir(configDir, { recursive: true });
@@ -438,6 +443,7 @@ const TOP_LEVEL_SETTINGS_FIELDS = new Set([
   "theme",
   "outputStyle",
   "workStyle",
+  "replyStyle",
   "fastMode",
   "effort",
   "passes",
@@ -451,6 +457,7 @@ function validateSettingsFields(
   configPath: string,
 ): void {
   assertKnownFields(settings, TOP_LEVEL_SETTINGS_FIELDS, "settings", configPath);
+  assertReplyStyle(settings.replyStyle, configPath);
   if (settings.modelDisabled !== undefined && typeof settings.modelDisabled !== "boolean") throw new SettingsFileError("settings.modelDisabled", configPath);
   assertNestedFields(settings, "permission", [
     "mode",
@@ -547,6 +554,12 @@ function validateSettingsFields(
         }
       }
     }
+  }
+}
+
+function assertReplyStyle(value: unknown, source: string): void {
+  if (value !== undefined && !isReplyStyle(value)) {
+    throw new Error(`Invalid replyStyle in ${source}: use collaborative, direct, or explanatory.`);
   }
 }
 

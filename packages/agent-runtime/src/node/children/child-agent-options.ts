@@ -2,7 +2,7 @@ import type { AgentChildSpawnInput } from "@vykor/agent-contracts";
 import type { RunCapabilityView } from "../runtime/node-runtime-resources.js";
 
 import type { Settings } from "@vykor/host-config";
-import { canonicalToolName, canonicalToolNames } from "@vykor/agent-contracts";
+import { canonicalToolName, canonicalToolNames, DEFAULT_REPLY_STYLE } from "@vykor/agent-contracts";
 import { settingsForApprovalMode } from "@vykor/sandbox";
 import {
   readonlyMap,
@@ -89,6 +89,7 @@ export function deriveChildAgentOptions(
     sessionId: input.sessionId,
     model: child.model === "inherit" ? configuration.model ?? input.settings.model : child.model ?? configuration.model,
     systemPrompt: child.systemPrompt ?? configuration.systemPrompt,
+    replyStyle: child.replyStyle ?? configuration.replyStyle ?? input.settings.replyStyle ?? DEFAULT_REPLY_STYLE,
     workMode:
       configuration.workMode === "plan" ||
       parentMode === "plan" ||

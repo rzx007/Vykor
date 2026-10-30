@@ -1,4 +1,5 @@
 export * from "./conversation/messages.js";
+export * from "./conversation/reply-style.js";
 export * from "./model/usage.js";
 export * from "./model/model.js";
 export * from "./model/errors.js";

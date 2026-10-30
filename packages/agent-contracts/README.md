@@ -15,6 +15,6 @@
 | [tools](src/tools/README.md) | 工具定义、结果、名称和 Shell 输出接口 |
 | [policy](src/policy/README.md) | 权限请求、判定和 Hook 回调接口 |
 
-公开入口由 [package.json](package.json) 声明：`@vykor/agent-contracts` 对应 [src/index.ts](src/index.ts)，另有 `@vykor/agent-contracts/tool-data` 和 `@vykor/agent-contracts/permissions` 两个子入口。
+公开入口由 [package.json](package.json) 声明：`@vykor/agent-contracts` 对应 [src/index.ts](src/index.ts)，另有 `@vykor/agent-contracts/tool-data`、`@vykor/agent-contracts/permissions` 和 `@vykor/agent-contracts/reply-style` 三个纯数据子入口。协议和领域层从专用入口读取回复风格，避免引入运行时接口。
 
 新增内容放入对应分类，并按需要从 `src/index.ts` 导出。分类内测试放该目录的 `__test__/`，跨分类测试放 [src/__test__](src/__test__/)。可运行 `pnpm --filter @vykor/agent-contracts test` 检查本包。

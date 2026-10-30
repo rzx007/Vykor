@@ -1,4 +1,4 @@
-import type { ProtocolClient, SystemResource } from "@vykor/application-client"
+import { isReplyStyle, type ProtocolClient, type SystemResource } from "@vykor/application-client"
 
 import {
   buildDesktopSettingsSnapshot,
@@ -19,6 +19,7 @@ import type {
   UpdateDesktopNotificationSoundsInput,
   UpdateDesktopMemorySettingsInput,
   UpdateDesktopReasoningVisibilityInput,
+  UpdateDesktopReplyStyleInput,
   UpdateDesktopWorkStyleInput,
 } from "../../../shared/settings-types"
 import { desktopSessionService } from "../session/session-service"
@@ -59,10 +60,20 @@ export class DesktopSettingsService {
 
   async updateWorkStyle(input: UpdateDesktopWorkStyleInput): Promise<DesktopSettingsSnapshot> {
     if (!isDesktopWorkStyle(input.workStyle)) {
-      throw new Error("未知的工作风格，请选择务实或高效。")
+      throw new Error("未知的进度通知设置，请选择关键节点或必要时。")
     }
     return this.withDaemonRetry(async (client) => {
       const settings = await client.system.patchSettings({ workStyle: input.workStyle })
+      return buildDesktopSettingsSnapshot(settings, this.dependencies.getPreferences())
+    })
+  }
+
+  async updateReplyStyle(input: UpdateDesktopReplyStyleInput): Promise<DesktopSettingsSnapshot> {
+    if (!isReplyStyle(input?.replyStyle)) {
+      throw new Error("未知的回复风格，请选择协作、直接或讲解。")
+    }
+    return this.withDaemonRetry(async (client) => {
+      const settings = await client.system.patchSettings({ replyStyle: input.replyStyle })
       return buildDesktopSettingsSnapshot(settings, this.dependencies.getPreferences())
     })
   }

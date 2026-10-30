@@ -13,6 +13,10 @@
       "import": "./src/tools/tool-data.ts",
       "types": "./src/tools/tool-data.ts"
     },
+    "./reply-style": {
+      "import": "./src/conversation/reply-style.ts",
+      "types": "./src/conversation/reply-style.ts"
+    },
     "./permissions": {
       "import": "./src/policy/permissions.ts",
       "types": "./src/policy/permissions.ts"

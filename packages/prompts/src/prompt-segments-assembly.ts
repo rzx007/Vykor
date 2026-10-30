@@ -1,4 +1,6 @@
 import type { ContextBucketId, ContextLedgerSegment } from "@vykor/agent-contracts";
+import type { ReplyStyle } from "@vykor/agent-contracts";
+import { buildReplyStyleSection } from "./reply-styles.js";
 import type { WorkStyle } from "@vykor/host-config";
 import type { EffectiveEnvironmentInfo } from "@vykor/environment";
 import { loadLocalRules } from "@vykor/personalization";
@@ -32,6 +34,7 @@ export interface PromptSegmentsAssemblyOptions {
   permissionMode?: PromptPermissionMode;
   fastMode?: boolean;
   workStyle?: WorkStyle;
+  replyStyle?: ReplyStyle;
   effort?: string;
   passes?: number;
   includeDelegation?: boolean;
@@ -103,7 +106,7 @@ export async function buildTaggedPromptSegments(
       segments,
       "stable",
       "system",
-      "# Session Mode\nFast mode is enabled. Prefer concise replies, minimal tool use, and quicker progress.",
+      "# Session Mode\nFast mode is enabled. Prefer a direct execution path and batch independent work. Keep the selected Reply Style and Work Style; do not skip necessary investigation, validation, or permission checks.",
     );
   }
 
@@ -130,6 +133,8 @@ export async function buildTaggedPromptSegments(
   if (options.includeDelegation !== false) {
     pushSegment(segments, "stable", "subagents", buildDelegationSection());
   }
+
+  pushSegment(segments, "stable", "system", buildReplyStyleSection(options.replyStyle));
 
   if (options.customPrompt?.trim()) {
     pushSegment(

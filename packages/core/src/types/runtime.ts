@@ -10,6 +10,7 @@ export type QueryRequestConfiguration = {
   baseUrl?: string;
   apiFormat?: "anthropic" | "openai";
   effort?: string;
+  replyStyle?: import("@vykor/agent-contracts").ReplyStyle;
   maxTurns?: number;
   reasoningEffort?: string;
   /** Omitted for clients whose image capability is managed by the caller. */

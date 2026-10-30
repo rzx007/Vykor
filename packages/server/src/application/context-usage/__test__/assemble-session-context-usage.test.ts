@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { assembleContextUsageSnapshot, estimateTokens } from "@vykor/core";
 import { type Settings } from "@vykor/host-config";
+import type { SessionRecord } from "@vykor/domain-contracts/sessions";
 
 import { assembleSessionContextUsage } from "../assemble-session-context-usage.js";
 import { ContextUsageCache } from "../context-usage-cache.js";
@@ -37,6 +38,23 @@ function serializeTool(tool: {
 }
 
 describe("assembleSessionContextUsage", () => {
+  it("counts the session reply style override and resolves inherit against current settings", async () => {
+    const base = { sessionId: "style-usage", cwd: process.cwd(), model: "test/model",
+      cache: new ContextUsageCache(), agent: { getHistory: () => [], listModelVisibleTools: () => [] } };
+    const directSettings = settingsRef({ replyStyle: "direct" }).current;
+    const explanatorySettings = settingsRef({ replyStyle: "explanatory" }).current;
+    const direct = await assembleSessionContextUsage({ ...base, settings: directSettings });
+    const explanatory = await assembleSessionContextUsage({ ...base, settings: explanatorySettings });
+    expect(direct.estimatedInputTokens).not.toBe(explanatory.estimatedInputTokens);
+    const runtime: { model: string; replyStyle: "direct" | "inherit" } = { model: "test/model", replyStyle: "direct" };
+    const session: SessionRecord = { id: base.sessionId, cwd: base.cwd, model: base.model,
+      title: "Style usage", status: "idle", metadata: { runtime }, createdAt: 1, updatedAt: 1 };
+    const override = await assembleSessionContextUsage({ ...base, settings: explanatorySettings, session });
+    expect(override.estimatedInputTokens).toBe(direct.estimatedInputTokens);
+    runtime.replyStyle = "inherit";
+    const reset = await assembleSessionContextUsage({ ...base, settings: explanatorySettings, session });
+    expect(reset.estimatedInputTokens).toBe(explanatory.estimatedInputTokens);
+  });
   it("uses the session agent runtime prompt instead of rebuilding global settings", async () => {
     const cache = new ContextUsageCache();
     const agent = {

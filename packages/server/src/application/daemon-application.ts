@@ -714,6 +714,7 @@ export class DaemonApplication implements DurableAgentApplication {
         const skillsList = await resolveSessionSkillsList(session.cwd, settings);
         await assembleSessionContextUsage({
           sessionId,
+          session,
           cwd: session.cwd,
           model: runtime.model,
           settings,
@@ -738,6 +739,7 @@ export class DaemonApplication implements DurableAgentApplication {
         const skillsList = await resolveSessionSkillsList(sessionCwd, settings);
         return await tryAssembleSessionContextUsageLive({
           sessionId,
+          session,
           cwd: sessionCwd,
           model: runtime.model,
           settings,

@@ -51,6 +51,8 @@ vk --dry-run
 
 用户配置与数据默认在 `~/.vykor/`（例如 `settings.json`、daemon registry、会话库）。
 
+在交互会话中使用 `/config set replyStyle collaborative`、`/config set replyStyle direct` 或 `/config set replyStyle explanatory` 修改全局回复风格，下一次请求生效。该设置独立于进度通知 `workStyle` 与命令行显示 `outputStyle`；会话 runtime 可指定风格或用 `inherit` 恢复跟随全局默认。
+
 ## 常用用法
 
 ```bash

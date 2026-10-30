@@ -3,12 +3,44 @@ import { describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadSettings, saveProjectSettings } from "@vykor/host-config";
+import { loadSettings, saveProjectSettings, updateSettings } from "@vykor/host-config";
 import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 
 import { createDaemonAgentLoader } from "../daemon-agent.js";
 
 describe("daemon request settings refresh", () => {
+  it("resolves durable reply style overrides before refreshed global file settings and restores inheritance", async () => {
+    const project = mkdtempSync(join(tmpdir(), "vykor-reply-style-"));
+    const previousConfigDir = process.env.VYKOR_CONFIG_DIR;
+    process.env.VYKOR_CONFIG_DIR = join(project, "config");
+    const session = { id: "reply-style", cwd: project, model: "m", metadata: { runtime: { model: "m" } } } as any;
+    const createAgent = vi.fn(async () => ({ loadHistory: () => undefined, close: async () => undefined }) as any);
+    try {
+      await updateSettings(current => ({ ...current, replyStyle: "direct" }), { includeEnvironment: false });
+      const loader = createDaemonAgentLoader({
+        getSettingsForCwd: cwd => loadSettings(undefined, { includeProject: true, projectRoot: cwd }),
+        getSession: () => session,
+        createAgent: hostedAgentFactory(createAgent),
+      })!;
+      await loader({ session, history: [], parts: [] });
+      const options = createAgent.mock.calls[0]![0].options;
+      expect(options.replyStyle).toBe("direct");
+      const reader = options.requestConfigurationStore;
+      expect((await reader.read()).configuration.replyStyle).toBe("direct");
+      await updateSettings(current => ({ ...current, replyStyle: "explanatory" }), { includeEnvironment: false });
+      expect((await reader.read()).configuration.replyStyle).toBe("explanatory");
+      session.metadata.runtime.replyStyle = "direct";
+      expect((await reader.read()).configuration.replyStyle).toBe("direct");
+      session.metadata.runtime.replyStyle = "inherit";
+      expect((await reader.read()).configuration.replyStyle).toBe("explanatory");
+      await updateSettings(current => ({ ...current, replyStyle: "collaborative" }), { includeEnvironment: false });
+      expect((await reader.read()).configuration.replyStyle).toBe("collaborative");
+    } finally {
+      if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
+      rmSync(project, { recursive: true, force: true });
+    }
+  });
   it("keeps an explicitly cleared session prompt cleared on a warm agent", async () => {
     const session = {
       id: "cleared-prompt", cwd: "/repo", model: "model-a",

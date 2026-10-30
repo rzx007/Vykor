@@ -1,4 +1,6 @@
 import type { PermissionMode } from "../permissions/permissions.js";
+import type { ReplyStyle } from "@vykor/agent-contracts";
+export type { ReplyStyle } from "@vykor/agent-contracts";
 import type { HookDefinition } from "../extensions/hooks.js";
 import type { McpOAuthSettings } from "../extensions/mcp-credentials.js";
 
@@ -173,6 +175,7 @@ export interface Settings {
   theme?: string;
   outputStyle?: string;
   workStyle?: WorkStyle;
+  replyStyle?: ReplyStyle;
   fastMode?: boolean;
   effort?: string;
   passes?: number;

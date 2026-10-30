@@ -6,6 +6,8 @@
 
 `exportPortableSettings()` 按配置分组生成可移植内容；`parsePortableSettings()` 验证格式；`importPortableSettings()` 应用通过校验的修改并返回结果。
 
+回复风格 `replyStyle` 归入 `general` 分类，导出持久配置中的三档值，导入时拒绝会话专用的 `inherit`。文件省略该字段时保留原偏好，旧版文件仍可导入。
+
 ## 状态归属
 
 实际配置由 host-config 读取和保存；本目录处理传输内容，不保存额外配置副本。

@@ -712,10 +712,11 @@
       ],
       "allowTargetPaths": [
         "packages/agent-contracts/src/tools/tool-data.ts",
-        "packages/agent-contracts/src/policy/permissions.ts"
+        "packages/agent-contracts/src/policy/permissions.ts",
+        "packages/agent-contracts/src/conversation/reply-style.ts"
       ],
       "forbidSpecifiers": [
-        "^@vykor/agent-contracts(?:/(?!tool-data$|permissions$).*)?$"
+        "^@vykor/agent-contracts(?:/(?!tool-data$|permissions$|reply-style$).*)?$"
       ],
       "removeByPhase": "P6",
       "migrationId": "M30",
@@ -816,7 +817,8 @@
         "packages/agent-contracts/src/policy/permissions.ts",
         "packages/agent-contracts/src/tools/result-data.ts",
         "packages/agent-contracts/src/tools/result-text.ts",
-        "packages/agent-contracts/src/tools/tool-data.ts"
+        "packages/agent-contracts/src/tools/tool-data.ts",
+        "packages/agent-contracts/src/conversation/reply-style.ts"
       ],
       "allowTargetPaths": [
         "packages/json-data/src/",
@@ -827,7 +829,8 @@
         "packages/agent-contracts/src/policy/permissions.ts",
         "packages/agent-contracts/src/tools/result-data.ts",
         "packages/agent-contracts/src/tools/result-text.ts",
-        "packages/agent-contracts/src/tools/tool-data.ts"
+        "packages/agent-contracts/src/tools/tool-data.ts",
+        "packages/agent-contracts/src/conversation/reply-style.ts"
       ],
       "allowExternal": [],
       "forbidBuiltins": true,
@@ -886,6 +889,7 @@
       "allowTargetPaths": [
         "packages/agent-contracts/src/tools/tool-data.ts",
         "packages/agent-contracts/src/policy/permissions.ts",
+        "packages/agent-contracts/src/conversation/reply-style.ts",
         "packages/domain-contracts/src/",
         "packages/plugin-contracts/src/",
         "packages/json-data/src/json.ts",

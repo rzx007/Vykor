@@ -111,6 +111,22 @@ function createSettingsService() {
 }
 
 describe("settings service config coercion", () => {
+  it("saves reply styles as soft updates through both patch forms", async () => {
+    const service = createSettingsService();
+    const direct = await service.patch({ replyStyle: "direct" });
+    expect(direct).toMatchObject({ settings: { replyStyle: "direct" }, invalidateRuntimes: true, restartRuntimes: false });
+    const explanatory = await service.patch({ path: "replyStyle", value: "explanatory" });
+    expect(explanatory.settings.replyStyle).toBe("explanatory");
+    expect((await loadSettings(undefined, { includeEnvironment: false })).replyStyle).toBe("explanatory");
+  });
+  it.each(["inherit", "chatty", "", null, 1])("rejects invalid reply style %j before either patch form writes", async replyStyle => {
+    const service = createSettingsService();
+    await service.patch({ replyStyle: "direct" });
+    const saved = readFileSync(getConfigFilePath(), "utf8");
+    await expect(service.patch({ replyStyle })).rejects.toThrow(/reply style|replyStyle/i);
+    await expect(service.patch({ path: "replyStyle", value: replyStyle })).rejects.toThrow(/reply style|replyStyle/i);
+    expect(readFileSync(getConfigFilePath(), "utf8")).toBe(saved);
+  });
   it("coerces the showReasoning config value to a boolean", async () => {
     const service = createSettingsService();
     const result = await service.patch({ path: "showReasoning", value: "off" });

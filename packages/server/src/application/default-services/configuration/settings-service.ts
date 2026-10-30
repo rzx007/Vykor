@@ -8,6 +8,7 @@ import {
 } from "@vykor/api";
 
 import type { SettingsService } from "../../settings-api.js";
+import { isReplyStyle } from "@vykor/agent-contracts";
 import type { AgentEnvironmentCapabilities } from "../query-models.js";
 import {
   loadSettings,
@@ -52,6 +53,7 @@ const SOFT_RUNTIME_INVALIDATE_KEYS = new Set([
   "effort",
   "fastMode",
   "workStyle",
+  "replyStyle",
   "systemPrompt",
   "memory",
   "permission",
@@ -154,6 +156,9 @@ export function createDefaultSettingsService(
       }
       if (Object.hasOwn(patch, "blockOnUnknownToolOutcome") || patch.path === "blockOnUnknownToolOutcome") throw new Error("Unknown config key: blockOnUnknownToolOutcome");
       assertCurrentEnvironmentPatch(patch);
+      if (Object.hasOwn(patch, "replyStyle") && !isReplyStyle(patch.replyStyle)) {
+        throw new Error("Unknown reply style. Use collaborative, direct or explanatory.");
+      }
       if (
         "workStyle" in patch &&
         patch.workStyle !== "practical" &&
@@ -351,6 +356,7 @@ function customProviderModelIds(
 }
 
 function coerceConfigValue(key: string, value: string): unknown {
+  if (key === "replyStyle") return isReplyStyle(value) ? value : undefined;
   if (
     [
       "model",

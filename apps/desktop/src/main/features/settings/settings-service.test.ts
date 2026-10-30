@@ -5,6 +5,7 @@ import { browserAgentService } from "../browser/browser-agent-service"
 import { DesktopSettingsService } from "./settings-service"
 
 const defaultSnapshot = {
+  replyStyle: "collaborative",
   workStyle: "practical",
   notificationMode: "when_unfocused",
   notificationSounds: {

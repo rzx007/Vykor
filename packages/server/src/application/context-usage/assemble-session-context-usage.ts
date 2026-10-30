@@ -1,6 +1,7 @@
 import type {HostedAgent} from "@vykor/agent-runtime";
 import { assembleContextUsageSnapshot, createTip, messagesToLedgerSegments, toolSchemasToLedgerSegments, type ContextUsageSnapshot, type ToolSchemaInput } from "@vykor/core";
 import { type ToolRegistrationSource } from "@vykor/agent-contracts";
+import { isReplyStyle } from "@vykor/agent-contracts";
 import { type ContextLedgerSegment, type Message } from "@vykor/agent-contracts";
 import { type Settings } from "@vykor/host-config";
 import { buildPromptLedgerSegments } from "@vykor/prompts";
@@ -28,6 +29,7 @@ export interface SessionContextUsageAgent {
 
 export interface AssembleSessionContextUsageInput {
   sessionId: string;
+  session?: SessionRecord;
   cwd: string;
   model: string;
   settings: Settings;
@@ -162,11 +164,15 @@ export function modelVisibleToolsToSchemaInputs(
 export async function assembleSessionContextUsage(
   input: AssembleSessionContextUsageInput,
 ): Promise<ContextUsageSnapshot> {
+  const runtime = input.session
+    ? readSessionRuntimeConfig(input.session, { replyStyle: input.settings.replyStyle })
+    : undefined;
   const rebuiltPromptSegments = await buildPromptLedgerSegments({
     customPrompt: input.settings.systemPrompt,
     cwd: input.cwd,
     permissionMode: input.settings.permission.mode,
     workStyle: input.settings.workStyle,
+    replyStyle: isReplyStyle(runtime?.replyStyle) ? runtime.replyStyle : input.settings.replyStyle,
     fastMode: input.settings.fastMode,
     effort: input.settings.effort,
     passes: input.settings.passes,
@@ -242,6 +248,7 @@ export type AssembleLiveContextUsageInput = {
  */
 export async function tryAssembleSessionContextUsageLive(input: {
   sessionId: string;
+  session?: SessionRecord;
   cwd: string;
   model: string;
   cache: ContextUsageCache;
@@ -265,6 +272,7 @@ export async function tryAssembleSessionContextUsageLive(input: {
   try {
     return await assembleSessionContextUsage({
       sessionId: input.sessionId,
+      session: input.session,
       cwd: input.cwd,
       model: input.model,
       settings: input.settings,
