@@ -409,7 +409,7 @@ function ConversationPane({
 
   const forkFromAssistantMessage = useCallback(
     async (messageId: string): Promise<void> => {
-      if (!activeSessionId || archived || running) throw new Error("当前聊天暂不能创建分叉")
+      if (!activeSessionId || archived || running) return
       await forkSession(activeSessionId, { afterMessageId: messageId })
     },
     [activeSessionId, archived, running, forkSession]
@@ -727,9 +727,7 @@ function ConversationPane({
                           }
                           onEditLastUserMessage={editLatestUserMessage}
                           onCopyAssistantMessage={copyAssistantMessage}
-                          onForkAssistantMessage={
-                            !archived && !running ? forkFromAssistantMessage : undefined
-                          }
+                          onForkAssistantMessage={forkFromAssistantMessage}
                           onOpenFile={onOpenFile}
                           canOpenReview={canOpenReview}
                           onOpenReview={onOpenReview}
@@ -804,10 +802,7 @@ function ConversationPane({
                 {"此会话已归档，只能查看历史内容"}
               </div>
             ) : (
-              <div
-                key={`composer-area:${composerScope}`}
-                className="conversation-composer-column mb-5 flex shrink-0 flex-col gap-2"
-              >
+              <div className="conversation-composer-column mb-5 flex shrink-0 flex-col gap-2">
                 {goal && goalComposer.dismissedGoalId !== goal.id ? (
                   <GoalBanner
                     key={`${goal.id}:${goal.wait?.kind === "user" ? goal.wait.questionId : ""}`}

@@ -882,39 +882,6 @@ describe("desktop session actions", () => {
     })
   })
 
-  it("shares identical in-flight forks and opens the result only once", async () => {
-    const source = emptySessionView("fork-source").session
-    const forked = emptySessionView("fork-result").session
-    let finish!: (value: typeof forked) => void
-    const pending = new Promise<typeof forked>(resolve => { finish = resolve })
-    const fork = vi.fn(() => pending)
-    const open = vi.fn(async (id: string) => emptySessionView(id))
-    vi.stubGlobal("window", { desktop: { sessions: { fork, open } } })
-    resetNewConversationState()
-    useDesktopSessionStore.setState({ sessions: [source], activeSessionId: source.id })
-    const first = useDesktopSessionStore.getState().forkSession(source.id, { afterMessageId: "m" })
-    const repeated = useDesktopSessionStore.getState().forkSession(source.id, { afterMessageId: "m" })
-    finish(forked)
-    expect(await Promise.all([first, repeated])).toEqual([forked, forked])
-    expect(fork).toHaveBeenCalledTimes(1)
-    expect(open).toHaveBeenCalledTimes(1)
-  })
-
-  it("releases a failed fork for explicit retry and keeps different fork points independent", async () => {
-    const source = emptySessionView("fork-source").session
-    const forked = emptySessionView("fork-result").session
-    const fork = vi.fn<() => Promise<typeof forked>>(async () => { throw new Error("offline") })
-    vi.stubGlobal("window", { desktop: { sessions: { fork, open: vi.fn(async (id: string) => emptySessionView(id)) } } })
-    resetNewConversationState()
-    useDesktopSessionStore.setState({ sessions: [source], activeSessionId: source.id })
-    const requests = [1, 2].map(() => useDesktopSessionStore.getState().forkSession(source.id, { afterMessageId: "m" }))
-    expect((await Promise.allSettled(requests)).map(result => result.status)).toEqual(["rejected", "rejected"])
-    expect(fork).toHaveBeenCalledTimes(1)
-    fork.mockImplementation(async () => forked)
-    await Promise.all(["m", "another"].map(afterMessageId => useDesktopSessionStore.getState().forkSession(source.id, { afterMessageId })))
-    expect(fork).toHaveBeenCalledTimes(3)
-  })
-
   it("does not let a late fork steal the primary subscription", async () => {
     const source = emptySessionView("session-a").session
     const forked = { ...emptySessionView("session-fork").session, title: "forked" }

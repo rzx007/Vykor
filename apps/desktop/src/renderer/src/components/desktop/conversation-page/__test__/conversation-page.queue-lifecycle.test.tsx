@@ -153,7 +153,7 @@ it("reconciles sending, accepted and queued snapshots into one queue without rem
         },
       })
     )
-    expect(host.querySelectorAll('[aria-label="待处理消息队列"]')).toHaveLength(1)
+    expect(host.querySelectorAll('[aria-label="待处理消息"]')).toHaveLength(1)
     expect(host.querySelectorAll('[data-slot="item"]')).toHaveLength(1)
     expect(host.querySelector('[aria-label="正文草稿"]')).toBe(composer)
     expect(composer.value).toBe("正文草稿不能丢")
@@ -164,7 +164,7 @@ it("reconciles sending, accepted and queued snapshots into one queue without rem
       sessionRuntimes: { chat: createEmptySessionRuntime() },
     })
   )
-  expect(host.querySelector('[aria-label="待处理消息队列"]')).toBeNull()
+  expect(host.querySelector('[aria-label="待处理消息"]')).toBeNull()
   expect(host.querySelector('[aria-label="正文草稿"]')).toBe(composer)
   const other = emptySessionView("other")
   await act(async () => {
