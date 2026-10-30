@@ -2904,7 +2904,7 @@
     },
     {
       "path": "package.json",
-      "line": 30,
+      "line": 33,
       "text": "    \"check:retired-ui\": \"node --test scripts/check-retired-native-ui.test.mjs && node scripts/check-retired-native-ui.mjs\",",
       "reason": "Retirement guard itself: detects forbidden code, exports and generated artifacts."
     },

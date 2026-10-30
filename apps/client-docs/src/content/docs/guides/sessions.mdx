@@ -1,0 +1,112 @@
+---
+title: 会话与输入
+description: 创建会话、可靠提交输入，管理排队工作、中断与恢复，并读取历史结果。
+---
+
+`client.sessions` 管理会话及其执行记录。会话工作目录属于 daemon 所在机器；模型、Agent persona 和技能来自 daemon 已有配置，可通过 `client.runtime` 的只读方法查询。
+
+## 创建与配置
+
+```ts
+const session = await client.sessions.create({
+  cwd: daemonCwd,
+  model,
+  title: "检查项目",
+  metadata: { runtime: { model, approvalMode: "ask" } },
+});
+```
+
+`model` 是模型 ID；`metadata.runtime` 保存会话运行配置。更新配置时，可以用公开辅助函数保留已有 metadata：
+
+```ts
+import { patchSessionRuntimeMetadata } from "@rzx/client";
+
+const current = await client.sessions.get(sessionId);
+await client.sessions.update(sessionId, {
+  metadata: patchSessionRuntimeMetadata(current.metadata, {
+    approvalMode: "ask",
+  }),
+});
+```
+
+这些辅助函数构造和读取配置，实际工具授权仍由 daemon 决定。需要只改标题时，直接 `sessions.update(sessionId, { title })`。
+
+## 提交一笔可重试的输入
+
+```ts
+import { createPromptRequestId } from "@rzx/client";
+
+const request = {
+  id: createPromptRequestId(),
+  delivery: "queue" as const,
+  items: [{ type: "text" as const, text: "请检查项目并说明发现的问题。" }],
+};
+// 需要断线或重启后重试时，在首次发送前保存 request。
+const admitted = await client.sessions.admitPrompt(sessionId, request);
+console.log(admitted.input.id, admitted.run?.id, admitted.queue_state);
+```
+
+同一个 ID 和相同内容可以重试；同一个 ID 携带不同内容会被拒绝。可靠重试需要调用方保存稳定 ID 及完整请求，包括附件和 metadata。省略 `id` 时 SDK 会自动生成一个，但应用重启后无法靠它判断此前那笔提交。
+
+`delivery` 默认是 `queue`，安排一次独立执行，可能立即运行，也可能排队。`steer` 用于向当前运行补充输入，不保证创建新 Run；如果附带附件，服务端会按 `queue` 处理。`outputSchema` 只能用于排队任务，不能通过 `steer` 改变当前 Run 的交付约定。
+
+## 按返回值观察
+
+| 字段 | 含义与后续动作 |
+| --- | --- |
+| `input` | 已接纳的输入记录，可用它的 ID 对应队列操作 |
+| `run` | 可选的执行记录；用返回的 `run.id` 等待或控制这次任务 |
+| `queue_state` | 可选的 `running` 或 `queued`，描述返回时的调度状态 |
+
+只有存在 `run` 时才调用 `waitForRun`。Run 的 `completed`、`failed`、`interrupted` 都是可返回的真实终态；`waitForRun` 不会把任务失败自动改成异常。权限观察需要并行运行，见[权限指南](../permissions/)。
+
+## 排队任务与最新输入
+
+队列操作需要精确的输入和 Run 标识，避免把另一个客户端后来提交的任务当作目标：
+
+```ts
+await client.sessions.cancelQueuedPrompt(sessionId, inputId, {
+  queuedRunId,
+});
+
+await client.sessions.promoteQueuedPrompt(sessionId, inputId, {
+  queuedRunId,
+  expectedActiveRunId,
+});
+```
+
+`cancelQueuedPrompt` 只针对仍在等待的输入。`promoteQueuedPrompt` 尝试把指定排队输入送入精确匹配的当前运行，调用后以返回的 `input`、`queued_run`、`active_run` 为准。
+
+需要编辑最新一笔输入时，用 `editLatestPrompt(sessionId, { id, sourceMessageId, items })`。`sourceMessageId` 标明被编辑的用户消息，不能只靠界面当前位置推断目标。
+
+## 中断与恢复
+
+```ts
+const interrupted = await client.sessions.interrupt(sessionId, {
+  expectedRunId: runId,
+});
+console.log(interrupted.interrupted);
+
+const resumed = await client.sessions.resumeInterruptedRun(sessionId, runId, {
+  id: createPromptRequestId(),
+});
+```
+
+`expectedRunId` 让中断针对预期的运行；返回的 `activeRunId`、`queuedRunIds` 和 `interrupted` 描述服务端处理结果。取消客户端 `AbortSignal` 不能代替这次调用。
+
+`resumeInterruptedRun` 重新投递中断 Run 的原始输入，创建带恢复来源的新 Input 和 Run，旧 Run 仍保持 `interrupted`。它不会接回旧的模型连接。需要可靠重试时，仍要保存恢复请求的 ID；如显式传入 `outputSchema`，必须与原约定相同。
+
+## 历史、分叉与清理
+
+| 方法 | 用途 |
+| --- | --- |
+| `list`、`search`、`get` | 列出、搜索保存的会话，或读取会话信息 |
+| `getState` | 读取消息、运行、权限及事件游标组成的完整快照 |
+| `listMessages`、`listMessageParts`、`getMessagePart` | 读取消息和正文；摘要视图的完整 Part 通过有作用域的详情方法取得 |
+| `fork` | 创建分叉会话，可指定是否复制历史或消息边界 |
+| `rewind`、`compact` | 回退会话轮次或压缩历史 |
+| `getUsage`、`export` | 读取用量或让 daemon 导出会话，导出路径属于 daemon 机器 |
+| `archive` | 归档会话，停止接收新工作 |
+| `delete` | 永久删除会话，返回被删除的会话 ID |
+
+Goal 是会话中保存的目标记录，可通过 `getGoal`、`createGoal`、`updateGoal` 和 `applyGoalAction` 管理。它和单个 Run 的终态分别保存；本轮完成不等于目标自动完成。完整参数见 [API 参考](../../reference/overview/)。

@@ -1,0 +1,12 @@
+:root {
+  --sl-color-accent-low: #172554;
+  --sl-color-accent: #818cf8;
+  --sl-color-accent-high: #e0e7ff;
+  --sl-font-system-mono: 'Cascadia Code', 'SFMono-Regular', Consolas, monospace;
+}
+:root[data-theme='light'] {
+  --sl-color-accent-low: #eef2ff;
+  --sl-color-accent: #4338ca;
+  --sl-color-accent-high: #312e81;
+}
+.sl-markdown-content {overflow-wrap: anywhere;}

@@ -1,0 +1,74 @@
+---
+title: 可选本机服务管理
+description: 从 Node 专用入口发现、启动或停止登记的本机 daemon，普通远程连接无需此入口。
+---
+
+import { Code } from '@astrojs/starlight/components';
+import serviceExample from '../../../../examples/node/service.ts?raw';
+
+已有 daemon 的调用方直接提供地址和 token 即可。只有 Node 应用需要自行查找、启动或停止本机后台时，才从 `@rzx/client/service` 导入本节功能。浏览器使用根入口连接已有服务。
+
+## 发现已有服务
+
+```ts
+import { VykorClient } from "@rzx/client";
+import { Service } from "@rzx/client/service";
+
+const endpoint = await Service.discover();
+if (!endpoint) throw new Error("没有找到可用的本机 daemon");
+const client = new VykorClient(Service.clientOptions(endpoint));
+```
+
+`discover()` 只读取登记文件并探测已有实例，不启动进程。它要求实例健康、协议兼容且鉴权通过；不存在或不可用时返回 `undefined`。Endpoint 含 token，应当作凭据保存，不写入普通日志。
+
+## 显式启动
+
+要由程序启动 daemon，先在调用方项目另装 CLI：
+
+```sh
+npm install @rzx/ohs
+```
+
+然后调用 `Service.ensure()`。它会复用可用实例，或从 `cwd` 指向的调用方项目查找 `@rzx/ohs`，用当前 Node 启动 `serve --register --host 127.0.0.1 --port 0`，等登记和探测成功后返回。
+
+<Code code={serviceExample} lang="ts" title="examples/node/service.ts" />
+
+示例默认只发现已有服务，`--start` 才显式启动，`--stop` 才显式停止整个服务。脚本正常退出不会自动停止 daemon，因为其他客户端可能正在共用它。
+
+源码保存为 `service.ts`，在调用方项目安装所需包后，用 Node.js 24 执行：
+
+```sh
+node service.ts
+node service.ts --start
+node service.ts --stop
+```
+
+以上命令分别演示三种模式，按当前需要选择一条运行。
+
+`ensure` 不配置模型、不修改系统自启动，也不会结束活着但不兼容的登记实例。出现这种实例时，需要调用方明确处理现有服务。
+
+## 参数与登记位置
+
+```ts
+const endpoint = await Service.ensure({
+  cwd: applicationDirectory,
+  timeoutMs: 15_000,
+  env: { VYKOR_DATA_DIR: isolatedDataDirectory },
+});
+```
+
+登记路径按顺序使用 `VYKOR_DATA_DIR/daemon/registry.json`、`VYKOR_CONFIG_DIR/data/daemon/registry.json`、用户目录下的 `.vykor/data/daemon/registry.json`。可用 `file` 显式指定；自定义启动命令必须把实例写到这个文件，或通过 `env.VYKOR_DATA_DIR` 选择匹配位置。
+
+`version` 可约束 CLI 应用版本，省略时仍强制检查通信协议。`timeoutMs` 默认是启动等待 10 秒、单次探测 1 秒、停止等待 5 秒。
+
+需要指定可执行程序时，传完整 `command` 数组。命令直接执行，不做 shell 展开；Windows 应用传 Node 和 CLI 文件路径，避免依赖 `.cmd` 包装。
+
+同一进程内，对同一登记文件的并发 `ensure` 共享一次启动，启动命令、环境和启动取消信号使用首个发起者的设置。后来加入者可用自己的 signal 结束等待，不取消原发起者。跨进程通过登记文件旁的锁排队，取得锁后会再次探测。
+
+启动超时、取消或子进程退出时，SDK 清理本次启动的子进程；失败不会替换活着的登记实例。程序只想连接已有服务时，使用 `discover` 可以避免启动行为。
+
+## 停止范围
+
+`Service.stop(endpoint)` 核对登记身份和鉴权，只停止精确匹配的实例；实例被替换时返回 `false`。它停止整个 daemon，所有共用该服务的客户端都会受到影响。
+
+只想中断一次 Agent 执行时，用 `sessions.interrupt(sessionId, { expectedRunId: runId })`；只想结束当前脚本的观察时，取消相应 signal。操作系统服务管理器可能按自身配置重新启动 daemon，本入口不修改那份配置。

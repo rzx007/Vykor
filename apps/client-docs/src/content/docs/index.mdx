@@ -1,0 +1,38 @@
+---
+title: Vykor Client SDK
+description: 用 TypeScript 连接已有 daemon，创建会话、提交 Agent 任务并读取持久化结果。
+---
+
+`@rzx/client` 让网页、IDE 和 Node 程序连接同一个 Vykor daemon。Agent 在 daemon 所在机器执行，会话、输入、运行和权限记录也保存在那里；你的程序负责发起操作、处理权限决定和显示结果。
+
+```ts
+import { VykorClient } from "@rzx/client";
+
+const client = new VykorClient({ baseUrl, token });
+const sessions = await client.sessions.list();
+```
+
+构造客户端不会启动后台进程，也不会配置模型或凭据。默认接入路径是提供已有 daemon 的地址和 token，再选择 daemon 已配置的模型。
+
+## 从连接到结果
+
+1. 按[安装与连接](./getting-started/installation/)准备地址、凭据和运行环境。
+2. 跟随[运行第一个任务](./getting-started/first-run/)，创建会话并提交输入。
+3. 用[权限指南](./guides/permissions/)接收待审批请求，由应用明确回复。
+4. 用 `waitForRun` 等待指定运行结束，或用[快照与事件同步](./guides/sync-recovery/)持续更新界面。
+
+HTTP 提交成功表示输入已被接纳。任务可能已经开始、正在排队，或成为当前运行的补充输入。最终状态和正文来自 daemon 保存的记录，详见[生命周期与状态归属](./concepts/lifecycle/)。
+
+## 按需求阅读
+
+| 需要做什么 | 阅读入口 |
+| --- | --- |
+| 创建、继续或中断会话任务 | [会话与输入](./guides/sessions/) |
+| 列目录、读取 UTF-8 文件或搜索内容 | [会话工作区文件](./guides/files/) |
+| 上传附件、查询后台任务及子任务 | [附件与 Jobs](./guides/attachments-jobs/) |
+| 要求固定格式的交付数据 | [结构化交付](./guides/structured-delivery/) |
+| 处理请求失败和版本不兼容 | [错误与兼容性](./guides/errors-compatibility/) |
+| 在 Node 程序中查找或启动本机 daemon | [可选本机服务管理](./guides/local-service/) |
+| 查方法签名和公开类型 | [API 参考](./reference/overview/) |
+
+本站只介绍公开 SDK 的 Agent 生命周期能力。应用业务和 daemon 管理配置不属于这个 SDK；本机进程管理从单独的 Node 入口 `@rzx/client/service` 显式使用。

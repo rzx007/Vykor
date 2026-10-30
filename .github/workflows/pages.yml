@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths:
       - 'artifacts/vykor-home/**'
+      - 'apps/client-docs/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'package.json'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -26,6 +31,8 @@ jobs:
         working-directory: artifacts/vykor-home
     steps:
       - uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -43,6 +50,23 @@ jobs:
         run: npm run build -- --base "$PAGES_BASE_PATH/"
         env:
           PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+      - name: Install SDK documentation dependencies
+        working-directory: .
+        run: pnpm --filter @vykor/client-docs... install --frozen-lockfile --ignore-scripts
+      - name: Check SDK documentation
+        working-directory: .
+        run: pnpm docs:check
+      - name: Build SDK documentation
+        working-directory: .
+        run: pnpm docs:build
+        env:
+          CLIENT_DOCS_SITE: ${{ steps.pages.outputs.base_url }}
+          CLIENT_DOCS_BASE: ${{ steps.pages.outputs.base_path }}/client-sdk/
+      - name: Include SDK documentation in website
+        working-directory: .
+        run: |
+          mkdir -p artifacts/vykor-home/dist/client-sdk
+          cp -R apps/client-docs/dist/. artifacts/vykor-home/dist/client-sdk/
       - name: Upload website
         uses: actions/upload-pages-artifact@v4
         with:

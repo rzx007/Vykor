@@ -1,0 +1,74 @@
+---
+title: 快照与事件同步
+description: 用保存的会话快照建立基线，接收实时事件，并在断流后恢复持久化状态。
+---
+
+import { Code } from '@astrojs/starlight/components';
+import syncExample from '../../../../examples/node/sync-events.ts?raw';
+
+`syncEvents` 把完整快照和后续事件合并成 `VykorClientState`。界面读取这份状态，脚本也可以用同一套规则观察运行，避免各自实现重连和结果拼接。
+
+## 观察一个会话
+
+<Code code={syncExample} lang="ts" title="examples/node/sync-events.ts" />
+
+示例连接已有 daemon，从命令行取得 `sessionId`，不创建会话或提交任务。每次更新的 `source` 表示来源：
+
+```sh
+node sync-events.ts <sessionId>
+```
+
+源码保存为同名文件，在已安装 SDK 的项目中用 Node.js 24 运行。示例最多观察 30 秒，然后结束本地订阅。
+
+| `source` | 含义 |
+| --- | --- |
+| `snapshot` | 已应用快照，或全局历史回放已经结束 |
+| `replay` | 应用了持久事件回放 |
+| `live` | 应用了实时事件 |
+| `reconnecting` | 连接已断开，正在退避等待重试 |
+
+单会话会先调用 `sessions.getState(sessionId)`。快照同时包含状态和事件游标，两者在服务端同一次原子读取中产生。SDK 从这条基线之后接收 SSE，避免在“读完状态”和“开始订阅”之间漏掉更新。
+
+单会话断流后，SDK 先刷新快照，成功后才重新开流。会话过滤后的事件序号可能不连续，因此不会把其他会话占用的序号误判为缺口。
+
+## 观察全部会话
+
+省略 `sessionId` 时，SDK 先用 `events.list()` 回放持久事件，再接全局 SSE。发现实时事件序号跳跃时，会查询历史补齐缺口，按序合并后继续处理。
+
+全局观察适合会话列表或跨会话状态。只需要某一个会话的正文时，优先使用带 `sessionId` 的观察，避免接收不相关数据。
+
+## 从保存的状态继续
+
+需要回调接口时，可使用 `SessionSyncController`。它保存当前状态，提供连接状态变化、更新和错误回调，不依赖 UI 框架。
+
+```ts
+import { SessionSyncController } from "@rzx/client";
+
+const controller = new SessionSyncController({
+  client,
+  sessionId,
+  onUpdate: ({ state }) => renderState(state),
+  onStatusChange: status => renderConnectionStatus(status),
+  onError: error => reportSyncError(error),
+});
+
+await controller.start();
+```
+
+示例中的 `renderState`、`renderConnectionStatus` 和 `reportSyncError` 由应用实现。控制器的不可恢复错误通过 `onError` 上报，并将状态设为 `error`；`start()` 不把这类错误重新抛给调用者。迭代接口 `syncEvents` 则会向外抛出。
+
+应用如需持久保存客户端视图，应把完整的 `VykorClientState` 和它对应的游标一起保存，并在重建控制器时通过 `initialState` 和 `cursor` 一起传入。只有非零游标而没有对应状态会被拒绝，因为它会跳过恢复所需的历史。仅附着单个会话时，新的服务端快照仍是恢复依据。
+
+切换会话或卸载界面时调用 `controller.abort()`，取消旧订阅。控制器用 `generation` 区分观察代次，并阻止取消后迟到的更新写入当前状态；应用也可在回调中核对代次。
+
+## 临时文字与持久正文
+
+文字增量让界面及时显示输出，但它们不是供长期回放的完整正文。SDK 会用游标避免重复追加临时文字；单会话同步也不会保留无限增长的事件副本。完整 Part 在持久化边界保存，重新附着和断线恢复从快照读取这些内容。
+
+展示消息时，可用 `selectVisibleSessionMessagesWithParts(state.buckets[sessionId])`。需要读取摘要视图省略的完整 Part 时，用 `sessions.getMessagePart(sessionId, messageId, partId)`，不要从工具日志重建消息。
+
+## 哪些错误会重试
+
+首次快照或首次全局历史回放失败会直接结束同步，不进入自动重试。进入事件循环后，网络错误、5xx、408、425、429 和事件流正常结束会触发退避重连；默认从 250 毫秒开始，最长等待 30 秒。
+
+其他 4xx 会原样保留 `VykorApiError` 的 `status` 和 `body` 并结束同步。不支持的事件格式也会结束同步，不能跳过它假装状态完整。取消 signal 结束本地观察，后台 Run 不受影响。更多处理建议见[错误与兼容性](../errors-compatibility/)。

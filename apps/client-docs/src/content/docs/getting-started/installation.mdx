@@ -1,0 +1,61 @@
+---
+title: 安装与连接
+description: 安装公开 SDK，并从 Node 或浏览器连接已有 Vykor daemon。
+---
+
+import { Code } from '@astrojs/starlight/components';
+import nodeConnect from '../../../../examples/node/connect.ts?raw';
+import browserConnect from '../../../../examples/browser/connect.ts?raw';
+
+## 安装 SDK
+
+```sh
+npm install @rzx/client
+```
+
+发布包提供 ESM JavaScript 和 TypeScript 类型声明，运行时不要求安装本仓库或其他 `@vykor/*` 包。Node.js 要求 20.3 或更新版本；浏览器需要支持 `fetch`、`ReadableStream` 和 `AbortController`。
+
+普通连接只安装 `@rzx/client`。只有需要程序自行启动本机 daemon 时，才另装 CLI 并使用[本机服务入口](../../guides/local-service/)。
+
+## 准备连接信息
+
+由 daemon 的维护者提供这些信息：
+
+| 信息 | 用在哪里 |
+| --- | --- |
+| HTTP 或 HTTPS 根地址 | `VykorClient` 的 `baseUrl`，比如 `http://127.0.0.1:8787` |
+| Bearer token | `VykorClient` 的 `token` |
+| 可用模型 ID | `sessions.create` 的 `model`，可先用 `runtime.listModels()` 查询 |
+| daemon 机器上的工作目录 | `sessions.create` 的 `cwd` |
+
+`cwd` 指向服务端机器。连接远程 daemon 时，本机上的同名目录不会被读取或执行。
+
+`baseUrl` 只能是 HTTP 或 HTTPS 地址，不能包含用户名、密码、查询参数或片段。token 单独传入 `token`，SDK 会添加鉴权头。也可以传入自定义 `fetch`，接入应用已有的请求处理。
+
+## Node 连接示例
+
+以下示例只查询协议能力、模型和会话，不提交 Agent 任务。运行前设置 `VYKOR_BASE_URL` 和 `VYKOR_TOKEN`。示例不会自动选择本机服务。
+
+<Code code={nodeConnect} lang="ts" title="examples/node/connect.ts" />
+
+在已安装 SDK 的项目中保存为 `connect.ts`。示例使用 Node.js 24 内建的 TypeScript 去类型能力，可以直接运行：
+
+```powershell
+$env:VYKOR_BASE_URL = "http://127.0.0.1:8787"
+$env:VYKOR_TOKEN = "<自己的 daemon token>"
+node connect.ts
+```
+
+SDK 的最低 Node 版本仍是 20.3；使用较早版本时，先按项目现有的 TypeScript 构建流程生成 JavaScript，再运行生成文件。
+
+构造 `VykorClient` 不发送请求。首次普通资源请求会先读取 `/capabilities` 并检查协议，成功后才发出业务请求。也可以像示例一样先调用 `protocol.capabilities()`，根据能力决定显示哪些功能。
+
+## 浏览器连接示例
+
+浏览器使用同一个根入口，通过函数参数接收地址和 token：
+
+<Code code={browserConnect} lang="ts" title="examples/browser/connect.ts" />
+
+daemon 需通过 `--allow-origin` 允许网页的准确来源。token 由应用的连接或登录流程提供，不要把实际凭据写进公开前端源码。浏览器不能导入 Node 专用的 `@rzx/client/service`。
+
+连接成功后，继续[运行第一个任务](../first-run/)。如果服务不可达或协议不兼容，见[错误与兼容性](../../guides/errors-compatibility/)。

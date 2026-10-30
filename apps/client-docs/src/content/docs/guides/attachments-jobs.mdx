@@ -1,0 +1,88 @@
+---
+title: 附件与 Jobs
+description: 上传并引用附件，读取下载流，以及用完整目标标识管理后台任务和子任务。
+---
+
+附件先上传到 daemon，再由会话输入引用。Job 表示后台任务或子任务的当前状态，具体能读、等、输入还是取消，由快照中的能力字段决定。
+
+## 上传并引用附件
+
+```ts
+const asset = await client.attachments.upload({
+  displayName: "notes.txt",
+  mediaType: "text/plain",
+  body: new TextEncoder().encode("需要分析的资料"),
+  signal,
+});
+
+if (asset.status !== "ready") {
+  throw new Error(`附件尚不可用：${asset.status}`);
+}
+
+const admitted = await client.sessions.admitPrompt(sessionId, {
+  id: requestId,
+  items: [{ type: "text", text: "请概括附件内容。" }],
+  attachments: [{ assetId: asset.id, intent: "document" }],
+});
+```
+
+`upload` 接受 `Blob`、`ArrayBuffer`、`Uint8Array` 或 `ReadableStream<Uint8Array>`，直接发送字节，不要求调用方拼 JSON 或 multipart。`displayName` 是展示文件名，`mediaType` 是可选的声明类型。
+
+上传结果是附件记录，状态可能为 `importing`、`ready`、`failed` 或 `deleted`；可用 `attachments.get(assetId)` 再次读取。输入中的 `attachments` 用 `assetId` 引用上传结果，可选 `displayName` 和用途 `intent`，不把客户端本机路径当成服务端文件。
+
+附带附件的输入会按排队任务处理，即使请求传入 `delivery: "steer"`，也不会把结构化附件直接注入当前运行。重试准入时应重用原请求 ID 和相同附件引用，见[会话与输入](../sessions/)。
+
+## 下载与删除
+
+```ts
+const response = await client.attachments.download(assetId, {
+  range: { start: 0, end: 1023 },
+  signal,
+});
+const bytes = new Uint8Array(await response.arrayBuffer());
+```
+
+`download` 返回原生 `Response`，可以读取字节，也可以从 `response.body` 消费流。`range` 支持 `start/end` 或 `suffixBytes`；后者不能和前两者组合。省略范围时下载完整内容。
+
+`attachments.delete(assetId)` 删除指定附件并返回更新后的记录。它是明确的资源操作，不是结束观察时自动执行的清理步骤。
+
+## 查询后台任务
+
+```ts
+const result = await client.jobs.list({
+  sessionId,
+  includeFinished: true,
+  limit: 100,
+});
+
+for (const error of result.errors) {
+  console.error(error.kind, error.message);
+}
+for (const job of result.jobs) {
+  if (!job.capabilities.read) continue;
+  const output = await client.jobs.read(job.target, {
+    sessionId,
+    maxChars: 10_000,
+  });
+  console.log(output.text, output.cursor, output.truncated);
+}
+```
+
+`jobs.list()` 返回 `{ jobs, errors }`，不是数组。某一类任务查询失败时，其他类别仍可能有结果，应同时处理 `errors`。可用 `kinds`、`statuses`、时间范围和 `limit` 过滤。
+
+快照中的 `capabilities` 分别声明 `read`、`wait`、`send` 和 `cancel`。`kind` 的取值包括 `terminal`、`shell`、`agent`、`dream` 和 `workflow`，不意味着每种任务都支持所有操作。
+
+## 传完整 target
+
+后续方法的第一个参数是 `job.target`。Agent target 包含 `kind`、`jobId` 和 `runId`；其他类别包含 `kind` 和 `jobId`。不要仅从显示用的 `id` 重建目标，也不要把 Agent 的旧轮 Run ID 替换成新轮 ID。
+
+| 方法 | 行为 |
+| --- | --- |
+| `read(target, { sessionId, after?, maxChars?, signal? })` | 读取输出，返回 `text`、`cursor`、`truncated` 和当前 `snapshot` |
+| `wait(target, { sessionId, timeoutMs?, after?, maxChars? }, { signal? })` | 等待目标变化或结束，返回读取结果和 `timedOut` |
+| `send(target, { sessionId, data }, { signal? })` | 向支持输入的任务发送数据；可能返回新轮 `{ sessionId, inputId, runId }` 回执 |
+| `cancel(target, { sessionId, reason? }, { signal? })` | 请求取消目标，返回更新后的快照 |
+
+增量读取时，把上次返回的 `cursor` 作为下一次 `after`。`wait` 的 `timedOut: true` 表示这次等待到时，不等于任务失败或已被取消。取消等待 signal 同样只结束本地请求；要取消后台目标，显式调用 `jobs.cancel()`。
+
+`jobs.createBackgroundShell({ sessionId, command, cwd?, description?, requestId? })` 可创建后台 Shell，返回 `{ jobId, snapshot }`。它会在 daemon 执行命令，和只读的文件接口用途不同；需要安全重试创建请求时，调用方应保存稳定 `requestId`。完整类型见 [API 参考](../../reference/overview/)。

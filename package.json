@@ -8,6 +8,9 @@
   ],
   "type": "module",
   "scripts": {
+    "docs:dev": "pnpm --filter @rzx/client build && pnpm --filter @vykor/client-docs dev",
+    "docs:build": "pnpm -r --filter @vykor/client-docs... run build",
+    "docs:check": "pnpm --filter @rzx/client build && pnpm --filter @vykor/client-docs check-types && pnpm --filter @vykor/client-docs test",
     "dev": "turbo dev",
     "dev:apps": "turbo dev --filter=@vykor/desktop --ui=stream",
     "build": "turbo build",

@@ -1,0 +1,64 @@
+---
+title: 结构化交付
+description: 为排队任务指定输出 Schema，读取格式校验回执，并区分运行终态与交付进展。
+---
+
+当应用需要固定形状的数据时，在提交输入时传入顶层 `outputSchema`。SDK 会先确认服务端声明 `features.structuredDelivery >= 1`，再发送请求；不支持时不会提交这笔业务请求。
+
+## 提交输出格式
+
+```ts
+import { createPromptRequestId, waitForRun } from "@rzx/client";
+
+const admitted = await client.sessions.admitPrompt(sessionId, {
+  id: createPromptRequestId(),
+  delivery: "queue",
+  items: [{ type: "text", text: "生成报告并返回它的路径。" }],
+  outputSchema: {
+    type: "object",
+    properties: { path: { type: "string" } },
+    required: ["path"],
+    additionalProperties: false,
+  },
+});
+if (!admitted.run) throw new Error("输入未创建 Run");
+
+// 权限请求需由并行观察或应用已有审批界面处理。
+const { run } = await waitForRun(client, {
+  sessionId,
+  runId: admitted.run.id,
+  signal,
+});
+console.log(run.status, run.metadata.delivery);
+```
+
+`outputSchema` 约束交付回执的 `data`，不要求从普通文本中猜出 JSON。模型需要通过 `SubmitResult` 提交 `status`、`summary` 和符合格式的 `data`；缺少有效交付时，本轮会明确失败。
+
+格式约定属于这次排队 Run，不能用 `delivery: "steer"` 改变正在执行任务的约定。不要把新请求的 `outputSchema` 藏进 `metadata`，SDK 会拒绝这种写法。恢复中断 Run 时，如显式提供 Schema，必须与原约定一致。
+
+## 读取交付回执
+
+完成后的回执保存在 `run.metadata.delivery`。该 metadata 允许扩展数据，应用应检查实际对象形状后再读取具体字段。
+
+| 字段或状态 | 表示什么 |
+| --- | --- |
+| `validation: "schema_valid"` | `data` 符合声明的格式 |
+| `verification: "not_requested"` | 没有执行宿主业务核验，HTTP SDK 调用属于这种情况 |
+| `verification: "passed"` | 配置了可信宿主核验器，并且核验通过 |
+| `status: "done"` | 模型报告交付完成 |
+| `status: "partial"`、`"blocked"`、`"waiting"` | 模型报告部分完成、遇到阻碍或等待更多信息 |
+
+格式校验只说明数据形状有效。比如 Schema 要求 `path` 是字符串，并不能证明这个文件确实存在或内容符合要求。HTTP 请求不传业务核验函数；需要检查真实产物时，应由有相应权限的可信宿主完成。
+
+`run.status === "completed"` 表示本轮正常结束，和交付的 `done/partial/blocked/waiting` 分别保存。正常结束的 Run 仍可能等待资料，也不会自动完成会话 Goal。
+
+## 支持的 Schema 范围
+
+当前支持的子集包括：
+
+- `type`、`properties`、`required`、布尔 `additionalProperties`。
+- 单一 `items`，基本值 `enum` 和 `const`。
+- 数值 `minimum`、`maximum`，字符串 `minLength`、`maxLength`。
+- 说明字段 `title` 和 `description`。
+
+这不是完整 JSON Schema 实现。不支持的关键字在配置时直接报错；Schema 最多 512 个节点、16 层，HTTP 请求中的 Schema 额外限制为 64 KiB。参数或能力错误见[错误与兼容性](../errors-compatibility/)。

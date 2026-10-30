@@ -21,6 +21,11 @@
       "inputs": ["$TURBO_DEFAULT$"],
       "outputs": ["out/**"]
     },
+    "@vykor/client-docs#build": {
+      "dependsOn": ["^build"],
+      "env": ["CLIENT_DOCS_SITE", "CLIENT_DOCS_BASE"],
+      "outputs": ["dist/**"]
+    },
     "check-types": {
       "dependsOn": ["^build"]
     },

@@ -1,0 +1,52 @@
+---
+title: 运行第一个任务
+description: 创建会话、接纳输入、明确处理权限，再等待指定 Run 的持久化结果。
+---
+
+import { Code } from '@astrojs/starlight/components';
+import runWithPermissions from '../../../../examples/node/run-with-permissions.ts?raw';
+
+先完成[安装与连接](../installation/)，并确认 daemon 已配置可用模型。下面的示例会创建会话并向模型提交真实任务。
+
+## 准备运行参数
+
+Node 示例读取四个环境变量，不内置服务地址或凭据：
+
+| 环境变量 | 内容 |
+| --- | --- |
+| `VYKOR_BASE_URL` | 已有 daemon 的根地址 |
+| `VYKOR_TOKEN` | 该 daemon 的 token |
+| `VYKOR_MODEL` | daemon 已配置的模型 ID |
+| `VYKOR_DAEMON_CWD` | daemon 所在机器上的工作目录 |
+
+## 提交并等待
+
+将源码保存为 `run-with-permissions.ts`，按上一页安装 SDK。使用 Node.js 24，设置连接参数后执行：
+
+```powershell
+$env:VYKOR_MODEL = "<daemon 已配置的模型 ID>"
+$env:VYKOR_DAEMON_CWD = "<daemon 机器上的工作目录>"
+node run-with-permissions.ts
+```
+
+<Code code={runWithPermissions} lang="ts" title="examples/node/run-with-permissions.ts" />
+
+示例完成四件事：创建 Session，用稳定请求 ID 提交输入，并行观察待审批请求，再通过 `waitForRun` 等待服务端返回的 Run ID。Session 是承载工作目录和历史的会话；Run 是一次具体执行，二者可以跨多次客户端连接继续存在。
+
+示例对待审批请求统一回复拒绝，不会自动批准工具操作。正式应用应显示请求内容，让用户决定后调用 `permissions.reply()`，具体接线见[权限指南](../../guides/permissions/)。
+
+## 理解返回结果
+
+`sessions.admitPrompt()` 返回的是输入准入结果，包含 `input`、可选的 `run` 和可选的 `queue_state`。`queue_state: "queued"` 表示排队，`"running"` 表示已进入运行；两者都不表示任务完成。没有 `run` 时，不能凭空构造一个 Run ID 继续等待，应检查准入结果和服务端执行配置。
+
+`waitForRun(client, { sessionId, runId })` 从完整快照开始观察，返回 `{ run, messages }`。即使开始等待前运行已经结束，也能读取保存过的终态。只有 `completed` 表示本轮正常结束；`failed` 和 `interrupted` 也会作为结果返回，任务失败不会自动变成 JavaScript 异常。
+
+消息中的正文保存在 `parts`。示例筛选 assistant 消息和 `type: "text"` 的 Part；需要显示工具记录、附件或推理时，应按相应类型处理。
+
+## 超时和再次提交
+
+给 `waitForRun` 或 HTTP 请求传入的 `AbortSignal` 只结束本地观察或请求。后台运行可能继续执行；需要停止它时，显式调用 `sessions.interrupt(sessionId, { expectedRunId: runId })`。
+
+本页示例在超时、按 Ctrl+C 或观察失败时，会额外调用 `interrupt` 请求停止这次运行；这来自示例的清理逻辑。观察示例只结束订阅，不中断原有任务。会话记录会保留在 daemon 中。
+
+网络中断可能让调用方无法判断提交是否成功。要可靠重试，应在首次提交前保存请求 ID 和请求内容，再用同一组数据重试；新任务换新 ID。SDK 自动生成的 ID 适合一次性调用，不提供跨进程恢复保证。详见[会话与输入](../../guides/sessions/)。

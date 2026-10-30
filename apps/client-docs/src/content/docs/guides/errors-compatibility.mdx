@@ -1,0 +1,77 @@
+---
+title: 错误与兼容性
+description: 区分 HTTP 失败、协议不兼容、运行失败及同步重试条件，保留服务端错误信息。
+---
+
+请求错误、任务失败和观察结束是三件不同的事。先看错误来自哪一步，再决定刷新连接、修正参数、重新提交还是向用户展示 Run 的失败原因。
+
+## HTTP 错误
+
+非成功 HTTP 响应抛出 `VykorApiError`，保留状态码和原始响应正文：
+
+```ts
+import { VykorApiError } from "@rzx/client";
+
+try {
+  await client.sessions.get(sessionId);
+} catch (error) {
+  if (error instanceof VykorApiError) {
+    console.error(error.status, error.body);
+  } else {
+    throw error;
+  }
+}
+```
+
+应用应根据 `status` 和结构化 `body` 提供具体处理，不把所有失败压成“网络不可用”。文件请求另外提供 `code` 和 `message`，详见[文件错误](../files/#文件错误)。
+
+普通资源调用不会自动重试业务请求。尤其是提交输入，网络失败可能发生在 daemon 已经接纳之后；需要可靠重试时，必须使用首次提交前保存的同一个请求 ID 和完整内容。
+
+## 运行失败
+
+`waitForRun` 返回真实终态，不会因为 `run.status === "failed"` 或 `"interrupted"` 就自动抛出任务异常。调用方要检查 `run.status`，失败信息可从 `run.error` 和返回消息读取。
+
+```ts
+const { run, messages } = await waitForRun(client, { sessionId, runId, signal });
+if (run.status === "failed") {
+  console.error(run.error, messages);
+}
+```
+
+HTTP、同步或格式错误仍可能使等待抛出异常。取消等待 signal 只结束本地观察，后台任务可能继续运行。
+
+## 同步的重试范围
+
+| 发生阶段与情况 | SDK 行为 |
+| --- | --- |
+| 首次会话快照或首次全局历史回放失败 | 直接结束，不自动重试 |
+| 进入事件循环后出现网络错误、5xx、408、425、429 | 退避后重试；单会话先刷新快照，再开流 |
+| 进入事件循环后，事件流正常结束 | 按断流处理并重连 |
+| 其他 4xx，如参数错误、鉴权失效、会话不存在 | 结束同步，原样保留 `VykorApiError.status/body` |
+| 不支持的事件格式版本 | 结束同步，报告 `UnsupportedSessionEventSchemaVersionError` |
+| 取消 signal | 结束本地观察，不中断 Run |
+
+`syncEvents` 将不可恢复错误抛给调用方。`SessionSyncController` 把连接状态设为 `error`，通过 `onError` 上报，`start()` 本身不会重新抛出。应用可以在修正地址、凭据或版本后创建新的观察流程，不要对明确的鉴权或资源错误无限重连。
+
+## 协议版本与功能能力
+
+SDK npm 版本、CLI 应用版本和通信协议版本分别管理。SDK 与 CLI 不要求版本字符串相同，但通信协议必须完全一致；代码导出的 `CURRENT_PROTOCOL_VERSION` 是当前要求。
+
+首次普通资源请求会先检查 `/capabilities`，成功后缓存握手结果，再发送带协议版本头的业务请求。缺少版本、版本不同或能力响应格式错误都会在业务请求前失败，不会自动降级到旧协议。
+
+```ts
+import { CURRENT_PROTOCOL_VERSION, IncompatibleProtocolError } from "@rzx/client";
+
+try {
+  const capabilities = await client.protocol.capabilities();
+  console.log(CURRENT_PROTOCOL_VERSION, capabilities.features);
+} catch (error) {
+  if (error instanceof IncompatibleProtocolError) {
+    console.error("客户端和 daemon 的通信协议不一致", error.message);
+  } else {
+    throw error;
+  }
+}
+```
+
+能力标记用来区分可选功能。会话文件检查 `sessionFiles >= 1`；结构化交付检查 `structuredDelivery >= 1`。即使协议相同，也不能假定每个 daemon 都支持所有功能或所有文件读取平台。

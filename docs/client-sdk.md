@@ -2,6 +2,8 @@
 
 > 状态：当前客户端 SDK 的独立安装、使用和发布入口。
 
+独立的中文开发者站点、可运行示例和自动 API 参考位于 [apps/client-docs](../apps/client-docs/README.md)。根目录运行 `pnpm docs:dev` 启动；本页保留仓库内使用和发布维护说明。
+
 `@rzx/client` 让网页、IDE、Node 脚本和其他应用通过 HTTP 调用同一个 Vykor daemon。任务在 daemon 所在机器执行，会话、运行和权限记录由 daemon 保存；客户端保存连接和展示状态。直接在程序进程内运行 Agent 的方式见 [Agent SDK](./agent-sdk.md)。
 
 ## 安装与连接

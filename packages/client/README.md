@@ -1,5 +1,7 @@
 # @rzx/client
 
+开发者站点与可运行示例见 [Client SDK 文档子项目](../../apps/client-docs/README.md)，在仓库根目录运行 `pnpm docs:dev`；API 参考由两个公开入口的发布声明生成。
+
 连接已有 Vykor daemon 的 Agent 生命周期 SDK。网页、IDE 和 Node 脚本可创建会话、提交输入、处理权限、控制运行并读取结果；执行与持久化由 daemon 负责。
 
 ## 安装与连接

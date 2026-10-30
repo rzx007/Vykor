@@ -76,7 +76,7 @@ snapshot 和 cursor 在服务端同一个原子读取中产生，因此不会出
 
 ## SSE gap、重连和去重
 
-收到 live event 后，Controller 比较 `event.seq` 与当前 cursor：
+全局同步收到 live event 后，Controller 比较 `event.seq` 与当前 cursor。单会话流的序号来自全局事件序列，可能跳过其他会话的事件，不因数字不连续直接补全局历史；断线后先重新读取该会话快照，再继续订阅。
 
 ```text
 event.seq == cursor + 1

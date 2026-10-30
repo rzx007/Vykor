@@ -1,0 +1,94 @@
+---
+title: 会话工作区文件
+description: 按会话列目录、读文件和搜索内容，理解读取预算、权限及平台限制。
+---
+
+import { Code } from '@astrojs/starlight/components';
+import filesExample from '../../../../examples/node/files.ts?raw';
+
+`client.files` 只读访问 daemon 为会话选定的实际工作区，也适用于有独立目录的子会话和 worktree。调用方提供会话 ID 与相对路径，不提供宿主目录、执行环境或权限配置。
+
+路径用 `/` 分隔，`.` 表示会话根目录，返回的路径也相对于会话根目录。这些方法不启动 Agent、不调用模型、不改变文件或会话事件。
+
+## 先检查能力
+
+```ts
+const capabilities = await client.protocol.capabilities();
+if ((capabilities.features.sessionFiles ?? 0) < 1) {
+  throw new Error("daemon 尚未提供会话文件接口，请升级 daemon");
+}
+```
+
+能力标记说明服务端提供接口，不保证每个平台都具备安全读取所需的系统能力。宿主限制仍可能返回 501。
+
+## 读取示例
+
+示例从命令行取得 `sessionId`，可再传一个相对文件路径，默认读取 `README.md`：
+
+<Code code={filesExample} lang="ts" title="examples/node/files.ts" />
+
+源码保存为 `files.ts`，在已安装 SDK 的项目中设置 `VYKOR_BASE_URL`、`VYKOR_TOKEN`，用 Node.js 24 执行：
+
+```sh
+node files.ts <sessionId> README.md
+```
+
+若工作区没有 `README.md`，传入实际存在的 UTF-8 文本文件。
+
+## 五种只读操作
+
+| 方法 | 结果与参数上限 |
+| --- | --- |
+| `list(sessionId, options?)` | 返回当前一级目录的 `entries`；默认 200 项，`limit` 最多 1000 |
+| `stat(sessionId, path, options?)` | 返回路径信息；`sizeBytes` 是字节数，`modifiedAt` 是 Unix 毫秒，链接保留为 `symlink` |
+| `readText(sessionId, path, options?)` | 返回 UTF-8 `content`、`encoding` 和 `truncated`；默认 256 KiB，`maxBytes` 最多 1 MiB，不截断 UTF-8 字符 |
+| `find(sessionId, options)` | 按 `pattern` 的 glob 规则返回 `files: string[]`；默认 100 项，最多 1000 |
+| `search(sessionId, options)` | 按单行字面 `query` 返回 `matches: { path, line, text }[]`；行号从 1 开始，默认忽略大小写，默认 100 条，最多 200 |
+
+`pattern` 与搜索的 `include` 相对于起点 `path`，结果路径相对于会话根目录。内容搜索不解释正则表达式，也不支持跨行 query。递归查找默认跳过 `.git`、`node_modules`、`dist` 等目录，不递归进入目录链接。
+
+文件接口没有保存、创建、移动、删除、监听或分页方法。需要 Agent 修改文件时，应通过正常任务及权限流程执行。
+
+## 读取预算与截断
+
+目录列举、递归查找和搜索每次最多采集 4000 个候选目录项，包括用于判断是否还有结果的探针。采集会提前停止，排序只覆盖已采集的集合，因此大目录的返回值不保证是全目录排序后的前若干项。
+
+内容搜索每个文件最多读 256 KiB，总读取量最多 8 MiB；二进制文件和非法 UTF-8 也占用读取预算。单条匹配摘要最多 4096 字符，文件请求最长执行 10 秒。查找和搜索达到时间、读取量或结果预算时返回 `truncated: true`，应用应提示“结果可能不完整”，不要显示成“只有这些结果”。
+
+直接读取二进制或非法 UTF-8 文件会返回 `file_not_text`。取消传入的 signal 只结束本次文件请求，不中断会话 Run。
+
+## 路径与权限
+
+daemon 对候选项逐项检查工作区边界、真实路径和读取规则。明确的 `denyRead`、路径规则和会话权限限制仍然生效；需要确认的读取会直接拒绝，不创建新的审批请求。
+
+POSIX 中合法但 API 无法表示的枚举项，比如名字含 `\` 的文件，会被跳过，其余项继续返回。用户直接传入非法路径仍返回 400。WSL 在实际 WSL 环境中检查路径与规则，无法可靠核验时返回不支持，不退回宿主文件系统读取。
+
+正文读取先打开文件，再对已打开对象重新检查真实路径和读取权限，从同一文件对象做一次有界读取。缺少这种安全读取或有界枚举能力时，服务端返回 501。
+
+## 当前平台支持
+
+以下限制适用于 `readText`，以及 `search` 读取候选文件正文的步骤：
+
+| 环境 | 要求与限制 |
+| --- | --- |
+| Linux 本机 | 需要 `/proc` 核验已打开文件对象 |
+| WSL | 正文读取需要 `/proc`；`list/find/search` 的目录扫描还需要 Bash 与 GNU coreutils 9+ |
+| Windows 本机 | 仅支持本地 NTFS 上只有一个硬链接名称的文件；需要可用的 PowerShell 与 `fsutil` 只读核验 |
+| 其他 Windows 卷、UNC、macOS | 暂不支持安全正文读取，返回 501 |
+
+## 文件错误
+
+`VykorApiError` 保留 HTTP `status` 和原始 `body`。文件错误正文带 `code` 和 `message`：
+
+| `code` | HTTP 状态与含义 |
+| --- | --- |
+| `file_invalid_request` | 400，路径、查询或参数上限无效 |
+| `file_forbidden` | 403，路径或读取策略拒绝 |
+| `file_not_found` | 404，会话或路径不存在 |
+| `file_not_text` | 415，不是受支持的 UTF-8 文本 |
+| `file_not_supported` | 501，文件服务或宿主安全核验能力不支持 |
+| `file_not_ready` | 503，服务未就绪、配置缺失或工作区维护中 |
+| `file_timeout`、`file_cancelled` | 408，直接操作超时或取消 |
+| `file_operation_failed` | 500，其他读取失败 |
+
+错误响应不会提供宿主绝对路径。完整错误处理方式见[错误与兼容性](../errors-compatibility/)。

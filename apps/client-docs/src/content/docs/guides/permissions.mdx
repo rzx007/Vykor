@@ -1,0 +1,62 @@
+---
+title: 权限请求
+description: 并行观察待审批工具操作，并明确回复一次批准、会话批准或拒绝。
+---
+
+工具操作可能等待权限决定。SDK 不会自动批准请求，`waitForRun` 也不负责审批；如果应用只等待任务完成而不处理待审批请求，运行可能一直等待用户决定。
+
+## 读取并回复
+
+持续界面从 `syncEvents` 的状态中读取最早待处理请求：
+
+```ts
+import { selectFirstPendingPermission, syncEvents } from "@rzx/client";
+
+for await (const update of syncEvents(client, { sessionId, signal })) {
+  const request = selectFirstPendingPermission(update.state, sessionId);
+  if (request) {
+    // 交给应用现有的审批界面，展示 toolName 和 payload。
+    showPermissionRequest(request);
+  }
+}
+```
+
+`showPermissionRequest` 是应用自己的界面函数。同一请求可能在多次状态更新中出现，应用应按 `request.id` 更新已有提示，避免重复打开。
+
+用户决定后，明确提交相应结果：
+
+```ts
+await client.permissions.reply(request.id, {
+  status: "approved",
+  decision: "once",
+});
+
+// 用户选择拒绝时：
+await client.permissions.reply(request.id, { status: "denied" });
+```
+
+`decision: "once"` 表示一次批准；需要会话范围批准时传 `"session"`。应让用户知道选择的范围，不把一个按钮暗中扩大为会话批准。`clientId` 可标记回复来自哪个客户端。
+
+以上批准和拒绝是互斥的操作示例，实际只发送用户选择的一次回复。
+
+回复成功后，权限事件可能稍后才到达；持续观察的程序应按请求 ID 记住已发送的回复，避免旧快照触发重复提交。多个客户端同时处理同一请求时，后到的回复可能返回 409，应刷新状态继续观察；其他错误仍按请求失败处理。
+
+## 与结果等待并行
+
+一个观察流程负责显示和回复权限，另一个用 `waitForRun` 等待指定 Run。完整 Node 示例见[运行第一个任务](../../getting-started/first-run/)，它为演示明确拒绝全部待审批请求。
+
+关闭面板或切换会话时可以取消旧观察的 signal。取消观察不会拒绝待审批请求，也不会中断后台运行；需要中断时调用 `sessions.interrupt()`。
+
+## 按需查询和撤销批准
+
+```ts
+const pending = await client.permissions.list({
+  sessionId,
+  status: "pending",
+});
+const approvals = await client.permissions.listApprovals();
+```
+
+`list` 适合按会话、状态或工具名查询。`listApprovals()` 读取已有批准，`revokeApproval(requestId)` 撤销指定批准记录。撤销与中断运行是不同操作，不应把撤销调用当作停止当前工具的保证。
+
+回复失败时保留 `VykorApiError` 的状态码和响应正文，以服务端记录为准刷新界面，见[错误与兼容性](../errors-compatibility/)。

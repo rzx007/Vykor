@@ -68,6 +68,7 @@ function vykor { vk @args }
 | --- | --- |
 | [apps/cli](apps/cli/README.md) | 命令行、TUI 启动与 daemon 连接 |
 | [apps/frontend](apps/frontend/README.md) | 终端交互界面 |
+| [apps/client-docs](apps/client-docs/README.md) | Client SDK 独立文档站、使用示例与自动 API 参考 |
 | [apps/desktop](apps/desktop/README.md) | Electron 主进程、preload 与桌面界面 |
 | [packages/agent-runtime](packages/agent-runtime/README.md) | 默认 Node Agent、运行与子 Agent 生命周期 |
 | [packages/core](packages/core/README.md) | 模型调用循环、历史、工具执行和上下文压缩 |
