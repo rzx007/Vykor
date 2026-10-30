@@ -198,7 +198,7 @@ it("enters a new standalone tool once and leaves restored tools settled", async 
     ...part(""),
     id: "tool-1",
     type: "tool",
-    toolName: "read_file",
+    toolName: "Read",
   }
   await act(async () =>
     root.render(
