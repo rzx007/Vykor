@@ -213,8 +213,20 @@ export function PanelScenario() {
 }
 const viewport = () =>
   document.querySelector<HTMLElement>('[data-slot="message-scroller-viewport"]')!
+async function waitForBottom() {
+  const start = performance.now()
+  let stableFrames = 0
+  while (stableFrames < 2 && performance.now() - start < 500) {
+    await frame()
+    const gap = viewport().scrollHeight - viewport().clientHeight - viewport().scrollTop
+    stableFrames = Math.abs(gap) <= 1 ? stableFrames + 1 : 0
+  }
+  check(stableFrames === 2, "panel follow did not settle within 500ms")
+  return performance.now() - start
+}
 const api = {
   async prepare(count: number) {
+    document.documentElement.dataset.reducedMotion = "false"
     flushSync(() => root.render(null))
     tailSize = 0
     writeUtilityPanelViewStates({
@@ -290,11 +302,10 @@ const api = {
         focus: document.activeElement?.getAttribute("aria-label"),
       })}`
     )
-    check(
-      Math.abs(viewport().scrollHeight - viewport().clientHeight - viewport().scrollTop) <= 1,
-      "resize lost bottom"
-    )
-    return { passed: true }
+    // 宽度变化会重排多行；等待平滑跟随收敛，不把固定帧数当成即时到底。
+    const settleMs = await waitForBottom()
+    check(scroller.getSnapshot().following, "resize interrupted following")
+    return { passed: true, settleMs }
   },
   async regress() {
     const bottom = viewport().scrollTop
@@ -328,7 +339,7 @@ const api = {
     document.getElementById("sidebar-toggle")!.click()
     await settle()
     scroller.scrollToEnd()
-    await settle()
+    await waitForBottom()
     check(
       tailSize > beforeGrowth &&
         document.querySelector(`[data-stream-size="${tailSize}"]`) !== null,

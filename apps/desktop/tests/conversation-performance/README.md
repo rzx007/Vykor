@@ -19,6 +19,8 @@
 pnpm --filter @vykor/desktop test:conversation-performance
 ```
 
+默认滚动场景同时检查测高后不即时跳动、连续输出的跟随距离不超过 32px、停止后 160ms 内到底、结束不补跳，以及上翻中断动画后通过“回到最新”恢复。分别在 1,000 和 10,000 行中保留底部位置、历史阅读点和可见行数量检查。
+
 只测 Markdown 的 PowerShell 入口：
 
 ```powershell

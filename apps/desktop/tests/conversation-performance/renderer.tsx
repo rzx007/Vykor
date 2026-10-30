@@ -38,6 +38,7 @@ let freshFileHandler = true
 const openFile = () => {}
 const viewport = () =>
   document.querySelector<HTMLElement>('[data-slot="message-scroller-viewport"]')!
+const bottomGap = () => viewport().scrollHeight - viewport().clientHeight - viewport().scrollTop
 const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 const settle = async () => {
   for (let index = 0; index < 6; index++) await frame()
@@ -87,8 +88,21 @@ function render() {
 function require(condition: boolean, message: string) {
   if (!condition) throw new Error(message)
 }
+async function waitForBottom(timeoutMs: number) {
+  const start = performance.now()
+  let stableFrames = 0
+  while (performance.now() - start < timeoutMs) {
+    await frame()
+    stableFrames = bottomGap() <= 1 ? stableFrames + 1 : 0
+    if (stableFrames === 2) break
+  }
+  const elapsedMs = performance.now() - start
+  require(stableFrames === 2, `follow did not settle within ${timeoutMs}ms: gap=${bottomGap()}`)
+  return elapsedMs
+}
 const api = {
   async prepare(count: number) {
+    document.documentElement.dataset.reducedMotion = "false"
     chat++
     markdown = null
     height = 120
@@ -101,6 +115,7 @@ const api = {
     render()
     await settle()
     require(controller.getSnapshot().following, "initial follow missing")
+    require(bottomGap() <= 1, "initial transcript did not open at bottom")
   },
   async historyResize(count: number) {
     await api.prepare(count)
@@ -124,26 +139,62 @@ const api = {
     }
   },
   async grow(updates: number) {
-    let maxSettledGap = 0
+    const initialTop = viewport().scrollTop
+    const tail = document.querySelector<HTMLElement>(
+      `[data-transcript-row="${rows[rows.length - 1].id}"]`
+    )!
+    const initialHeight = tail.getBoundingClientRect().height
+    let measuredWithoutJump = false
+    let measuredGrowth = false
+    let maxGap = 0
     let maxMounted = 0
-    for (let index = 0; index < updates; index++) {
-      height += 12
-      render()
-      await frame()
-      await frame()
-      maxSettledGap = Math.max(
-        maxSettledGap,
-        viewport().scrollHeight - viewport().clientHeight - viewport().scrollTop
-      )
+    let progressiveFrames = 0
+    let previousTop = initialTop
+    let lastUpdateTime = performance.now()
+    // 此观察器晚于虚拟列表注册，在同次测高交付中检查是否已被直接拉到底。
+    const observer = new ResizeObserver((entries) => {
+      if (!entries.some((entry) => entry.contentRect.height > initialHeight)) return
+      maxGap = Math.max(maxGap, bottomGap())
+      if (!measuredGrowth) {
+        measuredGrowth = true
+        measuredWithoutJump = Math.abs(viewport().scrollTop - initialTop) <= 1 && bottomGap() > 1
+      }
+    })
+    observer.observe(tail)
+    const sample = () => {
+      const top = viewport().scrollTop
+      const gap = bottomGap()
+      require(top >= previousTop - 1, "stream follow moved backward")
+      if (top > previousTop + 0.01 && gap > 1) progressiveFrames++
+      previousTop = top
+      maxGap = Math.max(maxGap, gap)
       maxMounted = Math.max(maxMounted, document.querySelectorAll("[data-transcript-row]").length)
     }
+    try {
+      for (let index = 0; index < updates; index++) {
+        height += 12
+        lastUpdateTime = performance.now()
+        render()
+        await frame()
+        sample()
+        await frame()
+        sample()
+      }
+    } finally {
+      observer.disconnect()
+    }
+    require(measuredGrowth && measuredWithoutJump, "measured stream growth jumped immediately")
+    require(progressiveFrames >= 2, "stream growth did not advance across animation frames")
+    require(maxGap <= 32, `stream lag exceeded 32px: ${maxGap}`)
+    await waitForBottom(Math.max(0, 160 - (performance.now() - lastUpdateTime)))
+    const settleMs = performance.now() - lastUpdateTime
+    const stoppedTop = viewport().scrollTop
     await settle()
-    require(maxSettledGap <= 1, "stream briefly lagged behind measured content")
+    require(Math.abs(viewport().scrollTop - stoppedTop) <= 1, "stream moved after settling")
     require(controller.getSnapshot().following, "stream lost following")
-    require(viewport().scrollHeight - viewport().clientHeight - viewport().scrollTop <=
-      1, "stream not at bottom")
+    require(bottomGap() <= 1, "stream not at bottom")
     require(maxMounted < 25, "unbounded mounted history")
-    return { updates, maxSettledGap, maxMounted }
+    return { updates, maxGap, progressiveFrames, measuredWithoutJump, settleMs, maxMounted }
   },
   async streamingCode(count: number, large = false) {
     await api.prepare(count)
@@ -183,9 +234,14 @@ const api = {
     }
     require(controller.getSnapshot().following, "code growth lost following")
     require(document.querySelectorAll("pre").length === 4, "missing sequential code blocks")
+    await waitForBottom(160)
+    const beforeCompletion = viewport().scrollTop
     streaming = false
     render()
     await settle()
+    require(bottomGap() <= 1, "completion left reply away from bottom")
+    require(Math.abs(viewport().scrollTop - beforeCompletion) <=
+      1, "completion jumped settled reply")
     require(document.querySelector("pre") === firstPre, "completion remounted earlier code")
     require(!!firstPre.querySelector('span[style*="color"]'), "completion cleared earlier colors")
     require(document.querySelectorAll("pre").length === 4, "completion lost code blocks")
@@ -207,17 +263,28 @@ const api = {
     await settle()
     require(viewport().scrollTop === position, "stream moved historical reader")
     require(!controller.getSnapshot().following, "history navigation rearmed following")
-    controller.scrollToEnd()
-    await settle()
+    const returnButton = () =>
+      document.querySelector<HTMLButtonElement>('button[aria-label*="回到最新"]')!
+    returnButton().click()
+    require(viewport().scrollTop === position, "jump latest moved synchronously")
+    await frame()
+    await frame()
     require(controller.getSnapshot().following, "jump latest failed to resume")
-    await api.grow(10)
+    require(viewport().scrollTop > position && bottomGap() > 1, "jump latest had no smooth travel")
+    const interruptedGap = bottomGap()
     viewport().dispatchEvent(new WheelEvent("wheel", { deltaY: -120, bubbles: true }))
+    viewport().scrollTop -= 30
     const detached = viewport().scrollTop
     height += 100
     render()
     await settle()
     require(viewport().scrollTop === detached, "upward intent lost to growth")
-    return { passed: true }
+    require(!controller.getSnapshot().following, "upward intent did not stop active animation")
+    returnButton().click()
+    const resumedMs = await waitForBottom(500)
+    require(controller.getSnapshot().following, "jump latest failed after interruption")
+    await api.grow(10)
+    return { passed: true, interruptedGap, resumedMs }
   },
 }
 Object.assign(window, { transcriptPerformance: api })

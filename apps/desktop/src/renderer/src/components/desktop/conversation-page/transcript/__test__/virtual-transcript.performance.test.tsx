@@ -210,7 +210,8 @@ it.each([1000, 10000])(
       expect(viewport.scrollTop - before).toBe(1200)
       expect(metrics.keys).toBeLessThan(10000)
       expect(metrics.commits).toBeLessThan(150)
-      expect(metrics.measurements).toBeLessThan(2000)
+      // 平滑跟随每帧读取测高缓存；仍限制总读取量，并保持上面的历史遍历、提交约束。
+      expect(metrics.measurements).toBeLessThan(3000)
       console.info(
         JSON.stringify({
           scenario: "virtual-tail-100-growths",
