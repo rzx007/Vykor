@@ -46,6 +46,51 @@ const part: DesktopSessionPart = {
 
 describe("inline tool group wording", () => {
   it.each([
+    [undefined, "打开终端", "操作已结束"],
+    [{}, "打开终端", "操作已结束"],
+    [{ command: "" }, "打开终端", "操作已结束"],
+    [{ command: "  " }, "打开终端", "操作已结束"],
+    [{ command: 42 }, "打开终端", "操作已结束"],
+    [{ command: "echo ok" }, "运行命令", "运行了命令"],
+    [{ arguments: { arguments: { command: "echo ok" } } }, "运行命令", "运行了命令"],
+    [{ name: "interactive", arguments: { command: "business field" } }, "打开终端", "操作已结束"],
+  ])("presents TerminalOpen according to its actual command: %j", (input, name, completed) => {
+    const call = { ...part, toolName: "TerminalOpen", status: "completed" as const, input }
+    expect(summarizeToolCall(call).name).toBe(name)
+    expect(toolGroupCompletedLabel([{ call }])).toBe(completed)
+    expect(
+      summarizeToolCall({
+        ...call,
+        id: "ui-tool-generation:terminal",
+        metadata: { uiToolGeneration: true, toolProgress: { phase: "generating" } },
+      })
+    ).toEqual({ name })
+  })
+
+  it.each(["Bash", "TerminalOpen"])(
+    "does not count failed or uncertain commands: %s",
+    (toolName) => {
+      for (const state of ["failed", "interrupted", "unknown", "not_started"]) {
+        const call: DesktopSessionPart = {
+          ...part,
+          toolName,
+          input: { command: "echo ok" },
+          ...(state === "failed" || state === "interrupted"
+            ? { status: state }
+            : { status: "completed" as const, metadata: { executionState: state } }),
+        }
+        expect(toolGroupCompletedLabel([{ call }])).toBe("操作已结束")
+      }
+    }
+  )
+
+  it("combines legacy Bash and notebook edits without treating an empty terminal as a command", () => {
+    const calls = ["Bash", "NotebookEdit", "JobRead", "TerminalOpen"].map((toolName) => ({
+      call: { ...part, toolName, status: "completed" as const },
+    }))
+    expect(toolGroupCompletedLabel(calls)).toBe("编辑了文件，运行了命令")
+  })
+  it.each([
     "TeamCreate",
     "TeamDelete",
     "ScheduleCreate",
@@ -57,7 +102,6 @@ describe("inline tool group wording", () => {
     "read_file",
     "job_read",
     "GREP",
-    "Bash",
   ])("keeps non-file operations neutral: %s", (toolName) => {
     expect(toolGroupCompletedLabel([{ call: { ...part, toolName, status: "completed" } }])).toBe(
       "操作已结束"
@@ -73,7 +117,7 @@ describe("inline tool group wording", () => {
     }
   )
 
-  it.each(["Shell", "BackgroundShellCreate", "TerminalOpen"])(
+  it.each(["Shell", "Bash", "BackgroundShellCreate"])(
     "still summarizes known command operations: %s",
     (toolName) => {
       expect(toolGroupCompletedLabel([{ call: { ...part, toolName, status: "completed" } }])).toBe(
@@ -217,7 +261,8 @@ describe("built-in tool Chinese names", () => {
     ["Edit", "编辑文件"],
     ["ApplyPatch", "应用补丁"],
     ["Shell", "运行命令"],
-    ["TerminalOpen", "运行命令"],
+    ["Bash", "运行命令"],
+    ["TerminalOpen", "打开终端"],
     ["WebSearch", "搜索内容"],
     ["WebFetch", "请求网络"],
     ["Browser", "浏览网页"],

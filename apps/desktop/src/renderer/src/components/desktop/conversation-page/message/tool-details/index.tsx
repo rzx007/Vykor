@@ -37,7 +37,7 @@ export function ToolDetails({
         </p>
       ) : null}
       {imagePath && toolCallStatus(fullCall, fullResult) === "completed" ? null : call.toolName ===
-        "Shell" ? (
+          "Shell" || call.toolName === "Bash" ? (
         <ShellToolDetails
           input={input}
           output={output}

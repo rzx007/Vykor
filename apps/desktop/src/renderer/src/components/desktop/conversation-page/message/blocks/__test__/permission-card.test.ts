@@ -37,6 +37,7 @@ function summaryText(container: HTMLElement): string {
 describe("PermissionCard", () => {
   it.each([
     ["Shell", "运行命令"],
+    ["Bash", "运行命令"],
     ["Write", "写入文件"],
     ["Edit", "修改文件"],
     ["ApplyPatch", "应用文件补丁"],
@@ -52,6 +53,8 @@ describe("PermissionCard", () => {
 
   it.each([
     "shell",
+    "bash",
+    "BASH",
     "write",
     "edit",
     "read",

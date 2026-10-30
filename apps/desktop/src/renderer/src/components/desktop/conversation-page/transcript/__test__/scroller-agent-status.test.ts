@@ -54,7 +54,7 @@ describe("resolveScrollerAgentStatus", () => {
           }),
         ],
       })
-    ).toEqual({ kind: "tool", title: "Bash · pnpm test" })
+    ).toEqual({ kind: "tool", title: "运行命令 · pnpm test" })
   })
 
   it("falls back to a running sub-agent, then a generic processing label", () => {

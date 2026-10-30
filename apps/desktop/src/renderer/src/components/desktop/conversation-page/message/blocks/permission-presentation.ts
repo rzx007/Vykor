@@ -2,6 +2,7 @@ import type { DesktopPermissionRequest } from "@shared/session-types"
 
 const operationLabels: Record<string, string> = {
   Shell: "运行命令",
+  Bash: "运行命令",
   Write: "写入文件",
   Edit: "修改文件",
   ApplyPatch: "应用文件补丁",

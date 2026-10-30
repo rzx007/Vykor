@@ -118,13 +118,41 @@ describe("tool details display names", () => {
     act(() => button!.click())
   }
 
+  it.each([
+    [{}, "打开终端", "操作已结束"],
+    [{ command: "echo ok" }, "运行命令", "运行了命令"],
+  ])(
+    "keeps TerminalOpen wording consistent in rows and completed groups: %j",
+    (input, label, completed) => {
+      const call = part("TerminalOpen", input, { output: "TERMINAL_RESULT" })
+      render([call], false, vi.fn(), false)
+      expect(container.textContent).toContain(label)
+      openDetails()
+      expect(container.textContent).toContain("TERMINAL_RESULT")
+      render(
+        [
+          call,
+          { ...call, id: "second-tool", toolUseId: "second-call", seq: 2 },
+          {
+            ...part("", {}, { id: "answer", seq: 3, messageId: "m2", type: "text" }),
+            text: "Finished",
+          },
+        ],
+        false,
+        vi.fn(),
+        false
+      )
+      expect(container.textContent).toContain(completed)
+    }
+  )
+
   it.each(["exec", "command", "ex_ec", "shell", "bASh", "S_h_e_l_l", "mcp__shell__exec"])(
     "keeps a third-party name in the expanded detail heading: %s",
     (toolName) => {
       render([
         part(
           toolName,
-          { query: "needle" },
+          { command: "echo third-party", query: "needle" },
           {
             metadata: {
               shellDisplayName: "PowerShell from unrelated metadata",
@@ -156,6 +184,8 @@ describe("tool details display names", () => {
     openDetails()
     expect(container.textContent).toContain("PowerShell 7.6")
     expect(container.textContent).toContain("SHELL_RESULT")
+    expect(container.querySelector("[data-shell-command]")?.textContent).toBe("echo ok")
+    expect(container.querySelector("[data-shell-output]")?.textContent).toContain("SHELL_RESULT")
   })
 })
 
@@ -1229,12 +1259,12 @@ it("keeps expanded tool details across virtual row unmounts without executing th
   }
   show(true)
   expect(container.textContent).not.toContain("a long saved tool result")
-  click("Bash")
+  click("运行命令")
   expect(container.textContent).toContain("a long saved tool result")
   show(false)
   show(true)
   expect(container.textContent).toContain("a long saved tool result")
-  click("Bash")
+  click("运行命令")
   show(false)
   show(true)
   expect(container.textContent).not.toContain("a long saved tool result")

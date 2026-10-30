@@ -55,8 +55,6 @@ export type ChangedFile = {
   hasStats: boolean
 }
 
-const mutationToolPattern =
-  /(?:apply[_-]?patch|write|edit|create|delete|remove|move|rename|replace)/i
 const pathKeys = new Set(["path", "file", "filePath", "file_path", "target", "destination"])
 
 export function buildAssistantContent(parts: DesktopSessionPart[]): AssistantContentUnit[] {
@@ -216,7 +214,8 @@ export function collectChangedFiles(parts: DesktopSessionPart[]): ChangedFile[] 
   const results = toolResultsById(parts)
   for (const part of parts) {
     if (isToolGenerationPresentation(part)) continue
-    if (part.type !== "tool" || !mutationToolPattern.test(part.toolName ?? "")) continue
+    if (part.type !== "tool" || toolPresentations.get(part.toolName ?? "")?.completed !== "edit")
+      continue
     const result = part.toolUseId ? results.get(part.toolUseId) : undefined
     const executionState = toolExecutionState(part, result)
     if (executionState === "not_started" || executionState === "unknown") continue
@@ -387,7 +386,7 @@ export function toolGroupCompletedLabel(
     commands = false,
     reads = false
   for (const tool of tools) {
-    const completed = toolPresentations.get(tool.call.toolName ?? "")?.completed
+    const completed = toolPresentation(tool.call)?.completed
     if (!completed || isToolGenerationPresentation(tool.call)) continue
     const execution = toolExecutionState(tool.call, tool.result)
     if (execution === "not_started" || execution === "unknown") continue
@@ -536,18 +535,27 @@ const toolPresentations: ReadonlyMap<string, BuiltinToolPresentation> = new Map(
   ["Edit", { label: "编辑文件", completed: "edit" }],
   ["ApplyPatch", { label: "应用补丁", completed: "edit" }],
   ["Shell", { label: "运行命令", completed: "command" }],
-  ["TerminalOpen", { label: "运行命令", completed: "command" }],
+  ["Bash", { label: "运行命令", completed: "command" }],
+  ["TerminalOpen", { label: "打开终端" }],
   ["WebSearch", { label: "搜索内容", completed: "read" }],
   ["Browser", { label: "浏览网页" }],
   ["BrowserDeveloper", { label: "检查网页", completed: "read" }],
   ["WebFetch", { label: "请求网络", completed: "read" }],
 ])
 
+function toolPresentation(part: DesktopSessionPart): BuiltinToolPresentation | undefined {
+  if (part.toolName === "TerminalOpen") {
+    const command = unwrapToolInput(part.input)?.command
+    if (typeof command === "string" && command.trim()) return toolPresentations.get("Shell")
+  }
+  return toolPresentations.get(part.toolName ?? "")
+}
+
 export function summarizeToolCall(part: DesktopSessionPart): { name: string; detail?: string } {
   const rawName = part.toolName || "tool"
   const preparing = isToolGenerationPresentation(part)
   if (rawName === "ImageToText" && !preparing) return summarizeLocalOcr(part)
-  const name = toolPresentations.get(rawName)?.label ?? humanizeToolName(rawName)
+  const name = toolPresentation(part)?.label ?? humanizeToolName(rawName)
   if (preparing) return { name }
   return {
     name,
@@ -628,10 +636,9 @@ function collectPaths(value: unknown): string[] {
   return paths
 }
 
-function summarizeToolInput(
-  input: Record<string, unknown> | undefined,
-  includeEditCount = false
-): string | undefined {
+function unwrapToolInput(
+  input: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
   if (!input) return undefined
   // Only unwrap the provider envelope, keeping mixed/business fields intact.
   const seen = new Set<Record<string, unknown>>()
@@ -641,6 +648,15 @@ function summarizeToolInput(
     if (!nested) break
     input = nested
   }
+  return input
+}
+
+function summarizeToolInput(
+  rawInput: Record<string, unknown> | undefined,
+  includeEditCount = false
+): string | undefined {
+  const input = unwrapToolInput(rawInput)
+  if (!input) return undefined
   for (const key of [
     "path",
     "file_path",
