@@ -28,7 +28,7 @@ export {
 
 type SessionSlashClient = Pick<
   VykorClient,
-  "protocol" | "system" | "providers" | "auth" | "projects" | "plugins" | "development" | "sessions" | "jobs"
+  "protocol" | "runtime" | "system" | "providers" | "auth" | "projects" | "plugins" | "development" | "sessions" | "jobs"
 >;
 
 export type SessionSlashCtx = {

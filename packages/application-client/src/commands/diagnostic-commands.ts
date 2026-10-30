@@ -114,7 +114,7 @@ export async function handleDiagnosticCommand(
     client.system.getSettings().catch(() => ({}) as Record<string, unknown>),
     client.auth.getStatus().catch(() => null),
     client.system.listMemory({ cwd }).catch(() => ({ directory: "(unavailable)", entries: [] as Array<{ id: string }> })),
-    sessionId ? client.system.getSessionMcp(sessionId).catch(() => []) : Promise.resolve([]),
+    sessionId ? client.runtime.getSessionMcp(sessionId).catch(() => []) : Promise.resolve([]),
     sessionId
       ? client.jobs.list({ sessionId, includeFinished: true, limit: 100 })
         .then((listed) => ({ jobs: listed.jobs, errors: listed.errors }))

@@ -21,3 +21,5 @@
 持久状态归 daemon；客户端保存同步视图、连接及取消信号，界面保存草稿和选择。产品命令、业务资源及业务类型位于 [私有应用客户端](../../application-client/README.md)，不进入公开根导出。
 
 新增实现放对应分类，跨分类测试放本层 [`__test__/`](./__test__)，单分类测试放该分类的 `__test__/`。
+
+公开边界测试对照 [API 清单](../../../scripts/client-public-api-contract.json) 检查根导出、资源入口及每个资源的公开成员。资源增加方法或公开属性必须显式更新清单；TypeScript 的 private、protected 和 `#private` 内部成员不属于公开清单。

@@ -8,7 +8,7 @@ import type {
   SessionResource,
   SystemResource,
 } from "../resources/index.js";
-import type { ProtocolClient } from "@rzx/client";
+import type { ProtocolClient, RuntimeResource } from "@rzx/client";
 import type { CommandCatalogEntry, VykorClientState } from "../types/index.js";
 import { handleDiagnosticCommand } from "./diagnostic-commands.js";
 import { handleJobCommand } from "./job-commands.js";
@@ -32,9 +32,10 @@ export type RuntimeDiagnostics = {
 
 export interface SessionCommandClient {
   protocol: Pick<ProtocolClient, "health">;
+  runtime: Pick<RuntimeResource, "getSessionMcp" | "listAgentPersonas">;
   system: Pick<
     SystemResource,
-    | "getSettings" | "patchSettings" | "getSessionMcp"
+    | "getSettings" | "patchSettings"
     | "listMemory" | "getMemory" | "addMemory" | "removeMemory"
     | "listFacts" | "replaceFact"
     | "getContextPreview" | "getContextStatus" | "getContextUsage"
@@ -46,7 +47,7 @@ export interface SessionCommandClient {
   plugins: Pick<PluginResource, "list" | "enable" | "disable" | "reload">;
   development: Pick<
     DevelopmentResource,
-    "listAgentPersonas" | "listHooks" | "getGitDiff" | "getGitBranch" | "getGitStatus" | "gitCommit"
+    "listHooks" | "getGitDiff" | "getGitBranch" | "getGitStatus" | "gitCommit"
   >;
   sessions: Pick<
     SessionResource,
@@ -285,7 +286,7 @@ export async function dispatchSessionCommand(
   if (slash?.name === "/mcp") {
     if (!sessionId) return "handled";
     await readPresentation(`mcp:${sessionId}`, "MCP", async () => {
-      const servers = await client.system.getSessionMcp(sessionId);
+      const servers = await client.runtime.getSessionMcp(sessionId);
       if (servers.length === 0) return "No MCP servers connected.";
       return [
         `MCP Servers (${servers.length}):`,
@@ -481,7 +482,7 @@ export async function dispatchSessionCommand(
   }
 
   if (slash?.name === "/subagents") {
-    const agents = await client.development.listAgentPersonas();
+    const agents = await client.runtime.listAgentPersonas();
     emit(
       [
         `Available subagent personas (${agents.length}):`,

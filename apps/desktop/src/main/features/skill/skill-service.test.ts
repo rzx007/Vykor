@@ -1,15 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const daemon = vi.hoisted(() => ({
-  development: {
+  runtime: {
     listSkills: vi.fn(),
+  },
+  development: {
     removeSkill: vi.fn(),
   },
 }))
 
 const refreshedDaemon = vi.hoisted(() => ({
-  development: {
+  runtime: {
     listSkills: vi.fn(),
+  },
+  development: {
     removeSkill: vi.fn(),
   },
 }))
@@ -116,14 +120,14 @@ const mixedSnapshot = {
 describe("DesktopSkillService", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    daemon.development.listSkills.mockResolvedValue(snapshot)
+    daemon.runtime.listSkills.mockResolvedValue(snapshot)
     daemon.development.removeSkill.mockResolvedValue(snapshot)
-    refreshedDaemon.development.listSkills.mockResolvedValue(snapshot)
+    refreshedDaemon.runtime.listSkills.mockResolvedValue(snapshot)
     refreshedDaemon.development.removeSkill.mockResolvedValue(snapshot)
   })
 
   it("delegates snapshots to the daemon client and hides outside-project workspaces", async () => {
-    daemon.development.listSkills.mockResolvedValueOnce(mixedSnapshot)
+    daemon.runtime.listSkills.mockResolvedValueOnce(mixedSnapshot)
     const service = new DesktopSkillService({ documentsPath: "D:/Documents" })
 
     await expect(service.snapshot({ projectPath: "D:/code/Vykor" })).resolves.toEqual({
@@ -141,13 +145,13 @@ describe("DesktopSkillService", () => {
         mixedSnapshot.skills[5],
       ],
     })
-    expect(daemon.development.listSkills).toHaveBeenCalledOnce()
-    expect(daemon.development.listSkills).toHaveBeenCalledWith()
+    expect(daemon.runtime.listSkills).toHaveBeenCalledOnce()
+    expect(daemon.runtime.listSkills).toHaveBeenCalledWith()
     expect(sessionService.refreshDaemonClient).not.toHaveBeenCalled()
   })
 
   it("does not require the current page project to be in the skill catalog", async () => {
-    daemon.development.listSkills.mockResolvedValueOnce(mixedSnapshot)
+    daemon.runtime.listSkills.mockResolvedValueOnce(mixedSnapshot)
     const service = new DesktopSkillService({ documentsPath: "D:/Documents" })
 
     await expect(service.snapshot({ projectPath: "D:/code/hidden" })).resolves.toMatchObject({
@@ -170,21 +174,21 @@ describe("DesktopSkillService", () => {
     expect(daemon.development.removeSkill).toHaveBeenCalledWith("skill_personal", {
       expectedContent: "current skill contents",
     })
-    expect(daemon.development.listSkills).not.toHaveBeenCalled()
+    expect(daemon.runtime.listSkills).not.toHaveBeenCalled()
   })
 
   it.each(["Failed to fetch", "connect ECONNREFUSED", "read ECONNRESET"])(
     "refreshes the daemon client and retries once after %s",
     async (message) => {
-      daemon.development.listSkills.mockRejectedValueOnce(new Error(message))
+      daemon.runtime.listSkills.mockRejectedValueOnce(new Error(message))
       const service = new DesktopSkillService({ documentsPath: "D:/Documents" })
 
       await expect(service.snapshot({ projectPath: "D:/code/Vykor" })).resolves.toEqual(
         snapshot
       )
-      expect(daemon.development.listSkills).toHaveBeenCalledOnce()
+      expect(daemon.runtime.listSkills).toHaveBeenCalledOnce()
       expect(sessionService.refreshDaemonClient).toHaveBeenCalledOnce()
-      expect(refreshedDaemon.development.listSkills).toHaveBeenCalledOnce()
+      expect(refreshedDaemon.runtime.listSkills).toHaveBeenCalledOnce()
     }
   )
 

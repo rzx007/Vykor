@@ -15,7 +15,7 @@ import type {
 import { desktopSessionService } from "../session/session-service"
 import { resolveDesktopRuntimeSnapshot } from "../session/runtime-selection"
 
-type ProviderClient = Pick<VykorClient, "providers" | "auth" | "system">
+type ProviderClient = Pick<VykorClient, "runtime" | "providers" | "auth" | "system">
 
 export class DesktopProviderService {
   snapshot(options: { refresh?: boolean } = {}): Promise<DesktopProviderSnapshot> {
@@ -24,7 +24,7 @@ export class DesktopProviderService {
         client.providers.listProviders(),
         client.auth.getStatus(),
         client.system.getSettings(),
-        (options.refresh ? client.providers.listModels({ refresh: true }) : client.providers.listModels())
+        (options.refresh ? client.providers.refreshModels() : client.runtime.listModels())
           .catch((error) => { if (options.refresh) throw error; return [] }),
       ])
       return buildDesktopProviderSnapshot({ providers, auth, settings, models })
@@ -340,7 +340,7 @@ async function prepareDefaultRemoval(
   input: { replacement?: { provider: string; model: string }; disableDefault?: boolean }
 ) {
   if (settings.modelDisabled === true) return false
-  const modelProviders = await client.providers.listModels()
+  const modelProviders = await client.runtime.listModels()
   if (
     settings.provider !== provider &&
     resolveDesktopRuntimeSnapshot(

@@ -54,10 +54,10 @@ describe("provider configuration during active runs", () => {
       baseUrl: "http://models.test",
       fetch: async (url, init) => routes.request(new Request(url, init)),
     });
-    await client.providers.listModels({ refresh: true });
+    await client.providers.refreshModels();
     expect(list).toHaveBeenLastCalledWith({ refresh: true });
     expect(control.invalidateRuntimes).toHaveBeenCalledOnce();
-    await client.providers.listModels();
+    await client.runtime.listModels();
     expect(list).toHaveBeenLastCalledWith();
     expect(control.invalidateRuntimes).toHaveBeenCalledOnce();
   });

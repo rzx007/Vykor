@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const daemon = vi.hoisted(() => ({
+  runtime: {
+    listModels: vi.fn(),
+  },
   providers: {
     listProviders: vi.fn(),
-    listModels: vi.fn(),
+    refreshModels: vi.fn(),
     connectCatalogProvider: vi.fn(),
     updateCatalogProviderHeaders: vi.fn(),
     disconnectCatalogProvider: vi.fn(),
@@ -364,7 +367,8 @@ describe("DesktopProviderService catalog headers", () => {
     daemon.providers.listProviders.mockResolvedValue([])
     daemon.auth.getStatus.mockResolvedValue(authMissing)
     daemon.system.getSettings.mockResolvedValue({})
-    daemon.providers.listModels.mockResolvedValue([])
+    daemon.runtime.listModels.mockResolvedValue([])
+    daemon.providers.refreshModels.mockResolvedValue([])
     daemon.providers.connectCatalogProvider.mockResolvedValue({
       name: "remote",
       displayName: "Remote",
@@ -389,11 +393,11 @@ describe("DesktopProviderService catalog headers", () => {
 
   it("requests fresh models for an explicit provider snapshot refresh", async () => {
     await service.snapshot({ refresh: true })
-    expect(daemon.providers.listModels).toHaveBeenCalledWith({ refresh: true })
+    expect(daemon.providers.refreshModels).toHaveBeenCalledWith()
   })
 
   it("surfaces a failed explicit refresh instead of replacing the models with an empty list", async () => {
-    daemon.providers.listModels.mockRejectedValueOnce(new Error("model refresh failed"))
+    daemon.providers.refreshModels.mockRejectedValueOnce(new Error("model refresh failed"))
     await expect(service.snapshot({ refresh: true })).rejects.toThrow("model refresh failed")
   })
 

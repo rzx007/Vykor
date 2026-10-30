@@ -13,6 +13,8 @@
 
 新业务接口放在对应 resources 分类；命令放 commands；会话生命周期、事件同步、连接逻辑放公开 SDK。
 
+模型、技能、Agent persona 和会话 MCP 状态的只读查询统一使用 `client.runtime`。产品需要强制刷新模型目录时调用 `client.providers.refreshModels()`；技能删除、凭据和设置修改仍由相应产品资源负责。
+
 ## 检查
 
 运行 `pnpm --filter @vykor/application-client check-types`、`pnpm --filter @vykor/application-client test`。本包直接导出 TypeScript 源码，`build` 验证源码类型，产品打包器负责最终产物。

@@ -8,7 +8,7 @@ import { app } from "electron"
 import { isOutsideProjectWorkspacePath } from "../session/outside-project-workspace"
 import { desktopSessionService } from "../session/session-service"
 
-type SkillClient = Pick<VykorClient, "development">
+type SkillClient = Pick<VykorClient, "runtime" | "development">
 
 export interface DesktopSkillServiceOptions {
   documentsPath?: string
@@ -20,7 +20,7 @@ export class DesktopSkillService {
   async snapshot(input: DesktopSkillSnapshotInput): Promise<DesktopSkillSnapshot> {
     void input
     return filterOutsideProjectWorkspaces(
-      await withDaemonRetry((client) => client.development.listSkills()),
+      await withDaemonRetry((client) => client.runtime.listSkills()),
       this.documentsPath()
     )
   }

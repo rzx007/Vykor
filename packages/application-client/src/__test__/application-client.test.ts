@@ -5,6 +5,34 @@ import { VykorClient } from "../index.js";
 
 // Removing the private facade would stop product business requests at this boundary.
 describe("private application client", () => {
+  it("keeps read-only capability queries on runtime and product administration on private resources", () => {
+    const client = new VykorClient({ baseUrl: "http://daemon.test" });
+    expect("listSkills" in client.development).toBe(false);
+    expect("listAgentPersonas" in client.development).toBe(false);
+    expect("getSessionMcp" in client.system).toBe(false);
+    expect("listModels" in client.providers).toBe(false);
+    expect(client.development.removeSkill).toBeTypeOf("function");
+    expect(client.providers.refreshModels).toBeTypeOf("function");
+  });
+
+  it("uses the shared runtime for model reads while preserving explicit product refresh", async () => {
+    const calls: string[] = [];
+    const controller = new AbortController();
+    const providers = [{ name: "test", displayName: "Test", models: [] }];
+    const client = new VykorClient({ baseUrl: "http://daemon.test", fetch: async (input, init) => {
+      const url = new URL(String(input));
+      if (url.pathname === "/capabilities") return Response.json({
+        serverVersion: "test", protocol: { version: CURRENT_PROTOCOL_VERSION }, features: {},
+      });
+      expect(init?.signal).toBe(controller.signal);
+      calls.push(url.pathname + url.search);
+      return Response.json({ providers });
+    } });
+    await expect(client.runtime.listModels({ signal: controller.signal })).resolves.toEqual(providers);
+    await expect(client.providers.refreshModels({ signal: controller.signal })).resolves.toEqual(providers);
+    expect(calls).toEqual(["/models", "/models?refresh=true"]);
+  });
+
   it("preserves application snapshot data while sharing lifecycle resources", async () => {
     const snapshot = {
       cursor: 1,

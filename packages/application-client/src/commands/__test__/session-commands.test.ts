@@ -40,10 +40,13 @@ function fakeClient(overrides: Record<string, unknown> = {}): SessionCommandClie
     protocol: {
       health: method("health", vi.fn(async () => ({ ok: true, version: "1.2.3" }))),
     },
+    runtime: {
+      getSessionMcp: method("getSessionMcp", vi.fn(async () => [])),
+      listAgentPersonas: method("listAgentPersonas"),
+    },
     system: {
       getSettings: method("getSettings", vi.fn(async () => ({}))),
       patchSettings: method("patchSettings"),
-      getSessionMcp: method("getSessionMcp", vi.fn(async () => [])),
       listMemory: method("listMemory", vi.fn(async () => ({ directory: "/memory", entries: [] }))),
       getMemory: method("getMemory"),
       addMemory: method("addMemory"),
@@ -72,7 +75,6 @@ function fakeClient(overrides: Record<string, unknown> = {}): SessionCommandClie
       reload: method("reloadPlugins"),
     },
     development: {
-      listAgentPersonas: method("listAgentPersonas"),
       listHooks: method("listHooks"),
       getGitDiff: method("getGitDiff"),
       getGitBranch: method("getGitBranch"),

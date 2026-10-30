@@ -21,6 +21,8 @@ describe("Public API Contract Verification", () => {
     );
     for (const entry of entries) expect(Object.keys(entry).sort()).toEqual(["kind", "name"]);
     expect(entries.filter((entry: { kind: string }) => entry.kind === "client-resource").map((entry: { name: string }) => entry.name).sort()).toEqual(resourceNames);
+    expect(contract.resourceMethods).toBeDefined();
+    expect(Object.keys(contract.resourceMethods).sort()).toEqual(resourceNames);
   });
 
   it("matches all runtime exports against contract json", () => {
@@ -37,7 +39,7 @@ describe("Public API Contract Verification", () => {
     expect(Object.getOwnPropertyNames(clientModule.VykorClient.prototype)).toEqual(["constructor"]);
   });
 
-  it("uses TypeChecker to verify module exports match contract", () => {
+  it("uses TypeChecker to verify exports and public Resource methods match contract", () => {
     const clientTsconfig = resolve(repoRoot, "packages/client/tsconfig.json");
     const configFile = ts.readConfigFile(clientTsconfig, ts.sys.readFile);
     const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, dirname(clientTsconfig));
@@ -58,5 +60,19 @@ describe("Public API Contract Verification", () => {
     const expectedTypeNames = entries.filter((entry: { kind: string }) => entry.kind === "type-export").map((entry: { name: string }) => entry.name).sort();
     expect([...actualRuntimeNames].sort()).toEqual(expectedRuntimeNames);
     expect([...actualTypeNames].sort()).toEqual(expectedTypeNames);
+
+    const clientExport = checker.getExportsOfModule(moduleSymbol!).find(symbol => symbol.name === "VykorClient")!;
+    const clientType = checker.getDeclaredTypeOfSymbol(checker.getAliasedSymbol(clientExport));
+    for (const name of resourceNames) {
+      const resource = checker.getPropertyOfType(clientType, name)!;
+      const resourceType = checker.getTypeOfSymbolAtLocation(resource, resource.valueDeclaration!);
+      const methods = checker.getPropertiesOfType(resourceType).filter(member => {
+        const declaration = member.valueDeclaration!;
+        const memberName = (declaration as ts.NamedDeclaration).name;
+        return !(ts.getCombinedModifierFlags(declaration) & (ts.ModifierFlags.Private | ts.ModifierFlags.Protected))
+          && (!memberName || !ts.isPrivateIdentifier(memberName));
+      }).map(member => member.name).sort();
+      expect(methods, `public methods on client.${name}`).toEqual(contract.resourceMethods[name]);
+    }
   });
 });

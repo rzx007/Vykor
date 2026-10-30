@@ -40,7 +40,7 @@ export async function resolveProviderForModel(
   requestedProvider: unknown
 ): Promise<string | undefined> {
   const provider = optionalProvider(requestedProvider)
-  const models = (await client.providers.listModels()).flatMap((item) => item.models)
+  const models = (await client.runtime.listModels()).flatMap((item) => item.models)
   if (provider) {
     if (!models.some((item) => item.id === model && item.providerName === provider)) {
       throw new Error(`模型 ${model} 不属于 provider ${provider}。`)

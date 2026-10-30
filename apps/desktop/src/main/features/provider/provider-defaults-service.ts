@@ -9,7 +9,7 @@ export class DesktopProviderDefaultsService {
 
   async snapshot(): Promise<ProviderDefaultsSnapshot> {
     const client = await desktopSessionService.daemonClient()
-    const [settings, providers] = await Promise.all([client.system.getSettings(), client.providers.listModels()])
+    const [settings, providers] = await Promise.all([client.system.getSettings(), client.runtime.listModels()])
     const models = providers.flatMap((provider) => provider.models)
     const runtime = resolveDesktopRuntimeSnapshot(models, settings)
     const verified: ProviderDefaultsSnapshot["verified"] = {}

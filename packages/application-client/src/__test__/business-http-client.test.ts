@@ -84,7 +84,7 @@ it("lists and removes skills through daemon resource routes", async () => {
       }) as typeof fetch,
     });
 
-    await expect(client.development.listSkills()).resolves.toEqual(snapshot);
+    await expect(client.runtime.listSkills()).resolves.toEqual(snapshot);
     await expect(
       client.development.removeSkill("skill/a b", { expectedContent: "current" }),
     ).resolves.toEqual(snapshot);

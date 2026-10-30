@@ -186,7 +186,7 @@ export class DesktopSessionService {
     const client = await this.getClient()
     const [settings, providers, allSessions, projectRecords, capabilities] = await Promise.all([
       client.system.getSettings(),
-      client.providers.listModels(),
+      client.runtime.listModels(),
       client.sessions.list({ includeArchived: true, limit: 400 }),
       client.projects.list(),
       client.protocol.capabilities(),
@@ -475,7 +475,7 @@ export class DesktopSessionService {
     if (input.effort !== undefined && typeof input.effort !== "string")
       throw new Error("推理强度必须是文本。")
     if (input.effort) {
-      const known = (await client.providers.listModels())
+      const known = (await client.runtime.listModels())
         .flatMap((item) => item.models)
         .find((item) => item.id === model && (!provider || item.providerName === provider))
       if (!known?.reasoningEfforts?.includes(input.effort))

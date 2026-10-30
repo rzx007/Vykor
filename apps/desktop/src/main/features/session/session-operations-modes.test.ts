@@ -10,7 +10,7 @@ it("writes approval and work modes independently when creating a session", async
   }))
   const client = {
     system: { getSettings: async () => ({}) },
-    providers: { listModels: async () => [{ models: [{ id: "model", providerName: "local" }] }] },
+    runtime: { listModels: async () => [{ models: [{ id: "model", providerName: "local" }] }] },
     sessions: { create },
   }
   await new SessionOperations().createSession(client as never, {

@@ -7,7 +7,6 @@ import type { HttpTransport } from "@rzx/client";
 import type {
   CommandCatalogEntry,
   ListCommandsOptions,
-  McpServerStatus,
   MemoryEntryRecord,
   MemoryListResponse,
   OutputStyleInfo,
@@ -90,18 +89,6 @@ export class SystemResource {
       },
     );
     return response.settings;
-  }
-
-  /** `GET /sessions/:id/mcp` */
-  async getSessionMcp(
-    sessionId: string,
-    options: { signal?: AbortSignal } = {},
-  ): Promise<McpServerStatus[]> {
-    const response = await this.transport.request<{ servers: McpServerStatus[] }>(
-      `/sessions/${encodeURIComponent(sessionId)}/mcp`,
-      { signal: options.signal },
-    );
-    return response.servers;
   }
 
   /** `GET /memory?cwd=` */

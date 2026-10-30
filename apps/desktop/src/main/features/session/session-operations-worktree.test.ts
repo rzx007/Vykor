@@ -11,7 +11,7 @@ const worktreePath = resolve("test-tasks", "tree")
 const base = { projectId: "project", cwd: ownerRoot, model: "model", provider: "provider", taskLocation: "worktree" as const }
 function client() {
   return { system: { getSettings: vi.fn(async () => ({})) },
-    providers: { listModels: vi.fn(async () => [{ name: "provider", models: [{ id: "model", providerName: "provider" }] }]) },
+    runtime: { listModels: vi.fn(async () => [{ name: "provider", models: [{ id: "model", providerName: "provider" }] }]) },
     sessions: { create: vi.fn(async (input: Record<string, unknown>) => ({ ...input, id: "session", title: "", status: "idle", createdAt: 1, updatedAt: 1 })), archive: vi.fn(async () => ({})) } }
 }
 beforeEach(() => { vi.resetAllMocks(); git.createTaskWorktree.mockResolvedValue({ id: "tree", path: worktreePath, branch: "task/tree" }) })

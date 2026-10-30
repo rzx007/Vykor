@@ -66,7 +66,7 @@ import { getGitPreferences } from "../settings/git-settings-storage"
 
 export type SessionOperationsClient = Pick<
   VykorClient,
-  "projects" | "development" | "system" | "sessions" | "permissions" | "providers"
+  "projects" | "development" | "system" | "sessions" | "permissions" | "runtime"
 >
 
 export { toDesktopProject } from "./project-operations-support"

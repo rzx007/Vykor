@@ -351,7 +351,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
   const loadModels = useCallback(async (): Promise<ModelProviderInfo[]> => {
     const client = clientRef.current;
     if (!client) return [];
-    return await client.providers.listModels();
+    return await client.runtime.listModels();
   }, []);
 
   const refreshSettings = useCallback(async (): Promise<void> => {
@@ -603,7 +603,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
     mcpAbortRef.current = controller;
     const isCurrent = () => activeSessionIdRef.current === sessionId && auxiliaryGenerationRef.current === generation;
 
-    void client.system.getSessionMcp(sessionId, { signal: controller.signal })
+    void client.runtime.getSessionMcp(sessionId, { signal: controller.signal })
       .then((servers) => {
         if (!isCurrent()) return;
         setMcpServers(Array.isArray(servers) ? servers.map(mcpServerSnapshot) : []);

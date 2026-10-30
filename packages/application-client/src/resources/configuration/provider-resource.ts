@@ -122,13 +122,13 @@ export class ProviderResource {
     );
   }
 
-  /** `GET /models` */
-  async listModels(
-    options: { signal?: AbortSignal; refresh?: boolean } = {},
+  /** Refresh the provider catalog; ordinary model reads belong to runtime.listModels. */
+  async refreshModels(
+    options: { signal?: AbortSignal } = {},
   ): Promise<ModelProviderInfo[]> {
     const response = await this.transport.request<{ providers: ModelProviderInfo[] }>(
       "/models",
-      { signal: options.signal, ...(options.refresh ? { query: { refresh: true } } : {}) },
+      { signal: options.signal, query: { refresh: true } },
     );
     return response.providers;
   }

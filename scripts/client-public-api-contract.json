@@ -1,6 +1,21 @@
 {
   "$schema": "./client-public-api-contract.schema.json",
   "version": 1,
+  "resourceMethods": {
+    "attachments": ["delete", "download", "get", "upload"],
+    "events": ["list", "stream"],
+    "files": ["find", "list", "readText", "search", "stat"],
+    "jobs": ["cancel", "createBackgroundShell", "list", "read", "send", "wait"],
+    "permissions": ["list", "listApprovals", "reply", "revokeApproval"],
+    "protocol": ["capabilities", "health"],
+    "runtime": ["getSessionMcp", "listAgentPersonas", "listModels", "listSkills"],
+    "sessions": [
+      "admitPrompt", "applyGoalAction", "archive", "cancelQueuedPrompt", "compact", "create", "createGoal",
+      "delete", "editLatestPrompt", "export", "fork", "get", "getGoal", "getMessagePart", "getState", "getUsage",
+      "interrupt", "list", "listMessageParts", "listMessages", "promoteQueuedPrompt", "remember",
+      "resumeInterruptedRun", "rewind", "search", "update", "updateGoal"
+    ]
+  },
   "entries": [
     {
       "name": "attachments",

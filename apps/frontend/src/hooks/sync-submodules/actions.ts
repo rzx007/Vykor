@@ -45,7 +45,7 @@ export const JOBS_AUXILIARY_SLASH_COMMANDS = new Set([
 
 type ActionClient = Pick<
   VykorClient,
-  | "protocol" | "system" | "providers" | "auth" | "projects"
+  | "protocol" | "runtime" | "system" | "providers" | "auth" | "projects"
   | "plugins" | "development" | "sessions" | "jobs" | "permissions"
 >;
 

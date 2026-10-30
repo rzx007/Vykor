@@ -33,7 +33,7 @@ const models: DesktopModel[] = [
 
 it("does not use settings provider to disambiguate a session model", async () => {
   const client = {
-    providers: { listModels: async () => [
+    runtime: { listModels: async () => [
       { name: "one", models: [{ id: "shared", providerName: "one" }] },
       { name: "two", models: [{ id: "shared", providerName: "two" }] },
     ] },

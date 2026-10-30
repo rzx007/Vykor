@@ -1,25 +1,15 @@
 /**
- * DevelopmentResource: 技能、Agent Persona、Hook 与 Git 源码控制资源。
+ * DevelopmentResource: 技能删除、Hook 与 Git 源码控制资源。
  */
 
 import type { HttpTransport } from "@rzx/client";
 import type {
-  AgentPersonaInfo,
   HookInfo,
   SkillSnapshot,
 } from "../../types/index.js";
 
 export class DevelopmentResource {
   constructor(private readonly transport: HttpTransport) {}
-
-  /** `GET /skills` */
-  async listSkills(
-    options: { signal?: AbortSignal } = {},
-  ): Promise<SkillSnapshot> {
-    return await this.transport.request<SkillSnapshot>("/skills", {
-      signal: options.signal,
-    });
-  }
 
   /** `DELETE /skills/:id` */
   async removeSkill(
@@ -35,19 +25,6 @@ export class DevelopmentResource {
         signal: options.signal,
       },
     );
-  }
-
-  /** `GET /agent-personas` */
-  async listAgentPersonas(
-    options: { signal?: AbortSignal } = {},
-  ): Promise<AgentPersonaInfo[]> {
-    const response = await this.transport.request<{ agents: AgentPersonaInfo[] }>(
-      "/agent-personas",
-      {
-        signal: options.signal,
-      },
-    );
-    return response.agents;
   }
 
   /** `GET /hooks?cwd=&sessionId=` */
