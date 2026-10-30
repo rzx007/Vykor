@@ -3558,25 +3558,25 @@
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 180,
+      "line": 178,
       "text": "  readonly pluginUiHistory?: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 232,
+      "line": 230,
       "text": "  readonly pluginUiHistory: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 401,
+      "line": 398,
       "text": "      this.pluginUiHistory = new PluginUiHistoryService({ store });",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 1033,
+      "line": 1030,
       "text": "        recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
@@ -3882,13 +3882,13 @@
     },
     {
       "path": "packages/server/src/application/session/interactions/session-interaction-service.ts",
-      "line": 472,
+      "line": 462,
       "text": "      if (Object.hasOwn(sourceRun.metadata, \"uiAction\") || Object.hasOwn(sourceRun.metadata, \"pluginAppAction\")) {",
       "reason": "Explicit generic-resume refusal for historical actions; no replay."
     },
     {
       "path": "packages/server/src/application/session/interactions/session-interaction-service.ts",
-      "line": 476,
+      "line": 466,
       "text": "          \"plugin_ui_action_not_resumable\",",
       "reason": "Explicit generic-resume refusal for historical actions; no replay."
     },

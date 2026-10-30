@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { sessionSettingsRoot } from "../../../runtime/session-settings-root.js";
 
@@ -14,7 +14,6 @@ import type {
   DetachedProcessExecution,
   DetachedProcessSupervisor,
   ShellAdmissionPorts,
-  StartShellExecutionOptions,
 } from "@vykor/execution-node";
 
 import type { SessionExecutionProjector } from "../transcript/session-execution-projector.js";
@@ -382,10 +381,6 @@ function stableJson(value: unknown): string {
     .sort()
     .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`)
     .join(",")}}`;
-}
-
-function processTaskStatus(status: DetachedProcessExecution["status"]): SessionTaskStatus {
-  return status === "stopping" ? "running" : status;
 }
 
 function runtimeExecutionId(task: { id: string; metadata: Record<string, unknown> }): string {

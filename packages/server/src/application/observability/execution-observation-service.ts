@@ -4,6 +4,18 @@ import type { ExecutionKind, ExecutionKindSummary, ExecutionObservation, Executi
 import type { SessionObservationReadResult } from "./session-execution-observation-reader.js";
 import type { WorkflowObservationReadResult } from "./workflow-execution-observation-reader.js";
 
+const OUTCOME_COUNTERS = {
+  pending: undefined,
+  running: undefined,
+  completed: "completed",
+  failed: "failed",
+  timed_out: "timedOut",
+  cancelled: "cancelled",
+  blocked: "blocked",
+  skipped: "skipped",
+  unknown: "unknown",
+} as const;
+
 export interface ExecutionObservationServiceInput {
   readSessions(): SessionObservationReadResult;
   readWorkflows(backing: ReadonlyMap<string, string[]>): WorkflowObservationReadResult;
@@ -131,31 +143,8 @@ function summarize(records: ExecutionObservation[]): ExecutionKindSummary {
   let minMs: number | undefined;
   let maxMs: number | undefined;
   for (const record of records) {
-    switch (record.outcome) {
-      case "completed":
-        summary.completed += 1;
-        break;
-      case "failed":
-        summary.failed += 1;
-        break;
-      case "timed_out":
-        summary.timedOut += 1;
-        break;
-      case "cancelled":
-        summary.cancelled += 1;
-        break;
-      case "blocked":
-        summary.blocked += 1;
-        break;
-      case "skipped":
-        summary.skipped += 1;
-        break;
-      case "unknown":
-        summary.unknown += 1;
-        break;
-      default:
-        break;
-    }
+    const counter = OUTCOME_COUNTERS[record.outcome];
+    if (Object.hasOwn(OUTCOME_COUNTERS, record.outcome) && counter) summary[counter] += 1;
 
     if (record.durationMs !== undefined) {
       summary.duration.count += 1;

@@ -22,15 +22,7 @@ export interface OAuthOperationView {
   runtimeSync?: McpRuntimeSyncResult;
 }
 
-export interface OAuthOperationEventData {
-  loginId: string;
-  name: string;
-  state: OAuthOperationState;
-  credentialCommitted: boolean;
-  authorizationReady: boolean;
-  errorCode?: string;
-  runtimeSync?: McpRuntimeSyncResult;
-}
+export interface OAuthOperationEventData extends OAuthOperationView {}
 
 export interface OAuthOperationEvent {
   event: typeof MCP_OAUTH_LOGIN_UPDATED_EVENT | typeof MCP_OAUTH_LOGIN_COMPLETED_EVENT;
@@ -348,15 +340,7 @@ export class McpOAuthOperationService {
   }
 
   private toView(record: OperationRecord): OAuthOperationView {
-    return {
-      loginId: record.loginId,
-      name: record.name,
-      state: record.state,
-      credentialCommitted: record.credentialCommitted,
-      authorizationReady: record.authorizationUrl !== undefined,
-      ...(record.errorCode ? { errorCode: record.errorCode } : {}),
-      ...(record.runtimeSync ? { runtimeSync: record.runtimeSync } : {}),
-    };
+    return eventData(record, true);
   }
 
   private findByRequestId(requestId: string): OperationRecord | undefined {

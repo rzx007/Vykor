@@ -1,5 +1,4 @@
 import {
-  AttachmentError,
   normalizePromptAttachments,
   promptAttachmentFingerprint,
 } from "@vykor/services";
@@ -19,7 +18,7 @@ import {
 } from "../../control/daemon-operation-gate.js";
 import { isRecord, jsonEqual, withoutTraceId } from "../../support.js";
 import { SessionApplicationError } from "../session-application-error.js";
-import { validateOutputSchemaRequest, readStoredOutputSchema } from "../execution/run-admission-work.js";
+import { inputItems, validateOutputSchemaRequest, readStoredOutputSchema } from "../execution/run-admission-work.js";
 import { materializeSessionInput } from "./session-input-materializer.js";
 import { conversationContextCatalog } from "../transcript/session-conversation-context.js";
 import { capturePluginSelectionPolicy, emptyPluginScope } from "../plugins/session-plugin-selection.js";
@@ -46,15 +45,6 @@ export type {
   SessionInteractionServiceContext,
   SessionInteractionSessions,
 } from "./session-interaction-types.js";
-
-function inputItems(input: {
-  items?: readonly SessionUserInputItem[];
-  content?: string;
-}): SessionUserInputItem[] {
-  return input.items
-    ? [...input.items]
-    : [{ type: "text", text: input.content ?? "" }];
-}
 
 function withoutPluginId(
   metadata: Record<string, unknown> | undefined,

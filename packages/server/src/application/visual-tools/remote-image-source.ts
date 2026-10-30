@@ -153,7 +153,7 @@ async function get(
   });
 }
 
-function streamOf(bytes: Uint8Array): ReadableStream<Uint8Array> {
+export function streamOf(bytes: Uint8Array): ReadableStream<Uint8Array> {
   return new ReadableStream({
     start(controller) {
       controller.enqueue(bytes);

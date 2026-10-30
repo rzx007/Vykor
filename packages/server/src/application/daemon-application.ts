@@ -22,8 +22,6 @@ import { createTaskArchive } from "../jobs/job-snapshots.js";
 import type { Settings } from "@vykor/host-config";
 import type { ChannelConfigStore } from "@vykor/auth";
 import { createModelCatalogService } from "@vykor/api";
-import { fileReadTool } from "@vykor/tools";
-import { computePluginBehaviorDigest } from "@vykor/plugins";
 import type { TerminalProvider } from "@vykor/terminal";
 import { readSessionRuntimeConfig } from "./session/configuration/runtime-configuration.js";
 import type { AttachmentLimits } from "@vykor/domain-contracts/attachments";
@@ -392,7 +390,6 @@ export class DaemonApplication implements DurableAgentApplication {
         sessions: store.sessions, operationGate: this.operationGate, events: this.eventPublisher,
         assertReady: () => this.assertReady(),
       });
-      const application = this;
       const runtimeDiscovery = createSessionRuntimeDiscovery(options);
       const pluginCapabilities = new SessionPluginCapabilityService({
         store,
@@ -1197,21 +1194,6 @@ export class DaemonApplication implements DurableAgentApplication {
     if (run) this.options.store.runs.updateRun(runId, { metadata: { traceId: generated } });
     return generated;
   }
-}
-
-function isSessionInTree(
-  store: { getSession(sessionId: string): SessionRecord | undefined },
-  rootSessionId: string,
-  candidateSessionId: string,
-): boolean {
-  let current = store.getSession(candidateSessionId);
-  const visited = new Set<string>();
-  while (current && !visited.has(current.id)) {
-    if (current.id === rootSessionId) return true;
-    visited.add(current.id);
-    current = current.parentId ? store.getSession(current.parentId) : undefined;
-  }
-  return false;
 }
 
 /**

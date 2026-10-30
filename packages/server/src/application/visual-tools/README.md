@@ -17,7 +17,7 @@
 | [daemon-image-generation-tool.ts](./daemon-image-generation-tool.ts) | `DaemonImageGenerationToolOptions`、`createDaemonImageGenerationTool` |
 | [daemon-image-to-text-tool.ts](./daemon-image-to-text-tool.ts) | `createDaemonImageToTextTool` |
 | [index.ts](./index.ts) | 汇总本分类的公开接口 |
-| [remote-image-source.ts](./remote-image-source.ts) | `ImportedImageSource`、`downloadRemoteImage`、`isPublicAddress` |
+| [remote-image-source.ts](./remote-image-source.ts) | `ImportedImageSource`、`downloadRemoteImage`、`isPublicAddress`、图片字节共用的 `streamOf` |
 | [tool-abort-scope.ts](./tool-abort-scope.ts) | `createToolAbortScope` |
 
 ## 测试与维护

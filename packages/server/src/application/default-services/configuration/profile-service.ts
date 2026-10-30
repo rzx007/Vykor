@@ -25,7 +25,7 @@ export function createDefaultProfileService(): ProfileService {
   };
 }
 
-function formatPersonalPromptDiagnostics(diagnostics: PersonalPromptFileDiagnostic[]): string {
+export function formatPersonalPromptDiagnostics(diagnostics: PersonalPromptFileDiagnostic[]): string {
   const lines = ["Personal prompt files:"];
   for (const item of diagnostics) {
     const flags = [

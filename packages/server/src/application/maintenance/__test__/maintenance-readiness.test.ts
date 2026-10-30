@@ -6,6 +6,12 @@ import { SessionStore } from "@vykor/services";
 import { describe, expect, it, vi } from "vitest";
 import { DaemonApplication } from "../../daemon-application.js";
 describe("read-only application readiness", () => {
+  it.each(["readLogs", "updatePolicy"] as const)("rejects %s without persistent storage before checking readiness", async (method) => {
+    const readiness = vi.fn(() => ({ phase: "starting", accepting: false }));
+    const service = createMaintenanceApplicationService({ store: {} as any, control: {} as any, readiness });
+    await expect(service[method]()).rejects.toMatchObject({ status: 501, message: "当前后台未提供持久存储维护。" });
+    expect(readiness).not.toHaveBeenCalled();
+  });
   it("rejects direct application writes before touching the policy file", async () => {
     const service = createMaintenanceApplicationService({ store: { path: "D:/unused/policy-test/sessions.db" } as any, control: {} as any, readiness: () => ({ phase: "starting", accepting: false }) });
     await expect(service.updatePolicy({ enabled: true, days: 30, expected: { enabled: false, days: 90 } })).rejects.toMatchObject({ status: 409 });

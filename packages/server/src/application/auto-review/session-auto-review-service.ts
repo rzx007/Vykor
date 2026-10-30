@@ -147,7 +147,7 @@ export class SessionAutoReviewService {
     const startedAt = this.now();
     if (!entry) {
       if (existing && existing.status !== "captured") return existing;
-      return this.settle(input.sessionId, input.runId, {
+      return this.transition(input.sessionId, input.runId, {
         mode: existing?.mode ?? "risk_based",
         riskLevel: "unknown",
         status: "unavailable",
@@ -175,7 +175,7 @@ export class SessionAutoReviewService {
       if (onAbort) signal.removeEventListener("abort", onAbort);
       if (compared === "interrupted" || signal.aborted) {
         const userPreempted = signal.reason === "user_input";
-        return this.settle(input.sessionId, input.runId, {
+        return this.transition(input.sessionId, input.runId, {
           mode: entry.mode,
           riskLevel: "unknown",
           status: userPreempted ? "skipped" : "failed",
@@ -185,7 +185,7 @@ export class SessionAutoReviewService {
         });
       }
       if (isUnavailable(compared)) {
-        return this.settle(input.sessionId, input.runId, {
+        return this.transition(input.sessionId, input.runId, {
           mode: entry.mode,
           riskLevel: "unknown",
           status: "unavailable",
@@ -197,7 +197,7 @@ export class SessionAutoReviewService {
       return await this.runReview({ ...input, signal }, entry.mode, compared, startedAt);
     } catch (error) {
       this.log({ event: "auto_review.error", runId: input.runId, error: errorText(error) });
-      return this.settle(input.sessionId, input.runId, {
+      return this.transition(input.sessionId, input.runId, {
         mode: entry.mode,
         riskLevel: "unknown",
         status: "failed",
@@ -219,7 +219,7 @@ export class SessionAutoReviewService {
   ): Promise<AutoReviewRunMetadata> {
     const decision = classifyAutoReviewRisk(changeSet);
     if (!decision.shouldReview) {
-      return this.settle(input.sessionId, input.runId, {
+      return this.transition(input.sessionId, input.runId, {
         mode,
         riskLevel: decision.level,
         status: "skipped",
@@ -232,7 +232,7 @@ export class SessionAutoReviewService {
 
     const role = getBuiltinAgentDefinitions().find((agent) => agent.name === "review");
     if (!role || role.source !== "builtin") {
-      return this.settle(input.sessionId, input.runId, {
+      return this.transition(input.sessionId, input.runId, {
         mode,
         riskLevel: decision.level,
         status: "failed",
@@ -300,7 +300,7 @@ export class SessionAutoReviewService {
       childResult = outcome.result;
     } catch (error) {
       this.log({ event: "auto_review.child_error", runId: input.runId, error: errorText(error) });
-      return this.settle(input.sessionId, input.runId, {
+      return this.transition(input.sessionId, input.runId, {
         mode,
         riskLevel: decision.level,
         status: input.signal.reason === "user_input" ? "skipped" : "failed",
@@ -315,7 +315,7 @@ export class SessionAutoReviewService {
     const finishedAt = this.now();
     if (input.signal.aborted) {
       const userPreempted = input.signal.reason === "user_input";
-      return this.settle(input.sessionId, input.runId, {
+      return this.transition(input.sessionId, input.runId, {
         mode,
         riskLevel: decision.level,
         status: userPreempted ? "skipped" : "failed",
@@ -328,7 +328,7 @@ export class SessionAutoReviewService {
     }
     if (childResult.status !== "completed") {
       const timedOut = childResult.failureKind === "timeout";
-      return this.settle(input.sessionId, input.runId, {
+      return this.transition(input.sessionId, input.runId, {
         mode,
         riskLevel: decision.level,
         status: timedOut ? "timed_out" : "failed",
@@ -342,7 +342,7 @@ export class SessionAutoReviewService {
 
     const parsed = parseAutoReviewDelivery(childResult.delivery, allowedPaths);
     if (!parsed) {
-      return this.settle(input.sessionId, input.runId, {
+      return this.transition(input.sessionId, input.runId, {
         mode,
         riskLevel: decision.level,
         status: "failed",
@@ -358,7 +358,7 @@ export class SessionAutoReviewService {
     const status: AutoReviewStatus =
       verdict === "pass" ? "passed" : verdict === "fail" ? "findings" : "partial";
     const severity = highestSeverity(parsed.findings.map((finding) => finding.severity));
-    return this.settle(input.sessionId, input.runId, {
+    return this.transition(input.sessionId, input.runId, {
       mode,
       riskLevel: decision.level,
       status,
@@ -383,7 +383,7 @@ export class SessionAutoReviewService {
     // Only a captured baseline can be converged. Disabled runs and capture-time
     // unavailability keep their real state and precise reason.
     if (!existing || existing.status !== "captured") return existing;
-    return this.settle(input.sessionId, input.runId, {
+    return this.transition(input.sessionId, input.runId, {
       ...existing,
       status: "unavailable",
       reasons: [input.reason],
@@ -396,38 +396,20 @@ export class SessionAutoReviewService {
     let count = 0;
     for (const run of this.options.session.runs.listAllRuns()) {
       const review = readAutoReviewRunMetadata(run.metadata?.autoReview);
-      if (!review) continue;
-      if (review.status === "pending") {
-        this.settle(run.sessionId, run.id, {
-          ...review,
-          status: "failed",
-          reasons: ["daemon_restarted"],
-          finishedAt: this.now(),
-        });
-        count += 1;
-      } else if (review.status === "captured") {
-        this.settle(run.sessionId, run.id, {
-          ...review,
-          status: "unavailable",
-          reasons: ["daemon_restarted"],
-          finishedAt: this.now(),
-        });
-        count += 1;
-      }
+      if (!review || (review.status !== "pending" && review.status !== "captured")) continue;
+      this.transition(run.sessionId, run.id, {
+        ...review,
+        status: review.status === "pending" ? "failed" : "unavailable",
+        reasons: ["daemon_restarted"],
+        finishedAt: this.now(),
+      });
+      count += 1;
     }
     return count;
   }
 
   private readReview(runId: string): AutoReviewRunMetadata | undefined {
     return readAutoReviewRunMetadata(this.options.session.runs.getRun(runId)?.metadata?.autoReview);
-  }
-
-  private settle(
-    sessionId: string,
-    runId: string,
-    review: ReviewBase,
-  ): AutoReviewRunMetadata {
-    return this.transition(sessionId, runId, review);
   }
 
   private transition(

@@ -80,6 +80,11 @@ export function createMaintenanceApplicationService(
         "后台尚未就绪或已停止准入，拒绝维护写操作",
       );
   }
+  function assertAvailable(write = false) {
+    if (typeof context.store.path !== "string")
+      throw new ApplicationError(501, "当前后台未提供持久存储维护。");
+    if (write) assertReady();
+  }
   async function restartPreview() {
     const sessions = context.store.sessions.list({ includeArchived: true });
     const active = (status: string) =>
@@ -109,13 +114,11 @@ export function createMaintenanceApplicationService(
   return {
     requireWriteReady: assertReady,
     async getReadiness(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
+      assertAvailable();
       return context.readiness?.() ?? { phase: "unknown", accepting: false };
     },
     async getStorageHealth(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
+      assertAvailable();
       try {
         assertPath(context.store.path);
         const root = dirname(context.store.path);
@@ -134,14 +137,11 @@ export function createMaintenanceApplicationService(
       }
     },
     async getRestartPreview(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
+      assertAvailable();
       return await restartPreview();
     },
     async prepareRestart(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
-      assertReady();
+      assertAvailable(true);
       if (!context.closeApplication)
         throw new ApplicationError(501, "后台未提供安全重启接口");
       const lease = context.control.acquireGlobalMutation();
@@ -173,8 +173,7 @@ export function createMaintenanceApplicationService(
       }
     },
     async readPolicy(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
+      assertAvailable();
       try {
         return readPolicy();
       } catch (error) {
@@ -182,9 +181,7 @@ export function createMaintenanceApplicationService(
       }
     },
     async updatePolicy(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
-      assertReady();
+      assertAvailable(true);
       try {
         const input = request as {
           enabled: boolean;
@@ -218,9 +215,7 @@ export function createMaintenanceApplicationService(
       }
     },
     async runPolicyCleanup(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
-      assertReady();
+      assertAvailable(true);
       try {
         const policy = readPolicy();
         if (
@@ -246,8 +241,7 @@ export function createMaintenanceApplicationService(
       }
     },
     async readErrors(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
+      assertAvailable();
       const errors: Array<{
         timestamp: number;
         category: string;
@@ -289,8 +283,7 @@ export function createMaintenanceApplicationService(
       };
     },
     async inspectEnvironment(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
+      assertAvailable();
       try {
         const settings = await context.settings?.get();
         const activeDefault = settings?.runtimeEnvironmentActive as
@@ -311,9 +304,7 @@ export function createMaintenanceApplicationService(
       }
     },
     async previewCleanup(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
-      assertReady();
+      assertAvailable(true);
       try {
         if (!cleanup) throw new Error("未配置清理服务");
         return cleanup.preview(
@@ -324,9 +315,7 @@ export function createMaintenanceApplicationService(
       }
     },
     async runCleanup(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
-      assertReady();
+      assertAvailable(true);
       try {
         if (!cleanup) throw new Error("未配置清理服务");
         return await cleanup.execute(
@@ -337,19 +326,15 @@ export function createMaintenanceApplicationService(
       }
     },
     async readCleanupAudits(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
+      assertAvailable();
       return { audits: cleanup?.audits() ?? [] };
     },
     async readDiagnosticDetails(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
+      assertAvailable();
       return { expiresAt: detailedUntil > Date.now() ? detailedUntil : null };
     },
     async updateDiagnosticDetails(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
-      assertReady();
+      assertAvailable(true);
       try {
         const { minutes } = request as {
           minutes: number;
@@ -363,8 +348,7 @@ export function createMaintenanceApplicationService(
       }
     },
     async readLogs(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
+      assertAvailable();
       return {
         logs: (context.logs?.() ?? []).map((value) => {
           if (detailedUntil > Date.now()) return value;
@@ -381,8 +365,7 @@ export function createMaintenanceApplicationService(
       };
     },
     async readUsage(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
+      assertAvailable();
       try {
         const filter = request as UsageFilter;
         for (const field of [filter.from, filter.to])
@@ -400,8 +383,7 @@ export function createMaintenanceApplicationService(
       }
     },
     async readUsageSettings(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
+      assertAvailable();
       try {
         return readSettings();
       } catch (error) {
@@ -409,9 +391,7 @@ export function createMaintenanceApplicationService(
       }
     },
     async addUsagePrice(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
-      assertReady();
+      assertAvailable(true);
       try {
         const input = request as Record<string, unknown>;
         for (const field of ["provider", "model", "currency", "source"])
@@ -433,14 +413,6 @@ export function createMaintenanceApplicationService(
         if (!/^[A-Za-z]{3}$/.test(price.currency))
           throw new Error("币种必须为三个字母代码，例如 USD、CNY");
         for (const field of [
-          "provider",
-          "model",
-          "currency",
-          "source",
-        ] as const)
-          if (typeof price[field] !== "string" || !price[field].trim())
-            throw new Error("供应商、模型、币种和价格来源不能为空");
-        for (const field of [
           "inputPerMillion",
           "outputPerMillion",
           "cacheReadPerMillion",
@@ -461,9 +433,7 @@ export function createMaintenanceApplicationService(
       }
     },
     async updateUsageSettings(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
-      assertReady();
+      assertAvailable(true);
       try {
         const input = request as UsageSettings["budget"] & {
           expected?: UsageSettings["budget"];
@@ -495,8 +465,7 @@ export function createMaintenanceApplicationService(
       }
     },
     async readStorage(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
+      assertAvailable();
       try {
         return scanStorage(context.store.path);
       } catch (error) {
@@ -504,9 +473,7 @@ export function createMaintenanceApplicationService(
       }
     },
     async createBackup(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
-      assertReady();
+      assertAvailable(true);
       const lease = context.control.acquireGlobalMutation();
       if (!lease)
         throw new ApplicationError(
@@ -664,9 +631,7 @@ export function createMaintenanceApplicationService(
       }
     },
     async verifyBackup(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
-      assertReady();
+      assertAvailable(true);
       try {
         const { source } = request as {
           source: string;
@@ -683,9 +648,7 @@ export function createMaintenanceApplicationService(
       }
     },
     async restoreBackup(request: unknown = {}, signal?: AbortSignal) {
-      if (typeof context.store.path !== "string")
-        throw new ApplicationError(501, "当前后台未提供持久存储维护。");
-      assertReady();
+      assertAvailable(true);
       try {
         const { source, target } = request as {
           source: string;

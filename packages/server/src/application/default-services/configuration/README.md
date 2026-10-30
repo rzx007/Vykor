@@ -15,7 +15,7 @@
 | 文件 | 主要接口或用途 |
 | --- | --- |
 | [auth-service.ts](./auth-service.ts) | `createDefaultAuthService` |
-| [profile-service.ts](./profile-service.ts) | `createDefaultProfileService` |
+| [profile-service.ts](./profile-service.ts) | `createDefaultProfileService`、供档案与上下文报告共用的 `formatPersonalPromptDiagnostics` |
 | [settings-service.ts](./settings-service.ts) | `SettingsRuntimeImpact`、`AgentEnvironmentService`、`settingsPatchRuntimeImpact`、`createDefaultSettingsService` |
 
 ## 测试与维护

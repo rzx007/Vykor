@@ -331,6 +331,42 @@ describe("system routes", () => {
     expect(invalidateRuntimes).toHaveBeenCalledOnce();
   });
 
+  it.each([true, false])("only restarts settings runtimes with a mutation lease (acquired=%s)", async (acquired) => {
+    const release = vi.fn();
+    const closeAllRuntimes = vi.fn(async () => {});
+    const invalidateRuntimes = vi.fn(async () => {});
+    const patch = vi.fn(async () => ({ settings: {}, restartRuntimes: true, invalidateRuntimes: true }));
+    const app = createSystemRoutes({
+      settingsService: { get: async () => ({}), patch },
+      control: daemonControl({ acquireGlobalMutation: () => acquired ? { release } : undefined, closeAllRuntimes, invalidateRuntimes }),
+    });
+    const response = await app.request("/settings", {
+      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ workStyle: "efficient" }),
+    });
+    expect(response.status).toBe(acquired ? 200 : 409);
+    expect(patch).toHaveBeenCalledOnce();
+    expect(closeAllRuntimes).toHaveBeenCalledTimes(acquired ? 1 : 0);
+    expect(invalidateRuntimes).not.toHaveBeenCalled();
+    expect(release).toHaveBeenCalledTimes(acquired ? 1 : 0);
+  });
+
+  it.each([true, false])("preserves settings conflict responses and releases the mutation lease (acquired=%s)", async (acquired) => {
+    const release = vi.fn();
+    const app = createSystemRoutes({
+      settingsService: {
+        get: async () => ({}),
+        patch: async () => { throw Object.assign(new Error("conflict"), { code: "settings_conflict" }); },
+      },
+      control: daemonControl({ acquireGlobalMutation: () => acquired ? { release } : undefined }),
+    });
+    const response = await app.request("/settings", {
+      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ workStyle: "efficient" }),
+    });
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toEqual({ error: "权限或访问边界已被其他入口修改。请重新读取后保存。" });
+    expect(release).toHaveBeenCalledTimes(acquired ? 1 : 0);
+  });
+
   it("still blocks hard settings updates while session runs are active", async () => {
     const patch = vi.fn(async () => ({
       settings: { provider: "anthropic" },
