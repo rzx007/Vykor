@@ -2,8 +2,7 @@ export { type SessionStatus, type SessionStorage, type InputDelivery, type RunSt
 export { type SessionModelFailureKind, type SessionModelRetryState, type SessionModelGenerationMetadata, type SessionModelAttemptUsageStatus, type SessionModelAttemptUsageSnapshot, type SessionModelAttemptUsage, type SessionModelUsageSummary, settleSessionToolMetadata, readSessionModelRetryState, readModelGenerationMetadata, isSupersededModelPart, isCommittedModelPart, readSessionModelUsage, readSessionModelAttemptUsage } from "@vykor/domain-contracts/sessions/model-metadata";
 import type { SessionRecord, SessionInputRecord, SessionMessageRecord, SessionMessagePartRecord, SessionRunRecord, SessionRunAttemptRecord, SessionExecutionRecord, PermissionRequestRecord } from "@vykor/domain-contracts/sessions";
 /** Atomic, server-owned state used when a client attaches to one session. */
-export interface SessionStateSnapshot {
-  pluginApps?: import("../extensions/plugin-apps").PluginAppRecord[];
+export interface AgentSessionStateSnapshot {
   cursor: number;
   session: SessionRecord;
   inputs: SessionInputRecord[];
@@ -13,6 +12,11 @@ export interface SessionStateSnapshot {
   attempts: SessionRunAttemptRecord[];
   tasks?: SessionExecutionRecord[];
   permissions: PermissionRequestRecord[];
+}
+
+/** Application attach data extends the portable Agent lifecycle snapshot. */
+export interface SessionStateSnapshot extends AgentSessionStateSnapshot {
+  pluginApps?: import("../extensions/plugin-apps").PluginAppRecord[];
 }
 
 

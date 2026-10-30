@@ -8,7 +8,7 @@ import type {
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
   UploadAttachmentInput,
-} from "@rzx/client"
+} from "@vykor/application-client"
 import { vi } from "vitest"
 
 import { createSolidPng } from "../../image-preview/safe-image-test-bytes"

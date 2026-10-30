@@ -1,4 +1,4 @@
-import type { AuthStatus, ModelProviderInfo, VykorClient, ProviderInfo } from "@rzx/client"
+import type { AuthStatus, ModelProviderInfo, VykorClient, ProviderInfo } from "@vykor/application-client"
 
 import type {
   ActivateDesktopProviderInput,

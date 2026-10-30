@@ -1,6 +1,6 @@
 import { resolve } from "node:path"
 
-import type { PluginInfo } from "@rzx/client"
+import type { PluginInfo } from "@vykor/application-client"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const daemon = vi.hoisted(() => {

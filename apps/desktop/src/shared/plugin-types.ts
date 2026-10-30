@@ -1,4 +1,4 @@
-import type { PluginInfo } from "@rzx/client"
+import type { PluginInfo } from "@vykor/application-client"
 
 export type DesktopPluginInfo = PluginInfo
 
@@ -85,5 +85,5 @@ export interface DesktopMarketplacePreview {
   replacementRequired: boolean
   sourceName: string
   approvalRequired: boolean
-  operation?: import("@rzx/client").MarketplaceOperation
+  operation?: import("@vykor/application-client").MarketplaceOperation
 }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { VykorClient } from "@rzx/client"
+import type { VykorClient } from "@vykor/application-client"
 
 const git = vi.hoisted(() => ({ execGit: vi.fn(), uniqueBranch: vi.fn() }))
 vi.mock("electron", () => ({

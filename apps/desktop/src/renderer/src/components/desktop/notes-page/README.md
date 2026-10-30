@@ -21,7 +21,7 @@
 
 ## 调用与状态归属
 
-入口是 `NotesPage -> NoteBoard -> useNoteOrganization -> window.desktop.notes`。正文和恢复稿继续由 `useNotesController`、`NoteSaveCoordinator` 管理；整理操作通过公开客户端中的纯函数生成新快照，沿 IPC 和 HTTP 保存到便签目录的 `organization.json`。正文更新时间不参与桌面排序。
+入口是 `NotesPage -> NoteBoard -> useNoteOrganization -> window.desktop.notes`。正文和恢复稿继续由 `useNotesController`、`NoteSaveCoordinator` 管理；整理操作通过私有应用客户端 `@vykor/application-client` 中的纯函数生成新快照，沿 IPC 和 HTTP 保存到便签目录的 `organization.json`。正文更新时间不参与桌面排序。
 
 拖拽前的布局、来源和文件夹开合状态保存在 `NoteBoard` 内存中。`note-drag-state` 统一保存悬停目标、截止时间和当前意图，并提供下一次计时的剩余时间；`NoteBoard` 只安排计时器、检查 DOM 命中和展示合并目标，不重复维护完整意图。移动达到 6 px 才拿起；便签连续悬停 250 ms 才合并，文件夹连续悬停 400 ms 才展开；越过展开层边界 24 px 后收起。滚动或切换目标清零计时，松手才保存，Escape 恢复原布局。系统减少动态效果只关闭动画，不改变这些阈值。
 

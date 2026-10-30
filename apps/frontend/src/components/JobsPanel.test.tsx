@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { act, useState } from "react";
 import { testRender } from "@opentui/react/test-utils";
-import type { JobReadResult, JobSnapshot } from "@rzx/client";
+import type { JobReadResult, JobSnapshot } from "@vykor/application-client";
 import { ThemeProvider } from "../theme/ThemeContext";
 import type { JobDetailRemoteState, JobRemoteState } from "../jobs/job-remote-state";
 import { JobsPanel } from "./JobsPanel";

@@ -1,6 +1,6 @@
 # Product Surface Integration
 
-> 状态：CLI、TUI、Web、Desktop、IDE、Bot 和 Workflow 接入 Durable Application 的权威边界。最后核对：2026-08-23。
+> 状态：CLI、TUI、Web、Desktop、IDE、Bot 和 Workflow 接入 Durable Application 的权威边界。最后核对：2026-10-30。
 
 ## 共同原则
 
@@ -15,25 +15,27 @@
 
 | 产品 | 推荐入口 | 自己负责 | 不能自己再做一套 |
 |---|---|---|---|
-| CLI 单次执行 | `VykorClient` + daemon Session API | 参数、终端输出、退出码 | 临时 JSON Session、独立 Run 状态机 |
-| TUI | client snapshot + SSE + command API | 键盘、布局、选择、权限弹框 | 后台 Task/Workflow 真相、第二个 Agent |
-| Web | browser-safe client + HTTP/SSE | Web 路由、渲染、断线提示 | Node polyfill、直接访问文件和数据库 |
-| Desktop | renderer 使用 client；main 提供本机能力 | 窗口、PTY、系统集成 | renderer 直连 SQLite、第二份 Run 状态 |
-| IDE | client + IDE host bridge | 编辑器选择、diff、workspace UX | 绕过 Permission 直接写文件 |
+| CLI 单次执行 | 私有应用客户端 + daemon Session API | 参数、终端输出、退出码 | 临时 JSON Session、独立 Run 状态机 |
+| TUI | 私有应用客户端 + SDK 同步与命令 API | 键盘、布局、选择、权限弹框 | 后台 Task/Workflow 真相、第二个 Agent |
+| Web | 浏览器安全的生命周期 SDK + HTTP/SSE | Web 路由、渲染、断线提示 | Node polyfill、直接访问文件和数据库 |
+| Desktop | renderer 通过 main 使用私有应用客户端；main 提供本机能力 | 窗口、PTY、系统集成 | renderer 直连 SQLite、第二份 Run 状态 |
+| IDE | 生命周期 SDK + IDE 宿主桥接 | 编辑器选择、diff、workspace 体验 | 绕过 Permission 直接写文件 |
 | Bot | Channel adapter + DurableChannelBridge | 平台鉴权、message ID、ACL、发送 | 独立 Agent history、失败后重跑 Agent |
 | Workflow | Application 提供 repository 和 child host | DAG 计划、task snapshot、重试策略 | 第二套 Session/Job/child 所有权 |
 | 程序内嵌入 | `createAgentKernel()` 或 `createDefaultNodeAgent()` | 自己持有 live Agent 和关闭资源 | 假装获得 daemon 的跨进程恢复能力 |
 
 ## 共享 client 的标准流程
 
-TUI、Web、Desktop 和 IDE 应复用 `@rzx/client`：
+TUI、Web、Desktop 和 IDE 共用 `@rzx/client` 的会话同步；CLI、TUI、Desktop 的产品业务接口通过私有 `@vykor/application-client` 使用，它复用公开 SDK 的实现。公开 SDK 实例只含 `protocol`、`runtime`、`sessions`、`permissions`、`attachments`、`jobs` 和 `events`。调用流程：
 
 1. 调 `/capabilities`，协议版本必须完全匹配。
 2. 获取 Session snapshot。
 3. 用 snapshot cursor 连接 SSE。
 4. 所有事件交给共享 reducer。
 5. 断线后从最后 cursor 重连。
-6. 写操作只调用 Application API，不直接修改本地 reducer 伪造成功。
+6. 写操作只调用资源 API，不直接修改本地 reducer 伪造成功。
+
+脚本等待单个 Run 可调用 `waitForRun(client, { sessionId, runId, signal })`，从相同的快照和实时流取得 `{ run, messages }`。失败与中断也返回真实终态；取消 signal 只结束等待。权限请求必须由审批界面或并行的 `syncEvents` 观察处理。
 
 界面可以先显示“正在提交”，但服务端返回 Input/Run 后必须用服务端 ID 和状态替换临时 UI 状态。
 

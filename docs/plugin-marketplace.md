@@ -52,8 +52,8 @@
 - [来源读取和下载](../packages/plugin-sources/src/marketplace/marketplace.ts)：来源配置、缓存、网络边界及下载校验。
 - [安装协调](../packages/server/src/application/default-services/extensions/marketplace-service.ts)：候选包、兼容要求、权限、来源和安装回执。
 - [原 Installer](../packages/plugins/src/installation/installer.ts)：代码快照与安装记录提交。
-- [HTTP 入口](../packages/server/src/http/routes/marketplace.ts)和[客户端资源](../packages/client/src/resources/plugins/plugin-resource.ts)：共享请求与响应。
-- [Protocol](../packages/protocol/src/index.ts)统一公开市场通信类型；Client 仍只直接依赖 Protocol。来源包复用插件契约的分发格式校验，不依赖安装器、Agent 或 Server。
+- [HTTP 入口](../packages/server/src/http/routes/marketplace.ts)和[私有应用客户端资源](../packages/application-client/src/resources/plugins/plugin-resource.ts)：共享请求与响应。
+- [Protocol](../packages/protocol/src/index.ts)统一提供市场通信类型；私有应用客户端通过 Protocol 使用这些类型，公开 `@rzx/client` 不导出市场接口。来源包复用插件契约的分发格式校验，不依赖安装器、Agent 或 Server。
 - [桌面确认](../apps/desktop/src/main/features/plugin/marketplace-service.ts)和[市场界面](../apps/desktop/src/renderer/src/components/desktop/plugin-page/plugins/marketplace.tsx)：窗口绑定、用户确认和展示。
 
 ## 源码、贡献与发布

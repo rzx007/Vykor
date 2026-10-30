@@ -1,17 +1,17 @@
 # Vykor 架构总览
 
-> 状态：当前实现的权威鸟瞰。最后核对：2026-10-23。
+> 状态：当前实现的权威鸟瞰。最后核对：2026-10-30。
 
 2026-10-23 清理：已删除无业务调用的旧 swarm 包；团队状态由 coordinator 的 TeamRegistry、Node 宿主和 Kernel child 管理。跨包回归放在 [tests/agent-integration](../tests/agent-integration/README.md)，通过根测试命令进入 CI；工具自身的回归保留在 tools，Agent Runtime 不再承接它们。
 
 ## 一句话说明
 
-Vykor 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、Web、Desktop、Bot 和 Workflow 是不同入口，共用领域 Client、Daemon Application、Session Runtime 存储和 Agent Runtime，不各自维护一套 Run 或会话真相。
+Vykor 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、Web、Desktop、Bot 和 Workflow 是不同入口，共用 Agent 生命周期客户端、Daemon Application、Session Runtime 存储和 Agent Runtime，不各自维护一套 Run 或会话真相。产品业务接口由私有应用客户端补充。
 
 ```text
 CLI / TUI / Web / Desktop / Bot / Workflow
                     |
-      @rzx/client 领域 Resources
+      @rzx/client 生命周期 Resources
                     |
           HTTP routes + SSE transport
                     |
@@ -31,15 +31,18 @@ CLI / TUI / Web / Desktop / Bot / Workflow
 
 产品入口负责人和机器交互：收集输入、显示消息、管理页面和调用平台能力。它不直接读取 SQLite，也不自行决定 Run 怎样排队或恢复。
 
-业务调用通过 `VykorClient` 的领域 Resource，例如：
+生命周期调用通过公开 `@rzx/client` 的 `VykorClient`，例如：
 
 ```ts
 await client.sessions.create(input);
-await client.sessions.admitPrompt(sessionId, { content: "hello" });
-await client.permissions.reply(requestId, decision);
+await client.sessions.admitPrompt(sessionId, {
+  id: createPromptRequestId(),
+  items: [{ type: "text", text: "hello" }],
+});
+await client.permissions.reply(requestId, { status: "approved", decision: "once" });
 ```
 
-Client transport 负责 HTTP、SSE、鉴权、协议 header 和错误转换；Resource 负责把一个领域动作映射到 endpoint。Client state 先应用 snapshot，再按 SSE cursor 合并增量。Client 只直接依赖 Protocol；本地的运行配置、权限模式和插件描述辅助函数用于展示与构造请求，执行授权仍由 Server 和 Node 判断。
+公开实例只有 `protocol`、`runtime`、`sessions`、`permissions`、`attachments`、`jobs`、`events`。`runtime` 只查询已有模型、Agent persona、技能和会话 MCP 能力。Client transport 负责 HTTP、SSE、鉴权、协议 header 和错误转换；Resource 负责把生命周期动作映射到 endpoint。Client state 先应用 snapshot，再按 SSE cursor 合并增量；`waitForRun` 复用这套流程等待指定 Run。产品业务通过私有 `@vykor/application-client` 接入，复用公开 SDK 的传输、资源和同步；执行授权仍由 Server 和 Node 判断。
 
 ### 2. Daemon Application
 
@@ -121,14 +124,16 @@ Runtime 不读取 daemon 数据库，不开 HTTP 服务，也不知道界面来�
 | `@vykor/core` | 唯一历史、模型重试/压缩、工具检查与执行 |
 | `@vykor/agent-runtime` | Kernel 运行 Run/Child；Node 负责默认能力和资源生命周期 |
 | `@vykor/server` | Daemon Application、HTTP routes、运行编排、投影、恢复和运维 |
-| `@rzx/client` | 协议握手、HTTP/SSE transport、领域 Resources、reducer 和同步控制器 |
+| `@rzx/client` | 协议握手、HTTP/SSE transport、生命周期 Resources、reducer、同步控制器和指定 Run 等待 |
+| `@vykor/application-client` | 私有产品入口；笔记、渠道、调度、插件及市场、插件应用、Office、全局设置、提供商与登录、开发/终端管理和命令 |
 | `@vykor/coordinator` / `@vykor/jobs` | Workflow 调度以及统一 Job 观察与控制 |
 | `apps/*` | CLI、TUI、Desktop、Website 等产品入口 |
 
 依赖按数据、通信与执行的职责分开：
 
 ```text
-Client / Server HTTP -> Protocol -> 领域、插件、JSON、Job/Terminal 纯数据子入口
+公开 Client / Server HTTP -> Protocol -> 领域、插件、JSON、Job/Terminal 纯数据子入口
+私有应用 Client -> 公开 Client + Protocol
 Server application -> domain-contracts + Services + Node 宿主
 Services -> domain-contracts + 自己的存储命令
 Node -> plugin-contracts + Job/Terminal contracts + 执行/配置/权限模块

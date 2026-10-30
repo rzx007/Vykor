@@ -1,7 +1,7 @@
 import { useId, useRef, useState } from "react"
 import { LayoutGroup } from "motion/react"
 import { CircleAlert, CirclePlus, FolderOpen, Search } from "lucide-react"
-import { moveNoteToDesktop } from "@rzx/client"
+import { moveNoteToDesktop } from "@vykor/application-client"
 
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@renderer/components/ui/alert"
 import { Button } from "@renderer/components/ui/button"

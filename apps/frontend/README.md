@@ -4,7 +4,9 @@
 
 ## 运行过程与状态
 
-`src/index.tsx` 读取 `VYKOR_FRONTEND_CONFIG` 并启动终端渲染器，`src/App.tsx` 创建界面；`src/hooks/useServerSync.ts` 通过 `@rzx/client` 提交操作、读取快照和消费 SSE 变化。输入、消息、权限、Run 和后台任务保存在 daemon，前端只保存当前选择、弹窗和显示状态。
+`src/index.tsx` 读取 `VYKOR_FRONTEND_CONFIG` 并启动终端渲染器，`src/App.tsx` 创建界面；`src/hooks/useServerSync.ts` 通过 `@vykor/application-client` 提交操作、读取快照和消费 SSE 变化。输入、消息、权限、Run 和后台任务保存在 daemon，前端只保存当前选择、弹窗和显示状态。
+
+私有应用客户端复用公开 SDK `@rzx/client` 的会话与事件同步，另提供插件、命令和提供商等产品接口；Bun 构建把它们一起打进终端入口。
 
 完整链路见 [TUI 流程](../../docs/tui-flow.md)与[客户端同步](../../docs/client-sync-flow.md)。本包不能直接读取会话数据库，也不创建第二套 Agent 或权限执行入口。
 

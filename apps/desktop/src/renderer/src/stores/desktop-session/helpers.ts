@@ -1,4 +1,4 @@
-import { readSessionRuntimeConfig } from "@rzx/client"
+import { readSessionRuntimeConfig } from "@vykor/application-client"
 import type {
   DesktopBootstrapData,
   DesktopPermissionMode,

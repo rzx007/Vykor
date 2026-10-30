@@ -112,7 +112,9 @@ export async function* streamServerSentEvents<T>(
     const event = parseSseFrame(buffer);
     if (event !== undefined) yield decode(event);
   } finally {
-    reader.releaseLock();
+    // Ending iteration must close the response, including early return and decode errors.
+    try { await reader.cancel(); } catch { /* Preserve the original stream/decode failure. */ }
+    finally { reader.releaseLock(); }
   }
 }
 
@@ -173,6 +175,7 @@ export class SseTransport {
           if (!idleExpired) throw error;
         }
       } finally {
+        connection.abort();
         if (idleTimer) clearTimeout(idleTimer);
         options.signal?.removeEventListener("abort", onOuterAbort);
       }
@@ -209,7 +212,9 @@ async function* readRawSseFrames(
     const frame = parseRawSseFrame(buffer);
     if (frame) yield frame;
   } finally {
-    reader.releaseLock();
+    // Ending iteration must close the response, including early return and decode errors.
+    try { await reader.cancel(); } catch { /* Preserve the original stream/decode failure. */ }
+    finally { reader.releaseLock(); }
   }
 }
 

@@ -1,4 +1,4 @@
-import { VykorApiError } from "@rzx/client"
+import { VykorApiError } from "@vykor/application-client"
 import type {
   CreateDesktopNoteInput,
   DesktopNote,

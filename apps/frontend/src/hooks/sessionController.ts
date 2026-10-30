@@ -3,7 +3,7 @@ import type {
   SelectOptionPayload,
   TranscriptItem,
 } from "../types";
-import type { ApprovalMode, JobSnapshot, ModelProviderInfo, SessionModelRetryState, SessionModelUsageSummary } from "@rzx/client";
+import type { ApprovalMode, JobSnapshot, ModelProviderInfo, SessionModelRetryState, SessionModelUsageSummary } from "@vykor/application-client";
 import type { JobDetailRemoteState, JobRemoteState } from "../jobs/job-remote-state";
 
 export type JobRequestAction =

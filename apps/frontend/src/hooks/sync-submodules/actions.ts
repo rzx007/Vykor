@@ -7,7 +7,7 @@ import {
   type VykorClient,
   type VykorClientState,
   type SessionRecord,
-} from "@rzx/client";
+} from "@vykor/application-client";
 
 import type { FrontendConfig } from "../../types";
 import {
@@ -79,7 +79,7 @@ export interface ActionDispatcherContext {
   refreshSettings?: () => void | Promise<void>;
   loadJobDetail: (client: Pick<VykorClient, "jobs">, sessionId: string, jobId: string) => Promise<void>;
   createAndSwitchSession: (title?: string) => Promise<SessionRecord | undefined>;
-  cacheFirstRead: (request: import("@rzx/client").PresentationReadRequest) => void;
+  cacheFirstRead: (request: import("@vykor/application-client").PresentationReadRequest) => void;
   jobStateRef: { current: JobRemoteState };
   setJobState: React.Dispatch<React.SetStateAction<JobRemoteState>>;
   jobDetailStateRef: { current: JobDetailRemoteState };

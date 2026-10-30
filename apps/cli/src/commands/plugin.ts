@@ -1,7 +1,7 @@
 import { join, resolve } from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { VykorClient, type PluginInfo } from "@rzx/client";
+import { VykorClient, type PluginInfo } from "@vykor/application-client";
 import {
   requestedPluginPermissions,
   validateNativePlugin,

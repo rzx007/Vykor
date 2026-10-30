@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
+// Bundle the private application client so an installed TUI needs no workspace packages.
 const externals = [
   ...Object.keys(pkg.dependencies || {}),
   ...Object.keys(pkg.peerDependencies || {}),

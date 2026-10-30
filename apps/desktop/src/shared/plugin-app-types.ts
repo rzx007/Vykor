@@ -1,4 +1,4 @@
-import type { PluginAppActionResponse, PluginAppRecord, PluginAppResponse, PluginAppSource, PluginAppSubmissionReceipt, PluginAppToolPolicy, VykorClient } from "@rzx/client"
+import type { PluginAppActionResponse, PluginAppRecord, PluginAppResponse, PluginAppSource, PluginAppSubmissionReceipt, PluginAppToolPolicy, VykorClient } from "@vykor/application-client"
 export type PluginAppHostState = Omit<PluginAppResponse, "lease"> & { online: boolean }
 export interface PluginAppMount { mountId: string; url: string; state: PluginAppHostState }
 export interface PluginAppPreparedTool { requestId: string; toolName: string; args: Record<string, unknown>; expectedRevision: number; policy?: PluginAppToolPolicy }

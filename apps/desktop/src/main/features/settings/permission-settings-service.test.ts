@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { VykorClient } from "@rzx/client"
+import type { VykorClient } from "@vykor/application-client"
 import { DesktopPermissionSettingsService } from "./permission-settings-service"
 
 function setup() {

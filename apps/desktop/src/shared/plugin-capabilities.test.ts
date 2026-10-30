@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { requireDesktopPluginCapabilities } from "./plugin-capabilities"
-import { CURRENT_PROTOCOL_VERSION } from "@rzx/client"
+import { CURRENT_PROTOCOL_VERSION } from "@vykor/application-client"
 
 describe("Desktop plugin capability gate", () => {
   it("accepts the current complete server and rejects incompatible or incomplete servers", () => {

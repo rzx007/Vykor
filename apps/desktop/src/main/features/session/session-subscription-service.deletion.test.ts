@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { EventEmitter, on } from "node:events"
-import type { SessionEventRecord, SessionStateSnapshot } from "@rzx/client"
+import type { SessionEventRecord, SessionStateSnapshot } from "@vykor/application-client"
 import { SessionSubscriptionService } from "./session-subscription-service"
 
 afterEach(() => vi.useRealTimers())

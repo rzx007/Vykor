@@ -7,7 +7,7 @@ import type {
   TerminalResizeRequest,
   TerminalSessionInfo,
   TerminalWriteRequest,
-} from "@rzx/client"
+} from "@vykor/application-client"
 
 import { IpcEvents } from "../../../shared/ipc-channels"
 import { getDesktopPreferences } from "../settings/desktop-preferences"

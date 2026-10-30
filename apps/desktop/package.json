@@ -81,7 +81,7 @@
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
-    "@rzx/client": "workspace:*",
+    "@vykor/application-client": "workspace:*",
     "@vykor/server": "workspace:*",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-web-links": "^0.11.0",

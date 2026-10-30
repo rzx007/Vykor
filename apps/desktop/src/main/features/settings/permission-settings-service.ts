@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util"
 import { isAbsolute } from "node:path"
-import { normalizeApprovalMode, type VykorClient } from "@rzx/client"
+import { normalizeApprovalMode, type VykorClient } from "@vykor/application-client"
 import {
   checkPermissionConfiguration,
   inspectPermissionConfiguration,

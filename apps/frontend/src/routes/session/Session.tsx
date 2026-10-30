@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { SessionModelRetryState, SessionModelUsageSummary } from "@rzx/client";
+import type { SessionModelRetryState, SessionModelUsageSummary } from "@vykor/application-client";
 import { useTheme } from "../../theme/ThemeContext";
 import { createSyntaxStyle } from "../../theme/syntax";
 import type { TranscriptItem } from "../../types";

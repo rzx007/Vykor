@@ -7,7 +7,7 @@ import {
   type SessionBucket,
   type SessionRecord,
   type SyncEventUpdate,
-} from "@rzx/client";
+} from "@vykor/application-client";
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);

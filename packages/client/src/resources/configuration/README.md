@@ -1,29 +1,7 @@
-# 配置与授权资源
+# 运行权限资源
 
-访问认证、模型提供方、权限、MCP 和系统配置。
+[permission-resource.ts](./permission-resource.ts) 导出 `PermissionResource`，通过 `client.permissions` 查询待处理权限请求，并用 `reply` 明确批准或拒绝。回复结果来自 daemon，执行是否继续由服务端权限流程决定。
 
-## 主要文件
+权限请求和决定由 daemon 保存，客户端快照和事件只维护其本地视图。等待 Run 的函数不会自动回复请求；界面或脚本必须提供自己的权限处理方式。
 
-| 文件 | 主要导出 |
-| --- | --- |
-| [auth-resource.ts](./auth-resource.ts) | `AuthResource` |
-| [mcp-resource.ts](./mcp-resource.ts) | `McpResource` |
-| [permission-resource.ts](./permission-resource.ts) | `PermissionResource` |
-| [provider-resource.ts](./provider-resource.ts) | `ProviderResource` |
-| [system-resource.ts](./system-resource.ts) | `ProjectFactRecord`、`FactReplacementResult`、`DaemonRestartPreview` |
-
-## 入口与处理步骤
-
-主要入口或定义见 [auth-resource.ts](./auth-resource.ts)。
-
-读取或提交配置与授权请求，通过协议客户端送到 daemon，并返回更新后的配置或操作结果。
-
-## 状态放在哪里
-
-远端业务数据由 daemon 保存；连接、订阅和展示状态保存在客户端对象中。
-
-## 新代码与测试
-
-与本目录职责一起修改的代码放在这里；跨分类的公共入口由上层目录组织。
-
-测试位于 [`__test__/`](./__test__)；只覆盖下级分类的测试放在对应分类的 `__test__/`。
+登录、模型提供商、全局设置和 MCP 管理已迁入 [私有应用客户端](../../../../application-client/README.md)。这里只放生命周期中的权限请求操作；测试放 [`__test__/`](./__test__)。

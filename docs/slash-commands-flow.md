@@ -67,7 +67,7 @@
 | Skill input materializer | `packages/server/src/application/session/interactions/session-input-materializer.ts` | 校验结构化 Skill 输入，并在执行前生成“先调用 Skill 工具”的 Agent 输入 |
 | Native Skill tool | `packages/tools/src/meta/skill.ts` | 按注册表读取实际 `SKILL.md`，返回 Skill 文件、根目录和正文 |
 | Application services | `packages/server/src/application/default-application-services.ts` | settings/memory/git/plugins 等命令依赖 |
-| Shared dispatch | `packages/client/src/commands/session-commands.ts` | 呈现层 + 资源 API 调用 |
+| Shared dispatch | `packages/application-client/src/commands/session-commands.ts` | 呈现层 + 资源 API 调用 |
 | TUI adapter | `apps/frontend/src/hooks/sessionSlashCommands.ts` | React ctx → `SessionCommandHost` |
 | TUI sync | `apps/frontend/src/hooks/useServerSync.ts` | `/new` `/resume`、template busy、admitPrompt |
 | TUI App | `apps/frontend/src/App.tsx` | 本地 UI 命令（theme/sessions/permissions…） |

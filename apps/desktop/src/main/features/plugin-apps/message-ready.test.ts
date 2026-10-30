@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest"
-import type { VykorClient } from "@rzx/client"
+import type { VykorClient } from "@vykor/application-client"
 import { pluginAppMessageReady } from "./message-ready"
 it("requires an actual selected model and enabled runtime instead of trusting a configured label", async () => {
   const settings = { modelDisabled: false }

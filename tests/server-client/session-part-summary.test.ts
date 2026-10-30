@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
-import { VykorClient, syncEvents } from "../../packages/client/src/index.js";
+import { VykorClient, syncEvents } from "@rzx/client";
 import { SessionTranscriptProjection } from "../../packages/server/src/application/session/transcript/transcript-projection.js";
 import { buildAgentTranscript } from "../../packages/server/src/application/agent/agent-transcript.js";
 import { VykorHttpServer } from "../../packages/server/src/http/server.js";

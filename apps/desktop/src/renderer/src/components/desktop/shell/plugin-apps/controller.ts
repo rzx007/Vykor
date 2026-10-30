@@ -1,7 +1,7 @@
 import type { DesktopPluginAppsAPI, PluginAppHostState, PluginAppMount, PluginAppConfirmation } from "@shared/plugin-app-types"
 import { CallToolResultSchema, ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js"
 import { pluginAppModelContexts } from "./plugin-app-model-context"
-import { parseMcpCallResultData } from "@rzx/client"
+import { parseMcpCallResultData } from "@vykor/application-client"
 export interface AppConfirmationSource { title: string; pluginId: string; sessionId: string; description?: string }
 export type AppConfirmation = (request: PluginAppConfirmation, signal: AbortSignal, source?: AppConfirmationSource) => Promise<boolean>
 const hiddenToolError = () => new McpError(ErrorCode.InvalidRequest, "页面当前隐藏，不能发起新操作。", { code: "plugin_app_hidden", notAccepted: true })

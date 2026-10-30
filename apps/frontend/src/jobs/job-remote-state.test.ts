@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { JobSnapshot } from "@rzx/client";
+import type { JobSnapshot } from "@vykor/application-client";
 import {
   beginJobList,
   mergeJobSnapshot,

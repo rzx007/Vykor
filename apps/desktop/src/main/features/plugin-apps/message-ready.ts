@@ -1,4 +1,4 @@
-import type { VykorClient } from "@rzx/client"
+import type { VykorClient } from "@vykor/application-client"
 /** Match the real session model against current provider models; a configured label alone is insufficient. */
 export async function pluginAppMessageReady(client: VykorClient, sessionId: string): Promise<boolean> {
   const [session, settings, providers] = await Promise.all([

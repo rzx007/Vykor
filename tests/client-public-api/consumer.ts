@@ -1,207 +1,95 @@
-/**
- * Representative external consumer type fixture for @rzx/client.
- * Verifies public contract can be cleanly consumed without any relative imports, any, or ts-ignore.
- */
-import {
-  VykorClient,
-  type PluginUiActionResponse,
-  VykorApiError,
-  IncompatibleProtocolError,
-  CURRENT_PROTOCOL_VERSION,
-  checkProtocolCompatibility,
-  supportsFeature,
-  applyEvent,
-  createInitialClientState,
-  SessionSyncController,
-  type ServerCapabilities,
-  type ProtocolCompatibility,
-  type SessionRecord,
-  type CreateClientSessionInput,
-  type UploadAttachmentInput,
-  type AttachmentAssetRecord,
-  type ReplyPermissionInput,
-  type PermissionRequestRecord,
-  type CreateScheduledTaskInput,
-  type ScheduledTaskRecord,
-  type CreateBackgroundShellInput,
-  type CreateBackgroundShellResult,
-  type TerminalCreateRequest,
-  type TerminalSessionInfo,
-  type DurableChannelMessageInput,
-  type DurableChannelMessageResult,
-  type ChannelRuntimeStatus,
-  type FeishuChannelSnapshot,
-  type FeishuRegistrationSnapshot,
-  type ListEventsOptions,
-  type SessionEventRecord,
-  type VykorServerHealth,
-  type ModelProviderInfo,
-  type AuthStatus,
-  type ProjectRecord,
-  type PluginInfo,
-  type SkillSnapshot,
-  type McpRuntimeSyncResult,
-  type McpRuntimeStatus,
+/** External lifecycle consumer. Product administration is intentionally absent. */
+import { VykorClient, CURRENT_PROTOCOL_VERSION, checkProtocolCompatibility, supportsFeature,
+  VykorApiError, IncompatibleProtocolError, SessionSyncController, syncEvents, waitForRun,
+  applyEvent, createInitialClientState, selectFirstPendingPermission, type ModelProviderInfo, type SkillSnapshot,
+  type CreateClientSessionInput, type UploadAttachmentInput, type ReplyPermissionInput,
+  type SessionRunRecord, type AdmitClientPromptInput,
 } from "@rzx/client";
+// @ts-expect-error product data is not part of the lifecycle SDK
+import type { NoteRecord } from "@rzx/client";
+// @ts-expect-error product installation is private
+import type { MarketplaceCatalog } from "@rzx/client";
+// @ts-expect-error plugin application UI is private
+import type { PluginAppConversationRequest } from "@rzx/client";
 
-async function consumePluginUiHistory(client: VykorClient, sessionId: string, instanceId: string,
-  requestId: string, signal: AbortSignal): Promise<void> {
-  const action: PluginUiActionResponse = await client.pluginUiHistory.getAction(sessionId, instanceId, requestId, { signal });
-  void action;
+export async function consumePublicApi(client: VykorClient, signal: AbortSignal): Promise<void> {
+  const capabilities = await client.protocol.capabilities({ signal });
+  const compatible = checkProtocolCompatibility(capabilities, { version: CURRENT_PROTOCOL_VERSION });
+  if (!compatible.compatible) throw new IncompatibleProtocolError(capabilities, "different protocol");
+  const health = await client.protocol.health({ signal });
+  if (!health.ok) throw new VykorApiError("unhealthy", 503, health);
+  const models: ModelProviderInfo[] = await client.runtime.listModels({ signal });
+  const skills: SkillSnapshot = await client.runtime.listSkills({ signal });
+  await client.runtime.listAgentPersonas({ signal });
+  const input: CreateClientSessionInput = { cwd: "/workspace", model: models[0]!.models[0]!.id };
+  const session = await client.sessions.create(input, { signal });
+  await client.sessions.update(session.id, { title: "Agent lifecycle" }, { signal });
+  await client.runtime.getSessionMcp(session.id, { signal });
+  const upload: UploadAttachmentInput = { displayName: "input.txt", body: new Uint8Array([1]) };
+  const asset = await client.attachments.upload(upload);
+  await client.attachments.get(asset.id, { signal });
+  await client.attachments.download(asset.id, { signal, range: { start: 0, end: 20 } });
+  const prompt: AdmitClientPromptInput = { id: "stable-input", items: [{ type: "text", text: "Inspect the project" }] };
+  selectFirstPendingPermission(createInitialClientState(), session.id);
+  const snapshot = await client.sessions.getState(session.id, { signal });
+  // @ts-expect-error application snapshot extensions are private
+  snapshot.pluginApps;
+  const admission = await client.sessions.admitPrompt(session.id, prompt, { signal });
+  if (admission.run) {
+    const result = await waitForRun(client, { sessionId: session.id, runId: admission.run.id, signal });
+    const run: SessionRunRecord = result.run;
+    void [run, result.messages];
+    await client.sessions.interrupt(session.id, { expectedRunId: run.id, signal });
+    await client.sessions.resumeInterruptedRun(session.id, run.id, { id: "resume-once" }, { signal });
+  }
+  const decision: ReplyPermissionInput = { status: "denied" };
+  await client.permissions.list({ sessionId: session.id, signal });
+  await client.permissions.reply("permission", decision, { signal });
+  const jobs = await client.jobs.list({ sessionId: session.id, signal });
+  const target = { kind: "agent" as const, jobId: "child", runId: "exact-run" };
+  await client.jobs.read(target, { sessionId: session.id, signal });
+  await client.jobs.wait(target, { sessionId: session.id }, { signal });
+  await client.jobs.send(target, { sessionId: session.id, data: "continue" }, { signal });
+  await client.jobs.cancel(target, { sessionId: session.id }, { signal });
+  // @ts-expect-error agent job commands must select an exact run
+  await client.jobs.cancel({ kind: "agent", jobId: "child" }, { sessionId: session.id });
+  const controller = new SessionSyncController({ client, sessionId: session.id, signal, generation: 1, onUpdate: () => {} });
+  void [controller, jobs.errors, skills, supportsFeature(capabilities, "jobs")];
+  for await (const update of syncEvents(client, { sessionId: session.id, signal })) {
+    if (update.event) applyEvent(createInitialClientState(), update.event);
+    break;
+  }
+  await client.sessions.getState(session.id, { signal });
+  await client.sessions.listMessages(session.id, { signal });
+  await client.sessions.fork(session.id, {}, { signal });
+  await client.sessions.compact(session.id, { signal });
+  await client.sessions.rewind(session.id, { count: 1 }, { signal });
+  await client.sessions.archive(session.id, { signal });
+  await client.sessions.delete(session.id, { signal });
 }
 
-export async function consumePublicApi(client: VykorClient): Promise<void> {
-  // Protocol checks
-  const serverCaps: ServerCapabilities = await client.protocol.capabilities();
-  const currentVersion: number = CURRENT_PROTOCOL_VERSION;
-  const compatibility: ProtocolCompatibility = checkProtocolCompatibility(serverCaps, {
-    version: currentVersion,
-  });
-  const hasFeature: boolean = supportsFeature(serverCaps, "attachments");
-  if (!compatibility.compatible || !hasFeature) {
-    throw new IncompatibleProtocolError(serverCaps, compatibility.reason ?? "Protocol incompatible");
-  }
-
-  // Protocol Resource
-  const health: VykorServerHealth = await client.protocol.health();
-  if (!health.ok) {
-    throw new VykorApiError("Health check failed", 500, { error: "unhealthy" });
-  }
-
-  // System Resource
-  await client.system.getSettings();
-
-  // Sessions Resource
-  const createInput: CreateClientSessionInput = {
-    cwd: "/workspace",
-    model: "claude-3-5-sonnet",
-    title: "Fixture session",
-  };
-  const session: SessionRecord = await client.sessions.create(createInput);
-  const fetchedSession: SessionRecord = await client.sessions.get(session.id);
-
-  // Attachments Resource
-  const uploadInput: UploadAttachmentInput = {
-    displayName: "test.txt",
-    mediaType: "text/plain",
-    body: new Uint8Array([1, 2, 3]),
-  };
-  const attachment: AttachmentAssetRecord = await client.attachments.upload(uploadInput);
-  await client.attachments.get(attachment.id);
-
-  // Permissions Resource
-  const permissionInput: ReplyPermissionInput = {
-    status: "approved",
-    decision: "once",
-  };
-  const permission: PermissionRequestRecord = await client.permissions.reply("req-1", permissionInput);
-
-  // Schedules Resource
-  const taskInput: CreateScheduledTaskInput = {
-    name: "Daily Task",
-    prompt: "daily check",
-    recurrence: "0 0 * * *",
-    recurrenceFormat: "once",
-    timezone: "UTC",
-    destination: "standalone",
-  };
-  const task: ScheduledTaskRecord = await client.schedules.createTask(taskInput);
-
-  // Jobs Resource
-  const shellInput: CreateBackgroundShellInput = {
-    sessionId: session.id,
-    command: "echo test",
-  };
-  const shellJob: CreateBackgroundShellResult = await client.jobs.createBackgroundShell(shellInput);
-
-  const list = await client.jobs.list({ sessionId: session.id });
-  const target = shellJob.snapshot.target;
-  await client.jobs.read(target, { sessionId: session.id });
-  await client.jobs.wait(target, { sessionId: session.id });
-  await client.jobs.cancel(target, { sessionId: session.id });
-  const receipt = await client.jobs.send({ kind: "agent", jobId: "child", runId: "run" }, { sessionId: session.id, data: "next" });
-  void [list.errors, receipt?.runId];
-  // @ts-expect-error protocol 6 requires the complete target
-  await client.jobs.read("old-id", { sessionId: session.id });
-  // @ts-expect-error an agent target must pin its runId
-  await client.jobs.cancel({ kind: "agent", jobId: "child" }, { sessionId: session.id });
-
-  // Terminals Resource
-  const termRequest: TerminalCreateRequest = {
-    scope: { kind: "session", sessionId: session.id },
-    runtime: "local",
-    cols: 80,
-    rows: 24,
-    shell: "bash",
-  };
-  const terminal: TerminalSessionInfo = await client.terminals.create(termRequest);
-
-  // Channels Resource
-  const channelMsg: DurableChannelMessageInput = {
-    connector: "slack",
-    accountId: "acc-1",
-    chatId: "chat-1",
-    externalMessageId: "msg-1",
-    senderId: "user-1",
-    content: "ping",
-    cwd: "/workspace",
-    model: "claude-3-5-sonnet",
-  };
-  const channelRes: DurableChannelMessageResult = await client.channels.handleMessage(channelMsg);
-  const channelRuntime: ChannelRuntimeStatus = await client.channels.runtimeStatus();
-  const feishuSnapshot: FeishuChannelSnapshot = await client.channels.getFeishu();
-  const feishuRegistration: FeishuRegistrationSnapshot =
-    await client.channels.feishuRegistrationStatus();
-  void channelRuntime;
-  void feishuSnapshot;
-  void feishuRegistration;
-
-  // Events Resource
-  const eventOptions: ListEventsOptions = {
-    sessionId: session.id,
-    limit: 10,
-  };
-  const events: SessionEventRecord[] = await client.events.list(eventOptions);
-
-  // Providers, Auth, Projects, Plugins, Development Resources
-  const models: ModelProviderInfo[] = await client.providers.listModels();
-  const authStatus: AuthStatus = await client.auth.getStatus();
-  const projects: ProjectRecord[] = await client.projects.list();
-  const pluginResult: { plugins: PluginInfo[]; warnings: string[] } = await client.plugins.list({ cwd: "/workspace" });
-  const skills: SkillSnapshot = await client.development.listSkills();
-
-  // MCP Runtime control Resource
-  const mcpStatus: McpRuntimeSyncResult = await client.mcp.runtimeStatus("linear", "A".repeat(43));
-  const mcpRuntime: McpRuntimeStatus = mcpStatus.status;
-  const mcpSync: McpRuntimeSyncResult = await client.mcp.synchronize("linear", "A".repeat(43));
-  void [mcpRuntime, mcpSync];
-
-  // State / Sync API
-  const initialState = createInitialClientState();
-  if (events.length > 0) {
-    const firstEvent = events[0];
-    if (firstEvent) {
-      applyEvent(initialState, firstEvent);
-    }
-  }
-
-  const syncAbort = new AbortController();
-  const controller = new SessionSyncController({
-    sessionId: session.id,
-    signal: syncAbort.signal,
-    client: {
-      sessions: {
-        getState: (id, opts) => client.sessions.getState(id, opts),
-      },
-      events: {
-        list: (opts) => client.events.list(opts),
-        stream: (opts) => client.events.stream(opts),
-      },
-    },
-  });
-  syncAbort.abort();
-
-  void [controller, permission, task, shellJob, terminal, channelRes, models, authStatus, projects, pluginResult, skills];
+export function rejectApplicationApi(client: VykorClient): void {
+  // @ts-expect-error product notes are private
+  client.notes;
+  // @ts-expect-error delivery channels are private
+  client.channels;
+  // @ts-expect-error scheduled product tasks are private
+  client.schedules;
+  // @ts-expect-error daemon administration is private
+  client.system;
+  // @ts-expect-error provider credentials are private
+  client.providers;
+  // @ts-expect-error plugin installation is private
+  client.plugins;
+  // @ts-expect-error terminal administration is private
+  client.terminals;
+  // @ts-expect-error storage administration is private
+  client.attachments.scanStorage();
+  // @ts-expect-error desktop worktree cleanup is private
+  client.sessions.clearWorktreeBinding;
+  // @ts-expect-error application contexts are not an Agent prompt field
+  const input: AdmitClientPromptInput = { items: [], pluginAppContexts: [] };
+  void input;
 }
 
 export function rejectRemovedFlatApi(client: VykorClient): void {

@@ -14,7 +14,7 @@ import {
   type VykorClientState,
   type PresentationReadRequest,
   type SessionRecord,
-} from "@rzx/client";
+} from "@vykor/application-client";
 
 import type { FrontendConfig, McpServerSnapshot, TranscriptItem } from "../types";
 import {

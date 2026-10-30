@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { CURRENT_PROTOCOL_VERSION } from "@rzx/client"
+import { CURRENT_PROTOCOL_VERSION } from "@vykor/application-client"
 vi.mock("electron", () => ({ app: { getVersion: () => "1.0" }, dialog: {}, shell: {}, Notification: { isSupported: () => false } }))
 vi.mock("@vykor/server/daemon-host", () => ({ readDaemonRegistry: () => ({ url: "http://127.0.0.1:7777", token: "secret", storePath: "D:/data/sessions.db" }) }))
 vi.mock("../session/session-service", () => ({ desktopSessionService: {} }))

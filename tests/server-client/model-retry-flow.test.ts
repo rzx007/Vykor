@@ -7,7 +7,7 @@ import { ModelRequestFailure } from "@vykor/agent-contracts";
 import { QueryEngine, ToolRegistry } from "@vykor/core/engine";
 import { type AgentEvent, type StreamingMessageClient, type ToolDefinition } from "@vykor/agent-contracts";
 import { SessionStore } from "@vykor/services";
-import { applyEvents, createInitialClientState, selectVisibleSessionMessagesWithParts } from "../../packages/client/src/index.js";
+import { applyEvents, createInitialClientState, selectVisibleSessionMessagesWithParts } from "@rzx/client";
 import { FrameworkAgentRun } from "../../packages/agent-runtime/src/kernel/framework-agent-run.js";
 import { AgentEventBus } from "../../packages/agent-runtime/src/kernel/event-source.js";
 import { DaemonAgentEventProjector } from "../../packages/server/src/application/agent/daemon-agent-event-projector.js";

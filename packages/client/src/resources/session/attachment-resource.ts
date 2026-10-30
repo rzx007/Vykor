@@ -3,9 +3,6 @@ import { parseAttachmentAssetRecord } from "@vykor/protocol";
 import type { HttpTransport } from "../../transport/http-transport.js";
 import { attachmentRangeHeader } from "../../transport/http-transport.js";
 import type {
-  AttachmentStorageGcResult,
-  AttachmentStorageRepairResult,
-  AttachmentStorageReport,
   DownloadAttachmentOptions,
   UploadAttachmentInput,
 } from "../../types/index.js";
@@ -61,40 +58,5 @@ export class AttachmentResource {
       { method: "DELETE", signal: options.signal },
     );
     return parseAttachmentAssetRecord(value);
-  }
-
-  async scanStorage(
-    options: { signal?: AbortSignal } = {},
-  ): Promise<AttachmentStorageReport> {
-    return await this.transport.request<AttachmentStorageReport>(
-      "/attachments/storage",
-      { signal: options.signal },
-    );
-  }
-
-  async repairStorage(
-    options: { signal?: AbortSignal } = {},
-  ): Promise<AttachmentStorageRepairResult> {
-    return await this.transport.request<AttachmentStorageRepairResult>(
-      "/attachments/storage/actions",
-      {
-        method: "POST",
-        body: { action: "repair-safe" },
-        signal: options.signal,
-      },
-    );
-  }
-
-  async gcStorage(
-    options: { signal?: AbortSignal } = {},
-  ): Promise<AttachmentStorageGcResult> {
-    return await this.transport.request<AttachmentStorageGcResult>(
-      "/attachments/storage/actions",
-      {
-        method: "POST",
-        body: { action: "gc" },
-        signal: options.signal,
-      },
-    );
   }
 }

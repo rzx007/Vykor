@@ -3,7 +3,7 @@ import { join } from "node:path"
 
 import { afterEach, describe, expect, it } from "vitest"
 
-import type { AttachmentAssetRecord, UploadAttachmentInput } from "@rzx/client"
+import type { AttachmentAssetRecord, UploadAttachmentInput } from "@vykor/application-client"
 
 import type { DesktopAttachmentUploadEvent } from "../../../shared/attachment-types"
 import {

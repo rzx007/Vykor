@@ -1,6 +1,6 @@
 import { AlertCircle, ChevronDown, FileCode2, LoaderCircle, TerminalSquare } from "lucide-react"
 import { memo, useEffect, useId, useMemo, useState } from "react"
-import type { WorkspaceChangesMetadata } from "@rzx/client"
+import type { WorkspaceChangesMetadata } from "@vykor/application-client"
 import type { DesktopGitDiffScope } from "@shared/git-types"
 
 import { Button } from "@renderer/components/ui/button"

@@ -10,7 +10,7 @@ const capabilities = (version = CURRENT_PROTOCOL_VERSION) => Response.json({
 });
 
 describe("mandatory protocol handshake", () => {
-  it("shares one handshake across concurrent HTTP, event and terminal streams", async () => {
+  it("shares one handshake across concurrent HTTP, event and attachment downloads", async () => {
     const calls: Array<{ path: string; headers: Headers }> = [];
     let release!: (response: Response) => void;
     const handshake = new Promise<Response>((resolve) => { release = resolve; });
@@ -25,7 +25,7 @@ describe("mandatory protocol handshake", () => {
     const requests = [
       client.sessions.list(),
       client.events.stream()[Symbol.asyncIterator]().next(),
-      client.terminals.streamEvents()[Symbol.asyncIterator]().next(),
+      client.attachments.download("attachment"),
     ];
     expect(calls.map((call) => call.path)).toEqual(["/capabilities"]);
     release(capabilities());
@@ -43,7 +43,7 @@ describe("mandatory protocol handshake", () => {
     const results = await Promise.allSettled([
       client.sessions.list(),
       client.events.stream()[Symbol.asyncIterator]().next(),
-      client.terminals.streamEvents()[Symbol.asyncIterator]().next(),
+      client.attachments.download("attachment"),
     ]);
     expect(results.every((result) => result.status === "rejected")).toBe(true);
     expect(fetchImpl).toHaveBeenCalledTimes(1);

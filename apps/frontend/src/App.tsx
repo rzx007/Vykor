@@ -17,7 +17,7 @@ import { JobsPanel, type JobsPanelProps } from "./components/JobsPanel";
 import type { FrontendConfig } from "./types";
 import type { TuiAction } from "./hooks/sessionController";
 import { copySelectionToClipboard } from "./utils/selection";
-import { normalizeApprovalMode, type ApprovalMode } from "@rzx/client";
+import { normalizeApprovalMode, type ApprovalMode } from "@vykor/application-client";
 
 type JobsPanelCallbacks = Omit<JobsPanelProps, "state" | "detailState">;
 

@@ -4,6 +4,8 @@ Vykor 终端 CLI：在终端里跑 AI Agent。默认进入交互式 TUI（需 [B
 
 命令行入口：`vk` 与 `vykor`（等价）。
 
+产品操作与类型由私有工作区包 `@vykor/application-client` 提供，会话同步复用公开 SDK `@rzx/client`。构建会把私有包打进 CLI 与 TUI，安装发布包无需单独安装它。
+
 ## 要求
 
 - Node.js >= 20

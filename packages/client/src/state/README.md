@@ -12,6 +12,7 @@
 | [session-stream-state.ts](./session-stream-state.ts) | `applySessionStreamEvent`、`applySessionStreamSnapshot` |
 | [session-sync-controller.ts](./session-sync-controller.ts) | `SyncConnectionStatus`、`SessionSyncControllerOptions`、`SessionSyncController` |
 | [sync.ts](./sync.ts) | `SyncEventsClient`、`hydrateState`、`syncEvents` |
+| [wait-for-run.ts](./wait-for-run.ts) | `waitForRun`、`WaitForRunOptions`、`RunResult` |
 
 ## 入口与处理步骤
 
@@ -21,9 +22,11 @@
 
 `syncEvents` 把更新作为异步迭代结果返回，保留摘要 `partView` 和可配置空闲超时（默认 60 秒）。`SessionSyncController` 使用同一内部流程，把初始缓存和游标传入，将结果交给回调；它保存当前状态、连接状态、取消信号和订阅代次，保持传输层原有的空闲超时默认值。取消后到达的快照、补读和事件不会更新显示。内部 `runEventSync` 不从公开入口导出。
 
+`waitForRun(client, { sessionId, runId, signal })` 使用 `syncEvents` 等待指定 Run 的终态，返回 `{ run, messages }`。已完成快照、失败和中断都按持久记录返回；它不自动批准权限。signal 只停止等待，不中断 daemon 上的 Run。
+
 ## 状态放在哪里
 
-会话视图、事件缓冲和订阅状态保存在客户端实例；业务持久化由 daemon 负责。
+会话视图和订阅状态由调用方的同步控制器或迭代任务保管；业务持久化由 daemon 负责。
 
 ## 新代码与测试
 

@@ -2,7 +2,7 @@ import {
   IncompatibleProtocolError,
   VykorApiError,
   VykorClient,
-} from "@rzx/client";
+} from "@vykor/application-client";
 import type { McpRuntimeConnectionCoordinator } from "@vykor/mcp";
 import type { McpRuntimeSyncResult, McpServerIdentity } from "@vykor/host-config";
 import { readDaemonRegistry } from "@vykor/server";
@@ -29,7 +29,7 @@ const unavailable = (): McpRuntimeSyncResult => ({
 /**
  * CLI-side Runtime coordinator.
  *
- * It reuses the daemon registry and the typed `@rzx/client` resource.
+ * It reuses the daemon registry and the typed `@vykor/application-client` resource.
  * A missing registry or an unreachable daemon is reported as `unavailable`;
  * daemon authentication, protocol and server errors are surfaced as real sync
  * failures so they are never mistaken for an offline daemon.

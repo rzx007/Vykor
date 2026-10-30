@@ -1,4 +1,4 @@
-import type { MaintenanceBackupManifest, CleanupPreview, CleanupResult, StorageReport, StorageRetentionPolicy, UsageFilter, UsagePrice, UsageReport, UsageSettings } from "@rzx/client"
+import type { MaintenanceBackupManifest, CleanupPreview, CleanupResult, StorageReport, StorageRetentionPolicy, UsageFilter, UsagePrice, UsageReport, UsageSettings } from "@vykor/application-client"
 export type { CleanupPreview, CleanupResult, StorageReport, StorageRetentionPolicy, UsageFilter, UsagePrice, UsageReport, UsageSettings }
 export interface MaintenanceBackupResult { path: string; manifest: MaintenanceBackupManifest; totalBytes?: number; excludes?: string[]; settingsExcluded?: boolean; settingsSnapshotPath?: string }
 export interface DiagnosticCheck { id: string; name: string; status: "success" | "warning" | "failed" | "unsupported" | "timeout" | "cancelled"; detail: string }

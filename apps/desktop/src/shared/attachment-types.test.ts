@@ -1,4 +1,4 @@
-import type { ServerCapabilities } from "@rzx/client"
+import type { ServerCapabilities } from "@vykor/application-client"
 import { describe, expect, it } from "vitest"
 
 import {

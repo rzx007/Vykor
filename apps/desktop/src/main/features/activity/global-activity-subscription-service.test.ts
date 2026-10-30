@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import { createInitialClientState, type SyncEventUpdate } from "@rzx/client"
+import { createInitialClientState, type SyncEventUpdate } from "@vykor/application-client"
 import { GlobalActivitySubscriptionService } from "./global-activity-subscription-service"
 
 function source() {

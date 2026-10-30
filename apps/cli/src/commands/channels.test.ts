@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@vykor/server", () => ({
   readDaemonRegistry: mocks.readDaemonRegistry,
 }));
-vi.mock("@rzx/client", () => ({
+vi.mock("@vykor/application-client", () => ({
   VykorClient: class {
     protocol = { health: mocks.health };
     channels = {

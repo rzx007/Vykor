@@ -1,38 +1,23 @@
-# 共享客户端源码导航
+# Agent 生命周期客户端源码
 
-通过 HTTP 与事件流访问 daemon，并维护客户端展示所需的会话状态。
-
-## 主要文件
-
-| 文件 | 主要导出 |
-| --- | --- |
-| [index.ts](./index.ts) | 统一导出本分类的类型与函数 |
+通过 HTTP 连接已有 daemon，维护会话记录的本地视图。根入口为 [index.ts](./index.ts)，只导出生命周期 API、只读能力、核心类型及同步函数；本机服务管理从独立 `/service` 入口使用。
 
 ## 分类目录
 
 | 目录 | 用途 |
 | --- | --- |
-| [commands/](./commands/README.md) | 将会话、设置、诊断等界面操作组织成可复用命令。 |
-| [configuration/](./configuration/README.md) | 处理客户端提交运行配置时使用的公共规则。 |
-| [protocol/](./protocol/README.md) | 在传输层之上统一处理协议请求和公共数据格式。 |
-| [resources/](./resources/README.md) | 按业务职责组织访问 daemon 的资源接口。 |
-| [service/](./service/README.md) | Node 专用后台服务管理，从独立子入口使用。 |
-| [state/](./state/README.md) | 把服务端快照与持续事件合并成可展示、可查询的会话状态。 |
-| [transport/](./transport/README.md) | 实现 HTTP 请求、协议握手和 SSE 事件连接。 |
-| [types/](./types/README.md) | 集中定义附件、扩展能力和状态同步使用的客户端类型。 |
+| [configuration/](./configuration/README.md) | 会话运行配置整理与模式检查 |
+| [protocol/](./protocol/README.md) | 健康、能力与协议检查 |
+| [resources/](./resources/README.md) | 会话、权限、附件、任务、事件与只读运行能力 |
+| [service/](./service/README.md) | Node 专用本机后台管理 |
+| [state/](./state/README.md) | 快照、事件合并、断线恢复与等待 Run 结果 |
+| [transport/](./transport/README.md) | HTTP/SSE 传输与协议握手 |
+| [types/](./types/README.md) | 生命周期请求、响应和同步类型 |
 
-## 入口与处理步骤
+## 调用与状态
 
-主要入口或定义见 [index.ts](./index.ts)。
+`VykorClient` 只组装资源，第一次请求才握手；会话写入和执行都交给 daemon。`syncEvents` 先读快照再订阅事件，reducer 更新本地视图，选择函数返回可展示记录。`waitForRun` 复用该同步流程等待指定运行终态。
 
-创建传输层和协议客户端，再构造资源接口；命令调用这些接口，状态模块结合快照和事件更新本地视图。
+持久状态归 daemon；客户端保存同步视图、连接及取消信号，界面保存草稿和选择。产品命令、业务资源及业务类型位于 [私有应用客户端](../../application-client/README.md)，不进入公开根导出。
 
-## 状态放在哪里
-
-远端业务数据由 daemon 保存；连接、订阅和展示状态保存在客户端对象中。
-
-## 新代码与测试
-
-根目录保留包入口和分类导航；具体实现放入对应分类。
-
-测试位于 [`__test__/`](./__test__)；只覆盖下级分类的测试放在对应分类的 `__test__/`。
+新增实现放对应分类，跨分类测试放本层 [`__test__/`](./__test__)，单分类测试放该分类的 `__test__/`。

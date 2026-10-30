@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { HttpTransport } from "@rzx/client";
+import { HttpTransport } from "@vykor/application-client";
 
 interface DebugOptions {
   json?: boolean;

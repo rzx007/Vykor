@@ -4,7 +4,7 @@ import {
   type SessionRecord,
   type ApprovalMode,
   type WorkMode,
-} from "@rzx/client";
+} from "@vykor/application-client";
 
 import type { FrontendConfig } from "../../types";
 

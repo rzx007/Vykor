@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSystemRoutes } from "../../packages/server/src/http/routes/system.js";
 import { createAuthRoutes } from "../../packages/server/src/http/routes/auth.js";
-import { VykorClient } from "@rzx/client";
+import { VykorClient } from "@vykor/application-client";
 
 function controls() {
   return {

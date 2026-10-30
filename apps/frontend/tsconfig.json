@@ -22,8 +22,8 @@
       "@vykor/coordinator/workflow": [
         "../../packages/coordinator/src/workflow/index.ts"
       ],
-      "@rzx/client": [
-        "../../packages/client/src/index.ts"
+      "@vykor/application-client": [
+        "../../packages/application-client/src/index.ts"
       ],
       "@vykor/services": [
         "../../packages/services/src/index.ts"

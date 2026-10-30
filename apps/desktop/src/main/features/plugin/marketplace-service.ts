@@ -5,7 +5,7 @@ import type {
   MarketplaceSelection,
   MarketplacePreview,
   MarketplaceOperation,
-} from "@rzx/client"
+} from "@vykor/application-client"
 import type { WebContents } from "electron"
 import type { DesktopMarketplacePreview } from "../../../shared/plugin-types"
 

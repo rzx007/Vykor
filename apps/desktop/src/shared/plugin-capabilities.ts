@@ -1,4 +1,4 @@
-import { checkProtocolCompatibility, CURRENT_PROTOCOL_VERSION, supportsFeature, type ServerCapabilities } from "@rzx/client"
+import { checkProtocolCompatibility, CURRENT_PROTOCOL_VERSION, supportsFeature, type ServerCapabilities } from "@vykor/application-client"
 
 export function requireDesktopPluginCapabilities(capabilities: ServerCapabilities): void {
   if (

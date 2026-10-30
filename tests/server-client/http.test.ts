@@ -11,7 +11,7 @@ import { join } from "node:path";
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { ModelCatalogService } from "@vykor/api";
-import { VykorClient, CURRENT_PROTOCOL_VERSION } from "../../packages/client/src/index.js";
+import { VykorClient, CURRENT_PROTOCOL_VERSION, waitForRun } from "@rzx/client";
 
 import {
   createWorkflowPlan,
@@ -1476,18 +1476,12 @@ describe("VykorHttpServer", () => {
           body: JSON.stringify({ content: "start child" }),
         });
         expect(prompt.status).toBe(202);
-        await waitForEvent(
-          baseUrl,
-          token,
-          (event) =>
-            event.type === "session.run.updated" &&
-            (
-              event.payload?.run as
-                { sessionId?: string; status?: string } | undefined
-            )?.sessionId === "parent" &&
-            (event.payload?.run as { status?: string } | undefined)?.status ===
-              "completed",
-        );
+        const client = new VykorClient({ baseUrl, token, fetch });
+        const admission = await prompt.json() as { run: { id: string } };
+        const result = await waitForRun(client, {
+          sessionId: "parent", runId: admission.run.id, signal: AbortSignal.timeout(30_000),
+        });
+        expect(result.run.status).toBe("completed");
         const child = server.store
           .sessions.list({ includeArchived: true })
           .find((session) => session.parentId === "parent");
@@ -1507,7 +1501,6 @@ describe("VykorHttpServer", () => {
         });
         expect(closeRuntime.status).toBe(409);
         expect(root!.children.get(task!.id)).toBeDefined();
-        const client = new VykorClient({ baseUrl, token, fetch });
         const firstTarget = { kind: "agent", jobId: task!.id, runId: task!.runId! } as const;
         const receipt = await client.jobs.send(firstTarget, { sessionId: "parent", data: "public Jobs follow up" });
         expect(receipt).toMatchObject({ inputId: expect.any(String), runId: expect.any(String) });

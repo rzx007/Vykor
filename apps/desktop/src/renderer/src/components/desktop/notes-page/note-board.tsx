@@ -25,7 +25,7 @@ import {
   sortableKeyboardCoordinates,
   useSortable,
 } from "@dnd-kit/sortable"
-import { reorderInContainer, type DesktopItem, type NoteOrganizationV1Record } from "@rzx/client"
+import { reorderInContainer, type DesktopItem, type NoteOrganizationV1Record } from "@vykor/application-client"
 import { SPRING_LAYOUT } from "@renderer/lib/ease"
 import { ProjectFolderItem } from "@renderer/components/motion/project-folder"
 import { cn } from "@renderer/lib/utils"

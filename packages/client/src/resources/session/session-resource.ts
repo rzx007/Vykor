@@ -2,8 +2,8 @@
  * SessionResource: 会话生命周期、快照、消息树、Prompt 准入排队与 Goal 资源。
  */
 
-import type { CreateSessionGoalInput, GoalActionInput, SessionGoal, UpdateSessionGoalInput, SearchSessionsOptions, SessionSearchResult, ClearSessionWorktreeBindingInput } from "@vykor/protocol";
-import { assertPromptMetadataAllowed, decodeClearedSessionWorktreeBinding, decodeSessionStateSnapshot } from "@vykor/protocol";
+import type { CreateSessionGoalInput, GoalActionInput, SessionGoal, UpdateSessionGoalInput, SearchSessionsOptions, SessionSearchResult } from "@vykor/protocol";
+import { assertPromptMetadataAllowed, decodeAgentSessionStateSnapshot } from "@vykor/protocol";
 import type { HttpTransport } from "../../transport/http-transport.js";
 import type {
   AdmitClientPromptInput,
@@ -126,12 +126,6 @@ export class SessionResource {
     return response.session;
   }
 
-  /** Clear only an archived session's matching binding after its directory was removed. */
-  async clearWorktreeBinding(sessionId: string, input: ClearSessionWorktreeBindingInput, options: { signal?: AbortSignal } = {}): Promise<SessionRecord> {
-    const response = await this.transport.request<{ session: SessionRecord }>(`/sessions/${encodeURIComponent(sessionId)}/worktree-cleared`, { method: "POST", body: input, signal: options.signal });
-    return decodeClearedSessionWorktreeBinding(response.session, sessionId);
-  }
-
   /** `POST /sessions/:id/fork` */
   async fork(
     sessionId: string,
@@ -190,7 +184,7 @@ export class SessionResource {
         signal: options.signal,
       },
     );
-    return decodeSessionStateSnapshot(response);
+    return decodeAgentSessionStateSnapshot(response);
   }
 
   /** `GET /sessions/:id/messages` */

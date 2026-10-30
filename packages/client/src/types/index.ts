@@ -1,61 +1,10 @@
-/**
- * 客户端公开类型。
- *
- * 会话/事件/权限等记录类型来自 `@vykor/protocol`；本文件补充
- * HTTP 请求参数、响应体，以及 reducer 使用的本地聚合状态结构。
- */
-
-import type { PluginInfo } from "./extension-types.js";
-import type { MemoryEntryRecord } from "@vykor/protocol";
-export type { MemoryEntryRecord, MemoryRevision, UpdateMemoryEntryInput, ClearMemoryInput } from "@vykor/protocol";
-export type { ClearSessionWorktreeBindingInput } from "@vykor/protocol";
+/** Public Agent lifecycle request, response and synchronization types. */
+import type { AdmitPromptAttachmentInput, AttachmentAssetRecord, CreateSessionInput, ForkSessionInput, InputDelivery, PermissionRequestRecord, PermissionStatus, SessionEventRecord, SessionAttachmentMessagePartRecord, SessionInputAttachmentRecord, SessionInputRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRecord, SessionRunRecord, SessionRunAttemptRecord, SessionExecutionRecord, AgentSessionStateSnapshot as SessionStateSnapshot, SessionTransformationMessagePartRecord, SessionUserInputItem, ListMessagePartsOptions, JobSnapshot, SessionGoal, CreateSessionGoalInput, UpdateSessionGoalInput, GoalActionInput } from "@vykor/protocol";
+export type { AdmitPromptAttachmentInput, AttachmentAssetRecord, InputDelivery, PermissionRequestRecord, PermissionStatus, SessionEventRecord, SessionAttachmentMessagePartRecord, SessionInputAttachmentRecord, SessionInputRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRecord, SessionRunRecord, SessionRunAttemptRecord, SessionExecutionRecord, AgentSessionStateSnapshot as SessionStateSnapshot, SessionTransformationMessagePartRecord, SessionUserInputItem, ListMessagePartsOptions, JobSnapshot, SessionGoal, CreateSessionGoalInput, UpdateSessionGoalInput, GoalActionInput } from "@vykor/protocol";
+export type { GoalStopReason, GoalExternalWait } from "@vykor/protocol";
 export type * from "./attachment-types.js";
-export type * from "./extension-types.js";
+export type * from "./runtime-types.js";
 export type * from "./sync-types.js";
-
-import type { AdmitPromptAttachmentInput, AttachmentAssetRecord, CreateScheduledTaskInput, CreateNoteInput, CreateSessionInput, ForkSessionInput, InputDelivery, PermissionRequestRecord, NoteRecord, ScheduledRunRecord, ScheduledTaskRecord, UpdateScheduledTaskInput, UpdateNoteInput, PermissionStatus, SessionEventRecord, SessionAttachmentMessagePartRecord, SessionInputAttachmentRecord, SessionInputRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRecord, SessionRunRecord, SessionRunAttemptRecord, SessionExecutionRecord, SessionStateSnapshot, SessionTransformationMessagePartRecord, SessionUserInputItem, ListMessagePartsOptions, JobSnapshot, SessionGoal, CreateSessionGoalInput, UpdateSessionGoalInput, GoalActionInput } from "@vykor/protocol";
-
-export type {
-  SessionGoal,
-  CreateSessionGoalInput,
-  UpdateSessionGoalInput,
-  GoalActionInput,
-  AdmitPromptAttachmentInput,
-  AttachmentAssetRecord,
-  CreateScheduledTaskInput,
-  CreateNoteInput,
-  InputDelivery,
-  PermissionRequestRecord,
-  NoteRecord,
-  ScheduledRunRecord,
-  ScheduledTaskRecord,
-  UpdateScheduledTaskInput,
-  UpdateNoteInput,
-  PermissionStatus,
-  SessionEventRecord,
-  SessionAttachmentMessagePartRecord,
-  SessionInputAttachmentRecord,
-  SessionInputRecord,
-  SessionMessagePartRecord,
-  SessionMessageRecord,
-  SessionRecord,
-  SessionRunRecord,
-  SessionRunAttemptRecord,
-  SessionExecutionRecord,
-  SessionStateSnapshot,
-  SessionTransformationMessagePartRecord,
-  SessionUserInputItem,
-  ListMessagePartsOptions,
-};
-
-export interface ScheduledTaskStatusSummary {
-  running: true;
-  tasks: number;
-  active: number;
-  paused: number;
-  executing: number;
-  unread: number;
-}
 
 /** `VykorClient` 构造参数。 */
 export interface VykorClientOptions {
@@ -121,7 +70,6 @@ export interface CancelQueuedPromptResponse {
 
 /** `POST /sessions/:id/prompts` 请求体。 */
 export interface AdmitClientPromptInput {
-  pluginAppContexts?: import("@vykor/protocol").PluginAppConversationRequest[];
   id?: string;
   items: SessionUserInputItem[];
   delivery?: InputDelivery;
@@ -129,6 +77,9 @@ export interface AdmitClientPromptInput {
   attachments?: AdmitPromptAttachmentInput[];
   metadata?: Record<string, unknown>;
 }
+
+/** Session identity is carried by the URL; only lifecycle prompt fields are public. */
+export type PromptInputForClient = AdmitClientPromptInput;
 
 /** `POST /sessions/:id/runs/:runId/resume` 请求体。`id` 用于安全重试。 */
 export interface ResumeInterruptedRunInput {
@@ -190,151 +141,11 @@ export interface ResumeInterruptedRunResponse extends PromptResponse {
   source_run: SessionRunRecord;
 }
 
-export type CommandKind = "session" | "template";
-export type CommandSelection = "execute" | "submenu" | "insert";
-export type CommandSource =
-  "builtin" | "bundled" | "user" | "plugin" | "project";
-
-/** `GET /commands` 返回的命令元数据。 */
-interface CommandCatalogEntryBase {
-  name: string;
-  displayName?: string;
-  description?: string;
-  source?: CommandSource;
-  argumentHint?: string;
-  selection?: CommandSelection;
-  requiresEmptyComposer?: boolean;
-}
-
-export type CommandCatalogEntry = CommandCatalogEntryBase & (
-  | { kind: "session"; path?: never; skillName?: never }
-  | { kind: "template"; path: string; skillName: string }
-);
-
-/** `GET /commands` 查询参数。 */
-export interface ListCommandsOptions {
-  cwd: string;
-}
-
 /** `PATCH /sessions/:id` 请求体。 */
 export interface UpdateClientSessionInput {
   title?: string;
   agent?: string | null;
   metadata?: Record<string, unknown>;
-}
-
-export interface ProjectRecord {
-  id: string;
-  name: string;
-  path: string;
-  pinnedAt?: number;
-  defaultShell?: string;
-  lastOpenedAt: number;
-  archivedAt?: number;
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface ListProjectsOptions {
-  includeArchived?: boolean;
-}
-
-export interface ProviderInfo {
-  name: string;
-  displayName: string;
-  hasKey: boolean;
-  active: boolean;
-  local?: boolean;
-  custom?: boolean;
-  requiresApiKey?: boolean;
-  source?: "builtin" | "catalog" | "custom" | "subscription";
-}
-
-export interface CustomProviderInput {
-  id: string;
-  displayName: string;
-  baseUrl: string;
-  apiFormat: "openai";
-  apiKey?: string;
-  models: Array<{
-    id: string;
-    displayName: string;
-    imageInputSupport?: "native" | "unsupported" | "unknown";
-    /** 用户自填的上下文窗口（tokens）；留空时服务端按模型 id 查目录。 */
-    contextWindow?: number;
-    /** 用户自填的最大输出（tokens）；留空时服务端按模型 id 查目录。 */
-    maxOutputTokens?: number;
-  }>;
-  headers?: Record<string, string>;
-  secretHeaders?: Record<string, string | null>;
-}
-
-export interface ConnectCatalogProviderInput {
-  apiKey: string;
-  headers?: Record<string, string>;
-  secretHeaders?: Record<string, string | null>;
-}
-
-export interface UpdateCatalogProviderHeadersInput {
-  headers: Record<string, string>;
-}
-
-export interface ModelInfo {
-  id: string;
-  label: string;
-  provider: string;
-  providerName: string;
-  hint?: string;
-  contextWindow?: number;
-  outputLimit?: number;
-  reasoning?: boolean;
-  reasoningEfforts?: string[];
-  vision?: boolean;
-  inputModalities?: string[];
-  inputCapabilities?: { image: "native" | "unsupported" | "unknown" };
-  toolCalling?: boolean;
-  status?: "active" | "beta";
-}
-
-export interface ModelProviderInfo {
-  name: string;
-  displayName: string;
-  models: ModelInfo[];
-}
-
-export interface McpServerStatus {
-  name: string;
-  status: string;
-  toolCount: number;
-  resourceCount: number;
-  command?: string;
-  error?: string;
-}
-
-/** Wire-compatible copy of the daemon's aggregate MCP Runtime state. */
-export type McpRuntimeStatus = "connected" | "disconnected" | "error" | "unavailable";
-
-export interface McpRuntimeSyncResult {
-  status: McpRuntimeStatus;
-  affectedRuntimes: number;
-  failures: Array<{ runtimeId: string; message: string }>;
-}
-
-export interface MemoryListResponse {
-  directory: string;
-  entries: MemoryEntryRecord[];
-}
-
-export interface AuthStatus {
-  codex: {
-    configured: boolean;
-    state: string;
-    source: string;
-    detail?: string;
-    profileLabel?: string;
-  };
-  storedProviders: string[];
-  envProviders: Array<{ name: string; envKey: string }>;
 }
 
 export interface CompactSessionResponse {
@@ -350,21 +161,11 @@ export interface RewindSessionResponse {
   parts: SessionMessagePartRecord[];
 }
 
-export interface ReloadPluginsResponse {
-  plugins: PluginInfo[];
-  warnings: string[];
-  message: string;
-}
-
 export interface RememberSessionResponse {
   skipped: boolean;
   reason?: string;
   writtenIds: string[];
   titles: string[];
-}
-
-export interface StartDreamResponse {
-  taskId: string;
 }
 
 export interface SessionUsageResponse {
@@ -381,12 +182,6 @@ export interface SessionExportResponse {
   format: "md" | "json";
   filepath: string;
   messageCount: number;
-}
-
-export interface OutputStyleInfo {
-  name: string;
-  content: string;
-  source: "builtin" | "user";
 }
 
 /** `POST /background-shells` 请求体。 */
@@ -411,5 +206,3 @@ export interface InterruptSessionResponse {
   queuedRunIds: string[];
   interrupted: boolean;
 }
-
-export type { GoalStopReason, GoalExternalWait } from "@vykor/protocol";

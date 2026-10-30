@@ -5,11 +5,11 @@ import { fileURLToPath } from "node:url"
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourceRoot = join(desktopRoot, "src")
 const allowedImports = new Set([
-  "@rzx/client",
+  "@vykor/application-client",
   "@vykor/server",
   "@vykor/server/daemon-host",
 ])
-const allowedPackageDependencies = new Set(["@rzx/client", "@vykor/server"])
+const allowedPackageDependencies = new Set(["@vykor/application-client", "@vykor/server"])
 const importPattern =
   /(?:from\s*|import\s*(?:\(\s*)?|require\s*\(\s*)["'](@vykor\/[^"']+|@rzx\/client(?:\/[^"']*)?)["']/g
 
@@ -25,8 +25,11 @@ export function validateDesktopWorkspaceImport(file, specifier) {
 }
 
 const failures = []
-if (validateDesktopWorkspaceImport("src/renderer/demo.ts", "@rzx/client")) {
-  failures.push("Boundary verifier must allow the public client in renderer")
+if (validateDesktopWorkspaceImport("src/renderer/demo.ts", "@vykor/application-client")) {
+  failures.push("Boundary verifier must allow the application client in renderer")
+}
+if (!validateDesktopWorkspaceImport("src/renderer/demo.ts", "@vykor/application-client/internal")) {
+  failures.push("Boundary verifier must reject unknown application client subpaths")
 }
 const clientInternalImport = [...'import { x } from "@rzx/client/internal"'.matchAll(importPattern)][0]
 if (!clientInternalImport || !validateDesktopWorkspaceImport("src/renderer/demo.ts", clientInternalImport[1])) {

@@ -1,5 +1,5 @@
-import type { VykorClientState, PermissionRequestRecord } from "@rzx/client";
-import { selectFirstPendingPermission } from "@rzx/client";
+import type { VykorClientState, PermissionRequestRecord } from "@vykor/application-client";
+import { selectFirstPendingPermission } from "@vykor/application-client";
 
 export function permissionToModal(request: PermissionRequestRecord): Record<string, unknown> {
   const input = request.payload.input && typeof request.payload.input === "object"

@@ -11,7 +11,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@rzx/client": "workspace:*",
+    "@vykor/application-client": "workspace:*",
     "@vykor/themes": "workspace:*",
     "@opentui/core": "catalog:",
     "@opentui/react": "catalog:",

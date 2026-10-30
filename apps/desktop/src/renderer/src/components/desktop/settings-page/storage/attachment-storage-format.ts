@@ -1,4 +1,4 @@
-import type { AttachmentStorageIssue, AttachmentStorageReport } from "@rzx/client"
+import type { AttachmentStorageIssue, AttachmentStorageReport } from "@vykor/application-client"
 
 export type GroupedStorageIssue = Pick<AttachmentStorageIssue, "code" | "severity"> & {
   count: number

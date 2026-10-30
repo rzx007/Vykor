@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { mergeNotes, reconcileOrganization } from "@rzx/client"
+import { mergeNotes, reconcileOrganization } from "@vykor/application-client"
 import { projectNoteDesktop, searchNoteOrganization } from "../note-organization"
 import type { NoteView } from "../note-model"
 

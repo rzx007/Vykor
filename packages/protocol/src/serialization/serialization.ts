@@ -8,6 +8,7 @@ import type {
   SessionRunAttemptRecord,
   SessionRunRecord,
   SessionStateSnapshot,
+  AgentSessionStateSnapshot,
   SessionRecord,
 } from "../session/session.js";
 import type { AttachmentIntent } from "../attachments/attachment.js";
@@ -376,7 +377,7 @@ export function serializeSessionEventRecord(event: SessionEventRecord): string {
   return JSON.stringify(event);
 }
 
-export function decodeSessionStateSnapshot(value: unknown): SessionStateSnapshot {
+function validateSessionStateSnapshot(value: unknown): DataRecord {
   const snapshot = object(value, "snapshot");
   numberField(snapshot, "cursor", "snapshot");
   validateSession(snapshot.session, "snapshot.session");
@@ -387,7 +388,18 @@ export function decodeSessionStateSnapshot(value: unknown): SessionStateSnapshot
   arrayField(snapshot, "attempts", "snapshot", validateAttempt);
   if (snapshot.tasks !== undefined) arrayField(snapshot, "tasks", "snapshot", validateTask);
   arrayField(snapshot, "permissions", "snapshot", validatePermission);
-  return snapshot as unknown as SessionStateSnapshot;
+  return snapshot;
+}
+
+/** Public SDK snapshot: validate once and project only lifecycle fields. */
+export function decodeAgentSessionStateSnapshot(value: unknown): AgentSessionStateSnapshot {
+  const snapshot = validateSessionStateSnapshot(value);
+  const { cursor, session, inputs, messages, parts, runs, attempts, tasks, permissions } = snapshot;
+  return { cursor, session, inputs, messages, parts, runs, attempts, ...(tasks !== undefined ? { tasks } : {}), permissions } as AgentSessionStateSnapshot;
+}
+
+export function decodeSessionStateSnapshot(value: unknown): SessionStateSnapshot {
+  return validateSessionStateSnapshot(value) as unknown as SessionStateSnapshot;
 }
 
 /** Validate the persisted acknowledgement for the narrow archived-worktree cleanup operation. */

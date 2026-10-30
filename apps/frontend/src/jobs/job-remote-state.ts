@@ -1,4 +1,4 @@
-import type { JobReadResult, JobSnapshot } from "@rzx/client";
+import type { JobReadResult, JobSnapshot } from "@vykor/application-client";
 
 export type JobRemoteState =
   | { status: "idle"; jobs: JobSnapshot[] }

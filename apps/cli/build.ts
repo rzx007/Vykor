@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 
 const pkg = JSON.parse(readFileSync("package.json", "utf-8"));
 const frontendPkg = JSON.parse(readFileSync("../frontend/package.json", "utf-8"));
+// Bundle workspace code, including the private application client, into both products.
 const cliExternals = [...new Set([
   ...Object.keys(pkg.dependencies || {}),
   ...Object.keys(pkg.peerDependencies || {}),

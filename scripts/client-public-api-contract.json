@@ -2,266 +2,33 @@
   "$schema": "./client-public-api-contract.schema.json",
   "version": 1,
   "entries": [
-    { "name": "mergeNotes", "kind": "runtime-export" },
-    { "name": "moveNoteToDesktop", "kind": "runtime-export" },
-    { "name": "moveNoteToFolder", "kind": "runtime-export" },
-    { "name": "reorderInContainer", "kind": "runtime-export" },
-    { "name": "dissolveFolder", "kind": "runtime-export" },
-    { "name": "renameFolder", "kind": "runtime-export" },
-    { "name": "validateFolderName", "kind": "runtime-export" },
-    { "name": "reconcileOrganization", "kind": "runtime-export" },
-    { "name": "DesktopItem", "kind": "type-export" },
-    { "name": "NoteFolderRecord", "kind": "type-export" },
-    { "name": "NoteOrganizationV1Record", "kind": "type-export" },
-    { "name": "NoteOrganizationSnapshotRecord", "kind": "type-export" },
-    { "name": "SaveNoteOrganizationInput", "kind": "type-export" },
     {
-      "name": "getPluginAppToolPolicy",
-      "kind": "runtime-export"
+      "name": "attachments",
+      "kind": "client-resource"
     },
     {
-      "name": "PluginAppToolDescriptor",
-      "kind": "type-export"
+      "name": "events",
+      "kind": "client-resource"
     },
     {
-      "name": "PluginAppToolPolicy",
-      "kind": "type-export"
+      "name": "jobs",
+      "kind": "client-resource"
     },
     {
-      "name": "OFFICE_MEDIA_TYPES",
-      "kind": "runtime-export"
+      "name": "permissions",
+      "kind": "client-resource"
     },
     {
-      "name": "officeFormat",
-      "kind": "runtime-export"
+      "name": "protocol",
+      "kind": "client-resource"
     },
     {
-      "name": "OfficeFormat",
-      "kind": "type-export"
+      "name": "runtime",
+      "kind": "client-resource"
     },
     {
-      "name": "OfficePreview",
-      "kind": "type-export"
-    },
-    {
-      "name": "CleanupCandidate",
-      "kind": "type-export"
-    },
-    {
-      "name": "CleanupPreview",
-      "kind": "type-export"
-    },
-    {
-      "name": "CleanupResult",
-      "kind": "type-export"
-    },
-    {
-      "name": "ClearMemoryInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "ClearSessionWorktreeBindingInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "DaemonRestartPreview",
-      "kind": "type-export"
-    },
-    {
-      "name": "MaintenanceBackupManifest",
-      "kind": "type-export"
-    },
-    {
-      "name": "MemoryRevision",
-      "kind": "type-export"
-    },
-    {
-      "name": "StorageCategory",
-      "kind": "type-export"
-    },
-    {
-      "name": "StorageReport",
-      "kind": "type-export"
-    },
-    {
-      "name": "StorageRetentionPolicy",
-      "kind": "type-export"
-    },
-    {
-      "name": "UpdateMemoryEntryInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "UsageFilter",
-      "kind": "type-export"
-    },
-    {
-      "name": "UsagePrice",
-      "kind": "type-export"
-    },
-    {
-      "name": "UsageReport",
-      "kind": "type-export"
-    },
-    {
-      "name": "UsageRequest",
-      "kind": "type-export"
-    },
-    {
-      "name": "UsageSettings",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginUiConversationReceipt",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginUiSubmissionRecord",
-      "kind": "type-export"
-    },
-    {
-      "name": "ProtocolValidationError",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "parsePluginUiConversationReceipt",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "parsePluginUiSubmissionRecord",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "readPluginUiInstance",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "readPluginUiAction",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "JsonValue",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginUiActionRunMetadata",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginUiActionReceipt",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginUiActionResponse",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginUiInstanceRecord",
-      "kind": "type-export"
-    },
-    {
-      "name": "AttachmentResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "AuthResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "CURRENT_PROTOCOL_VERSION",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "ChannelResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "DevelopmentResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "EventResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "HttpTransport",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "IncompatibleProtocolError",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "JobResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "NoteResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "LOCAL_COMMAND_DETAILS",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "LOCAL_COMMAND_NAMES",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "VykorApiError",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "VykorClient",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "PermissionResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "PluginResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "ProjectResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "ProtocolClient",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "ProviderResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "ScheduleResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "SessionResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "SessionSyncController",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "SseTransport",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "SystemResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "TerminalResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "UnsupportedSessionEventSchemaVersionError",
-      "kind": "runtime-export"
+      "name": "sessions",
+      "kind": "client-resource"
     },
     {
       "name": "applyEvent",
@@ -273,6 +40,14 @@
     },
     {
       "name": "applySessionSnapshot",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "attachmentRangeHeader",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "AttachmentResource",
       "kind": "runtime-export"
     },
     {
@@ -288,11 +63,15 @@
       "kind": "runtime-export"
     },
     {
-      "name": "dispatchSessionCommand",
+      "name": "CURRENT_PROTOCOL_VERSION",
       "kind": "runtime-export"
     },
     {
-      "name": "hasActiveRun",
+      "name": "EventResource",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "HttpTransport",
       "kind": "runtime-export"
     },
     {
@@ -300,15 +79,23 @@
       "kind": "runtime-export"
     },
     {
-      "name": "isPluginIconSource",
+      "name": "IncompatibleProtocolError",
       "kind": "runtime-export"
     },
     {
-      "name": "isPluginWebUrl",
+      "name": "isSupersededModelPart",
       "kind": "runtime-export"
     },
     {
-      "name": "mergeCommandDetails",
+      "name": "isWorkMode",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "JobResource",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "normalizeApprovalMode",
       "kind": "runtime-export"
     },
     {
@@ -324,10 +111,6 @@
       "kind": "runtime-export"
     },
     {
-      "name": "parseSlashLine",
-      "kind": "runtime-export"
-    },
-    {
       "name": "parseUpdateSessionGoalInput",
       "kind": "runtime-export"
     },
@@ -336,7 +119,27 @@
       "kind": "runtime-export"
     },
     {
+      "name": "PermissionResource",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "ProtocolClient",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "ProtocolValidationError",
+      "kind": "runtime-export"
+    },
+    {
       "name": "readRuntimeMetadata",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "readSessionModelRetryState",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "readSessionModelUsage",
       "kind": "runtime-export"
     },
     {
@@ -348,7 +151,15 @@
       "kind": "runtime-export"
     },
     {
-      "name": "resolveSessionCwd",
+      "name": "responseArray",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "responseField",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "RuntimeResource",
       "kind": "runtime-export"
     },
     {
@@ -361,6 +172,14 @@
     },
     {
       "name": "selectSessionMessagesWithParts",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "selectSessionModelRetry",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "selectSessionModelUsage",
       "kind": "runtime-export"
     },
     {
@@ -384,6 +203,22 @@
       "kind": "runtime-export"
     },
     {
+      "name": "selectVisibleSessionMessagesWithParts",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "SessionResource",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "SessionSyncController",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "SseTransport",
+      "kind": "runtime-export"
+    },
+    {
       "name": "streamServerSentEvents",
       "kind": "runtime-export"
     },
@@ -396,7 +231,19 @@
       "kind": "runtime-export"
     },
     {
-      "name": "McpResource",
+      "name": "UnsupportedSessionEventSchemaVersionError",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "VykorApiError",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "VykorClient",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "waitForRun",
       "kind": "runtime-export"
     },
     {
@@ -416,27 +263,15 @@
       "kind": "type-export"
     },
     {
+      "name": "ApprovalMode",
+      "kind": "type-export"
+    },
+    {
+      "name": "ApprovalReviewRecord",
+      "kind": "type-export"
+    },
+    {
       "name": "AttachmentAssetRecord",
-      "kind": "type-export"
-    },
-    {
-      "name": "AttachmentStorageGcResult",
-      "kind": "type-export"
-    },
-    {
-      "name": "AttachmentStorageIssue",
-      "kind": "type-export"
-    },
-    {
-      "name": "AttachmentStorageRepairResult",
-      "kind": "type-export"
-    },
-    {
-      "name": "AttachmentStorageReport",
-      "kind": "type-export"
-    },
-    {
-      "name": "AuthStatus",
       "kind": "type-export"
     },
     {
@@ -448,95 +283,11 @@
       "kind": "type-export"
     },
     {
-      "name": "ChannelDeliveryRecord",
-      "kind": "type-export"
-    },
-    {
-      "name": "ChannelDeliveryStatus",
-      "kind": "type-export"
-    },
-    {
-      "name": "ChannelStatusSnapshot",
-      "kind": "type-export"
-    },
-    {
-      "name": "ChannelConnectorRuntimeStatus",
-      "kind": "type-export"
-    },
-    {
-      "name": "ChannelDenialNotice",
-      "kind": "type-export"
-    },
-    {
-      "name": "ChannelDomain",
-      "kind": "type-export"
-    },
-    {
-      "name": "ChannelRuntimeControlInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "ChannelRuntimeState",
-      "kind": "type-export"
-    },
-    {
-      "name": "ChannelRuntimeStatus",
-      "kind": "type-export"
-    },
-    {
-      "name": "FeishuAllowInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "FeishuChannelSnapshot",
-      "kind": "type-export"
-    },
-    {
-      "name": "FeishuConnectInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "FeishuPatchInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "FeishuRegistrationSnapshot",
-      "kind": "type-export"
-    },
-    {
-      "name": "FeishuRegistrationStartInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "FeishuRegistrationState",
-      "kind": "type-export"
-    },
-    {
       "name": "ClientProtocolSupport",
       "kind": "type-export"
     },
     {
-      "name": "CommandCatalogEntry",
-      "kind": "type-export"
-    },
-    {
-      "name": "CommandKind",
-      "kind": "type-export"
-    },
-    {
-      "name": "CommandSelection",
-      "kind": "type-export"
-    },
-    {
-      "name": "CommandSource",
-      "kind": "type-export"
-    },
-    {
       "name": "CompactSessionResponse",
-      "kind": "type-export"
-    },
-    {
-      "name": "ConnectCatalogProviderInput",
       "kind": "type-export"
     },
     {
@@ -552,27 +303,11 @@
       "kind": "type-export"
     },
     {
-      "name": "CreateScheduledTaskInput",
-      "kind": "type-export"
-    },
-    {
       "name": "CreateSessionGoalInput",
       "kind": "type-export"
     },
     {
-      "name": "CustomProviderInput",
-      "kind": "type-export"
-    },
-    {
       "name": "DownloadAttachmentOptions",
-      "kind": "type-export"
-    },
-    {
-      "name": "DurableChannelMessageInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "DurableChannelMessageResult",
       "kind": "type-export"
     },
     {
@@ -581,10 +316,6 @@
     },
     {
       "name": "EventSyncOptions",
-      "kind": "type-export"
-    },
-    {
-      "name": "ExternalConversationRecord",
       "kind": "type-export"
     },
     {
@@ -604,7 +335,11 @@
       "kind": "type-export"
     },
     {
-      "name": "HookInfo",
+      "name": "HttpRequestOptions",
+      "kind": "type-export"
+    },
+    {
+      "name": "HttpTransportOptions",
       "kind": "type-export"
     },
     {
@@ -620,7 +355,15 @@
       "kind": "type-export"
     },
     {
+      "name": "JobInputReceipt",
+      "kind": "type-export"
+    },
+    {
       "name": "JobKind",
+      "kind": "type-export"
+    },
+    {
+      "name": "JobListResult",
       "kind": "type-export"
     },
     {
@@ -636,7 +379,15 @@
       "kind": "type-export"
     },
     {
+      "name": "JobTarget",
+      "kind": "type-export"
+    },
+    {
       "name": "JobWaitResult",
+      "kind": "type-export"
+    },
+    {
+      "name": "JsonValue",
       "kind": "type-export"
     },
     {
@@ -644,11 +395,11 @@
       "kind": "type-export"
     },
     {
-      "name": "ListCommandsOptions",
+      "name": "ListEventsOptions",
       "kind": "type-export"
     },
     {
-      "name": "ListEventsOptions",
+      "name": "ListMessagePartsOptions",
       "kind": "type-export"
     },
     {
@@ -660,23 +411,11 @@
       "kind": "type-export"
     },
     {
-      "name": "ListProjectsOptions",
-      "kind": "type-export"
-    },
-    {
       "name": "ListSessionsOptions",
       "kind": "type-export"
     },
     {
       "name": "McpServerStatus",
-      "kind": "type-export"
-    },
-    {
-      "name": "MemoryEntryRecord",
-      "kind": "type-export"
-    },
-    {
-      "name": "MemoryListResponse",
       "kind": "type-export"
     },
     {
@@ -688,51 +427,11 @@
       "kind": "type-export"
     },
     {
-      "name": "VykorClientOptions",
-      "kind": "type-export"
-    },
-    {
-      "name": "VykorClientState",
-      "kind": "type-export"
-    },
-    {
-      "name": "VykorServerHealth",
-      "kind": "type-export"
-    },
-    {
-      "name": "OutputStyleInfo",
-      "kind": "type-export"
-    },
-    {
       "name": "PermissionRequestRecord",
       "kind": "type-export"
     },
     {
       "name": "PermissionStatus",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginCatalogEntry",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginInfo",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginRuntimeStatus",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginUiInventory",
-      "kind": "type-export"
-    },
-    {
-      "name": "PresentationReadRequest",
-      "kind": "type-export"
-    },
-    {
-      "name": "ProjectRecord",
       "kind": "type-export"
     },
     {
@@ -744,6 +443,10 @@
       "kind": "type-export"
     },
     {
+      "name": "PromptInputForClient",
+      "kind": "type-export"
+    },
+    {
       "name": "PromptResponse",
       "kind": "type-export"
     },
@@ -752,27 +455,7 @@
       "kind": "type-export"
     },
     {
-      "name": "ProviderInfo",
-      "kind": "type-export"
-    },
-    {
-      "name": "CreateNoteInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "NoteRecord",
-      "kind": "type-export"
-    },
-    {
-      "name": "UpdateNoteInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "RecordChannelDeliveryInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "ReloadPluginsResponse",
+      "name": "RawRequestOptions",
       "kind": "type-export"
     },
     {
@@ -784,19 +467,19 @@
       "kind": "type-export"
     },
     {
+      "name": "ResumeInterruptedRunInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "ResumeInterruptedRunResponse",
+      "kind": "type-export"
+    },
+    {
       "name": "RewindSessionResponse",
       "kind": "type-export"
     },
     {
-      "name": "ScheduledRunRecord",
-      "kind": "type-export"
-    },
-    {
-      "name": "ScheduledTaskRecord",
-      "kind": "type-export"
-    },
-    {
-      "name": "ScheduledTaskStatusSummary",
+      "name": "RunResult",
       "kind": "type-export"
     },
     {
@@ -813,14 +496,6 @@
     },
     {
       "name": "SessionBucket",
-      "kind": "type-export"
-    },
-    {
-      "name": "SessionCommandHost",
-      "kind": "type-export"
-    },
-    {
-      "name": "SessionCommandOutcome",
       "kind": "type-export"
     },
     {
@@ -857,6 +532,14 @@
     },
     {
       "name": "SessionMessageWithParts",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionModelRetryState",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionModelUsageSummary",
       "kind": "type-export"
     },
     {
@@ -920,15 +603,11 @@
       "kind": "type-export"
     },
     {
-      "name": "SlashLine",
-      "kind": "type-export"
-    },
-    {
-      "name": "StartDreamResponse",
-      "kind": "type-export"
-    },
-    {
       "name": "SyncConnectionStatus",
+      "kind": "type-export"
+    },
+    {
+      "name": "SyncEventsClient",
       "kind": "type-export"
     },
     {
@@ -936,59 +615,7 @@
       "kind": "type-export"
     },
     {
-      "name": "TerminalCreateRequest",
-      "kind": "type-export"
-    },
-    {
-      "name": "TerminalEvent",
-      "kind": "type-export"
-    },
-    {
-      "name": "TerminalReadRequest",
-      "kind": "type-export"
-    },
-    {
-      "name": "TerminalReadResult",
-      "kind": "type-export"
-    },
-    {
-      "name": "TerminalResizeRequest",
-      "kind": "type-export"
-    },
-    {
-      "name": "TerminalRuntime",
-      "kind": "type-export"
-    },
-    {
-      "name": "TerminalSessionInfo",
-      "kind": "type-export"
-    },
-    {
-      "name": "TerminalSessionStatus",
-      "kind": "type-export"
-    },
-    {
-      "name": "TerminalSignal",
-      "kind": "type-export"
-    },
-    {
-      "name": "TerminalSource",
-      "kind": "type-export"
-    },
-    {
-      "name": "TerminalWriteRequest",
-      "kind": "type-export"
-    },
-    {
-      "name": "UpdateCatalogProviderHeadersInput",
-      "kind": "type-export"
-    },
-    {
       "name": "UpdateClientSessionInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "UpdateScheduledTaskInput",
       "kind": "type-export"
     },
     {
@@ -1000,231 +627,19 @@
       "kind": "type-export"
     },
     {
-      "name": "WorkspaceChangeFile",
+      "name": "VykorClientOptions",
       "kind": "type-export"
     },
     {
-      "name": "WorkspaceChangesMetadata",
+      "name": "VykorClientState",
       "kind": "type-export"
     },
     {
-      "name": "McpRuntimeStatus",
+      "name": "VykorServerHealth",
       "kind": "type-export"
     },
     {
-      "name": "McpRuntimeSyncResult",
-      "kind": "type-export"
-    },
-    {
-      "name": "protocol",
-      "kind": "client-resource"
-    },
-    {
-      "name": "system",
-      "kind": "client-resource"
-    },
-    {
-      "name": "providers",
-      "kind": "client-resource"
-    },
-    {
-      "name": "auth",
-      "kind": "client-resource"
-    },
-    {
-      "name": "projects",
-      "kind": "client-resource"
-    },
-    {
-      "name": "plugins",
-      "kind": "client-resource"
-    },
-    {
-      "name": "development",
-      "kind": "client-resource"
-    },
-    {
-      "name": "sessions",
-      "kind": "client-resource"
-    },
-    {
-      "name": "attachments",
-      "kind": "client-resource"
-    },
-    {
-      "name": "permissions",
-      "kind": "client-resource"
-    },
-    {
-      "name": "schedules",
-      "kind": "client-resource"
-    },
-    {
-      "name": "notes",
-      "kind": "client-resource"
-    },
-    {
-      "name": "jobs",
-      "kind": "client-resource"
-    },
-    {
-      "name": "terminals",
-      "kind": "client-resource"
-    },
-    {
-      "name": "channels",
-      "kind": "client-resource"
-    },
-    {
-      "name": "events",
-      "kind": "client-resource"
-    },
-    {
-      "name": "mcp",
-      "kind": "client-resource"
-    },
-    {
-      "name": "readSessionModelRetryState",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "readSessionModelUsage",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "isSupersededModelPart",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "selectSessionModelRetry",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "selectSessionModelUsage",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "selectVisibleSessionMessagesWithParts",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "SessionModelRetryState",
-      "kind": "type-export"
-    },
-    {
-      "name": "SessionModelUsageSummary",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginUiHistoryResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "pluginUiHistory",
-      "kind": "client-resource"
-    },
-    {
-      "name": "pluginApps",
-      "kind": "client-resource"
-    },
-    {
-      "name": "PluginAppResource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "PLUGIN_APP_DATA_LIMITS",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "PLUGIN_APP_INPUT_LIMITS",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "PLUGIN_APP_RESOURCE_LIMITS",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "parsePluginAppConversationRequest",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "copyPluginAppJson",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "parseOpenPluginAppInput",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "parsePluginAppSource",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "parsePluginAppToolRequest",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "parseMcpCallResultData",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "isPluginAppAdmissionRejection",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "PluginAppToolRequest",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginAppConversationRequest",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginAppActionResponse",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginAppActionReceipt",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginAppSubmissionReceipt",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginAppRecord",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginAppSource",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginAppRuntimeLease",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginAppResponse",
-      "kind": "type-export"
-    },
-    {
-      "name": "PluginAppAdmissionRejection",
-      "kind": "type-export"
-    },
-    {
-      "name": "isWorkMode",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "normalizeApprovalMode",
-      "kind": "runtime-export"
-    },
-    {
-      "name": "ApprovalMode",
-      "kind": "type-export"
-    },
-    {
-      "name": "ApprovalReviewRecord",
+      "name": "WaitForRunOptions",
       "kind": "type-export"
     },
     {
@@ -1232,52 +647,12 @@
       "kind": "type-export"
     },
     {
-      "name": "MarketplaceCatalog",
+      "name": "WorkspaceChangeFile",
       "kind": "type-export"
     },
     {
-      "name": "MarketplaceSource",
+      "name": "WorkspaceChangesMetadata",
       "kind": "type-export"
-    },
-    {
-      "name": "MarketplaceSourceView",
-      "kind": "type-export"
-    },
-    {
-      "name": "MarketplaceEntry",
-      "kind": "type-export"
-    },
-    {
-      "name": "MarketplaceSelection",
-      "kind": "type-export"
-    },
-    {
-      "name": "MarketplacePreview",
-      "kind": "type-export"
-    },
-    {
-      "name": "MarketplaceInstallInput",
-      "kind": "type-export"
-    },
-    {
-      "name": "MarketplaceOperation",
-      "kind": "type-export"
-    },
-    {
-      "name": "MarketplaceProvenance",
-      "kind": "type-export"
-    },
-    {
-      "kind": "type-export",
-      "name": "JobTarget"
-    },
-    {
-      "kind": "type-export",
-      "name": "JobInputReceipt"
-    },
-    {
-      "kind": "type-export",
-      "name": "JobListResult"
     }
   ]
 }

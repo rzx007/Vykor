@@ -26,6 +26,7 @@ try {
   const installed = join(sandbox, "node_modules/@rzx/client");
   const manifest = JSON.parse(readFileSync(join(installed, "package.json"), "utf8"));
   assert.equal(Object.keys(manifest.dependencies ?? {}).length, 0, "SDK must not require unpublished workspace packages");
+  assert.deepEqual(Object.keys(manifest.exports).sort(), [".", "./service"], "Private application entries must not be published");
   for (const name of ["index.js", "index.d.ts", "service.js", "service.d.ts"]) {
     const content = readFileSync(join(installed, "dist", name), "utf8");
     assert.doesNotMatch(content, /(?:from\s*|import\s*\()\s*["'](?:@vykor\/|@rzx\/client(?:\/|["']))/, `${name} leaks workspace imports`);
@@ -34,6 +35,7 @@ try {
   const fixture = fileURLToPath(new URL("../src/service/__test__/service-fixture.mjs", import.meta.url));
   writeFileSync(join(sandbox, "consumer.mjs"), `
 import assert from "node:assert/strict";
+import * as sdk from "@rzx/client";
 import { VykorClient, createInitialClientState, CURRENT_PROTOCOL_VERSION } from "@rzx/client";
 import { Service } from "@rzx/client/service";
 const endpoint = await Service.ensure({
@@ -43,6 +45,10 @@ const endpoint = await Service.ensure({
 });
 try {
   const client = new VykorClient(Service.clientOptions(endpoint));
+  for (const key of ["notes", "channels", "schedules", "plugins", "pluginApps", "system", "providers", "terminals"]) assert.equal(key in client, false, key);
+  for (const key of ["NoteResource", "dispatchSessionCommand", "mergeNotes", "officeFormat"]) assert.equal(key in sdk, false, key);
+  assert.equal("scanStorage" in client.attachments, false);
+  assert.equal(typeof sdk.waitForRun, "function");
   assert.deepEqual(await client.sessions.list(), []);
   assert.equal(createInitialClientState().lastSeq, 0);
   assert.equal((await Service.discover({ file: endpoint.file })).pid, endpoint.pid);
@@ -52,19 +58,33 @@ console.log("packed Node client and service: ok");
   execFileSync(process.execPath, [join(sandbox, "consumer.mjs")], { cwd: sandbox, stdio: "inherit", timeout: 20_000 });
 
   writeFileSync(join(sandbox, "consumer.ts"), `
-import { VykorClient, syncEvents, type SessionRecord, type SessionRunRecord } from "@rzx/client";
+import { VykorClient, syncEvents, waitForRun, type SessionRecord, type SessionRunRecord } from "@rzx/client";
+// @ts-expect-error product types must not exist in the installed SDK
+import type { NoteRecord } from "@rzx/client";
+// @ts-expect-error UI contracts must not exist in the installed SDK
+import type { PluginAppConversationRequest } from "@rzx/client";
 import { Service, type ServiceEndpoint } from "@rzx/client/service";
 const client = new VykorClient({ baseUrl: "http://127.0.0.1:8787" });
 async function consume(endpoint: ServiceEndpoint) {
   const connected = new VykorClient(Service.clientOptions(endpoint));
   const session: SessionRecord = await connected.sessions.create({ cwd: "/workspace", model: "configured-model" });
   await connected.sessions.admitPrompt(session.id, { items: [{ type: "text", text: "hello" }] });
+  await waitForRun(connected, { sessionId: session.id, runId: "run", signal: AbortSignal.timeout(1000) });
   for await (const update of syncEvents(client, { sessionId: session.id })) {
     const runs: Record<string, SessionRunRecord> = update.state.buckets[session.id]!.runs;
     void runs;
   }
+  const snapshot = await client.sessions.getState(session.id);
+  // @ts-expect-error application snapshot extensions are private
+  snapshot.pluginApps;
   // @ts-expect-error cwd must be a string.
   await client.sessions.create({ cwd: 42, model: "configured-model" });
+  // @ts-expect-error application resources are private
+  client.notes;
+  // @ts-expect-error storage maintenance is private
+  client.attachments.scanStorage();
+  // @ts-expect-error plugin application inputs are private
+  client.sessions.admitPrompt(session.id, { items: [], pluginAppContexts: [] });
 }
 void consume;
 `);

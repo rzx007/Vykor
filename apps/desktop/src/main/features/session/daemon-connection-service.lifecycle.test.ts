@@ -14,7 +14,7 @@ vi.mock("electron", () => ({ app: { getVersion: () => "1", getPath: () => "D:/te
 vi.mock("@vykor/server/daemon-host", () => host)
 vi.mock("../daemon-autostart/daemon-surface", () => ({ isDesktopManagedRegistry: (value: { executionSurface: string }) => value.executionSurface === "desktop_managed", isLoopbackDaemonUrl: (url: string) => new URL(url).hostname === "127.0.0.1" }))
 vi.mock("../daemon-autostart/daemon-takeover", () => ({ stopNonDesktopDaemon: vi.fn(), reconcileDesktopManagedService: vi.fn() }))
-vi.mock("@rzx/client", () => ({ VykorClient: class {
+vi.mock("@vykor/application-client", () => ({ VykorClient: class {
   protocol = { health: async () => ({ activeRunCount: 0, queuedRunCount: 0 }), capabilities: async () => ({ features: { safeRestart: state.safeRestart } }) }
   projects = { list: async () => [] }
   system = { getRestartPreview: async () => state.preview, prepareRestart: async () => { if (state.prepareError) throw new Error(state.prepareError); state.prepared = true; state.onPrepare?.(); return { prepared: true } } }

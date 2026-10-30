@@ -3,7 +3,7 @@ import { createInterface } from "node:readline/promises";
 import type {
   FeishuChannelSnapshot,
   FeishuRegistrationSnapshot,
-} from "@rzx/client";
+} from "@vykor/application-client";
 
 /**
  * `vk channels add feishu` / `vk channels allow` 的向导逻辑。
@@ -164,7 +164,7 @@ export function createDefaultOnboardingDeps(): ChannelsOnboardingDeps {
     createClient: async () => {
       const { ensureLocalDaemon } = await import("../ensure-daemon.js");
       const daemon = await ensureLocalDaemon();
-      const { VykorClient } = await import("@rzx/client");
+      const { VykorClient } = await import("@vykor/application-client");
       return new VykorClient({ baseUrl: daemon.url, token: daemon.token });
     },
     renderQr: async (url) => {
@@ -184,7 +184,7 @@ export function createDefaultAllowDeps(): ChannelsAllowDeps {
     createClient: async () => {
       const { ensureLocalDaemon } = await import("../ensure-daemon.js");
       const daemon = await ensureLocalDaemon();
-      const { VykorClient } = await import("@rzx/client");
+      const { VykorClient } = await import("@vykor/application-client");
       return new VykorClient({ baseUrl: daemon.url, token: daemon.token });
     },
     log: (message) => console.log(message),

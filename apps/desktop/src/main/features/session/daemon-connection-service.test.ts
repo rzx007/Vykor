@@ -29,7 +29,7 @@ vi.mock("../daemon-autostart/daemon-takeover", () => ({
   reconcileDesktopManagedService: vi.fn(async () => undefined),
 }))
 
-vi.mock("@rzx/client", () => ({
+vi.mock("@vykor/application-client", () => ({
   VykorClient: class {
     protocol = {
       health: async () => {

@@ -181,7 +181,7 @@ import type {
   AttachmentStorageGcResult,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-} from "@rzx/client"
+} from "@vykor/application-client"
 import type { DesktopUpdateState } from "./update-types"
 import type {
   DesktopMcpAddInput,
@@ -197,7 +197,7 @@ import type {
   DesktopMcpSnapshot,
   DesktopMcpUpdateInput,
 } from "./mcp-types"
-import type { ChannelRuntimeStatus, FeishuChannelSnapshot } from "@rzx/client"
+import type { ChannelRuntimeStatus, FeishuChannelSnapshot } from "@vykor/application-client"
 import type {
   DesktopConnectionsSnapshot,
   DesktopFeishuAllowInput,
@@ -1155,15 +1155,15 @@ export interface IpcInvokeMap
     args: [input: DesktopPluginArchiveCancelInput]
     result: void
   }
-  [IpcChannels.marketplaceCatalog]: { args: [input: { cwd: string; refresh?: boolean }]; result: import("@rzx/client").MarketplaceCatalog }
-  [IpcChannels.marketplaceSources]: { args: [input: Record<string, never>]; result: { sources: import("@rzx/client").MarketplaceSource[] } }
-  [IpcChannels.marketplaceAddSource]: { args: [input: { url: string }]; result: { sources: import("@rzx/client").MarketplaceSource[] } }
-  [IpcChannels.marketplaceSetSourceEnabled]: { args: [input: { sourceId: string; enabled: boolean }]; result: { sources: import("@rzx/client").MarketplaceSource[] } }
-  [IpcChannels.marketplaceRemoveSource]: { args: [input: { sourceId: string }]; result: { sources: import("@rzx/client").MarketplaceSource[] } }
-  [IpcChannels.marketplacePreview]: { args: [input: import("@rzx/client").MarketplaceSelection]; result: import("./plugin-types").DesktopMarketplacePreview }
-  [IpcChannels.marketplaceConfirm]: { args: [input: { cwd: string; selectionId: string }]; result: import("@rzx/client").MarketplaceOperation }
+  [IpcChannels.marketplaceCatalog]: { args: [input: { cwd: string; refresh?: boolean }]; result: import("@vykor/application-client").MarketplaceCatalog }
+  [IpcChannels.marketplaceSources]: { args: [input: Record<string, never>]; result: { sources: import("@vykor/application-client").MarketplaceSource[] } }
+  [IpcChannels.marketplaceAddSource]: { args: [input: { url: string }]; result: { sources: import("@vykor/application-client").MarketplaceSource[] } }
+  [IpcChannels.marketplaceSetSourceEnabled]: { args: [input: { sourceId: string; enabled: boolean }]; result: { sources: import("@vykor/application-client").MarketplaceSource[] } }
+  [IpcChannels.marketplaceRemoveSource]: { args: [input: { sourceId: string }]; result: { sources: import("@vykor/application-client").MarketplaceSource[] } }
+  [IpcChannels.marketplacePreview]: { args: [input: import("@vykor/application-client").MarketplaceSelection]; result: import("./plugin-types").DesktopMarketplacePreview }
+  [IpcChannels.marketplaceConfirm]: { args: [input: { cwd: string; selectionId: string }]; result: import("@vykor/application-client").MarketplaceOperation }
   [IpcChannels.marketplaceCancel]: { args: [input: { selectionId: string }]; result: void }
-  [IpcChannels.marketplaceOperation]: { args: [input: { cwd: string; operationId: string }]; result: import("@rzx/client").MarketplaceOperation }
+  [IpcChannels.marketplaceOperation]: { args: [input: { cwd: string; operationId: string }]; result: import("@vykor/application-client").MarketplaceOperation }
   [IpcChannels.pluginImportGit]: {
     args: [input: DesktopPluginGitImportInput]
     result: DesktopPluginGitImportResult

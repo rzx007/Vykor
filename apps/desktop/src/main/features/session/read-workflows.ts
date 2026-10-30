@@ -1,4 +1,4 @@
-import type { VykorClient } from "@rzx/client"
+import type { VykorClient } from "@vykor/application-client"
 import { projectWorkflowRun } from "../../../shared/workflow-projection"
 import type { DesktopWorkflowSnapshot } from "../../../shared/workflow-types"
 

@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it, vi } from "vitest";
-import { VykorClient } from "../../packages/client/src/index.js";
+import { VykorClient } from "@rzx/client";
 import { VykorHttpServer } from "../../packages/server/src/http/server.js";
 
 it("passes storage through the client and HTTP creation/fork routes without changing ordinary forks", async () => {

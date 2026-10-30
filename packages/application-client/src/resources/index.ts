@@ -1,0 +1,16 @@
+export * from "./configuration/system-resource.js";
+export * from "./configuration/provider-resource.js";
+export * from "./configuration/auth-resource.js";
+export * from "./workspace/project-resource.js";
+export * from "./plugins/plugin-resource.js";
+export * from "./plugins/plugin-ui-history-resource.js";
+export * from "./runtime/development-resource.js";
+export * from "./session/session-resource.js";
+export * from "./session/attachment-resource.js";
+export * from "./workspace/schedule-resource.js";
+export * from "./workspace/note-resource.js";
+export * from "./runtime/terminal-resource.js";
+export * from "./workspace/channel-resource.js";
+export * from "./configuration/mcp-resource.js";
+
+export { PermissionResource, JobResource, EventResource, RuntimeResource, createPromptRequestId } from "@rzx/client";

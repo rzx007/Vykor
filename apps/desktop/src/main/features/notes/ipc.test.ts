@@ -4,9 +4,12 @@ import type {
   UpdateNoteInput,
   NoteOrganizationSnapshotRecord,
   SaveNoteOrganizationInput,
-} from "@rzx/client"
+} from "@vykor/application-client"
 import { IpcChannels } from "../../../shared/ipc-channels"
 import { describe, expect, it, vi } from "vitest"
+
+// This unit exercises injected note operations; do not start the Desktop singleton graph.
+vi.mock("./note-service", () => ({ desktopNoteService: {} }))
 
 interface NoteService {
   list(): Promise<NoteRecord[]>
@@ -20,7 +23,7 @@ interface NoteService {
 
 async function loadContribution(service: NoteService) {
   const path = "./ipc"
-  const module = (await import(/* @vite-ignore */ path).catch(() => null)) as null | {
+  const module = (await import(/* @vite-ignore */ path)) as {
     createNoteIpcContribution(service: NoteService): {
       register(context: unknown): Array<{
         channel: string
@@ -28,8 +31,7 @@ async function loadContribution(service: NoteService) {
       }>
     }
   }
-  expect(module).not.toBeNull()
-  return module!.createNoteIpcContribution(service)
+  return module.createNoteIpcContribution(service)
 }
 
 describe("note IPC contribution", () => {

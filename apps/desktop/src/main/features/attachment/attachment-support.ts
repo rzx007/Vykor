@@ -1,6 +1,6 @@
 import type { createReadStream } from "node:fs"
 
-import type { AttachmentResource } from "@rzx/client"
+import type { AttachmentResource } from "@vykor/application-client"
 
 export interface AttachmentClient {
   attachments: Pick<

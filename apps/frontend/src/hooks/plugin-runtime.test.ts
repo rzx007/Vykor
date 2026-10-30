@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { SessionRecord } from "@rzx/client";
+import type { SessionRecord } from "@vykor/application-client";
 import { sessionRuntimeMetadata, shouldAutoActivateSession } from "./useServerSync";
 
 function session(pluginsEnabled?: boolean): SessionRecord {

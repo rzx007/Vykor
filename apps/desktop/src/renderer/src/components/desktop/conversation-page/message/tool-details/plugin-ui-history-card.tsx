@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { PluginUiInstanceRecord } from "@rzx/client"
+import type { PluginUiInstanceRecord } from "@vykor/application-client"
 import type { DesktopSessionPart } from "@shared/session-types"
 import { toolOutputText } from "../models/message-content"
 import { useToolDetails } from "./use-tool-details"

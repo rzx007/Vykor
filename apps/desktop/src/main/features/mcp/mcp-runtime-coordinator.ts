@@ -3,7 +3,7 @@ import {
   VykorApiError,
   VykorClient,
   type McpRuntimeSyncResult,
-} from "@rzx/client"
+} from "@vykor/application-client"
 import { readDaemonRegistry } from "@vykor/server"
 
 interface McpRuntimeIdentity {
@@ -35,7 +35,7 @@ const unavailable = (): McpRuntimeSyncResult => ({
 /**
  * Desktop-side MCP Runtime coordinator.
  *
- * It calls the same daemon control plane through `@rzx/client` and the
+ * It calls the same daemon control plane through `@vykor/application-client` and the
  * daemon registry the main process already owns. A missing registry or an
  * unreachable daemon is `unavailable`; daemon auth, protocol and server errors
  * stay real sync failures so the page can show "saved, but reconnect failed".

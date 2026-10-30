@@ -1,4 +1,4 @@
-import type { AdmitPromptInput, PermissionRequestRecord, SessionEventRecord, SessionExecutionRecord, SessionInputRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRecord, SessionRunAttemptRecord, SessionRunRecord } from "@vykor/protocol";
+import type { PermissionRequestRecord, SessionEventRecord, SessionExecutionRecord, SessionInputRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRecord, SessionRunAttemptRecord, SessionRunRecord } from "@vykor/protocol";
 
 /**
  * 单个 session 在客户端的聚合视图。
@@ -56,6 +56,3 @@ export interface SyncEventUpdate {
   /** Session attach starts from an atomic snapshot, then consumes SSE deltas. */
   source: "snapshot" | "replay" | "live" | "reconnecting";
 }
-
-/** 去掉 sessionId 后的 admit prompt 输入（sessionId 由路径提供）。 */
-export type PromptInputForClient = Omit<AdmitPromptInput, "sessionId">;

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { Command } from "commander";
-import { VykorClient, VykorApiError, IncompatibleProtocolError } from "@rzx/client";
+import { VykorClient, VykorApiError, IncompatibleProtocolError } from "@vykor/application-client";
 type OAuthOperationView = Awaited<ReturnType<VykorClient["mcp"]["getLogin"]>>;
 type OAuthOperationEvent = ReturnType<VykorClient["mcp"]["watchLogin"]> extends AsyncIterable<infer T> ? T : never;
 import {

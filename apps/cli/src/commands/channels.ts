@@ -1,6 +1,6 @@
 import { Command } from "commander";
 
-import type { ChannelRuntimeStatus } from "@rzx/client";
+import type { ChannelRuntimeStatus } from "@vykor/application-client";
 import { runChannelsAddFeishu, runChannelsAllow } from "./channels-onboarding.js";
 
 /**
@@ -127,7 +127,7 @@ function messageOf(error: unknown): string {
 async function createDefaultRuntimeClient(): Promise<ChannelsRuntimeClientLike> {
   const { ensureLocalDaemon } = await import("../ensure-daemon.js");
   const daemon = await ensureLocalDaemon();
-  const { VykorClient } = await import("@rzx/client");
+  const { VykorClient } = await import("@vykor/application-client");
   return new VykorClient({ baseUrl: daemon.url, token: daemon.token });
 }
 
@@ -171,7 +171,7 @@ async function runChannelsStatus(): Promise<void> {
     console.log("daemon: not running；无法读取渠道配置");
     return;
   }
-  const { VykorClient } = await import("@rzx/client");
+  const { VykorClient } = await import("@vykor/application-client");
   const client = new VykorClient({ baseUrl: daemon.url, token: daemon.token });
   try {
     await client.protocol.health();

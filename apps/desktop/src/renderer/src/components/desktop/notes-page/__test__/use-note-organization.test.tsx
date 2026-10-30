@@ -7,7 +7,7 @@ import {
   reorderInContainer,
   type NoteOrganizationSnapshotRecord,
   type SaveNoteOrganizationInput,
-} from "@rzx/client"
+} from "@vykor/application-client"
 import { useNoteOrganization } from "../use-note-organization"
 import type { NoteView } from "../note-model"
 

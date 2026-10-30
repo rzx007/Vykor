@@ -1,13 +1,13 @@
 # Client Sync Flow
 
-> 状态：当前 TUI、Web、Desktop 共用客户端同步的权威说明。最后核对：2026-09-17。
+> 状态：当前 TUI、Web、Desktop 共用客户端同步的权威说明。最后核对：2026-10-30。
 
 ## 边界
 
 `@rzx/client` 负责四件事：
 
 1. 在首个业务请求前确认 Client 与 daemon 使用同一个协议版本；
-2. 通过领域 Resource 发起 typed HTTP 请求；
+2. 通过生命周期资源发起 HTTP 请求；
 3. 读取 session snapshot，并从对应 cursor 继续接收 SSE；
 4. 用共享 reducer 把 replay/live event 合并成客户端可展示状态。
 
@@ -15,18 +15,28 @@ Client 不运行 Agent、不读 SQLite、不决定 prompt 是 steer 还是 queue
 
 ## 公开入口
 
-`VykorClient` 只组装 `protocol` 和领域 Resource：
+公开 `VykorClient` 只组装七个资源：`protocol`、`runtime`、`sessions`、`permissions`、`attachments`、`jobs`、`events`。`runtime` 只读取已有模型、Agent persona、技能和会话 MCP 能力。
 
 ```ts
 const client = new VykorClient({ baseUrl, token });
 
-const session = await client.sessions.create(input);
-await client.sessions.admitPrompt(session.id, { content: "hello" });
-await client.permissions.reply(requestId, { decision: "allow" });
+const session = await client.sessions.create({
+  cwd: daemonCwd,
+  model,
+  metadata: { runtime: { model } },
+});
+const admitted = await client.sessions.admitPrompt(session.id, {
+  id: createPromptRequestId(),
+  items: [{ type: "text", text: "hello" }],
+});
+if (!admitted.run) throw new Error("输入未创建 Run");
+const result = await waitForRun(client, { sessionId: session.id, runId: admitted.run.id });
 const jobs = await client.jobs.list();
 ```
 
-当前资源包括 system、providers、auth、projects、plugins、development、sessions、attachments、permissions、schedules、jobs、terminals、channels 和 events。底层 transport 类仍可作为 SDK 构件导入，但 `VykorClient` 实例不暴露 transport 属性；产品代码不应绕过 Resource 直接拼业务 endpoint。
+上例的 `daemonCwd` 和 `model` 由调用方提供，若 Run 需要权限回复，现有审批界面应在等待期间通过 `client.permissions.reply(requestId, { status: "approved", decision: "once" })` 处理。完整可运行示例见 [Client SDK 使用指南](./client-sdk.md)。`waitForRun` 返回指定 Run 的真实终态和消息；传入的 `AbortSignal` 只结束等待。底层 transport 类仍可作为 SDK 构件导入，但 `VykorClient` 实例不暴露 transport 属性；产品代码不应绕过资源接口直接拼 endpoint。
+
+笔记、渠道、调度、插件及市场、插件应用、Office、全局设置、提供商与登录、开发/终端管理、命令及业务展示规则来自私有 [`@vykor/application-client`](../packages/application-client/README.md)。CLI、TUI 和 Desktop 使用私有包承接产品功能；它复用公开 SDK 的资源与同步实现。
 
 ## 首个请求前的协议握手
 
@@ -36,12 +46,12 @@ const jobs = await client.jobs.list();
 Resource method
   -> HttpTransport.ensureProtocol()
   -> GET /capabilities
-  -> checkProtocolCompatibility({ version: 4 })
+  -> checkProtocolCompatibility({ version: CURRENT_PROTOCOL_VERSION })
   -> 成功后缓存握手结果
-  -> 业务请求携带 x-vykor-protocol-version: 4
+  -> 业务请求携带 x-vykor-protocol-version: 7
 ```
 
-版本必须完全相等。缺少版本、版本不是 4 或响应格式错误都会在业务请求前失败；Client 不尝试 min/max 范围协商，也不降级到旧协议。
+当前协议版本为 7，版本必须完全相等。缺少版本、版本不一致或响应格式错误都会在业务请求前失败；Client 不尝试 min/max 范围协商，也不降级到旧协议。
 
 ## 单个 Session 的 snapshot-first attach
 
@@ -101,7 +111,7 @@ TUI transcript 只从 Message + Part 派生，不扫描 `runtime.*` 日志猜文
 
 ```ts
 const id = createPromptRequestId();
-await client.sessions.admitPrompt(sessionId, { id, content });
+await client.sessions.admitPrompt(sessionId, { id, items: [{ type: "text", text: content }] });
 // 网络结果不确定时，使用同一个 id 重试。
 ```
 
@@ -133,6 +143,8 @@ Resource response
 ```
 
 产品界面不应在收到 HTTP response 后手工拼一份 Message 或 Run；否则下一次 snapshot 会与本地副本冲突。
+
+脚本可用 `waitForRun(client, { sessionId, runId, signal })` 等待一个 Run。它复用相同的快照、事件归并和断线恢复流程，返回 `{ run, messages }`；已完成快照、失败和中断均返回已保存的真实终态。它不处理权限请求；审批界面或另一路 `syncEvents` 观察必须并行运行。
 
 ## 失败语义
 

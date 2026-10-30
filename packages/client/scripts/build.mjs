@@ -38,6 +38,10 @@ for (const [name, source, platform] of [
     } : {}),
   });
   const bundled = await readFile(join(dist, `${name}.js`), "utf8");
+  for (const output of Object.values(result.metafile.outputs)) {
+    if (Object.entries(output.inputs).some(([file, value]) => value.bytesInOutput > 0 && /(?:application-client\/|client\/src\/(?:commands|resources\/(?:workspace|plugins))\/)/.test(file)))
+      throw new Error(`${name}: application business code entered the SDK bundle`);
+  }
   for (const input of Object.keys(result.metafile.inputs).filter(file => file.includes("node_modules"))) {
     let directory = dirname(resolve(packageRoot, input));
     while (dirname(directory) !== directory) {
@@ -66,6 +70,8 @@ for (const [name, source, platform] of [
   try { await declarations.write({ file: join(dist, `${name}.d.ts`), format: "es" }); }
   finally { await declarations.close(); }
   const declaration = await readFile(join(dist, `${name}.d.ts`), "utf8");
+  if (/\b(?:NoteRecord|ScheduledTaskRecord|MarketplaceCatalog|PluginAppConversationRequest|PluginAppRecord|PluginAppBackendDefinition|OfficePreview|ChannelStatusSnapshot|SessionCommandHost)\b/.test(declaration))
+    throw new Error(`${name}: application business types entered SDK declarations`);
   if (/(?:from\s*|import\s*\()\s*["'](?:@vykor\/|@rzx\/client(?:\/|["']))/.test(declaration)) throw new Error(`${name}: public declarations leak workspace imports`);
   console.log(`Built ${name}.js and ${name}.d.ts (${platform})`);
 }

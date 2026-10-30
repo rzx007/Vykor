@@ -3,7 +3,7 @@ import type {
   ChannelRuntimeStatus,
   FeishuChannelSnapshot,
   FeishuRegistrationSnapshot,
-} from "@rzx/client"
+} from "@vykor/application-client"
 
 import type {
   DesktopConnectionsSnapshot,

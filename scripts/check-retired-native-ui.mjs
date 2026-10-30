@@ -37,7 +37,7 @@ export function checkRetirement(root) {
     "packages/protocol/src/extensions/plugin-ui-history.ts": ["@vykor/domain-contracts/plugin-apps/history", "../serialization/json.js", "../requests/requests.js", "../requests/domain-validation.js"],
     "packages/domain-contracts/src/plugin-apps/history.ts": ["@vykor/json-data/json", "../validation-error.js"],
     "packages/server/src/application/session/plugins/plugin-ui-history-service.ts": ["node:crypto", "@vykor/domain-contracts/sessions", "@vykor/domain-contracts/plugin-apps/history", "@vykor/json-data/json", "@vykor/services", "../../../shared/application-error.js"],
-    "packages/client/src/resources/plugins/plugin-ui-history-resource.ts": ["@vykor/protocol", "../../transport/http-transport.js"],
+    "packages/application-client/src/resources/plugins/plugin-ui-history-resource.ts": ["@vykor/protocol", "@rzx/client"],
   };
   for (const [path, allowed] of Object.entries(pureImports)) {
     const source = readFileSync(resolve(root, path), "utf8");

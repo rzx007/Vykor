@@ -5,10 +5,10 @@ import {
   discoverInstalledNativePlugins, readInstalledPluginStore, verifyInstalledNativePlugin,
 } from "@vykor/plugins";
 import { describe, expect, it } from "vitest";
-import { VykorClient } from "../../packages/client/src/transport/http-client.js";
-import { dispatchSessionCommand } from "../../packages/client/src/commands/session-commands.js";
-import { createInitialClientState } from "../../packages/client/src/state/reducer.js";
-import type { ReloadPluginsResponse } from "../../packages/client/src/types/index.js";
+import { VykorClient } from "@vykor/application-client";
+import { dispatchSessionCommand } from "@vykor/application-client";
+import { createInitialClientState } from "@rzx/client";
+import type { ReloadPluginsResponse } from "@vykor/application-client";
 import {
   callInspector, expectRuntimeStopped, pluginId, settings, toolName, withNativePluginFixture,
   type NativePluginFixture,

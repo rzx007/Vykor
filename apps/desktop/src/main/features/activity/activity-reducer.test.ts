@@ -4,7 +4,7 @@ import {
   syncEvents,
   type SessionEventRecord,
   type SyncEventUpdate,
-} from "@rzx/client"
+} from "@vykor/application-client"
 import { reduceActivityEvent } from "./activity-reducer"
 
 const session = {

@@ -1,4 +1,4 @@
-import { isSupersededModelPart } from "@rzx/client"
+import { isSupersededModelPart } from "@vykor/application-client"
 import type { DesktopSessionMessage, DesktopSessionPart } from "@shared/session-types"
 
 export interface ConversationSearchTarget {

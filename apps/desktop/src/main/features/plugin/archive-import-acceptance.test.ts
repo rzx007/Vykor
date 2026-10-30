@@ -11,7 +11,7 @@ vi.mock("electron", () => ({
   dialog: { showOpenDialog: vi.fn() },
 }))
 
-import { VykorClient } from "@rzx/client"
+import { VykorClient } from "@vykor/application-client"
 import {
   discoverInstalledNativePlugins,
   loadNativePlugin,

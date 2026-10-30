@@ -1,4 +1,4 @@
-import { readSessionModelUsage } from "@rzx/client"
+import { readSessionModelUsage } from "@vykor/application-client"
 
 export function ModelUsageNotice({
   metadata,

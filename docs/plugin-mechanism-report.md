@@ -88,7 +88,7 @@
 | `packages/server/src/application/default-services/extensions/plugin-service.ts` | 安装 / 启停 / 卸载 / 预览 / 列出的统一应用层 |
 | `packages/server/src/application/session/plugins/session-plugin-capability-service.ts` | 决定一次输入能不能带 `pluginId`，以及带哪一个 |
 | `packages/server/src/http/routes/service.ts` | `/plugins/**` HTTP 路由 |
-| `packages/client/src/resources/plugins/plugin-resource.ts` | 各前端共用的插件 HTTP 客户端 |
+| `packages/application-client/src/resources/plugins/plugin-resource.ts` | 各前端共用的插件 HTTP 客户端 |
 | `apps/cli/src/commands/plugin.ts` | `vk plugin` 子命令 |
 | `apps/desktop/src/main/features/plugin/plugin-service.ts` | Desktop 主进程的导入、确认与刷新 |
 | `apps/desktop/src/renderer/src/components/desktop/plugin-page` | 插件管理页面 |
@@ -449,7 +449,7 @@ POST   /plugins/reload                  关闭该 cwd 的 Runtime，下次使用
 
 注意两点：一是“缺批准”是**抛异常**，不是返回 `status: "blocked"`——`ConversionReport.status` 的联合类型里有 `blocked`/`failed`，但当前代码路径不会返回它们，想按状态分支的调用方会踩空；二是 Codex 的 `convert()` 会先从源重新推导一次 plan 并比对摘要，plan 过期或源已变化都会先于批准检查抛错。两个转换器在 `convert()` 里都会拒绝已存在的输出目录、源在 plan 之后被改动、以及“没有任何可转换组件”的源。
 
-**客户端**（`packages/client/src/resources/plugins/plugin-resource.ts`）：路由映射与上面的 HTTP 表一致，注意 `installLocal()` 一个方法覆盖 `/plugins/install-local` 与 `/plugins/link-local` 两条路由，靠 `link` 参数分流，没有单独的 link 方法。`reload()` 返回 `ReloadPluginsResponse`（`message` + 插件列表 + `warnings`）。CLI 与会话命令展示重载结果用 `packages/client/src/commands/plugin-presentation.ts` 的 `formatPluginReload`，输出会明确写“重载只让 Runtime 失效，实际加载发生在下一次使用”，并在权限缺失时提示重新 link/安装并补 `--approve`。
+**客户端**（`packages/application-client/src/resources/plugins/plugin-resource.ts`）：路由映射与上面的 HTTP 表一致，注意 `installLocal()` 一个方法覆盖 `/plugins/install-local` 与 `/plugins/link-local` 两条路由，靠 `link` 参数分流，没有单独的 link 方法。`reload()` 返回 `ReloadPluginsResponse`（`message` + 插件列表 + `warnings`）。CLI 与会话命令展示重载结果用 `packages/application-client/src/commands/plugin-presentation.ts` 的 `formatPluginReload`，输出会明确写“重载只让 Runtime 失效，实际加载发生在下一次使用”，并在权限缺失时提示重新 link/安装并补 `--approve`。
 
 **CLI**（`apps/cli/src/commands/plugin.ts`）：
 
@@ -577,7 +577,7 @@ node node_modules/vitest/vitest.mjs run --root packages/agent-runtime src/native
 
 | 项 | 做法 | 结果 |
 | --- | --- | --- |
-| 客户端资源路由映射与重载返回 | 逐行读 `packages/client/src/resources/plugins/plugin-resource.ts` 与 `packages/client/src/commands/plugin-presentation.ts` | 与 HTTP 路由对应（`installLocal` 一个方法覆盖 install-local 与 link-local），已补入第 11 节 |
+| 客户端资源路由映射与重载返回 | 逐行读 `packages/application-client/src/resources/plugins/plugin-resource.ts` 与 `packages/application-client/src/commands/plugin-presentation.ts` | 与 HTTP 路由对应（`installLocal` 一个方法覆盖 install-local 与 link-local），已补入第 11 节 |
 | 转换器批准链路 | 读两个转换器的 `plan()` 与 `convert()` 实现 | 发现两个转换器的批准门不同，且缺批准是抛异常而非返回 `blocked` 状态；已按实际重写第 11 节转换器一段 |
 | Windows 目录联接是否被拦 | 在临时目录用 `mklink /J` 造根联接与嵌套联接，直接调用 `assertRegularPluginCacheSnapshot` 与 `computePluginBehaviorDigest`，并带真实目录做对照 | 根联接被快照守卫拒绝、嵌套联接被摘要遍历拒绝；已补入第 5 节 |
 | 根联接是被哪一道检查拦下的 | 另跑一个探针，对同一联接同时打印 `lstat()` 的 `isDirectory()`/`isSymbolicLink()`、realpath 比对结果，以及 `readdir` 的 `Dirent` 标志 | `lstat` 对联接报 `isDirectory()=false`、`isSymbolicLink()=true`，所以是 `assertRegularPluginCacheSnapshot` 的第一道检查触发；realpath 比对是独立兜底。归因已改正（第 5 节） |

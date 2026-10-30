@@ -1,4 +1,4 @@
-import type { ModelInfo } from "@rzx/client"
+import type { ModelInfo } from "@vykor/application-client"
 
 export interface ProviderDefaultsSnapshot {
   models: ModelInfo[]

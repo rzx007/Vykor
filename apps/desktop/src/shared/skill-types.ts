@@ -1,4 +1,4 @@
-import type { SkillInfo, SkillProject, SkillSnapshot } from "@rzx/client"
+import type { SkillInfo, SkillProject, SkillSnapshot } from "@vykor/application-client"
 
 export type DesktopSkillInfo = SkillInfo
 export type DesktopSkillProject = SkillProject

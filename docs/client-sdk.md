@@ -23,7 +23,7 @@ console.log(await client.protocol.capabilities());
 console.log(await client.sessions.list());
 ```
 
-服务可由 `vk serve --host 127.0.0.1 --port 8787 --register` 启动。它需要事先配置好模型提供商；SDK 不安装模型或替调用者配置凭据。Node 可从本机登记文件取得生成的 token，见下一节。
+服务可由 `vk serve --host 127.0.0.1 --port 8787 --register` 启动。它需要事先配置好模型提供商；SDK 不安装模型或替调用者配置凭据。通常由调用方提供已有 daemon 的地址和 token。仅在需要由 Node 程序管理本机 daemon 时，才使用下一节的 `/service` 入口。
 
 浏览器使用同一个主入口，由应用提供地址与 token。服务端需通过 `--allow-origin` 配置网页的准确来源。远程连接直接传远端地址；`cwd` 指向服务端机器的工作目录。构造参数也允许自定义 `fetch`，例如接入应用自己的传输处理。
 
@@ -86,47 +86,65 @@ const endpoint = await Service.ensure({
 
 ## 提交任务与读取结果
 
-下面的 Node 示例使用已配置的模型，拒绝示例运行中出现的工具权限请求，并读取本次运行结束后的文本。`admitPrompt` 返回任务已接收的信息，实际结果通过会话同步取得。
+下面的 Node 示例连接已有 daemon，使用其已配置的模型，在后台观察权限请求并拒绝它们，然后等待指定 Run 的终态。运行前提供 `VYKOR_BASE_URL`、`VYKOR_TOKEN`、`VYKOR_MODEL` 和 daemon 机器上的 `VYKOR_DAEMON_CWD`。`admitPrompt` 只返回输入接纳结果；完成状态和消息由同步流程取得。
 
 ```js
 import {
-  VykorClient, syncEvents, selectFirstPendingPermission,
-  selectVisibleSessionMessagesWithParts,
+  VykorClient, createPromptRequestId, syncEvents,
+  selectFirstPendingPermission, waitForRun,
 } from "@rzx/client";
-import { Service } from "@rzx/client/service";
 
-const model = process.env.VYKOR_MODEL;
-if (!model) throw new Error("请设置 daemon 已配置可用的 VYKOR_MODEL");
-const endpoint = await Service.ensure();
-const client = new VykorClient(Service.clientOptions(endpoint));
-const session = await client.sessions.create({ cwd: process.cwd(), model });
+const { VYKOR_BASE_URL, VYKOR_TOKEN, VYKOR_MODEL, VYKOR_DAEMON_CWD } = process.env;
+if (!VYKOR_BASE_URL || !VYKOR_TOKEN || !VYKOR_MODEL || !VYKOR_DAEMON_CWD) {
+  throw new Error("请提供已有 daemon 的地址、token、模型和工作目录");
+}
+const client = new VykorClient({ baseUrl: VYKOR_BASE_URL, token: VYKOR_TOKEN });
+const session = await client.sessions.create({
+  cwd: VYKOR_DAEMON_CWD,
+  model: VYKOR_MODEL,
+  metadata: { runtime: { model: VYKOR_MODEL } },
+});
 const admitted = await client.sessions.admitPrompt(session.id, {
-  id: crypto.randomUUID(),
+  id: createPromptRequestId(),
   items: [{ type: "text", text: "请简短介绍你的能力，不调用工具。" }],
 });
 const runId = admitted.run?.id;
 if (!runId) throw new Error("这次输入没有创建可等待的 Run，请检查准入结果");
 
-for await (const update of syncEvents(client, {
-  sessionId: session.id,
-  signal: AbortSignal.timeout(120_000),
-})) {
-  const bucket = update.state.buckets[session.id];
-  const permission = selectFirstPendingPermission(bucket);
-  if (permission) await client.permissions.reply(permission.id, { status: "denied" });
-  const run = bucket?.runs[runId];
-  if (!run || run.status === "pending" || run.status === "running") continue;
-  if (run.status !== "completed") throw new Error(run.error ?? run.status);
-  const text = selectVisibleSessionMessagesWithParts(bucket)
-    .filter(({ message }) => message.role === "assistant" && message.runId === runId)
-    .flatMap(({ parts }) => parts.filter(part => part.type === "text").map(part => part.text ?? ""))
-    .join("\n");
-  console.log(text);
-  break;
+const approvalController = new AbortController();
+const approvalTask = (async () => {
+  for await (const update of syncEvents(client, {
+    sessionId: session.id,
+    signal: approvalController.signal,
+  })) {
+    const permission = selectFirstPendingPermission(update.state, session.id);
+    if (permission) await client.permissions.reply(permission.id, { status: "denied" });
+  }
+})().catch(error => {
+  console.error("权限观察失败:", error);
+});
+
+try {
+  const { run, messages } = await waitForRun(client, {
+    sessionId: session.id,
+    runId,
+    signal: AbortSignal.timeout(120_000),
+  });
+  console.log("Run 终态:", run.status);
+  if (run.status === "completed") {
+    const text = messages
+      .filter(({ message }) => message.role === "assistant")
+      .flatMap(({ parts }) => parts.filter(part => part.type === "text").map(part => part.text ?? ""))
+      .join("\n");
+    console.log(text);
+  }
+} finally {
+  approvalController.abort();
+  await approvalTask;
 }
 ```
 
-同步先取完整快照，再接收 SSE（服务端持续推送的事件）。即使订阅开始前任务已结束，也能从快照读到结果；断线后自动重连并重新核对状态。界面应使用共享同步和选择函数，避免把重试前已被替换的文本永久拼到结果里。
+`waitForRun` 和并行的权限观察都使用同一套同步规则：先取完整快照，再接收 SSE（服务端持续推送的事件）；断线后重新读取快照并继续。即使等待开始前 Run 已结束，也能返回已保存的终态。失败或中断时，它返回真实的 `run.status` 和该 Run 的消息，不自动抛出任务错误，也不自动批准权限。实际产品应将权限请求交给已有审批界面，由用户决定批准或拒绝；示例仅为演示，统一拒绝。
 
 需要重试同一笔提交时，重用相同 `id` 和内容；新任务使用新 `id`。提交结果可能表示开始、排队或对正在运行的任务补充输入，调用方应检查返回的 `input`、`run` 和 `queue_state`。已有会话存在并发工作时，用服务端返回的运行 ID 区分每次任务。
 
@@ -143,21 +161,26 @@ const admitted = await client.sessions.admitPrompt(session.id, {
     required: ["path"], additionalProperties: false,
   },
 });
-// 通过上文 syncEvents 取得完成后的 run，再读取 run.metadata.delivery。
+if (!admitted.run) throw new Error("输入未创建 Run");
+const { run } = await waitForRun(client, {
+  sessionId: session.id,
+  runId: admitted.run.id,
+});
+console.log(run.metadata.delivery);
 ```
 
 回执的 `validation: schema_valid` 表示格式有效；HTTP 不传业务核验函数，因此 `verification` 为 `not_requested`。可信 SDK 宿主可配置核验器读取真实产物，通过后才标为 `passed`。Run 的 `completed` 和交付的 `done/partial/blocked/waiting` 分开：本轮正常结束也可能仍需补充资料。支持的 Schema 子集见 [Kernel 交付](../packages/agent-runtime/src/kernel/delivery/README.md)，它不等同于完整 JSON Schema。
 
 ## 权限、取消与错误
 
-真实应用可以把 `selectFirstPendingPermission(bucket)` 的请求显示给用户，再提交：
+真实应用可以并行消费 `syncEvents`，用 `selectFirstPendingPermission(update.state, sessionId)` 取请求并显示给用户，再提交：
 
 ```js
 await client.permissions.reply(requestId, { status: "approved", decision: "once" });
 // 或 status: "denied"
 ```
 
-中断后台任务使用 `client.sessions.interrupt(sessionId, { expectedRunId: runId })`。给 HTTP 请求或 `syncEvents` 传 `AbortSignal` 只取消本地请求或订阅；后台任务可继续执行。
+中断后台任务使用 `client.sessions.interrupt(sessionId, { expectedRunId: runId })`。给 HTTP 请求、`syncEvents` 或 `waitForRun` 传 `AbortSignal` 只取消本地请求或等待；后台任务可继续执行。
 
 非成功 HTTP 响应抛出 `VykorApiError`，携带 `status` 和 `body`。协议不匹配抛出 `IncompatibleProtocolError`，调用方应升级对应客户端或服务端。`syncEvents` 对一般断流自动重连；取消与不支持的事件格式会结束同步。完整状态规则见 [Client Sync Flow](./client-sync-flow.md)。
 

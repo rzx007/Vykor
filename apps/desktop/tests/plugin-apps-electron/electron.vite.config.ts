@@ -11,7 +11,7 @@ export default defineConfig({
     build: {
       outDir: resolve(output, "main"),
       emptyOutDir: true,
-      externalizeDeps: { exclude: ["@rzx/client"] },
+      externalizeDeps: { exclude: ["@vykor/application-client", "@rzx/client"] },
       rollupOptions: {
         input: resolve("tests/plugin-apps-electron/main.ts"),
         output: { entryFileNames: "main.cjs" },

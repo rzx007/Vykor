@@ -278,7 +278,9 @@
     },
     "@vykor/plugin-sources": {
       "directory": "packages/plugin-sources",
-      "allowed": ["@vykor/plugin-contracts"],
+      "allowed": [
+        "@vykor/plugin-contracts"
+      ],
       "removeByPhase": "P6",
       "migrationId": "M30"
     },
@@ -382,6 +384,25 @@
       ],
       "removeByPhase": "P10",
       "migrationId": "M35"
+    },
+    "@vykor/application-client": {
+      "directory": "packages/application-client",
+      "allowed": [
+        "@rzx/client",
+        "@vykor/protocol"
+      ],
+      "removeByPhase": "P6",
+      "migrationId": "M30",
+      "allowedDeclarationOrigins": [
+        "@rzx/client",
+        "@vykor/protocol",
+        "@vykor/agent-contracts",
+        "@vykor/domain-contracts",
+        "@vykor/plugin-contracts",
+        "@vykor/json-data",
+        "@vykor/jobs",
+        "@vykor/terminal"
+      ]
     }
   },
   "modules": [
@@ -592,7 +613,8 @@
         "packages/output-styles/src/",
         "packages/themes/src/",
         "packages/environment/src/",
-        "packages/mcp/src/"
+        "packages/mcp/src/",
+        "packages/application-client/src/"
       ],
       "symbols": [
         "^(Settings|loadSettings|saveSettings|loadProjectSettings|saveProjectSettings|updateSettings|withSettingsFileLock|getConfigDir|getConfigFilePath|resolvePaths|getDataDir|getLogsDir|getSessionsDir|getTasksDir|getPluginsDir|getPluginCacheDir|getPluginDataDir|getPluginSourcesDir|getInstalledPluginStorePath|getSkillsDir|getMemoryDir|getProjectMemoryDir|getFeedbackDir|getCredentialsFilePath|getMcpOAuthFilePath|getChannelCredentialsFilePath|getProjectConfigDir|getProjectSettingsFilePath)$"

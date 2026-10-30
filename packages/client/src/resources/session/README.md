@@ -1,6 +1,6 @@
 # 会话与事件资源
 
-访问会话、附件及事件流相关接口。
+访问会话生命周期、附件及事件流。产品管理扩展由私有 [`@vykor/application-client`](../../../../application-client/README.md) 提供。
 
 ## 主要文件
 
@@ -12,15 +12,15 @@
 
 ## 入口与处理步骤
 
-主要入口或定义见 [attachment-resource.ts](./attachment-resource.ts)。
+`VykorClient` 将本目录的三个资源分别以 `sessions`、`attachments`、`events` 暴露，主要实现见上表。
 
-调用方提交会话操作或附件请求，资源接口构造协议请求并返回服务端结果；事件入口把后续更新交给状态模块。
+调用方创建和配置 Session、提交与排队 Input、控制 Run、查询 Goal 与历史/结果/用量，或上传和读取附件。资源接口构造 HTTP 请求并返回 daemon 的记录；`events` 提供历史查询和 SSE 订阅，状态模块负责快照与事件合并。附件存储扫描/修复/清理、Desktop worktree 绑定清理属于私有应用客户端。
 
 提交、编辑和 resume 都只接受显式 `outputSchema`，发送前检查服务端 `structuredDelivery` 能力。metadata/runMetadata 中的同名字段是服务端记录快照，新请求使用时明确拒绝。resume 沿用原合同，显式字段只能重复原 schema。
 
 ## 状态放在哪里
 
-远端业务数据由 daemon 保存；连接、订阅和展示状态保存在客户端对象中。
+Session、Input、Run、Message、Goal、附件和事件游标由 daemon 保存；同步视图由调用方的状态模块保管。
 
 ## 新代码与测试
 

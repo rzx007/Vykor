@@ -1,32 +1,12 @@
-# 任务与运行资源
+# 已有运行能力与后台任务
 
-访问任务、终端和开发运行相关接口。
-
-## 主要文件
-
-| 文件 | 主要导出 |
+| 文件 | 用途 |
 | --- | --- |
-| [development-resource.ts](./development-resource.ts) | `DevelopmentResource` |
-| [job-resource.ts](./job-resource.ts) | `JobResource` |
-| [terminal-resource.ts](./terminal-resource.ts) | `TerminalResource` |
+| [runtime-resource.ts](./runtime-resource.ts) | `RuntimeResource` 只读查询模型、Agent persona、技能和会话 MCP 状态 |
+| [job-resource.ts](./job-resource.ts) | `JobResource` 查询、读取、等待、输入和取消后台任务及子任务 |
 
-## 入口与处理步骤
+`client.runtime.listModels`、`listAgentPersonas`、`listSkills`、`getSessionMcp` 读取 daemon 已配置的能力，不写入提供商凭据、全局设置或插件。调用方从读取结果中选择模型及能力，再提交会话操作。
 
-主要入口或定义见 [development-resource.ts](./development-resource.ts)。
+`client.jobs.list({ sessionId })` 返回 `{ jobs, errors }`。read/wait/send/cancel 使用快照中的完整 `JobTarget`；Agent target 包含 kind、jobId、runId，其余任务包含 kind、jobId。send 可以返回新一轮输入的接纳回执。任务状态保存在 daemon，SDK 不建立本地任务执行器。
 
-先提交运行或控制请求，再取得任务、终端或开发服务状态，结果交给命令或界面处理。
-
-## 状态放在哪里
-
-远端业务数据由 daemon 保存；连接、订阅和展示状态保存在客户端对象中。
-
-## 新代码与测试
-
-与本目录职责一起修改的代码放在这里；跨分类的公共入口由上层目录组织。
-
-测试位于 [`__test__/`](./__test__)；只覆盖下级分类的测试放在对应分类的 `__test__/`。
-
-
-## 共用执行核心（阶段 A）
-
-JobResource 使用完整 JobTarget；list 返回 JobListResult，send 返回可选 JobInputReceipt。HTTP 请求与协议 decoder 一起切换为版本 6，不保留旧参数重载。
+Git、开发环境管理和持久终端管理迁入 [私有应用客户端](../../../../application-client/README.md)。新增只读能力描述或任务操作放对应文件，测试放 [`__test__/`](./__test__)。

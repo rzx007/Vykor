@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
-import type { VykorClientState, SessionEventRecord } from "@rzx/client"
-import { createInitialClientState } from "@rzx/client"
+import type { VykorClientState, SessionEventRecord } from "@vykor/application-client"
+import { createInitialClientState } from "@vykor/application-client"
 import { projectSessionActivity, projectScheduledActivity } from "./activity-projection"
 import { applyActivityUpdate, createActivityState } from "../../../renderer/src/stores/desktop-session/activity-state"
 

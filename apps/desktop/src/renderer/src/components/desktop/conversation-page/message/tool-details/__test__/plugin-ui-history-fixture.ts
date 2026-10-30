@@ -1,4 +1,4 @@
-import type { PluginUiInstanceRecord } from "@rzx/client"
+import type { PluginUiInstanceRecord } from "@vykor/application-client"
 import type { DesktopSessionPart } from "@shared/session-types"
 export const instanceId = "10000000-0000-4000-8000-000000000001"
 export const instance: PluginUiInstanceRecord = {

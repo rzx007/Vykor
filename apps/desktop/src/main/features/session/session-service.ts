@@ -10,7 +10,7 @@ import { app, BrowserWindow, dialog, type OpenDialogOptions, type WebContents } 
 import { homedir } from "node:os"
 import { join } from "node:path"
 
-import type { VykorClient } from "@rzx/client"
+import type { VykorClient } from "@vykor/application-client"
 import type {
   CheckoutDesktopProjectBranchInput,
   CloseDesktopAuxSessionInput,
@@ -433,7 +433,7 @@ export class DesktopSessionService {
     this.subscriptions.closeAuxSession(webContentsId, input)
   }
 
-  async sendPrompt(input: SendDesktopPromptInput, pluginAppContexts?: import("@rzx/client").PluginAppConversationRequest[]): Promise<void> {
+  async sendPrompt(input: SendDesktopPromptInput, pluginAppContexts?: import("@vykor/application-client").PluginAppConversationRequest[]): Promise<void> {
     const client = await this.getClient()
     await this.operations.sendPrompt(client, input, pluginAppContexts)
   }

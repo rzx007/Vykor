@@ -10,13 +10,15 @@
 | [session-input-items.ts](./session-input-items.ts) | 统一导出本分类的类型与函数 |
 | [session-model.ts](./session-model.ts) | 统一导出本分类的类型与函数 |
 | [session-requests.ts](./session-requests.ts) | `CreateSessionInput`、`ForkSessionInput`、`UpdateSessionInput` |
-| [session.ts](./session.ts) | `SessionStateSnapshot` |
+| [session.ts](./session.ts) | `AgentSessionStateSnapshot`、`SessionStateSnapshot` |
 
 ## 入口与处理步骤
 
 主要入口或定义见 [session-goals.ts](./session-goals.ts)。
 
 请求进入会话服务后，服务端按这些字段构造快照和事件；客户端引用相同定义完成解析和展示。
+
+`AgentSessionStateSnapshot` 只包含会话生命周期数据，公开 SDK 将它导出为 `SessionStateSnapshot`。服务端和内部应用使用扩展后的 `SessionStateSnapshot`，保留插件应用附加数据；线上响应格式不变。
 
 ## 状态放在哪里
 

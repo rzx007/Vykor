@@ -13,7 +13,7 @@ import {
   type SessionEventRecord,
   type SessionMessagePartRecord,
   type SessionStateSnapshot,
-} from "@rzx/client";
+} from "@vykor/application-client";
 import type { Settings } from "@vykor/host-config";
 import { isCoordinatorMode } from "@vykor/coordinator";
 

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import type { WebContents } from "electron"
 import { VykorApiError, isPluginAppAdmissionRejection, copyPluginAppJson, getPluginAppToolPolicy, parseOpenPluginAppInput, parsePluginAppSource, parsePluginAppToolRequest,
-  parsePluginAppConversationRequest, type PluginAppConversationRequest, type PluginAppSubmissionReceipt, type VykorClient, type PluginAppResponse, type PluginAppToolRequest, type PluginAppActionResponse } from "@rzx/client"
+  parsePluginAppConversationRequest, type PluginAppConversationRequest, type PluginAppSubmissionReceipt, type VykorClient, type PluginAppResponse, type PluginAppToolRequest, type PluginAppActionResponse } from "@vykor/application-client"
 import type { PluginAppHostState, PluginAppMount, PluginAppPreparedTool, PluginAppPreparedMessage, PluginAppModelContext } from "../../../shared/plugin-app-types"
 import { pluginAppText, pluginAppContextData } from "../../../shared/plugin-app-content"
 import type { DesktopSessionView } from "../../../shared/session-types"

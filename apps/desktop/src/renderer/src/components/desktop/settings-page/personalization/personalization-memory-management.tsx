@@ -1,6 +1,6 @@
 import { toast } from "@renderer/lib/toast"
 import { useCallback, useEffect, useRef, useState } from "react"
-import type { MemoryEntryRecord } from "@rzx/client"
+import type { MemoryEntryRecord } from "@vykor/application-client"
 import { SettingsGroup, SettingsRow } from "../shared/settings-group"
 import { Button } from "@renderer/components/ui/button"
 import { Input } from "@renderer/components/ui/input"

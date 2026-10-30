@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 import { SessionStore } from "@vykor/services";
-import { VykorClient } from "@rzx/client";
+import { VykorClient } from "@vykor/application-client";
 import { CURRENT_PROTOCOL_VERSION } from "@vykor/protocol";
 import { installNotesAppFixture } from "../../packages/agent-runtime/test-helpers/notes-app-fixture.js";
 import { VykorHttpServer } from "../../packages/server/src/http/server.js";

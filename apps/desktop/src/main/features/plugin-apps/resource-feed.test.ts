@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest"
-import { VykorClient, CURRENT_PROTOCOL_VERSION } from "@rzx/client"
+import { VykorClient, CURRENT_PROTOCOL_VERSION } from "@vykor/application-client"
 import { WindowResourceFeed } from "./resource-feed"
 import type { AppMountBinding } from "./plugin-app-service"
 

@@ -1,4 +1,4 @@
-import { isWorkMode, normalizeApprovalMode, type ApprovalMode, type WorkMode } from "@rzx/client";
+import { isWorkMode, normalizeApprovalMode, type ApprovalMode, type WorkMode } from "@vykor/application-client";
 
 /** Keep legacy `--permission-mode plan` working without coupling the two switches. */
 export function resolveRuntimeModes(
