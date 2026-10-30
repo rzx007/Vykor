@@ -263,9 +263,9 @@ describe("UtilityPanel review tool access", () => {
     installProbe(async () => ({ isRepository: false, rootPath: null }))
     Object.assign(window.desktop, { browser: { updateTab: vi.fn().mockResolvedValue(undefined) } })
     vi.stubGlobal("ResizeObserver", class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
+      observe = vi.fn()
+      unobserve = vi.fn()
+      disconnect = vi.fn()
     })
     useOutsideProjectSession("D:/plain-dir")
     const scopeId = "session:outside-html"
