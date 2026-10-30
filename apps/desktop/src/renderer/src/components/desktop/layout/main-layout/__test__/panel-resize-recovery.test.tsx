@@ -152,7 +152,7 @@ it("resets from the library's wider hit target beside the one-pixel separator", 
   expect(workspace.group().getLayout()).toEqual({ conversation: 60, utility: 40 })
 })
 
-it("keeps native keyboard resizing and exposes the available recovery actions", async () => {
+it("keeps native keyboard resizing without explanatory popups", async () => {
   const workspace = mount()
   await act(async () => {
     workspace.separator.focus()
@@ -161,11 +161,9 @@ it("keeps native keyboard resizing and exposes the available recovery actions", 
     )
   })
   expect(workspace.group().getLayout()).toEqual({ conversation: 55, utility: 45 })
-  expect(workspace.separator.getAttribute("aria-description")).toContain("Escape")
-  expect(workspace.separator.getAttribute("aria-description")).toContain("双击")
-  expect(document.querySelector('[data-slot="tooltip-content"][data-open]')?.textContent).toContain(
-    "方向键"
-  )
+  expect(workspace.separator.getAttribute("aria-label")).toBe("调整工具面板宽度")
+  expect(workspace.separator.hasAttribute("aria-description")).toBe(false)
+  expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull()
 })
 
 it("does not cancel another prevented click just because the separator remains focused", () => {
