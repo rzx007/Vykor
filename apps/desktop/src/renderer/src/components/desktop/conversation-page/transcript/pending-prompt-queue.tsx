@@ -1,4 +1,4 @@
-import { CornerDownRight, GripVertical, Trash2 } from "lucide-react"
+import { CornerDownRight, GripVertical, Paperclip, Trash2 } from "lucide-react"
 
 import { Button } from "@renderer/components/ui/button"
 import {
@@ -25,7 +25,7 @@ interface PendingPrompt {
 type LocalPendingSubmission = Pick<
   PendingPromptSubmission,
   "id" | "sessionId" | "content" | "phase" | "placement" | "error" | "dismissed"
->
+> & { attachments?: PendingPromptSubmission["attachments"] }
 
 export function PendingPromptQueue({
   prompts,
@@ -85,9 +85,10 @@ export function PendingPromptQueue({
             )}
           </ItemMedia>
           <ItemContent className="min-w-0 gap-1 pt-1 group-data-[size=xs]/item:gap-1">
-            <ItemTitle className="block w-full truncate font-normal">
-              {visibleLocalSubmission.content}
-            </ItemTitle>
+            <PendingPromptTitle
+              content={visibleLocalSubmission.content}
+              attachments={visibleLocalSubmission.attachments}
+            />
             {visibleLocalSubmission.phase === "failed" && visibleLocalSubmission.error ? (
               <p role="alert" className="text-xs leading-snug wrap-anywhere text-destructive">
                 {visibleLocalSubmission.error}
@@ -147,7 +148,7 @@ export function PendingPromptQueue({
               <GripVertical className="size-3.5 text-muted-foreground" />
             </ItemMedia>
             <ItemContent className="min-w-0 gap-1 pt-1 group-data-[size=xs]/item:gap-1">
-              <ItemTitle className="block w-full truncate font-normal">{input.content}</ItemTitle>
+              <PendingPromptTitle content={input.content} attachments={input.attachments} />
               {action?.phase === "failed" && action.error ? (
                 <p role="alert" className="text-xs leading-snug wrap-anywhere text-destructive">
                   {action.error}
@@ -188,5 +189,43 @@ export function PendingPromptQueue({
         )
       })}
     </ItemGroup>
+  )
+}
+
+function PendingPromptTitle({
+  content,
+  attachments = [],
+}: {
+  content: string
+  attachments?: readonly { displayName?: string }[]
+}): React.JSX.Element {
+  const attachmentOnly = !content.trim() && attachments.length > 0
+  const firstName = attachments[0]?.displayName?.trim()
+  let summary = content
+  if (attachmentOnly) {
+    summary = firstName
+      ? firstName + (attachments.length > 1 ? ` 等 ${attachments.length} 个附件` : "")
+      : `${attachments.length} 个附件`
+  }
+  return (
+    <ItemTitle
+      className="block w-full truncate font-normal"
+      title={
+        attachmentOnly
+          ? attachments
+              .map((attachment) => attachment.displayName?.trim() || "未命名附件")
+              .join("\n")
+          : undefined
+      }
+    >
+      {attachmentOnly ? (
+        <Paperclip
+          aria-hidden
+          strokeWidth={1.75}
+          className="mr-1 inline-block size-3.5 align-text-bottom text-muted-foreground"
+        />
+      ) : null}
+      {summary}
+    </ItemTitle>
   )
 }
