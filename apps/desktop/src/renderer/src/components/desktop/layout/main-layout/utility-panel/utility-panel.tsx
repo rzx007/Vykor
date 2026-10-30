@@ -146,20 +146,29 @@ export function UtilityPanel({
     setHandledAppRequestId,
   } = useUtilityPanelRuntime(scopeId)
   const [terminalCommands, setTerminalCommands] = useState<TerminalPanelCommand[]>([])
+  const imageNavigationGuardRef = useRef<((keyboard?: boolean) => boolean) | null>(null)
 
   useEffect(() => {
     if (!imageOpenRequest || handledImageRequestId === imageOpenRequest.id) return
     const timer = window.setTimeout(() => {
+      // Consume a blocked request so it cannot unexpectedly switch images after saving later.
+      setHandledImageRequestId(imageOpenRequest.id)
+      if (imageNavigationGuardRef.current && !imageNavigationGuardRef.current()) return
       const source = imageOpenRequest.source
-      const id = imageSourceKey(source)
-      const imageTab: UtilityTab = { id, tool: "image", title: source.name, imageSource: source }
+      const gallery = imageOpenRequest.gallery?.sources.some(
+        (item) => imageSourceKey(item) === imageSourceKey(source)
+      ) ? imageOpenRequest.gallery : undefined
+      const id = gallery ? `image-gallery:${gallery.id}` : imageSourceKey(source)
+      const imageTab: UtilityTab = {
+        id, tool: "image", title: source.name, imageSource: source,
+        ...(gallery ? { imageGallery: gallery } : {}),
+      }
       setTabs((current) =>
         current.some((tab) => tab.id === id)
           ? current.map((tab) => (tab.id === id ? imageTab : tab))
           : [...current, imageTab]
       )
       setActiveTabId(id)
-      setHandledImageRequestId(imageOpenRequest.id)
     }, 0)
     return () => window.clearTimeout(timer)
   }, [imageOpenRequest, handledImageRequestId, setTabs, setActiveTabId, setHandledImageRequestId])
@@ -752,7 +761,24 @@ export function UtilityPanel({
               />
             ))}
           {open && activeTab?.tool === "image" && activeTab.imageSource && (
-            <ImageViewerPanel key={activeTab.id} source={activeTab.imageSource} scopeId={scopeId} />
+            <ImageViewerPanel
+              key={activeTab.id}
+              source={activeTab.imageSource}
+              scopeId={scopeId}
+              gallery={activeTab.imageGallery}
+              navigationGuardRef={imageNavigationGuardRef}
+              onNavigate={(direction) => {
+                if (!close.isCurrentContext()) return
+                setTabs((current) => current.map((tab) => {
+                  if (tab.id !== activeTab.id || !tab.imageGallery || !tab.imageSource) return tab
+                  const index = tab.imageGallery.sources.findIndex(
+                    (item) => imageSourceKey(item) === imageSourceKey(tab.imageSource!)
+                  )
+                  const source = index < 0 ? undefined : tab.imageGallery.sources[index + direction]
+                  return source ? { ...tab, imageSource: source, title: source.name } : tab
+                }))
+              }}
+            />
           )}
           {!activeTab && !pendingTerminal && (
             <EmptyUtilityPanelState availableTools={availableTools} onAdd={addTab} />

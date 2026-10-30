@@ -91,6 +91,20 @@ export function sideChatDraftScope(sourceId: string): string {
     ? sessionComposerScope(targetId)
     : prefork
 }
+// eslint-disable-next-line react-refresh/only-export-components -- The existing side-chat lifecycle owns this check.
+export function canUseSideChatImageScope(sourceId: string, scope: string): boolean {
+  if (
+    !boundTargets.has(sourceId) ||
+    closingSources.has(sourceId) ||
+    sideChatDraftScope(sourceId) !== scope
+  )
+    return false
+  const targetId = sideChatTargets.get(sourceId)
+  return (
+    scope === `linked-chat:${sourceId}` ||
+    Boolean(targetId && targetId !== sourceId && scope === sessionComposerScope(targetId))
+  )
+}
 function bindValidatedTarget(sourceId: string, targetId: string): void {
   markComposerSessionTransient(targetId)
   if (boundTargets.has(sourceId)) boundTargets.set(sourceId, targetId)
@@ -713,6 +727,8 @@ export function SideChatPanel({
             <MessageScrollerContent className="conversation-content-column min-h-full min-w-0 text-content-foreground">
               {view || submissions.length ? (
                 <ConversationTranscript
+                  imageComposerScope={scope}
+                  imageCanFeedback={() => canUseSideChatImageScope(sourceId, scope)}
                   inputs={view?.inputs ?? []}
                   tasks={view?.tasks}
                   messages={transcript.messages}
@@ -810,6 +826,8 @@ export function SideChatPanel({
         ) : (
           <>
             <Composer
+              composerScope={scope}
+              imageCanFeedback={() => canUseSideChatImageScope(sourceId, scope)}
               id={`side-chat-composer-${sourceId}`}
               contextContent={
                 textSelections.length ? (

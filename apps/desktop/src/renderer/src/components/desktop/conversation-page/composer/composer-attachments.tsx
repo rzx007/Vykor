@@ -18,16 +18,24 @@ import {
   type DesktopAttachmentDraft,
 } from "@shared/attachment-types"
 import { AttachmentImagePreview, attachmentImageActionClassName } from "./attachment-image-preview"
-import { useImageViewer } from "@renderer/components/desktop/image-viewer/image-viewer-provider"
+import {
+  ImageGalleryProvider,
+  useImageViewer,
+} from "@renderer/components/desktop/image-viewer/image-viewer-provider"
+import { collectDraftImageGallery } from "@renderer/components/desktop/image-viewer/image-gallery"
 
 export function ComposerAttachments({
   attachments,
+  composerScope,
+  imageCanFeedback,
   readOnly = false,
   onCancel,
   onRetry,
   onRemove,
 }: {
   attachments: readonly DesktopAttachmentDraft[]
+  composerScope?: string
+  imageCanFeedback?: () => boolean
   readOnly?: boolean
   onCancel: (draftId: string) => void
   onRetry: (draftId: string) => void
@@ -54,24 +62,31 @@ export function ComposerAttachments({
       .filter(Boolean)
       .join(" · ") || `${attachments.length} 个附件已就绪`
   return (
-    <div className="space-y-1 px-3 pt-2">
-      <AttachmentGroup aria-label="待发送附件">
-        {attachments.map((attachment) => (
-          <ComposerAttachmentCard
-            key={attachment.draftId}
-            attachment={attachment}
-            readOnly={readOnly}
-            onCancel={onCancel}
-            onRetry={onRetry}
-            onRemove={onRemove}
-            alignMixedAttachmentHeights={alignMixedAttachmentHeights}
-          />
-        ))}
-      </AttachmentGroup>
-      <p role="status" className="text-xs text-ui-muted">
-        {feedback}
-      </p>
-    </div>
+    <ImageGalleryProvider
+      getGallery={() =>
+        collectDraftImageGallery(attachments, composerScope, readOnly, imageCanFeedback)
+      }
+      readOnly={readOnly || !composerScope}
+    >
+      <div className="space-y-1 px-3 pt-2">
+        <AttachmentGroup aria-label="待发送附件">
+          {attachments.map((attachment) => (
+            <ComposerAttachmentCard
+              key={attachment.draftId}
+              attachment={attachment}
+              readOnly={readOnly}
+              onCancel={onCancel}
+              onRetry={onRetry}
+              onRemove={onRemove}
+              alignMixedAttachmentHeights={alignMixedAttachmentHeights}
+            />
+          ))}
+        </AttachmentGroup>
+        <p role="status" className="text-xs text-ui-muted">
+          {feedback}
+        </p>
+      </div>
+    </ImageGalleryProvider>
   )
 }
 

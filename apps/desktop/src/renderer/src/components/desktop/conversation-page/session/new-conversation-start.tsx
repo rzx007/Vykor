@@ -23,6 +23,7 @@ import {
 } from "@shared/attachment-types"
 import type { DesktopContextUsageSnapshot } from "@shared/context-usage-types"
 import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
+import { NEW_CONVERSATION_SCOPE } from "@renderer/stores/desktop-session/composer-draft-state"
 import { selectGoalObjective } from "@renderer/stores/desktop-session/goal-actions"
 import type { ComposerPickerCommand, ComposerPickerItem } from "../composer/composer-picker"
 import { Composer } from "../composer/composer"
@@ -527,6 +528,7 @@ export function NewConversationStart({
           </div>
 
           <Composer
+            composerScope={NEW_CONVERSATION_SCOPE}
             id="new-conversation-composer"
             className="relative -mt-0.5 w-full"
             textareaClassName="min-h-24 max-h-48 pt-4"

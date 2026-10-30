@@ -53,6 +53,8 @@ Context Picker 当前提供：
 | `goal-banner.tsx` | 当前目标状态、详情、暂停/继续和取消入口 |
 | `../../../../stores/desktop-session/goal-actions.ts` | 按会话隔离的目标草稿、请求和状态同步 |
 
+图片打开时，`ComposerAttachments` 才从本输入框的附件收集已就绪图片快照，保留 `draftId`，以显式传入的 `composerScope` 隔离主聊天、新聊天和侧聊。打开流程复用图片查看器；没有作用域时只读打开单张，不从控件 ID 推断归属。侧聊额外携带现有目标的有效性检查，销毁或切换目标后旧快照不能重建旧草稿。
+
 ## 数据模型
 
 编辑器状态使用 `ComposerDocument`：

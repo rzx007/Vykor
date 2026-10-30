@@ -7,7 +7,15 @@ export type ImageSource = { name: string; readOnly?: boolean; draftId?: string }
   | { kind: "memory"; id: string; bytes: ArrayBuffer; mediaType: string }
 )
 
-export type ImageOpenRequest = { id: number; source: ImageSource }
+/** Caller-owned browsing snapshot, isolated from other chats and unsent drafts. */
+export type ImageGallery = {
+  id: string
+  sources: readonly ImageSource[]
+  composerScope?: string
+  canFeedback?: () => boolean
+}
+
+export type ImageOpenRequest = { id: number; source: ImageSource; gallery?: ImageGallery }
 
 export class ImagePreviewUnavailableError extends Error {
   constructor(readonly reason: "format" | "size") {

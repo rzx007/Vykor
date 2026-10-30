@@ -5,6 +5,7 @@ import { beginPanelToggleTransition } from "../panel-toggle-transition"
 import type { DesktopGitDiffScope, DesktopGitReviewRequest } from "@shared/git-types"
 import type { UtilityToolRequest } from "./utility-panel-tabs"
 import type {
+  ImageGallery,
   ImageOpenRequest,
   ImageSource,
 } from "@renderer/components/desktop/image-viewer/image-source"
@@ -75,7 +76,7 @@ export type UtilityPanelController = {
   toggle: () => void
   toggleMaximized: () => void
   openFile: (path: string, line?: number) => void
-  openImage: (source: ImageSource) => void
+  openImage: (source: ImageSource, gallery?: ImageGallery, expectedPanelScopeId?: string) => void
   openReview: (path?: string, scope?: DesktopGitDiffScope, rootPath?: string) => void
   openTerminal: (terminalId: string) => void
   openTool: (tool: UtilityToolRequest, taskId?: string) => void
@@ -340,9 +341,10 @@ export function useUtilityPanelController({
   )
 
   const openImage = useCallback(
-    (source: ImageSource): void => {
+    (source: ImageSource, gallery?: ImageGallery, expectedPanelScopeId?: string): void => {
+      if (expectedPanelScopeId && expectedPanelScopeId !== activeScopeIdRef.current) return
       restore()
-      setImageRequest({ id: ++toolRequestSequence, scopeId: activeScopeIdRef.current, source })
+      setImageRequest({ id: ++toolRequestSequence, scopeId: activeScopeIdRef.current, source, gallery })
     },
     [restore]
   )

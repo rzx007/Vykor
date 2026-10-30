@@ -1,12 +1,18 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
-import { RefreshCw } from "lucide-react"
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type RefObject } from "react"
+import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import {
   NEW_CONVERSATION_SCOPE,
   sessionComposerScope,
 } from "@renderer/stores/desktop-session/composer-draft-state"
-import { ImagePreviewUnavailableError, readImageSource, type ImageSource } from "./image-source"
+import {
+  ImagePreviewUnavailableError,
+  imageSourceKey,
+  readImageSource,
+  type ImageGallery,
+  type ImageSource,
+} from "./image-source"
 import { imageFeedbackText } from "./image-annotations"
 import type { DesktopAttachmentPreview } from "@shared/attachment-types"
 import { toast } from "@renderer/lib/toast"
@@ -16,7 +22,32 @@ const ImageViewer = lazy(() =>
 )
 
 /** 当前图片标签的加载和草稿衔接。面板继续管理标签、关闭及会话隔离。 */
-export function ImageViewerPanel({ source, scopeId }: { source: ImageSource; scopeId: string }) {
+export function ImageViewerPanel({
+  source,
+  scopeId,
+  gallery,
+  onNavigate,
+  navigationGuardRef,
+}: {
+  source: ImageSource
+  scopeId: string
+  gallery?: ImageGallery
+  onNavigate?: (direction: -1 | 1) => void
+  navigationGuardRef?: RefObject<((keyboard?: boolean) => boolean) | null>
+}) {
+  const localGuardRef = useRef<((keyboard?: boolean) => boolean) | null>(null)
+  const guardRef = navigationGuardRef ?? localGuardRef
+  const surfaceRef = useRef<HTMLDivElement>(null)
+  const index =
+    gallery?.sources.findIndex((item) => imageSourceKey(item) === imageSourceKey(source)) ?? -1
+  const count = gallery?.sources.length ?? 0
+  const browsable = index >= 0 && count > 1 && !!onNavigate
+  const navigate = (direction: -1 | 1, keyboard = false) => {
+    if (!browsable || index + direction < 0 || index + direction >= count) return
+    if (guardRef.current && !guardRef.current(keyboard)) return
+    surfaceRef.current?.focus({ preventScroll: true })
+    onNavigate?.(direction)
+  }
   const [loaded, setLoaded] = useState<{
     source: ImageSource
     scopeId: string
@@ -56,102 +87,171 @@ export function ImageViewerPanel({ source, scopeId }: { source: ImageSource; sco
     }
   }, [readImage])
   const currentLoad = loaded?.source === source && loaded.scopeId === scopeId ? loaded : null
-  if (!currentLoad?.preview) {
-    return (
-      <div className="grid h-full place-items-center px-4 text-sm text-muted-foreground">
-        <div className="flex max-w-sm flex-col items-center gap-3 text-center">
-          <p role={currentLoad?.error ? "alert" : "status"} aria-busy={!currentLoad?.error}>
-            {currentLoad?.error ?? "正在读取图片…"}
-          </p>
-          {currentLoad?.error && currentLoad.retryable ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              shape="pill"
-              aria-label="重新读取图片"
-              onClick={() => {
-                if (currentLoad.request !== version.current) return
-                setLoaded(null)
-                readImage()
-              }}
-            >
-              <RefreshCw data-icon="inline-start" strokeWidth={1.75} />
-              重新读取
-            </Button>
-          ) : null}
-        </div>
-      </div>
-    )
-  }
-  const preview = currentLoad.preview
+  const preview = currentLoad?.preview
   return (
-    <Suspense
-      fallback={
-        <div role="status" className="grid h-full place-items-center text-sm text-muted-foreground">
-          正在加载查看器…
-        </div>
-      }
+    <div
+      ref={surfaceRef}
+      tabIndex={-1}
+      aria-label="图片连续浏览"
+      className="flex h-full min-w-0 flex-col outline-none"
+      onKeyDown={(event) => {
+        if (
+          event.defaultPrevented ||
+          event.nativeEvent.isComposing ||
+          event.keyCode === 229 ||
+          event.ctrlKey ||
+          event.metaKey ||
+          event.altKey ||
+          event.shiftKey ||
+          (event.target instanceof Element &&
+            event.target.closest('input, textarea, [contenteditable="true"]'))
+        )
+          return
+        if (!browsable || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) return
+        event.preventDefault()
+        navigate(event.key === "ArrowLeft" ? -1 : 1, true)
+      }}
     >
-      <ImageViewer
-        bytes={preview.bytes}
-        mediaType={preview.mediaType}
-        name={source.name}
-        onOpenOriginal={
-          source.kind === "attachment"
-            ? () => window.desktop.attachments.open({ assetId: source.assetId })
-            : undefined
-        }
-        onFeedback={
-          !source.readOnly && support
-            ? async (marked, regions, width, height) => {
-                const request = currentLoad.request
-                if (request !== version.current) return
-                const state = useDesktopSessionStore.getState()
-                const sessionId = state.activeSessionId
-                const ownsSession = sessionId
-                  ? scopeId === sessionComposerScope(sessionId)
-                  : scopeId.startsWith("draft:")
-                if (!ownsSession) throw new Error("当前聊天已变化，请重新打开图片后加入批注")
-                // 图片来源与聊天草稿分开：只有从待发送附件打开时，才跟随那份草稿。
-                const scope =
-                  (source.draftId &&
-                    Object.keys(state.composerDraftsByScope).find((key) =>
-                      state.composerDraftsByScope[key]?.attachments.some(
-                        (a) => a.draftId === source.draftId
-                      )
-                    )) ||
-                  (sessionId ? sessionComposerScope(sessionId) : NEW_CONVERSATION_SCOPE)
-                const bytes = await marked.arrayBuffer()
-                if (request !== version.current) return
-                const current = useDesktopSessionStore.getState()
-                if (current.activeSessionId !== sessionId)
-                  throw new Error("当前聊天已变化，请重新打开图片后加入批注")
-                await current.addImageFeedback(scope, {
-                  original: {
-                    bytes: preview.bytes,
-                    mediaType: preview.mediaType,
-                    displayName: source.name,
-                  },
-                  marked: {
-                    bytes,
-                    mediaType: "image/png",
-                    displayName: `${source.name.replace(/\.[^.]+$/, "")}-批注.png`,
-                  },
-                  originalAssetId: source.kind === "attachment" ? source.assetId : undefined,
-                  text: imageFeedbackText(
-                    source.kind === "file" ? source.path : source.name,
-                    regions,
-                    width,
-                    height
-                  ),
-                })
-                // 保留右侧预览，用户可以在左侧编辑草稿、继续对照图片。
-                toast.success("图片和批注已加入聊天草稿")
+      {browsable ? (
+        <div className="flex shrink-0 items-center gap-1 border-b border-border/60 px-3 py-1.5">
+          <span className="min-w-0 flex-1 truncate text-sm" title={source.name}>
+            {source.name}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            shape="circle"
+            size="icon-sm"
+            aria-label="上一张图片"
+            title="上一张图片（←）"
+            disabled={index === 0}
+            onClick={() => navigate(-1)}
+          >
+            <ChevronLeft strokeWidth={1.75} />
+          </Button>
+          <span className="min-w-12 text-center text-xs text-muted-foreground tabular-nums">
+            {index + 1} / {count}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            shape="circle"
+            size="icon-sm"
+            aria-label="下一张图片"
+            title="下一张图片（→）"
+            disabled={index === count - 1}
+            onClick={() => navigate(1)}
+          >
+            <ChevronRight strokeWidth={1.75} />
+          </Button>
+        </div>
+      ) : null}
+      <div className="min-h-0 flex-1">
+        {!preview ? (
+          <div className="grid h-full place-items-center px-4 text-sm text-muted-foreground">
+            <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+              <p role={currentLoad?.error ? "alert" : "status"} aria-busy={!currentLoad?.error}>
+                {currentLoad?.error ?? "正在读取图片…"}
+              </p>
+              {currentLoad?.error && currentLoad.retryable ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  shape="pill"
+                  aria-label="重新读取图片"
+                  onClick={() => {
+                    if (currentLoad.request !== version.current) return
+                    setLoaded(null)
+                    readImage()
+                  }}
+                >
+                  <RefreshCw data-icon="inline-start" strokeWidth={1.75} />
+                  重新读取
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <Suspense
+            fallback={
+              <div
+                role="status"
+                className="grid h-full place-items-center text-sm text-muted-foreground"
+              >
+                正在加载查看器…
+              </div>
+            }
+          >
+            <ImageViewer
+              key={imageSourceKey(source)}
+              navigationGuardRef={guardRef}
+              bytes={preview.bytes}
+              mediaType={preview.mediaType}
+              name={source.name}
+              onOpenOriginal={
+                source.kind === "attachment"
+                  ? () => window.desktop.attachments.open({ assetId: source.assetId })
+                  : undefined
               }
-            : undefined
-        }
-      />
-    </Suspense>
+              onFeedback={
+                !source.readOnly && support && (!gallery || !!gallery.composerScope)
+                  ? async (marked, regions, width, height) => {
+                      const request = currentLoad.request
+                      if (request !== version.current) return
+                      const state = useDesktopSessionStore.getState()
+                      const sessionId = state.activeSessionId
+                      const ownsSession = sessionId
+                        ? scopeId === sessionComposerScope(sessionId)
+                        : scopeId.startsWith("draft:")
+                      if (!ownsSession || gallery?.canFeedback?.() === false)
+                        throw new Error("当前聊天已变化，请重新打开图片后加入批注")
+                      // 图片来源与聊天草稿分开：只有从待发送附件打开时，才跟随那份草稿。
+                      const scope =
+                        (source.draftId &&
+                          Object.keys(state.composerDraftsByScope).find((key) =>
+                            state.composerDraftsByScope[key]?.attachments.some(
+                              (a) => a.draftId === source.draftId
+                            )
+                          )) ||
+                        gallery?.composerScope ||
+                        (sessionId ? sessionComposerScope(sessionId) : NEW_CONVERSATION_SCOPE)
+                      const bytes = await marked.arrayBuffer()
+                      if (request !== version.current) return
+                      const current = useDesktopSessionStore.getState()
+                      if (
+                        current.activeSessionId !== sessionId ||
+                        gallery?.canFeedback?.() === false
+                      )
+                        throw new Error("当前聊天已变化，请重新打开图片后加入批注")
+                      await current.addImageFeedback(scope, {
+                        original: {
+                          bytes: preview.bytes,
+                          mediaType: preview.mediaType,
+                          displayName: source.name,
+                        },
+                        marked: {
+                          bytes,
+                          mediaType: "image/png",
+                          displayName: `${source.name.replace(/\.[^.]+$/, "")}-批注.png`,
+                        },
+                        originalAssetId: source.kind === "attachment" ? source.assetId : undefined,
+                        text: imageFeedbackText(
+                          source.kind === "file" ? source.path : source.name,
+                          regions,
+                          width,
+                          height
+                        ),
+                      })
+                      // 保留右侧预览，用户可以在左侧编辑草稿、继续对照图片。
+                      toast.success("图片和批注已加入聊天草稿")
+                    }
+                  : undefined
+              }
+            />
+          </Suspense>
+        )}
+      </div>
+    </div>
   )
 }

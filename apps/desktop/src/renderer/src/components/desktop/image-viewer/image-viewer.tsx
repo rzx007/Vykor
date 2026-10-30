@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react"
 import {
   ChevronDown,
   Copy,
@@ -34,6 +42,8 @@ import { renderImageRegions, type ImageRegion } from "./image-annotations"
 import "@annotorious/annotorious/annotorious.css"
 import "./image-viewer.css"
 
+const BUSY_NAVIGATION_ERROR = "正在处理图片，请完成后再切换。"
+
 export function ImageViewer({
   bytes,
   url,
@@ -42,6 +52,7 @@ export function ImageViewer({
   onClose,
   onFeedback,
   onOpenOriginal,
+  navigationGuardRef,
 }: {
   bytes: ArrayBuffer
   url?: string
@@ -55,12 +66,15 @@ export function ImageViewer({
     height: number
   ) => Promise<void>
   onOpenOriginal?: () => Promise<unknown>
+  navigationGuardRef?: RefObject<((keyboard?: boolean) => boolean) | null>
 }) {
   const [drawing, setDrawing] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [scale, setScale] = useState(1)
   const [expandedTools, setExpandedTools] = useState(false)
   const [busy, setBusy] = useState(false)
+  const busyRef = useRef(false)
+  const pointers = useRef(new Set<number>())
   const [actionError, setActionError] = useState<string | null>(null)
   const [status, setStatus] = useState("")
   const viewport = useRef<HTMLDivElement>(null)
@@ -79,6 +93,50 @@ export function ImageViewer({
   const duration = reduced ? 0 : 160
   const focusComment = useCallback((node: HTMLTextAreaElement | null) => {
     node?.focus()
+  }, [])
+
+  useLayoutEffect(() => {
+    if (!navigationGuardRef) return
+    const guard = (keyboard = false): boolean => {
+      if (busyRef.current) {
+        setActionError(BUSY_NAVIGATION_ERROR)
+        return false
+      }
+      if (pointers.current.size > 0) return false
+      if (
+        keyboard &&
+        (drawing ||
+          annotation.selectedId ||
+          document.activeElement?.closest("textarea,input,[contenteditable=true]"))
+      )
+        return false
+      if (!annotation.flushDraft()) return false
+      annotation.cancelSelection()
+      setDrawing(false)
+      return true
+    }
+    navigationGuardRef.current = guard
+    return () => {
+      if (navigationGuardRef.current === guard) navigationGuardRef.current = null
+    }
+  })
+
+  useEffect(() => {
+    const end = (event: PointerEvent) => {
+      pointers.current.delete(event.pointerId)
+    }
+    const clear = () => {
+      pointers.current.clear()
+    }
+    window.addEventListener("pointerup", end, true)
+    window.addEventListener("pointercancel", end, true)
+    window.addEventListener("blur", clear)
+    return () => {
+      window.removeEventListener("pointerup", end, true)
+      window.removeEventListener("pointercancel", end, true)
+      window.removeEventListener("blur", clear)
+      clear()
+    }
   }, [])
 
   useEffect(() => {
@@ -123,7 +181,8 @@ export function ImageViewer({
   }
 
   const perform = async (action: () => Promise<void>) => {
-    if (busy) return
+    if (busyRef.current) return
+    busyRef.current = true
     setBusy(true)
     setActionError(null)
     try {
@@ -131,7 +190,9 @@ export function ImageViewer({
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "操作失败，请重试")
     } finally {
+      busyRef.current = false
       setBusy(false)
+      setActionError((current) => (current === BUSY_NAVIGATION_ERROR ? null : current))
     }
   }
 
@@ -185,6 +246,9 @@ export function ImageViewer({
     <section
       className="image-annotation-viewer relative h-full min-h-0 overflow-hidden bg-muted/40 text-foreground select-none"
       aria-label="图片查看与批注"
+      onPointerDownCapture={(event) => {
+        pointers.current.add(event.pointerId)
+      }}
       onKeyDownCapture={(event) => {
         const editing = (event.target as HTMLElement).closest(
           "textarea,input,[contenteditable=true]"

@@ -15,7 +15,7 @@ import type {
   DesktopSessionUpdate,
   DesktopSessionView,
 } from "@shared/session-types"
-import { SideChatPanel, appendSideChatQuote, sideChatTargets } from "../side-chat-panel"
+import { SideChatPanel, appendSideChatQuote, sideChatTargets, canUseSideChatImageScope, destroySideChat } from "../side-chat-panel"
 import { SideChatSelectionActions } from "../side-chat-selection-actions"
 import { UtilityPanel } from "../../../layout/main-layout/utility-panel/utility-panel"
 import {
@@ -169,6 +169,24 @@ async function mount(sourceId = "main", active = true) {
     root.render(<SideChatPanel key={sourceId} sourceId={sourceId} active={active} {...callbacks} />)
   )
 }
+it("rejects stale image feedback after the side-chat region unmounts or its target disappears", async () => {
+  expect(canUseSideChatImageScope("main", "linked-chat:main")).toBe(false)
+  await mount()
+  expect(canUseSideChatImageScope("main", "linked-chat:main")).toBe(true)
+  await act(async () => root.render(<div />))
+  expect(canUseSideChatImageScope("main", "linked-chat:main")).toBe(false)
+  sideChatTargets.set("main", "side-main")
+  await mount()
+  expect(canUseSideChatImageScope("main", "session:side-main")).toBe(true)
+  sideChatTargets.delete("main")
+  expect(canUseSideChatImageScope("main", "session:side-main")).toBe(false)
+  sideChatTargets.set("main", "side-main")
+  expect(canUseSideChatImageScope("main", "session:side-main")).toBe(true)
+  const closing = destroySideChat("main")
+  expect(canUseSideChatImageScope("main", "session:side-main")).toBe(false)
+  await act(async () => closing)
+  expect(canUseSideChatImageScope("main", "session:side-main")).toBe(false)
+})
 async function mountUtilitySideChat(open = true) {
   const scopeId = "session:side-chat-close"
   if (!readUtilityPanelRuntimeState(scopeId)) {

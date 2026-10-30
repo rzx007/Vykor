@@ -713,6 +713,7 @@ function ConversationPane({
                     <MessageScrollerContent className="conversation-content-column min-h-full min-w-0 text-content-foreground">
                       {openingSession && !sessionView ? null : (
                         <ConversationTranscript
+                          imageComposerScope={composerScope}
                           tasks={sessionView?.tasks}
                           onRunErrorAction={resolveRunError}
                           onOpenAgents={onOpenAgents}
@@ -871,6 +872,7 @@ function ConversationPane({
                   </div>
                 ) : null}
                 <Composer
+                  composerScope={composerScope}
                   key={composerScope}
                   id="message-composer"
                   draft={draft}

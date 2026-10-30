@@ -37,9 +37,20 @@ import { useCodePreviewDrafts } from "@renderer/components/desktop/tools/editor/
 import { imageSourceKey } from "@renderer/components/desktop/image-viewer/image-source"
 
 // 图片编辑器自身另有集成测试；这里验证真实 panel 的标签和会话缓存。
-vi.mock("@renderer/components/desktop/image-viewer/image-viewer-panel", () => ({
-  ImageViewerPanel: () => null,
-}))
+type ImagePanelProps = React.ComponentProps<typeof import("@renderer/components/desktop/image-viewer/image-viewer-panel").ImageViewerPanel>
+const imagePanel = vi.hoisted(() => ({ props: null as ImagePanelProps | null, guard: vi.fn(() => true) }))
+vi.mock("@renderer/components/desktop/image-viewer/image-viewer-panel", async () => {
+  const { useLayoutEffect } = await import("react")
+  return { ImageViewerPanel: (props: ImagePanelProps) => {
+    imagePanel.props = props
+    useLayoutEffect(() => {
+      const ref = props.navigationGuardRef
+      if (ref) ref.current = imagePanel.guard
+      return () => { if (ref?.current === imagePanel.guard) ref.current = null }
+    }, [props.navigationGuardRef])
+    return null
+  } }
+})
 
 const initialStoreState = useDesktopSessionStore.getState()
 const panelMetrics = vi.hoisted(() => ({ renders: 0 }))
@@ -385,6 +396,41 @@ describe("UtilityPanel review tool access", () => {
     )
     await settle()
     expect(readUtilityPanelRuntimeState(scopeId)!.tabs).toEqual([])
+  })
+
+  it("browses a gallery in one tab and consumes blocked external image opens", async () => {
+    installProbe(async () => ({ isRepository: false, rootPath: null }))
+    useOutsideProjectSession("D:/plain-dir")
+    imagePanel.guard.mockReturnValue(true)
+    const scopeId = "session:gallery-tabs"
+    const sources = ["one", "two", "three"].map((assetId) => ({ kind: "attachment" as const, assetId, name: assetId + ".png" }))
+    const gallery = { id: "conversation:side", sources, composerScope: "session:side" }
+    const request = { id: 1, source: sources[0]!, gallery }
+    const container = mountPanel(scopeId, { imageOpenRequest: request })
+    await settle()
+    expect(imagePanel.props?.gallery).toBe(gallery)
+    const navigate = imagePanel.props!.onNavigate!
+    // Two fast arrows must advance relative to the live tab, rather than a stale render index.
+    await act(async () => { navigate(1); navigate(1) })
+    await settle()
+    expect(imagePanel.props?.source).toBe(sources[2])
+    expect(readUtilityPanelRuntimeState(scopeId)!.tabs).toHaveLength(1)
+    expect(container.querySelector(".utility-tab-strip")?.textContent).toContain("three.png")
+    const renderRequest = () => mountedRoot!.render(createElement(UtilityPanel, {
+      scopeId, open: true, maximized: false, onToggleMaximized: vi.fn(), onClose: vi.fn(),
+      fileOpenRequest: null, reviewOpenRequest: null, terminalOpenRequest: null, toolOpenRequest: null,
+      imageOpenRequest: { id: 2, source: sources[0]!, gallery },
+      onOpenFile: vi.fn(), onOpenReview: vi.fn(), onOpenTerminal: vi.fn(),
+    }))
+    imagePanel.guard.mockReturnValue(false)
+    await act(async () => renderRequest())
+    await settle()
+    expect(imagePanel.props?.source).toBe(sources[2])
+    imagePanel.guard.mockReturnValue(true)
+    await act(async () => renderRequest())
+    await settle()
+    expect(imagePanel.props?.source).toBe(sources[2])
+    expect(readUtilityPanelRuntimeState(scopeId)!.handledImageRequestId).toBe(2)
   })
   it("offers the review tool once the probe reports a repository", async () => {
     const isRepository = installProbe(async () => ({ isRepository: true, rootPath: null }))
