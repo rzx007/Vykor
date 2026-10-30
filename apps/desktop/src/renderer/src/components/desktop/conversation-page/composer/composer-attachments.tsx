@@ -1,5 +1,5 @@
-import { RotateCcw, X } from "lucide-react"
-import { useEffect, useState } from "react"
+import { CircleAlert, CircleCheck, RotateCcw, X } from "lucide-react"
+import { createElement, useEffect, useState } from "react"
 import { getFileIcon } from "@renderer/components/desktop/tools/files/file-icons"
 
 import {
@@ -13,6 +13,7 @@ import {
   AttachmentProgress,
   AttachmentTitle,
 } from "@renderer/components/ui/attachment"
+import { Spinner } from "@renderer/components/ui/spinner"
 import {
   resolveDesktopAttachmentCompatibility,
   type DesktopAttachmentDraft,
@@ -47,20 +48,6 @@ export function ComposerAttachments({
   const containsFile = attachments.some((attachment) => !isImageAttachment(attachment))
   const alignMixedAttachmentHeights = containsImage && containsFile
 
-  const preparing = attachments.filter((item) => item.status === "uploading").length
-  const attention = attachments.filter(
-    (item) =>
-      item.status === "failed" ||
-      item.status === "cancelled" ||
-      (item.status === "ready" && !resolveDesktopAttachmentCompatibility(item).supported)
-  ).length
-  const feedback =
-    [
-      preparing ? `${preparing} 个附件正在准备` : "",
-      attention ? `${attention} 个附件需要处理${readOnly ? "" : "，请重试或移除后发送"}` : "",
-    ]
-      .filter(Boolean)
-      .join(" · ") || `${attachments.length} 个附件已就绪`
   return (
     <ImageGalleryProvider
       getGallery={() =>
@@ -68,7 +55,7 @@ export function ComposerAttachments({
       }
       readOnly={readOnly || !composerScope}
     >
-      <div className="space-y-1 px-3 pt-2">
+      <div className="px-3 pt-2">
         <AttachmentGroup aria-label="待发送附件">
           {attachments.map((attachment) => (
             <ComposerAttachmentCard
@@ -82,9 +69,6 @@ export function ComposerAttachments({
             />
           ))}
         </AttachmentGroup>
-        <p role="status" className="text-xs text-ui-muted">
-          {feedback}
-        </p>
       </div>
     </ImageGalleryProvider>
   )
@@ -124,13 +108,27 @@ function ComposerAttachmentCard({
         : "error"
   const mediaType = attachment.mediaType ?? attachment.declaredMediaType
   const compatibility = resolveDesktopAttachmentCompatibility(attachment)
-  const FileIcon = getFileIcon(attachment.displayName, mediaType)
   const errorMessage =
     attachment.error?.message ??
     (attachment.status === "cancelled" ? "上传已取消" : null) ??
     (attachment.status === "ready" && !compatibility.supported
       ? (compatibility.reason ?? null)
       : null)
+  const indicatorState = attachment.status === "ready" && !compatibility.supported ? "error" : state
+  const statusLabel =
+    indicatorState === "uploading"
+      ? attachment.progress === 1
+        ? "正在确认附件"
+        : "正在上传"
+      : indicatorState === "done"
+        ? "已就绪"
+        : (errorMessage ?? "附件需要处理")
+  const statusIndicator = (
+    <ComposerAttachmentStatus
+      state={indicatorState}
+      label={`${attachment.displayName}：${statusLabel}`}
+    />
+  )
 
   if (visiblePreviewUrl) {
     return (
@@ -138,6 +136,7 @@ function ComposerAttachmentCard({
         src={visiblePreviewUrl}
         displayName={attachment.displayName}
         alignMixedAttachmentHeights={alignMixedAttachmentHeights}
+        statusIndicator={statusIndicator}
         onOpen={
           viewer && attachment.assetId
             ? () =>
@@ -170,7 +169,7 @@ function ComposerAttachmentCard({
   return (
     <Attachment
       data-display="file-card"
-      state={attachment.status === "ready" && !compatibility.supported ? "error" : state}
+      state={indicatorState}
       size="sm"
       className={`max-w-64 flex-nowrap ${alignMixedAttachmentHeights ? "h-20" : ""}`}
     >
@@ -182,11 +181,16 @@ function ComposerAttachmentCard({
             onError={() => setFailedPreviewUrl(visiblePreviewUrl)}
           />
         ) : (
-          <FileIcon />
+          createElement(getFileIcon(attachment.displayName, mediaType))
         )}
       </AttachmentMedia>
       <AttachmentContent>
-        <AttachmentTitle title={attachment.displayName}>{attachment.displayName}</AttachmentTitle>
+        <div className="flex min-w-0 items-center gap-1.5">
+          <AttachmentTitle title={attachment.displayName} className="min-w-0 flex-1">
+            {attachment.displayName}
+          </AttachmentTitle>
+          {statusIndicator}
+        </div>
         <AttachmentDescription
           title={errorMessage ?? previewMessage ?? undefined}
           className={errorMessage || previewFailed ? "whitespace-normal" : undefined}
@@ -245,6 +249,39 @@ function ComposerAttachmentCard({
         </AttachmentActions>
       ) : null}
     </Attachment>
+  )
+}
+
+function ComposerAttachmentStatus({
+  state,
+  label,
+}: {
+  state: "uploading" | "done" | "error"
+  label: string
+}): React.JSX.Element {
+  return (
+    <span
+      role="img"
+      aria-label={label}
+      title={label}
+      className={`inline-flex size-3.5 shrink-0 items-center justify-center ${
+        state === "error" ? "text-destructive" : "text-muted-foreground"
+      }`}
+    >
+      {state === "uploading" ? (
+        <Spinner
+          role="presentation"
+          aria-hidden="true"
+          aria-label={undefined}
+          className="size-3.5 motion-reduce:animate-none"
+          strokeWidth={1.75}
+        />
+      ) : state === "done" ? (
+        <CircleCheck aria-hidden="true" className="size-3.5" strokeWidth={1.75} />
+      ) : (
+        <CircleAlert aria-hidden="true" className="size-3.5" strokeWidth={1.75} />
+      )}
+    </span>
   )
 }
 

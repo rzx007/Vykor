@@ -11,6 +11,7 @@ export function AttachmentImagePreview({
   displayName,
   alignMixedAttachmentHeights = false,
   fill = false,
+  statusIndicator,
   actions,
   actionsClassName,
   onError,
@@ -20,6 +21,7 @@ export function AttachmentImagePreview({
   displayName: string
   alignMixedAttachmentHeights?: boolean
   fill?: boolean
+  statusIndicator?: ReactNode
   actions?: ReactNode
   actionsClassName?: string
   onError: () => void
@@ -50,6 +52,11 @@ export function AttachmentImagePreview({
       ) : (
         <img src={src} alt={displayName} className="size-full object-cover" onError={onError} />
       )}
+      {statusIndicator ? (
+        <div className="pointer-events-none absolute right-1.5 bottom-1.5 flex items-center justify-center rounded-full bg-background/85 p-0.5">
+          {statusIndicator}
+        </div>
+      ) : null}
       {actions ? (
         <AttachmentActions className={cn("absolute top-1.5 right-1.5 gap-1", actionsClassName)}>
           {actions}

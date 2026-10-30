@@ -34,7 +34,7 @@ describe("Composer attach button", () => {
       onDraftChange, onSubmit, onSelectModel: vi.fn(), onSelectPermissionMode: vi.fn(), onSelectEffort: vi.fn(),
     }
     await act(async () => root.render(createElement(Composer, { ...props, attachmentPreparation: { pending: ["reading"], error: null } })))
-    expect(container.textContent).toContain("正在准备附件")
+    expect(container.textContent).not.toContain("正在准备附件")
     await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })))
     expect(onSubmit).not.toHaveBeenCalled()
     await act(async () => root.render(createElement(Composer, { ...props, attachmentPreparation: { pending: [], error: "读取失败，正文草稿已保留" } })))

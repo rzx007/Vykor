@@ -1,6 +1,6 @@
 import { Download, ExternalLink, FileText } from "lucide-react"
 import { getFileIcon } from "@renderer/components/desktop/tools/files/file-icons"
-import { useContext, useEffect, useState } from "react"
+import { createElement, useContext, useEffect, useState } from "react"
 import { documentFormat } from "@shared/document-preview"
 import { MainLayoutContext } from "@renderer/components/desktop/layout/main-layout/main-layout-context"
 
@@ -45,11 +45,13 @@ export function MessageAttachment({
   fill?: boolean
 }): React.JSX.Element {
   const viewer = useImageViewer()
-  const FileIcon = getFileIcon(part.displayName, part.mediaType)
-  const layout=useContext(MainLayoutContext)
-  const open=()=>{
-    if(documentFormat(part.displayName)&&layout?.openFile)layout.openFile(`attachment://${encodeURIComponent(part.assetId)}/${encodeURIComponent(part.displayName)}`)
-    else void window.desktop.attachments.open({assetId:part.assetId})
+  const layout = useContext(MainLayoutContext)
+  const open = () => {
+    if (documentFormat(part.displayName) && layout?.openFile)
+      layout.openFile(
+        `attachment://${encodeURIComponent(part.assetId)}/${encodeURIComponent(part.displayName)}`
+      )
+    else void window.desktop.attachments.open({ assetId: part.assetId })
   }
   const previewUrl = useMessageAttachmentPreview(part)
   const [failedPreviewUrl, setFailedPreviewUrl] = useState<string | null>(null)
@@ -120,12 +122,18 @@ export function MessageAttachment({
             onError={() => setFailedPreviewUrl(visiblePreviewUrl)}
           />
         ) : (
-          <FileIcon />
+          createElement(getFileIcon(part.displayName, part.mediaType))
         )}
       </AttachmentMedia>
       <AttachmentContent>
         <AttachmentTitle title={part.displayName}>
-          {documentFormat(part.displayName)&&layout?.openFile?<button className="text-left hover:underline" onClick={open}>{part.displayName}</button>:part.displayName}
+          {documentFormat(part.displayName) && layout?.openFile ? (
+            <button className="text-left hover:underline" onClick={open}>
+              {part.displayName}
+            </button>
+          ) : (
+            part.displayName
+          )}
         </AttachmentTitle>
         <AttachmentDescription>
           {fileKind(part.mediaType)} · {formatBytes(part.sizeBytes)}
@@ -133,11 +141,7 @@ export function MessageAttachment({
       </AttachmentContent>
       {!readOnly ? (
         <AttachmentActions>
-          <AttachmentAction
-            aria-label={`打开 ${part.displayName}`}
-            title="打开"
-            onClick={open}
-          >
+          <AttachmentAction aria-label={`打开 ${part.displayName}`} title="打开" onClick={open}>
             <ExternalLink />
           </AttachmentAction>
           <AttachmentAction

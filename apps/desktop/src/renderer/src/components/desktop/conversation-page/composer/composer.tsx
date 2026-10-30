@@ -293,9 +293,6 @@ export function Composer({
       ) : null}
       {contextContent}
       {!goalEditing && !goalMode && <PluginAppComposerContext sessionId={activeSessionId} readOnly={sending} />}
-      {preparingAttachments ? (
-        <p role="status" className="px-3 pt-2 text-xs text-ui-muted">正在准备附件，完成后可发送</p>
-      ) : null}
       {attachmentActionError || attachmentPreparation?.error ? (
         <p role="alert" className="px-3 pt-2 text-xs text-destructive">
           {attachmentActionError ?? attachmentPreparation?.error}

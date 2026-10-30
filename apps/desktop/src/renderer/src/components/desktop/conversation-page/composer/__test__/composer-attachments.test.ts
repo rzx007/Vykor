@@ -63,6 +63,11 @@ describe("ComposerAttachments", () => {
     expect(html).toContain('aria-label="重试上传 凡人修仙传.txt"')
     expect(html).toContain('aria-live="polite"')
     expect(html).toContain("上传中断，请重试")
+    expect(html).toContain('aria-label="产品发布中心.pdf：正在上传"')
+    expect(html).toContain('aria-label="投标文件.docx：已就绪"')
+    expect(html).toContain('aria-label="凡人修仙传.txt：上传中断，请重试"')
+    expect(html).not.toContain("个附件正在准备")
+    expect(html).not.toContain("个附件需要处理")
   })
 
   it("keeps accompanying text when pasted files are present", () => {

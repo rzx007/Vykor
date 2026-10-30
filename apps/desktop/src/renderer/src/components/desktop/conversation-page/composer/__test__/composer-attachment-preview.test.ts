@@ -161,6 +161,10 @@ describe("ComposerAttachments preview", () => {
     expect(imageAttachment?.className).toContain("border-border/50")
     expect(imageAttachment?.textContent).not.toContain(readyImage.displayName)
     expect(
+      imageAttachment?.querySelector('[aria-label="runtime-map.jpeg：已就绪"]')
+    ).not.toBeNull()
+    expect(container.textContent).not.toContain("个附件已就绪")
+    expect(
       imageAttachment?.querySelector('[aria-label="移除附件 runtime-map.jpeg"]')
     ).not.toBeNull()
   })
