@@ -804,7 +804,10 @@ function ConversationPane({
                 {"此会话已归档，只能查看历史内容"}
               </div>
             ) : (
-              <div className="conversation-composer-column mb-5 flex shrink-0 flex-col gap-2">
+              <div
+                key={`composer-area:${composerScope}`}
+                className="conversation-composer-column mb-5 flex shrink-0 flex-col gap-2"
+              >
                 {goal && goalComposer.dismissedGoalId !== goal.id ? (
                   <GoalBanner
                     key={`${goal.id}:${goal.wait?.kind === "user" ? goal.wait.questionId : ""}`}
@@ -829,7 +832,6 @@ function ConversationPane({
                   error={composerValidationError ?? activeSessionError ?? pluginCatalogError}
                 />
                 <PendingPromptQueue
-                  key={composerScope}
                   prompts={pendingPrompts}
                   activeRunId={activeRun?.id}
                   localSubmissions={localPromptSubmissions}

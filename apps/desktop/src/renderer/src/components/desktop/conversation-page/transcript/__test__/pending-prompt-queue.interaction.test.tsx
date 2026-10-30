@@ -108,9 +108,7 @@ it("keeps failed and in-flight actions visible beyond the fold and disables conf
   expect(busy.querySelector<HTMLButtonElement>('[aria-label="删除待处理消息"]')?.disabled).toBe(
     true
   )
-  expect(
-    [...busy.querySelectorAll<HTMLButtonElement>("button")].find((b) =>
-      b.textContent?.includes("补充到当前任务")
-    )?.disabled
-  ).toBe(true)
+  expect(busy.querySelector<HTMLButtonElement>('[aria-label="补充到当前任务"]')?.disabled).toBe(
+    true
+  )
 })

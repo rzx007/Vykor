@@ -1,5 +1,5 @@
 import { useId, useState } from "react"
-import { AlertCircle, ChevronDown, CornerDownRight, MessageCircle, X } from "lucide-react"
+import { AlertCircle, ChevronDown, Clock3, CornerDownRight, X } from "lucide-react"
 
 import { Button } from "@renderer/components/ui/button"
 import {
@@ -72,7 +72,14 @@ export function PendingPromptQueue({
       content: submission.content,
       error: submission.phase === "failed" ? submission.error : undefined,
       attention: submission.phase === "failed" || submission.phase === "submitting",
-      indicator: submission.phase === "failed" ? <AlertCircle /> : <Spinner />,
+      indicator:
+        submission.phase === "failed" ? (
+          <AlertCircle />
+        ) : submission.phase === "submitting" ? (
+          <Spinner />
+        ) : (
+          <Clock3 />
+        ),
       actions: (
         <>
           <span className="text-xs text-muted-foreground">
@@ -120,7 +127,7 @@ export function PendingPromptQueue({
         content: input.content,
         error: action?.phase === "failed" ? action.error : undefined,
         attention: action?.phase === "failed" || busy,
-        indicator: busy ? <Spinner /> : <MessageCircle />,
+        indicator: action?.phase === "failed" ? <AlertCircle /> : <Clock3 />,
         actions: (
           <>
             <Tooltip>
@@ -129,23 +136,18 @@ export function PendingPromptQueue({
                   <Button
                     type="button"
                     variant="ghost"
-                    shape="pill"
-                    size="sm"
+                    shape="circle"
+                    size="icon-sm"
                     disabled={!activeRunId || busy}
                     aria-label="补充到当前任务"
                     aria-busy={promoting || undefined}
                     onClick={() => onPromote(input.id, run.id)}
                   >
-                    {promoting ? (
-                      <Spinner data-icon="inline-start" />
-                    ) : (
-                      <CornerDownRight data-icon="inline-start" />
-                    )}
-                    {promoting ? "正在补充" : "补充到当前任务"}
+                    {promoting ? <Spinner /> : <CornerDownRight />}
                   </Button>
                 }
               />
-              <TooltipContent>将这条消息补充给当前任务，成功后不再单独排队。</TooltipContent>
+              <TooltipContent>补充到当前任务，成功后不再单独排队。</TooltipContent>
             </Tooltip>
             <Button
               type="button"
@@ -170,17 +172,19 @@ export function PendingPromptQueue({
   const shown = expanded ? rows : rows.filter((row, index) => index < 3 || row.attention)
   return (
     <section className="flex min-w-0 flex-col gap-1.5" aria-label="待处理消息队列">
-      <p className="px-1 text-xs text-muted-foreground" aria-live="polite">
-        待处理消息 · {rows.length}
-      </p>
-      <ItemGroup id={listId} className="gap-1.5" aria-label="待处理消息">
+      {rows.length > 1 ? (
+        <p className="px-1 text-xs text-muted-foreground" aria-live="polite">
+          待处理消息 · {rows.length}
+        </p>
+      ) : null}
+      <ItemGroup id={listId} className="gap-0.5 has-data-[size=xs]:gap-0.5" aria-label="待处理消息">
         {shown.map((row) => (
           <Item
             key={row.id}
             role="listitem"
-            variant="outline"
+            variant="default"
             size="xs"
-            className="bg-background/95"
+            className="min-h-8 px-1 py-0"
           >
             <ItemMedia variant="icon" aria-hidden>
               {row.indicator}
@@ -226,7 +230,7 @@ function QueueMessageContent({ content }: { content: string }) {
             variant="ghost"
             size="sm"
             shape="pill"
-            className="h-auto min-w-0 justify-start px-1 py-1"
+            className="h-7 min-w-0 justify-start px-1 py-0"
           />
         }
       >
