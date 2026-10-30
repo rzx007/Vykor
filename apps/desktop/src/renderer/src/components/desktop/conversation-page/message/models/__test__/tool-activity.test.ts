@@ -53,13 +53,18 @@ describe("inline tool group wording", () => {
     "mcp__calendar__create_event",
     "mcp__remote__exec_query",
     "CustomTool",
+    "write_file",
+    "read_file",
+    "job_read",
+    "GREP",
+    "Bash",
   ])("keeps non-file operations neutral: %s", (toolName) => {
     expect(toolGroupCompletedLabel([{ call: { ...part, toolName, status: "completed" } }])).toBe(
       "操作已结束"
     )
   })
 
-  it.each(["Write", "Edit", "ApplyPatch", "TodoWrite", "write_file"])(
+  it.each(["Write", "Edit", "ApplyPatch", "TodoWrite"])(
     "still summarizes known file operations: %s",
     (toolName) => {
       expect(toolGroupCompletedLabel([{ call: { ...part, toolName, status: "completed" } }])).toBe(
@@ -118,6 +123,19 @@ describe("inline tool group wording", () => {
 
 describe("built-in tool Chinese names", () => {
   it.each([
+    ["Agent", "调用子智能体"],
+    ["ImageGeneration", "生成图片"],
+    ["BackgroundShellCreate", "创建后台终端"],
+    ["Glob", "查找文件"],
+    ["Read", "读取文件"],
+    ["Write", "写入文件"],
+    ["Edit", "编辑文件"],
+    ["ApplyPatch", "应用补丁"],
+    ["Shell", "运行命令"],
+    ["TerminalOpen", "运行命令"],
+    ["WebSearch", "搜索内容"],
+    ["WebFetch", "请求网络"],
+    ["Browser", "浏览网页"],
     ["Grep", "搜索文件内容"],
     ["JobList", "查看任务列表"],
     ["JobRead", "读取任务输出"],
@@ -166,10 +184,65 @@ describe("built-in tool Chinese names", () => {
     ).toEqual({ name })
   })
 
-  it.each(["job_read", "JOB-READ", "JobRead"])("accepts normalized tool names: %s", (toolName) => {
+  it.each([
+    ["job_read", "Job read"],
+    ["Job_Read", "Job Read"],
+    ["JOB-READ", "JOB READ"],
+    ["grep", "Grep"],
+    ["GREP", "GREP"],
+    ["team_create", "Team create"],
+    ["read_mcp_resource", "Read mcp resource"],
+    ["Image_To_Text", "Image To Text"],
+    ["ReadCalendar", "Read Calendar"],
+    ["ReadFile", "Read File"],
+    ["write_file", "Write file"],
+    ["apply_patch", "Apply patch"],
+    ["my_apply_patch_preview", "My apply patch preview"],
+    ["mcp__github__search_repositories", "Mcp github search repositories"],
+    ["mcp__weather__fetch_forecast", "Mcp weather fetch forecast"],
+    ["mcp__approval__request_review", "Mcp approval request review"],
+    ["mcp__browser__navigate", "Mcp browser navigate"],
+    ["plugin__acme__ReadCalendar", "Plugin acme Read Calendar"],
+    ["constructor", "Constructor"],
+  ])("preserves non-builtin names instead of normalizing them: %s", (toolName, name) => {
     expect(summarizeToolCall({ ...part, toolName, input: { description: "task-1" } })).toEqual({
-      name: "读取任务输出",
+      name,
       detail: "task-1",
+    })
+    expect(toolGroupLatestLabel([{ call: { ...part, toolName } }])).toBe(name)
+    expect(
+      summarizeToolCall({
+        ...part,
+        toolName,
+        id: "ui-tool-generation:third-party",
+        metadata: { uiToolGeneration: true, toolProgress: { phase: "generating" } },
+      })
+    ).toEqual({ name })
+  })
+
+  it("uses the local OCR summary only for its registered name", () => {
+    expect(summarizeToolCall({ ...part, toolName: "ImageToText" }).name).toBe(
+      "正在使用本地 OCR 识别文字"
+    )
+    expect(
+      summarizeToolCall({
+        ...part,
+        toolName: "ImageToText",
+        id: "ui-tool-generation:ocr",
+        metadata: { uiToolGeneration: true, toolProgress: { phase: "generating" } },
+      })
+    ).toEqual({ name: "识别图片文字" })
+  })
+
+  it("does not append file-edit counts to a similarly named third-party tool", () => {
+    const input = { file_path: "calendar.json", edits: [{}, {}] }
+    expect(summarizeToolCall({ ...part, toolName: "EditCalendar", input })).toEqual({
+      name: "Edit Calendar",
+      detail: "calendar.json",
+    })
+    expect(summarizeToolCall({ ...part, toolName: "Edit", input })).toEqual({
+      name: "编辑文件",
+      detail: "calendar.json · 2 处修改",
     })
   })
 

@@ -387,7 +387,7 @@ export function toolGroupCompletedLabel(
     commands = false,
     reads = false
   for (const tool of tools) {
-    if (isToolGenerationPresentation(tool.call)) continue
+    if (isToolGenerationPresentation(tool.call) || !toolNames.has(tool.call.toolName ?? "")) continue
     const execution = toolExecutionState(tool.call, tool.result)
     if (execution === "not_started" || execution === "unknown") continue
     const status = toolCallStatus(tool.call, tool.result)
@@ -488,67 +488,67 @@ function toolResultsById(parts: DesktopSessionPart[]): Map<string, DesktopSessio
   )
 }
 
-const toolNames: ReadonlyArray<readonly [RegExp, string]> = [
-  [/^agent$/, "调用子智能体"],
-  [/^imagegeneration$/, "生成图片"],
-  [/^backgroundshellcreate$/, "创建后台终端"],
-  [/^imagetotext$/, "识别图片文字"],
-  [/^grep$/, "搜索文件内容"],
-  [/^joblist$/, "查看任务列表"],
-  [/^jobread$/, "读取任务输出"],
-  [/^jobwait$/, "等待任务"],
-  [/^jobsend$/, "发送任务输入"],
-  [/^jobcancel$/, "停止任务"],
-  [/^skill$/, "读取技能"],
-  [/^listskills$/, "查看技能列表"],
-  [/^toolsearch$/, "查找工具"],
-  [/^toolresult$/, "查看工具结果"],
-  [/^todowrite$/, "更新待办清单"],
-  [/^askuser$/, "询问用户"],
-  [/^config$/, "管理配置"],
-  [/^brief$/, "精简文本"],
-  [/^sleep$/, "等待"],
-  [/^lsp$/, "查询代码信息"],
-  [/^notebookedit$/, "编辑笔记本"],
-  [/^workflow$/, "运行工作流"],
-  [/^teamcreate$/, "创建协作团队"],
-  [/^teamdelete$/, "删除协作团队"],
-  [/^schedulecreate$/, "创建定时任务"],
-  [/^schedulelist$/, "查看定时任务"],
-  [/^scheduleupdate$/, "更新定时任务"],
-  [/^scheduledelete$/, "删除定时任务"],
-  [/^schedulerunnow$/, "立即运行定时任务"],
-  [/^enterplanmode$/, "进入规划模式"],
-  [/^exitplanmode$/, "退出规划模式"],
-  [/^enterworktree$/, "创建独立工作区"],
-  [/^exitworktree$/, "移除独立工作区"],
-  [/^mcptoolcall$/, "调用外部工具"],
-  [/^listmcpresources$/, "查看外部资源"],
-  [/^readmcpresource$/, "读取外部资源"],
-  [/^mcpauth$/, "配置外部工具认证"],
-  [/^feishupush$/, "发送飞书消息"],
-  [/^(?:glob|listfiles|findfiles)/, "查找文件"],
-  [/^(?:read|readfile)/, "读取文件"],
-  [/^(?:write|writefile|createfile)/, "写入文件"],
-  [/^(?:edit|editfile|replace)/, "编辑文件"],
-  [/applypatch/, "应用补丁"],
-  [/^(?:bash|shell|terminal|exec|command)/, "运行命令"],
-  [/search/, "搜索内容"],
-  [/browser|navigate|openurl/, "浏览网页"],
-  [/fetch|http|request/, "请求网络"],
-]
+// 使用真实注册名精确匹配，避免把第三方名称的大小写、前缀或分隔符当成内置别名。
+const toolNames: ReadonlyMap<string, string> = new Map([
+  ["Agent", "调用子智能体"],
+  ["ImageGeneration", "生成图片"],
+  ["BackgroundShellCreate", "创建后台终端"],
+  ["ImageToText", "识别图片文字"],
+  ["Grep", "搜索文件内容"],
+  ["JobList", "查看任务列表"],
+  ["JobRead", "读取任务输出"],
+  ["JobWait", "等待任务"],
+  ["JobSend", "发送任务输入"],
+  ["JobCancel", "停止任务"],
+  ["Skill", "读取技能"],
+  ["ListSkills", "查看技能列表"],
+  ["ToolSearch", "查找工具"],
+  ["ToolResult", "查看工具结果"],
+  ["TodoWrite", "更新待办清单"],
+  ["AskUser", "询问用户"],
+  ["Config", "管理配置"],
+  ["Brief", "精简文本"],
+  ["Sleep", "等待"],
+  ["Lsp", "查询代码信息"],
+  ["NotebookEdit", "编辑笔记本"],
+  ["Workflow", "运行工作流"],
+  ["TeamCreate", "创建协作团队"],
+  ["TeamDelete", "删除协作团队"],
+  ["ScheduleCreate", "创建定时任务"],
+  ["ScheduleList", "查看定时任务"],
+  ["ScheduleUpdate", "更新定时任务"],
+  ["ScheduleDelete", "删除定时任务"],
+  ["ScheduleRunNow", "立即运行定时任务"],
+  ["EnterPlanMode", "进入规划模式"],
+  ["ExitPlanMode", "退出规划模式"],
+  ["EnterWorktree", "创建独立工作区"],
+  ["ExitWorktree", "移除独立工作区"],
+  ["McpToolCall", "调用外部工具"],
+  ["ListMcpResources", "查看外部资源"],
+  ["ReadMcpResource", "读取外部资源"],
+  ["McpAuth", "配置外部工具认证"],
+  ["FeishuPush", "发送飞书消息"],
+  ["Glob", "查找文件"],
+  ["Read", "读取文件"],
+  ["Write", "写入文件"],
+  ["Edit", "编辑文件"],
+  ["ApplyPatch", "应用补丁"],
+  ["Shell", "运行命令"],
+  ["TerminalOpen", "运行命令"],
+  ["WebSearch", "搜索内容"],
+  ["Browser", "浏览网页"],
+  ["WebFetch", "请求网络"],
+])
 
 export function summarizeToolCall(part: DesktopSessionPart): { name: string; detail?: string } {
   const rawName = part.toolName || "tool"
   const preparing = isToolGenerationPresentation(part)
-  const normalized = rawName.toLocaleLowerCase().replace(/[-_]/g, "")
-  if (normalized === "imagetotext" && !preparing) return summarizeLocalOcr(part)
-  const name =
-    toolNames.find(([pattern]) => pattern.test(normalized))?.[1] ?? humanizeToolName(rawName)
+  if (rawName === "ImageToText" && !preparing) return summarizeLocalOcr(part)
+  const name = toolNames.get(rawName) ?? humanizeToolName(rawName)
   if (preparing) return { name }
   return {
     name,
-    detail: summarizeToolInput(part.input, /^(?:edit|editfile|replace)/.test(normalized)),
+    detail: summarizeToolInput(part.input, rawName === "Edit"),
   }
 }
 
