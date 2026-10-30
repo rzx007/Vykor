@@ -1,14 +1,14 @@
 import type { DesktopPermissionRequest } from "@shared/session-types"
 
 const operationLabels: Record<string, string> = {
-  shell: "运行命令",
-  write: "写入文件",
-  edit: "修改文件",
-  applypatch: "应用文件补丁",
-  read: "读取文件",
-  browser: "操作浏览器",
-  browserdeveloper: "检查网页",
-  jobcancel: "停止任务",
+  Shell: "运行命令",
+  Write: "写入文件",
+  Edit: "修改文件",
+  ApplyPatch: "应用文件补丁",
+  Read: "读取文件",
+  Browser: "操作浏览器",
+  BrowserDeveloper: "检查网页",
+  JobCancel: "停止任务",
 }
 
 const operationFields = [
@@ -60,10 +60,9 @@ export function readPermissionOperation(permission: DesktopPermissionRequest): {
     details = "无法显示原始详情"
   }
   const toolName = boundedPermissionText(permission.toolName, 120)
-  const normalizedName = permission.toolName.toLowerCase()
   return {
-    summary: Object.hasOwn(operationLabels, normalizedName)
-      ? operationLabels[normalizedName]!
+    summary: Object.hasOwn(operationLabels, permission.toolName)
+      ? operationLabels[permission.toolName]!
       : "运行工具",
     toolName,
     reason: boundedPermissionText(permission.payload.reason, 1000),

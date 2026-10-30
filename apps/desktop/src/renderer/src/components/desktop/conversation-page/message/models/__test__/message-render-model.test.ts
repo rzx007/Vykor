@@ -115,6 +115,39 @@ describe("message render model", () => {
     expect(toolDisplayName(toolPart("Read", {}))).toBe("Read")
   })
 
+  it.each(["exec", "command", "ex_ec", "shell", "bASh", "S_h_e_l_l", "mcp__shell__exec"])(
+    "preserves a third-party detail title even with shell metadata: %s",
+    (toolName) => {
+      const call = {
+        ...toolPart(toolName, {}),
+        metadata: { shellDisplayName: "PowerShell", shellDialect: "pwsh" },
+      }
+      expect(toolDisplayName(call)).toBe(toolName)
+      expect(toolDisplayName(call, { ...call, id: "result", type: "tool_result" })).toBe(toolName)
+    }
+  )
+
+  it.each(["Shell", "Bash"])(
+    "keeps genuine %s metadata when a legacy result has none",
+    (toolName) => {
+      const call = {
+        ...toolPart(toolName, {}),
+        metadata: { shellDisplayName: "PowerShell 7.6", shellDialect: "pwsh" },
+      }
+      expect(
+        toolDisplayName(call, { ...call, id: "result", type: "tool_result", metadata: {} })
+      ).toBe("PowerShell 7.6")
+      expect(
+        toolDisplayName(call, {
+          ...call,
+          id: "result",
+          type: "tool_result",
+          metadata: { shellDialect: "bash" },
+        })
+      ).toBe("Bash")
+    }
+  )
+
   it("preserves commentary and final-answer phase metadata", () => {
     const part = {
       ...toolPart("Read", {}),

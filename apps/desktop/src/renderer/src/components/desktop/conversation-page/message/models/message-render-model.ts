@@ -387,7 +387,8 @@ export function toolGroupCompletedLabel(
     commands = false,
     reads = false
   for (const tool of tools) {
-    if (isToolGenerationPresentation(tool.call) || !toolNames.has(tool.call.toolName ?? "")) continue
+    const completed = toolPresentations.get(tool.call.toolName ?? "")?.completed
+    if (!completed || isToolGenerationPresentation(tool.call)) continue
     const execution = toolExecutionState(tool.call, tool.result)
     if (execution === "not_started" || execution === "unknown") continue
     const status = toolCallStatus(tool.call, tool.result)
@@ -397,19 +398,9 @@ export function toolGroupCompletedLabel(
       !(phase === "completed" && (status === "running" || status === "pending"))
     )
       continue
-    const name = (tool.call.toolName ?? "").toLowerCase().replace(/[-_]/g, "")
-    if (/^(?:bash|shell|terminal|terminalopen|exec|command|backgroundshellcreate)$/.test(name))
-      commands = true
-    else if (
-      /^(?:write|writefile|createfile|edit|editfile|replace|applypatch|todowrite)$/.test(name)
-    )
-      edits = true
-    else if (
-      /^(?:read|readfile|glob|listfiles|findfiles|grep|search|websearch|webfetch|fetch|imagetotext|skill|listskills)$/.test(
-        name
-      )
-    )
-      reads = true
+    if (completed === "command") commands = true
+    else if (completed === "edit") edits = true
+    else reads = true
   }
   const label = [edits ? "编辑了文件" : "", commands ? "运行了命令" : ""].filter(Boolean).join("，")
   return label || (reads ? "查看了内容" : "操作已结束")
@@ -488,63 +479,75 @@ function toolResultsById(parts: DesktopSessionPart[]): Map<string, DesktopSessio
   )
 }
 
-// 使用真实注册名精确匹配，避免把第三方名称的大小写、前缀或分隔符当成内置别名。
-const toolNames: ReadonlyMap<string, string> = new Map([
-  ["Agent", "调用子智能体"],
-  ["ImageGeneration", "生成图片"],
-  ["BackgroundShellCreate", "创建后台终端"],
-  ["ImageToText", "识别图片文字"],
-  ["Grep", "搜索文件内容"],
-  ["JobList", "查看任务列表"],
-  ["JobRead", "读取任务输出"],
-  ["JobWait", "等待任务"],
-  ["JobSend", "发送任务输入"],
-  ["JobCancel", "停止任务"],
-  ["Skill", "读取技能"],
-  ["ListSkills", "查看技能列表"],
-  ["ToolSearch", "查找工具"],
-  ["ToolResult", "查看工具结果"],
-  ["TodoWrite", "更新待办清单"],
-  ["AskUser", "询问用户"],
-  ["Config", "管理配置"],
-  ["Brief", "精简文本"],
-  ["Sleep", "等待"],
-  ["Lsp", "查询代码信息"],
-  ["NotebookEdit", "编辑笔记本"],
-  ["Workflow", "运行工作流"],
-  ["TeamCreate", "创建协作团队"],
-  ["TeamDelete", "删除协作团队"],
-  ["ScheduleCreate", "创建定时任务"],
-  ["ScheduleList", "查看定时任务"],
-  ["ScheduleUpdate", "更新定时任务"],
-  ["ScheduleDelete", "删除定时任务"],
-  ["ScheduleRunNow", "立即运行定时任务"],
-  ["EnterPlanMode", "进入规划模式"],
-  ["ExitPlanMode", "退出规划模式"],
-  ["EnterWorktree", "创建独立工作区"],
-  ["ExitWorktree", "移除独立工作区"],
-  ["McpToolCall", "调用外部工具"],
-  ["ListMcpResources", "查看外部资源"],
-  ["ReadMcpResource", "读取外部资源"],
-  ["McpAuth", "配置外部工具认证"],
-  ["FeishuPush", "发送飞书消息"],
-  ["Glob", "查找文件"],
-  ["Read", "读取文件"],
-  ["Write", "写入文件"],
-  ["Edit", "编辑文件"],
-  ["ApplyPatch", "应用补丁"],
-  ["Shell", "运行命令"],
-  ["TerminalOpen", "运行命令"],
-  ["WebSearch", "搜索内容"],
-  ["Browser", "浏览网页"],
-  ["WebFetch", "请求网络"],
+type BuiltinToolPresentation = {
+  label: string
+  completed?: "edit" | "command" | "read"
+}
+
+// 名称与完成类别共用一张精确表；不声明类别的操作保留中性摘要。
+const toolPresentations: ReadonlyMap<string, BuiltinToolPresentation> = new Map([
+  ["Agent", { label: "调用子智能体" }],
+  ["ImageGeneration", { label: "生成图片" }],
+  ["BackgroundShellCreate", { label: "创建后台终端", completed: "command" }],
+  ["ImageToText", { label: "识别图片文字", completed: "read" }],
+  ["Grep", { label: "搜索文件内容", completed: "read" }],
+  ["JobList", { label: "查看任务列表", completed: "read" }],
+  ["JobRead", { label: "读取任务输出", completed: "read" }],
+  ["JobWait", { label: "等待任务", completed: "read" }],
+  ["JobSend", { label: "发送任务输入" }],
+  ["JobCancel", { label: "停止任务" }],
+  ["Skill", { label: "读取技能", completed: "read" }],
+  ["ListSkills", { label: "查看技能列表", completed: "read" }],
+  ["ToolSearch", { label: "查找工具", completed: "read" }],
+  ["ToolResult", { label: "查看工具结果", completed: "read" }],
+  ["TodoWrite", { label: "更新待办清单", completed: "edit" }],
+  ["AskUser", { label: "询问用户" }],
+  ["Config", { label: "管理配置" }],
+  ["Brief", { label: "精简文本" }],
+  ["Sleep", { label: "等待" }],
+  ["Lsp", { label: "查询代码信息", completed: "read" }],
+  ["NotebookEdit", { label: "编辑笔记本", completed: "edit" }],
+  ["Workflow", { label: "运行工作流" }],
+  ["TeamCreate", { label: "创建协作团队" }],
+  ["TeamDelete", { label: "删除协作团队" }],
+  ["ScheduleCreate", { label: "创建定时任务" }],
+  ["ScheduleList", { label: "查看定时任务", completed: "read" }],
+  ["ScheduleUpdate", { label: "更新定时任务" }],
+  ["ScheduleDelete", { label: "删除定时任务" }],
+  ["ScheduleRunNow", { label: "立即运行定时任务" }],
+  ["EnterPlanMode", { label: "进入规划模式" }],
+  ["ExitPlanMode", { label: "退出规划模式" }],
+  ["EnterWorktree", { label: "创建独立工作区" }],
+  ["ExitWorktree", { label: "移除独立工作区" }],
+  ["McpToolCall", { label: "调用外部工具" }],
+  ["ListMcpResources", { label: "查看外部资源", completed: "read" }],
+  ["ReadMcpResource", { label: "读取外部资源", completed: "read" }],
+  ["McpAuth", { label: "配置外部工具认证" }],
+  ["FeishuPush", { label: "发送飞书消息" }],
+  ["SubmitResult", { label: "提交结果" }],
+  ["Remember", { label: "保存记忆" }],
+  ["GoalRead", { label: "查看目标", completed: "read" }],
+  ["GoalUpdate", { label: "更新目标" }],
+  ["McpConfigure", { label: "配置外部工具" }],
+  ["PluginInstall", { label: "安装插件" }],
+  ["Glob", { label: "查找文件", completed: "read" }],
+  ["Read", { label: "读取文件", completed: "read" }],
+  ["Write", { label: "写入文件", completed: "edit" }],
+  ["Edit", { label: "编辑文件", completed: "edit" }],
+  ["ApplyPatch", { label: "应用补丁", completed: "edit" }],
+  ["Shell", { label: "运行命令", completed: "command" }],
+  ["TerminalOpen", { label: "运行命令", completed: "command" }],
+  ["WebSearch", { label: "搜索内容", completed: "read" }],
+  ["Browser", { label: "浏览网页" }],
+  ["BrowserDeveloper", { label: "检查网页", completed: "read" }],
+  ["WebFetch", { label: "请求网络", completed: "read" }],
 ])
 
 export function summarizeToolCall(part: DesktopSessionPart): { name: string; detail?: string } {
   const rawName = part.toolName || "tool"
   const preparing = isToolGenerationPresentation(part)
   if (rawName === "ImageToText" && !preparing) return summarizeLocalOcr(part)
-  const name = toolNames.get(rawName) ?? humanizeToolName(rawName)
+  const name = toolPresentations.get(rawName)?.label ?? humanizeToolName(rawName)
   if (preparing) return { name }
   return {
     name,
@@ -554,21 +557,22 @@ export function summarizeToolCall(part: DesktopSessionPart): { name: string; det
 
 export function toolDisplayName(call: DesktopSessionPart, result?: DesktopSessionPart): string {
   const rawName = call.toolName || "Tool"
-  const normalized = rawName.toLocaleLowerCase().replace(/[-_]/g, "")
-  if (!/^(?:bash|shell|exec|command)$/.test(normalized)) return rawName
+  if (rawName !== "Shell" && rawName !== "Bash") return rawName
 
-  const metadata = result?.metadata ?? call.metadata
-  if (typeof metadata.shellDisplayName === "string" && metadata.shellDisplayName.trim()) {
-    return metadata.shellDisplayName
-  }
-  const dialect = metadata.shellDialect
-  if (dialect === "powershell" || dialect === "windows-powershell") return "PowerShell"
-  if (dialect === "pwsh") return "PowerShell 7"
-  if (dialect === "cmd") return "Command Prompt"
-  if (dialect === "bash") return "Bash"
-  if (dialect === "posix" || dialect === "posix-sh" || dialect === "zsh") {
-    const shell = metadata.shell
-    return typeof shell === "string" && /bash/i.test(shell) ? "Bash" : "POSIX Shell"
+  for (const metadata of [result?.metadata, call.metadata]) {
+    if (!metadata) continue
+    if (typeof metadata.shellDisplayName === "string" && metadata.shellDisplayName.trim()) {
+      return metadata.shellDisplayName
+    }
+    const dialect = metadata.shellDialect
+    if (dialect === "powershell" || dialect === "windows-powershell") return "PowerShell"
+    if (dialect === "pwsh") return "PowerShell 7"
+    if (dialect === "cmd") return "Command Prompt"
+    if (dialect === "bash") return "Bash"
+    if (dialect === "posix" || dialect === "posix-sh" || dialect === "zsh") {
+      const shell = metadata.shell
+      return typeof shell === "string" && /bash/i.test(shell) ? "Bash" : "POSIX Shell"
+    }
   }
   return "Shell"
 }

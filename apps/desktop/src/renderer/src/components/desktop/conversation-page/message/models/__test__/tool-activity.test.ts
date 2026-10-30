@@ -64,7 +64,7 @@ describe("inline tool group wording", () => {
     )
   })
 
-  it.each(["Write", "Edit", "ApplyPatch", "TodoWrite"])(
+  it.each(["Write", "Edit", "ApplyPatch", "TodoWrite", "NotebookEdit"])(
     "still summarizes known file operations: %s",
     (toolName) => {
       expect(toolGroupCompletedLabel([{ call: { ...part, toolName, status: "completed" } }])).toBe(
@@ -81,6 +81,91 @@ describe("inline tool group wording", () => {
       )
     }
   )
+
+  it.each([
+    "Read",
+    "Glob",
+    "Grep",
+    "WebSearch",
+    "WebFetch",
+    "ImageToText",
+    "Skill",
+    "ListSkills",
+    "ToolSearch",
+    "ToolResult",
+    "Lsp",
+    "JobList",
+    "JobRead",
+    "JobWait",
+    "ListMcpResources",
+    "ReadMcpResource",
+    "ScheduleList",
+    "BrowserDeveloper",
+    "GoalRead",
+  ])("summarizes completed read-only operations: %s", (toolName) => {
+    expect(toolGroupCompletedLabel([{ call: { ...part, toolName, status: "completed" } }])).toBe(
+      "查看了内容"
+    )
+  })
+
+  it.each([
+    "Agent",
+    "ImageGeneration",
+    "Browser",
+    "Config",
+    "Brief",
+    "Sleep",
+    "AskUser",
+    "Workflow",
+    "TeamCreate",
+    "TeamDelete",
+    "ScheduleCreate",
+    "ScheduleUpdate",
+    "ScheduleDelete",
+    "ScheduleRunNow",
+    "EnterPlanMode",
+    "ExitPlanMode",
+    "EnterWorktree",
+    "ExitWorktree",
+    "McpToolCall",
+    "McpAuth",
+    "FeishuPush",
+    "JobSend",
+    "JobCancel",
+    "SubmitResult",
+    "Remember",
+    "GoalUpdate",
+    "McpConfigure",
+    "PluginInstall",
+    "notebook_edit",
+    "job_read",
+    "mcp__custom__Read",
+  ])("keeps mixed-effect and third-party operations neutral: %s", (toolName) => {
+    expect(toolGroupCompletedLabel([{ call: { ...part, toolName, status: "completed" } }])).toBe(
+      "操作已结束"
+    )
+  })
+
+  it.each([
+    { status: "failed" as const, metadata: {} },
+    { status: "interrupted" as const, metadata: {} },
+    { status: "completed" as const, metadata: { executionState: "unknown" } },
+    { status: "completed" as const, metadata: { executionState: "not_started" } },
+  ])("does not count an unconfirmed notebook edit: %j", (state) => {
+    expect(
+      toolGroupCompletedLabel([{ call: { ...part, toolName: "NotebookEdit", ...state } }])
+    ).toBe("操作已结束")
+  })
+
+  it("combines notebook edits and commands while keeping reads secondary", () => {
+    expect(
+      toolGroupCompletedLabel(
+        ["NotebookEdit", "Shell", "JobRead"].map((toolName) => ({
+          call: { ...part, toolName, status: "completed" },
+        }))
+      )
+    ).toBe("编辑了文件，运行了命令")
+  })
 
   it.each([
     [{}, "正在使用本地 OCR 识别文字"],
@@ -170,6 +255,13 @@ describe("built-in tool Chinese names", () => {
     ["ReadMcpResource", "读取外部资源"],
     ["McpAuth", "配置外部工具认证"],
     ["FeishuPush", "发送飞书消息"],
+    ["SubmitResult", "提交结果"],
+    ["Remember", "保存记忆"],
+    ["BrowserDeveloper", "检查网页"],
+    ["GoalRead", "查看目标"],
+    ["GoalUpdate", "更新目标"],
+    ["McpConfigure", "配置外部工具"],
+    ["PluginInstall", "安装插件"],
   ])("uses the same Chinese name for %s in rows and group titles", (toolName, name) => {
     const call = { ...part, toolName }
     expect(summarizeToolCall(call)).toEqual({ name, detail: undefined })
@@ -204,6 +296,9 @@ describe("built-in tool Chinese names", () => {
     ["mcp__browser__navigate", "Mcp browser navigate"],
     ["plugin__acme__ReadCalendar", "Plugin acme Read Calendar"],
     ["constructor", "Constructor"],
+    ["browserdeveloper", "Browserdeveloper"],
+    ["goal_read", "Goal read"],
+    ["mcp__custom__PluginInstall", "Mcp custom Plugin Install"],
   ])("preserves non-builtin names instead of normalizing them: %s", (toolName, name) => {
     expect(summarizeToolCall({ ...part, toolName, input: { description: "task-1" } })).toEqual({
       name,
