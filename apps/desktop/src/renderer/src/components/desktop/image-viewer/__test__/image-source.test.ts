@@ -39,3 +39,18 @@ it("opens raw image bytes without requiring a project path or uploaded attachmen
   })
   expect(image).toEqual({ bytes, mediaType: "image/png" })
 })
+
+it("classifies unsupported formats separately from temporary image reads", async () => {
+  await expect(
+    readImageSource({
+      kind: "memory",
+      id: "vector",
+      name: "vector.svg",
+      bytes: new ArrayBuffer(1),
+      mediaType: "image/svg+xml",
+    })
+  ).rejects.toMatchObject({
+    name: "ImagePreviewUnavailableError",
+    reason: "format",
+  })
+})

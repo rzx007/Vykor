@@ -50,20 +50,27 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export interface AgentTaskGroups {
   active: DesktopSessionTask[]
+  incomplete: DesktopSessionTask[]
   completed: DesktopSessionTask[]
 }
 
 export function groupAgentTasks(tasks: DesktopSessionTask[]): AgentTaskGroups {
   const active: DesktopSessionTask[] = []
+  const incomplete: DesktopSessionTask[] = []
   const completed: DesktopSessionTask[] = []
   for (const task of tasks) {
     if (task.type !== "agent" || !task.childSessionId) continue
     if (task.status === "pending" || task.status === "running") active.push(task)
-    else completed.push(task)
+    else if (task.status === "completed") completed.push(task)
+    else incomplete.push(task)
   }
   const newestFirst = (left: DesktopSessionTask, right: DesktopSessionTask): number =>
     right.createdAt - left.createdAt
-  return { active: active.sort(newestFirst), completed: completed.sort(newestFirst) }
+  return {
+    active: active.sort(newestFirst),
+    incomplete: incomplete.sort(newestFirst),
+    completed: completed.sort(newestFirst),
+  }
 }
 
 export function matchesAgentSessionUpdate(

@@ -106,7 +106,12 @@ export function AgentsTool({
             onOpenTerminal={onOpenTerminal}
           />
         ) : (
-          <AgentTaskList active={groups.active} completed={groups.completed} onOpen={openTask} />
+          <AgentTaskList
+            active={groups.active}
+            incomplete={groups.incomplete}
+            completed={groups.completed}
+            onOpen={openTask}
+          />
         )
       ) : null}
     </section>
@@ -115,14 +120,16 @@ export function AgentsTool({
 
 function AgentTaskList({
   active,
+  incomplete,
   completed,
   onOpen,
 }: {
   active: DesktopSessionTask[]
+  incomplete: DesktopSessionTask[]
   completed: DesktopSessionTask[]
   onOpen: (task: DesktopSessionTask) => void
 }): React.JSX.Element {
-  if (active.length === 0 && completed.length === 0) {
+  if (active.length === 0 && incomplete.length === 0 && completed.length === 0) {
     return (
       <Empty className="border-0">
         <EmptyHeader>
@@ -140,7 +147,8 @@ function AgentTaskList({
 
   return (
     <div className="flex min-h-0 flex-1 scrollbar-thin flex-col gap-6 overflow-y-auto px-4 py-5">
-      <AgentTaskGroup title="进行中" tasks={active} active onOpen={onOpen} />
+      <AgentTaskGroup title="进行中" tasks={active} onOpen={onOpen} />
+      <AgentTaskGroup title="未完成" tasks={incomplete} onOpen={onOpen} />
       <AgentTaskGroup title="已完成" tasks={completed} onOpen={onOpen} />
     </div>
   )
@@ -149,30 +157,23 @@ function AgentTaskList({
 function AgentTaskGroup({
   title,
   tasks,
-  active = false,
   onOpen,
 }: {
   title: string
   tasks: DesktopSessionTask[]
-  active?: boolean
   onOpen: (task: DesktopSessionTask) => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
+  if (tasks.length === 0) return null
   return (
     <section className="flex flex-col gap-2" aria-label={title}>
       <h2 className="px-1 text-xs font-medium text-muted-foreground">
         {title} · {tasks.length}
       </h2>
-      {tasks.length === 0 ? (
-        <p className="px-1 py-2 text-sm text-muted-foreground">
-          {active ? "没有正在运行的子智能体" : "没有已完成的子智能体"}
-        </p>
-      ) : (
-        <ItemGroup className="gap-2">
-          {tasks.map((task) => (
-            <AgentTaskItem key={task.id} task={task} onOpen={onOpen} />
-          ))}
-        </ItemGroup>
-      )}
+      <ItemGroup className="gap-2">
+        {tasks.map((task) => (
+          <AgentTaskItem key={task.id} task={task} onOpen={onOpen} />
+        ))}
+      </ItemGroup>
     </section>
   )
 }
@@ -203,11 +204,14 @@ function AgentTaskItem({
           {presentation.reason ?? task.output ?? presentation.label}
         </ItemDescription>
       </ItemContent>
-      <ItemActions>
+      <ItemActions className="shrink-0 flex-col items-end gap-1">
         <Badge variant={failed ? "destructive" : running ? "secondary" : "outline"}>
           {running ? <Spinner className="size-3" aria-hidden="true" /> : null}
           {presentation.label}
         </Badge>
+        {presentation.hasPartialReport ? (
+          <span className="text-xs text-muted-foreground">查看部分结果</span>
+        ) : null}
       </ItemActions>
     </Item>
   )

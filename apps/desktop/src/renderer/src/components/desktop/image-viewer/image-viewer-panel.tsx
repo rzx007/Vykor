@@ -1,10 +1,12 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react"
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react"
+import { RefreshCw } from "lucide-react"
+import { Button } from "@renderer/components/ui/button"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import {
   NEW_CONVERSATION_SCOPE,
   sessionComposerScope,
 } from "@renderer/stores/desktop-session/composer-draft-state"
-import { readImageSource, type ImageSource } from "./image-source"
+import { ImagePreviewUnavailableError, readImageSource, type ImageSource } from "./image-source"
 import { imageFeedbackText } from "./image-annotations"
 import type { DesktopAttachmentPreview } from "@shared/attachment-types"
 import { toast } from "@renderer/lib/toast"
@@ -17,43 +19,72 @@ const ImageViewer = lazy(() =>
 export function ImageViewerPanel({ source, scopeId }: { source: ImageSource; scopeId: string }) {
   const [loaded, setLoaded] = useState<{
     source: ImageSource
+    scopeId: string
     request: number
     preview?: DesktopAttachmentPreview
     error?: string
+    retryable?: boolean
   } | null>(null)
   const version = useRef(0)
   const support = useDesktopSessionStore(
     (state) => state.attachmentSupport?.interactionEnabled ?? false
   )
-  useEffect(() => {
+  const readImage = useCallback(() => {
     const request = ++version.current
     void readImageSource(source)
       .then((preview) => {
-        if (request === version.current) setLoaded({ source, request, preview })
+        if (request === version.current) setLoaded({ source, scopeId, request, preview })
       })
       .catch((error) => {
         if (request === version.current)
           setLoaded({
             source,
+            scopeId,
             request,
-            error: error instanceof Error ? error.message : "无法读取图片",
+            error:
+              error instanceof ImagePreviewUnavailableError
+                ? error.message
+                : "无法读取图片，请重新读取。",
+            retryable: !(error instanceof ImagePreviewUnavailableError),
           })
       })
+  }, [source, scopeId])
+  useEffect(() => {
+    readImage()
     return () => {
       version.current += 1
     }
-  }, [source])
-  if (loaded?.source !== source || !loaded.preview) {
+  }, [readImage])
+  const currentLoad = loaded?.source === source && loaded.scopeId === scopeId ? loaded : null
+  if (!currentLoad?.preview) {
     return (
-      <div
-        role="status"
-        className="grid h-full place-items-center px-4 text-sm text-muted-foreground"
-      >
-        {loaded?.source === source && loaded.error ? loaded.error : "正在读取图片…"}
+      <div className="grid h-full place-items-center px-4 text-sm text-muted-foreground">
+        <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+          <p role={currentLoad?.error ? "alert" : "status"} aria-busy={!currentLoad?.error}>
+            {currentLoad?.error ?? "正在读取图片…"}
+          </p>
+          {currentLoad?.error && currentLoad.retryable ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              shape="pill"
+              aria-label="重新读取图片"
+              onClick={() => {
+                if (currentLoad.request !== version.current) return
+                setLoaded(null)
+                readImage()
+              }}
+            >
+              <RefreshCw data-icon="inline-start" strokeWidth={1.75} />
+              重新读取
+            </Button>
+          ) : null}
+        </div>
       </div>
     )
   }
-  const preview = loaded.preview
+  const preview = currentLoad.preview
   return (
     <Suspense
       fallback={
@@ -74,7 +105,7 @@ export function ImageViewerPanel({ source, scopeId }: { source: ImageSource; sco
         onFeedback={
           !source.readOnly && support
             ? async (marked, regions, width, height) => {
-                const request = loaded.request
+                const request = currentLoad.request
                 if (request !== version.current) return
                 const state = useDesktopSessionStore.getState()
                 const sessionId = state.activeSessionId

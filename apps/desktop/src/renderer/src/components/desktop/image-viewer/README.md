@@ -13,6 +13,9 @@
 - [image-viewer.tsx](image-viewer.tsx)
 - [image-viewer-provider.tsx](image-viewer-provider.tsx)
 - [image-viewer-panel.tsx](image-viewer-panel.tsx)
+- [image-source.ts](image-source.ts)：读取附件、项目文件或内存图片；把不支持的格式和超过预览大小限制的情况与临时读取失败区分开。
+
+读取失败时，面板就近提供“重新读取”；重读期间显示读取状态，同一次读取尚未结束时不重复请求。不支持的格式或超过预览大小限制时只说明原因。每次读取沿用面板版本号，并核对图片来源与聊天归属，切换图片、聊天或关闭面板后忽略旧结果；读取和重读都不上传附件、不发送聊天，也不改变批注加入草稿的归属。
 
 ## 维护约定
 

@@ -28,29 +28,41 @@ function task(
 }
 
 describe("groupAgentTasks", () => {
-  it("keeps only child-agent tasks and separates active from terminal work", () => {
+  it("separates active, incomplete, and completed child-agent tasks", () => {
     const groups = groupAgentTasks([
       task("running", "running", { createdAt: 2 }),
       task("completed", "completed", { createdAt: 4 }),
       task("failed", "failed", { createdAt: 3 }),
+      task("pending", "pending", { createdAt: 1 }),
+      task("interrupted", "interrupted", { createdAt: 5 }),
+      task("stopped", "stopped", { createdAt: 6 }),
       task("without-child", "running", { childSessionId: undefined, createdAt: 8 }),
+      task("failed-without-child", "failed", { childSessionId: undefined, createdAt: 8 }),
       task("shell", "completed", { type: "shell", createdAt: 9 }),
+      task("failed-shell", "failed", { type: "shell", createdAt: 9 }),
     ])
 
-    expect(groups.active.map((item) => item.id)).toEqual(["running"])
-    expect(groups.completed.map((item) => item.id)).toEqual(["completed", "failed"])
+    expect(groups.active.map((item) => item.id)).toEqual(["running", "pending"])
+    expect(groups.incomplete.map((item) => item.id)).toEqual(["stopped", "interrupted", "failed"])
+    expect(groups.completed.map((item) => item.id)).toEqual(["completed"])
   })
 
   it("shows the most recently created task first within each group", () => {
     const groups = groupAgentTasks([
       task("older-active", "pending", { createdAt: 1 }),
       task("newer-active", "running", { createdAt: 5 }),
-      task("older-done", "interrupted", { createdAt: 2 }),
-      task("newer-done", "stopped", { createdAt: 6 }),
+      task("older-incomplete", "interrupted", { createdAt: 2, updatedAt: 20 }),
+      task("newer-incomplete", "stopped", { createdAt: 6 }),
+      task("older-completed", "completed", { createdAt: 3, updatedAt: 30 }),
+      task("newer-completed", "completed", { createdAt: 7 }),
     ])
 
     expect(groups.active.map((item) => item.id)).toEqual(["newer-active", "older-active"])
-    expect(groups.completed.map((item) => item.id)).toEqual(["newer-done", "older-done"])
+    expect(groups.incomplete.map((item) => item.id)).toEqual([
+      "newer-incomplete",
+      "older-incomplete",
+    ])
+    expect(groups.completed.map((item) => item.id)).toEqual(["newer-completed", "older-completed"])
   })
 })
 

@@ -9,6 +9,7 @@ import { instance, sourcePart } from "../../../conversation-page/message/tool-de
 import type {
   DesktopAuxSessionUpdate,
   DesktopSessionUpdate,
+  DesktopSessionTask,
   DesktopSessionView,
 } from "@shared/session-types"
 
@@ -103,6 +104,159 @@ afterEach(() => {
   act(() => root.unmount())
   container.remove()
   vi.unstubAllGlobals()
+})
+
+it("lists pending and running tasks separately from incomplete and completed work without subscribing to children", async () => {
+  const current = useDesktopSessionStore.getState().sessionView!
+  const task = current.tasks[0]!
+  const tasks: DesktopSessionTask[] = [
+    { ...task, id: "pending", description: "等待分析", status: "pending" },
+    { ...task, id: "running", description: "正在检查", status: "running" },
+    { ...task, id: "failed", description: "分析失败", status: "failed" },
+    { ...task, id: "interrupted", description: "检查中断", status: "interrupted" },
+    { ...task, id: "stopped", description: "主动停止", status: "stopped" },
+    { ...task, id: "completed", description: "分析完成", status: "completed" },
+  ]
+  useDesktopSessionStore.setState({ sessionView: { ...current, tasks } })
+  await act(async () => root.render(<AgentsTool {...callbacks} active />))
+
+  const active = container.querySelector('[aria-label="进行中"]')
+  const incomplete = container.querySelector('[aria-label="未完成"]')
+  const completed = container.querySelector('[aria-label="已完成"]')
+  expect(incomplete).not.toBeNull()
+  expect(active?.querySelectorAll("button")).toHaveLength(2)
+  expect(active?.textContent).toContain("等待分析")
+  expect(active?.textContent).toContain("正在检查")
+  expect(incomplete?.querySelectorAll("button")).toHaveLength(3)
+  for (const description of ["分析失败", "检查中断", "主动停止"]) {
+    expect(incomplete?.textContent ?? "").toContain(description)
+    expect(completed?.textContent ?? "").not.toContain(description)
+  }
+  expect(completed?.querySelectorAll("button")).toHaveLength(1)
+  expect(completed?.textContent).toContain("分析完成")
+  const stopped = [...incomplete!.querySelectorAll("button")].find((button) =>
+    button.textContent?.includes("主动停止")
+  )!
+  expect(stopped.textContent).toContain("已停止")
+  expect(stopped.textContent).not.toContain("执行出错")
+  expect(openAux).not.toHaveBeenCalled()
+  expect(auxListeners.size).toBe(0)
+})
+
+it("keeps incomplete-only work visible and omits empty groups and unverified partial-result entries", async () => {
+  const current = useDesktopSessionStore.getState().sessionView!
+  const task = current.tasks[0]!
+  useDesktopSessionStore.setState({
+    sessionView: {
+      ...current,
+      tasks: [
+        {
+          ...task,
+          status: "failed",
+          runId: "run-current",
+          metadata: {
+            childFailure: {
+              failureKind: "max_turns",
+              partialResult: {
+                version: 1,
+                childSessionId: task.childSessionId,
+                runId: "run-old",
+                source: "limit_finalization",
+                text: "old report",
+                truncated: false,
+              },
+            },
+          },
+        },
+      ],
+    },
+  })
+  await act(async () => root.render(<AgentsTool {...callbacks} active />))
+
+  expect(container.querySelector('[aria-label="未完成"]')).not.toBeNull()
+  expect(container.querySelector('[aria-label="进行中"]')).toBeNull()
+  expect(container.querySelector('[aria-label="已完成"]')).toBeNull()
+  expect(container.textContent).not.toContain("还没有子智能体")
+  expect(container.textContent).not.toContain("查看部分结果")
+  expect(openAux).not.toHaveBeenCalled()
+})
+
+it("opens a verified partial report through the existing row button and child-session subscription", async () => {
+  const current = useDesktopSessionStore.getState().sessionView!
+  const reportText = "已检查导入路径，运行结果待确认。"
+  useDesktopSessionStore.setState({
+    sessionView: {
+      ...current,
+      tasks: [
+        {
+          ...current.tasks[0]!,
+          status: "failed",
+          runId: "run-partial",
+          metadata: {
+            childFailure: {
+              failureKind: "max_turns",
+              partialResult: {
+                version: 1,
+                childSessionId: "child-1",
+                runId: "run-partial",
+                source: "limit_finalization",
+                text: reportText,
+                truncated: false,
+              },
+            },
+          },
+        },
+      ],
+    },
+  })
+  const child = emptySessionView("child-1")
+  child.messages = [
+    {
+      id: "report-message",
+      sessionId: "child-1",
+      seq: 1,
+      role: "assistant",
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    },
+  ]
+  child.parts = [
+    {
+      id: "report-part",
+      sessionId: "child-1",
+      messageId: "report-message",
+      seq: 1,
+      type: "text",
+      status: "completed",
+      text: reportText,
+      metadata: {},
+      createdAt: 1,
+      updatedAt: 1,
+    },
+  ]
+  openAux.mockResolvedValue(child)
+  await act(async () => root.render(<AgentsTool {...callbacks} active />))
+
+  const row = [
+    ...container.querySelectorAll<HTMLButtonElement>('[aria-label="未完成"] button'),
+  ].find((button) => button.textContent?.includes("查看部分结果"))
+  expect(row).toBeDefined()
+  expect(row!.querySelector("button")).toBeNull()
+  expect(row!.textContent).toContain("本次轮次已用完，子任务未完成")
+  expect(openAux).not.toHaveBeenCalled()
+  await act(async () => row!.click())
+  expect(openAux).toHaveBeenCalledExactlyOnceWith({
+    subscriptionId: "agents:details",
+    sessionId: "child-1",
+  })
+  expect(auxListeners.size).toBe(1)
+  expect(container.textContent).toContain(reportText)
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('[aria-label="返回子智能体列表"]')!.click()
+  )
+  expect(auxListeners.size).toBe(0)
+  expect(container.querySelector('[aria-label="未完成"]')?.textContent).toContain("查看部分结果")
 })
 
 it("opens the requested agent's existing detail subscription once and allows returning to the list", async () => {
