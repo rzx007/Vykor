@@ -77,7 +77,7 @@
 
       .startup-loading-outline {
         stroke-width: 0.4;
-        opacity: 0.7;
+        opacity: 0.45;
       }
 
       /* 模糊只作用于轮廓副本，主体始终清楚；越向外越淡。 */
@@ -101,7 +101,7 @@
 
       .startup-loading-light-outline {
         stroke-width: 0.4;
-        opacity: 0.24;
+        opacity: 0.95;
       }
 
       /* 参考 beUI TextShimmer 的连续扫光，用 SVG 遮罩只照亮镂空轮廓。 */
@@ -136,6 +136,10 @@
         display: none;
       }
 
+      :root[data-reduced-motion="true"] .startup-loading-outline {
+        opacity: 0.7;
+      }
+
       :root[data-reduced-motion="true"] #startup-loading {
         transition: none;
       }
@@ -147,6 +151,9 @@
         }
         .startup-loading-light {
           display: none;
+        }
+        .startup-loading-outline {
+          opacity: 0.7;
         }
         #startup-loading {
           transition: none;
@@ -185,7 +192,10 @@
             />
             <linearGradient id="startup-light-gradient">
               <stop offset="0" stop-color="white" stop-opacity="0" />
-              <stop offset="0.5" stop-color="white" />
+              <stop offset="0.3" stop-color="white" stop-opacity="0.15" />
+              <stop offset="0.45" stop-color="white" />
+              <stop offset="0.55" stop-color="white" />
+              <stop offset="0.7" stop-color="white" stop-opacity="0.15" />
               <stop offset="1" stop-color="white" stop-opacity="0" />
             </linearGradient>
             <mask
