@@ -114,7 +114,29 @@ export async function createSessionFileAccess(environment: ExecutionEnvironmentH
     return contained(paths, root, target);
   }
 
+  // The adapter obtained this name from a held file object. Never resolve it again by pathname:
+  // a concurrent directory replacement could otherwise change which object is being authorized.
+  async function verifyOpened(canonical: string, tool: FileReadTool, signal?: AbortSignal): Promise<void> {
+    checkCancelled(signal);
+    if (!canonicalRoot || !paths.isAbsolute(canonical)) throw unsupported();
+    canonical = paths.resolve(canonical);
+    if (!contained(paths, canonicalRoot, canonical)) throw forbidden();
+    await checkPermission(canonical, canonicalRoot, tool);
+    for (const rule of policy.filesystem.denyRead) {
+      if (await ruleContains(rule, await canonicalRule(await rulePath(rule), signal), canonical)) throw forbidden();
+    }
+    if (policy.enabled) {
+      let allowed = false;
+      for (const rule of [...policy.filesystem.allowRead, ...policy.filesystem.extraAllowedRoots]) {
+        if (await ruleContains(rule, await canonicalRule(await rulePath(rule), signal), canonical)) { allowed = true; break; }
+      }
+      if (!allowed) throw forbidden();
+    }
+    checkCancelled(signal);
+  }
+
   return {
+    verifyOpened,
     async authorize(relativePath: string, tool: FileReadTool, signal?: AbortSignal): Promise<AuthorizedFilePath> {
       checkCancelled(signal);
       const relative = validateRelativePath(relativePath, environment.info.pathStyle);
@@ -133,20 +155,7 @@ export async function createSessionFileAccess(environment: ExecutionEnvironmentH
       checkCancelled(signal);
       canonicalRoot ??= await canonicalize(root, signal);
       const canonical = await canonicalize(target, signal);
-      if (!contained(paths, canonicalRoot, canonical)) throw forbidden();
-      await checkPermission(canonical, canonicalRoot, tool);
-      for (const denied of denies) {
-        if (await ruleContains(denied.rule, await canonicalRule(denied.path, signal), canonical)) throw forbidden();
-      }
-      if (policy.enabled) {
-        const allowRules = [...policy.filesystem.allowRead, ...policy.filesystem.extraAllowedRoots];
-        let allowed = false;
-        for (const rule of allowRules) {
-          if (await ruleContains(rule, await canonicalRule(await rulePath(rule), signal), canonical)) { allowed = true; break; }
-        }
-        if (!allowed) throw forbidden();
-      }
-      checkCancelled(signal);
+      await verifyOpened(canonical, tool, signal);
       return { executionPath: canonical, sourcePath: target, relativePath: relative };
     },
   };

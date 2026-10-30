@@ -23,66 +23,9 @@ console.log(await client.protocol.capabilities());
 console.log(await client.sessions.list());
 ```
 
-服务可由 `vk serve --host 127.0.0.1 --port 8787 --register` 启动。它需要事先配置好模型提供商；SDK 不安装模型或替调用者配置凭据。通常由调用方提供已有 daemon 的地址和 token。仅在需要由 Node 程序管理本机 daemon 时，才使用下一节的 `/service` 入口。
+默认连接已有 daemon，由调用方提供地址和 token。服务可由 `vk serve --host 127.0.0.1 --port 8787 --register` 启动，需要事先配置好模型提供商；SDK 不安装模型或替调用者配置凭据。需要由 Node 程序自行管理本机 daemon 时，见[可选附录](#附录node-应用管理本机-daemon可选)。
 
 浏览器使用同一个主入口，由应用提供地址与 token。服务端需通过 `--allow-origin` 配置网页的准确来源。远程连接直接传远端地址；`cwd` 指向服务端机器的工作目录。构造参数也允许自定义 `fetch`，例如接入应用自己的传输处理。
-
-## 本机后台服务
-
-Node 专用功能从 `@rzx/client/service` 导入；浏览器主入口不加载进程或文件管理代码。
-
-先把 CLI 安装到调用方项目：
-
-```bash
-npm install @rzx/ohs
-```
-
-```js
-import { VykorClient } from "@rzx/client";
-import { Service } from "@rzx/client/service";
-
-const endpoint = await Service.ensure();
-const client = new VykorClient(Service.clientOptions(endpoint));
-console.log(await client.sessions.list());
-```
-
-| 方法 | 行为 |
-| --- | --- |
-| `Service.discover(options?)` | 返回健康、协议兼容且鉴权通过的本机实例；不存在或不可用时返回 `undefined`，不启动进程 |
-| `Service.ensure(options?)` | 复用已有实例，或启动 CLI 并等待登记与健康检查完成 |
-| `Service.clientOptions(endpoint)` | 返回可直接传给 `new VykorClient()` 的地址和 token |
-| `Service.stop(endpoint, options?)` | 核对登记身份和鉴权后停止该进程；实例已替换时返回 `false` |
-
-登记路径依次使用 `VYKOR_DATA_DIR/daemon/registry.json`、`VYKOR_CONFIG_DIR/data/daemon/registry.json`、`~/.vykor/data/daemon/registry.json`。`file` 可显式指定登记文件。Endpoint 含 token，应按凭据保管。
-
-`ensure` 的默认命令从 `cwd`（默认 `process.cwd()`）定位已安装的 `@rzx/ohs`，用当前 Node 运行 CLI 的 `serve --register --host 127.0.0.1 --port 0`。它不依赖调用者的 `process.argv[1]`，不修改系统自启动设置，也不会结束已有但不兼容的后台。
-
-```js
-const endpoint = await Service.ensure({
-  cwd: "/path/to/application", // 在这里查找 @rzx/ohs
-  version: version => version.startsWith("1."), // 可选 CLI 版本限制
-  timeoutMs: 15_000,
-  env: { VYKOR_DATA_DIR: "/path/to/isolated-vykor-data" },
-});
-```
-
-未指定 `version` 时仍强制检查通信协议。SDK npm 版本、CLI 应用版本和通信协议版本是不同的值；通信协议必须完全一致，当前代码导出 `CURRENT_PROTOCOL_VERSION`。
-
-需要指定可执行程序时，传完整命令数组：
-
-```js
-const endpoint = await Service.ensure({
-  command: [process.execPath, "/installed/vykor/dist/index.js", "serve", "--register", "--host", "127.0.0.1", "--port", "0"],
-});
-```
-
-命令直接执行，不做 shell 展开；Windows 上使用 Node 和 CLI 文件路径，避免依赖 `.cmd` 包装。自定义 `file` 时，自定义命令必须把实例写到该文件；默认 CLI 可通过 `env.VYKOR_DATA_DIR` 选择对应位置。
-
-同一 Node 进程内，对同一文件的并发 `ensure` 共享一次启动；启动命令、环境和启动取消信号采用首个发起者的设置。后来加入的调用者可以用自己的 signal 结束等待，不影响原发起者。`timeoutMs` 默认启动等待 10 秒、单次探测 1 秒、停止等待 5 秒。启动超时、取消或子进程退出会清理本次启动的子进程；失败时不会替换活着的登记实例。
-
-不同进程或 SDK 副本通过登记文件旁的 `.sdk-start.lock` 目录排队，拿到锁后重新探测服务，避免重复拉起后台。锁每 5 秒续期，异常退出后的残留锁在 10 秒后可收回；需要跨越这一恢复窗口时可设置更长的 `timeoutMs`。
-
-只有明确要停止共用后台时才调用 `await Service.stop(endpoint)`。结束一次脚本通常只需断开订阅，其他客户端仍可继续工作。操作系统服务管理器可能按自己的配置重新启动 daemon，本入口不修改该配置。
 
 ## 提交任务与读取结果
 
@@ -181,11 +124,22 @@ console.log(text.content, text.truncated, files.files, search.matches);
 | `find` | glob 匹配的 `files: string[]`；默认 100 项，最多 1000 项 |
 | `search` | 单行字面文本匹配，返回 `matches: { path, line, text }[]`，行号从 1 开始；默认忽略大小写，默认 100 条、最多 200 条 |
 
-`pattern` 和 `include` 相对于搜索起点 `path`，结果中的路径相对于会话根目录。搜索不解释用户正则，不支持跨行 query。递归查找默认跳过 `.git`、`node_modules`、`dist` 等生成或依赖目录，不递归进入目录链接；被权限禁止的项不进入目录与搜索结果。没有文件监听、创建、保存、移动或删除入口。
+`pattern` 和 `include` 相对于搜索起点 `path`，结果中的路径相对于会话根目录。搜索不解释用户正则，不支持跨行 query；忽略大小写时仍按字面文本匹配，即使 `İ` 等字符转换后长度变化，摘要也按原文位置截取。递归查找默认跳过 `.git`、`node_modules`、`dist` 等生成或依赖目录，不递归进入目录链接；被权限禁止的项不进入目录与搜索结果。POSIX 中合法但无法用 API 路径表示的枚举项（如名称含 `\`）会被跳过，其余项继续返回；用户直接传这类非法路径仍返回 `file_invalid_request`。没有文件监听、创建、保存、移动、删除或分页入口。
 
-目录与搜索最多检查 4000 个目录项。内容搜索每文件最多读取 256 KiB，总读取最多 8 MiB；二进制文件和非法 UTF-8 也计入读取预算。内容匹配的单条文本最多 4096 字符。文件请求最长执行 10 秒；查找和搜索在执行中达到时间、读取量或结果预算时返回 `truncated: true`，表示结果可能不完整。直接读取二进制或非法 UTF-8 返回 `file_not_text`。
+目录列举及递归查找、搜索每次最多采集 4000 个候选目录项，包含用于判断还有结果的截断探针。底层逐项枚举并提前停止，不先加载完整目录；排序只覆盖已采集的受限集合，因此大目录的结果不保证是全目录排序后的前若干项。内容搜索每文件最多读取 256 KiB，总读取最多 8 MiB；二进制文件和非法 UTF-8 也计入读取预算。内容匹配的单条文本最多 4096 字符。文件请求最长执行 10 秒；查找和搜索在执行中达到时间、读取量或结果预算时返回 `truncated: true`，表示结果可能不完整。直接读取二进制或非法 UTF-8 返回 `file_not_text`。
 
 每个候选路径都执行工作区边界、真实路径和读取权限检查。明确的 `denyRead`、路径规则、会话工具上限和拒绝配置仍然生效；需要确认的结果直接拒绝，不创建审批或自动批准。WSL 路径在实际 WSL 环境验证，不能可靠映射的权限规则返回不支持，不回退到宿主文件系统。CLI advanced 与其 Agent 一样使用本机文件环境。
+
+正文读取先打开文件，再用已打开文件对象的真实路径重新检查工作区和读取规则，从同一句柄（指向该文件对象的引用）单次有界读取，并在成功、失败或取消后关闭。路径在检查后被替换，也不能让读取转向未经授权的对象；缺少这种安全读取能力或有界目录枚举能力时返回 `file_not_supported`（501），不退回按路径重新打开。
+
+正文读取（`readText`，以及 `search` 读取候选文件时）的当前支持范围如下；能力标记不代表每种宿主环境都具备所需系统能力。
+
+| 环境 | 要求与限制 |
+| --- | --- |
+| Linux 本机 | 需要可用的 `/proc` 来核验已打开文件对象的真实路径 |
+| WSL | 正文读取需要 `/proc`；`list/find/search` 的目录扫描还需要 Bash 与 GNU coreutils 9+ |
+| Windows 本机 | 仅支持本地 NTFS 上只有一个硬链接名称的文件；使用 PowerShell 与 `fsutil` 做只读核验，可由普通账号执行，核验能力不可用时返回 501 |
+| 其他 Windows 卷、UNC 路径、macOS | 暂不支持安全正文读取，返回 501 |
 
 HTTP 错误仍由 `VykorApiError` 携带 `status` 与原始 `body`，文件错误响应包含 `code` 和 `message`：
 
@@ -195,7 +149,7 @@ HTTP 错误仍由 `VykorApiError` 携带 `status` 与原始 `body`，文件错�
 | `file_forbidden` | 403，路径或会话读取策略拒绝 |
 | `file_not_found` | 404，会话或路径不存在 |
 | `file_not_text` | 415，目标不是支持的 UTF-8 文本 |
-| `file_not_supported` | 501，daemon 未配置文件服务或不能可靠验证环境规则 |
+| `file_not_supported` | 501，daemon 未配置文件服务，或缺少安全正文读取、有界目录枚举、环境规则核验能力 |
 | `file_not_ready` | 503，服务尚未就绪、配置缺失或工作区正在维护 |
 | `file_timeout` / `file_cancelled` | 408，直接操作超时或已取消 |
 | `file_operation_failed` | 500，其它读取失败；响应不包含宿主绝对路径 |
@@ -234,7 +188,7 @@ await client.permissions.reply(requestId, { status: "approved", decision: "once"
 
 中断后台任务使用 `client.sessions.interrupt(sessionId, { expectedRunId: runId })`。给 HTTP 请求、`syncEvents` 或 `waitForRun` 传 `AbortSignal` 只取消本地请求或等待；后台任务可继续执行。
 
-非成功 HTTP 响应抛出 `VykorApiError`，携带 `status` 和 `body`。协议不匹配抛出 `IncompatibleProtocolError`，调用方应升级对应客户端或服务端。`syncEvents` 对一般断流自动重连；取消与不支持的事件格式会结束同步。完整状态规则见 [Client Sync Flow](./client-sync-flow.md)。
+非成功 HTTP 响应抛出 `VykorApiError`，携带 `status` 和 `body`。协议不匹配抛出 `IncompatibleProtocolError`，调用方应升级对应客户端或服务端。`syncEvents` 首次读取快照或全局历史回放失败时直接抛出错误，不自动重试。进入事件循环后，SSE、断流后的快照恢复或事件缺口补齐遇到网络错误、5xx、408/425/429 时退避重试；其他 4xx 会终止同步，并原样抛出该 `VykorApiError`，不丢失状态码和响应正文。取消与不支持的事件格式也会结束同步，`waitForRun` 沿用这些规则。完整状态规则见 [Client Sync Flow](./client-sync-flow.md)。
 
 ## 构建与验证
 
@@ -276,3 +230,62 @@ pnpm release:client:dry -- 0.1.0
 ## Jobs 协议 7
 
 `client.jobs.list` 返回 `{jobs,errors}`；read/wait/send/cancel 的首参数为快照中的完整 target。Agent target 含 kind、jobId、runId，其他类型含 kind、jobId。send 可返回新轮接纳 receipt。具体请求见 [Jobs 协议](./jobs-protocol.md)，旧版连接会被明确拒绝。
+
+## 附录：Node 应用管理本机 daemon（可选）
+
+仅在 Node 应用需要自行查找、启动或停止本机 daemon 时使用本节，例如 IDE 插件的一键启动功能。已有 daemon 的调用方直接提供地址和 token，可以跳过本节。
+
+本节功能从 `@rzx/client/service` 导入，仅适用于 Node；浏览器使用主入口连接已有 daemon。
+
+先把 CLI 安装到调用方项目：
+
+```bash
+npm install @rzx/ohs
+```
+
+```js
+import { VykorClient } from "@rzx/client";
+import { Service } from "@rzx/client/service";
+
+const endpoint = await Service.ensure();
+const client = new VykorClient(Service.clientOptions(endpoint));
+console.log(await client.sessions.list());
+```
+
+| 方法 | 行为 |
+| --- | --- |
+| `Service.discover(options?)` | 返回健康、协议兼容且鉴权通过的本机实例；不存在或不可用时返回 `undefined`，不启动进程 |
+| `Service.ensure(options?)` | 复用已有实例，或启动 CLI 并等待登记与健康检查完成 |
+| `Service.clientOptions(endpoint)` | 返回可直接传给 `new VykorClient()` 的地址和 token |
+| `Service.stop(endpoint, options?)` | 核对登记身份和鉴权后停止该进程；实例已替换时返回 `false` |
+
+登记路径依次使用 `VYKOR_DATA_DIR/daemon/registry.json`、`VYKOR_CONFIG_DIR/data/daemon/registry.json`、`~/.vykor/data/daemon/registry.json`。`file` 可显式指定登记文件。Endpoint 含 token，应按凭据保管。
+
+`ensure` 的默认命令从 `cwd`（默认 `process.cwd()`）定位已安装的 `@rzx/ohs`，用当前 Node 运行 CLI 的 `serve --register --host 127.0.0.1 --port 0`。它不依赖调用者的 `process.argv[1]`，不修改系统自启动设置，也不会结束已有但不兼容的后台。
+
+```js
+const endpoint = await Service.ensure({
+  cwd: "/path/to/application", // 在这里查找 @rzx/ohs
+  version: version => version.startsWith("1."), // 可选 CLI 版本限制
+  timeoutMs: 15_000,
+  env: { VYKOR_DATA_DIR: "/path/to/isolated-vykor-data" },
+});
+```
+
+未指定 `version` 时仍强制检查通信协议。SDK npm 版本、CLI 应用版本和通信协议版本是不同的值；通信协议必须完全一致，当前代码导出 `CURRENT_PROTOCOL_VERSION`。
+
+需要指定可执行程序时，传完整命令数组：
+
+```js
+const endpoint = await Service.ensure({
+  command: [process.execPath, "/installed/vykor/dist/index.js", "serve", "--register", "--host", "127.0.0.1", "--port", "0"],
+});
+```
+
+命令直接执行，不做 shell 展开；Windows 上使用 Node 和 CLI 文件路径，避免依赖 `.cmd` 包装。自定义 `file` 时，自定义命令必须把实例写到该文件；默认 CLI 可通过 `env.VYKOR_DATA_DIR` 选择对应位置。
+
+同一 Node 进程内，对同一文件的并发 `ensure` 共享一次启动；启动命令、环境和启动取消信号采用首个发起者的设置。后来加入的调用者可以用自己的 signal 结束等待，不影响原发起者。`timeoutMs` 默认启动等待 10 秒、单次探测 1 秒、停止等待 5 秒。启动超时、取消或子进程退出会清理本次启动的子进程；失败时不会替换活着的登记实例。
+
+不同进程或 SDK 副本通过登记文件旁的 `.sdk-start.lock` 目录排队，拿到锁后重新探测服务，避免重复拉起后台。锁每 5 秒续期，异常退出后的残留锁在 10 秒后可收回；需要跨越这一恢复窗口时可设置更长的 `timeoutMs`。
+
+`Service.stop(endpoint)` 会停止整个 daemon，所有共用该服务的客户端都会受影响。中断某次 Agent 执行应使用 `client.sessions.interrupt(sessionId, { expectedRunId: runId })`。结束一次脚本通常只需断开订阅，其他客户端仍可继续工作。操作系统服务管理器可能按自己的配置重新启动 daemon，本入口不修改该配置。

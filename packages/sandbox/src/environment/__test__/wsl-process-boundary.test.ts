@@ -103,4 +103,28 @@ ${script}`;
     expect(existsSync(marker)).toBe(false);
     expect(existsSync(log) ? readFileSync(log, "utf8") : "").toMatch(/^<-TERM><--><-\d+>$/);
   });
+
+  it.skipIf(!shell)("preserves stdin while a process runs under the cancellation supervisor", () => {
+    const root = mkdtempSync(join(tmpdir(), "vk-wsl-stdin-boundary-")); roots.push(root);
+    const marker = join(root, "cancel").replaceAll("\\", "/");
+    const originalTmpdir = process.env.TMPDIR;
+    try {
+      if (process.platform !== "win32") process.env.TMPDIR = "C:/Temp";
+      spawnWslProcess({ argv: ["cat"], cwd: "/mnt/d/repo", signal: new AbortController().signal });
+    } finally {
+      if (originalTmpdir === undefined) delete process.env.TMPDIR;
+      else process.env.TMPDIR = originalTmpdir;
+    }
+    // Starting a process group is irrelevant to stdin; execute the actual supervisor with a real shell.
+    const script = transport.argv[5]!.replaceAll("/usr/bin/setsid", "run_target");
+    const harness = `run_target() { "$@"; }\n${script}`;
+    const result = spawnSync(shell, ["-c", harness, "vk-supervisor", marker, "cat"], {
+      input: "stdin survives supervision\n", encoding: "utf8", windowsHide: true, timeout: 3000,
+    });
+    transport.child.emit("close", result.status);
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    expect(result.stdout).toBe("stdin survives supervision\n");
+    expect(existsSync(marker)).toBe(false);
+  });
 });

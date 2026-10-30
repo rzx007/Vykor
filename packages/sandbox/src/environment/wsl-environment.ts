@@ -201,8 +201,12 @@ export function spawnWslProcess(input: {
 const WSL_CANCEL_SUPERVISOR = `
 cancel_file=$1
 shift
-/usr/bin/setsid "$@" &
+# Non-interactive shells replace a background command's stdin with /dev/null.
+# Preserve it explicitly, then close the extra descriptor in both processes.
+exec 3<&0
+/usr/bin/setsid "$@" <&3 3<&- &
 child_pid=$!
+exec 3<&-
 while kill -0 "$child_pid" 2>/dev/null; do
   if [ -f "$cancel_file" ]; then
     /bin/kill -TERM -- "-$child_pid" 2>/dev/null || /bin/kill -TERM "$child_pid" 2>/dev/null

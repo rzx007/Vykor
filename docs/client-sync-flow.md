@@ -15,7 +15,7 @@ Client 不运行 Agent、不读 SQLite、不决定 prompt 是 steer 还是 queue
 
 ## 公开入口
 
-公开 `VykorClient` 只组装七个资源：`protocol`、`runtime`、`sessions`、`permissions`、`attachments`、`jobs`、`events`。`runtime` 只读取已有模型、Agent persona、技能和会话 MCP 能力。
+公开 `VykorClient` 只组装八个资源：`protocol`、`runtime`、`sessions`、`permissions`、`attachments`、`jobs`、`events`、`files`。`runtime` 只读取已有模型、Agent persona、技能和会话 MCP 能力；`files` 按会话提供有界的只读工作区访问，正文在打开文件后重新授权，不参与快照或事件同步。文件支持范围见 [Client SDK 使用指南](./client-sdk.md#会话工作区文件只读)。
 
 ```ts
 const client = new VykorClient({ baseUrl, token });
@@ -88,7 +88,7 @@ event.seq > cursor + 1
   -> 再应用当前 live event
 ```
 
-stream 正常结束或遇到可恢复网络错误时，状态进入 `reconnecting`，按指数退避等待，再从 `state.lastSeq` 建立新连接。Abort 会结束循环；不支持的 event schema version 属于不可恢复错误，状态进入 `error`，不会靠跳过事件继续。
+首次会话快照或全局历史回放失败时直接抛出错误，不进入重连循环。进入事件循环后，stream 正常结束，或 SSE、断流后的快照恢复、事件缺口补齐遇到网络错误、5xx、408/425/429 时，状态进入 `reconnecting`，按指数退避等待，再从 `state.lastSeq` 建立新连接。其他 4xx（如参数错误、权限失效或会话已删除）会终止同步并原样抛出 `VykorApiError`，保留 `status` 和 `body`；Controller 进入 `error`，不继续重连。Abort 会结束循环；不支持的 event schema version 也属于不可恢复错误，状态进入 `error`，不会靠跳过事件继续。
 
 Reducer 以 durable `seq` 去重。text delta 是 transient event：它会立即追加显示，但不进入 durable `eventsBySeq`，只推进 `transientCursor`，避免重连时重复文字。part complete、Tool 边界和 Run terminal 会把完整正文持久化，后续 snapshot 可以恢复。
 
@@ -149,8 +149,9 @@ Resource response
 ## 失败语义
 
 - 协议不兼容：`IncompatibleProtocolError`，不发送业务请求；
-- HTTP 已知错误：转换为 `VykorApiError`，保留状态码和结构化 payload；
-- 网络/SSE 暂时失败：Controller 进入 reconnecting 并从 `lastSeq` 继续；
+- 首次快照或全局历史回放失败：直接抛出错误，Controller 进入 error，不自动重试；
+- HTTP 4xx（408/425/429 除外）：原样抛出 `VykorApiError`，保留状态码和结构化 payload，Controller 进入 error 并终止同步；
+- 进入事件循环后的网络错误、HTTP 5xx、408/425/429 或 SSE 正常结束：Controller 进入 reconnecting，退避后从 `lastSeq` 继续；
 - event schema 不支持：进入 error，要求升级 Client；
 - generation 已过期或 signal aborted：丢弃迟到结果，不更新当前界面；
 - prompt 响应未知：只有保存过稳定 request ID 的调用方才能可靠重试。

@@ -38,7 +38,11 @@ console.log(providers.flatMap(provider => provider.models));
 | `events` | 查询历史事件和订阅 SSE（服务端持续推送的事件） |
 | `files` | 按会话读取目录、文件信息和 UTF-8 文本，查找文件名与内容 |
 
-`files` 通过 daemon 的实际会话工作区执行只读操作，按项检查路径和权限；调用方不提供宿主目录。支持 `list`、`stat`、`readText`、`find`、`search`，读取和搜索有上限并返回 `truncated`；使用前检查 `sessionFiles` 能力。详细示例和限制见 [会话文件指南](../../docs/client-sdk.md#会话工作区文件只读)。
+`files` 通过 daemon 的实际会话工作区执行只读操作，按项检查路径和权限；调用方不提供宿主目录。支持 `list`、`stat`、`readText`、`find`、`search`，读取和搜索有上限并返回 `truncated`；使用前检查 `sessionFiles` 能力。
+
+目录最多采集 4000 个候选项（含截断探针），只对受限集合排序；API 无法表示的 POSIX 枚举项会被跳过，用户直接传非法路径仍返回 400。正文在打开文件后重新授权，再从同一已打开对象读取；缺少安全读取或有界枚举能力时返回 501。
+
+正文读取当前支持有 `/proc` 的 Linux/WSL，以及可用 PowerShell 和 `fsutil` 校验的本地 NTFS 单硬链接文件；WSL 目录扫描还需 Bash 与 GNU coreutils 9+。其他 Windows 卷、UNC 和 macOS 暂不支持正文读取。详细示例和限制见 [会话文件指南](../../docs/client-sdk.md#会话工作区文件只读)。
 
 `runtime` 提供 `listModels`、`listAgentPersonas`、`listSkills` 和 `getSessionMcp`，只读取 daemon 已配置的能力。会话快照、reducer（合并快照和事件的函数）、选择函数及同步控制器从根入口导出，供不同界面共用一套恢复流程。请求 metadata 与工具输入/输出保留扩展数据。
 
@@ -58,6 +62,8 @@ console.log(providers.flatMap(provider => provider.models));
 ```
 
 Session、Input、Message、Run、Task、Permission 和事件游标由 daemon 持久保存。SDK 维护这些记录的本地视图，断线后重新读取快照并继续同步；草稿、当前选中项、窗口及连接提示由各产品保存。界面不直接读取数据库，不另建 Run 对账或 Agent 执行逻辑。
+
+首次快照或全局历史回放失败时直接抛出错误。进入事件循环后，SSE、断流后的快照恢复或事件缺口补齐遇到网络错误、5xx、408/425/429 时退避重试；其他 4xx 会终止同步并原样抛出 `VykorApiError`，保留 `status` 和 `body`，由调用方处理参数、权限或资源失效。
 
 ## 目录与维护
 

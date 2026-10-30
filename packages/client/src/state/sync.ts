@@ -10,6 +10,7 @@ import {
   UnsupportedSessionEventSchemaVersionError,
 } from "./reducer.js";
 import { applySessionStreamEvent, applySessionStreamSnapshot } from "./session-stream-state.js";
+import { VykorApiError } from "../transport/http-transport.js";
 import type {
   EventSyncOptions, ListEventsOptions, VykorClientState, SessionEventRecord,
   SessionStateSnapshot, SyncEventUpdate,
@@ -130,6 +131,9 @@ export async function* runEventSync(
       } catch (error) {
         if (error instanceof UnsupportedSessionEventSchemaVersionError) throw error;
         if (isAbortError(error) || signal?.aborted) return;
+        // 请求无效、失去权限或会话已删除时，重连无法恢复；超时、过早请求和限流仍可重试。
+        if (error instanceof VykorApiError && error.status >= 400 && error.status < 500
+          && ![408, 425, 429].includes(error.status)) throw error;
       }
       if (signal?.aborted) return;
       // 刷新失败也走同一退避入口；needsSnapshot 保持为真，绝不跳过快照恢复。

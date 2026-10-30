@@ -20,6 +20,10 @@
 
 `stat(path, signal)`、`listDir(path, signal)` 与 `paths.canonicalize(path, signal)` 接受可选取消信号，供请求在目录遍历和真实路径检查期间停止。
 
+需要把授权与实际读取绑定时使用可选的 `files.openRead(path, signal)`。它返回已打开对象的 `canonicalPath`、`stat`、单次 `readBytes({maxBytes, signal})` 和幂等的 `close()`。调用方先按实际对象路径检查权限，再从同一个对象读取，并在 `finally` 等待关闭；实现不能重新按路径打开文件。不具备可靠对象识别能力时返回 `ENOTSUP`，调用方不得回退到普通 `readBytes`。句柄与进程归实现方持有，调用方负责关闭。
+
+`files.scanDirectory(path, { maxEntries, signal })` 是可选的受限目录扫描能力，返回 `{ entries, truncated }`：最多保留 `maxEntries` 个子项，另取一个子项判断是否截断。目录项按文件系统顺序返回，链接不当作真实子目录。调用方只对这批结果排序，截断时不能保证拿到全目录排序后的前几项。旧环境可以暂不提供此方法；要求固定扫描预算的调用方应返回不支持，不能回退到整目录 `listDir`。具体实现可使用固定大小的系统缓冲预读，不能先收集全部目录项再截断。
+
 ## 新增代码与测试
 
 同一职责的新代码放在本目录。测试放同层 [__test__/](__test__/)，跨分类场景放它们共同上层的 `__test__/`。

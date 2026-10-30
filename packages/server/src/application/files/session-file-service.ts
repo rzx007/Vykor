@@ -46,12 +46,14 @@ export class SessionFileService {
     return this.request(sessionId, signal, async request => {
       const directory = await request.access.authorize(path, "Read", request.signal);
       await requireDirectory(request, directory.executionPath);
-      const children = await request.environment.files.listDir(directory.executionPath, request.signal);
+      const scanDirectory=request.environment.files.scanDirectory;
+      if (!scanDirectory) throw new SessionFileError("file_not_supported","The session environment cannot scan directories within a fixed budget");
+      const scan=await scanDirectory.call(request.environment.files,directory.executionPath,{maxEntries:MAX_VISITED-1,signal:request.signal});
+      const children=scan.entries;
       children.sort((a,b) => Number(b.isDirectory)-Number(a.isDirectory) || a.name.localeCompare(b.name));
       const entries: SessionFileInfo[] = [];
-      let visited = 0, truncated = false;
+      let truncated = scan.truncated;
       for (const child of children) {
-        if (++visited > MAX_VISITED) { truncated = true; break; }
         const relativePath = posix.join(directory.relativePath, child.name);
         const candidate = await this.candidate(request, relativePath, "Read");
         if (!candidate) continue;
@@ -75,7 +77,7 @@ export class SessionFileService {
     const input = parseSessionFileReadInput({...query,path});
     return this.request(sessionId, signal, async request => {
       const target = await request.access.authorize(input.path, "Read", request.signal);
-      const {bytesRead: _bytesRead, ...text} = await readText(request, target.executionPath, input.maxBytes ?? TEXT_BYTES);
+      const {bytesRead: _bytesRead, ...text} = await readText(request, target.executionPath, "Read", input.maxBytes ?? TEXT_BYTES);
       return {path:target.relativePath, ...text};
     });
   }
@@ -118,16 +120,18 @@ export class SessionFileService {
           if (remaining <= 1) { budget.truncated=true; break; }
           const maxBytes = Math.min(TEXT_BYTES,remaining-1);
           let read;
-          try { read = await readText(request,file.executionPath,maxBytes,bytes => { budget.bytes += bytes; }); }
+          try { read = await readText(request,file.executionPath,"Grep",maxBytes,bytes => { budget.bytes += bytes; }); }
           catch(error) { if (isFileError(error,"file_not_text")) continue; throw error; }
           budget.truncated ||= read.truncated;
           const lines = read.content.split(/\r?\n/);
           for (let index=0;index<lines.length;index++) {
             request.signal.throwIfAborted();
             const line = lines[index]!;
-            const found = (caseSensitive ? line : line.toLowerCase()).indexOf(target);
+            const searchable = caseSensitive ? line : line.toLowerCase();
+            const found = searchable.indexOf(target);
             if (found < 0) continue;
-            const start = Math.max(0,found-160);
+            const sourceIndex = searchable.length === line.length ? found : originalCaseIndex(line,found);
+            const start = Math.max(0,sourceIndex-160);
             matches.push({path:file.path,line:index+1,text:line.slice(start,start+4096)});
             if (start > 0 || line.length > start+4096) budget.truncated=true;
             if (matches.length >= limit) return {path:root.relativePath,matches,truncated:true};
@@ -139,17 +143,23 @@ export class SessionFileService {
   }
 
   private async *walk(request:Request, root:string, tool:Tool, budget:Budget): AsyncIterable<{path:string;executionPath:string}> {
+    const scanDirectory=request.environment.files.scanDirectory;
+    if (!scanDirectory) throw new SessionFileError("file_not_supported","The session environment cannot scan directories within a fixed budget");
     const pending = [root];
     while (pending.length) {
       request.signal.throwIfAborted();
+      const remaining=MAX_VISITED-budget.visited;
+      if (remaining<=0) { budget.truncated=true; return; }
       const current = pending.pop()!;
       const directory = await request.access.authorize(current,tool,request.signal);
-      const entries = await request.environment.files.listDir(directory.executionPath,request.signal);
+      const scan=await scanDirectory.call(request.environment.files,directory.executionPath,{maxEntries:remaining-1,signal:request.signal});
+      budget.visited+=scan.entries.length+Number(scan.truncated);
+      budget.truncated ||= scan.truncated;
+      const entries=scan.entries;
       entries.sort((a,b) => a.name.localeCompare(b.name));
       const directories: string[] = [];
       for (const entry of entries) {
         request.signal.throwIfAborted();
-        if (++budget.visited > MAX_VISITED) { budget.truncated=true; return; }
         if (entry.isDirectory && SKIP_DIRECTORIES.has(entry.name)) continue;
         const candidate = await this.candidate(request,posix.join(directory.relativePath,entry.name),tool);
         if (!candidate) continue;
@@ -167,7 +177,8 @@ export class SessionFileService {
       const stat = await request.environment.files.stat(target.sourcePath,request.signal);
       return {path:target.relativePath,executionPath:target.executionPath,stat};
     } catch(error) {
-      if (isFileError(error,"file_forbidden") || isFileError(error,"file_not_found") || isMissing(error)) return undefined;
+      // An enumerated POSIX name may not fit the API's forward-slash path format.
+      if (isFileError(error,"file_invalid_request") || isFileError(error,"file_forbidden") || isFileError(error,"file_not_found") || isMissing(error)) return undefined;
       throw error;
     }
   }
@@ -208,6 +219,8 @@ export class SessionFileService {
       if (timeout) throw new SessionFileError("file_timeout","File request timed out");
       if (error instanceof SessionFileError) throw error;
       if (isMissing(error)) throw new SessionFileError("file_not_found","Workspace path not found");
+      if (hasCode(error,"ENOTSUP")) throw new SessionFileError("file_not_supported","The session environment cannot verify the opened file");
+      if (hasCode(error,"EFTYPE")) throw new SessionFileError("file_not_text","Expected a regular UTF-8 text file");
       if (hasCode(error,"EACCES") || hasCode(error,"EPERM")) throw new SessionFileError("file_forbidden","Workspace path cannot be read");
       throw new SessionFileError("file_operation_failed","File operation failed");
     } finally {
@@ -221,10 +234,15 @@ async function requireDirectory(request:Request,path:string) {
   const stat=await request.environment.files.stat(path,request.signal);
   if (!stat.isDirectory) throw new SessionFileError("file_invalid_request","Expected a workspace directory");
 }
-async function readText(request:Request,path:string,maxBytes:number,onRead?:(bytes:number)=>void) {
-  const stat=await request.environment.files.stat(path,request.signal);
-  if (!stat.isFile) throw new SessionFileError("file_not_text","Expected a regular UTF-8 text file");
-  const bytes=await request.environment.files.readBytes(path,{maxBytes:maxBytes+1,signal:request.signal});
+async function readText(request:Request,path:string,tool:Tool,maxBytes:number,onRead?:(bytes:number)=>void) {
+  if (!request.environment.files.openRead) throw new SessionFileError("file_not_supported","The session environment cannot verify the opened file");
+  const reader=await request.environment.files.openRead(path,request.signal);
+  let bytes:Uint8Array;
+  try {
+    await request.access.verifyOpened(reader.canonicalPath,tool,request.signal);
+    if (!reader.stat.isFile) throw new SessionFileError("file_not_text","Expected a regular UTF-8 text file");
+    bytes=await reader.readBytes({maxBytes:maxBytes+1,signal:request.signal});
+  } finally { await reader.close(); }
   onRead?.(bytes.byteLength);
   request.signal.throwIfAborted();
   const truncated=bytes.byteLength>maxBytes;
@@ -243,6 +261,17 @@ function compileGlob(pattern:string):(path:string)=>boolean {
   try { expression=globToRegex(pattern); }
   catch { throw new SessionFileError("file_invalid_request","Invalid file pattern"); }
   return path=>expression.test(path) || !pattern.includes("/") && expression.test(posix.basename(path));
+}
+function originalCaseIndex(line:string,lowercaseIndex:number):number {
+  // Keep literal matching on the full lowercased line, then map expanded characters back to the source.
+  let sourceIndex=0,lowercaseOffset=0;
+  for (const character of line) {
+    const lowercaseLength=character.toLowerCase().length;
+    if (lowercaseOffset+lowercaseLength>lowercaseIndex) return sourceIndex;
+    sourceIndex+=character.length;
+    lowercaseOffset+=lowercaseLength;
+  }
+  return sourceIndex;
 }
 function hasCode(error:unknown,code:string):boolean { return !!error && typeof error==="object" && "code" in error && error.code===code; }
 function isMissing(error:unknown):boolean {return hasCode(error,"ENOENT") || hasCode(error,"ENOTDIR");}

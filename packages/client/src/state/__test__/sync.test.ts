@@ -5,6 +5,7 @@ import { syncEvents } from "../sync"
 import { SessionSyncController } from "../session-sync-controller"
 import type { SyncEventsClient } from "../sync"
 import type { EventSyncOptions, SyncEventUpdate } from "../../types/index"
+import { VykorApiError } from "../../transport/http-transport"
 
 function snapshot(cursor: number): SessionStateSnapshot {
   return {
@@ -214,6 +215,45 @@ describe("iterator transport options", () => {
 })
 
 describe("syncEvents reconnect", () => {
+  it.each([400, 401, 403, 404, 410, 422])("propagates HTTP %s when refreshing a disconnected session", async status => {
+    const failure = new VykorApiError("Cannot observe session", status, { error: "Cannot observe session" })
+    let reads = 0
+    const client: SyncEventsClient = {
+      sessions: { getState: async () => { if (++reads === 1) return snapshot(1); throw failure } },
+      events: { list: async () => [], stream: emptyStream },
+    }
+    const observer = syncEvents(client, { sessionId: "s1", reconnectDelayMs: () => 0 })[Symbol.asyncIterator]()
+    try {
+      expect((await observer.next()).value?.source).toBe("snapshot")
+      expect((await observer.next()).value?.source).toBe("reconnecting")
+      await expect(observer.next()).rejects.toBe(failure)
+    } finally {
+      await observer.return?.()
+    }
+  })
+
+  it.each([408, 425, 429, 500, 503])("recovers the session snapshot after a temporary HTTP %s", async status => {
+    let reads = 0
+    const client: SyncEventsClient = {
+      sessions: { getState: async () => {
+        if (++reads === 2) throw new VykorApiError("Temporarily unavailable", status, {})
+        return snapshot(reads === 1 ? 1 : 5)
+      } },
+      events: { list: async () => [], stream: emptyStream },
+    }
+    const observer = syncEvents(client, { sessionId: "s1", reconnectDelayMs: () => 0 })[Symbol.asyncIterator]()
+    try {
+      expect((await observer.next()).value?.source).toBe("snapshot")
+      expect((await observer.next()).value?.source).toBe("reconnecting")
+      expect((await observer.next()).value?.source).toBe("reconnecting")
+      const recovered = await observer.next()
+      expect(recovered.value?.source).toBe("snapshot")
+      expect(recovered.value?.state.lastSeq).toBe(5)
+    } finally {
+      await observer.return?.()
+    }
+  })
+
   it("forwards a usage-only event without adding a second Goal state", async () => {
     const usage = { knownTokens: 12, incomplete: false, unknownAttempts: 0, partialAttempts: 0, inFlightAttempts: 0, runTimeMs: 5, seq: 2, updatedAt: 2 };
     const value: SessionEventRecord = { id: "usage-2", seq: 2, type: "session.goal.usage.updated", schemaVersion: 1, sessionId: "s1", payload: { goalId: "g1", usage }, createdAt: 2 };

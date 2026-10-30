@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as state from "../index.js";
 import type { SessionEventRecord, SessionRunRecord, SessionStateSnapshot } from "../../types/index.js";
 import type { SyncEventsClient } from "../sync.js";
@@ -98,6 +98,31 @@ describe("waitForRun", () => {
     expect(result.run.status).toBe("completed");
     expect(reads).toBe(2);
     expect(streams).toBe(1);
+  });
+
+  it("rejects when the session was deleted while its run observer was disconnected", async () => {
+    vi.useFakeTimers();
+    const abort = new AbortController();
+    try {
+      let reads = 0;
+      const client = new VykorClient({ baseUrl: "http://daemon", fetch: async url => {
+        if (String(url).endsWith("/capabilities")) return Response.json({ serverVersion: "test", protocol: { version: CURRENT_PROTOCOL_VERSION }, features: {} });
+        if (String(url).includes("/state")) {
+          if (++reads === 1) return Response.json(snapshot([run("target", "running")]));
+          return Response.json({ error: "Session not found" }, { status: 404 });
+        }
+        return new Response(new ReadableStream<Uint8Array>({
+          start(controller) { controller.error(new TypeError("connection lost")); },
+        }));
+      } });
+      const pending = state.waitForRun(client, { sessionId: "session-1", runId: "target", signal: abort.signal })
+        .catch(error => error);
+      setTimeout(() => abort.abort(new Error("observation did not stop after session deletion")), 1_000);
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(await pending).toMatchObject({ name: "VykorApiError", status: 404, body: { error: "Session not found" } });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("closes a live observer on cancellation", async () => {

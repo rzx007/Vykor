@@ -124,9 +124,31 @@ export interface EnvironmentReadBytesOptions {
   signal?: AbortSignal;
 }
 
+/** One opened regular file. The path and metadata describe this object, not a later pathname lookup. */
+export interface EnvironmentFileReader {
+  canonicalPath: string;
+  stat: EnvironmentFileStat;
+  /** Consume one bounded read. A reader must not be reused after reading starts. */
+  readBytes(options: { maxBytes: number; signal?: AbortSignal }): Promise<Uint8Array>;
+  /** Idempotent; wait for I/O cleanup. Read/startup errors are reported by openRead/readBytes. */
+  close(): Promise<void>;
+}
+
 export interface EnvironmentFileEntry {
   name: string;
   isDirectory: boolean;
+}
+
+export interface EnvironmentDirectoryScanOptions {
+  /** Return at most this many entries, with one truncation lookahead. Fixed I/O buffering is allowed. */
+  maxEntries: number;
+  signal?: AbortSignal;
+}
+
+export interface EnvironmentDirectoryScanResult {
+  /** Filesystem order; a partial scan does not establish global directory ordering. */
+  entries: EnvironmentFileEntry[];
+  truncated: boolean;
 }
 
 export interface EnvironmentGrepOptions {
@@ -145,8 +167,12 @@ export interface EnvironmentGrepResult {
 }
 
 export interface EnvironmentFileSystem {
+  /** No pathname fallback: implementations unable to identify the held object must fail closed. */
+  openRead?(path: string, signal?: AbortSignal): Promise<EnvironmentFileReader>;
   stat(path: string, signal?: AbortSignal): Promise<EnvironmentFileStat>;
   listDir(path: string, signal?: AbortSignal): Promise<EnvironmentFileEntry[]>;
+  /** Bounded enumeration; optional for existing environments. Never substitute an unbounded list. */
+  scanDirectory?(path: string, options: EnvironmentDirectoryScanOptions): Promise<EnvironmentDirectoryScanResult>;
   readText(path: string): Promise<string>;
   readBytes(path: string, options?: EnvironmentReadBytesOptions): Promise<Uint8Array>;
   writeText(path: string, content: string): Promise<void>;

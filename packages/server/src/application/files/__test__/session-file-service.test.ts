@@ -81,8 +81,11 @@ describe("session readonly files", () => {
     const acquire=f.context.acquireEnvironment;
     f.context.acquireEnvironment=async(session,config)=>{
       const environment=await acquire(session,config);
-      const read=environment.files.readBytes.bind(environment.files);
-      environment.files.readBytes=async(path,options)=>{const result=await read(path,options);bytesRead+=result.byteLength;return result;};
+      const openRead=environment.files.openRead!.bind(environment.files);
+      environment.files.openRead=async(path,signal)=>{
+        const reader=await openRead(path,signal), read=reader.readBytes.bind(reader);
+        return {...reader,readBytes:async options=>{const result=await read(options);bytesRead+=result.byteLength;return result;}};
+      };
       return environment;
     };
     const result=await f.service.search("a",{query:"needle"});

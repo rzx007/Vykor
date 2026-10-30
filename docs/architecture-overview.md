@@ -42,13 +42,14 @@ await client.sessions.admitPrompt(sessionId, {
 await client.permissions.reply(requestId, { status: "approved", decision: "once" });
 ```
 
-公开实例只有 `protocol`、`runtime`、`sessions`、`permissions`、`attachments`、`jobs`、`events`。`runtime` 只查询已有模型、Agent persona、技能和会话 MCP 能力。Client transport 负责 HTTP、SSE、鉴权、协议 header 和错误转换；Resource 负责把生命周期动作映射到 endpoint。Client state 先应用 snapshot，再按 SSE cursor 合并增量；`waitForRun` 复用这套流程等待指定 Run。产品业务通过私有 `@vykor/application-client` 接入，复用公开 SDK 的传输、资源和同步；执行授权仍由 Server 和 Node 判断。
+公开实例只有 `protocol`、`runtime`、`sessions`、`permissions`、`attachments`、`jobs`、`events`、`files`。`runtime` 只查询已有模型、Agent persona、技能和会话 MCP 能力；`files` 按会话提供只读工作区访问。Client transport 负责 HTTP、SSE、鉴权、协议 header 和错误转换；Resource 负责把生命周期动作映射到 endpoint。Client state 先应用 snapshot，再按 SSE cursor 合并增量；`waitForRun` 复用这套流程等待指定 Run。首次快照或全局历史回放失败直接抛出；进入事件循环后，网络错误、5xx、408/425/429 触发退避重试，其他 4xx 会原样抛出并终止同步。产品业务通过私有 `@vykor/application-client` 接入，复用公开 SDK 的传输、资源和同步；执行授权仍由 Server 和 Node 判断。
 
 ### 2. Daemon Application
 
 HTTP route 只解析请求并调用窄应用服务。当前 Session 主链路包括：
 
 - `SessionQueryService`：读取 session、snapshot、message 和 part；
+- `SessionFileService`：在会话实际工作区内列目录、读取信息和正文、查找文件及搜索文本；
 - `SessionCommandService`：create、update、fork、archive、delete；
 - `SessionInteractionService`：prompt、queue、resume、interrupt 和 child 交互；
 - `RunAdmissionService`：把输入归类为 start、queue、steer、replay 或 reject；
@@ -57,6 +58,8 @@ HTTP route 只解析请求并调用窄应用服务。当前 Session 主链路包
 - `SessionOperationRunner`：在同一 session 内串行操作，等待 ready、取得 operation lease，并在成功提交后发布事件。
 
 `DaemonApplication` 组装这些服务并管理启动/关闭。HTTP 解码结果经 `http/mappers` 转为应用用例输入；应用层使用自己的输入和查询模型，不依赖 Protocol。写入 Repository 时再构造 Services 自己的存储命令。
+
+文件服务先取得工作区操作许可，再经环境接口执行读取，不创建 Agent 或持久事件。目录扫描逐项采集，最多 4000 个候选项（含截断探针），排序只覆盖受限集合；无法用 API 路径表示的 POSIX 枚举项会跳过，用户非法路径仍返回 400。正文打开后按同一文件对象的真实路径重新授权，单次有界读取并始终关闭；缺少安全读取或有界枚举能力时返回 501。忽略大小写的文本搜索保持字面匹配，并用原文位置截取 Unicode 摘要。平台要求及测试入口见 [会话工作区文件](../packages/server/src/application/files/README.md)。
 
 ### 3. Services / Storage
 

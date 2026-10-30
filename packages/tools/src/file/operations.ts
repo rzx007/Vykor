@@ -5,6 +5,8 @@ import { basename, dirname, join, posix, relative } from "node:path";
 import type { ToolContext } from "@vykor/agent-contracts";
 import type {
   EnvironmentFileSystem,
+  EnvironmentDirectoryScanOptions,
+  EnvironmentDirectoryScanResult,
   EnvironmentFileStat,
   EnvironmentGrepOptions,
   EnvironmentGrepResult,
@@ -21,6 +23,9 @@ import {
 } from "./search/host-search.js";
 import { checkGrepOptions, consumeGrepProcess, withGrepDeadline } from "./search/grep-search.js";
 import { FALLBACK_FILE_BYTES, searchFallback } from "./search/grep-fallback.js";
+import { checkDirectoryScanOptions, parseDirectoryScan, scanHostDirectory, WSL_DIRECTORY_SCAN_SCRIPT } from "./directory-scan.js";
+import { openHostFileReader } from "./open-host-reader.js";
+import { openWslFileReader } from "./open-wsl-reader.js";
 
 export { globToRegex } from "./search/host-search.js";
 
@@ -81,6 +86,12 @@ export async function fileSnapshotMatches(operations: FileOperations, path: stri
 }
 
 export class HostFileOperations implements FileOperations {
+  private readonly verifiedNtfsVolumes = new Set<string>();
+  openRead(path: string, signal?: AbortSignal) { return openHostFileReader(path, signal, this.verifiedNtfsVolumes); }
+  async scanDirectory(path: string, options: EnvironmentDirectoryScanOptions): Promise<EnvironmentDirectoryScanResult> {
+    return scanHostDirectory(path,options);
+  }
+
   async stat(path: string, signal?: AbortSignal): Promise<FileStat> {
     signal?.throwIfAborted();
     try {
@@ -302,6 +313,19 @@ rm -- "$1"`;
 
 export class WslFileOperations implements FileOperations {
   constructor(private readonly environment: ExecutionEnvironmentHandle) {}
+
+  openRead(path: string, signal?: AbortSignal) { return openWslFileReader(this.environment, path, signal); }
+
+  async scanDirectory(path: string, options: EnvironmentDirectoryScanOptions): Promise<EnvironmentDirectoryScanResult> {
+    options.signal?.throwIfAborted();
+    checkDirectoryScanOptions(options);
+    const result=await this.run([
+      "/bin/bash","-c",WSL_DIRECTORY_SCAN_SCRIPT,"vk-directory-scan",path,String(options.maxEntries+1),
+    ],undefined,true,undefined,options.signal);
+    if(result.exitCode===95) throw Object.assign(new Error(result.output || "Bounded directory scans are not supported by this WSL runtime"),{code:"ENOTSUP"});
+    if(result.exitCode!==0) throw new Error(result.output || `Cannot scan directory: ${path}`);
+    return parseDirectoryScan(result.bytes,options.maxEntries);
+  }
 
   async stat(path: string, signal?: AbortSignal): Promise<FileStat> {
     const result = await this.run([
