@@ -22,9 +22,9 @@ export function SidebarNavigationButton({
     <button
       type="button"
       onClick={onClick}
-      aria-label={
-        badge ? `${label}，${badge} 个结果待查看` : running ? `${label}，正在运行` : label
-      }
+      aria-label={[label, running && "正在运行", badge > 0 && `${badge} 个结果待查看`]
+        .filter(Boolean)
+        .join("，")}
       className={cn(
         "flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-sm font-[450] text-sidebar-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         selected && "bg-sidebar-selected"
@@ -32,15 +32,20 @@ export function SidebarNavigationButton({
     >
       <Icon className="size-4 text-sidebar-muted" strokeWidth={1.8} />
       <span>{label}</span>
-      {running ? (
-        <Spinner aria-hidden="true" className="ml-auto size-3 motion-reduce:animate-none" />
-      ) : null}
-      {badge ? (
+      {running || badge > 0 ? (
         <span
           aria-hidden="true"
-          className="ml-auto rounded-full bg-sidebar-accent px-1.5 text-xs tabular-nums"
+          className="ml-auto inline-flex shrink-0 items-center gap-1.5 text-sidebar-muted"
         >
-          {badge}
+          {running ? <Spinner className="size-3.5 motion-reduce:animate-none" /> : null}
+          {badge > 0 ? (
+            <span
+              data-slot="navigation-badge"
+              className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-sidebar-accent px-1 text-xs leading-none tabular-nums"
+            >
+              {badge}
+            </span>
+          ) : null}
         </span>
       ) : null}
     </button>
@@ -92,7 +97,7 @@ export function SidebarSectionHeader({
           aria-label={actionLabel}
           title={actionLabel}
           onClick={onAction}
-          className="grid size-6 place-items-center rounded text-sidebar-muted opacity-0 transition-opacity hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring group-hover/section:opacity-100"
+          className="grid size-6 place-items-center rounded text-sidebar-muted opacity-0 transition-opacity group-hover/section:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
         >
           <SquarePen className="size-3.5" />
         </button>

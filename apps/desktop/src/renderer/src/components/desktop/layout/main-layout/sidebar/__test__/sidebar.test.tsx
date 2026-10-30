@@ -11,6 +11,8 @@ import type { DesktopSessionRecord } from "@shared/session-types"
 import { SIDEBAR_SECTIONS_STORAGE_KEY } from "../sidebar-section-expansion"
 import { Sidebar } from "../sidebar"
 import { SessionRow } from "../sidebar-session-groups"
+import { SidebarNavigationButton } from "../sidebar-controls"
+import { Clock3 } from "lucide-react"
 
 vi.mock("@tanstack/react-router", () => ({
   useMatchRoute: () => () => false,
@@ -169,6 +171,31 @@ describe("Sidebar collapsible sections and empty states", () => {
     expect(recentSectionBtn).toBeTruthy()
     expect(recentSectionBtn?.getAttribute("aria-expanded")).toBe("true")
     expect(container.textContent).toContain("暂无最近会话")
+  })
+
+  it.each([
+    { running: true, badge: 0 },
+    { running: false, badge: 2 },
+    { running: true, badge: 2 },
+  ])("groups scheduled status indicators at the right edge: %o", ({ running, badge }) => {
+    act(() =>
+      root.render(
+        <SidebarNavigationButton icon={Clock3} label="定时任务" running={running} badge={badge} />
+      )
+    )
+    const button = container.querySelector("button")!
+    const status = button.lastElementChild!
+    expect(status.classList.contains("ml-auto")).toBe(true)
+    expect(status.classList.contains("shrink-0")).toBe(true)
+    expect(status.querySelectorAll('[data-slot="spinner"]')).toHaveLength(running ? 1 : 0)
+    if (badge) {
+      expect(status.textContent).toBe(String(badge))
+      expect(
+        status.querySelector("[data-slot='navigation-badge']")?.classList.contains("h-4")
+      ).toBe(true)
+    }
+    if (running) expect(button.getAttribute("aria-label")).toContain("正在运行")
+    if (badge) expect(button.getAttribute("aria-label")).toContain(`${badge} 个结果待查看`)
   })
 
   it("opens chat search from the sidebar search action", async () => {
