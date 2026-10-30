@@ -34,6 +34,7 @@
 | [schedules.ts](./schedules.ts) | `ScheduleRoutesContext`、`createScheduleRoutes` |
 | [service.ts](./service.ts) | `ServiceRoutesContext`、`createServiceRoutes` |
 | [session-goal.ts](./session-goal.ts) | `createSessionGoalRoutes` |
+| [session-files.ts](./session-files.ts) | `SessionFileRouteService`、`createSessionFileRoutes`：会话工作区目录、信息、文本和文件搜索的五个只读 GET 入口 |
 | [session-plugin-apps.ts](./session-plugin-apps.ts) | `createSessionPluginAppsRoutes` |
 | [session-utility.ts](./session-utility.ts) | `SessionUtilityRoutesContext`、`createSessionUtilityRoutes` |
 | [session.ts](./session.ts) | `SessionRoutesContext`、`createSessionRoutes` |
@@ -41,6 +42,8 @@
 | [terminal.ts](./terminal.ts) | `TerminalHttpEventHub`、`createTerminalRoutes` |
 
 历史展示记录的读取路由保留在本目录，与当前应用操作分开处理。
+
+会话文件路由挂在 `/sessions/:sessionId/files`，只接收相对路径和协议规定的查询参数，拒绝重复参数与未知字段。路由把请求取消信号单独传给应用服务；应用决定实际目录、读取权限和操作上限，HTTP 层不创建 Agent。文件错误返回稳定的 `{ code, message }`，未知异常隐藏内部细节；未接入文件服务的宿主返回 501，能力列表也不声明 `sessionFiles`。
 
 ## 测试与维护
 

@@ -4,3 +4,4 @@ export { AttachmentResource } from "./session/attachment-resource.js";
 export { PermissionResource } from "./configuration/permission-resource.js";
 export { JobResource } from "./runtime/job-resource.js";
 export { EventResource } from "./session/event-resource.js";
+export { FilesResource } from "./files/files-resource.js";

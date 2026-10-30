@@ -1,3 +1,5 @@
+import { SessionFileError } from "@vykor/domain-contracts/files";
+import { SessionFileService } from "./files/session-file-service.js";
 import { bindToolDispatchCheck } from "./session/execution/tool-dispatch-check.js";
 import { createNoteApplicationService, type NoteApplicationService } from "./notes/note-application-service.js";
 import { createProjectFactsService, type ProjectFactsService } from "./personalization/project-facts-service.js";
@@ -175,6 +177,7 @@ export interface DaemonApplicationOptions {
  * daemon 对外暴露的能力面。HTTP 路由只调这些，不自己造 Agent、不自己写会话记录。
  */
 export interface DurableAgentApplication {
+  readonly files?: SessionFileService;
   createMaintenanceService?(host?: Pick<MaintenanceApplicationContext, "logs" | "settings"> & { beforeClose?(): void }): ReturnType<typeof createMaintenanceApplicationService>;
   readonly diagnosticState?: { phase: "starting" | "ready" | "failed" | "closing" | "closed"; accepting: boolean };
   readonly pluginUiHistory?: PluginUiHistoryService;
@@ -228,6 +231,7 @@ function failMissingSettings(): never {
  * → onEvent 进投影 → 写成会话记录 → events 推给窗口。
  */
 export class DaemonApplication implements DurableAgentApplication {
+  readonly files: SessionFileService;
   private readonly executionOwner: ExecutionRuntimeOwner;
   readonly pluginUiHistory: PluginUiHistoryService;
   readonly pluginLifecycle: PluginLifecycle;
@@ -357,6 +361,22 @@ export class DaemonApplication implements DurableAgentApplication {
         options.executionSurface === "desktop_managed"
           ? createSessionEnvironmentAcquirer()
           : undefined;
+      const acquireFileEnvironment = createSessionEnvironmentAcquirer({
+        surface: options.executionSurface ?? "cli_advanced", loadSecrets: false,
+      });
+      this.files = new SessionFileService({
+        getSession: id => store.sessions.get(id),
+        getSettings: async session => {
+          const settings = options.getSettingsForCwd
+            ? await options.getSettingsForCwd(sessionSettingsRoot(session))
+            : options.getSettings?.() ?? options.settings;
+          if (!settings) throw new SessionFileError("file_not_ready", "Session file settings are not configured");
+          return settings;
+        },
+        acquireEnvironment: acquireFileEnvironment,
+        readiness: () => this.diagnosticState,
+        enter: scope => this.operationGate.enter(scope),
+      });
       this.terminals = new DaemonTerminalService(
         {
           getProject: (projectId) => store.projects.get(projectId),

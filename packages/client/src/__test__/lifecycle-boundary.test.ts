@@ -12,7 +12,7 @@ describe("public Agent lifecycle boundary", () => {
     for (const name of ["notes", "channels", "schedules", "plugins", "pluginApps", "pluginUiHistory", "system", "providers", "auth", "projects", "development", "terminals", "mcp"]) {
       expect(name in client, `public client exposes product resource ${name}`).toBe(false);
     }
-    for (const name of ["protocol", "runtime", "sessions", "permissions", "attachments", "jobs", "events"]) {
+    for (const name of ["protocol", "runtime", "sessions", "permissions", "attachments", "jobs", "events", "files"]) {
       expect(name in client, `missing lifecycle resource ${name}`).toBe(true);
     }
   });

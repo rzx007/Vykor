@@ -23,6 +23,8 @@ export {
   fileReadTool,
   fileWriteTool,
   globTool,
+  globToRegex,
+  isBinaryContent,
   normalizeToolPath,
   resolveToolPath,
   type FileChangePreview,

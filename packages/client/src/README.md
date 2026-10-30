@@ -8,7 +8,7 @@
 | --- | --- |
 | [configuration/](./configuration/README.md) | 会话运行配置整理与模式检查 |
 | [protocol/](./protocol/README.md) | 健康、能力与协议检查 |
-| [resources/](./resources/README.md) | 会话、权限、附件、任务、事件与只读运行能力 |
+| [resources/](./resources/README.md) | 会话、权限、附件、任务、事件、工作区文件与只读运行能力 |
 | [service/](./service/README.md) | Node 专用本机后台管理 |
 | [state/](./state/README.md) | 快照、事件合并、断线恢复与等待 Run 结果 |
 | [transport/](./transport/README.md) | HTTP/SSE 传输与协议握手 |

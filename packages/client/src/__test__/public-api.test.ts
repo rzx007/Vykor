@@ -10,7 +10,7 @@ const repoRoot = resolve(__dirname, "../../../../");
 const contractPath = resolve(repoRoot, "scripts/client-public-api-contract.json");
 const contract = JSON.parse(readFileSync(contractPath, "utf8"));
 const entries = contract.entries;
-const resourceNames = ["attachments", "events", "jobs", "permissions", "protocol", "runtime", "sessions"].sort();
+const resourceNames = ["attachments", "events", "files", "jobs", "permissions", "protocol", "runtime", "sessions"].sort();
 
 describe("Public API Contract Verification", () => {
   it("contains only current export and Resource entries", () => {

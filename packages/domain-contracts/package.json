@@ -15,6 +15,10 @@
       "import": "./src/goals/index.ts",
       "types": "./src/goals/index.ts"
     },
+    "./files": {
+      "import": "./src/files/index.ts",
+      "types": "./src/files/index.ts"
+    },
     "./attachments": {
       "import": "./src/attachments/index.ts",
       "types": "./src/attachments/index.ts"

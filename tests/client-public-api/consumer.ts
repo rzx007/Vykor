@@ -4,6 +4,10 @@ import { VykorClient, CURRENT_PROTOCOL_VERSION, checkProtocolCompatibility, supp
   applyEvent, createInitialClientState, selectFirstPendingPermission, type ModelProviderInfo, type SkillSnapshot,
   type CreateClientSessionInput, type UploadAttachmentInput, type ReplyPermissionInput,
   type SessionRunRecord, type AdmitClientPromptInput,
+  FilesResource, type SessionDirectoryResult, type SessionFileInfo, type SessionTextFileResult,
+  type SessionFindFilesResult, type SessionSearchFilesResult, type SessionFileSearchMatch,
+  type SessionFileListOptions, type SessionFileReadOptions, type SessionFileFindOptions,
+  type SessionFileSearchOptions, type SessionFileErrorCode,
 } from "@rzx/client";
 // @ts-expect-error product data is not part of the lifecycle SDK
 import type { NoteRecord } from "@rzx/client";
@@ -23,6 +27,20 @@ export async function consumePublicApi(client: VykorClient, signal: AbortSignal)
   await client.runtime.listAgentPersonas({ signal });
   const input: CreateClientSessionInput = { cwd: "/workspace", model: models[0]!.models[0]!.id };
   const session = await client.sessions.create(input, { signal });
+  const files: FilesResource = client.files;
+  const listOptions: SessionFileListOptions = { path: ".", limit: 20, signal };
+  const readOptions: SessionFileReadOptions = { maxBytes: 4096, signal };
+  const findOptions: SessionFileFindOptions = { pattern: "**/*.ts", path: "src", limit: 10, signal };
+  const searchOptions: SessionFileSearchOptions = { query: "literal [text]", include: "**/*.ts", caseSensitive: false, limit: 10, signal };
+  const directory: SessionDirectoryResult = await files.list(session.id, listOptions);
+  const file: SessionFileInfo = await files.stat(session.id, "README.md", { signal });
+  const text: SessionTextFileResult = await files.readText(session.id, "README.md", readOptions);
+  const found: SessionFindFilesResult = await files.find(session.id, findOptions);
+  const searched: SessionSearchFilesResult = await files.search(session.id, searchOptions);
+  const matches: SessionFileSearchMatch[] = searched.matches;
+  const filePaths: string[] = found.files;
+  const fileError: SessionFileErrorCode = "file_forbidden";
+  void [directory.entries, file.sizeBytes, file.modifiedAt, text.encoding, matches, filePaths, fileError];
   await client.sessions.update(session.id, { title: "Agent lifecycle" }, { signal });
   await client.runtime.getSessionMcp(session.id, { signal });
   const upload: UploadAttachmentInput = { displayName: "input.txt", body: new Uint8Array([1]) };
@@ -90,6 +108,17 @@ export function rejectApplicationApi(client: VykorClient): void {
   // @ts-expect-error application contexts are not an Agent prompt field
   const input: AdmitClientPromptInput = { items: [], pluginAppContexts: [] };
   void input;
+}
+
+export function rejectFileWrites(client: VykorClient): void {
+  // @ts-expect-error workspace files are read-only
+  client.files.write("session", "README.md", "changed");
+  // @ts-expect-error workspace files are read-only
+  client.files.delete("session", "README.md");
+  // @ts-expect-error workspace files are read-only
+  client.files.create("session", "new.txt");
+  // @ts-expect-error the workspace root is chosen by the session
+  client.files.list("session", { cwd: "/arbitrary-host-directory" });
 }
 
 export function rejectRemovedFlatApi(client: VykorClient): void {

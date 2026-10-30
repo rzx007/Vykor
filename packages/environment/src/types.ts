@@ -113,6 +113,15 @@ export interface EnvironmentFileStat {
   isFile: boolean;
   isDirectory: boolean;
   isSymbolicLink?: boolean;
+  sizeBytes?: number;
+  /** Unix timestamp in milliseconds. */
+  modifiedAt?: number;
+}
+
+export interface EnvironmentReadBytesOptions {
+  /** Return at most this many bytes; omitted means read the whole file. */
+  maxBytes?: number;
+  signal?: AbortSignal;
 }
 
 export interface EnvironmentFileEntry {
@@ -136,10 +145,10 @@ export interface EnvironmentGrepResult {
 }
 
 export interface EnvironmentFileSystem {
-  stat(path: string): Promise<EnvironmentFileStat>;
-  listDir(path: string): Promise<EnvironmentFileEntry[]>;
+  stat(path: string, signal?: AbortSignal): Promise<EnvironmentFileStat>;
+  listDir(path: string, signal?: AbortSignal): Promise<EnvironmentFileEntry[]>;
   readText(path: string): Promise<string>;
-  readBytes(path: string): Promise<Uint8Array>;
+  readBytes(path: string, options?: EnvironmentReadBytesOptions): Promise<Uint8Array>;
   writeText(path: string, content: string): Promise<void>;
   writeBytes(path: string, content: Uint8Array): Promise<void>;
   createTextExclusive(path: string, content: string): Promise<void>;
@@ -155,7 +164,7 @@ export interface EnvironmentFileSystem {
 
 export interface EnvironmentPathResolver {
   /** Resolve existing paths and links in the execution environment's filesystem. */
-  canonicalize?(path: string): Promise<string>;
+  canonicalize?(path: string, signal?: AbortSignal): Promise<string>;
   resolve(
     path: string,
     operation: EnvironmentPathOperation,

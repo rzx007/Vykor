@@ -5,7 +5,7 @@ export {
 } from "./transport/index.js";
 export type { HttpTransportOptions, HttpRequestOptions, RawRequestOptions } from "./transport/index.js";
 export { ProtocolClient, IncompatibleProtocolError } from "./protocol/index.js";
-export { RuntimeResource, SessionResource, AttachmentResource, PermissionResource, JobResource, EventResource, createPromptRequestId } from "./resources/index.js";
+export { RuntimeResource, SessionResource, AttachmentResource, PermissionResource, JobResource, EventResource, FilesResource, createPromptRequestId } from "./resources/index.js";
 export * from "./state/index.js";
 export type * from "./types/index.js";
 export { normalizeApprovalMode, isWorkMode, patchSessionRuntimeMetadata, readSessionRuntimeConfig } from "./configuration/runtime-configuration.js";

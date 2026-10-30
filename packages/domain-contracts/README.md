@@ -11,6 +11,7 @@
 | [sessions](src/sessions/README.md) | 会话、运行与消息记录 |
 | [inputs](src/inputs/README.md) | 用户输入项、附件引用与输入校验 |
 | [goals](src/goals/README.md) | 持续目标、预算、等待和操作校验 |
+| [files](src/files/README.md) | 会话工作区只读文件数据、错误和请求校验 |
 | [attachments](src/attachments/README.md) | 附件资源、转换结果和格式校验 |
 | [schedules](src/schedules/README.md) | 计划任务与执行记录 |
 | [channels](src/channels/README.md) | 外部聊天绑定与消息投递记录 |

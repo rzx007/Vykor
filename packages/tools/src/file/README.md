@@ -28,6 +28,10 @@
 
 从文件工具工厂进入，先解析路径并执行访问检查，再读取或写入内容，按需要生成预览和返回结果。
 
+`HostFileOperations` 和 `WslFileOperations` 的 `stat` 返回目标大小 `sizeBytes` 与毫秒时间戳 `modifiedAt`。`readBytes(path, { maxBytes, signal })` 可限制实际读取的字节数并响应取消；未传 `maxBytes` 时保持整文件读取。调用方需要判断是否截断时，可多请求一个字节。读取不会修改文件，路径权限检查仍由调用方完成。
+
+`stat(path, signal)` 与 `listDir(path, signal)` 也接受取消信号。本机调用在系统查询前后检查取消；WSL 将取消信号交给执行进程。
+
 ## 状态放在哪里
 
 单次调用保存输入、取消信号和执行结果；文件、进程及任务状态由注入的宿主接口或目标系统保存。

@@ -1,7 +1,7 @@
 import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
 
 import { spawnSync } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -36,6 +36,104 @@ describe("file operations", () => {
     await expect(operations.readText("/home/me/file.txt")).resolves.toBe("hello");
     expect(calls[0]?.slice(0, 2)).toEqual(["/bin/sh", "-c"]);
     expect(calls[0]?.slice(-2)).toEqual(["vk-read", "/home/me/file.txt"]);
+  });
+});
+
+describe("bounded file reads and metadata", () => {
+  it("returns host file size and modification time from the filesystem", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vk-file-metadata-")); roots.push(root);
+    const file = join(root, "value.txt");
+    await writeFile(file, "你好!", "utf8");
+    await utimes(file, 1_700_000_000, 1_700_000_000.125);
+
+    expect(await new HostFileOperations().stat(file)).toMatchObject({
+      isFile: true, sizeBytes: 7, modifiedAt: 1_700_000_000_125,
+    });
+  });
+
+  it("limits host reads to the requested bytes without modifying the file", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vk-bounded-read-")); roots.push(root);
+    const file = join(root, "value.txt");
+    await writeFile(file, "你好!", "utf8");
+    const operations = new HostFileOperations();
+
+    expect(Buffer.from(await operations.readBytes(file, { maxBytes: 4 }))).toEqual(Buffer.from([0xe4, 0xbd, 0xa0, 0xe5]));
+    expect(await operations.readBytes(file, { maxBytes: 0 })).toHaveLength(0);
+    expect(Buffer.from(await operations.readBytes(file, { maxBytes: 100 })).toString("utf8")).toBe("你好!");
+    expect(await readFile(file, "utf8")).toBe("你好!");
+  });
+
+  it("rejects a cancelled host read before opening the target", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(new HostFileOperations().readBytes("missing", { maxBytes: 4, signal: controller.signal }))
+      .rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it.skipIf(process.platform === "win32" && !shell)("reads bounded WSL bytes and metadata using the actual fixed scripts", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vk-wsl-bounded-read-")); roots.push(root);
+    const file = join(root, "a; touch injected.txt");
+    await writeFile(file, "你好!", "utf8");
+    await utimes(file, 1_700_000_000, 1_700_000_000.125);
+    const operations = new WslFileOperations(wslEnvironment(async (argv) => {
+      const result = spawnSync(shell, argv.slice(1), { windowsHide: true });
+      if (result.error) throw result.error;
+      return {
+        ...environmentExit(result.status ?? 1),
+        onOutput(listener: (chunk: Uint8Array) => void) { listener(result.stdout); return () => {}; },
+        onErrorOutput(listener: (chunk: Uint8Array) => void) { listener(result.stderr); return () => {}; },
+      };
+    }) as any);
+    const executionPath = file.replaceAll("\\", "/");
+
+    expect(await operations.stat(executionPath)).toMatchObject({
+      isFile: true, sizeBytes: 7, modifiedAt: 1_700_000_000_125,
+    });
+    expect(Buffer.from(await operations.readBytes(executionPath, { maxBytes: 4 }))).toEqual(Buffer.from([0xe4, 0xbd, 0xa0, 0xe5]));
+    expect(await operations.readBytes(executionPath, { maxBytes: 0 })).toHaveLength(0);
+    expect(Buffer.from(await operations.readBytes(executionPath))).toEqual(Buffer.from("你好!"));
+    expect(await readdir(root)).toEqual(["a; touch injected.txt"]);
+  });
+
+  it("rejects cancelled WSL reads and forwards cancellation to its executor", async () => {
+    const controller = new AbortController();
+    let receivedSignal: AbortSignal | undefined;
+    const operations = new WslFileOperations({
+      info: { kind: "wsl" }, workspace: { executionRoot: "/workspace" },
+      process: { execProcess: async (_argv: string[], options: { signal?: AbortSignal }) => {
+        receivedSignal = options.signal;
+        return environmentProcess("test");
+      } },
+    } as any);
+    await operations.readBytes("/workspace/value", { maxBytes: 4, signal: controller.signal });
+    expect(receivedSignal).toBe(controller.signal);
+    controller.abort();
+    await expect(operations.readBytes("/workspace/value", { maxBytes: 4, signal: controller.signal }))
+      .rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it.each(["stat", "listDir"] as const)("cancels host %s before and after filesystem access", async (operation) => {
+    const operations = new HostFileOperations();
+    const before = new AbortController();
+    before.abort();
+    await expect(operations[operation]("missing", before.signal)).rejects.toMatchObject({ name: "AbortError" });
+
+    const root = await mkdtemp(join(tmpdir(), "vk-cancel-inspect-")); roots.push(root);
+    const during = new AbortController();
+    const pending = operations[operation](root, during.signal);
+    during.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  });
+
+  it.each(["stat", "listDir"] as const)("cancels WSL %s before starting and after the executor finishes", async (operation) => {
+    const controller = new AbortController();
+    const operations = new WslFileOperations(wslEnvironment(async () => {
+      if (controller.signal.aborted) throw new Error("Cancelled lookup must not start");
+      return { ...environmentProcess("file"),
+        async wait() { controller.abort(); return { exitCode: 0 }; } };
+    }) as any);
+    await expect(operations[operation]("/workspace", controller.signal)).rejects.toMatchObject({ name: "AbortError" });
+    await expect(operations[operation]("/workspace", controller.signal)).rejects.toMatchObject({ name: "AbortError" });
   });
 });
 

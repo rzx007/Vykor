@@ -7,6 +7,7 @@
 | [sessions](sessions/README.md) | `@vykor/domain-contracts/sessions` | 会话、运行与消息记录 |
 | [inputs](inputs/README.md) | `@vykor/domain-contracts/inputs` | 用户输入项、附件引用与输入校验 |
 | [goals](goals/README.md) | `@vykor/domain-contracts/goals` | 持续目标、预算、等待和操作校验 |
+| [files](files/README.md) | `@vykor/domain-contracts/files` | 会话工作区只读文件数据、错误和请求校验 |
 | [attachments](attachments/README.md) | `@vykor/domain-contracts/attachments` | 附件资源、转换结果和格式校验 |
 | [schedules](schedules/README.md) | `@vykor/domain-contracts/schedules` | 计划任务与执行记录 |
 | [channels](channels/README.md) | `@vykor/domain-contracts/channels` | 外部聊天绑定与消息投递记录 |

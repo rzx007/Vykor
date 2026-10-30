@@ -5,8 +5,10 @@ import { basename, dirname, join, posix, relative } from "node:path";
 import type { ToolContext } from "@vykor/agent-contracts";
 import type {
   EnvironmentFileSystem,
+  EnvironmentFileStat,
   EnvironmentGrepOptions,
   EnvironmentGrepResult,
+  EnvironmentReadBytesOptions,
   ExecutionEnvironmentHandle,
 } from "@vykor/environment";
 import {
@@ -26,11 +28,7 @@ export interface FileEntry {
   name: string;
   isDirectory: boolean;
 }
-export interface FileStat {
-  isFile: boolean;
-  isDirectory: boolean;
-  isSymbolicLink?: boolean;
-}
+export type FileStat = EnvironmentFileStat;
 
 export type GrepOptions = EnvironmentGrepOptions;
 
@@ -57,8 +55,8 @@ function isEnoent(error: unknown): boolean {
 }
 
 export interface FileOperations extends EnvironmentFileSystem {
-  stat(path: string): Promise<FileStat>;
-  listDir(path: string): Promise<FileEntry[]>;
+  stat(path: string, signal?: AbortSignal): Promise<FileStat>;
+  listDir(path: string, signal?: AbortSignal): Promise<FileEntry[]>;
   readText(path: string): Promise<string>;
   writeText(path: string, content: string): Promise<void>;
   glob(basePath: string, pattern: string, limit: number): Promise<string[]>;
@@ -83,35 +81,64 @@ export async function fileSnapshotMatches(operations: FileOperations, path: stri
 }
 
 export class HostFileOperations implements FileOperations {
-  async stat(path: string): Promise<FileStat> {
+  async stat(path: string, signal?: AbortSignal): Promise<FileStat> {
+    signal?.throwIfAborted();
     try {
       const [item, linkInfo] = await Promise.all([stat(path), lstat(path)]);
-      return { isFile: item.isFile(), isDirectory: item.isDirectory(), isSymbolicLink: linkInfo.isSymbolicLink() };
+      return { isFile: item.isFile(), isDirectory: item.isDirectory(), isSymbolicLink: linkInfo.isSymbolicLink(), sizeBytes: item.size, modifiedAt: item.mtimeMs };
     } catch (error) {
+      signal?.throwIfAborted();
       if (isEnoent(error)) {
         // stat follows links; lstat can still identify a dangling link.
         const item = await lstat(path).catch((linkError: unknown) => {
           if (isEnoent(linkError)) throw new FileNotFoundError(path);
           throw linkError;
         });
-        if (item.isSymbolicLink()) return { isFile: false, isDirectory: false, isSymbolicLink: true };
+        if (item.isSymbolicLink()) return { isFile: false, isDirectory: false, isSymbolicLink: true, sizeBytes: item.size, modifiedAt: item.mtimeMs };
       }
       throw error;
+    } finally {
+      signal?.throwIfAborted();
     }
   }
 
-  async listDir(path: string): Promise<FileEntry[]> {
-    const entries = await readdir(path, { withFileTypes: true });
-    return entries.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory() }));
+  async listDir(path: string, signal?: AbortSignal): Promise<FileEntry[]> {
+    signal?.throwIfAborted();
+    try {
+      const entries = await readdir(path, { withFileTypes: true });
+      return entries.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory() }));
+    } finally {
+      signal?.throwIfAborted();
+    }
   }
 
   async readText(path: string): Promise<string> {
     return await readFile(path, "utf-8");
   }
 
-  async readBytes(path: string): Promise<Uint8Array> {
+  async readBytes(path: string, options: EnvironmentReadBytesOptions = {}): Promise<Uint8Array> {
+    options.signal?.throwIfAborted();
+    checkReadMaxBytes(options.maxBytes);
     try {
-      return await readFile(path);
+      if (options.maxBytes === undefined) return await readFile(path, { signal: options.signal });
+      const handle = await open(path, "r");
+      try {
+        const chunks: Buffer[] = [];
+        let remaining = options.maxBytes;
+        const buffer = Buffer.alloc(Math.min(remaining, 64 * 1024));
+        options.signal?.throwIfAborted();
+        while (remaining > 0) {
+          options.signal?.throwIfAborted();
+          const { bytesRead } = await handle.read(buffer, 0, Math.min(remaining, buffer.length), null);
+          options.signal?.throwIfAborted();
+          if (bytesRead === 0) break;
+          chunks.push(Buffer.from(buffer.subarray(0, bytesRead)));
+          remaining -= bytesRead;
+        }
+        return Buffer.concat(chunks);
+      } finally {
+        await handle.close();
+      }
     } catch (error) {
       if (isEnoent(error)) throw new FileNotFoundError(path);
       throw error;
@@ -207,6 +234,12 @@ export class HostFileOperations implements FileOperations {
   }
 }
 
+function checkReadMaxBytes(maxBytes: number | undefined): void {
+  if (maxBytes !== undefined && (!Number.isSafeInteger(maxBytes) || maxBytes < 0)) {
+    throw new RangeError("maxBytes must be a non-negative safe integer");
+  }
+}
+
 // 固定 shell 脚本：路径只作为位置参数传入，绝不拼进脚本文本。
 const WSL_MISSING_PARENT_SCRIPT = `ancestor=$(dirname -- "$1")
 while [ ! -e "$ancestor" ]; do
@@ -221,7 +254,9 @@ const WSL_READ_SCRIPT = `if [ ! -e "$1" ]; then
   missing_exit=3
   ${WSL_MISSING_PARENT_SCRIPT}
 fi
-/bin/cat -- "$1"`;
+if [ "$#" -ge 2 ]; then /usr/bin/head -c "$2" -- "$1"
+else /bin/cat -- "$1"
+fi`;
 
 const WSL_STAT_SCRIPT = `if [ -L "$1" ]; then
   if [ -f "$1" ]; then printf symlink-file
@@ -234,6 +269,12 @@ elif [ -e "$1" ]; then printf other
 else
   missing_exit=2
   ${WSL_MISSING_PARENT_SCRIPT}
+fi
+printf '\\t'
+if [ -L "$1" ] && [ ! -e "$1" ]; then
+  /usr/bin/stat -c '%s\t%Y\t%y' -- "$1"
+else
+  /usr/bin/stat -Lc '%s\t%Y\t%y' -- "$1"
 fi`;
 
 const WSL_ATOMIC_WRITE_SCRIPT = `set -eu
@@ -270,10 +311,16 @@ export class WslFileOperations implements FileOperations {
       if (result.exitCode === 2) throw new FileNotFoundError(path);
       throw new Error(result.output || `Cannot stat path: ${path}`);
     }
+    const [kind, size, modifiedSeconds, modifiedDate] = result.output.trimEnd().split("\t");
+    const sizeBytes = size === undefined ? undefined : Number(size);
+    const modifiedAt = modifiedSeconds === undefined ? undefined : Number(modifiedSeconds) * 1000
+      + Number((modifiedDate?.match(/\.(\d+)/)?.[1] ?? "0").slice(0, 3).padEnd(3, "0"));
     return {
-      isFile: result.output === "file" || result.output === "symlink-file",
-      isDirectory: result.output === "directory" || result.output === "symlink-directory",
-      isSymbolicLink: result.output.startsWith("symlink"),
+      isFile: kind === "file" || kind === "symlink-file",
+      isDirectory: kind === "directory" || kind === "symlink-directory",
+      isSymbolicLink: kind?.startsWith("symlink") ?? false,
+      ...(Number.isFinite(sizeBytes) ? { sizeBytes } : {}),
+      ...(Number.isFinite(modifiedAt) ? { modifiedAt } : {}),
     };
   }
 
@@ -289,11 +336,17 @@ export class WslFileOperations implements FileOperations {
   }
 
   async readText(path: string, signal?: AbortSignal): Promise<string> {
-    return new TextDecoder().decode(await this.readBytes(path, signal));
+    return new TextDecoder().decode(await this.readBytes(path, { signal }));
   }
 
-  async readBytes(path: string, signal?: AbortSignal): Promise<Uint8Array> {
-    const result = await this.run(["/bin/sh", "-c", WSL_READ_SCRIPT, "vk-read", path], undefined, true, undefined, signal);
+  async readBytes(path: string, options?: EnvironmentReadBytesOptions | AbortSignal): Promise<Uint8Array> {
+    const { maxBytes, signal } = options && "aborted" in options ? { signal: options } : options ?? {};
+    signal?.throwIfAborted();
+    checkReadMaxBytes(maxBytes);
+    const argv = ["/bin/sh", "-c", WSL_READ_SCRIPT, "vk-read", path];
+    if (maxBytes !== undefined) argv.push(String(maxBytes));
+    const result = await this.run(argv, undefined, true, undefined, signal);
+    signal?.throwIfAborted();
     if (result.exitCode !== 0) {
       if (result.exitCode === 3) throw new FileNotFoundError(path);
       throw new Error(result.output || `Cannot read file: ${path}`);
@@ -392,6 +445,7 @@ export class WslFileOperations implements FileOperations {
     cwd = this.environment.workspace.executionRoot,
     signal?: AbortSignal,
   ): Promise<{ exitCode: number; output: string; bytes: Uint8Array }> {
+    signal?.throwIfAborted();
     const process = await this.environment.process.execProcess(argv, {
       cwd, signal,
     });
@@ -413,6 +467,7 @@ export class WslFileOperations implements FileOperations {
     } finally {
       stop();
       stopErrors?.();
+      signal?.throwIfAborted();
     }
   }
 }

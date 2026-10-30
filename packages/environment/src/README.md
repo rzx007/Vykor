@@ -16,6 +16,10 @@
 
 本层没有全局运行状态或持久文件；工作区绑定和元数据是返回的新对象，进程、终端和文件资源由接口实现持有并释放。
 
+文件状态可包含 `sizeBytes` 与毫秒时间戳 `modifiedAt`。`EnvironmentFileSystem.readBytes` 接受可选的 `maxBytes` 和取消信号；实现方最多读取该字节数，省略上限时保持整文件读取。需要判断截断的调用方可请求上限再加一个字节。
+
+`stat(path, signal)`、`listDir(path, signal)` 与 `paths.canonicalize(path, signal)` 接受可选取消信号，供请求在目录遍历和真实路径检查期间停止。
+
 ## 新增代码与测试
 
 同一职责的新代码放在本目录。测试放同层 [__test__/](__test__/)，跨分类场景放它们共同上层的 `__test__/`。

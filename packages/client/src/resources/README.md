@@ -1,10 +1,11 @@
 # 生命周期资源导航
 
-[index.ts](./index.ts) 导出公开资源类；`VykorClient` 组合这些资源与 `ProtocolClient`，实例只有 protocol、runtime、sessions、permissions、attachments、jobs、events。
+[index.ts](./index.ts) 导出公开资源类；`VykorClient` 组合这些资源与 `ProtocolClient`，实例提供 protocol、runtime、sessions、permissions、attachments、jobs、events、files。
 
 | 目录 | 资源与用途 |
 | --- | --- |
 | [configuration/](./configuration/README.md) | `PermissionResource` 查询和回复运行权限请求 |
+| [files/](./files/README.md) | `FilesResource` 读取会话工作区目录、文件信息、文本并查找文件或内容 |
 | [runtime/](./runtime/README.md) | `RuntimeResource` 读取已有能力，`JobResource` 观察和控制后台/子任务 |
 | [session/](./session/README.md) | `SessionResource` 生命周期、`AttachmentResource` 附件、`EventResource` 事件 |
 

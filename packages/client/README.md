@@ -36,6 +36,9 @@ console.log(providers.flatMap(provider => provider.models));
 | `attachments` | 上传、读取、下载和删除附件 |
 | `jobs` | 查询、读取、等待、输入和取消后台任务及子任务 |
 | `events` | 查询历史事件和订阅 SSE（服务端持续推送的事件） |
+| `files` | 按会话读取目录、文件信息和 UTF-8 文本，查找文件名与内容 |
+
+`files` 通过 daemon 的实际会话工作区执行只读操作，按项检查路径和权限；调用方不提供宿主目录。支持 `list`、`stat`、`readText`、`find`、`search`，读取和搜索有上限并返回 `truncated`；使用前检查 `sessionFiles` 能力。详细示例和限制见 [会话文件指南](../../docs/client-sdk.md#会话工作区文件只读)。
 
 `runtime` 提供 `listModels`、`listAgentPersonas`、`listSkills` 和 `getSessionMcp`，只读取 daemon 已配置的能力。会话快照、reducer（合并快照和事件的函数）、选择函数及同步控制器从根入口导出，供不同界面共用一套恢复流程。请求 metadata 与工具输入/输出保留扩展数据。
 

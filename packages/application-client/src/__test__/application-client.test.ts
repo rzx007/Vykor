@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CURRENT_PROTOCOL_VERSION } from "@vykor/protocol";
-import { SessionResource, AttachmentResource } from "@rzx/client";
+import { SessionResource, AttachmentResource, FilesResource } from "@rzx/client";
 import { VykorClient } from "../index.js";
 
 // Removing the private facade would stop product business requests at this boundary.
@@ -28,6 +28,7 @@ describe("private application client", () => {
     expect(client.sessions.admitPrompt).toBeTypeOf("function");
     expect(client.sessions).toBeInstanceOf(SessionResource);
     expect(client.attachments).toBeInstanceOf(AttachmentResource);
+    expect(client.files).toBeInstanceOf(FilesResource);
   });
 
   it("sends business requests through the authenticated SDK transport", async () => {

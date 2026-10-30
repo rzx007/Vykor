@@ -7,6 +7,22 @@ import { createExecutionEnvironment } from "../execution-environment.js";
 import { resolveShellDescriptor } from "../../process/shell.js";
 
 describe("createExecutionEnvironment", () => {
+  it("cancels native canonicalization before and after filesystem access", async () => {
+    const cwd = process.cwd();
+    const handle = await createExecutionEnvironment({
+      config: { mode: "local", kind: "local", failClosed: false, cwd, sandbox: {} as any }, settings: settings(),
+      binding: createWorkspaceBinding({ kind: "local", hostRoot: cwd, executionRoot: cwd }), sessionId: "cancel-path", userSkillsRoot: cwd,
+    });
+    const before = new AbortController();
+    before.abort();
+    await expect(handle.paths.canonicalize!("missing", before.signal)).rejects.toMatchObject({ name: "AbortError" });
+    const during = new AbortController();
+    const pending = handle.paths.canonicalize!(cwd, during.signal);
+    during.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    await handle.release();
+  });
+
   it("does not mark a native path outside the workspace as mounted", async () => {
     const cwd = process.cwd();
     const handle = await createExecutionEnvironment({

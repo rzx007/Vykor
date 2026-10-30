@@ -16,6 +16,7 @@
 | [attachments/](./attachments/README.md) | 定义附件引用以及办公文件交互数据。 |
 | [channels/](./channels/README.md) | 定义渠道配置、投递与运行状态。 |
 | [extensions/](./extensions/README.md) | 定义插件应用、市场、展示、历史记录和 MCP 授权数据。 |
+| [files/](./files/README.md) | 转导出会话文件领域契约并检查 HTTP 响应。 |
 | [knowledge/](./knowledge/README.md) | 定义跨端共享的笔记和记忆数据。 |
 | [permissions/](./permissions/README.md) | 定义审批模式、审批结果及自动审查信息。 |
 | [requests/](./requests/README.md) | 集中解析 HTTP 请求，并复用领域字段的检查规则。 |

@@ -3,7 +3,7 @@ import type { VykorClientOptions } from "../types/index.js";
 import { HttpTransport } from "./http-transport.js";
 import { SseTransport } from "./sse-transport.js";
 import { ProtocolClient } from "../protocol/index.js";
-import { RuntimeResource, SessionResource, AttachmentResource, PermissionResource, JobResource, EventResource } from "../resources/index.js";
+import { RuntimeResource, SessionResource, AttachmentResource, PermissionResource, JobResource, EventResource, FilesResource } from "../resources/index.js";
 
 export class VykorClient {
   readonly protocol: ProtocolClient;
@@ -13,6 +13,7 @@ export class VykorClient {
   readonly permissions: PermissionResource;
   readonly jobs: JobResource;
   readonly events: EventResource;
+  readonly files: FilesResource;
 
   constructor(options: VykorClientOptions) {
     const transport = new HttpTransport(options);
@@ -24,5 +25,6 @@ export class VykorClient {
     this.permissions = new PermissionResource(transport);
     this.jobs = new JobResource(transport);
     this.events = new EventResource(transport, sse);
+    this.files = new FilesResource(transport);
   }
 }

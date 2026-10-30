@@ -194,7 +194,14 @@ function adaptChildProcess(child: ChildProcess): EnvironmentProcess {
 
 function createLocalPathResolver(binding: WorkspaceBinding): EnvironmentPathResolver {
   return {
-    canonicalize: (path) => realpath(isAbsolute(path) ? path : resolve(binding.executionRoot, path)),
+    async canonicalize(path, signal) {
+      signal?.throwIfAborted();
+      try {
+        return await realpath(isAbsolute(path) ? path : resolve(binding.executionRoot, path));
+      } finally {
+        signal?.throwIfAborted();
+      }
+    },
     async resolve(path) {
       const executionPath = isAbsolute(path) ? resolve(path) : resolve(binding.executionRoot, path);
       const rel = relative(binding.executionRoot, executionPath);

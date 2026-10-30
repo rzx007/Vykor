@@ -1,5 +1,5 @@
 /** 产品客户端：共用 SDK 连接与生命周期资源，组装应用业务接口。 */
-import { HttpTransport, SseTransport, ProtocolClient, RuntimeResource, PermissionResource, JobResource, EventResource, type VykorClientOptions } from "@rzx/client";
+import { HttpTransport, SseTransport, ProtocolClient, RuntimeResource, PermissionResource, JobResource, EventResource, FilesResource, type VykorClientOptions } from "@rzx/client";
 import { SystemResource, ProviderResource, AuthResource, ProjectResource, PluginResource, PluginUiHistoryResource, DevelopmentResource, SessionResource, AttachmentResource, ScheduleResource, NoteResource, TerminalResource, ChannelResource, McpResource } from "./resources/index.js";
 import { PluginAppResource } from "./resources/plugins/plugin-app-resource.js";
 
@@ -24,6 +24,7 @@ export class VykorClient {
   readonly channels: ChannelResource;
   readonly events: EventResource;
   readonly mcp: McpResource;
+  readonly files: FilesResource;
 
   constructor(options: VykorClientOptions) {
     const transport = new HttpTransport(options);
@@ -48,5 +49,6 @@ export class VykorClient {
     this.channels = new ChannelResource(transport);
     this.events = new EventResource(transport, sse);
     this.mcp = new McpResource(transport);
+    this.files = new FilesResource(transport);
   }
 }

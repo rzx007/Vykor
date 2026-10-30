@@ -6,6 +6,8 @@
 
 `SessionRunCoordinator` 协调排队、中断与执行资源；环境组装接入终端和隔离能力；配置函数检查运行环境、分发方式与密钥。
 
+`createSessionEnvironmentAcquirer({ surface, loadSecrets: false })` 为只读文件请求复用环境创建流程。CLI advanced 与其 Agent 一样使用 native 文件环境；Desktop 保留 local/WSL 选择。只读入口不要求加载 Agent 执行用的机密变量；常规 Agent、终端和后台入口保持原有默认值。
+
 ## 状态归属
 
 运行中的等待与取消由协调器持有，环境由对应宿主管理，配置和密钥通过既有服务保存。

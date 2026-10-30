@@ -30,6 +30,7 @@ export interface SystemRoutesContext {
   restartPreparedHealth?: () => (VykorServerHealth & { ready: false; accepting: false; restartPrepared: true }) | undefined;
   memoryManagementReady?: boolean;
   pluginAppsReady?: boolean;
+  sessionFilesReady?: boolean;
   pluginLifecycle?: PluginLifecycle;
   version?: string;
   commandCatalog?: CommandCatalogProvider;
@@ -56,6 +57,11 @@ export interface SystemRoutesContext {
   >;
 }
 
+function withSessionFiles(capabilities: ServerCapabilities, ready = false): ServerCapabilities {
+  const { sessionFiles: _sessionFiles, ...features } = capabilities.features;
+  return { ...capabilities, features: { ...features, ...(ready ? { sessionFiles: 1 } : {}) } };
+}
+
 export function createSystemRoutes(context: SystemRoutesContext): Hono {
   return new Hono()
     .use("/providers/*", async (c, next) => {
@@ -71,7 +77,7 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
     })
     .get("/capabilities", async () =>
       jsonResponse(
-        context.capabilities ??
+        withSessionFiles(context.capabilities ??
           ({
             serverVersion: context.version ?? "0.1.0",
             protocol: { version: CURRENT_PROTOCOL_VERSION },
@@ -110,7 +116,7 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
                     await context.settingsService.agentEnvironmentCapabilities(),
                 }
               : {}),
-          } satisfies ServerCapabilities),
+          } satisfies ServerCapabilities), context.sessionFilesReady),
       ),
     )
     .get("/health", () => {

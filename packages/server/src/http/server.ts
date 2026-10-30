@@ -66,6 +66,7 @@ import { createRunExecutionRoutes } from "./routes/run-execution.js";
 import { createServiceRoutes } from "./routes/service.js";
 import { createSessionRoutes } from "./routes/session.js";
 import { createSessionGoalRoutes } from "./routes/session-goal.js";
+import { createSessionFileRoutes } from "./routes/session-files.js";
 import { createSessionUtilityRoutes } from "./routes/session-utility.js";
 import { createSystemRoutes } from "./routes/system.js";
 import { createMaintenanceRoutes } from "./routes/maintenance.js";
@@ -355,6 +356,7 @@ export class VykorHttpServer {
         attachmentLimits: this.application.attachments.limits,
         mcpOAuthInstanceId: this.application.mcpOAuthOperations?.oauthInstanceId,
         pluginAppsReady: !!this.application.pluginApps && !!this.application.pluginAppConversation,
+        sessionFilesReady: !!this.application.files,
         pluginLifecycle: this.application.pluginLifecycle,
       }),
     );
@@ -454,6 +456,7 @@ export class VykorHttpServer {
       createTerminalRoutes(this.terminals, this.terminalEvents),
     );
     this.app.route("/projects", createProjectRoutes(this.application.projects));
+    this.app.route("/sessions", createSessionFileRoutes(this.application.files));
     this.app.route(
       "/sessions",
       createSessionUtilityRoutes({

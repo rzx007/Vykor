@@ -38,6 +38,7 @@
 | [control/](./control/README.md) | 协调应用是否接受操作、独占维护，以及运行状态诊断。 |
 | [default-services/](./default-services/README.md) | 提供应用接口的默认实现，并共享当前配置引用。 |
 | [events/](./events/README.md) | 把已保存的事件重放和后续通知提供给 HTTP、渠道及嵌入调用方。 |
+| [files/](./files/README.md) | 按会话的实际执行环境与读取权限提供只读目录、文件与搜索接口。 |
 | [goals/](./goals/README.md) | 为 Agent 提供目标读取、修改、策略和每次运行的目标上下文。 |
 | [maintenance/](./maintenance/README.md) | 统一处理存储扫描、清理策略、用量报表及维护准备。 |
 | [mcp/](./mcp/README.md) | 管理外部工具服务的配置、OAuth 登录和运行连接同步。 |

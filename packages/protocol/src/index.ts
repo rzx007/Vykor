@@ -17,6 +17,7 @@ export * from "./extensions/mcp-oauth.js";
 export * from "./runtime/execution-observability.js";
 export * from "./permissions/auto-review.js";
 export * from "./workspace-changes.js";
+export * from "./files/session-files.js";
 export * from "./extensions/plugin-presentation.js";
 export type { MarketplaceCatalog, MarketplaceSource, MarketplaceSourceView, MarketplaceEntry, MarketplaceSelection, MarketplacePreview, MarketplaceInstallInput, MarketplaceOperation, MarketplaceProvenance } from "@vykor/plugin-contracts/marketplace";
 export * from "./knowledge/notes.js";

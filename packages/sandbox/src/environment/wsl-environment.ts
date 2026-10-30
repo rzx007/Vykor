@@ -15,6 +15,19 @@ import { signalProcessTree } from "../process/process-control.js";
 
 const execFileAsync = promisify(execFile);
 
+// A failed realpath alone cannot distinguish an absent path from denied lookup.
+const WSL_PATH_ABSENCE_SCRIPT = `if [ -e "$1" ] || [ -L "$1" ]; then exit 1; fi
+ancestor=$(dirname -- "$1")
+while [ ! -e "$ancestor" ]; do
+  if [ -L "$ancestor" ]; then exit 1; fi
+  parent=$(dirname -- "$ancestor")
+  if [ "$parent" = "$ancestor" ]; then exit 1; fi
+  ancestor=$parent
+done
+if [ -f "$ancestor" ]; then exit 4; fi
+if [ -d "$ancestor" ] && [ -x "$ancestor" ]; then exit 3; fi
+exit 1`;
+
 export class WslEnvironmentUnavailableError extends Error {
   constructor(message: string) {
     super(message);
@@ -95,21 +108,35 @@ export function createWslPathResolver(binding: WorkspaceBinding, executor?: Envi
   };
   return {
     ...(executor ? {
-      async canonicalize(path: string) {
+      async canonicalize(path: string, signal?: AbortSignal) {
+        signal?.throwIfAborted();
         const resolved = /^[a-zA-Z]:[\\/]/.test(path) || path.startsWith("\\\\")
           ? hostPathToWslPath(path) : resolveExecutionPath(path);
-        const process = await executor.execProcess(["/usr/bin/realpath", "-e", "--", resolved]);
+        const process = await executor.execProcess(["/usr/bin/realpath", "-e", "--", resolved], { signal });
         const chunks: Uint8Array[] = [];
         const stop = process.onOutput((chunk) => chunks.push(chunk));
         process.end();
         try {
           const result = await process.wait();
-          if (result.exitCode !== 0) throw new Error(`Cannot verify image path in WSL: ${resolved}`);
+          if (result.exitCode !== 0) {
+            signal?.throwIfAborted();
+            const probe = await executor.execProcess(["/bin/sh", "-c", WSL_PATH_ABSENCE_SCRIPT, "vykor-realpath-missing", resolved], { signal });
+            probe.end();
+            const probeResult = await probe.wait();
+            if (probeResult.exitCode === 3) {
+              throw Object.assign(new Error(`Path not found: ${resolved}`), { code: "ENOENT" });
+            }
+            if (probeResult.exitCode === 4) {
+              throw Object.assign(new Error(`Not a directory: ${resolved}`), { code: "ENOTDIR" });
+            }
+            throw new Error(`Cannot verify path in WSL: ${resolved}`);
+          }
           const canonical = Buffer.concat(chunks).toString("utf8").replace(/\r?\n$/, "");
           if (!posix.isAbsolute(canonical)) throw new Error("WSL returned an invalid canonical path");
           return canonical;
         } finally {
           stop();
+          signal?.throwIfAborted();
         }
       },
     } : {}),

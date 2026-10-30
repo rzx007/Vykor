@@ -6,6 +6,7 @@
 | --- | --- |
 | [index.ts](./index.ts) | `VykorClientOptions`、会话创建/输入/队列/恢复/Goal 请求与响应 |
 | [attachment-types.ts](./attachment-types.ts) | `UploadAttachmentInput`、`DownloadAttachmentOptions` |
+| [file-types.ts](./file-types.ts) | 会话工作区文件请求、结果与取消选项 |
 | [runtime-types.ts](./runtime-types.ts) | 模型、Agent persona、技能、会话 MCP 的只读描述 |
 | [sync-types.ts](./sync-types.ts) | `SessionBucket`、`VykorClientState`、同步选项与更新 |
 

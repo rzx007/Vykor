@@ -11,6 +11,10 @@
       "kind": "client-resource"
     },
     {
+      "name": "files",
+      "kind": "client-resource"
+    },
+    {
       "name": "jobs",
       "kind": "client-resource"
     },
@@ -68,6 +72,10 @@
     },
     {
       "name": "EventResource",
+      "kind": "runtime-export"
+    },
+    {
+      "name": "FilesResource",
       "kind": "runtime-export"
     },
     {
@@ -499,6 +507,10 @@
       "kind": "type-export"
     },
     {
+      "name": "SessionDirectoryResult",
+      "kind": "type-export"
+    },
+    {
       "name": "SessionEventRecord",
       "kind": "type-export"
     },
@@ -508,6 +520,62 @@
     },
     {
       "name": "SessionExportResponse",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionFileErrorCode",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionFileFindInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionFileFindOptions",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionFileInfo",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionFileListInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionFileListOptions",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionFileReadInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionFileReadOptions",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionFileRequestOptions",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionFileSearchInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionFileSearchMatch",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionFileSearchOptions",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionFileStatInput",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionFindFilesResult",
       "kind": "type-export"
     },
     {
@@ -563,6 +631,10 @@
       "kind": "type-export"
     },
     {
+      "name": "SessionSearchFilesResult",
+      "kind": "type-export"
+    },
+    {
       "name": "SessionSearchResult",
       "kind": "type-export"
     },
@@ -572,6 +644,10 @@
     },
     {
       "name": "SessionSyncControllerOptions",
+      "kind": "type-export"
+    },
+    {
+      "name": "SessionTextFileResult",
       "kind": "type-export"
     },
     {

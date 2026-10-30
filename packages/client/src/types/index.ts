@@ -5,6 +5,7 @@ export type { GoalStopReason, GoalExternalWait } from "@vykor/protocol";
 export type * from "./attachment-types.js";
 export type * from "./runtime-types.js";
 export type * from "./sync-types.js";
+export type * from "./file-types.js";
 
 /** `VykorClient` 构造参数。 */
 export interface VykorClientOptions {

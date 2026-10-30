@@ -148,6 +148,58 @@ try {
 
 需要重试同一笔提交时，重用相同 `id` 和内容；新任务使用新 `id`。提交结果可能表示开始、排队或对正在运行的任务补充输入，调用方应检查返回的 `input`、`run` 和 `queue_state`。已有会话存在并发工作时，用服务端返回的运行 ID 区分每次任务。
 
+## 会话工作区文件（只读）
+
+`client.files` 按会话访问 daemon 所在机器的实际工作目录，包括子会话自己的目录和独立代码工作树（worktree）。调用方提供会话 ID 和相对路径，不提交宿主目录、执行环境或权限配置。路径用 `/` 分隔，`.` 表示根目录；返回路径同样相对于会话工作区。
+
+先检查 `capabilities.features.sessionFiles >= 1`。旧 daemon 未声明此能力时应提示升级；本次增加能力标记，不改变通信协议版本。
+
+```ts
+const capabilities = await client.protocol.capabilities();
+if ((capabilities.features.sessionFiles ?? 0) < 1) {
+  throw new Error("daemon 尚未提供会话文件接口，请升级 daemon");
+}
+const signal = AbortSignal.timeout(10_000);
+const directory = await client.files.list(sessionId, { path: ".", limit: 100, signal });
+const info = await client.files.stat(sessionId, "README.md", { signal });
+const text = await client.files.readText(sessionId, "README.md", { maxBytes: 64 * 1024, signal });
+const files = await client.files.find(sessionId, { path: "src", pattern: "**/*.ts", limit: 100, signal });
+const search = await client.files.search(sessionId, {
+  path: "src", query: "TODO", include: "**/*.ts", caseSensitive: false, limit: 100, signal,
+});
+console.log(directory.entries, info.kind, info.sizeBytes, info.modifiedAt);
+console.log(text.content, text.truncated, files.files, search.matches);
+```
+
+`sessionId` 来自已有会话或 `sessions.create()` 的结果。五个方法均不启动 Agent、不调用模型、不改变文件和会话事件。取消只结束本次文件操作，不中断 Run。
+
+| 方法 | 结果与上限 |
+| --- | --- |
+| `list` | 当前一级目录的 `entries`，包含名称、相对路径、类型、可用的大小和修改时间；默认 200 项，最多 1000 项 |
+| `stat` | 单个路径的信息；`sizeBytes` 是字节数，`modifiedAt` 是 Unix 毫秒时间，链接类型保留为 `symlink` |
+| `readText` | UTF-8 `content`、`encoding` 和 `truncated`；默认读取 256 KiB，`maxBytes` 最多 1 MiB；不会返回切断的 UTF-8 字符 |
+| `find` | glob 匹配的 `files: string[]`；默认 100 项，最多 1000 项 |
+| `search` | 单行字面文本匹配，返回 `matches: { path, line, text }[]`，行号从 1 开始；默认忽略大小写，默认 100 条、最多 200 条 |
+
+`pattern` 和 `include` 相对于搜索起点 `path`，结果中的路径相对于会话根目录。搜索不解释用户正则，不支持跨行 query。递归查找默认跳过 `.git`、`node_modules`、`dist` 等生成或依赖目录，不递归进入目录链接；被权限禁止的项不进入目录与搜索结果。没有文件监听、创建、保存、移动或删除入口。
+
+目录与搜索最多检查 4000 个目录项。内容搜索每文件最多读取 256 KiB，总读取最多 8 MiB；二进制文件和非法 UTF-8 也计入读取预算。内容匹配的单条文本最多 4096 字符。文件请求最长执行 10 秒；查找和搜索在执行中达到时间、读取量或结果预算时返回 `truncated: true`，表示结果可能不完整。直接读取二进制或非法 UTF-8 返回 `file_not_text`。
+
+每个候选路径都执行工作区边界、真实路径和读取权限检查。明确的 `denyRead`、路径规则、会话工具上限和拒绝配置仍然生效；需要确认的结果直接拒绝，不创建审批或自动批准。WSL 路径在实际 WSL 环境验证，不能可靠映射的权限规则返回不支持，不回退到宿主文件系统。CLI advanced 与其 Agent 一样使用本机文件环境。
+
+HTTP 错误仍由 `VykorApiError` 携带 `status` 与原始 `body`，文件错误响应包含 `code` 和 `message`：
+
+| code | HTTP 状态与含义 |
+| --- | --- |
+| `file_invalid_request` | 400，非法路径、查询或超出参数上限 |
+| `file_forbidden` | 403，路径或会话读取策略拒绝 |
+| `file_not_found` | 404，会话或路径不存在 |
+| `file_not_text` | 415，目标不是支持的 UTF-8 文本 |
+| `file_not_supported` | 501，daemon 未配置文件服务或不能可靠验证环境规则 |
+| `file_not_ready` | 503，服务尚未就绪、配置缺失或工作区正在维护 |
+| `file_timeout` / `file_cancelled` | 408，直接操作超时或已取消 |
+| `file_operation_failed` | 500，其它读取失败；响应不包含宿主绝对路径 |
+
 ## 结构化交付
 
 提交新排队任务时可指定 `outputSchema`；Client 检查服务端 `features.structuredDelivery >= 1` 后才发送。它要求模型用 `SubmitResult` 提交 `status`、`summary` 和符合 Schema 的 `data`；没有有效交付会明确失败。
