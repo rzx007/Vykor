@@ -570,7 +570,7 @@
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/tools/agents/__test__/agents-tool.test.tsx",
-      "line": 92,
+      "line": 93,
       "text": "  child.parts = [{ ...sourcePart, sessionId: \"child-1\", metadata: { pluginUi: childInstance } }]",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
