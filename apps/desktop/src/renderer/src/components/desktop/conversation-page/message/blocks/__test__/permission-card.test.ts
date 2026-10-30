@@ -36,6 +36,40 @@ function summaryText(container: HTMLElement): string {
 
 describe("PermissionCard", () => {
   it.each([
+    ["Shell", "运行命令"],
+    ["Bash", "运行命令"],
+    ["Write", "写入文件"],
+    ["Edit", "修改文件"],
+    ["ApplyPatch", "应用文件补丁"],
+    ["Read", "读取文件"],
+    ["Browser", "操作浏览器"],
+    ["BrowserDeveloper", "检查网页"],
+    ["JobCancel", "停止任务"],
+  ])("keeps the actual %s permission summary", (toolName, label) => {
+    const container = renderPermission(toolName, {})
+    expect(summaryText(container)).toContain(label)
+    expect(summaryText(container)).toContain(toolName)
+  })
+
+  it.each([
+    "shell",
+    "bash",
+    "BASH",
+    "write",
+    "edit",
+    "read",
+    "browser",
+    "jobcancel",
+    "ex_ec",
+    "mcp__custom__Read",
+    "constructor",
+  ])("does not describe a third-party permission as a built-in operation: %s", (toolName) => {
+    const container = renderPermission(toolName, {})
+    expect(summaryText(container)).toContain("运行工具")
+    expect(summaryText(container)).toContain(toolName)
+  })
+
+  it.each([
     ["ask_user", "需要你确认"],
     ["timed_out", "审查超时"],
   ])("shows automatic review state %s and its escaped reason", (status, title) => {

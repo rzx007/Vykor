@@ -174,13 +174,13 @@
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/message-render-model.ts",
-      "line": 130,
+      "line": 128,
       "text": "      const source = readPluginUiInstance(part.metadata) ?? readPluginUiInstance(result?.metadata)",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/conversation-page/message/models/message-render-model.ts",
-      "line": 138,
+      "line": 136,
       "text": "        units.push({ id: part.id, type: \"plugin-ui\", call: part, result, instance: source })",
       "reason": "Read-only historical transcript/card rendering; no iframe, open action or new App source."
     },
@@ -264,7 +264,7 @@
     },
     {
       "path": "apps/desktop/src/renderer/src/components/desktop/tools/agents/__test__/agents-tool.test.tsx",
-      "line": 92,
+      "line": 93,
       "text": "  child.parts = [{ ...sourcePart, sessionId: \"child-1\", metadata: { pluginUi: childInstance } }]",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
@@ -3582,25 +3582,25 @@
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 183,
+      "line": 181,
       "text": "  readonly pluginUiHistory?: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 236,
+      "line": 234,
       "text": "  readonly pluginUiHistory: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 421,
+      "line": 418,
       "text": "      this.pluginUiHistory = new PluginUiHistoryService({ store });",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 1053,
+      "line": 1050,
       "text": "        recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
@@ -3732,13 +3732,13 @@
     },
     {
       "path": "packages/server/src/application/session/interactions/session-interaction-service.ts",
-      "line": 472,
+      "line": 462,
       "text": "      if (Object.hasOwn(sourceRun.metadata, \"uiAction\") || Object.hasOwn(sourceRun.metadata, \"pluginAppAction\")) {",
       "reason": "Explicit generic-resume refusal for historical actions; no replay."
     },
     {
       "path": "packages/server/src/application/session/interactions/session-interaction-service.ts",
-      "line": 476,
+      "line": 466,
       "text": "          \"plugin_ui_action_not_resumable\",",
       "reason": "Explicit generic-resume refusal for historical actions; no replay."
     },

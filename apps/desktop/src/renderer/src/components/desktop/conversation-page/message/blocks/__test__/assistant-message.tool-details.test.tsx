@@ -109,6 +109,86 @@ it.each([true, false])(
   }
 )
 
+describe("tool details display names", () => {
+  const openDetails = () => {
+    const button = container.querySelector<HTMLButtonElement>(
+      'section[aria-label="工具活动组"] button[aria-expanded="false"]'
+    )
+    expect(button).not.toBeNull()
+    act(() => button!.click())
+  }
+
+  it.each([
+    [{}, "打开终端", "操作已结束"],
+    [{ command: "echo ok" }, "运行命令", "运行了命令"],
+  ])(
+    "keeps TerminalOpen wording consistent in rows and completed groups: %j",
+    (input, label, completed) => {
+      const call = part("TerminalOpen", input, { output: "TERMINAL_RESULT" })
+      render([call], false, vi.fn(), false)
+      expect(container.textContent).toContain(label)
+      openDetails()
+      expect(container.textContent).toContain("TERMINAL_RESULT")
+      render(
+        [
+          call,
+          { ...call, id: "second-tool", toolUseId: "second-call", seq: 2 },
+          {
+            ...part("", {}, { id: "answer", seq: 3, messageId: "m2", type: "text" }),
+            text: "Finished",
+          },
+        ],
+        false,
+        vi.fn(),
+        false
+      )
+      expect(container.textContent).toContain(completed)
+    }
+  )
+
+  it.each(["exec", "command", "ex_ec", "shell", "bASh", "S_h_e_l_l", "mcp__shell__exec"])(
+    "keeps a third-party name in the expanded detail heading: %s",
+    (toolName) => {
+      render([
+        part(
+          toolName,
+          { command: "echo third-party", query: "needle" },
+          {
+            metadata: {
+              shellDisplayName: "PowerShell from unrelated metadata",
+              shellDialect: "pwsh",
+            },
+            output: "THIRD_PARTY_RESULT",
+          }
+        ),
+      ])
+      openDetails()
+      expect(container.textContent).toContain(toolName)
+      expect(container.textContent).not.toContain("PowerShell from unrelated metadata")
+      expect(container.textContent).toContain("THIRD_PARTY_RESULT")
+      expect(container.querySelector("[data-shell-command]")).toBeNull()
+    }
+  )
+
+  it.each(["Shell", "Bash"])("keeps the actual %s display name when details open", (toolName) => {
+    render([
+      part(
+        toolName,
+        { command: "echo ok" },
+        {
+          metadata: { shellDisplayName: "PowerShell 7.6" },
+          output: "SHELL_RESULT",
+        }
+      ),
+    ])
+    openDetails()
+    expect(container.textContent).toContain("PowerShell 7.6")
+    expect(container.textContent).toContain("SHELL_RESULT")
+    expect(container.querySelector("[data-shell-command]")?.textContent).toBe("echo ok")
+    expect(container.querySelector("[data-shell-output]")?.textContent).toContain("SHELL_RESULT")
+  })
+})
+
 describe("inline tool group status", () => {
   beforeEach(() => {
     document.documentElement.dataset.reducedMotion = "true"
@@ -1061,7 +1141,7 @@ describe("tool parameter and result display", () => {
       { type: "text", text: "second block" },
     ], executionState: "completed" }
     render([part("Grep", { pattern: "needle" }, { output })])
-    click("Grep")
+    click("搜索文件内容")
     const blocks = [...container.querySelectorAll("[data-tool-output]")].map(element => element.textContent)
     expect(blocks).toEqual(["first\nline", expect.stringContaining("result.png"), "second block"])
     expect(container.querySelector("details")?.textContent).toContain("executionState")

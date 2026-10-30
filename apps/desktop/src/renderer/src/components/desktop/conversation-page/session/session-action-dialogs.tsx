@@ -1,4 +1,5 @@
-import { useId, useState } from "react"
+import { useCallback, useId, useRef, useState } from "react"
+import { useNavigate } from "@tanstack/react-router"
 
 import { Button } from "@renderer/components/ui/button"
 import {
@@ -13,6 +14,8 @@ import {
 import { Field, FieldGroup } from "@renderer/components/ui/field"
 import { Input } from "@renderer/components/ui/input"
 import { Label } from "@renderer/components/ui/label"
+import { Spinner } from "@renderer/components/ui/spinner"
+import { toast } from "@renderer/lib/toast"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type { DesktopSessionRecord } from "@shared/session-types"
 
@@ -20,17 +23,63 @@ export function useSessionActionDialogs(): {
   beginRename: (session: DesktopSessionRecord) => void
   beginArchive: (session: DesktopSessionRecord) => void
   beginDelete: (session: DesktopSessionRecord) => void
+  beginFork: (session: DesktopSessionRecord, afterMessageId?: string) => void
   dialogs: React.JSX.Element
 } {
   const renameSession = useDesktopSessionStore((state) => state.renameSession)
   const archiveSession = useDesktopSessionStore((state) => state.archiveSession)
   const deleteSession = useDesktopSessionStore((state) => state.deleteSession)
+  const forkSession = useDesktopSessionStore((state) => state.forkSession)
+  const navigate = useNavigate()
+  const [forkTarget, setForkTarget] = useState<{
+    session: DesktopSessionRecord
+    afterMessageId?: string
+  } | null>(null)
+  const [forkBusy, setForkBusy] = useState(false)
+  const forkInFlight = useRef(false)
+  const [forkError, setForkError] = useState<string | null>(null)
   const renameFieldId = useId()
   const [renameTarget, setRenameTarget] = useState<DesktopSessionRecord | null>(null)
   const [archiveTarget, setArchiveTarget] = useState<DesktopSessionRecord | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<DesktopSessionRecord | null>(null)
   const [renameValue, setRenameValue] = useState("")
   const [busy, setBusy] = useState(false)
+
+  const beginFork = useCallback((session: DesktopSessionRecord, afterMessageId?: string): void => {
+    if (forkInFlight.current) return
+    setForkError(null)
+    setForkTarget({ session, afterMessageId })
+  }, [])
+
+  const confirmFork = async (): Promise<void> => {
+    if (!forkTarget || forkInFlight.current) return
+    forkInFlight.current = true
+    setForkBusy(true)
+    setForkError(null)
+    let forked: DesktopSessionRecord
+    try {
+      forked = await forkSession(
+        forkTarget.session.id,
+        forkTarget.afterMessageId ? { afterMessageId: forkTarget.afterMessageId } : undefined
+      )
+    } catch {
+      setForkError("创建分支失败，请重试。")
+      return
+    } finally {
+      forkInFlight.current = false
+      setForkBusy(false)
+    }
+    setForkTarget(null)
+    toast.success("已创建会话分支")
+    // 创建已成功；导航失败只能提示打开失败，不能引导再次创建。
+    if (useDesktopSessionStore.getState().activeSessionId === forked.id) {
+      void navigate({ to: "/conversation/$sessionId", params: { sessionId: forked.id } }).catch(
+        () => {
+          toast.error("分支已创建，打开失败", "请从侧栏打开新分支。")
+        }
+      )
+    }
+  }
 
   const beginRename = (session: DesktopSessionRecord): void => {
     const title = session.title.trim()
@@ -65,10 +114,57 @@ export function useSessionActionDialogs(): {
 
   return {
     beginRename,
+    beginFork,
     beginArchive: setArchiveTarget,
     beginDelete: setDeleteTarget,
     dialogs: (
       <>
+        <Dialog
+          open={forkTarget !== null}
+          onOpenChange={(value) => {
+            if (!value && !forkInFlight.current) {
+              setForkTarget(null)
+              setForkError(null)
+            }
+          }}
+        >
+          <DialogContent showCloseButton={!forkBusy}>
+            <DialogHeader>
+              <DialogTitle>
+                {forkTarget?.afterMessageId ? "从这条回复创建分支？" : "创建会话分支？"}
+              </DialogTitle>
+              <DialogDescription className="wrap-anywhere">
+                {forkTarget?.session.title.trim() || "新对话"}：
+                {forkTarget?.afterMessageId
+                  ? "保留截至这条回复的历史，后续可独立继续。"
+                  : "保留当前历史，后续可独立继续。"}
+              </DialogDescription>
+            </DialogHeader>
+            {forkError ? (
+              <p role="alert" className="text-sm text-destructive">
+                {forkError}
+              </p>
+            ) : null}
+            <DialogFooter>
+              <DialogClose
+                render={
+                  <Button variant="outline" shape="pill" disabled={forkBusy}>
+                    取消
+                  </Button>
+                }
+              />
+              <Button
+                shape="pill"
+                disabled={forkBusy}
+                aria-busy={forkBusy || undefined}
+                onClick={() => void confirmFork()}
+              >
+                {forkBusy ? <Spinner data-icon="inline-start" /> : null}
+                {forkBusy ? "正在创建…" : "创建分支"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         <Dialog
           open={renameTarget !== null}
           onOpenChange={(value) => !value && setRenameTarget(null)}

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { DesktopAttachmentDraft } from "@shared/attachment-types"
 import { ComposerAttachments } from "../composer-attachments"
+import { ImageViewerProvider } from "@renderer/components/desktop/image-viewer/image-viewer-provider"
 
 describe("ComposerAttachments preview", () => {
   let container: HTMLDivElement
@@ -66,6 +67,70 @@ describe("ComposerAttachments preview", () => {
     expect(container.querySelector("img")).toBeNull()
     expect(container.querySelector("svg")).not.toBeNull()
   })
+
+  it.each([undefined, "session:side"])(
+    "opens draft images with their explicit scope %s and keeps other drafts separate",
+    async (composerScope) => {
+      const onOpenImage = vi.fn()
+      const second = {
+        ...readyImage,
+        assetId: "second-image",
+        draftId: "second-draft",
+        displayName: "second.jpeg",
+      }
+      await act(async () =>
+        root.render(
+          createElement(ImageViewerProvider, {
+            onOpenImage,
+            scopeId: "panel",
+            children: createElement(ComposerAttachments, {
+              composerScope,
+              attachments: [readyImage, second],
+              onCancel: vi.fn(),
+              onRetry: vi.fn(),
+              onRemove: vi.fn(),
+            }),
+          })
+        )
+      )
+      await act(async () =>
+        container
+          .querySelector<HTMLButtonElement>('[aria-label="查看图片 runtime-map.jpeg"]')!
+          .click()
+      )
+      const [source, gallery, scope] = onOpenImage.mock.calls[0]!
+      expect(scope).toBe("panel")
+      expect(source.draftId).toBe("draft-image")
+      if (composerScope) {
+        expect(gallery.id).toBe("draft:session:side")
+        expect(gallery.sources).toHaveLength(2)
+        expect(gallery.sources[1].draftId).toBe("second-draft")
+      } else {
+        expect(gallery).toBeUndefined()
+        expect(source.readOnly).toBe(true)
+      }
+      await act(async () =>
+        root.render(
+          createElement(ImageViewerProvider, {
+            onOpenImage,
+            scopeId: "panel",
+            children: createElement(ComposerAttachments, {
+              composerScope: "session:main",
+              attachments: [second],
+              onCancel: vi.fn(),
+              onRetry: vi.fn(),
+              onRemove: vi.fn(),
+            }),
+          })
+        )
+      )
+      await act(async () =>
+        container.querySelector<HTMLButtonElement>('[aria-label="查看图片 second.jpeg"]')!.click()
+      )
+      expect(onOpenImage.mock.lastCall?.[1].id).toBe("draft:session:main")
+      if (gallery) expect(gallery.sources).toHaveLength(2)
+    }
+  )
 
   it("reports a preview failure separately and retries only the preview read", async () => {
     const read = vi.mocked(window.desktop.attachments.readPreview)

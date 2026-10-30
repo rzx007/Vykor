@@ -98,7 +98,7 @@
 1. **入口 → 分类。** `classifyPromptPlacement` 同时看当前会话的权威 run 和本地未确认 submission。两者都没有进行中工作时，固定为 `transcript`。
 2. **调用 → 状态写入位置。** 在 `sessionRuntimes[activeSessionId]` 写入 submission 与同 ID 的 `send-prompt` operation，再调用 `sessions.sendPrompt`。
 3. **IPC 返回 → 保留覆盖。** 成功后 operation 为 `acknowledged`，submission 为 `accepted`；它们仍保留，直到 SSE 确认 input ID。
-4. **SSE 返回 → 清理。** 快照确认 input 后，对账函数删除 submission 和 operation。普通发送不会传给 `PendingPromptQueue`。
+4. **SSE 返回 → 清理。** 快照确认 input 后清理 operation；正文消息可见或对应 run 已结束时，再移除本地 submission。取消的排队任务不会生成正文，也按对应 run 的结束状态清理，避免重新显示“等待处理”。这里只清理本地占位，不重新提交输入。普通发送不会传给 `PendingPromptQueue`。
 5. **失败 → 重试。** 未被 SSE 确认时，把该 submission 标为 `failed` 并保留错误；同内容重试沿用原 ID 和 placement。
 
 ### 排队发送

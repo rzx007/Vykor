@@ -41,6 +41,19 @@ function serviceWith(options: {
 }
 
 describe("ExecutionObservationService", () => {
+  it("counts each terminal outcome while including pending and running records only in the total", () => {
+    const outcomes: ExecutionOutcome[] = ["pending", "running", "completed", "failed", "timed_out", "cancelled", "blocked", "skipped", "unknown"];
+    const report = serviceWith({
+      sessionRecords: outcomes.map(outcome => observation({
+        executionKind: "root_agent_run", executionId: outcome, outcome,
+      })),
+    }).query({});
+    expect(report.summary.root_agent_run).toMatchObject({
+      total: 9, technicalTerminal: 3,
+      completed: 1, failed: 1, timedOut: 1, cancelled: 1, blocked: 1, skipped: 1, unknown: 1,
+      completionRate: 1 / 3, failureRate: 2 / 3, cancellationRate: 1 / 9, skipRate: 1 / 9,
+    });
+  });
   it("groups summaries by kind without cross-kind totals", () => {
     const service = serviceWith({
       sessionRecords: [

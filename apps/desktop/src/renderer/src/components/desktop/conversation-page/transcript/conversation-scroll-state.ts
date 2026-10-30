@@ -37,6 +37,14 @@ export function createConversationScrollState() {
   let navigation: TranscriptNavigation | null = null
   let intent = 0
   let lastScrollTop = 0
+  const isAtEnd = () => {
+    const viewport = viewportRef.current
+    return (
+      !viewport ||
+      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <=
+        conversationEndThresholdPx
+    )
+  }
 
   const publish = (next: ConversationScrollSnapshot): void => {
     if (
@@ -56,7 +64,12 @@ export function createConversationScrollState() {
     viewportRef,
     setSearchMatch: (searchMatch: ConversationSearchMatch | null) => {
       if (searchMatch) intent = -1
-      publish({ ...snapshot, searchMatch, following: searchMatch ? false : snapshot.following })
+      publish({
+        ...snapshot,
+        searchMatch,
+        following: searchMatch ? false : snapshot.following,
+        atEnd: searchMatch ? isAtEnd() : snapshot.atEnd,
+      })
     },
     turnExpansion,
     presentedTurns,
@@ -97,13 +110,14 @@ export function createConversationScrollState() {
     setPosition: (atEnd: boolean, activeMessageId: string | null) =>
       publish({
         ...snapshot,
-        atEnd,
+        // 跟随动画中的短暂距离不显示“返回最新”，也不逐帧刷新界面。
+        atEnd: snapshot.following || atEnd,
         activeMessageId,
         hasNewContent: atEnd && snapshot.following ? false : snapshot.hasNewContent,
       }),
     setIntent: (direction: number) => {
       intent = direction
-      if (direction <= 0) publish({ ...snapshot, following: false })
+      if (direction <= 0) publish({ ...snapshot, following: false, atEnd: isAtEnd() })
     },
     recordScrollAdjustment: () => {
       // 自己写入的位置（包括浏览器临时限位）不是用户上滚；保留独立的阅读意图。
@@ -113,19 +127,17 @@ export function createConversationScrollState() {
     onScroll: () => {
       const viewport = viewportRef.current
       if (!viewport) return
-      const atEnd =
-        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <=
-        conversationEndThresholdPx
+      const atEnd = isAtEnd()
       const movedUp = viewport.scrollTop < lastScrollTop - 1
       const movedDown = viewport.scrollTop > lastScrollTop + 1
       lastScrollTop = viewport.scrollTop
-      if (atEnd && movedDown) intent = 1
+      if (movedUp) intent = -1
+      else if (atEnd && movedDown) intent = 1
       // 高度增长可能产生位置未变的 scroll 回读，它不代表用户离开底部。
-      const following =
-        atEnd && intent >= 0 ? true : movedUp || intent < 0 ? false : snapshot.following
+      const following = movedUp || intent < 0 ? false : atEnd ? true : snapshot.following
       publish({
         ...snapshot,
-        atEnd,
+        atEnd: following || atEnd,
         following,
         hasNewContent: atEnd && following ? false : snapshot.hasNewContent,
       })
@@ -133,13 +145,13 @@ export function createConversationScrollState() {
     scrollToMessage: (id: string): boolean => {
       if (!navigation?.hasMessage(id)) return false
       intent = -1
-      publish({ ...snapshot, following: false })
+      publish({ ...snapshot, following: false, atEnd: isAtEnd() })
       navigation.scrollToMessage(id)
       return true
     },
     scrollToEnd: () => {
       intent = 1
-      publish({ ...snapshot, following: true, hasNewContent: false })
+      publish({ ...snapshot, following: true, atEnd: true, hasNewContent: false })
       navigation?.scrollToEnd()
     },
   }

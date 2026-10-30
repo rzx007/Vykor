@@ -10,6 +10,8 @@ import {
 import { imageAnnotationKey, parseImageRegions, type ImageRegion } from "./image-annotations"
 import { isSafeImagePreviewLayout } from "@shared/safe-image-preview"
 
+const DRAFT_SAVE_ERROR = "批注草稿未能保存，关闭窗口前请先加入聊天"
+
 function toAnnotation(region: ImageRegion): ImageAnnotation {
   const geometry: Rectangle["geometry"] = {
     bounds: {
@@ -54,6 +56,7 @@ export function useImageAnnotations(
   const hostRef = useRef<HTMLDivElement>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const annotatorRef = useRef<ImageAnnotator | null>(null)
+  const flushDraftRef = useRef<(() => boolean) | null>(null)
   const [regions, setRegions] = useState<ImageRegion[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
@@ -97,8 +100,9 @@ export function useImageAnnotations(
           setError("无法读取批注草稿，本次批注仍可继续")
         }
         annotator.setAnnotations(saved.map(toAnnotation))
-        const sync = () => {
-          if (disposed || !annotator) return
+        let lastSaved: string | null = null
+        const sync = (): boolean => {
+          if (disposed || !annotator) return false
           const next = annotator
             .getAnnotations()
             .map((annotation) => {
@@ -118,13 +122,24 @@ export function useImageAnnotations(
             .filter((region) => region.width > 0 && region.height > 0)
           setRegions(next)
           setHistory({ undo: annotator.canUndo(), redo: annotator.canRedo() })
+          const serialized = JSON.stringify(next)
+          if (lastSaved === null) lastSaved = serialized
+          if (serialized === lastSaved) {
+            setError((current) => (current === DRAFT_SAVE_ERROR ? null : current))
+            return true
+          }
           try {
-            if (next.length) localStorage.setItem(key, JSON.stringify(next))
+            if (next.length) localStorage.setItem(key, serialized)
             else localStorage.removeItem(key)
+            lastSaved = serialized
+            setError((current) => (current === DRAFT_SAVE_ERROR ? null : current))
+            return true
           } catch {
-            setError("批注草稿未能保存，关闭窗口前请先加入聊天")
+            setError(DRAFT_SAVE_ERROR)
+            return false
           }
         }
+        flushDraftRef.current = sync
         annotator.state.store.observe(sync)
         annotator.on("selectionChanged", (selection) => {
           if (!disposed) setSelectedId(selection[0]?.id ?? null)
@@ -140,6 +155,7 @@ export function useImageAnnotations(
       image.onload = image.onerror = null
       annotator?.destroy()
       annotatorRef.current = null
+      flushDraftRef.current = null
       imageRef.current = null
       host.replaceChildren()
       if (!url) URL.revokeObjectURL(objectUrl)
@@ -163,6 +179,9 @@ export function useImageAnnotations(
     error,
     history,
     selectedId,
+    flushDraft() {
+      return flushDraftRef.current?.() ?? true
+    },
     select(id: string) {
       annotatorRef.current?.setSelected(id)
     },

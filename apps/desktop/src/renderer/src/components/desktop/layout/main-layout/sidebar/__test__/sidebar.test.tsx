@@ -14,6 +14,7 @@ import { SessionRow } from "../sidebar-session-groups"
 
 vi.mock("@tanstack/react-router", () => ({
   useMatchRoute: () => () => false,
+  useNavigate: () => vi.fn(async () => {}),
 }))
 
 vi.mock("motion/react", () => ({
@@ -229,7 +230,13 @@ describe("Sidebar collapsible sections and empty states", () => {
         },
       },
     })
-    const actions = { onOpen: vi.fn(), onRename: vi.fn(), onArchive: vi.fn(), onDelete: vi.fn() }
+    const actions = {
+      onOpen: vi.fn(),
+      onRename: vi.fn(),
+      onArchive: vi.fn(),
+      onDelete: vi.fn(),
+      onFork: vi.fn(),
+    }
     act(() => root.render(<SessionRow session={session} active={false} actions={actions} />))
     expect(container.querySelector('[aria-label="等待处理"]')).not.toBeNull()
     act(() => root.render(<SessionRow session={session} active actions={actions} />))

@@ -116,6 +116,18 @@ it("opens image requests in the originating scope and keeps successive requests 
   expect(workspace.controller().imageOpenRequest!.source).toEqual(source)
 })
 
+it("forwards a caller's gallery and rejects opens captured in a previous panel scope", () => {
+  const workspace = mount(false, { conversation: 100, utility: 0 })
+  const source = { kind: "attachment" as const, assetId: "image-one", name: "one.png" }
+  const gallery = { id: "conversation:chat", sources: [source], composerScope: "session:chat" }
+  const openImage = workspace.controller().openImage
+  act(() => openImage(source, gallery, "session:chat"))
+  expect(workspace.controller().imageOpenRequest?.gallery).toBe(gallery)
+  workspace.switchSession("other-chat")
+  act(() => openImage(source, gallery, "session:chat"))
+  expect(workspace.controller().imageOpenRequest).toBeNull()
+})
+
 it("restores the saved split after reopening an already maximized workbench", () => {
   const workspace = mount(true, { conversation: 0, utility: 100 })
   workspace.toggle()

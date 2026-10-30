@@ -193,12 +193,12 @@ it("keeps character animation for long streaming replies and preserves appended 
   expect(container.textContent).toContain("最终内容")
 })
 
-it("enters a new standalone tool once and leaves restored tools settled", async () => {
+it.each([["Read", "读取文件"], ["read_file", "Read file"]])("enters a new standalone %s once and leaves restored tools settled", async (toolName, label) => {
   const tool: DesktopSessionPart = {
     ...part(""),
     id: "tool-1",
     type: "tool",
-    toolName: "read_file",
+    toolName,
   }
   await act(async () =>
     root.render(
@@ -229,6 +229,6 @@ it("enters a new standalone tool once and leaves restored tools settled", async 
       />
     )
   )
-  expect(container.textContent).toContain("读取文件")
+  expect(container.textContent).toContain(label)
   expect(container.textContent).not.toContain("工具查看 1 次")
 })

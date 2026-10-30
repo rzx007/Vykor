@@ -173,7 +173,6 @@ function ConversationPane({
   const queuedPromptActions = useDesktopSessionStore(selectActiveSessionQueuedPromptActions)
   const pendingPromptSubmissions = useDesktopSessionStore(selectActiveSessionPromptSubmissions)
   const permissionReplies = useDesktopSessionStore(selectActiveSessionPermissionReplies)
-  const forkSession = useDesktopSessionStore((state) => state.forkSession)
   const startConversationFrom = useDesktopSessionStore((state) => state.startConversationFrom)
   const togglePinSession = useDesktopSessionStore((state) => state.togglePinSession)
   const chooseProject = useDesktopSessionStore((state) => state.chooseProject)
@@ -248,6 +247,7 @@ function ConversationPane({
   const showReasoning = useShowReasoning()
   const archived = sessionView?.session.status === "archived"
   const sessionActions = useSessionActionDialogs()
+  const beginFork = sessionActions.beginFork
 
   const submitDraft = async (): Promise<void> => {
     const content = selectComposerDocumentText(draft)
@@ -408,11 +408,12 @@ function ConversationPane({
   }, [])
 
   const forkFromAssistantMessage = useCallback(
-    async (messageId: string): Promise<void> => {
+    (messageId: string): void => {
       if (!activeSessionId || archived || running) return
-      await forkSession(activeSessionId, { afterMessageId: messageId })
+      const session = useDesktopSessionStore.getState().sessionView?.session
+      if (session?.id === activeSessionId) beginFork(session, messageId)
     },
-    [activeSessionId, archived, running, forkSession]
+    [activeSessionId, archived, running, beginFork]
   )
 
   const editLatestUserMessage = useCallback(
@@ -531,10 +532,7 @@ function ConversationPane({
       }
       if (command.id === "fork") {
         if (running) throw new Error("请等待当前任务结束后再创建聊天分支。")
-        const forked = await forkSession(activeSession.id)
-        if (useDesktopSessionStore.getState().activeSessionId === forked.id) {
-          await navigate({ to: "/conversation/$sessionId", params: { sessionId: forked.id } })
-        }
+        beginFork(activeSession)
         return
       }
       throw new Error(`暂不支持 /${command.id}。`)
@@ -556,7 +554,7 @@ function ConversationPane({
       startConversationFrom,
       togglePinSession,
       sessionActions,
-      forkSession,
+      beginFork,
     ]
   )
 
@@ -586,6 +584,7 @@ function ConversationPane({
                   onRename={() => sessionActions.beginRename(sessionView.session)}
                   onArchive={() => sessionActions.beginArchive(sessionView.session)}
                   onDelete={() => sessionActions.beginDelete(sessionView.session)}
+                  onFork={() => beginFork(sessionView.session)}
                 />
               ) : (
                 <HeaderIconButton label="更多操作">
@@ -713,6 +712,7 @@ function ConversationPane({
                     <MessageScrollerContent className="conversation-content-column min-h-full min-w-0 text-content-foreground">
                       {openingSession && !sessionView ? null : (
                         <ConversationTranscript
+                          imageComposerScope={composerScope}
                           tasks={sessionView?.tasks}
                           onRunErrorAction={resolveRunError}
                           onOpenAgents={onOpenAgents}
@@ -871,6 +871,7 @@ function ConversationPane({
                   </div>
                 ) : null}
                 <Composer
+                  composerScope={composerScope}
                   key={composerScope}
                   id="message-composer"
                   draft={draft}

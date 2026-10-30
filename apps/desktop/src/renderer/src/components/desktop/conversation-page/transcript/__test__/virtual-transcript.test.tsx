@@ -230,6 +230,7 @@ afterEach(() => {
   else Reflect.deleteProperty(HTMLElement.prototype, "scrollTo")
   vi.unstubAllGlobals()
   vi.useRealTimers()
+  delete document.documentElement.dataset.reducedMotion
   delete (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT
 })
 
@@ -276,7 +277,7 @@ it("follows appended turns and streaming height changes only while at the end", 
   expect(scroller.getSnapshot().atEnd).toBe(true)
 })
 
-it("aligns streaming growth in the measurement delivery without waiting another frame", async () => {
+it("smoothly follows measured growth and settles without a final jump", async () => {
   act(() => render(rows(1000)))
   await settle()
   const before = viewport().scrollTop
@@ -284,8 +285,28 @@ it("aligns streaming growth in the measurement delivery without waiting another 
   await act(async () => {
     for (const observer of [...observers]) observer.flush()
   })
-  expect(viewport().scrollTop).toBe(before + 300)
+  expect(viewport().scrollTop).toBe(before)
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(16)
+  })
+  expect(viewport().scrollTop).toBeGreaterThan(before)
+  expect(viewport().scrollTop).toBeLessThan(before + 300)
+  expect(container.querySelector("button")).toBeNull()
+  let previous = viewport().scrollTop
+  for (let index = 0; index < 14; index++) {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(16)
+    })
+    expect(viewport().scrollTop).toBeGreaterThanOrEqual(previous)
+    expect(viewport().scrollTop).toBeLessThanOrEqual(before + 300)
+    previous = viewport().scrollTop
+  }
+  expect(viewport().scrollTop).toBeCloseTo(before + 300, 0)
   expect(scroller.getSnapshot().atEnd).toBe(true)
+  const settled = viewport().scrollTop
+  act(() => render(rows(1000)))
+  await settle()
+  expect(viewport().scrollTop).toBe(settled)
 })
 
 it("keeps following when a layout shrink clamps its own scroll before the correction frame", async () => {
@@ -345,14 +366,160 @@ it("follows reply growth before a footer and stays at the end when that footer d
   await act(async () => {
     for (const observer of [...observers]) observer.flush()
   })
+  expect(viewport().scrollTop).toBe(before)
+  await settle()
   expect(viewport().scrollTop).toBe(before + 300)
-  expect(scroller.getSnapshot().atEnd).toBe(true)
   act(() => render(items.slice(0, -1)))
   await settle()
   expect(scroller.getSnapshot().atEnd).toBe(true)
   expect(scroller.getSnapshot().following).toBe(true)
   expect(row(999)).not.toBeNull()
 })
+
+it("tracks continuing output with bounded lag and catches up quickly after it stops", async () => {
+  act(() => render(rows(1000)))
+  await settle()
+  for (let index = 1; index <= 20; index++) {
+    heights.set("turn-999", 120 + index * 12)
+    await act(async () => {
+      for (const observer of [...observers]) observer.flush()
+      await vi.advanceTimersByTimeAsync(32)
+    })
+    const gap = viewport().scrollHeight - viewport().clientHeight - viewport().scrollTop
+    expect(gap).toBeGreaterThanOrEqual(0)
+    expect(gap).toBeLessThan(32)
+    expect(scroller.getSnapshot().following).toBe(true)
+  }
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(160)
+  })
+  expect(
+    viewport().scrollHeight - viewport().clientHeight - viewport().scrollTop
+  ).toBeLessThanOrEqual(1)
+})
+
+it.each(["wheel", "keyboard", "touch", "scrollbar"])(
+  "immediately stops an active follow animation on upward %s input",
+  async (input) => {
+    act(() => render(rows(1000)))
+    await settle()
+    heights.set("turn-999", 420)
+    await act(async () => {
+      for (const observer of [...observers]) observer.flush()
+      await vi.advanceTimersByTimeAsync(16)
+    })
+    const element = viewport()
+    act(() => {
+      if (input === "wheel")
+        element.dispatchEvent(new WheelEvent("wheel", { deltaY: -100, bubbles: true }))
+      else if (input === "keyboard")
+        element.dispatchEvent(new KeyboardEvent("keydown", { key: "PageUp", bubbles: true }))
+      else if (input === "scrollbar") scroll(element.scrollTop - 20)
+      else {
+        for (const [type, y] of [
+          ["touchstart", 50],
+          ["touchmove", 90],
+        ] as const) {
+          const event = new Event(type, { bubbles: true })
+          Object.defineProperty(event, "touches", { value: [{ clientY: y }] })
+          element.dispatchEvent(event)
+        }
+      }
+    })
+    const stopped = element.scrollTop
+    expect(scroller.getSnapshot().following).toBe(false)
+    heights.set("turn-999", 520)
+    await settle()
+    expect(element.scrollTop).toBe(stopped)
+  }
+)
+
+it("stops following on a small scrollbar movement within the end threshold", async () => {
+  act(() => render(rows(1000)))
+  await settle()
+  heights.set("turn-999", 132)
+  await act(async () => {
+    for (const observer of [...observers]) observer.flush()
+    await vi.advanceTimersByTimeAsync(32)
+  })
+  act(() => scroll(viewport().scrollTop - 4))
+  const stopped = viewport().scrollTop
+  expect(viewport().scrollHeight - viewport().clientHeight - stopped).toBeLessThan(8)
+  expect(scroller.getSnapshot().following).toBe(false)
+  act(() => scroll(stopped))
+  expect(scroller.getSnapshot().following).toBe(false)
+  heights.set("turn-999", 420)
+  await settle()
+  expect(viewport().scrollTop).toBe(stopped)
+})
+
+it("restores the return button when upward input cancels a return before its first frame", async () => {
+  act(() => render(rows(1000)))
+  await settle()
+  act(() => scroller.scrollToMessage("prompt-0"))
+  await settle()
+  act(() => {
+    scroller.scrollToEnd()
+    viewport().dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }))
+  })
+  expect(scroller.getSnapshot().following).toBe(false)
+  expect(scroller.getSnapshot().atEnd).toBe(false)
+  expect(container.querySelector('button[aria-label*="回到最新"]')).not.toBeNull()
+  const stopped = viewport().scrollTop
+  await settle()
+  expect(viewport().scrollTop).toBe(stopped)
+})
+
+it("smoothly returns from distant history and lets upward input interrupt the return", async () => {
+  act(() => render(rows(10000)))
+  await settle()
+  act(() => scroller.scrollToMessage("prompt-400"))
+  await settle()
+  const before = viewport().scrollTop
+  act(() => scroller.scrollToEnd())
+  expect(viewport().scrollTop).toBe(before)
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(32)
+  })
+  expect(viewport().scrollTop).toBeGreaterThan(before)
+  expect(viewport().scrollTop).toBeLessThan(viewport().scrollHeight - viewport().clientHeight)
+  act(() => viewport().dispatchEvent(new WheelEvent("wheel", { deltaY: -100, bubbles: true })))
+  const stopped = viewport().scrollTop
+  heights.set("turn-9999", 420)
+  act(() => render(rows(10001)))
+  await settle()
+  expect(viewport().scrollTop).toBe(stopped)
+  act(() => scroller.scrollToEnd())
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(600)
+  })
+  expect(
+    viewport().scrollHeight - viewport().clientHeight - viewport().scrollTop
+  ).toBeLessThanOrEqual(1)
+  expect(container.querySelectorAll("[data-transcript-row]").length).toBeLessThan(25)
+})
+
+it.each([
+  { preference: "true", system: false, immediate: true },
+  { preference: "false", system: true, immediate: false },
+  { preference: undefined, system: true, immediate: true },
+])(
+  "honors reduced motion preference $preference with system=$system",
+  async ({ preference, system, immediate }) => {
+    if (preference !== undefined) document.documentElement.dataset.reducedMotion = preference
+    vi.stubGlobal("matchMedia", () => ({ matches: system }))
+    act(() => render(rows(1000)))
+    await settle()
+    const before = viewport().scrollTop
+    heights.set("turn-999", 420)
+    await act(async () => {
+      for (const observer of [...observers]) observer.flush()
+    })
+    expect(viewport().scrollTop).toBe(immediate ? before + 300 : before)
+    await settle()
+    expect(viewport().scrollTop).toBe(before + 300)
+  }
+)
 
 it("honors upward intent before the native scroll event and resumes through jump to latest", async () => {
   act(() => render(rows(1000)))
@@ -723,25 +890,58 @@ it("does not counter a backward gesture when an already measured row above it ch
 
 it("opens a global search target outside the virtual window and expands its long user text", async () => {
   const messages = Array.from({ length: 100 }, (_, index) => ({
-    id: `user-${index}`, sessionId: "chat", role: "user" as const, seq: index,
-    inputId: `input-${index}`, metadata: {}, createdAt: index, updatedAt: index,
+    id: `user-${index}`,
+    sessionId: "chat",
+    role: "user" as const,
+    seq: index,
+    inputId: `input-${index}`,
+    metadata: {},
+    createdAt: index,
+    updatedAt: index,
   }))
   const parts = messages.map((message, index) => ({
-    id: `part-${index}`, sessionId: "chat", messageId: message.id, seq: 1,
-    type: "text" as const, status: "completed" as const,
+    id: `part-${index}`,
+    sessionId: "chat",
+    messageId: message.id,
+    seq: 1,
+    type: "text" as const,
+    status: "completed" as const,
     text: index === 40 ? "长正文".repeat(400) + " needle" : "message " + index,
-    metadata: {}, createdAt: index, updatedAt: index,
+    metadata: {},
+    createdAt: index,
+    updatedAt: index,
   }))
-  act(() => root.render(
-    <ConversationScrollerProvider><Probe /><ConversationScroller>
-      <ConversationFind messages={messages} parts={parts} target={{ sessionId: "chat", messageId: "user-40", query: "needle" }} />
-      <ConversationScrollerViewport><ConversationScrollerContent>
-        <ConversationTranscript messages={messages} parts={parts} runs={[]} running={false}
-          canEditLastUserMessage={false} onEditLastUserMessage={() => {}} onCopyAssistantMessage={() => {}}
-          onOpenFile={() => {}} canOpenReview={false} onOpenReview={() => {}} onOpenTerminal={() => {}} />
-      </ConversationScrollerContent></ConversationScrollerViewport>
-    </ConversationScroller></ConversationScrollerProvider>
-  ))
+  act(() =>
+    root.render(
+      <ConversationScrollerProvider>
+        <Probe />
+        <ConversationScroller>
+          <ConversationFind
+            messages={messages}
+            parts={parts}
+            target={{ sessionId: "chat", messageId: "user-40", query: "needle" }}
+          />
+          <ConversationScrollerViewport>
+            <ConversationScrollerContent>
+              <ConversationTranscript
+                messages={messages}
+                parts={parts}
+                runs={[]}
+                running={false}
+                canEditLastUserMessage={false}
+                onEditLastUserMessage={() => {}}
+                onCopyAssistantMessage={() => {}}
+                onOpenFile={() => {}}
+                canOpenReview={false}
+                onOpenReview={() => {}}
+                onOpenTerminal={() => {}}
+              />
+            </ConversationScrollerContent>
+          </ConversationScrollerViewport>
+        </ConversationScroller>
+      </ConversationScrollerProvider>
+    )
+  )
   await settle()
   const target = container.querySelector<HTMLElement>('[data-chat-search-message="user-40"]')
   expect(target).not.toBeNull()

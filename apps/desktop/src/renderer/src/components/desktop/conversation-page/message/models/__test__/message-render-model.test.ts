@@ -12,6 +12,41 @@ import {
 } from "../message-render-model"
 
 describe("message render model", () => {
+  it.each([
+    "write_file",
+    "apply_patch",
+    "EditCalendar",
+    "mcp__custom__create_preview",
+    "plugin__remove",
+    "WRITE",
+    "constructor",
+  ])("does not infer file mutations from a third-party name: %s", (toolName) => {
+    const call = toolPart(toolName, {
+      file_path: "/outside/example.ts",
+      patch: "*** Update File: /outside/example.ts\n-old\n+new",
+    })
+    expect(collectChangedFiles([call])).toEqual([])
+    expect(
+      collectChangedFiles([
+        {
+          ...call,
+          input: {},
+          bodyView: { input: "preview", output: "full" },
+          metadata: { changedFiles: { files: [{ path: "/outside/example.ts" }] } },
+        },
+      ])
+    ).toEqual([])
+  })
+
+  it.each(["Write", "Edit", "ApplyPatch", "NotebookEdit", "TodoWrite"])(
+    "retains confirmed builtin file changes: %s",
+    (name) => {
+      expect(collectChangedFiles([toolPart(name, { file_path: "example.ts" })])).toEqual([
+        { path: "example.ts", additions: 0, deletions: 0, hasStats: false },
+      ])
+    }
+  )
+
   it("does not merge adjacent commentary and final answer text", () => {
     const base = { ...toolPart("Read", {}), type: "text" as const };
     expect(buildAssistantContent([
@@ -114,6 +149,39 @@ describe("message render model", () => {
     expect(toolDisplayName(toolPart("Bash", {}))).toBe("Shell")
     expect(toolDisplayName(toolPart("Read", {}))).toBe("Read")
   })
+
+  it.each(["exec", "command", "ex_ec", "shell", "bASh", "S_h_e_l_l", "mcp__shell__exec"])(
+    "preserves a third-party detail title even with shell metadata: %s",
+    (toolName) => {
+      const call = {
+        ...toolPart(toolName, {}),
+        metadata: { shellDisplayName: "PowerShell", shellDialect: "pwsh" },
+      }
+      expect(toolDisplayName(call)).toBe(toolName)
+      expect(toolDisplayName(call, { ...call, id: "result", type: "tool_result" })).toBe(toolName)
+    }
+  )
+
+  it.each(["Shell", "Bash"])(
+    "keeps genuine %s metadata when a legacy result has none",
+    (toolName) => {
+      const call = {
+        ...toolPart(toolName, {}),
+        metadata: { shellDisplayName: "PowerShell 7.6", shellDialect: "pwsh" },
+      }
+      expect(
+        toolDisplayName(call, { ...call, id: "result", type: "tool_result", metadata: {} })
+      ).toBe("PowerShell 7.6")
+      expect(
+        toolDisplayName(call, {
+          ...call,
+          id: "result",
+          type: "tool_result",
+          metadata: { shellDialect: "bash" },
+        })
+      ).toBe("Bash")
+    }
+  )
 
   it("preserves commentary and final-answer phase metadata", () => {
     const part = {
@@ -242,7 +310,7 @@ describe("message render model", () => {
   })
 
   it("collects files and line stats from an apply patch call", () => {
-    const part = toolPart("apply_patch", {
+    const part = toolPart("ApplyPatch", {
       patch: [
         "*** Begin Patch",
         "*** Update File: src/App.tsx",
@@ -262,7 +330,7 @@ describe("message render model", () => {
   })
 
   it("collects a structured path from a write tool", () => {
-    expect(collectChangedFiles([toolPart("write_file", { file_path: "src/output.ts" })])).toEqual([
+    expect(collectChangedFiles([toolPart("Write", { file_path: "src/output.ts" })])).toEqual([
       { path: "src/output.ts", additions: 0, deletions: 0, hasStats: false },
     ])
   })

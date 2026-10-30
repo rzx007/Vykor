@@ -42,12 +42,16 @@ import { MessageBlock } from "../message/blocks/message-block"
 import { RunErrorNotice, type RunErrorAction } from "../message/notices/run-error-notice"
 import { ContentEntrance } from "../message/blocks/content-entrance"
 import { usePluginAppResults } from "../../shell/plugin-apps/use-plugin-app-results"
+import { ImageGalleryProvider } from "@renderer/components/desktop/image-viewer/image-viewer-provider"
+import { collectConversationImageGallery } from "@renderer/components/desktop/image-viewer/image-gallery"
 
 const emptyInputs: DesktopSessionInput[] = []
 const emptyTasks: DesktopSessionTask[] = []
 
 interface ConversationTranscriptProps {
   messages: DesktopSessionMessage[]
+  imageComposerScope?: string
+  imageCanFeedback?: () => boolean
   inputs?: DesktopSessionInput[]
   parts: DesktopSessionPart[]
   runs: DesktopSessionRun[]
@@ -69,6 +73,8 @@ interface ConversationTranscriptProps {
 
 export const ConversationTranscript = memo(function ConversationTranscript({
   messages,
+  imageComposerScope,
+  imageCanFeedback,
   inputs = emptyInputs,
   parts,
   runs,
@@ -220,88 +226,95 @@ export const ConversationTranscript = memo(function ConversationTranscript({
   const [initialPartIds] = useState(() => new Set(parts.map((part) => part.id)))
 
   return (
-    <VirtualTranscript
-      rows={rows}
-      renderRow={(index) => {
-        const row = rows[index]!
-        const entry = entries[index]
-        if (!entry) {
-          if (row.id === "conversation-empty")
-            return (
-              <MessageScrollerItem>
-                <div className="flex min-h-80 items-center justify-center text-sm text-ui-muted">
-                  这个会话还没有消息
-                </div>
-              </MessageScrollerItem>
-            )
-          if (row.id === "conversation-model-retry" && modelRetry)
+    <ImageGalleryProvider
+      getGallery={() =>
+        collectConversationImageGallery(messages, parts, imageComposerScope, imageCanFeedback)
+      }
+      readOnly={!imageComposerScope}
+    >
+      <VirtualTranscript
+        rows={rows}
+        renderRow={(index) => {
+          const row = rows[index]!
+          const entry = entries[index]
+          if (!entry) {
+            if (row.id === "conversation-empty")
+              return (
+                <MessageScrollerItem>
+                  <div className="flex min-h-80 items-center justify-center text-sm text-ui-muted">
+                    这个会话还没有消息
+                  </div>
+                </MessageScrollerItem>
+              )
+            if (row.id === "conversation-model-retry" && modelRetry)
+              return (
+                <MessageScrollerItem messageId={row.id}>
+                  <ModelRetryNotice retry={modelRetry} />
+                </MessageScrollerItem>
+              )
             return (
               <MessageScrollerItem messageId={row.id}>
-                <ModelRetryNotice retry={modelRetry} />
+                <TaskDuration
+                  timing={activeRun ? taskTiming([activeRun]) : { status: "pending" }}
+                  label={runningActivity.label}
+                  state={runningActivity.orb}
+                />
               </MessageScrollerItem>
             )
-          return (
-            <MessageScrollerItem messageId={row.id}>
-              <TaskDuration
-                timing={activeRun ? taskTiming([activeRun]) : { status: "pending" }}
-                label={runningActivity.label}
-                state={runningActivity.orb}
-              />
-            </MessageScrollerItem>
-          )
-        }
+          }
 
-        if (entry.type === "system") {
+          if (entry.type === "system") {
+            return (
+              <MessageScrollerItem messageId={entry.system.id}>
+                {entry.system.compactionPhase ? (
+                  <ContextCompactionDivider
+                    presentation={{
+                      kind: "context_compaction",
+                      phase: entry.system.compactionPhase,
+                    }}
+                  />
+                ) : (
+                  <MessageBlock
+                    message={entry.system.message}
+                    parts={entry.system.parts}
+                    streaming={false}
+                    onOpenFile={onOpenFile}
+                    canOpenReview={canOpenReview}
+                    onOpenReview={onOpenReview}
+                    onOpenTerminal={onOpenTerminal}
+                  />
+                )}
+              </MessageScrollerItem>
+            )
+          }
+          const data = turnDataById.get(entry.turn.id)!
+          const userMessageIsAnchor = entry.turn.userMessage?.id === lastUserMessage?.id
           return (
-            <MessageScrollerItem messageId={entry.system.id}>
-              {entry.system.compactionPhase ? (
-                <ContextCompactionDivider
-                  presentation={{
-                    kind: "context_compaction",
-                    phase: entry.system.compactionPhase,
-                  }}
-                />
-              ) : (
-                <MessageBlock
-                  message={entry.system.message}
-                  parts={entry.system.parts}
-                  streaming={false}
-                  onOpenFile={onOpenFile}
-                  canOpenReview={canOpenReview}
-                  onOpenReview={onOpenReview}
-                  onOpenTerminal={onOpenTerminal}
-                />
-              )}
-            </MessageScrollerItem>
+            <TranscriptTurn
+              data={data}
+              streamingPart={entry === lastTurn ? streamingPart : undefined}
+              userMessageIsAnchor={userMessageIsAnchor}
+              canEditUserMessage={canEditLastUserMessage && userMessageIsAnchor}
+              running={running}
+              showRunning={entry === runningTurn}
+              runningLabel={data.finished ? undefined : runningActivity.label}
+              runningState={data.finished ? undefined : runningActivity.orb}
+              initialPartIds={initialPartIds}
+              tasks={tasks}
+              onRunErrorAction={onRunErrorAction}
+              onOpenAgents={onOpenAgents}
+              onEditLastUserMessage={onEditLastUserMessage}
+              onCopyAssistantMessage={onCopyAssistantMessage}
+              onForkAssistantMessage={onForkAssistantMessage}
+              onOpenFile={onOpenFile}
+              canOpenReview={canOpenReview}
+              onOpenReview={onOpenReview}
+              onOpenTerminal={onOpenTerminal}
+            />
           )
-        }
-        const data = turnDataById.get(entry.turn.id)!
-        const userMessageIsAnchor = entry.turn.userMessage?.id === lastUserMessage?.id
-        return (
-          <TranscriptTurn
-            data={data}
-            streamingPart={entry === lastTurn ? streamingPart : undefined}
-            userMessageIsAnchor={userMessageIsAnchor}
-            canEditUserMessage={canEditLastUserMessage && userMessageIsAnchor}
-            running={running}
-            showRunning={entry === runningTurn}
-            runningLabel={data.finished ? undefined : runningActivity.label}
-            runningState={data.finished ? undefined : runningActivity.orb}
-            initialPartIds={initialPartIds}
-            tasks={tasks}
-            onRunErrorAction={onRunErrorAction}
-            onOpenAgents={onOpenAgents}
-            onEditLastUserMessage={onEditLastUserMessage}
-            onCopyAssistantMessage={onCopyAssistantMessage}
-            onForkAssistantMessage={onForkAssistantMessage}
-            onOpenFile={onOpenFile}
-            canOpenReview={canOpenReview}
-            onOpenReview={onOpenReview}
-            onOpenTerminal={onOpenTerminal}
-          />
-        )
-      }}
-    />
+        }}
+      />
+    </ImageGalleryProvider>
   )
 })
 

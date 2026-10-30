@@ -4,6 +4,7 @@ import { sniffAttachmentMediaType } from "@vykor/services";
 import type { AttachmentService } from "../attachments/attachment-service.js";
 import {
   downloadRemoteImage as defaultDownloadRemoteImage,
+  streamOf,
   type ImportedImageSource,
 } from "./remote-image-source.js";
 import { createToolAbortScope } from "./tool-abort-scope.js";
@@ -339,13 +340,4 @@ function imageExtension(mediaType: string | undefined): string {
     case "image/bmp": return "bmp";
     default: return "png";
   }
-}
-
-function streamOf(bytes: Uint8Array): ReadableStream<Uint8Array> {
-  return new ReadableStream({
-    start(controller) {
-      controller.enqueue(bytes);
-      controller.close();
-    },
-  });
 }

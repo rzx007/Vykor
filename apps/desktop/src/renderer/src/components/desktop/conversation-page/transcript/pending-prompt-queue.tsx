@@ -1,4 +1,4 @@
-import { CornerDownRight, GripVertical, Trash2 } from "lucide-react"
+import { CornerDownRight, GripVertical, Paperclip, Trash2 } from "lucide-react"
 
 import { Button } from "@renderer/components/ui/button"
 import {
@@ -25,7 +25,7 @@ interface PendingPrompt {
 type LocalPendingSubmission = Pick<
   PendingPromptSubmission,
   "id" | "sessionId" | "content" | "phase" | "placement" | "error" | "dismissed"
->
+> & { attachments?: PendingPromptSubmission["attachments"] }
 
 export function PendingPromptQueue({
   prompts,
@@ -66,33 +66,37 @@ export function PendingPromptQueue({
   if (visiblePrompts.length === 0 && visibleLocalSubmissions.length === 0) return null
 
   return (
-    <ItemGroup className="gap-1.5" aria-label="待处理消息">
+    <ItemGroup
+      className="max-h-48 gap-1 overflow-y-auto p-1 has-data-[size=xs]:gap-1"
+      aria-label="待处理消息"
+    >
       {visibleLocalSubmissions.map((visibleLocalSubmission) => (
         <Item
           key={visibleLocalSubmission.id}
-          variant="outline"
+          variant="default"
           size="xs"
-          className="bg-background/95"
+          className="min-h-10 flex-nowrap items-start gap-2 rounded-lg px-2 py-1"
         >
-          <ItemMedia aria-hidden>
+          <ItemMedia className="h-7 w-4" aria-hidden>
             {visibleLocalSubmission.phase === "failed" ? (
               <span className="text-xs font-semibold text-destructive">!</span>
             ) : (
               <Spinner className="size-3.5" />
             )}
           </ItemMedia>
-          <ItemContent className="min-w-0">
-            <ItemTitle className="max-w-full truncate font-normal">
-              {visibleLocalSubmission.content}
-            </ItemTitle>
+          <ItemContent className="min-w-0 gap-1 pt-1 group-data-[size=xs]/item:gap-1">
+            <PendingPromptTitle
+              content={visibleLocalSubmission.content}
+              attachments={visibleLocalSubmission.attachments}
+            />
             {visibleLocalSubmission.phase === "failed" && visibleLocalSubmission.error ? (
-              <p role="alert" className="text-xs leading-snug text-destructive">
+              <p role="alert" className="text-xs leading-snug wrap-anywhere text-destructive">
                 {visibleLocalSubmission.error}
               </p>
             ) : null}
           </ItemContent>
-          <ItemActions>
-            <span className="text-xs text-muted-foreground">
+          <ItemActions className="min-h-7 shrink-0 gap-1">
+            <span className="text-xs whitespace-nowrap text-muted-foreground">
               {visibleLocalSubmission.phase === "submitting"
                 ? "正在发送"
                 : visibleLocalSubmission.phase === "accepted"
@@ -105,7 +109,8 @@ export function PendingPromptQueue({
                   <Button
                     type="button"
                     variant="ghost"
-                    size="xs"
+                    shape="pill"
+                    size="sm"
                     onClick={() => onRetryLocal(visibleLocalSubmission.id)}
                   >
                     核对并重试
@@ -114,7 +119,9 @@ export function PendingPromptQueue({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="icon-xs"
+                  shape="circle"
+                  size="icon-sm"
+                  className="[&_svg]:size-3.5"
                   aria-label="关闭发送错误"
                   title="关闭"
                   onClick={() => onDismissLocal(visibleLocalSubmission.id)}
@@ -131,23 +138,29 @@ export function PendingPromptQueue({
         const cancelling = action?.kind === "cancel" && action.phase === "pending"
         const busy = action?.phase === "pending"
         return (
-          <Item key={run.id} variant="outline" size="xs" className="bg-background/95">
-            <ItemMedia aria-hidden>
+          <Item
+            key={run.id}
+            variant="default"
+            size="xs"
+            className="min-h-10 flex-nowrap items-start gap-2 rounded-lg px-2 py-1"
+          >
+            <ItemMedia className="h-7 w-4" aria-hidden>
               <GripVertical className="size-3.5 text-muted-foreground" />
             </ItemMedia>
-            <ItemContent className="min-w-0">
-              <ItemTitle className="max-w-full truncate font-normal">{input.content}</ItemTitle>
+            <ItemContent className="min-w-0 gap-1 pt-1 group-data-[size=xs]/item:gap-1">
+              <PendingPromptTitle content={input.content} attachments={input.attachments} />
               {action?.phase === "failed" && action.error ? (
-                <p role="alert" className="text-xs leading-snug text-destructive">
+                <p role="alert" className="text-xs leading-snug wrap-anywhere text-destructive">
                   {action.error}
                 </p>
               ) : null}
             </ItemContent>
-            <ItemActions>
+            <ItemActions className="min-h-7 shrink-0 gap-1">
               <Button
                 type="button"
                 variant="ghost"
-                size="xs"
+                shape="pill"
+                size="sm"
                 disabled={!activeRunId || busy}
                 onClick={() => onPromote(input.id, run.id)}
               >
@@ -161,7 +174,9 @@ export function PendingPromptQueue({
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-xs"
+                shape="circle"
+                size="icon-sm"
+                className="[&_svg]:size-3.5"
                 disabled={busy}
                 aria-label="删除待处理消息"
                 title="删除待处理消息"
@@ -174,5 +189,43 @@ export function PendingPromptQueue({
         )
       })}
     </ItemGroup>
+  )
+}
+
+function PendingPromptTitle({
+  content,
+  attachments = [],
+}: {
+  content: string
+  attachments?: readonly { displayName?: string }[]
+}): React.JSX.Element {
+  const attachmentOnly = !content.trim() && attachments.length > 0
+  const firstName = attachments[0]?.displayName?.trim()
+  let summary = content
+  if (attachmentOnly) {
+    summary = firstName
+      ? firstName + (attachments.length > 1 ? ` 等 ${attachments.length} 个附件` : "")
+      : `${attachments.length} 个附件`
+  }
+  return (
+    <ItemTitle
+      className="block w-full truncate font-normal"
+      title={
+        attachmentOnly
+          ? attachments
+              .map((attachment) => attachment.displayName?.trim() || "未命名附件")
+              .join("\n")
+          : undefined
+      }
+    >
+      {attachmentOnly ? (
+        <Paperclip
+          aria-hidden
+          strokeWidth={1.75}
+          className="mr-1 inline-block size-3.5 align-text-bottom text-muted-foreground"
+        />
+      ) : null}
+      {summary}
+    </ItemTitle>
   )
 }

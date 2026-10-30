@@ -14,7 +14,7 @@
 
 | 文件 | 主要接口或用途 |
 | --- | --- |
-| [context-service.ts](./context-service.ts) | `createDefaultContextService` |
+| [context-service.ts](./context-service.ts) | `createDefaultContextService`；个人提示词文件诊断复用 [配置目录的格式化函数](../configuration/profile-service.ts) |
 | [dream-service.ts](./dream-service.ts) | `createDefaultDreamService` |
 | [memory-service.ts](./memory-service.ts) | `createDefaultMemoryService`、`openMemoryManager` |
 

@@ -24,7 +24,7 @@ import { DEFAULT_ATTACHMENT_LIMITS } from "@vykor/services";
 import { CURRENT_PROTOCOL_VERSION, parseExecutionObservationFilter } from "@vykor/protocol";
 import type { AttachmentLimits, ServerCapabilities } from "@vykor/protocol";
 import { settingsPatchRuntimeImpact } from "../../application/default-services/configuration/settings-service.js";
-import type { PluginLifecycle, PluginLifecycleScope } from "../../application/session/plugins/plugin-lifecycle.js";
+import type { PluginLifecycle } from "../../application/session/plugins/plugin-lifecycle.js";
 
 export interface SystemRoutesContext {
   restartPreparedHealth?: () => (VykorServerHealth & { ready: false; accepting: false; restartPrepared: true }) | undefined;
@@ -250,36 +250,15 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
           : {},
       );
       const lease = context.control.acquireGlobalMutation();
-      if (!lease) {
-        if (impact === "restart") {
-          return errorResponse(
-            409,
-            "Cannot update daemon settings while session runs are active",
-          );
-        }
-        try {
-          const result = await context.settingsService.patch(body);
-          if (result.restartRuntimes) {
-            return errorResponse(
-              409,
-              "Cannot update daemon settings while session runs are active",
-            );
-          }
-          if (result.invalidateRuntimes) {
-            await context.control.invalidateRuntimes();
-          }
-          return jsonResponse({ settings: result.settings });
-        } catch (error) {
-          return errorResponse(
-            error instanceof Error && "code" in error && error.code === "settings_conflict" ? 409 : 400,
-            error instanceof Error && "code" in error && error.code === "settings_conflict" ? "权限或访问边界已被其他入口修改。请重新读取后保存。" : error instanceof Error ? error.message : String(error),
-          );
-        }
-      }
+      if (!lease && impact === "restart")
+        return errorResponse(409, "Cannot update daemon settings while session runs are active");
       try {
         const result = await context.settingsService.patch(body);
-        if (result.restartRuntimes) await context.control.closeAllRuntimes();
-        else if (result.invalidateRuntimes) {
+        if (result.restartRuntimes) {
+          if (!lease)
+            return errorResponse(409, "Cannot update daemon settings while session runs are active");
+          await context.control.closeAllRuntimes();
+        } else if (result.invalidateRuntimes) {
           await context.control.invalidateRuntimes();
         }
         return jsonResponse({ settings: result.settings });
@@ -289,7 +268,7 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
           error instanceof Error && "code" in error && error.code === "settings_conflict" ? "权限或访问边界已被其他入口修改。请重新读取后保存。" : error instanceof Error ? error.message : String(error),
         );
       } finally {
-        lease.release();
+        lease?.release();
       }
     })
     .get("/providers", async () => {

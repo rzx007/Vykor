@@ -35,6 +35,7 @@ export type SessionActions = {
   onRename: (session: DesktopSessionRecord) => void
   onArchive: (session: DesktopSessionRecord) => void
   onDelete: (session: DesktopSessionRecord) => void
+  onFork: (session: DesktopSessionRecord) => void
 }
 
 export type ProjectActions = {
@@ -144,6 +145,7 @@ export function SessionRow({
         onRename={() => actions.onRename(session)}
         onArchive={() => actions.onArchive(session)}
         onDelete={() => actions.onDelete(session)}
+        onFork={() => actions.onFork(session)}
       >
         {running ? (
           <>

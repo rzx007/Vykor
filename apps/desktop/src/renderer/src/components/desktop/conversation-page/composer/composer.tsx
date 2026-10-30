@@ -30,6 +30,8 @@ import { pluginMentionsEnabled as defaultPluginMentionsEnabled } from "./plugin-
 
 export function Composer({
   id,
+  composerScope,
+  imageCanFeedback,
   draft,
   sending,
   running = false,
@@ -83,6 +85,8 @@ export function Composer({
   contextContent,
 }: {
   id: string
+  composerScope?: string
+  imageCanFeedback?: () => boolean
   draft: ComposerDocument
   sending: boolean
   running?: boolean
@@ -299,6 +303,8 @@ export function Composer({
       ) : null}
       <ComposerAttachments
         attachments={attachments}
+        composerScope={composerScope}
+        imageCanFeedback={imageCanFeedback}
         readOnly={attachmentReadOnly || sending}
         onCancel={(draftId) => void attachmentAction(() => onCancelAttachment?.(draftId), "取消上传")}
         onRetry={(draftId) => void attachmentAction(() => onRetryAttachment?.(draftId), "重试附件")}

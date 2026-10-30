@@ -32,6 +32,7 @@ import { resolveModelContextLimits, type ModelContextLimits } from "../../contex
 import { createDefaultModelService } from "../models/model-service.js";
 import { openMemoryManager } from "./memory-service.js";
 import { readCurrentSettings, type DaemonSettingsRef } from "../shared.js";
+import { formatPersonalPromptDiagnostics } from "../configuration/profile-service.js";
 
 interface ContextStatusRow {
   source: string;
@@ -296,23 +297,6 @@ export function createDefaultContextService(
       return { snapshot, report: formatContextUsageReport(snapshot) };
     },
   };
-}
-
-function formatPersonalPromptDiagnostics(diagnostics: PersonalPromptFileDiagnostic[]): string {
-  const lines = ["Personal prompt files:"];
-  for (const item of diagnostics) {
-    const flags = [
-      item.truncated ? "truncated" : "",
-      item.issues.length > 0 ? `${item.issues.length} issue(s)` : "",
-    ].filter(Boolean);
-    lines.push(`- ${item.file}: ${item.status}${flags.length ? ` (${flags.join(", ")})` : ""}`);
-    lines.push(`  path: ${item.path}`);
-    if (item.message) lines.push(`  note: ${item.message}`);
-    for (const issue of item.issues) {
-      lines.push(`  ${issue.severity}: ${issue.code} - ${issue.message}`);
-    }
-  }
-  return lines.join("\n");
 }
 
 function formatPromptLayersReport(

@@ -12,7 +12,7 @@ import {
 } from "lucide-react"
 
 import type { FileViewerTab } from "@renderer/components/desktop/tools/files/file-viewer"
-import type { ImageSource } from "@renderer/components/desktop/image-viewer/image-source"
+import type { ImageGallery, ImageSource } from "@renderer/components/desktop/image-viewer/image-source"
 
 export type UtilityTool =
   | "review"
@@ -40,6 +40,7 @@ export type UtilityTab = {
   projectPath?: string
   terminalId?: string
   imageSource?: ImageSource
+  imageGallery?: ImageGallery
 }
 
 export const utilityToolMeta: Record<
