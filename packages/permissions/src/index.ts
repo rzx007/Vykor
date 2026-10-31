@@ -7,6 +7,7 @@ import type {
 import type { PermissionDecision } from "@vykor/agent-contracts";
 import { canonicalToolName, canonicalToolNames } from "@vykor/agent-contracts";
 import { posix, win32 } from "node:path";
+import { analyzeShellCommands, type PermissionShellDialect } from "./shell-commands.js";
 
 export type {
   PermissionMode,
@@ -60,6 +61,8 @@ export interface PermissionCheckOptions {
   trustedLocalReadOnlyToolNames?: string[];
   cwd?: string;
   pathStyle?: "windows" | "posix";
+  /** Actual executor family, supplied by the host rather than tool input. */
+  shellDialect?: PermissionShellDialect;
 }
 
 export class PermissionChecker {
@@ -74,6 +77,7 @@ export class PermissionChecker {
   private trustedLocalReadOnlyToolNames: Set<string> | undefined;
   private cwd: string | undefined;
   private pathStyle: "windows" | "posix";
+  private shellDialect: PermissionShellDialect | undefined;
 
   constructor(options: PermissionCheckOptions) {
     this.mode = options.mode === "full_access" ? "full_auto"
@@ -85,6 +89,7 @@ export class PermissionChecker {
     this.allowedTools = new Set(canonicalToolNames(options.allowedTools ?? []));
     this.deniedTools = new Set(canonicalToolNames(options.deniedTools ?? []));
     this.pathStyle = options.pathStyle ?? (process.platform === "win32" ? "windows" : "posix");
+    this.shellDialect = options.shellDialect;
     this.pathRules = options.pathRules ?? [];
     if (
       this.pathStyle === "posix" &&
@@ -105,6 +110,39 @@ export class PermissionChecker {
   }
 
   async checkTool(
+    toolName: string,
+    input: Record<string, unknown>,
+    inputSchema?: Record<string, unknown>,
+  ): Promise<PermissionDecision> {
+    toolName = canonicalToolName(toolName);
+    if (!["Shell", "BackgroundShellCreate", "TerminalOpen"].includes(toolName) || typeof input.command !== "string") {
+      return this.checkSingleTool(toolName, input, inputSchema);
+    }
+
+    // Preserve whole-request deny rules, but a whole-string allow must never
+    // authorize commands following a separator.
+    const whole = await this.checkSingleTool(toolName, input, inputSchema);
+    if (whole.action === "deny") return whole;
+    // A terminal can choose its own interpreter, including an input.shell
+    // override. Do not reuse the foreground/background executor's identity.
+    const analysis = analyzeShellCommands(input.command, toolName === "TerminalOpen" ? undefined : this.shellDialect);
+    if (toolName === "TerminalOpen" && input.shell !== undefined) analysis.complete = false;
+    let result: PermissionDecision = { action: "allow", reason: "Every literal shell command is allowed" };
+    for (const { source: command, denyCandidate } of analysis.commands) {
+      const decision = await this.checkSingleTool(toolName, { ...input, command }, inputSchema);
+      if (decision.action === "deny") return decision;
+      if (denyCandidate !== command) {
+        const normalized = await this.checkSingleTool(toolName, { ...input, command: denyCandidate }, inputSchema);
+        if (normalized.action === "deny") return normalized;
+      }
+      if (decision.action === "ask") result = decision;
+    }
+    return analysis.complete ? result : {
+      action: "ask", reason: "Shell syntax or interpreter cannot be analyzed safely; confirmation is required",
+    };
+  }
+
+  private async checkSingleTool(
     toolName: string,
     input: Record<string, unknown>,
     inputSchema?: Record<string, unknown>,

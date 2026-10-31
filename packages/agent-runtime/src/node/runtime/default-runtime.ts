@@ -46,7 +46,7 @@ import {
 } from "@vykor/coordinator/teams";
 import { buildRuntimeSystemPrompt } from "@vykor/prompts";
 import type { SandboxRuntimeReporter } from "@vykor/sandbox";
-import { settingsForApprovalMode } from "@vykor/sandbox";
+import { resolveHostShellLauncher, settingsForApprovalMode } from "@vykor/sandbox";
 import { effectivePermissionMode } from "@vykor/permissions";
 import { normalizeApprovalMode } from "@vykor/host-config";
 import type { SkillRegistry } from "@vykor/skills";
@@ -282,10 +282,16 @@ export async function createVykorRuntime(
       trustedBuiltinToolNames,
     );
 
+    // The legacy executor uses this same process-lifetime cached launcher.
+    // With an execution environment, its descriptor is the actual executor.
+    const hostShellKind = options.executionEnvironment ? undefined : resolveHostShellLauncher().kind;
     const permissionChecker = new PermissionChecker({
       mode,
       cwd,
       pathStyle: options.executionEnvironment?.info.pathStyle,
+      shellDialect: options.executionEnvironment
+        ? options.executionEnvironment.info.shellDescriptor?.family
+        : hostShellKind === "bash" || hostShellKind === "posix-sh" ? "posix" : hostShellKind,
       allowedTools:
         effectiveAllowed.kind === "only" ? [...effectiveAllowed.names] : [],
       deniedTools: [...effectiveDenied],
