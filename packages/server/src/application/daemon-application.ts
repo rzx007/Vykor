@@ -319,6 +319,7 @@ export class DaemonApplication implements DurableAgentApplication {
     }, options.ownerHeartbeatMs ?? 5_000);
     this.ownerHeartbeat.unref?.();
     let createdWorkflowHost: WorkflowHost | undefined;
+    let createdAgentPool: AgentPool | undefined;
     try {
       const attachmentServices = createDaemonAttachmentServices({
         store,
@@ -677,7 +678,26 @@ export class DaemonApplication implements DurableAgentApplication {
             : "";
         },
         isSessionExternallyOwned: (sessionId) => this.liveChildren.has(sessionId),
+        idleTimeoutMs: 30 * 60 * 1_000,
+        hasSessionWork: (sessionId) =>
+          this.readyState !== "ready" ||
+          this.runControl.hasWork(sessionId) ||
+          store.runs.listRuns(sessionId).some(run => run.status === "pending" || run.status === "running") ||
+          store.permissions.list({ sessionId, status: "pending" }).length > 0 ||
+          store.runs.listSessionTasks(sessionId).some(task => task.status === "pending" || task.status === "running"),
+        enterIdleEviction: (sessionId, isIdle) => {
+          store.assertApplicationOwner(this.ownerLease);
+          const session = store.sessions.get(sessionId);
+          return session ? this.operationGate.tryEnterBarrier(
+            { kind: "session", sessionId, cwd: session.cwd }, isIdle,
+          ) : undefined;
+        },
+        onIdleEvictionError: (error, sessionId) => options.log({
+          level: "warn", event: "session.agent.idle_cleanup_failed", sessionId,
+          error: error instanceof Error ? error.message : String(error),
+        }),
       });
+      createdAgentPool = this.agentPool;
 
       // 一次 prompt 跑完才做：写记忆、个性化、auto-dream。失败的半截对话不写进去。
       const postRunMaintenance = new SessionPostRunMaintenance({
@@ -1070,6 +1090,7 @@ export class DaemonApplication implements DurableAgentApplication {
           },
           (error) => {
             this.readyState = "failed";
+            this.agentPool.stopIdleEviction();
             clearInterval(this.ownerHeartbeat);
             store.releaseApplicationOwner(this.ownerLease);
             throw error;
@@ -1077,6 +1098,7 @@ export class DaemonApplication implements DurableAgentApplication {
         );
       void this.startupRecovery.catch(() => {});
     } catch (error) {
+      createdAgentPool?.stopIdleEviction();
       this.releaseContextUsageLiveAssembler?.();
       void (async () => {
         try { await createdWorkflowHost?.close(); }
@@ -1097,6 +1119,7 @@ export class DaemonApplication implements DurableAgentApplication {
   close(): Promise<void> {
     if (this.closePromise) return this.closePromise;
     this.readyState = "closing";
+    this.agentPool.stopIdleEviction();
     this.closePromise = this.closeWork();
     return this.closePromise;
   }
