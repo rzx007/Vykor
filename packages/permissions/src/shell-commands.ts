@@ -36,6 +36,13 @@ export function analyzeShellCommands(source: string, dialect?: PermissionShellDi
     // Only the shared, unquoted subset is safe without a supported interpreter.
     const complete = ordinaryCharacters && /^[\w./:\\ -]+$/.test(source.trim()) && !isIndirectCommand(source.trim().split(/ +/)[0]!);
     if (complete) return { commands: [{ source: source.trim(), denyCandidate: source.trim().replace(/ +/g, " ") }], complete };
+    if (!dialect) {
+      // A terminal may select any of these executors. Keep every plausible deny
+      // candidate; no single interpreter's quoting can establish permission.
+      const candidates = (["posix", "powershell", "cmd"] as const)
+        .flatMap(executor => analyzeShellCommands(source, executor).commands);
+      return { commands: [...new Map(candidates.map(command => [JSON.stringify(command), command])).values()], complete: false };
+    }
     // Retain literal candidates for deny checks without granting ordinary approval.
   }
 
@@ -78,10 +85,17 @@ export function analyzeShellCommands(source: string, dialect?: PermissionShellDi
       }
       continue;
     }
-    if (char === "'" || char === '"') {
+    if (dialect === "cmd" && char === "^") {
+      // Outside double quotes, CMD escapes the following character. An escaped
+      // quote cannot hide a later separator; an escaped separator stays literal.
+      complete = false;
+      if (index + 1 < source.length) word += source[++index]!;
+      else word += char;
+      wordStarted = true;
+    } else if ((char === "'" && dialect !== "cmd") || char === '"') {
       quote = char;
       wordStarted = true;
-    } else if (char === ";" || char === "\n" || (dialect === "powershell" && char === "\r") || char === "|" || char === "&") {
+    } else if ((char === ";" && dialect !== "cmd") || char === "\n" || (dialect === "powershell" && char === "\r") || char === "|" || char === "&") {
       finishCommand(index);
       if (char === "\r" && source[index + 1] === "\n") index++;
       if (char === "&" && source[index + 1] !== "&") complete = false;

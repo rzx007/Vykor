@@ -138,6 +138,21 @@ describe("Shell command permissions", () => {
     expect((await permissions.checkTool("Shell", { command: "echo 'it''s literal; rm -rf ./dummy'" })).action).toBe("allow");
   });
 
+  it.each(["posix", "powershell"] as const)("keeps single-quoted ampersands literal with a known %s executor", async shellDialect => {
+    const permissions = checker({ mode: "full_access", shellDialect, deniedCommands: ["echo DENIED*"] });
+    expect((await permissions.checkTool("Shell", { command: "echo 'prefix & echo DENIED_MARKER'" })).action).toBe("allow");
+  });
+
+  it.each(['echo "prefix & echo DENIED_MARKER"', "echo prefix ^& echo DENIED_MARKER", "echo prefix; echo DENIED_MARKER"])("keeps CMD literal text out of separate deny candidates: %s", async command => {
+    const permissions = checker({ mode: "full_access", shellDialect: "cmd", deniedCommands: ["echo DENIED*"] });
+    expect((await permissions.checkTool("Shell", { command })).action).toBe("allow");
+  });
+
+  it("matches CMD denied commands after removing literal caret escapes", async () => {
+    const permissions = checker({ mode: "full_access", shellDialect: "cmd", deniedCommands: ["echo DENIED*"] });
+    expect((await permissions.checkTool("Shell", { command: "e^cho DENIED_MARKER" })).action).toBe("deny");
+  });
+
   it.each(["\r", "\r\n"])("applies explicit PowerShell deny rules after %j", async newline => {
     const permissions = checker({ shellDialect: "powershell", rules: [
       { commandPattern: "echo *", action: "allow" },
@@ -180,6 +195,27 @@ describe("Shell command permissions", () => {
   });
 
   describe.each([undefined, "cmd"] as const)("without a supported executor (%s)", shellDialect => {
+    describe.each([
+      { deniedCommands: ["echo DENIED*"] },
+      { rules: [{ commandPattern: "echo DENIED*", action: "deny" as const }] },
+    ])("with command restrictions %j", restrictions => {
+      it.each(["Shell", "BackgroundShellCreate", "TerminalOpen"])("rejects CMD commands after a single-quoted separator for %s", async tool => {
+        const permissions = checker({ mode: "full_access", shellDialect, ...restrictions });
+        expect((await permissions.checkTool(tool, {
+          command: "echo 'prefix & echo DENIED_MARKER'",
+          ...(tool === "TerminalOpen" ? { shell: "cmd.exe" } : {}),
+        })).action).toBe("deny");
+      });
+
+      it.each(["Shell", "BackgroundShellCreate", "TerminalOpen"])("rejects CMD commands after caret-escaped quotes for %s", async tool => {
+        const permissions = checker({ mode: "full_access", shellDialect, ...restrictions });
+        expect((await permissions.checkTool(tool, {
+          command: 'echo ^"prefix & echo DENIED_MARKER^"',
+          ...(tool === "TerminalOpen" ? { shell: "cmd.exe" } : {}),
+        })).action).toBe("deny");
+      });
+    });
+
     it.each(["Shell", "BackgroundShellCreate", "TerminalOpen"])("keeps later deniedCommands ahead of full_access for %s", async tool => {
       const permissions = checker({ mode: "full_access", shellDialect, deniedCommands: ["rm -rf*"] });
       expect((await permissions.checkTool(tool, { command: "echo harmless && rm -rf ./dummy" })).action).toBe("deny");
