@@ -30,6 +30,112 @@ describe("ScheduleRepository", () => {
   };
   const runInput = { taskId: "task", cause: "manual" as const, scheduledFor: 100 };
 
+  it.each([
+    {
+      destination: "chat",
+      source: "live",
+      sessionId: "source-chat",
+      expectedSessionId: "source-chat",
+    },
+    {
+      destination: "chat",
+      source: "archived",
+      sessionId: "source-chat",
+      expectedSessionId: "source-chat",
+    },
+    {
+      destination: "chat",
+      source: "missing",
+      sessionId: "missing-chat",
+      expectedSessionId: undefined,
+    },
+    {
+      destination: "chat",
+      source: "deleted",
+      sessionId: "source-chat",
+      expectedSessionId: undefined,
+    },
+    {
+      destination: "standalone",
+      source: "live",
+      sessionId: "source-chat",
+      expectedSessionId: undefined,
+    },
+    {
+      destination: "standalone",
+      source: "live",
+      sessionId: undefined,
+      expectedSessionId: undefined,
+    },
+  ] as const)(
+    "links only a confirmed chat destination at creation: $destination / $source / $sessionId",
+    ({ destination, source, sessionId, expectedSessionId }) => {
+      withRepository((_repository, store) => {
+        if (source !== "missing") {
+          store.sessions.create({
+            id: "source-chat",
+            cwd: process.cwd(),
+            model: "test",
+          });
+          if (source === "archived") store.sessions.archive("source-chat");
+          if (source === "deleted")
+            store.conversationTransactions.deleteSessionTree("source-chat");
+        }
+        store.schedules.createTask({
+          ...taskInput,
+          id: "task",
+          destination,
+          sessionId,
+          createdFromSessionId: "source-chat",
+        });
+
+        const run = store.schedules.createRun({ ...runInput, id: "run" });
+
+        expect(run.sessionId).toBe(expectedSessionId);
+        expect(
+          store.conversations
+            .listEvents()
+            .filter((event) => event.type === "scheduled.run.created")
+            .map(
+              (event) => (event.payload.run as ScheduledRunRecord).sessionId,
+            ),
+        ).toEqual([expectedSessionId]);
+      });
+    },
+  );
+
+  it("clears a chat run's initial link when the chat is deleted and does not restore it", () => {
+    withRepository((_repository, store) => {
+      store.sessions.create({
+        id: "source-chat",
+        cwd: process.cwd(),
+        model: "test",
+      });
+      store.schedules.createTask({
+        ...taskInput,
+        id: "task",
+        destination: "chat",
+        sessionId: "source-chat",
+      });
+      const run = store.schedules.createRun({ ...runInput, id: "run" });
+      expect(run.sessionId).toBe("source-chat");
+
+      store.conversationTransactions.deleteSessionTree("source-chat");
+      store.schedules.linkRunSession(run.id, "source-chat");
+      const finished = store.schedules.updateRun(run.id, {
+        status: "failed",
+        unread: true,
+      });
+
+      expect(finished.sessionId).toBeUndefined();
+      expect(store.schedules.getTask("task")).toMatchObject({
+        status: "paused",
+      });
+      expect(store.schedules.getTask("task")?.sessionId).toBeUndefined();
+      expect(store.schedules.getTask("task")?.nextRunAt).toBeUndefined();
+    });
+  });
+
   it("replays every committed run transition including session link and read state", () => {
     withRepository((_repository, store) => {
       store.schedules.createTask({ ...taskInput, id: "task" });

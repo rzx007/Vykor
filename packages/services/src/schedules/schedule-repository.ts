@@ -132,8 +132,13 @@ export class ScheduleRepository {
   createRun(input: CreateScheduledRunInput): ScheduledRunRecord {
     return this.storage.atomic(() => {
       this.storage.assertWritable();
-      if (!this.getTask(input.taskId))
+      const task = this.getTask(input.taskId);
+      if (!task)
         throw new Error(`Scheduled task not found: ${input.taskId}`);
+      // A chat run remains routable when execution stops before onSessionReady.
+      const chatSession = task.destination === "chat" && task.sessionId
+        ? this.database.select({ id: sessions.id }).from(sessions).where(eq(sessions.id, task.sessionId)).get()
+        : undefined;
       const timestamp = Date.now(),
         id = input.id ?? randomUUID();
       this.database.insert(scheduledRuns).values({
@@ -142,6 +147,7 @@ export class ScheduleRepository {
         cause: input.cause,
         status: "queued",
         scheduledFor: input.scheduledFor,
+        sessionId: chatSession?.id ?? null,
         unread: 0,
         createdAt: timestamp,
         updatedAt: timestamp,

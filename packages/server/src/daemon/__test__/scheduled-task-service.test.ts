@@ -9,8 +9,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ScheduledTaskService,
   type ScheduleOperations,
+  type ScheduledTaskServiceOptions,
 } from "../scheduled-task-service.js";
 import { DaemonApplication } from "../../application/daemon-application.js";
+import { ScheduledTaskExecutor } from "../../application/schedule/scheduled-task-executor.js";
 
 const cleanups: Array<() => Promise<void> | void> = [];
 
@@ -20,7 +22,7 @@ afterEach(async () => {
 });
 
 function createHarness(
-  execute = vi.fn(async (
+  execute: ScheduledTaskServiceOptions["execute"] = vi.fn(async (
     _task: ScheduledTaskRecord,
     _run: ScheduledRunRecord,
     reportSessionReady: (sessionId: string) => void,
@@ -53,6 +55,99 @@ function createHarness(
 }
 
 describe("ScheduledTaskService", () => {
+  it.each([
+    {
+      name: "archived chat",
+      destination: "chat",
+      executionMode: "local",
+      archived: true,
+      projectPaths: [process.cwd()],
+      status: "needs_attention",
+      sessionId: "source-chat",
+      error: "Scheduled task chat is archived and requires user attention",
+    },
+    {
+      name: "standalone without a model",
+      destination: "standalone",
+      executionMode: "local",
+      archived: false,
+      projectPaths: [process.cwd()],
+      status: "failed",
+      sessionId: undefined,
+      error: "Scheduled task model is unavailable",
+    },
+  ] as const)(
+    "retains only an existing execution chat when $name fails before readiness",
+    async ({
+      destination,
+      executionMode,
+      archived,
+      projectPaths,
+      status,
+      sessionId,
+      error,
+    }) => {
+      let executor!: ScheduledTaskExecutor;
+      const { service, store } = createHarness(
+        vi.fn((task, run, ready) => executor.execute(task, run, ready)),
+      );
+      store.sessions.create({
+        id: "source-chat",
+        cwd: process.cwd(),
+        model: "test",
+      });
+      if (archived) store.sessions.archive("source-chat");
+      executor = new ScheduledTaskExecutor({
+        sessionQueries: { getSession: (id) => store.sessions.get(id) },
+        sessionCommands: {
+          createSession: () => {
+            throw new Error("Unexpected standalone creation");
+          },
+        },
+        sessionInteractions: {
+          admitPrompt: async () => {
+            throw new Error("Unexpected admission before preflight succeeded");
+          },
+        },
+        runControl: {
+          awaitRun: async () => {
+            throw new Error("Unexpected run before preflight succeeded");
+          },
+        },
+      });
+      const task = service.createTask({
+        name: "preflight failure",
+        prompt: "work",
+        recurrence: "2099-01-01T00:00:00Z",
+        recurrenceFormat: "once",
+        timezone: "UTC",
+        destination,
+        executionMode,
+        sessionId: destination === "chat" ? "source-chat" : undefined,
+        createdFromSessionId: "source-chat",
+        projectPaths: [...projectPaths],
+      });
+
+      const result = await service.trigger(task.id);
+
+      expect(result).toMatchObject({ status, error, unread: true });
+      expect(result.sessionId).toBe(sessionId);
+      expect(
+        store.conversations
+          .listEvents()
+          .filter((event) => event.type.startsWith("scheduled.run."))
+          .map((event) => {
+            const run = event.payload.run as ScheduledRunRecord;
+            return [run.status, run.sessionId];
+          }),
+      ).toEqual([
+        ["queued", sessionId],
+        ["running", sessionId],
+        [status, sessionId],
+      ]);
+    },
+  );
+
   it("publishes committed run transitions without a Scheduled page subscriber", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vk-schedule-publish-"));
     const scheduleStore = new SessionStore({ path: join(dir, "store.db") });
