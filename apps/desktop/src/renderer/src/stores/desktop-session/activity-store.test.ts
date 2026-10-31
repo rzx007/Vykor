@@ -196,6 +196,7 @@ describe("Desktop Activity store", () => {
           title: "Vykor 需要处理",
           body: `${view.session.title} 正在等待处理。`,
           sessionId: "current",
+          permissionId: "p1",
           silent: true,
           eventStatus: "needs_input",
           eventId: "session:current:1:p1:needs_input",

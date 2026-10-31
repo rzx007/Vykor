@@ -3,6 +3,7 @@ import {
   syncEvents,
   type ScheduledRunRecord,
   type SessionEventRecord,
+  type SessionGoal,
   type SyncEventUpdate,
 } from "@vykor/application-client"
 import type {
@@ -29,6 +30,7 @@ interface Subscription {
   generation: number
   snapshot: DesktopActivityUpdate | null
   sessions: Map<string, DesktopSessionActivity>
+  goals: Map<string, SessionGoal>
   scheduled: Map<string, DesktopScheduledActivity>
   deletedSessionIds: Set<string>
   cursor: number
@@ -77,6 +79,7 @@ export class GlobalActivitySubscriptionService {
       generation: ++this.nextGeneration,
       snapshot: null,
       sessions: new Map(),
+      goals: new Map(),
       scheduled: new Map(),
       deletedSessionIds: new Set(),
       cursor: 0,
@@ -175,6 +178,7 @@ export class GlobalActivitySubscriptionService {
       const deleted = new Set(removedSessionIds)
       for (const id of deleted) {
         subscription.sessions.delete(id)
+        subscription.goals.delete(id)
         subscription.deletedSessionIds.add(id)
       }
       this.onSessionsDeleted?.(subscription.webContents.id, removedSessionIds)
@@ -194,18 +198,25 @@ export class GlobalActivitySubscriptionService {
         if (item.taskId === removedTaskId) subscription.scheduled.delete(runId)
       }
     }
+    const goal = readSessionGoal(event)
+    if (goal && !subscription.deletedSessionIds.has(goal.sessionId))
+      subscription.goals.set(goal.sessionId, goal)
     const run = readScheduledRun(event)
     if (run) {
       const item = projectScheduledActivity(run, event.seq)
       subscription.scheduled.set(run.id, item)
       scheduled.push(item)
     } else {
-      const sessionId = event.sessionId ?? readSessionId(event)
+      const sessionId = event.sessionId ?? goal?.sessionId ?? readSessionId(event)
       if (sessionId && shouldProjectSession(event.type)) {
         const previous = subscription.sessions.get(sessionId)
         const activitySeq = isAttentionEvent(event) ? event.seq : (previous?.activitySeq ?? 0)
-        const item = projectSessionActivity(update.state, sessionId, activitySeq)
+        const currentGoal = subscription.goals.get(sessionId)
+        const item = projectSessionActivity(update.state, sessionId, activitySeq, currentGoal)
         if (item) {
+          // Any newly visible result owns the event that reveals it. A child's
+          // pending permission can obscure an ordinary run just as it can a goal.
+          if (isSessionAttentionChange(previous, item)) item.activitySeq = event.seq
           if (event.type === "session.created") subscription.deletedSessionIds.delete(sessionId)
           item.session = toDesktopSessionRecord(item.session)
           subscription.sessions.set(sessionId, item)
@@ -251,6 +262,33 @@ export class GlobalActivitySubscriptionService {
   }
 }
 
+function readSessionGoal(event: SessionEventRecord): SessionGoal | undefined {
+  if (event.type !== "session.goal.created" && event.type !== "session.goal.updated")
+    return undefined
+  const goal = event.payload.goal
+  return goal &&
+    typeof goal === "object" &&
+    !Array.isArray(goal) &&
+    "id" in goal &&
+    typeof goal.id === "string" &&
+    "sessionId" in goal &&
+    typeof goal.sessionId === "string"
+    ? (goal as SessionGoal)
+    : undefined
+}
+
+function isSessionAttentionChange(
+  previous: DesktopSessionActivity | undefined,
+  next: DesktopSessionActivity
+): boolean {
+  if (next.executionState === "running" || next.executionState === "idle") return false
+  return (
+    previous?.executionState !== next.executionState ||
+    previous?.permissionId !== next.permissionId ||
+    previous?.attentionId !== next.attentionId
+  )
+}
+
 function readScheduledRun(event: SessionEventRecord): ScheduledRunRecord | undefined {
   if (event.type !== "scheduled.run.created" && event.type !== "scheduled.run.updated")
     return undefined
@@ -272,6 +310,8 @@ function shouldProjectSession(type: string): boolean {
     type === "session.created" ||
     type === "session.updated" ||
     type === "session.archived" ||
+    type === "session.goal.created" ||
+    type === "session.goal.updated" ||
     type.startsWith("session.run.") ||
     type.startsWith("session.task.") ||
     type === "session.message.created" ||

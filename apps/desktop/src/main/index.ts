@@ -14,6 +14,8 @@ import { createPetWindow } from "./features/pet/window"
 import { desktopSessionService } from "./features/session/session-service"
 import { desktopTerminalService } from "./features/terminal/terminal-service"
 import { createTray, destroyTray } from "./features/tray/tray"
+import { initializeNotificationActions } from "./features/tray/notification-actions"
+import { openNotificationSession } from "./features/tray/notification-navigation"
 import { startDesktopUpdater } from "./features/updater/start"
 import {
   resolveDesktopDaemonMode,
@@ -99,7 +101,15 @@ function startDesktopApplication(): void {
       ipcRegistry.register(contribution)
     }
 
-    const mainWindow = createMainWindow(ctx)
+    const appContext = ctx
+    initializeNotificationActions(
+      () => desktopSessionService.daemonClient(),
+      (sessionId) => openNotificationSession(sessionId, () =>
+        appContext.windowManager.getMain() ?? appContext.createMainWindow()
+      )
+    )
+
+    const mainWindow = ctx.windowManager.getMain() ?? createMainWindow(ctx)
     createTray(ctx)
     createPetWindow(ctx)
     showMainWindow(mainWindow)

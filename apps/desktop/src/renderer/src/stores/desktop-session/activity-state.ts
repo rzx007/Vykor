@@ -30,6 +30,9 @@ export interface ActivityNotification {
 
   sessionId?: string
 
+  permissionId?: string
+  attentionId?: string
+
   taskId?: string
 
   status: DesktopSessionActivity["executionState"]
@@ -117,8 +120,10 @@ function sessionNotice(activity: DesktopSessionActivity): ActivityNotification {
 
   return {
     seq: activity.activitySeq,
-    eventId: `session:${activity.session.id}:${activity.runId ?? activity.updatedAt}:${activity.permissionId ?? ""}:${status}`,
+    eventId: `session:${activity.session.id}:${activity.runId ?? activity.updatedAt}:${activity.permissionId ?? activity.attentionId ?? ""}:${status}`,
     sessionId: activity.session.id,
+    ...(activity.permissionId ? { permissionId: activity.permissionId } : {}),
+    ...(activity.attentionId ? { attentionId: activity.attentionId } : {}),
     status,
 
     title: status === "needs_input" ? "Vykor 需要处理" : "Vykor",
@@ -206,18 +211,21 @@ export function applyActivityUpdate(
     const transition =
       !previous ||
       previous.executionState !== activity.executionState ||
-      previous.permissionId !== activity.permissionId
+      previous.permissionId !== activity.permissionId ||
+      previous.attentionId !== activity.attentionId
 
     if (
       update.delivery === "live" &&
       transition &&
-      !activity.session.parentId &&
-      !activity.session.metadata["scheduledTask"] &&
-      isResult(activity.executionState) && activity.executionState !== "interrupted" &&
+      (activity.executionState === "needs_input" ||
+        (!activity.session.parentId && !activity.scheduledRunId)) &&
+      isResult(activity.executionState) &&
+      activity.executionState !== "interrupted" &&
       activity.activitySeq > state.lastNotifiedCursor &&
       (activity.executionState === "needs_input" ||
         previous?.executionState === "running" ||
-        previous?.executionState === "needs_input")
+        previous?.executionState === "needs_input" ||
+        (activity.executionState === "failed" && previous?.executionState === "interrupted"))
     ) {
       const notice = sessionNotice(activity)
       sounds.push(notice)
@@ -239,18 +247,20 @@ export function applyActivityUpdate(
       update.delivery === "live" &&
       activity.run.unread &&
       (!previous || previous.executionState !== activity.executionState) &&
-      isResult(activity.executionState) && activity.executionState !== "interrupted" &&
+      isResult(activity.executionState) &&
+      activity.executionState !== "interrupted" &&
       activity.activitySeq > state.lastNotifiedCursor
     ) {
       const notice: ActivityNotification = {
         seq: activity.activitySeq,
         eventId: `scheduled:${activity.run.id}:${activity.executionState}`,
         taskId: activity.taskId,
+        ...(activity.run.sessionId ? { sessionId: activity.run.sessionId } : {}),
         status: activity.executionState,
 
         title: "Vykor 定时任务",
 
-        body: `定时任务${activity.executionState === "completed" ? "已完成" : "需要处理"}。`,
+        body: `定时任务${activity.executionState === "completed" ? "已完成" : activity.executionState === "failed" ? "运行失败" : "正在等待处理"}。`,
       }
       notifications.push(notice)
       sounds.push(notice)

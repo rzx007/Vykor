@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const { show, noteUnfocusedAttention, notifications, preferences, getFocusedWindow } = vi.hoisted(() => ({
-  show: vi.fn(),
-  noteUnfocusedAttention: vi.fn(),
-  notifications: [] as { click?: () => void; options?: unknown }[],
-  preferences: { notificationMode: "when_unfocused" as "when_unfocused" | "always" | "never", notificationEvents: { completed: true, failed: true, needs_input: true }, notifiedEventIds: [] as string[] },
-  getFocusedWindow: vi.fn(() => null as unknown),
-}))
+const { show, noteUnfocusedAttention, notifications, preferences, getFocusedWindow } = vi.hoisted(
+  () => ({
+    show: vi.fn(),
+    noteUnfocusedAttention: vi.fn(),
+    notifications: [] as { click?: () => void; options?: unknown }[],
+    preferences: {
+      notificationMode: "when_unfocused" as "when_unfocused" | "always" | "never",
+      notificationEvents: { completed: true, failed: true, needs_input: true },
+      notifiedEventIds: [] as string[],
+    },
+    getFocusedWindow: vi.fn(() => null as unknown),
+  })
+)
 
 vi.mock("../settings/desktop-preferences", () => ({
   getDesktopPreferences: () => preferences,
@@ -21,6 +27,7 @@ vi.mock("electron", () => ({
   Notification: class {
     static isSupported = vi.fn(() => true)
     click?: () => void
+    shown?: () => void
     constructor(readonly options: unknown) {
       notifications.push(this)
     }
@@ -28,7 +35,18 @@ vi.mock("electron", () => ({
       if (event === "click") this.click = listener
       return this
     }
-    show = show
+    once(event: string, listener: () => void) {
+      if (event === "show") this.shown = listener
+      return this
+    }
+    removeListener(event: string, listener: () => void) {
+      if (event === "show" && this.shown === listener) this.shown = undefined
+      return this
+    }
+    show() {
+      show()
+      this.shown?.()
+    }
   },
   Tray: class {},
 }))
@@ -52,7 +70,11 @@ describe("sendTrayNotification", () => {
   })
 
   it("treats a focused settings window as focused application state", () => {
-    getFocusedWindow.mockReturnValue({ isDestroyed: () => false, isVisible: () => true, isMinimized: () => false })
+    getFocusedWindow.mockReturnValue({
+      isDestroyed: () => false,
+      isVisible: () => true,
+      isMinimized: () => false,
+    })
     sendTrayNotification({ title: "Vykor", body: "任务已完成。" }, () => null)
     expect(show).not.toHaveBeenCalled()
     expect(noteUnfocusedAttention).not.toHaveBeenCalled()
@@ -60,9 +82,17 @@ describe("sendTrayNotification", () => {
 
   it("respects each event switch and deduplicates delivered task events", () => {
     preferences.notificationEvents.failed = false
-    sendTrayNotification({ title: "Vykor", body: "SECRET command", eventStatus: "failed", eventId: "f1" }, () => null)
+    sendTrayNotification(
+      { title: "Vykor", body: "SECRET command", eventStatus: "failed", eventId: "f1" },
+      () => null
+    )
     expect(show).not.toHaveBeenCalled()
-    const options = { title: "Vykor", body: "SECRET command", eventStatus: "completed" as const, eventId: "c1" }
+    const options = {
+      title: "Vykor",
+      body: "SECRET command",
+      eventStatus: "completed" as const,
+      eventId: "c1",
+    }
     sendTrayNotification(options, () => null)
     sendTrayNotification(options, () => null)
     expect(show).toHaveBeenCalledOnce()

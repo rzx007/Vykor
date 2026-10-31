@@ -319,7 +319,7 @@ class WorkspaceService {
   async copyPath(input: WorkspaceCopyPathInput): Promise<string> {
     const resolved = await this.resolveAllowedFile(input.rootPath, input.path)
     const text = input.absolute ? resolved.absolutePath : resolved.classification.relativePath
-    clipboard.writeText(text)
+    await clipboard.writeText(text)
     return text
   }
 

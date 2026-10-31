@@ -319,6 +319,7 @@ describe("Activity state", () => {
   it("does not issue a second conversation notification for a scheduled run", () => {
     const scheduledSession = {
       ...session("scheduled", "completed", 2),
+      scheduledRunId: "run",
       session: {
         ...session("scheduled", "completed", 2).session,
         metadata: { scheduledTask: { taskId: "task", scheduledRunId: "run" } },

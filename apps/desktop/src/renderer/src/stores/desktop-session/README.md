@@ -115,7 +115,7 @@ renderer 只有一处订阅入口：`store.ts` 的 `attachDesktopSessionEvents`�
 - 所有来自 IPC 的权威快照（`sessions.onUpdated` 与 `resyncActiveSessionSnapshot`）必须经过该入口完成受控写入；
 - 各 feature actions（prompt、attachment、goal、project）只修改其自身的 operation/draft/view 临时交互状态，不直接绕过权威入口伪造持久化 terminal 状态；
 - 打开会话 `openSession` 在验证 generation 与 operation 所有权后，仅将初次权威 snapshot 与项目工作区原子写入，随后由 `applySessionUpdate` 负责后续所有增量对账；
-- Notification 监听器（`notification-observer.ts`）纯粹作为只读观察者消费状态变更，不二次分发或重新应用事件。
+- 系统通知由全局活动订阅触发，不依赖当前打开的 `SessionView`；通知处理不二次分发或重新应用会话事件。
 
 高频文本更新走独立的轻量路径：Renderer 用 `applySessionPartDeltas` 校验会话、part 与文本偏移，只替换目标 part 和 cursor，不运行快照的 runtime 对账、项目刷新或 goal 刷新。每条主/辅投递在同步写入本地 view 后发送 ACK（消费确认）；主进程每订阅只保留一条在途更新，并将未确认期间的待发文本增量限制为 500 项或 1 MiB。结构变化、缓冲超限、应用失败或 5 秒内未确认时，以当前最新完整快照恢复。辅助会话在自己的 view ref 中应用同一 reducer，ACK/watchdog 随订阅卸载清理。
 
@@ -177,6 +177,18 @@ operation 的阶段是 `pending`、`acknowledged`、`failed`。
 12. 成功 operation 会清理；失败状态有明确可见 owner，不能无界积累。
 13. renderer 永远不保存附件真实路径；上传错误也不能包含路径、授权值、source token 或堆栈。
 14. production 构建在 daemon 声明附件能力时默认开放；`VYKOR_DESKTOP_ATTACHMENTS=0` 关闭时 picker、drop、paste 和附件发送入口都不能绕过，但纯文字发送保持原流程。
+
+## 后台活动与通知
+
+主进程把全局事件转换成 `DesktopActivityUpdate`，经 `store.ts` 的活动订阅交给 `activity-state.ts`。后者保存各会话和定时运行的最新状态、已读位置与通知位置，返回本次需要发送的通知；`store.ts` 再读取通知偏好并调用桌面通知入口。历史回放和初始快照只恢复状态，不重新弹出旧通知。
+
+需要处理权限请求时，通知将当前 `permissionId` 作为独立字段一路传给主进程，不从去重用的 `eventId` 反推请求。主进程据此读取后台请求，决定可用动作并提交准确的授权回复；通知不使用当前页面选中的会话或权限请求替代原目标。
+
+普通会话的完成、失败和等待回复按状态变化产生提醒。子会话和独立定时会话的完成结果由所属任务汇总，但它们需要人工授权或回复时立即提醒，并携带实际等待的会话 ID。目标模式的问题使用 `attentionId` 区分每次提问，避免没有授权记录的问题被漏掉，也避免同一个问题重复提醒。
+
+带 `scheduledRunId` 的会话运行由定时记录统一发送结束通知，包括在已有对话中执行的定时任务。是否属于定时执行以当前运行判断；独立定时会话以后收到的普通用户消息照常提醒，不能被会话保留的旧定时标记屏蔽。定时通知携带运行记录中的 `sessionId`，点击后由根路由打开原对话；尚未创建会话的失败没有可打开的对话 ID，不使用当前页面的会话替代。窗口焦点、通知偏好和原生投递确认由主进程托盘模块判断。
+
+新增通知状态规则放在 `activity-state.ts`，副作用沿用 `store.ts` 的统一活动入口；对应回归测试放在 `__test__/activity-notifications.test.ts`。
 
 ## 测试归属
 

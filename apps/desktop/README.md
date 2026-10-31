@@ -16,7 +16,8 @@ Electron + React desktop shell for Vykor.
 
 - [src/main/core](src/main/core/README.md)：应用上下文、Linux 输入法启动配置、窗口管理、界面调用注册及退出流程。
 - `src/main/features/main-window`: primary application window behavior.
-- `src/main/features/tray`: system tray menu, notification, and tray flash helpers.
+- [src/main/features/tray](src/main/features/tray/README.md)：托盘、系统通知、原会话跳转、直接回复和一次性授权按钮。
+- [src/main/features/clipboard](src/main/features/clipboard/README.md)：剪贴板读写和原生文本菜单。
 - `src/main/features/pet`: transparent desktop Pet window, visibility, click-through, and position persistence.
 - [src/main/features/session](src/main/features/session/README.md)：会话与项目操作、后台连接、订阅和恢复流程。
 - [src/main/features/settings](src/main/features/settings/README.md)：桌面设置读写、输入校验和快照；回复风格与进度通知分别保存。
@@ -30,6 +31,8 @@ Electron + React desktop shell for Vykor.
 
 ## Development
 
+开发环境使用 Node.js 22.12 或更高版本。Electron 精确锁定为 44.10.0，以保持 Windows 通知接口和原生模块构建版本一致。
+
 ```bash
 pnpm install
 pnpm --filter @vykor/desktop dev
@@ -42,7 +45,7 @@ pnpm --filter @vykor/desktop dev
 - `node-pty`：在本机开真正的终端（伪终端）。
 - `better-sqlite3`：本地 SQLite 数据库。
 
-`pnpm install` 装完 JS 依赖后，`postinstall` 会再跑 `electron-builder install-app-deps`。这一步按 **Electron 自己的 Node 版本** 重编译这些插件。给普通 Node 装好的 `.node` 文件不能直接给 Electron 用。
+`pnpm install` 装完 JS 依赖后，`postinstall` 先通过 `install-electron` 下载并校验 Electron 运行时，再跑 `electron-builder install-app-deps`。后一步按 **Electron 自己的 Node 版本** 重编译这些插件。给普通 Node 装好的 `.node` 文件不能直接给 Electron 用。
 
 Windows 上如果缺 Visual Studio 的 C++ 工具链，或没装 Spectre 缓解库，`node-pty` 会编译失败，整次 `pnpm install` 跟着失败。典型报错：
 

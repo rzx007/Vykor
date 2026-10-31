@@ -15,6 +15,10 @@ export interface DesktopSessionActivity {
   updatedAt: number
   runId?: string
   permissionId?: string
+  /** Stable identity for a goal question or another actionable stop without a permission request. */
+  attentionId?: string
+  /** Scheduler owns terminal notifications for this exact run, even inside an existing chat. */
+  scheduledRunId?: string
   error?: string
 }
 

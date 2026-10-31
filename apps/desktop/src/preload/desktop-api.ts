@@ -164,11 +164,16 @@ export const desktopAPI = {
     stopFlash: () => invoke(IpcChannels.trayStopFlash),
     notify: (options: TrayNotificationOptions) => invoke(IpcChannels.trayNotify, options),
     onNotificationClick: (listener: (sessionId: string) => void): (() => void) => {
+      let active = true
       const wrapped = (_event: Electron.IpcRendererEvent, sessionId: string): void => {
-        if (typeof sessionId === "string" && sessionId) listener(sessionId)
+        if (active && typeof sessionId === "string" && sessionId) listener(sessionId)
       }
       ipcRenderer.on(IpcEvents.trayNotificationClicked, wrapped)
-      return () => ipcRenderer.removeListener(IpcEvents.trayNotificationClicked, wrapped)
+      void invoke(IpcChannels.trayNotificationReady).catch(() => undefined)
+      return () => {
+        active = false
+        ipcRenderer.removeListener(IpcEvents.trayNotificationClicked, wrapped)
+      }
     },
   },
   pet: {

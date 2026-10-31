@@ -8,11 +8,15 @@ import { showMainWindow } from "../main-window/window"
 import { hidePetWindow, showPetWindow } from "../pet/window"
 import { noteUnfocusedAttention } from "./attention-badge"
 import { IpcEvents, type TrayNotificationOptions } from "../../../shared/ipc-channels"
+import { notificationInteractionOptions } from "./notification-actions"
 
 let tray: Tray | null = null
 let normalIcon: Electron.NativeImage | null = null
 let notifyIcon: Electron.NativeImage | null = null
 let flashTimer: ReturnType<typeof setInterval> | null = null
+const pendingNotificationIds = new Set<string>()
+const pendingNotifications = new Set<Notification>()
+const notificationAcknowledgementTimeoutMs = 5000
 
 export function createTray(ctx: AppContext): void {
   if (tray || shouldSkipTray()) return
@@ -68,39 +72,116 @@ export function stopFlashTray(): void {
 
 export function sendTrayNotification(
   options: TrayNotificationOptions,
-  getMainWindow: () => BrowserWindow | null
+  getMainWindow: () => BrowserWindow | null,
+  getFocusedWindow: () => BrowserWindow | null = BrowserWindow.getFocusedWindow
 ): void {
   const preferences = getDesktopPreferences()
+  const eventId = options.eventStatus ? options.eventId : undefined
   if (options.eventStatus) {
-    if (!normalizeNotificationEvents(preferences.notificationEvents)[options.eventStatus] || preferences.notificationMode === "never") return
-    if (options.eventId && preferences.notifiedEventIds?.includes(options.eventId)) return
-    // ponytail: cap this ledger at 1,000; the persisted activity cursor protects older replays.
-    if (options.eventId) patchDesktopPreferences({ notifiedEventIds: [...(preferences.notifiedEventIds ?? []), options.eventId].slice(-1000) })
+    if (
+      !normalizeNotificationEvents(preferences.notificationEvents)[options.eventStatus] ||
+      preferences.notificationMode === "never"
+    )
+      return
+    if (
+      eventId &&
+      (preferences.notifiedEventIds?.includes(eventId) || pendingNotificationIds.has(eventId))
+    )
+      return
   }
   const mainWindow = getMainWindow()
-  const focusedWindow = BrowserWindow.getFocusedWindow?.()
+  const focusedWindow = getFocusedWindow()
   const focused = Boolean(
     focusedWindow
       ? !focusedWindow.isDestroyed() && focusedWindow.isVisible() && !focusedWindow.isMinimized()
-      : mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized() && mainWindow.isFocused()
+      : mainWindow &&
+          !mainWindow.isDestroyed() &&
+          mainWindow.isVisible() &&
+          !mainWindow.isMinimized() &&
+          mainWindow.isFocused()
   )
   if (!focused) noteUnfocusedAttention(getMainWindow)
-  if (focused && !(options.eventStatus ? preferences.notificationMode === "always" : options.showWhenFocused)) return
+  if (
+    focused &&
+    !(options.eventStatus ? preferences.notificationMode === "always" : options.showWhenFocused)
+  )
+    return
   if (!Notification.isSupported()) return
 
-  const notification = new Notification({
-    title: options.title,
-    body: options.eventStatus ? options.eventStatus === "completed" ? "任务已完成。" : options.eventStatus === "failed" ? "任务运行失败。" : "任务正在等待你处理。" : options.body,
-    silent: options.silent,
-  })
-  notification.on("click", () => {
-    const win = getMainWindow()
-    if (!win || win.isDestroyed()) return
-    showMainWindow(win)
-    if (options.sessionId)
-      win.webContents.send(IpcEvents.trayNotificationClicked, options.sessionId)
-  })
-  notification.show()
+  if (eventId) pendingNotificationIds.add(eventId)
+  let settled = false
+  let notification: Notification | undefined
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const finish = (result: "shown" | "failed" | "unconfirmed"): void => {
+    if (settled) return
+    settled = true
+    if (timer) clearTimeout(timer)
+    if (notification) {
+      pendingNotifications.delete(notification)
+      notification.removeListener("show", shown)
+      notification.removeListener("failed", failed)
+      notification.removeListener("close", closed)
+    }
+    if (eventId) pendingNotificationIds.delete(eventId)
+    if (result === "failed") console.warn("[tray] native notification could not be displayed")
+    if (result !== "shown" || !eventId) return
+    try {
+      // Native confirmation can arrive out of order; merge into the latest saved ledger.
+      const notifiedEventIds = getDesktopPreferences().notifiedEventIds ?? []
+      if (!notifiedEventIds.includes(eventId)) {
+        patchDesktopPreferences({ notifiedEventIds: [...notifiedEventIds, eventId].slice(-1000) })
+      }
+    } catch {
+      console.warn("[tray] displayed notification could not be recorded")
+    }
+  }
+  const shown = (): void => finish("shown")
+  const failed = (): void => finish("failed")
+  const closed = (): void => finish("unconfirmed")
+  const body = options.eventStatus
+    ? options.eventStatus === "completed"
+      ? "任务已完成。"
+      : options.eventStatus === "failed"
+        ? "任务运行失败。"
+        : "任务正在等待你处理。"
+    : options.body
+  const deliver = (interaction?: Electron.NotificationConstructorOptions): void => {
+    try {
+      notification = new Notification({
+        title: options.title,
+        body,
+        silent: options.silent,
+        ...interaction,
+      })
+      pendingNotifications.add(notification)
+      notification.once("show", shown)
+      notification.once("failed", failed)
+      notification.once("close", closed)
+      notification.on("click", () => {
+        const win = getMainWindow()
+        if (!win || win.isDestroyed()) return
+        showMainWindow(win)
+        if (options.sessionId)
+          win.webContents.send(IpcEvents.trayNotificationClicked, options.sessionId)
+      })
+      timer = setTimeout(() => finish("unconfirmed"), notificationAcknowledgementTimeoutMs)
+      timer.unref?.()
+      notification.show()
+    } catch {
+      failed()
+    }
+  }
+  try {
+    const interaction = notificationInteractionOptions(options, body)
+    if (interaction)
+      void interaction.then(deliver).catch(() => {
+        console.warn("[tray] notification actions unavailable")
+        deliver()
+      })
+    else deliver()
+  } catch {
+    failed()
+  }
 }
 
 export function destroyTray(): void {

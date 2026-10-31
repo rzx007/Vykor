@@ -10,5 +10,6 @@
 - `src/startup-overlay.ts`：通过遮罩元素的 `data-startup-ready` 保存就绪状态，页面提交后发出事件并开始淡出；等待结束后移除遮罩，不等待动画周期。
 - `src/dismiss-startup-loading.ts`：数据初始化完成或失败时立即移除遮罩的入口。
 - `src/__test__/`：启动文档与退场行为测试。新增入口相关测试放在这里。
+- `src/routes/__root.tsx`：主窗口常驻的会话事件和通知点击入口。通知点击先查询原会话，再进入会话路由；等待查询期间若用户又点击通知、主动切页或关闭当前界面，旧查询结果和错误提示就失效。点击序号与导航序号保存在本次订阅内，切换会话和设置页不重建订阅；`src/router.session-events.test.tsx` 通过真实路由验证这些等待顺序。
 
 业务组件和状态分别放在 `src/components/`、`src/stores/`；全局样式按 [assets/README.md](src/assets/README.md) 的职责分类。新的启动效果继续留在 HTML 中，避免为首帧加载引入额外的界面运行库。

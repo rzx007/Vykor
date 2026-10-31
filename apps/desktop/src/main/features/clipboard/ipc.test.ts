@@ -8,7 +8,11 @@ const native = vi.hoisted(() => ({
   owner: { isDestroyed: () => false },
 }))
 vi.mock("electron", () => ({
-  clipboard: { readText: () => "", writeText: () => {}, availableFormats: () => native.formats },
+  clipboard: {
+    readText: async () => "",
+    writeText: async () => {},
+    read: async () => (native.formats.length ? [{ types: native.formats }] : []),
+  },
   BrowserWindow: { fromWebContents: () => native.owner },
   Menu: {
     buildFromTemplate: (items: MenuItemConstructorOptions[]) => {
@@ -47,6 +51,7 @@ it("offers only copy and conversation-scoped selection in a read-only message me
 })
 it("keeps native editor roles for rich copying, cutting and image pasting", async () => {
   const result = handler()(event, { editable: true, hasSelection: false })
+  await vi.waitFor(() => expect(native.items.length).toBeGreaterThan(0))
   expect(native.items.filter((item) => item.type !== "separator").map((item) => item.role)).toEqual(
     ["cut", "copy", "paste", "selectAll"]
   )
@@ -59,6 +64,7 @@ it("keeps native editor roles for rich copying, cutting and image pasting", asyn
 it("disables paste when the system clipboard is empty", async () => {
   native.formats = []
   const result = handler()(event, { editable: true, hasSelection: true })
+  await vi.waitFor(() => expect(native.items.length).toBeGreaterThan(0))
   expect(native.items.find((item) => item.role === "paste")?.enabled).toBe(false)
   native.popup!.callback!()
   await result

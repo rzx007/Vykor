@@ -1,6 +1,12 @@
 import { PluginAppsProvider } from "@renderer/components/desktop/shell/plugin-apps/provider"
 import { useEffect } from "react"
-import { createRootRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router"
+import {
+  createRootRoute,
+  Outlet,
+  useNavigate,
+  useRouter,
+  useRouterState,
+} from "@tanstack/react-router"
 import { markStartupOverlayReady } from "@renderer/startup-overlay"
 import { toast } from "@renderer/lib/toast"
 
@@ -17,6 +23,7 @@ export const Route = createRootRoute({
 
 function DesktopRoot(): React.JSX.Element {
   const navigate = useNavigate()
+  const router = useRouter()
   const routeReady = useRouterState({
     select: (state) => state.status === "idle" && !state.isLoading,
   })
@@ -26,19 +33,42 @@ function DesktopRoot(): React.JSX.Element {
 
   useEffect(() => {
     if (!sessionEventsEnabled) return
-    return window.desktop?.tray?.onNotificationClick?.((sessionId) => {
+    let disposed = false
+    let clickGeneration = 0
+    let navigationGeneration = 0
+    const detachNavigation = router.subscribe("onBeforeNavigate", () => {
+      navigationGeneration += 1
+    })
+    const detachClick = window.desktop?.tray?.onNotificationClick?.((sessionId) => {
+      const click = ++clickGeneration
+      const navigation = navigationGeneration
+      const location = router.history.location
+      // 查询期间的新点击、页面选择或卸载，都撤销旧通知打开页面的资格。
+      const isCurrent = (): boolean =>
+        !disposed &&
+        click === clickGeneration &&
+        navigation === navigationGeneration &&
+        location === router.history.location
       void window.desktop.notificationSettings
         .resolveSession(sessionId)
         .then((session) => {
+          if (!isCurrent()) return undefined
           if (!session) {
             toast.info("通知对应的会话已删除。", "原会话不可用，未打开其他任务。")
             return undefined
           }
           return navigate({ to: "/conversation/$sessionId", params: { sessionId: session.id } })
         })
-        .catch(() => toast.error("无法打开通知对应的会话。", "请检查后台连接后重试。"))
+        .catch(() => {
+          if (isCurrent()) toast.error("无法打开通知对应的会话。", "请检查后台连接后重试。")
+        })
     })
-  }, [navigate, sessionEventsEnabled])
+    return () => {
+      disposed = true
+      detachClick?.()
+      detachNavigation()
+    }
+  }, [navigate, router, sessionEventsEnabled])
 
   useEffect(() => {
     // effect 在页面提交后执行；数据返回、项目检查、会话恢复及重定向均不能提前撤掉遮罩。

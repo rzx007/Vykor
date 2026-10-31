@@ -38,6 +38,12 @@ export class WindowManager {
     return this.get("main")
   }
 
+  /** A companion window cannot show the conversation awaiting a reply. */
+  getNotificationFocusWindow(): BrowserWindow | null {
+    const focused = BrowserWindow.getFocusedWindow()
+    return focused === this.get("pet") ? null : focused
+  }
+
   createWindow(descriptor: WindowDescriptor): BrowserWindow {
     const win = new BrowserWindow({
       icon: descriptor.paths.iconPath,

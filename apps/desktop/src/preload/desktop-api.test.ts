@@ -26,6 +26,28 @@ it("does not expose retired UI IPC", () => {
 })
 
 describe("desktop activity preload bridge", () => {
+  it("registers the listener before releasing a cold-start notification", async () => {
+    const received: string[] = []
+    electron.invoke.mockImplementationOnce(async () => {
+      const [, wrapped] = electron.on.mock.lastCall!
+      wrapped({}, "cold-chat")
+    })
+    const unsubscribe = desktopAPI.tray.onNotificationClick((id) => received.push(id))
+    await Promise.resolve()
+    expect(electron.invoke).toHaveBeenCalledWith("tray:notification-ready")
+    expect(received).toEqual(["cold-chat"])
+    unsubscribe()
+  })
+
+  it("ignores an already queued click after its listener is released", () => {
+    const received: string[] = []
+    const unsubscribe = desktopAPI.tray.onNotificationClick((id) => received.push(id))
+    const [, wrapped] = electron.on.mock.lastCall!
+    unsubscribe()
+    wrapped({}, "late-chat")
+    expect(received).toEqual([])
+  })
+
   it("forwards valid notification chat IDs and releases its listener", () => {
     const received: string[] = []
     const unsubscribe = desktopAPI.tray.onNotificationClick((id) => received.push(id))

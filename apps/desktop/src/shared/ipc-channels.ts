@@ -266,6 +266,7 @@ export const IpcChannels = {
   trayFlash: "tray:flash",
   trayStopFlash: "tray:stop-flash",
   trayNotify: "tray:notify",
+  trayNotificationReady: "tray:notification-ready",
 
   petShow: "pet:show",
   petHide: "pet:hide",
@@ -513,6 +514,8 @@ export interface TrayNotificationOptions {
   silent?: boolean
   showWhenFocused?: boolean
   sessionId?: string
+  permissionId?: string
+  attentionId?: string
   eventId?: string
   eventStatus?: "completed" | "failed" | "needs_input"
 }
@@ -614,6 +617,7 @@ export interface IpcInvokeMap
   [IpcChannels.trayFlash]: { args: []; result: void }
   [IpcChannels.trayStopFlash]: { args: []; result: void }
   [IpcChannels.trayNotify]: { args: [options: TrayNotificationOptions]; result: void }
+  [IpcChannels.trayNotificationReady]: { args: []; result: void }
 
   [IpcChannels.petShow]: { args: []; result: void }
   [IpcChannels.petHide]: { args: []; result: void }

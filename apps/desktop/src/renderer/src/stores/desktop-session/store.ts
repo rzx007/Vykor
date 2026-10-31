@@ -131,6 +131,8 @@ export const useDesktopSessionStore = create<DesktopSessionState>((set, get) => 
                   silent: true,
                   ...(notification.status === "completed" || notification.status === "failed" || notification.status === "needs_input" ? { eventStatus: notification.status, eventId: notification.eventId } : {}),
                   ...(notification.sessionId ? { sessionId: notification.sessionId } : {}),
+                  ...(notification.permissionId ? { permissionId: notification.permissionId } : {}),
+                  ...(notification.attentionId ? { attentionId: notification.attentionId } : {}),
                   ...(settings.notificationMode === "always" ? { showWhenFocused: true } : {}),
                 })
               })

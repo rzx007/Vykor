@@ -15,11 +15,24 @@ import {
   type DesktopNotificationSounds,
 } from "../../../shared/settings-types"
 
+export interface DesktopNotificationTarget {
+  id: string
+  sessionId: string
+  permissionId?: string
+  goalId?: string
+  objectiveVersion?: number
+  questionId?: string
+  kind: "reply" | "approval" | "question" | "goal" | "open"
+  resolved?: boolean
+  reply?: { id: string; text: string; expectedRevision?: number }
+}
+
 export interface DesktopPreferences {
   notificationMode: DesktopNotificationMode
   notificationSounds?: DesktopNotificationSounds
   notificationEvents?: DesktopNotificationEvents
   notifiedEventIds?: string[]
+  notificationTargets?: DesktopNotificationTarget[]
   browserDeveloperMode?: boolean
   noteQuickShortcut?: string
   noteWindowAlwaysOnTop?: boolean
@@ -59,6 +72,7 @@ export function getDesktopPreferencesAt(userDataDir: string): DesktopPreferences
         : {}),
       ...(raw.notificationEvents ? { notificationEvents: normalizeNotificationEvents(raw.notificationEvents) } : {}),
       ...(Array.isArray(raw.notifiedEventIds) ? { notifiedEventIds: raw.notifiedEventIds.filter((value): value is string => typeof value === "string").slice(-1000) } : {}),
+      ...(raw.notificationTargets ? { notificationTargets: normalizeNotificationTargets(raw.notificationTargets) } : {}),
       ...(raw.browserDeveloperMode === true ? { browserDeveloperMode: true } : {}),
       ...(typeof raw.noteQuickShortcut === "string" ? { noteQuickShortcut: raw.noteQuickShortcut } : {}),
       ...(typeof raw.noteWindowAlwaysOnTop === "boolean" ? { noteWindowAlwaysOnTop: raw.noteWindowAlwaysOnTop } : {}),
@@ -89,6 +103,7 @@ export function patchDesktopPreferencesAt(
       : {}),
     ...(next.notificationEvents ? { notificationEvents: normalizeNotificationEvents(next.notificationEvents) } : {}),
     ...(Array.isArray(next.notifiedEventIds) ? { notifiedEventIds: next.notifiedEventIds.filter((value): value is string => typeof value === "string").slice(-1000) } : {}),
+    ...(next.notificationTargets ? { notificationTargets: normalizeNotificationTargets(next.notificationTargets) } : {}),
     ...(next.browserDeveloperMode === true ? { browserDeveloperMode: true } : {}),
     ...(typeof next.noteQuickShortcut === "string" ? { noteQuickShortcut: next.noteQuickShortcut } : {}),
     ...(typeof next.noteWindowAlwaysOnTop === "boolean" ? { noteWindowAlwaysOnTop: next.noteWindowAlwaysOnTop } : {}),
@@ -113,6 +128,22 @@ export function patchDesktopPreferencesAt(
 
 function isInstallIdentity(value: unknown): value is DesktopInstallIdentity {
   return value === "new" || value === "existing"
+}
+
+function normalizeNotificationTargets(value: unknown): DesktopNotificationTarget[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((item): item is DesktopNotificationTarget =>
+    item && typeof item === "object" && /^[a-f0-9]{16}$/.test(item.id) &&
+    typeof item.sessionId === "string" && item.sessionId.length > 0 &&
+    ["reply", "approval", "question", "goal", "open"].includes(item.kind) &&
+    (item.permissionId === undefined || typeof item.permissionId === "string") &&
+    (item.kind !== "goal" || (typeof item.goalId === "string" && item.goalId.length > 0 &&
+      Number.isSafeInteger(item.objectiveVersion) && item.objectiveVersion > 0 &&
+      typeof item.questionId === "string" && item.questionId.length > 0)) &&
+    (item.resolved === undefined || typeof item.resolved === "boolean") &&
+    (item.reply === undefined || (typeof item.reply?.id === "string" && typeof item.reply?.text === "string" &&
+      (item.reply.expectedRevision === undefined || (Number.isSafeInteger(item.reply.expectedRevision) && item.reply.expectedRevision >= 0))))
+  ).slice(-1000)
 }
 
 function isOnboardingState(value: unknown): value is DesktopDaemonOnboardingState {
