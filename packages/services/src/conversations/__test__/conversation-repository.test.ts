@@ -5,9 +5,31 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { SessionStore } from "../../session-runtime/store.js";
+import type { StorageContext } from "../../database/storage-context.js";
 import { ConversationRepository } from "../conversation-repository.js";
 
 describe("ConversationRepository read operations", () => {
+  it("reads a bounded event page without scanning the remaining retained history", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vk-conv-event-page-"));
+    const store = new SessionStore({ path: join(directory, "store.db") });
+    try {
+      const storage = (store as unknown as { storage: StorageContext }).storage;
+      const records = Array.from({ length: 10000 }, (_, index) => ({
+        id: `event-${index + 1}`, seq: index + 1, type: "session.updated", schemaVersion: 1,
+        sessionId: "s1", payload: {}, createdAt: index + 1,
+      }));
+      // Count reads of real retained records, not calls to a fake repository.
+      let inspected = 0;
+      storage.state.events = new Proxy(records, { get(target, property, receiver) {
+        if (typeof property === "string" && /^\d+$/.test(property)) inspected++;
+        return Reflect.get(target, property, receiver);
+      } });
+      expect(store.conversations.listEvents({ afterSeq: 5000, sessionId: "s1", limit: 2 }).map(event => event.seq)).toEqual([5001, 5002]);
+      expect(inspected).toBeLessThan(100);
+      expect(store.conversations.listEvents({ afterSeq: 9999, limit: 2 }).map(event => event.seq)).toEqual([10000]);
+    } finally { store.close(); rmSync(directory, { recursive: true, force: true }); }
+  });
+
   it("filters parts by Run before applying pagination without including other sessions", () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-conv-run-parts-"));
     const store = new SessionStore({ path: join(directory, "store.db") });

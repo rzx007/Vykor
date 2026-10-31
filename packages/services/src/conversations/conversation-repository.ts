@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import type { AppendEventInput, CreateMessageInput, ListEventsOptions, ListMessagePartsOptions, ListMessagesOptions, UpsertMessagePartInput } from "./commands.js";
 import type { SessionEventRecord, SessionInputRecord, SessionMessagePartRecord, SessionMessageRecord } from "@vykor/domain-contracts/sessions";
+import { matchesSessionEventScope } from "@vykor/domain-contracts/sessions";
 import type { SessionInputAttachmentRecord } from "@vykor/domain-contracts/attachments";
 
 import { atomicWrite } from "../database/transactions/atomic-write.js";
@@ -333,15 +334,31 @@ export class ConversationRepository {
   }
 
   listEvents(options: ListEventsOptions = {}): SessionEventRecord[] {
+    if (options.limit !== undefined && Number.isFinite(options.limit) && options.limit >= 0) {
+      // 写入按序追加，数据库加载和临时会话合并也按 seq 排序。
+      // 有限页只定位游标并复制本页，不为每个慢连接构造整段历史。
+      const retained = this.storage.state.events;
+      let low = 0;
+      let high = retained.length;
+      const after = options.afterSeq ?? -Infinity;
+      while (low < high) {
+        const middle = Math.floor((low + high) / 2);
+        if (retained[middle]!.seq <= after) low = middle + 1;
+        else high = middle;
+      }
+      const page: SessionEventRecord[] = [];
+      const limit = Math.floor(options.limit);
+      for (let index = low; index < retained.length && page.length < limit; index++) {
+        const event = retained[index]!;
+        if (matchesSessionEventScope(event, options.sessionId)) page.push(event);
+      }
+      return clone(page);
+    }
     let events = this.storage.state.events;
     if (options.afterSeq !== undefined)
       events = events.filter((event) => event.seq > options.afterSeq!);
     if (options.sessionId) {
-      events = events.filter(
-        (event) =>
-          event.sessionId === undefined ||
-          event.sessionId === options.sessionId,
-      );
+      events = events.filter(event => matchesSessionEventScope(event, options.sessionId));
     }
     events = [...events].sort((a, b) => a.seq - b.seq);
     if (options.limit !== undefined) events = events.slice(0, options.limit);

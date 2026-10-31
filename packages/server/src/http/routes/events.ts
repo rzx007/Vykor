@@ -15,7 +15,12 @@ import {
 interface HttpEventClient {
   controller: ReadableStreamDefaultController<Uint8Array>;
   abort: AbortController;
-  heartbeat?: ReturnType<typeof setInterval>;
+  heartbeat?: ReturnType<typeof setTimeout>;
+  cleanup: () => void;
+}
+
+interface PendingEvent {
+  outcome?: { next: IteratorResult<SessionEventRecord> } | { error: unknown };
 }
 
 /** 把 Application 的异步事件流翻译成 HTTP SSE；这里不再负责事件分发。 */
@@ -50,26 +55,82 @@ export class HttpEventHub {
           signal: abort.signal,
         });
         let client: HttpEventClient | undefined;
+        const iterator = subscription.stream[Symbol.asyncIterator]();
+        let pending: PendingEvent | undefined;
+        let wake: (() => void) | undefined;
+        let connected = false;
 
         const stream = new ReadableStream<Uint8Array>({
           start: (controller) => {
-            client = { controller, abort };
-            this.clients.add(client);
-            controller.enqueue(this.encoder.encode(": connected\n\n"));
-            const heartbeat = setInterval(
-              () => this.writeComment(client!, "keepalive"),
-              15_000,
-            );
-            heartbeat.unref?.();
-            client.heartbeat = heartbeat;
-            void this.pump(client, subscription.stream, c.req.query("partView") === "summary").finally(() => {
+            const terminate = () => {
+              if (!client || !this.clients.has(client)) return;
+              try {
+                if (subscription.signal.reason instanceof Error && subscription.signal.reason.name !== "AbortError") {
+                  controller.error(subscription.signal.reason);
+                } else controller.close();
+              } finally { this.removeClient(client); }
+            };
+            client = { controller, abort, cleanup: () => {
               c.req.raw.signal.removeEventListener("abort", requestAbort);
-            });
+              subscription.signal.removeEventListener("abort", terminate);
+              wake?.();
+              wake = undefined;
+              pending = undefined;
+            } };
+            this.clients.add(client);
+            subscription.signal.addEventListener("abort", terminate, { once: true });
+            if (c.req.raw.signal.aborted) abort.abort();
+            if (subscription.signal.aborted) terminate();
+          },
+          pull: async (controller) => {
+            if (!client || !this.clients.has(client)) return;
+            if (!connected) {
+              connected = true;
+              controller.enqueue(this.encoder.encode(": connected\n\n"));
+              return;
+            }
+            try {
+              // 每条 next 只注册一次完成处理；心跳只替换当前 read 的唤醒，不给 next 累积回调。
+              if (!pending) {
+                const current: PendingEvent = {};
+                pending = current;
+                void iterator.next().then(
+                  next => { current.outcome = { next }; wake?.(); },
+                  error => { current.outcome = { error }; wake?.(); },
+                );
+              }
+              const current = pending;
+              if (!current.outcome) await new Promise<void>(resolve => {
+                wake = resolve;
+                client!.heartbeat = setTimeout(() => resolve(undefined), 15_000);
+                client!.heartbeat.unref?.();
+              });
+              if (!this.clients.has(client)) return;
+              const outcome = current.outcome;
+              if (!outcome) {
+                controller.enqueue(this.encoder.encode(": keepalive\n\n"));
+              } else {
+                pending = undefined;
+                if ("error" in outcome) throw outcome.error;
+                const next = outcome.next;
+                if (next.done) { controller.close(); this.removeClient(client); return; }
+                const event = next.value;
+                controller.enqueue(this.encoder.encode(
+                  `id: ${event.seq}\nevent: ${event.type}\ndata: ${JSON.stringify(publicPartEvent(event, c.req.query("partView") === "summary"))}\n\n`,
+                ));
+              }
+            } catch (error) {
+              if (this.clients.has(client)) { controller.error(error); this.removeClient(client); }
+            } finally {
+              wake = undefined;
+              if (client.heartbeat) clearTimeout(client.heartbeat);
+              client.heartbeat = undefined;
+            }
           },
           cancel: () => {
             if (client) this.removeClient(client);
           },
-        });
+        }, { highWaterMark: 0 });
 
         return new Response(stream, { status: 200, headers: SSE_HEADERS });
       });
@@ -86,37 +147,10 @@ export class HttpEventHub {
     }
   }
 
-  private async pump(
-    client: HttpEventClient,
-    stream: AsyncIterable<SessionEventRecord>,
-    summary: boolean,
-  ): Promise<void> {
-    try {
-      for await (const event of stream) {
-        client.controller.enqueue(
-          this.encoder.encode(
-            `id: ${event.seq}\nevent: ${event.type}\ndata: ${JSON.stringify(publicPartEvent(event, summary))}\n\n`,
-          ),
-        );
-      }
-    } catch {
-      // Broken HTTP clients are normal; aborting removes the Application subscriber.
-    } finally {
-      this.removeClient(client);
-    }
-  }
-
-  private writeComment(client: HttpEventClient, comment: string): void {
-    try {
-      client.controller.enqueue(this.encoder.encode(`: ${comment}\n\n`));
-    } catch {
-      this.removeClient(client);
-    }
-  }
-
   private removeClient(client: HttpEventClient): void {
-    if (client.heartbeat) clearInterval(client.heartbeat);
-    client.abort.abort();
+    if (client.heartbeat) clearTimeout(client.heartbeat);
     this.clients.delete(client);
+    client.cleanup();
+    client.abort.abort();
   }
 }

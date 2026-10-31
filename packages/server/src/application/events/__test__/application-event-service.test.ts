@@ -17,6 +17,99 @@ function event(seq: number, sessionId = "s1"): SessionEventRecord {
 }
 
 describe("ApplicationEventService", () => {
+  it("preserves a history read failure in both the iterator and termination signal", async () => {
+    const failure = new Error("replay read failed");
+    const service = new ApplicationEventService({ latestEventSeq: () => 1, listEvents: () => { throw failure; } });
+    const subscription = service.subscribe();
+    await expect(subscription.stream[Symbol.asyncIterator]().next()).rejects.toBe(failure);
+    expect(subscription.signal.aborted).toBe(true);
+    expect(subscription.signal.reason).toBe(failure);
+    expect(service.subscriberCount).toBe(0);
+  });
+
+  it.each(["replay read failed", undefined])("normalizes a non-Error history failure (%s) for the termination signal", async failure => {
+    const service = new ApplicationEventService({ latestEventSeq: () => 1, listEvents: () => { throw failure; } });
+    const subscription = service.subscribe();
+    await expect(subscription.stream[Symbol.asyncIterator]().next()).rejects.toBe(failure);
+    expect(subscription.signal.reason).toMatchObject({ name: "Error", message: "Application event stream failed" });
+    expect(service.subscriberCount).toBe(0);
+  });
+
+  it("removes a subscription when reading its checkpoint fails", () => {
+    const service = new ApplicationEventService({ latestEventSeq: () => { throw new Error("store unavailable"); }, listEvents: () => [] });
+    expect(() => service.subscribe()).toThrow("store unavailable");
+    expect(service.subscriberCount).toBe(0);
+  });
+
+  it("closes an unread subscription after 10000 broadcasts and resumes from the consumed cursor", async () => {
+    const durable: SessionEventRecord[] = [];
+    const service = new ApplicationEventService({
+      latestEventSeq: () => durable.at(-1)?.seq ?? 0,
+      listEvents: ({ afterSeq = 0, limit } = {}) => durable.filter(item => item.seq > afterSeq).slice(0, limit),
+    });
+    const slow = service.subscribe();
+    const iterator = slow.stream[Symbol.asyncIterator]();
+    durable.push(event(1)); service.broadcastEvent(durable[0]!);
+    expect((await iterator.next()).value?.seq).toBe(1);
+    for (let seq = 2; seq <= 10000; seq++) {
+      const record = event(seq); durable.push(record); service.broadcastEvent(record);
+    }
+    expect(service.subscriberCount).toBe(0);
+    expect(slow.signal.aborted).toBe(true);
+    expect(slow.signal.reason).toMatchObject({ lastConsumedCursor: 1 });
+    await expect(iterator.next()).rejects.toMatchObject({ lastConsumedCursor: 1 });
+    const restored = service.subscribe({ after: 1 });
+    const received: number[] = [];
+    for await (const record of restored.stream) {
+      received.push(record.seq);
+      if (record.seq === 10000) break;
+    }
+    expect(received).toEqual(Array.from({ length: 9999 }, (_, index) => index + 2));
+  });
+
+  it("pages history only on demand and stops replay at its checkpoint", async () => {
+    const durable = Array.from({ length: 1000 }, (_, index) => event(index + 1));
+    let reads = 0;
+    const service = new ApplicationEventService({
+      latestEventSeq: () => durable.at(-1)?.seq ?? 0,
+      listEvents: ({ afterSeq = 0, limit } = {}) => {
+        if (limit === undefined || limit > 128) throw new Error("unbounded history read");
+        reads++;
+        return durable.filter(item => item.seq > afterSeq).slice(0, limit);
+      },
+    });
+    const subscription = service.subscribe();
+    expect(reads).toBe(0);
+    const iterator = subscription.stream[Symbol.asyncIterator]();
+    expect((await iterator.next()).value?.seq).toBe(1);
+    expect(reads).toBe(1);
+    durable.push(event(1001)); service.broadcastEvent(event(1001));
+    for (let seq = 2; seq <= 1001; seq++) expect((await iterator.next()).value?.seq).toBe(seq);
+    await iterator.return?.();
+    expect(service.subscriberCount).toBe(0);
+  });
+
+  it("cleans up cancellation before iteration starts", () => {
+    const abort = new AbortController();
+    const service = new ApplicationEventService({ latestEventSeq: () => 0, listEvents: () => [] });
+    service.subscribe({ signal: abort.signal });
+    abort.abort();
+    expect(service.subscriberCount).toBe(0);
+  });
+
+  it("keeps a normally consumed subscription live when another subscriber overflows", async () => {
+    const service = new ApplicationEventService({ latestEventSeq: () => 0, listEvents: () => [] });
+    const slow = service.subscribe();
+    const fast = service.subscribe().stream[Symbol.asyncIterator]();
+    for (let seq = 1; seq <= 10000; seq++) {
+      service.broadcastEvent(event(seq));
+      expect((await fast.next()).value?.seq).toBe(seq);
+    }
+    expect(slow.signal.aborted).toBe(true);
+    expect(service.subscriberCount).toBe(1);
+    await fast.return?.();
+  });
+
   it("先重放游标后的持久事件，再继续输出实时事件", async () => {
     const durable = [event(1), event(2)];
     const service = new ApplicationEventService({

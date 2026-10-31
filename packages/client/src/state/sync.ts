@@ -31,6 +31,7 @@ const DEFAULT_RECONNECT_DELAY_MS = (attempt: number): number =>
   Math.min(30_000, 250 * 2 ** Math.max(0, attempt));
 /** 服务端 keepalive 每 15s 一次，迭代接口保留 4 倍余量。 */
 const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 60_000;
+const EVENT_REPLAY_PAGE_SIZE = 128;
 
 export function hydrateState(events: Iterable<SessionEventRecord>): VykorClientState {
   return applyEvents(createInitialClientState(), events);
@@ -75,20 +76,32 @@ export async function* runEventSync(
     cursor = Math.max(cursor, snapshot.cursor, state.lastSeq);
   };
 
+  const replayHistory = async function* (initial: boolean): AsyncIterable<SyncEventUpdate> {
+    let pageCursor = cursor;
+    while (!signal?.aborted) {
+      const page = await client.events.list({
+        cursor: pageCursor, limit: EVENT_REPLAY_PAGE_SIZE, partView: options.partView, signal,
+      });
+      if (signal?.aborted) return;
+      for (const event of page) {
+        if (signal?.aborted) return;
+        const before = state;
+        state = reduce(state, event);
+        // 每条成功应用后立即推进；后续应用失败不能回到整页起点。
+        cursor = Math.max(cursor, event.seq, state.lastSeq);
+        if (initial || state !== before) yield { event, state, source: "replay" };
+      }
+      const through = page.at(-1)?.seq ?? pageCursor;
+      if (page.length < EVENT_REPLAY_PAGE_SIZE || through <= pageCursor) return;
+      pageCursor = through;
+    }
+  };
+
   try {
     if (options.sessionId) {
       await refreshSession(true);
     } else {
-      const replay = await client.events.list({
-        cursor: options.cursor, partView: options.partView, signal,
-      });
-      if (signal?.aborted) return;
-      for (const event of replay) {
-        if (signal?.aborted) return;
-        state = reduce(state, event);
-        yield { event, state, source: "replay" };
-      }
-      cursor = Math.max(cursor, state.lastSeq);
+      yield* replayHistory(true);
     }
     if (signal?.aborted) return;
     yield { state, source: "snapshot" };
@@ -112,20 +125,12 @@ export async function* runEventSync(
           if (signal?.aborted) return;
           attempt = 0;
           if (event.seq > cursor + 1 && !options.sessionId) {
-            const gap = await client.events.list({ cursor, partView: options.partView, signal });
-            if (signal?.aborted) return;
-            for (const missed of gap) {
-              if (signal?.aborted) return;
-              const before = state;
-              state = reduce(state, missed);
-              if (state !== before) yield { event: missed, state, source: "replay" };
-            }
-            cursor = Math.max(cursor, state.lastSeq);
+            yield* replayHistory(false);
           }
           if (signal?.aborted) return;
           const before = state;
           state = reduce(state, event);
-          cursor = Math.max(cursor, state.lastSeq);
+          cursor = Math.max(cursor, event.seq, state.lastSeq);
           if (state !== before) yield { event, state, source: "live" };
         }
       } catch (error) {

@@ -8,6 +8,8 @@ Repository 提供查询和常规修改；ConversationTransactions 处理输入�
 
 `listMessageParts(sessionId, { runId })` 可只读取一次运行的消息部件；先按会话和运行过滤，再应用消息、位置与数量限制。Goal 续跑保护通过此入口读取本轮结果，不复制整个历史中的工具正文。
 
+`listEvents({ afterSeq, sessionId, limit })` 有限分页直接在已按序追加、加载及合并的事件数组中二分定位游标，再读取到足够的匹配记录；只复制当前页，不先构造整段历史。未设置数量上限的既有查询仍返回排序后的完整结果。带会话过滤且匹配稀疏时可能扫描剩余记录，但临时结果空间只随页大小增长。
+
 ## 状态归属
 
 当前会话记录位于共享内存状态，持久内容通过 ChatPersistence 写入 SQLite；临时会话使用内存保存。

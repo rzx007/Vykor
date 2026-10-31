@@ -8,6 +8,7 @@
 | [records.ts](records.ts) | 记录类型、事件版本和默认存储方式 |
 | [model-metadata.ts](model-metadata.ts) | 读取重试、生成归属、用量完整性，以及收尾工具元数据 |
 | [runtime-config.ts](runtime-config.ts) | 运行配置类型、`metadata.runtime` 校验与版本读取 |
+| [event-scope.ts](event-scope.ts) | 历史查询和实时订阅共用的会话范围匹配，全局事件对所有会话可见 |
 
 另有 `@vykor/domain-contracts/sessions/records`、`sessions/model-metadata`、`sessions/runtime-config` 公开入口。调用方按类型读写记录，读取模型片段时用 `isCommittedModelPart` 排除未确认或已被替代的内容，读取配置时用 `readRuntimeMetadata` 验证字段。
 

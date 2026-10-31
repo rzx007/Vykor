@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest"
 
 import type { SessionEventRecord, SessionStateSnapshot } from "../../types/index"
 import { syncEvents } from "../sync"
+import { applyEvent } from "../reducer"
 import { SessionSyncController } from "../session-sync-controller"
 import type { SyncEventsClient } from "../sync"
 import type { EventSyncOptions, SyncEventUpdate } from "../../types/index"
@@ -48,6 +49,39 @@ describe.each(["iterator", "controller"] as const)("shared sync behavior: %s", a
   const record = (seq: number): SessionEventRecord => ({
     id: `e${seq}`, seq, type: "session.updated", schemaVersion: 1, sessionId: "s1",
     payload: { session: { ...snapshot(seq).session, title: `title-${seq}` } }, createdAt: seq,
+  })
+
+  it("loads global history in bounded pages before opening the stream", async () => {
+    const abort = new AbortController()
+    const applied: number[] = []
+    let openedAt: number | undefined
+    const history = Array.from({ length: 257 }, (_, index) => record(index + 1))
+    await consume({ sessions: { getState: async () => snapshot(0) }, events: {
+      list: async options => history.filter(event => event.seq > (options?.cursor ?? 0)).slice(0, options?.limit ?? 128),
+      stream: async function* (options) { openedAt = options?.cursor; abort.abort() },
+    } }, { signal: abort.signal }, update => { if (update.event) applied.push(update.event.seq) })
+    expect(applied).toEqual(Array.from({ length: 257 }, (_, index) => index + 1))
+    expect(openedAt).toBe(257)
+  })
+
+  if (api === "iterator") it("reconnects from the last applied event after a gap reducer fails", async () => {
+    const abort = new AbortController()
+    const cursors: number[] = []
+    const applied: number[] = []
+    let failOnce = true
+    for await (const update of syncEvents({ sessions: { getState: async () => snapshot(0) }, events: {
+      list: async options => options?.cursor === 1 ? [record(2), record(3)] : [record(1)],
+      stream: async function* (options) {
+        cursors.push(options?.cursor ?? 0)
+        if (cursors.length === 1) yield record(4)
+        else { yield record(3); yield record(4); abort.abort() }
+      },
+    } }, { signal: abort.signal, reconnectDelayMs: () => 0, globalReducer: (state, event) => {
+      if (event.seq === 3 && failOnce) { failOnce = false; throw new Error("temporary reducer failure") }
+      return applyEvent(state, event)
+    } })) { if (update.event) applied.push(update.event.seq) }
+    expect(cursors).toEqual([1, 2])
+    expect(applied).toEqual([1, 2, 3, 4])
   })
 
   it.each(["clean end", "stream error"])("refreshes before reopening after %s and skips duplicates", async failure => {
