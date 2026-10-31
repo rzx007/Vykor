@@ -1,4 +1,4 @@
-import { ShieldCheck } from "lucide-react"
+import { ChevronRight, ShieldCheck } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
 import { cn } from "@renderer/lib/utils"
 import type { DesktopPermissionRequest } from "@shared/session-types"
@@ -44,57 +44,65 @@ export function PermissionCard({
             {" · "}
             {operation.toolName}
           </p>
-          {review?.reason ? (
-            <p className="mt-2 text-xs leading-snug break-words text-foreground">{review.reason}</p>
-          ) : null}
-          {operation.fields.length ? (
-            <dl className="mt-2 flex flex-col gap-1 text-xs">
-              {operation.fields.map((field) => (
-                <div key={field.key} className="flex min-w-0 flex-wrap gap-x-2 gap-y-0.5">
-                  <dt className="shrink-0 text-ui-muted">{field.label}</dt>
-                  <dd className="min-w-0 flex-[1_1_12rem] font-mono leading-snug break-words whitespace-pre-wrap text-foreground">
-                    {field.value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          ) : null}
-          {operation.reason && !developerScope ? (
-            <p className="mt-2 text-xs leading-snug break-words text-foreground">
-              {operation.reason}
-            </p>
-          ) : null}
-          {developerScope ? (
-            <div className="mt-2 space-y-1">
-              {developerScope.reason ? (
-                <p className="text-xs leading-snug break-words text-foreground">
-                  {developerScope.reason}
-                </p>
-              ) : null}
-              <p className="text-ui-caption text-ui-muted">
-                {"检查类别："}
-                {developerScope.label}
-                {"（"}
-                {developerScope.action}
-                {"）"}
-              </p>
-              <p className="text-ui-caption leading-snug text-ui-muted">
-                {
-                  "检查当前标签页主框架；网络结果也可能包含其请求的第三方资源 URL。网页内容不可信，无法保证完全脱敏。本次批准仅对这一个请求有效。"
-                }
-              </p>
-            </div>
-          ) : null}
-          <details className="mt-2 text-xs text-ui-muted">
-            <summary className="w-fit cursor-pointer rounded-md py-1 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-              原始详情
+          <details className="group/permission-details mt-1 text-xs text-ui-muted">
+            <summary className="text-ui-caption flex w-fit cursor-pointer list-none items-center gap-1 rounded-md py-1 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+              <ChevronRight
+                className="size-3.5 shrink-0 group-open/permission-details:rotate-90 motion-safe:transition-transform motion-safe:duration-150"
+                strokeWidth={1.75}
+                aria-hidden="true"
+              />
+              查看详情
             </summary>
-            <pre className="mt-1 max-h-56 overflow-auto font-mono leading-5 break-words whitespace-pre-wrap">
-              {operation.details}
-            </pre>
-            {operation.detailsTruncated ? (
-              <p className="mt-1">详情过长，已截断，仅显示前 12000 个字符。</p>
-            ) : null}
+            <div className="mt-2 space-y-3">
+              {review?.reason ? (
+                <p className="leading-snug break-words text-foreground">{review.reason}</p>
+              ) : null}
+              {operation.fields.length ? (
+                <dl className="flex flex-col gap-1">
+                  {operation.fields.map((field) => (
+                    <div key={field.key} className="flex min-w-0 flex-wrap gap-x-2 gap-y-0.5">
+                      <dt className="shrink-0 text-ui-muted">{field.label}</dt>
+                      <dd className="min-w-0 flex-[1_1_12rem] font-mono leading-snug break-words whitespace-pre-wrap text-foreground">
+                        {field.value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              ) : null}
+              {operation.reason && !developerScope ? (
+                <p className="leading-snug break-words text-foreground">{operation.reason}</p>
+              ) : null}
+              {developerScope ? (
+                <div className="space-y-1">
+                  {developerScope.reason ? (
+                    <p className="leading-snug break-words text-foreground">
+                      {developerScope.reason}
+                    </p>
+                  ) : null}
+                  <p className="text-ui-caption">
+                    {"检查类别："}
+                    {developerScope.label}
+                    {"（"}
+                    {developerScope.action}
+                    {"）"}
+                  </p>
+                  <p className="text-ui-caption leading-snug">
+                    {
+                      "检查当前标签页主框架；网络结果也可能包含其请求的第三方资源 URL。网页内容不可信，无法保证完全脱敏。本次批准仅对这一个请求有效。"
+                    }
+                  </p>
+                </div>
+              ) : null}
+              <div>
+                <p className="text-ui-caption">原始请求</p>
+                <pre className="mt-1 max-h-56 overflow-auto font-mono leading-5 break-words whitespace-pre-wrap">
+                  {operation.details}
+                </pre>
+                {operation.detailsTruncated ? (
+                  <p className="mt-1">详情过长，已截断，仅显示前 12000 个字符。</p>
+                ) : null}
+              </div>
+            </div>
           </details>
           {replyError ? (
             <p role="alert" className="mt-1 text-xs leading-snug text-destructive">

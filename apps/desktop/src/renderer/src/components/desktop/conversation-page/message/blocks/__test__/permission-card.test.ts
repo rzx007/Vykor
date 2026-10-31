@@ -220,7 +220,7 @@ describe("PermissionCard", () => {
     }
   )
 
-  it("shows a shell command, its explicit working directory, and the request reason", () => {
+  it("keeps a shell command, its working directory, and technical reason inside collapsed details", () => {
     const container = renderPermission("Shell", {
       reason: "需要确认部署命令",
       input: { command: "pnpm deploy --tag release", workdir: "C:/projects/vykor" },
@@ -229,7 +229,10 @@ describe("PermissionCard", () => {
     expect(container.textContent).toContain("运行命令")
     expect(container.querySelector("dl")?.textContent ?? "").toContain("pnpm deploy --tag release")
     expect(container.querySelector("dl")?.textContent ?? "").toContain("C:/projects/vykor")
-    expect(summaryText(container)).toContain("需要确认部署命令")
+    expect(summaryText(container)).not.toContain("pnpm deploy --tag release")
+    expect(summaryText(container)).not.toContain("C:/projects/vykor")
+    expect(summaryText(container)).not.toContain("需要确认部署命令")
+    expect(container.querySelector("details")?.textContent).toContain("需要确认部署命令")
     expect(container.textContent).toContain("允许本次")
     expect(container.textContent).not.toContain("检查类别")
   })
@@ -281,7 +284,8 @@ describe("PermissionCard", () => {
       input: { action: "navigate" },
     })
 
-    expect(summaryText(container)).toContain("https://example.org/account")
+    expect(summaryText(container)).not.toContain("https://example.org/account")
+    expect(container.querySelector("details")?.textContent).toContain("https://example.org/account")
     expect(container.querySelector("dl")?.textContent ?? "").toContain("navigate")
     expect(container.querySelector("dl")?.textContent ?? "").not.toContain(
       "https://example.org/account"
@@ -309,7 +313,7 @@ describe("PermissionCard", () => {
 
     expect(details).not.toBeNull()
     expect(details.open).toBe(false)
-    expect(details.querySelector("summary")?.textContent).toContain("原始详情")
+    expect(details.querySelector("summary")?.textContent).toContain("查看详情")
     expect(JSON.parse(details.querySelector("pre")!.textContent!)).toEqual(payload)
     expect(container.querySelector("script, img")).toBeNull()
     expect(container.querySelector("dl")?.textContent).toContain(input.command)
