@@ -2,6 +2,14 @@ import { describe, expect, it } from "vitest"
 import { searchSettings } from "../settings-search"
 import { settingsNavigation } from "../settings-navigation"
 describe("real settings search", () => {
+  it("finds the message link browser preference by its choices", () => {
+    for (const query of ["链接打开方式", "内置浏览器", "系统默认浏览器", "每次询问"]) {
+      expect(searchSettings(query)).toContainEqual(
+        expect.objectContaining({ section: "general", title: "消息链接打开方式" })
+      )
+    }
+  })
+
   it("finds reply style choices separately from progress notifications", () => {
     for (const query of ["回复风格", "协作", "直接", "讲解"]) {
       expect(searchSettings(query)).toContainEqual(

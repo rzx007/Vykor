@@ -79,7 +79,7 @@ type UtilityPanelProps = {
   fileOpenRequest: { id: number; path: string; line?: number } | null
   reviewOpenRequest: DesktopGitReviewRequest | null
   terminalOpenRequest: { id: number; terminalId: string } | null
-  toolOpenRequest: { id: number; tool: UtilityToolRequest; taskId?: string } | null
+  toolOpenRequest: { id: number; tool: UtilityToolRequest; taskId?: string; url?: string } | null
   imageOpenRequest?: ImageOpenRequest | null
   onOpenFile: (path: string, line?: number) => void
   onOpenReview: (
@@ -429,10 +429,12 @@ export function UtilityPanel({
     if (!toolOpenRequest || handledToolRequestId === toolOpenRequest.id) return
     const timer = window.setTimeout(() => {
       setHandledToolRequestId(toolOpenRequest.id)
-      addTab(toolOpenRequest.tool)
+      if (toolOpenRequest.tool === "browser" && toolOpenRequest.url)
+        openBrowserTab(toolOpenRequest.url)
+      else addTab(toolOpenRequest.tool)
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [addTab, handledToolRequestId, setHandledToolRequestId, toolOpenRequest])
+  }, [addTab, openBrowserTab, handledToolRequestId, setHandledToolRequestId, toolOpenRequest])
 
   function persistFileTabs(paths: string[], activePath: string | null): void {
     if (!selectedProjectPath) return

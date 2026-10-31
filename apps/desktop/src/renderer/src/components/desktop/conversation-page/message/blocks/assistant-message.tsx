@@ -207,6 +207,7 @@ export const AssistantMessage = memo(function AssistantMessage({
           return (
             <AssistantMarkdown
               key={unit.id}
+              messageLinks
               text={unit.text}
               searchMessageId={unit.source.messageId}
               searchPartIdsJson={JSON.stringify(unit.source.partIds)}

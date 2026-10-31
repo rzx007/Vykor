@@ -1,6 +1,7 @@
 import { DEFAULT_REPLY_STYLE, isReplyStyle, type ReplyStyle } from "@vykor/application-client"
 
 export type DesktopWorkStyle = "practical" | "efficient"
+export type DesktopLinkOpeningMode = "ask" | "builtin" | "system"
 export type DesktopNotificationMode = "never" | "when_unfocused" | "always"
 export type DesktopNotificationSound = "completed" | "needs_input" | "failed"
 export type DesktopNotificationSounds = Record<DesktopNotificationSound, string>
@@ -110,6 +111,14 @@ export interface UpdateDesktopReasoningVisibilityInput {
 
 export interface UpdateDesktopBrowserDeveloperModeInput {
   enabled: boolean
+}
+
+export interface UpdateDesktopLinkOpeningModeInput {
+  linkOpeningMode: DesktopLinkOpeningMode
+}
+
+export function isDesktopLinkOpeningMode(value: unknown): value is DesktopLinkOpeningMode {
+  return value === "ask" || value === "builtin" || value === "system"
 }
 
 export interface UpdateDesktopDefaultOpenerInput {

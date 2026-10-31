@@ -10,13 +10,92 @@ import {
 } from "@renderer/components/ui/select"
 import { Switch } from "@renderer/components/ui/switch"
 import { useAppearance } from "@renderer/components/appearance/appearance-provider"
-import { isDesktopWorkStyle, type DesktopWorkStyle } from "@shared/settings-types"
+import {
+  isDesktopWorkStyle,
+  isDesktopLinkOpeningMode,
+  type DesktopWorkStyle,
+  type DesktopLinkOpeningMode,
+} from "@shared/settings-types"
 import { errorMessage } from "../shared/settings-error-message"
 
 const replyStyleLabels: Record<ReplyStyle, string> = {
   collaborative: "协作",
   direct: "直接",
   explanatory: "讲解",
+}
+
+export function LinkOpeningModeControl(): React.JSX.Element {
+  const [mode, setMode] = useState<DesktopLinkOpeningMode>("ask")
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const labels = { ask: "每次询问", builtin: "Vykor 内置浏览器", system: "系统默认浏览器" }
+
+  useEffect(() => {
+    let alive = true
+    void window.desktop.settings
+      .getLinkOpeningMode()
+      .then(
+        (value) => {
+          if (alive) setMode(isDesktopLinkOpeningMode(value) ? value : "ask")
+        },
+        (failure) => {
+          if (alive) setError(errorMessage(failure))
+        }
+      )
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  async function update(next: DesktopLinkOpeningMode) {
+    if (loading || saving || next === mode) return
+    const previous = mode
+    setMode(next)
+    setSaving(true)
+    setError(null)
+    try {
+      setMode(await window.desktop.settings.updateLinkOpeningMode({ linkOpeningMode: next }))
+    } catch (failure) {
+      setMode(previous)
+      setError(errorMessage(failure))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <Select
+        value={mode}
+        disabled={loading || saving}
+        onValueChange={(value) => {
+          if (isDesktopLinkOpeningMode(value)) void update(value)
+        }}
+      >
+        <SelectTrigger aria-label="消息链接打开方式" className="min-w-44">
+          <SelectValue>{labels[mode]}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {Object.entries(labels).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+      {error ? (
+        <p role="alert" className="text-ui-caption max-w-56 text-right text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  )
 }
 
 export function ReplyStyleControl(): React.JSX.Element {

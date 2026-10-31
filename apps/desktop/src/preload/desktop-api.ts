@@ -407,6 +407,10 @@ export const desktopAPI = {
     updateBrowserDeveloperMode: (
       input: IpcInvokeMap[typeof IpcChannels.settingsUpdateBrowserDeveloperMode]["args"][0]
     ) => invoke(IpcChannels.settingsUpdateBrowserDeveloperMode, input),
+    getLinkOpeningMode: () => invoke(IpcChannels.settingsGetLinkOpeningMode),
+    updateLinkOpeningMode: (
+      input: IpcInvokeMap[typeof IpcChannels.settingsUpdateLinkOpeningMode]["args"][0]
+    ) => invoke(IpcChannels.settingsUpdateLinkOpeningMode, input),
     updateDefaultOpener: (
       input: IpcInvokeMap[typeof IpcChannels.settingsUpdateDefaultOpener]["args"][0]
     ) => invoke(IpcChannels.settingsUpdateDefaultOpener, input),

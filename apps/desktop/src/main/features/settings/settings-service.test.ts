@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest"
 
-import { buildDesktopSettingsSnapshot } from "../../../shared/settings-types"
+import {
+  buildDesktopSettingsSnapshot,
+  type DesktopLinkOpeningMode,
+} from "../../../shared/settings-types"
 import { browserAgentService } from "../browser/browser-agent-service"
 import { DesktopSettingsService } from "./settings-service"
 
@@ -253,6 +256,61 @@ describe("DesktopSettingsService.updateReasoningVisibility", () => {
 
     expect(patchSettings).toHaveBeenCalledWith({ showReasoning: false })
     expect(result).toMatchObject({ showReasoning: false })
+  })
+})
+
+describe("DesktopSettingsService.updateLinkOpeningMode", () => {
+  function fixture(savedMode?: DesktopLinkOpeningMode) {
+    const patchPreferences = vi.fn((patch: { linkOpeningMode?: DesktopLinkOpeningMode }) => ({
+      notificationMode: "never" as const,
+      ...patch,
+    }))
+    const offline = vi.fn(async () => {
+      throw new Error("offline")
+    })
+    return {
+      patchPreferences,
+      offline,
+      service: new DesktopSettingsService({
+        daemonClient: offline,
+        refreshDaemonClient: offline,
+        getPreferences: () => ({ ...preferences(), linkOpeningMode: savedMode }),
+        patchPreferences,
+      }),
+    }
+  }
+
+  it.each(["ask", "builtin", "system"] as const)(
+    "saves %s locally even when the daemon is unavailable",
+    async (mode) => {
+      const { service, patchPreferences, offline } = fixture()
+      expect(await service.updateLinkOpeningMode({ linkOpeningMode: mode })).toBe(mode)
+      expect(patchPreferences).toHaveBeenCalledExactlyOnceWith({ linkOpeningMode: mode })
+      expect(offline).not.toHaveBeenCalled()
+    }
+  )
+
+  it("asks by default without contacting the daemon", () => {
+    const { service, offline } = fixture()
+    expect(service.getLinkOpeningMode()).toBe("ask")
+    expect(offline).not.toHaveBeenCalled()
+  })
+
+  it.each(["ask", "builtin", "system", "invalid"])(
+    "reads %s without contacting the daemon",
+    (mode) => {
+      const { service, offline } = fixture(mode as DesktopLinkOpeningMode)
+      expect(service.getLinkOpeningMode()).toBe(mode === "invalid" ? "ask" : mode)
+      expect(offline).not.toHaveBeenCalled()
+    }
+  )
+
+  it("rejects an invalid mode before writing preferences", async () => {
+    const { service, patchPreferences } = fixture()
+    await expect(
+      service.updateLinkOpeningMode({ linkOpeningMode: "other" as never })
+    ).rejects.toThrow("请选择")
+    expect(patchPreferences).not.toHaveBeenCalled()
   })
 })
 

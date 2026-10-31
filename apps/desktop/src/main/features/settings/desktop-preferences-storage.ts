@@ -6,12 +6,14 @@ import { validateTerminalSettings, type TerminalSettings } from "../../../shared
 
 import {
   isDesktopNotificationMode,
+  isDesktopLinkOpeningMode,
   normalizeNotificationSounds,
   normalizeDefaultOpenerId,
   normalizeDefaultTerminalShellId,
   type DesktopDaemonOnboardingState,
   type DesktopInstallIdentity,
   type DesktopNotificationMode,
+  type DesktopLinkOpeningMode,
   type DesktopNotificationSounds,
 } from "../../../shared/settings-types"
 
@@ -34,6 +36,7 @@ export interface DesktopPreferences {
   notifiedEventIds?: string[]
   notificationTargets?: DesktopNotificationTarget[]
   browserDeveloperMode?: boolean
+  linkOpeningMode?: DesktopLinkOpeningMode
   noteQuickShortcut?: string
   noteWindowAlwaysOnTop?: boolean
   defaultOpenerId?: string
@@ -74,6 +77,9 @@ export function getDesktopPreferencesAt(userDataDir: string): DesktopPreferences
       ...(Array.isArray(raw.notifiedEventIds) ? { notifiedEventIds: raw.notifiedEventIds.filter((value): value is string => typeof value === "string").slice(-1000) } : {}),
       ...(raw.notificationTargets ? { notificationTargets: normalizeNotificationTargets(raw.notificationTargets) } : {}),
       ...(raw.browserDeveloperMode === true ? { browserDeveloperMode: true } : {}),
+      ...(isDesktopLinkOpeningMode(raw.linkOpeningMode)
+        ? { linkOpeningMode: raw.linkOpeningMode }
+        : {}),
       ...(typeof raw.noteQuickShortcut === "string" ? { noteQuickShortcut: raw.noteQuickShortcut } : {}),
       ...(typeof raw.noteWindowAlwaysOnTop === "boolean" ? { noteWindowAlwaysOnTop: raw.noteWindowAlwaysOnTop } : {}),
       ...(defaultOpenerId ? { defaultOpenerId } : {}),
@@ -105,6 +111,9 @@ export function patchDesktopPreferencesAt(
     ...(Array.isArray(next.notifiedEventIds) ? { notifiedEventIds: next.notifiedEventIds.filter((value): value is string => typeof value === "string").slice(-1000) } : {}),
     ...(next.notificationTargets ? { notificationTargets: normalizeNotificationTargets(next.notificationTargets) } : {}),
     ...(next.browserDeveloperMode === true ? { browserDeveloperMode: true } : {}),
+    ...(isDesktopLinkOpeningMode(next.linkOpeningMode)
+      ? { linkOpeningMode: next.linkOpeningMode }
+      : {}),
     ...(typeof next.noteQuickShortcut === "string" ? { noteQuickShortcut: next.noteQuickShortcut } : {}),
     ...(typeof next.noteWindowAlwaysOnTop === "boolean" ? { noteWindowAlwaysOnTop: next.noteWindowAlwaysOnTop } : {}),
     ...(defaultOpenerId ? { defaultOpenerId } : {}),

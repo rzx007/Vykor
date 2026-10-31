@@ -259,6 +259,29 @@ function mountPanel(
 }
 
 describe("UtilityPanel review tool access", () => {
+  it("opens a message web URL in a browser tab in the current scope", async () => {
+    installProbe(async () => ({ isRepository: false, rootPath: null }))
+    Object.assign(window.desktop, { browser: { updateTab: vi.fn().mockResolvedValue(undefined) } })
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe = vi.fn()
+        unobserve = vi.fn()
+        disconnect = vi.fn()
+      }
+    )
+    useOutsideProjectSession("D:/plain-dir")
+    const scopeId = "session:message-web-link"
+    const url = "https://example.com/docs?q=1#section"
+    mountPanel(scopeId, { toolOpenRequest: { id: 1, tool: "browser", url } })
+    await settle()
+    const state = readUtilityPanelRuntimeState(scopeId)!
+    expect(state.tabs).toHaveLength(1)
+    expect(state.tabs[0]?.tool).toBe("browser")
+    expect(state.activeTabId).toBe(state.tabs[0]?.id)
+    expect(state.browserTabs[0]?.url).toBe(url)
+  })
+
   it("opens outside HTML in a browser tab without opening a file viewer", async () => {
     installProbe(async () => ({ isRepository: false, rootPath: null }))
     Object.assign(window.desktop, { browser: { updateTab: vi.fn().mockResolvedValue(undefined) } })

@@ -14,6 +14,8 @@
 
 ## 主要文件
 
+“消息链接打开方式”提供每次询问、Vykor 内置浏览器和系统默认浏览器；初始询问时预选内置。记住选择后可在这里切换浏览器或恢复每次询问，保存到本机桌面偏好，立即生效。
+
 - [general-settings.tsx](general-settings.tsx)
 - [general-display-controls.tsx](general-display-controls.tsx)
 - [editor-settings.tsx](editor-settings.tsx)

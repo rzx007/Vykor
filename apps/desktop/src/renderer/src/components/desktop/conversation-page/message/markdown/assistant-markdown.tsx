@@ -24,6 +24,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
   animateInitialText,
   onOpenFile,
   fileLinkMode = "open",
+  messageLinks = false,
 }: {
   text: string
   searchMessageId?: string
@@ -33,6 +34,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
   animateInitialText: boolean
   onOpenFile: (path: string, line?: number) => void
   fileLinkMode?: "open" | "text"
+  messageLinks?: boolean
 }): React.JSX.Element {
   const textAnimationEnabled = useStreamingTextAnimation()
   const openFileRef = useRef(onOpenFile)
@@ -89,6 +91,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
       data-chat-search-message={searchMessageId}
       data-chat-search-parts={searchPartIdsJson}
       className="assistant-markdown min-w-0"
+      data-message-web-links={messageLinks ? "true" : undefined}
       data-phase={phase}
       data-stream-initial={streaming && rendered.text === initialText ? "true" : undefined}
     >

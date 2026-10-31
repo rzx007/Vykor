@@ -3,6 +3,7 @@ import { isReplyStyle, type ProtocolClient, type SystemResource } from "@vykor/a
 import {
   buildDesktopSettingsSnapshot,
   isDesktopNotificationMode,
+  isDesktopLinkOpeningMode,
   isDesktopSoundId,
   isDesktopWorkStyle,
   normalizeDefaultOpenerId,
@@ -10,8 +11,10 @@ import {
 } from "../../../shared/settings-types"
 import type {
   DesktopSettingsSnapshot,
+  DesktopLinkOpeningMode,
   UpdateDesktopAgentEnvironmentInput,
   UpdateDesktopBrowserDeveloperModeInput,
+  UpdateDesktopLinkOpeningModeInput,
   UpdateDesktopCustomInstructionsInput,
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
@@ -149,6 +152,21 @@ export class DesktopSettingsService {
     if (!defaultOpenerId) throw new Error("打开方式不能为空。")
     const preferences = this.dependencies.patchPreferences({ defaultOpenerId })
     return this.snapshotWithPreferences(preferences)
+  }
+
+  getLinkOpeningMode(): DesktopLinkOpeningMode {
+    const mode = this.dependencies.getPreferences().linkOpeningMode
+    return isDesktopLinkOpeningMode(mode) ? mode : "ask"
+  }
+
+  async updateLinkOpeningMode(
+    input: UpdateDesktopLinkOpeningModeInput
+  ): Promise<DesktopLinkOpeningMode> {
+    if (!isDesktopLinkOpeningMode(input?.linkOpeningMode)) {
+      throw new Error("请选择每次询问、Vykor 内置浏览器或系统默认浏览器。")
+    }
+    this.dependencies.patchPreferences({ linkOpeningMode: input.linkOpeningMode })
+    return input.linkOpeningMode
   }
 
   async updateNotificationSounds(

@@ -19,6 +19,7 @@ const entries: Array<[string, string, string, string?]> = [
   ["general", "思考过程展示", "推理 展开 隐藏"],
   ["general", "后台持续运行", "daemon 自启动 常驻 登录 恢复"],
   ["general", "默认文件打开应用", "编辑器 文件 打开目标"],
+  ["general", "消息链接打开方式", "网页 HTTP HTTPS 内置浏览器 系统默认浏览器 每次询问 记住"],
   ["general", "完成后自动检查", "风险 只读审查 autoReview", "auto-review-mode"],
   ["general", "配置导入和导出", "备份 偏好 JSON", "configuration-transfer-heading"],
   ["providers", "默认模型", "供应商 默认 服务 模型 model 推理强度 effort"],

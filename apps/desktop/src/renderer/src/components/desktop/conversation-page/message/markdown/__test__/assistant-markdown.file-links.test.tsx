@@ -27,7 +27,7 @@ afterEach(() => {
   Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT")
 })
 
-async function render(text: string, fileLinkMode: "open" | "text" = "open") {
+async function render(text: string, fileLinkMode: "open" | "text" = "open", messageLinks = false) {
   await act(async () =>
     root.render(
       <AssistantMarkdown
@@ -35,6 +35,7 @@ async function render(text: string, fileLinkMode: "open" | "text" = "open") {
         streaming={false}
         animateInitialText={false}
         fileLinkMode={fileLinkMode}
+        messageLinks={messageLinks}
         onOpenFile={(path, line) => {
           opened.push([path, line])
         }}
@@ -42,6 +43,13 @@ async function render(text: string, fileLinkMode: "open" | "text" = "open") {
     )
   )
 }
+
+it("only enables browser selection for actual messages, leaving workflow results unchanged", async () => {
+  await render("[网页](https://example.com/docs)")
+  expect(container.querySelector('[data-message-web-links="true"] a')).toBeNull()
+  await render("[网页](https://example.com/docs)", "open", true)
+  expect(container.querySelector('[data-message-web-links="true"] a')?.getAttribute("href")).toBe("https://example.com/docs")
+})
 
 it.each([
   { href: "文档/说明.md", path: "文档/说明.md", line: undefined },

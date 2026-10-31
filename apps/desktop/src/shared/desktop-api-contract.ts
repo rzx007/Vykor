@@ -149,6 +149,8 @@ import type {
   DesktopDaemonAutoStartSnapshot,
   UpdateDesktopAgentEnvironmentInput,
   UpdateDesktopBrowserDeveloperModeInput,
+  UpdateDesktopLinkOpeningModeInput,
+  DesktopLinkOpeningMode,
   UpdateDesktopCustomInstructionsInput,
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
@@ -422,6 +424,10 @@ export type DesktopAPI = {
     updateBrowserDeveloperMode: (
       input: UpdateDesktopBrowserDeveloperModeInput
     ) => Promise<DesktopSettingsSnapshot>
+    getLinkOpeningMode: () => Promise<DesktopLinkOpeningMode>
+    updateLinkOpeningMode: (
+      input: UpdateDesktopLinkOpeningModeInput
+    ) => Promise<DesktopLinkOpeningMode>
     updateDefaultOpener: (
       input: UpdateDesktopDefaultOpenerInput
     ) => Promise<DesktopSettingsSnapshot>

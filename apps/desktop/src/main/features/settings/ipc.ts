@@ -1,6 +1,7 @@
 import { IpcChannels } from "../../../shared/ipc-channels"
 import type {
   UpdateDesktopBrowserDeveloperModeInput,
+  UpdateDesktopLinkOpeningModeInput,
   UpdateDesktopCustomInstructionsInput,
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
@@ -87,6 +88,15 @@ export const settingsIpcContribution: IpcContribution = {
           desktopSettingsService.updateBrowserDeveloperMode(
             input as UpdateDesktopBrowserDeveloperModeInput
           ),
+      },
+      {
+        channel: IpcChannels.settingsUpdateLinkOpeningMode,
+        handler: (_event, input) =>
+          desktopSettingsService.updateLinkOpeningMode(input as UpdateDesktopLinkOpeningModeInput),
+      },
+      {
+        channel: IpcChannels.settingsGetLinkOpeningMode,
+        handler: () => desktopSettingsService.getLinkOpeningMode(),
       },
       {
         channel: IpcChannels.settingsUpdateDefaultOpener,

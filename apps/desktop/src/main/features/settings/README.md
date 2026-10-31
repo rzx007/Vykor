@@ -6,4 +6,6 @@
 
 其他设置服务分别处理权限、终端、Git、通知、配置迁移和数据维护。同类设置的输入校验与后台调用放在对应服务，纯桌面字段及调用类型放在 `src/shared`。新测试放在同级 `__test__`；回复风格测试覆盖默认值、保存后读取、错误值拒绝及保存失败。
 
+消息链接打开方式通过 `getLinkOpeningMode`、`updateLinkOpeningMode` 直接读写本机 `desktop-preferences.json`，取值为询问、内置或系统浏览器；不访问 daemon，也不修改其配置。旧配置和无效值回退为询问，写入时拒绝未知值；其他偏好保存不会清除该选择。
+
 `desktop-preferences-storage.ts` 同时保存最近的原生通知目标，供桌面重启后的通知激活查找原会话和待处理请求。只保留最近 1,000 条，读取时丢弃结构无效的目标；未确认的回复文字仅在本机保存，后台确认后清除。通知动作仍由 `../tray/notification-actions.ts` 处理，设置目录不执行授权。`__test__/notification-targets.test.ts` 使用实际文件验证无关设置保存不会丢失目标，成功后可清除回复文字。

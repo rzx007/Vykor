@@ -128,6 +128,17 @@ it("forwards a caller's gallery and rejects opens captured in a previous panel s
   expect(workspace.controller().imageOpenRequest).toBeNull()
 })
 
+it("opens a scoped browser request with the complete URL and a fresh request ID", () => {
+  const workspace = mount(false, { conversation: 55, utility: 45 })
+  act(() => workspace.controller().openBrowser("https://example.com/a?q=1#part"))
+  const first = workspace.controller().toolOpenRequest!
+  expect(first).toMatchObject({ tool: "browser", url: "https://example.com/a?q=1#part" })
+  act(() => workspace.controller().openBrowser("https://example.com/b"))
+  expect(workspace.controller().toolOpenRequest?.id).toBeGreaterThan(first.id)
+  workspace.switchSession("other-chat")
+  expect(workspace.controller().toolOpenRequest).toBeNull()
+})
+
 it("restores the saved split after reopening an already maximized workbench", () => {
   const workspace = mount(true, { conversation: 0, utility: 100 })
   workspace.toggle()

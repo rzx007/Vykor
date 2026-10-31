@@ -158,6 +158,8 @@ import type {
   DesktopDaemonAutoStartSnapshot,
   UpdateDesktopAgentEnvironmentInput,
   UpdateDesktopBrowserDeveloperModeInput,
+  UpdateDesktopLinkOpeningModeInput,
+  DesktopLinkOpeningMode,
   UpdateDesktopCustomInstructionsInput,
   UpdateDesktopDefaultOpenerInput,
   UpdateDesktopDefaultTerminalShellInput,
@@ -456,6 +458,8 @@ export const IpcChannels = {
   settingsUpdateAgentEnvironment: "settings:update-agent-environment",
   settingsUpdateReasoningVisibility: "settings:update-reasoning-visibility",
   settingsUpdateBrowserDeveloperMode: "settings:update-browser-developer-mode",
+  settingsGetLinkOpeningMode: "settings:get-link-opening-mode",
+  settingsUpdateLinkOpeningMode: "settings:update-link-opening-mode",
   settingsUpdateDefaultOpener: "settings:update-default-opener",
   settingsUpdateDefaultTerminalShell: "settings:update-default-terminal-shell",
   daemonAutoStartSnapshot: "daemon-autostart:snapshot",
@@ -679,6 +683,14 @@ export interface IpcInvokeMap
   [IpcChannels.settingsUpdateBrowserDeveloperMode]: {
     args: [input: UpdateDesktopBrowserDeveloperModeInput]
     result: DesktopSettingsSnapshot
+  }
+  [IpcChannels.settingsUpdateLinkOpeningMode]: {
+    args: [input: UpdateDesktopLinkOpeningModeInput]
+    result: DesktopLinkOpeningMode
+  }
+  [IpcChannels.settingsGetLinkOpeningMode]: {
+    args: []
+    result: DesktopLinkOpeningMode
   }
   [IpcChannels.settingsUpdateDefaultOpener]: {
     args: [input: UpdateDesktopDefaultOpenerInput]

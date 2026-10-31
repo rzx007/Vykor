@@ -20,6 +20,7 @@ import {
   ReasoningVisibilityControl,
   ThemePreferenceControl,
   BrowserDeveloperControl,
+  LinkOpeningModeControl,
 } from "./general-display-controls"
 import {
   DefaultPermissionControl,
@@ -112,6 +113,11 @@ export function GeneralSettings() {
             title="默认打开应用"
             description="用于代码文件与文件夹。"
             control={<DefaultOpenerControl />}
+          />
+          <SettingsRow
+            title="消息链接打开方式"
+            description="询问时默认选择内置浏览器。"
+            control={<LinkOpeningModeControl />}
           />
           <SettingsRow
             title="后台持续运行"

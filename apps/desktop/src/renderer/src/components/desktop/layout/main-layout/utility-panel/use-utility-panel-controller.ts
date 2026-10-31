@@ -41,6 +41,7 @@ type ScopedToolRequest = {
   scopeId: string
   tool: UtilityToolRequest
   taskId?: string
+  url?: string
 }
 
 type ScopedReviewRequest = DesktopGitReviewRequest & {
@@ -76,6 +77,7 @@ export type UtilityPanelController = {
   toggle: () => void
   toggleMaximized: () => void
   openFile: (path: string, line?: number) => void
+  openBrowser: (url: string) => void
   openImage: (source: ImageSource, gallery?: ImageGallery, expectedPanelScopeId?: string) => void
   openReview: (path?: string, scope?: DesktopGitDiffScope, rootPath?: string) => void
   openTerminal: (terminalId: string) => void
@@ -365,6 +367,19 @@ export function useUtilityPanelController({
     [restore]
   )
 
+  const openBrowser = useCallback(
+    (url: string): void => {
+      restore()
+      setToolRequest({
+        id: ++toolRequestSequence,
+        scopeId: activeScopeIdRef.current,
+        tool: "browser",
+        url,
+      })
+    },
+    [restore]
+  )
+
   const openTool = useCallback(
     (tool: UtilityToolRequest, taskId?: string): void => {
       restore()
@@ -488,6 +503,7 @@ export function useUtilityPanelController({
     toggle,
     toggleMaximized,
     openFile,
+    openBrowser,
     openImage,
     openReview,
     openTerminal,
