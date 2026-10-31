@@ -84,9 +84,12 @@ describe("model retry through engine, runtime, durable projection and client", (
     } });
     const run = h.start();
     const result = await run.result;
-    expect(calls).toBe(2);
+    // 截断后最多续写两段；续写与首个失败请求的重试分别计数、累计用量。
+    const successfulSegments = stopReason === "max_tokens" ? 3 : 1;
+    expect(calls).toBe(successfulSegments + 1);
+    expect(h.events.filter(event => event.type === "model.retry.scheduled")).toHaveLength(1);
     expect(result.output).not.toContain("obsolete");
-    expect(result.usage).toMatchObject({ inputTokens: 10, outputTokens: 2, usageIncomplete: true });
+    expect(result.usage).toMatchObject({ inputTokens: 10 * successfulSegments, outputTokens: 2 * successfulSegments, usageIncomplete: true });
     const durableRun = h.store.runs.getRun(run.id)!;
     expect(durableRun.status).toBe("completed");
     expect(durableRun.metadata.modelRetry).toBeNull();
