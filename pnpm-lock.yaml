@@ -399,13 +399,13 @@ importers:
         version: 3.1.0(eslint@9.39.5(jiti@2.7.0))(typescript@5.9.3)
       '@electron-toolkit/preload':
         specifier: ^3.0.2
-        version: 3.0.2(electron@44.10.0)
+        version: 3.0.2(electron@45.2.1)
       '@electron-toolkit/tsconfig':
         specifier: ^2.0.0
         version: 2.0.0(@types/node@22.19.17)
       '@electron-toolkit/utils':
         specifier: ^4.0.0
-        version: 4.0.0(electron@44.10.0)
+        version: 4.0.0(electron@45.2.1)
       '@electron/asar':
         specifier: ^3.4.1
         version: 3.4.1
@@ -509,8 +509,8 @@ importers:
         specifier: ^4.4.0
         version: 4.4.0
       electron:
-        specifier: 44.10.0
-        version: 44.10.0
+        specifier: 45.2.1
+        version: 45.2.1
       electron-builder:
         specifier: ^26.0.12
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)
@@ -6740,8 +6740,8 @@ packages:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
 
-  electron@44.10.0:
-    resolution: {integrity: sha512-ss4pCfrQKV4TWkuVYtWB4HmeysPZgB96cSYNKYZv1UVCRP4vQMGNW5oopFbvx6Bbfce1XtP5pm5RDuKehp0svQ==}
+  electron@45.2.1:
+    resolution: {integrity: sha512-t433yuo8Kh8WG/mTStnPRT/NtpWw8A+caNLJgeU0tS/FlfOkeNEntFsac4ViLgDxZOmDe7BeSkOANVqrqNHhDA==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -8774,8 +8774,8 @@ packages:
   nlcst-to-string@4.0.0:
     resolution: {integrity: sha512-YKLBCcUYKAg0FNlOBT6aI91qFmSiFKiluk655WzPF+DDMA02qIyy8uiRqI8QXtcFpEvll12LpL5MXqEmAZ+dcA==}
 
-  node-abi@4.33.0:
-    resolution: {integrity: sha512-vLBWCKb+7LWsX+TbfzWOkw0W81m377tyx3hOweBTjO43CXZnRGS1/JPWs20fr0PgZyDXk6ROYrylsEycK8raDA==}
+  node-abi@4.40.0:
+    resolution: {integrity: sha512-GuvqvtrOk+AC27RidBxBsMzVNkwNl7PjHgc4NXbmdvSVLgIUjpaqcG1FjNRYnt2Yn9Ytq+Ln37XsBaglUcte/w==}
     engines: {node: '>=22.12.0'}
 
   node-addon-api@7.1.1:
@@ -12130,17 +12130,17 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@electron-toolkit/preload@3.0.2(electron@44.10.0)':
+  '@electron-toolkit/preload@3.0.2(electron@45.2.1)':
     dependencies:
-      electron: 44.10.0
+      electron: 45.2.1
 
   '@electron-toolkit/tsconfig@2.0.0(@types/node@22.19.17)':
     dependencies:
       '@types/node': 22.19.17
 
-  '@electron-toolkit/utils@4.0.0(electron@44.10.0)':
+  '@electron-toolkit/utils@4.0.0(electron@45.2.1)':
     dependencies:
-      electron: 44.10.0
+      electron: 45.2.1
 
   '@electron/asar@3.4.1':
     dependencies:
@@ -12204,7 +12204,7 @@ snapshots:
     dependencies:
       '@malept/cross-spawn-promise': 2.0.0
       debug: 4.4.3
-      node-abi: 4.33.0
+      node-abi: 4.40.0
       node-api-version: 0.2.1
       node-gyp: 12.4.0
       read-binary-file-arch: 1.0.6
@@ -16790,7 +16790,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@44.10.0:
+  electron@45.2.1:
     dependencies:
       '@electron-internal/extract-zip': 1.0.8
       '@electron/get': 5.1.0
@@ -19372,7 +19372,7 @@ snapshots:
     dependencies:
       '@types/nlcst': 2.0.3
 
-  node-abi@4.33.0:
+  node-abi@4.40.0:
     dependencies:
       semver: 7.8.5
 

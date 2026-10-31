@@ -31,7 +31,7 @@ Electron + React desktop shell for Vykor.
 
 ## Development
 
-开发环境使用 Node.js 22.12 或更高版本。Electron 精确锁定为 44.10.0，以保持 Windows 通知接口和原生模块构建版本一致。
+开发环境使用 Node.js 22.12 或更高版本。Electron 精确锁定为 45.2.1，以保持 Windows 通知接口和原生模块构建版本一致；锁文件中的 `node-abi` 同时更新到支持 Electron 45 的版本，供原生模块重建使用。
 
 ```bash
 pnpm install
