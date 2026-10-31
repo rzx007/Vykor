@@ -167,35 +167,33 @@ export function EmptyUtilityPanelState({
   return (
     <div className="flex h-full min-h-0 items-center justify-center px-8">
       <ItemGroup className="w-full max-w-130 gap-0!">
-        {availableTools
-          .filter((tool) => tool !== "plugin-app" && tool !== "workflows")
-          .map((tool) => {
-            const Icon = utilityToolMeta[tool].icon
-            return (
-              <Item
-                key={tool}
-                size="sm"
-                render={<button type="button" onClick={() => onAdd(tool)} />}
-                className="h-10 cursor-pointer flex-nowrap bg-transparent text-left text-sidebar-foreground hover:bg-muted"
-              >
-                <ItemMedia variant="icon" className="size-4">
-                  <Icon strokeWidth={1.8} />
-                </ItemMedia>
-                <ItemContent>
-                  <ItemTitle className="text-ui-small font-normal">
-                    {utilityToolMeta[tool].label}
-                  </ItemTitle>
-                </ItemContent>
-                <ItemActions className="min-w-28 justify-end">
-                  {utilityToolMeta[tool].shortcut ? (
-                    <Kbd className="text-ui-caption bg-code text-muted-foreground">
-                      {utilityToolMeta[tool].shortcut}
-                    </Kbd>
-                  ) : null}
-                </ItemActions>
-              </Item>
-            )
-          })}
+        {availableTools.map((tool) => {
+          const Icon = utilityToolMeta[tool].icon
+          return (
+            <Item
+              key={tool}
+              size="sm"
+              render={<button type="button" onClick={() => onAdd(tool)} />}
+              className="h-10 cursor-pointer flex-nowrap bg-transparent text-left text-sidebar-foreground hover:bg-muted"
+            >
+              <ItemMedia variant="icon" className="size-4">
+                <Icon strokeWidth={1.8} />
+              </ItemMedia>
+              <ItemContent>
+                <ItemTitle className="text-ui-small font-normal">
+                  {utilityToolMeta[tool].label}
+                </ItemTitle>
+              </ItemContent>
+              <ItemActions className="min-w-28 justify-end">
+                {utilityToolMeta[tool].shortcut ? (
+                  <Kbd className="text-ui-caption bg-code text-muted-foreground">
+                    {utilityToolMeta[tool].shortcut}
+                  </Kbd>
+                ) : null}
+              </ItemActions>
+            </Item>
+          )
+        })}
       </ItemGroup>
     </div>
   )

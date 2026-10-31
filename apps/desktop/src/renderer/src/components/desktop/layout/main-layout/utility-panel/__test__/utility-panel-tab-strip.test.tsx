@@ -23,7 +23,7 @@ afterEach(async () => {
   Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT")
 })
 
-it("hides apps and workflows only on the start page while keeping the other tool actions", async () => {
+it("hides apps and workflows on the start page while keeping the other tool actions", async () => {
   const onAdd = vi.fn()
   await act(async () => {
     root.render(<EmptyUtilityPanelState availableTools={utilityToolOrder} onAdd={onAdd} />)
@@ -47,7 +47,7 @@ it("hides apps and workflows only on the start page while keeping the other tool
   ])
 })
 
-it("keeps apps and workflows available from the new tool tab menu", async () => {
+it("shows the same tools in the new tab menu as on the start page", async () => {
   const onAdd = vi.fn()
   const tab: UtilityTab = { id: "browser-1", tool: "browser", title: "浏览器" }
   await act(async () => {
@@ -70,18 +70,21 @@ it("keeps apps and workflows available from the new tool tab menu", async () => 
     )
   })
 
-  for (const [label, tool] of [
-    ["应用", "plugin-app"],
-    ["编排", "workflows"],
-  ]) {
-    await act(async () =>
-      container.querySelector<HTMLButtonElement>('[aria-label="新建工具标签"]')!.click()
-    )
-    const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
-      (button) => button.textContent === label
-    )
-    expect(button).toBeDefined()
-    await act(async () => button!.click())
-    expect(onAdd).toHaveBeenLastCalledWith(tool)
-  }
+  await act(async () =>
+    container.querySelector<HTMLButtonElement>('[aria-label="新建工具标签"]')!.click()
+  )
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>("button")].filter(
+    (button) => !container.contains(button)
+  )
+  expect(buttons.map((button) => button.querySelector("span")?.textContent)).toEqual([
+    "子智能体",
+    "审阅",
+    "终端",
+    "浏览器",
+    "文件",
+    "侧边聊天",
+  ])
+  const terminal = buttons.find((button) => button.querySelector("span")?.textContent === "终端")!
+  await act(async () => terminal.click())
+  expect(onAdd).toHaveBeenCalledExactlyOnceWith("terminal")
 })
