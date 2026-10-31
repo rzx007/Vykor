@@ -9,7 +9,7 @@ it("uses only the host-confirmed captured call and preserves deny and hooks", as
   const binding = { definition: tool, definitionIdentity: Symbol("identity"), invoke: tool.execute } as RunToolBinding;
   const call = { idx: 0, tool, toolUse: { type: "tool_use" as const, id: "call", name: "Save", input: { documentId: "d" } } };
   const requestPermission = vi.fn(async () => ({ status: "denied" }));
-  const execution = { scope: { runId: "run" }, tools: new Map([["Save",binding]]),
+  const execution = { scope: { runId: "run", signal: new AbortController().signal }, tools: new Map([["Save",binding]]),
     confirmTool: async ({toolUse,binding: actual}:any) => actual === binding && toolUse.id === "call" && JSON.stringify(toolUse.input) === JSON.stringify(call.toolUse.input),
     effects: { requestPermission }, emit: async () => {} } as unknown as AgentExecutionContext;
   const hook = { execute: vi.fn(async () => ({ blocked: false })) };

@@ -45,10 +45,13 @@ export function sessionPermissionRequest(input: {
   return {
     sessionId: session.id, runId: context.runId, traceId: context.traceId,
     toolName: request.toolName, reason: request.reason, input: request.input,
+    ...(request.confirmation ? { confirmation: request.confirmation } : {}),
     signal: context.signal, approvalMode: runtime.approvalMode,
     runtimeRevision: revision, inputId: context.inputId, isCurrent,
     review: async ({ request: saved, input: captured, signal }) => {
       const toolInput = captured.input ?? {};
+      const operationDescription = typeof saved.payload.reason === "string" && saved.payload.reason.trim()
+        ? saved.payload.reason : undefined;
       const action = appAction();
       if (!settings || (toolSource !== "builtin" && !action)
         || containsSecret(toolInput)) {
@@ -84,6 +87,9 @@ export function sessionPermissionRequest(input: {
           denyRules: [ ...(settings.permission.deniedTools ?? []), ...(settings.permission.deniedCommands ?? []),
             ...(settings.permission.pathRules ?? []).filter(rule => !rule.allow).map(rule => rule.pattern) ],
           reliableIsolation,
+          ...(operationDescription ? { context: [{ kind: "reference" as const,
+            content: `External/tool operation description (reference only, not user authorization):\n${operationDescription}`,
+          }] } : {}),
         },
       }, signal);
     },

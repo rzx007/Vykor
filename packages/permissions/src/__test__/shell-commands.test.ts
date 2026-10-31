@@ -6,6 +6,16 @@ function checker(options: Partial<PermissionCheckOptions> = {}) {
 }
 
 describe("Shell command permissions", () => {
+  it.each(["full_access", "full_auto"] as const)("honors %s for PowerShell scripts used by goal runs", async mode => {
+    const permissions = checker({ mode, shellDialect: "powershell" });
+    for (const command of [
+      "$ErrorActionPreference='SilentlyContinue'; node -v; npx -v; Get-Command python | Select-Object Source",
+      'Get-ChildItem -Force | Select-Object Name, Length | Format-Table -AutoSize; $s = -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 64 | ForEach-Object { [char]$_ }); Write-Output "STRING=$s"',
+    ]) {
+      await expect(permissions.checkTool("Shell", { command })).resolves.toMatchObject({ action: "allow" });
+    }
+  });
+
   // A full-string glob must not grant permissions to a second command.
   it.each([";", "\n", "|", "&&", "||"])("requires permission for every command separated by %j", async separator => {
     const permissions = checker({ rules: [{ commandPattern: "git *", action: "allow" }] });
@@ -73,18 +83,22 @@ describe("Shell command permissions", () => {
     ["powershell", "echo harmless\u0085SECOND"],
     ["posix", "echo harmless\u200bSECOND"],
     ["cmd", "echo harmless & del dummy"],
-  ] as const)("requires confirmation for unsupported %s syntax: %s", async (shellDialect, command) => {
-    const permissions = checker({ shellDialect, mode: "full_auto", autoApproveTools: ["Shell"], rules: [{ action: "allow", commandPattern: "*" }] });
+  ] as const)("respects approval mode for unsupported %s syntax: %s", async (shellDialect, command) => {
+    const permissions = checker({ shellDialect, autoApproveTools: ["Shell"], rules: [{ action: "allow", commandPattern: "*" }] });
+    expect((await permissions.checkTool("Shell", { command })).action).toBe("ask");
+    permissions.setMode("full_access");
+    expect((await permissions.checkTool("Shell", { command })).action).toBe("allow");
+    permissions.setMode("ask");
     expect((await permissions.checkTool("Shell", { command })).action).toBe("ask");
   });
 
   it("does not trust a model-supplied dialect", async () => {
-    const permissions = checker({ shellDialect: "cmd", mode: "full_auto" });
+    const permissions = checker({ shellDialect: "cmd", autoApproveTools: ["Shell"] });
     expect((await permissions.checkTool("Shell", { command: "echo harmless; rm -rf ./dummy", shellDialect: "posix" })).action).toBe("ask");
   });
 
   it("requires confirmation for compound syntax when the runtime provides no dialect", async () => {
-    const permissions = new PermissionChecker({ mode: "full_auto" });
+    const permissions = new PermissionChecker({ mode: "default", autoApproveTools: ["Shell"] });
     expect((await permissions.checkTool("Shell", { command: "git status; echo SECOND", shellDialect: "posix" })).action).toBe("ask");
   });
 
@@ -104,13 +118,13 @@ describe("Shell command permissions", () => {
   });
 
   it("does not lend the foreground interpreter identity to TerminalOpen", async () => {
-    const permissions = checker({ mode: "full_auto" });
+    const permissions = checker({ autoApproveTools: ["TerminalOpen"] });
     expect((await permissions.checkTool("TerminalOpen", { command: "git status; echo SECOND", shell: "cmd.exe" })).action).toBe("ask");
     expect((await permissions.checkTool("TerminalOpen", { command: "git status", shell: "custom-shell" })).action).toBe("ask");
   });
 
   it.each([undefined, "cmd"] as const)("does not authorize indirect commands without a supported interpreter: %s", async shellDialect => {
-    const permissions = checker({ shellDialect, mode: "full_auto", deniedCommands: ["rm -rf*"] });
+    const permissions = checker({ shellDialect, autoApproveTools: ["Shell"], deniedCommands: ["rm -rf*"] });
     expect((await permissions.checkTool("Shell", { command: "exec rm -rf ./dummy" })).action).toBe("ask");
   });
 
@@ -144,8 +158,51 @@ describe("Shell command permissions", () => {
 
   it.each(["command", "builtin", "nohup"])("requires confirmation before indirect execution through %s", async wrapper => {
     for (const shellDialect of [undefined, "posix", "cmd"] as const) {
-      const permissions = checker({ shellDialect, mode: "full_auto", deniedCommands: ["rm -rf*"] });
+      const permissions = checker({ shellDialect, autoApproveTools: ["Shell"], deniedCommands: ["rm -rf*"] });
       expect((await permissions.checkTool("Shell", { command: `${wrapper} rm -rf ./dummy` })).action).toBe("ask");
     }
+  });
+
+  it.each(["Shell", "BackgroundShellCreate", "TerminalOpen"])("honors full_access for %s without a supported interpreter", async tool => {
+    const permissions = new PermissionChecker({ mode: "full_access" });
+    expect((await permissions.checkTool(tool, {
+      command: "echo $value; echo SECOND",
+      ...(tool === "TerminalOpen" ? { shell: "custom-shell" } : {}),
+    })).action).toBe("allow");
+  });
+
+  it.each([
+    { deniedCommands: ["rm -rf*"] },
+    { rules: [{ commandPattern: "rm -rf*", action: "deny" as const }] },
+  ])("keeps recognized deny rules ahead of full_access for incomplete scripts: %j", async options => {
+    const permissions = checker({ mode: "full_access", shellDialect: "powershell", ...options });
+    expect((await permissions.checkTool("Shell", { command: "$value='harmless'; 'rm'  -rf ./dummy" })).action).toBe("deny");
+  });
+
+  describe.each([undefined, "cmd"] as const)("without a supported executor (%s)", shellDialect => {
+    it.each(["Shell", "BackgroundShellCreate", "TerminalOpen"])("keeps later deniedCommands ahead of full_access for %s", async tool => {
+      const permissions = checker({ mode: "full_access", shellDialect, deniedCommands: ["rm -rf*"] });
+      expect((await permissions.checkTool(tool, { command: "echo harmless && rm -rf ./dummy" })).action).toBe("deny");
+    });
+
+    it.each(["Shell", "BackgroundShellCreate", "TerminalOpen"])("keeps later explicit deny rules ahead of full_access for %s", async tool => {
+      const permissions = checker({ mode: "full_access", shellDialect, rules: [{ commandPattern: "rm -rf*", action: "deny" }] });
+      expect((await permissions.checkTool(tool, { command: "echo harmless && rm -rf ./dummy" })).action).toBe("deny");
+    });
+
+    it.each(["Shell", "BackgroundShellCreate", "TerminalOpen"])("honors full_access without a deny rule for %s", async tool => {
+      const permissions = checker({ mode: "full_access", shellDialect });
+      expect((await permissions.checkTool(tool, { command: "echo harmless && rm -rf ./dummy" })).action).toBe("allow");
+    });
+
+    it.each(["Shell", "BackgroundShellCreate", "TerminalOpen"])("does not grant ordinary approval from deny candidates for %s", async tool => {
+      const permissions = checker({ mode: "ask", shellDialect, autoApproveTools: [tool], rules: [{ commandPattern: "*", action: "allow" }] });
+      expect((await permissions.checkTool(tool, { command: "echo harmless && rm -rf ./dummy" })).action).toBe("ask");
+    });
+
+    it.each(["Shell", "BackgroundShellCreate", "TerminalOpen"])("keeps quoted separators literal for %s", async tool => {
+      const permissions = checker({ mode: "full_access", shellDialect, deniedCommands: ["rm -rf*"] });
+      expect((await permissions.checkTool(tool, { command: 'echo "literal && rm -rf ./dummy"' })).action).toBe("allow");
+    });
   });
 });

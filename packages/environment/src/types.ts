@@ -167,6 +167,11 @@ export interface EnvironmentGrepResult {
 }
 
 export interface EnvironmentFileSystem {
+  /** Hold across the complete read/plan/check/mutate transaction, including actual I/O settlement.
+   * Paths are resolved execution paths. Implementations must coordinate across sessions/instances;
+   * cancellation may stop waiting but must not release an active transaction early.
+   */
+  withMutationLock?<T>(paths: readonly string[], work: () => Promise<T>, signal?: AbortSignal): Promise<T>;
   /** No pathname fallback: implementations unable to identify the held object must fail closed. */
   openRead?(path: string, signal?: AbortSignal): Promise<EnvironmentFileReader>;
   stat(path: string, signal?: AbortSignal): Promise<EnvironmentFileStat>;

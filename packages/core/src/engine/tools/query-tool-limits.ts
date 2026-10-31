@@ -123,11 +123,24 @@ export async function executeToolWithTimeout(
 
   const invocation = Promise.resolve().then(() => {
     controller.signal.throwIfAborted();
-    return tool.execute(input, {
+    const invocationContext: ToolContext = {
       ...context,
       abortSignal: controller.signal,
       deadlineAt,
-    });
+    };
+    if (context.requestPermission) {
+      const requestPermission: NonNullable<ToolContext["requestPermission"]> = (request, options) => context.requestPermission!(request, {
+        signal: AbortSignal.any([controller.signal, ...(options?.signal ? [options.signal] : [])]),
+      });
+      invocationContext.requestPermission = requestPermission;
+      if (context.agent) invocationContext.agent = {
+        ...context.agent,
+        effects: { ...context.agent.effects,
+          requestPermission: (request, scope) => requestPermission(request, { signal: scope.signal }),
+        },
+      };
+    }
+    return tool.execute(input, invocationContext);
   });
   const settled = invocation.then(() => {}, () => {});
   try {

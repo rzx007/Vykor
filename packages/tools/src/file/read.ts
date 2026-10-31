@@ -5,9 +5,10 @@ import { type ToolContext, type ToolDefinition, type ToolResult } from "@vykor/a
 import { resolveToolPathInContext } from "./access/environment-path.js";
 import { sandboxPathError } from "./access/sandbox-guard.js";
 import { isFileNotFoundError, fileOperationsFor, type FileOperations } from "./operations.js";
-import { decodeUtf8Text } from "./text-content.js";
+import { decodeUtf8Text, isBinaryContent } from "./text-content.js";
 import { managedPersistencePathKind } from "./access/managed-persistence-path.js";
 import { isSystemPath } from "./access/file-mutation-guard.js";
+import { targetProjectInstructions } from "./instructions.js";
 
 export { BINARY_CONTROL_RATIO, BINARY_SAMPLE_CHARS, isBinaryContent } from "./text-content.js";
 
@@ -17,6 +18,11 @@ export const MAX_READ_BYTES_LABEL = "50 KB";
 export const MAX_LINE_LENGTH = 2000;
 export const MAX_LINE_SUFFIX = ` ... (line truncated to ${MAX_LINE_LENGTH} chars)`;
 export const MAX_SUGGESTIONS = 3;
+/** Input/scan budget, independent of the 50 KB formatted output budget. */
+export const MAX_READ_INPUT_BYTES = 1024 * 1024;
+export const MAX_READ_INFO_BYTES = 8 * 1024 * 1024;
+/** Matches api's DEFAULT_MAX_VISION_SOURCE_BYTES without coupling tools to a provider. */
+export const MAX_READ_IMAGE_BYTES = 20 * 1024 * 1024;
 
 export function fileDigest(bytes: Uint8Array): `sha256:${string}` {
   return `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
@@ -151,11 +157,15 @@ function readErrorResult(error: unknown, started = true): ToolResult {
   };
 }
 
+function readPrecondition(message: string): ToolResult {
+  return { content: [{ type: "text", text: message }], isError: true, failureKind: "precondition", executionState: "completed" };
+}
+
 export function createFileReadTool(host: FileToolHost = {}): ToolDefinition {
-  return {
+  const tool: ToolDefinition = {
     name: "Read",
     description:
-      "Read a local text file, supported image, or directory. For Shell output use file_path=shell-output://UUID and cursor=0 (UTF-8 byte position); omit info_only/offset/limit. Use info_only=true to inspect local target existence, type and raw-byte SHA-256 without returning its body or changing files; this does not authorize a write. Otherwise local text is returned with each line prefixed as `N: <content>`. Use `offset` (1-indexed) and `limit` to continue through large local files or directories. Lines longer than 2000 characters and local text or directory output beyond 50 KB are truncated with a note. Supported images are returned as image blocks; other binary files are rejected.",
+      "Read a local text file, supported image, or directory. For Shell output use file_path=shell-output://UUID and cursor=0 (UTF-8 byte position); omit info_only/offset/limit. Use info_only=true to inspect local target existence, type and full raw-byte SHA-256 (files up to 8 MiB) without returning its body or changing files; this does not authorize a write. Otherwise local text is returned with each line prefixed as `N: <content>`. Text scans at most the first 1 MiB plus a one-byte truncation probe; offset beyond that scan is refused, total lines may be unknown, and incomplete scans have no full-file hash receipt. Use `offset` (1-indexed) and `limit` within the scanned prefix. Lines longer than 2000 characters and output beyond 50 KB are truncated with a note. Supported images up to 20 MiB are returned as image blocks; other binary files are rejected.",
     inputSchema: {
       type: "object",
       properties: {
@@ -205,21 +215,40 @@ export function createFileReadTool(host: FileToolHost = {}): ToolDefinition {
         if (input.info_only === true) return await inspectFileInfo(operations, filePath, rawPath, context, host);
         let fileStat: Awaited<ReturnType<FileOperations["stat"]>>;
         try {
-          fileStat = await operations.stat(filePath);
+          fileStat = await operations.stat(filePath, context.abortSignal);
         } catch (statError) {
+          context.abortSignal?.throwIfAborted();
           return await describeMissingPath(operations, filePath, statError, context, host);
         }
         if (fileStat.isDirectory) {
           return await readDirectoryListing(operations, filePath, offset, limit);
         }
 
-        const bytes = await operations.readBytes(filePath);
-        const mediaType = imageMediaType(bytes);
         const expectedMediaType = IMAGE_EXTENSIONS[extname(filePath).toLowerCase()];
+        if (expectedMediaType && (fileStat.sizeBytes ?? 0) > MAX_READ_IMAGE_BYTES) {
+          return readPrecondition(`Image exceeds the ${MAX_READ_IMAGE_BYTES} byte image input limit: ${filePath}`);
+        }
+        let bytes = await operations.readBytes(filePath, {
+          maxBytes: (expectedMediaType ? MAX_READ_IMAGE_BYTES : MAX_READ_INPUT_BYTES) + 1,
+          signal: context.abortSignal,
+        });
+        context.abortSignal?.throwIfAborted();
+        const mediaType = imageMediaType(bytes);
         if (expectedMediaType && mediaType !== expectedMediaType) {
           throw new Error(`Invalid image file: expected ${expectedMediaType} content`);
         }
         if (mediaType) {
+          if ((fileStat.sizeBytes ?? 0) > MAX_READ_IMAGE_BYTES) {
+            return readPrecondition(`Image exceeds the ${MAX_READ_IMAGE_BYTES} byte image input limit: ${filePath}`);
+          }
+          // Extensionless images retain signature-based detection. Their initial text-sized
+          // probe is bounded too; only media may request a second, image-sized bounded read.
+          if (!expectedMediaType && bytes.byteLength > MAX_READ_INPUT_BYTES) {
+            bytes = await operations.readBytes(filePath, { maxBytes: MAX_READ_IMAGE_BYTES + 1, signal: context.abortSignal });
+            context.abortSignal?.throwIfAborted();
+            if (imageMediaType(bytes) !== mediaType) return readPrecondition(`Image changed while reading: ${filePath}`);
+          }
+          if (bytes.byteLength > MAX_READ_IMAGE_BYTES) return readPrecondition(`Image exceeds the ${MAX_READ_IMAGE_BYTES} byte image input limit: ${filePath}`);
           const hostPath = context.environment
             ? context.environment.paths.toHostPath(filePath)
             : filePath;
@@ -234,9 +263,15 @@ export function createFileReadTool(host: FileToolHost = {}): ToolDefinition {
           };
         }
 
+        const inputCapped = bytes.byteLength > MAX_READ_INPUT_BYTES;
         let content: string;
         try {
-          content = decodeUtf8Text(bytes);
+          if (inputCapped) {
+            // Streaming mode retains only an incomplete trailing UTF-8 sequence (at most
+            // three bytes); invalid sequences inside the prefix still throw.
+            content = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes.subarray(0, MAX_READ_INPUT_BYTES), { stream: true });
+            if (isBinaryContent(content)) throw new Error("Unsupported binary content");
+          } else content = decodeUtf8Text(bytes);
         } catch {
           return {
             content: [{ type: "text", text: `Cannot read binary file: ${filePath}` }],
@@ -249,6 +284,7 @@ export function createFileReadTool(host: FileToolHost = {}): ToolDefinition {
         const lines = splitReadLines(content);
         const total = lines.length;
         if (offset > total && !(total === 0 && offset === 1)) {
+          if (inputCapped) return readPrecondition(`Offset ${offset} exceeds the 1 MiB input scan budget; the total line count is unknown. Read a smaller file or a dedicated bounded slice.`);
           return {
             content: [{ type: "text", text: `Offset ${offset} is out of range for this file (${total} lines)` }],
             isError: true,
@@ -259,7 +295,8 @@ export function createFileReadTool(host: FileToolHost = {}): ToolDefinition {
 
         const slice = sliceReadLines(lines, offset, limit);
         const body = slice.lines.join("\n");
-        const trailer = readTrailer({
+        const incompleteLine = inputCapped && !content.endsWith("\n");
+        const trailer = inputCapped ? boundedReadTrailer({ offset, slice, total, incompleteLine }) : readTrailer({
           offset,
           emitted: slice.emitted,
           total,
@@ -267,18 +304,48 @@ export function createFileReadTool(host: FileToolHost = {}): ToolDefinition {
         });
         return {
           content: [{ type: "text", text: body ? `${body}\n\n${trailer}` : trailer }],
-          metadata: { hostFileFacts: hostFileFacts(context, [{ path: filePath, operation: "read", afterDigest: fileDigest(bytes), bodyVisible: true }]) },
+          ...(!inputCapped ? { metadata: { hostFileFacts: hostFileFacts(context, [{ path: filePath, operation: "read", afterDigest: fileDigest(bytes), bodyVisible: true }]) } } : {}),
           executionState: "completed",
-          compactSummary: `Read completed: ${filePath}; lines=${offset}-${offset + slice.emitted - 1}; total=${total}`,
+          compactSummary: `Read completed: ${filePath}; lines=${offset}-${offset + slice.emitted - 1}; total=${inputCapped ? "unknown; input capped at 1 MiB" : total}`,
         };
       } catch (error) {
+        if (context.abortSignal?.aborted) return { content: [{ type: "text", text: "Read cancelled." }], isError: true, failureKind: "interrupted", executionState: started ? "completed" : "not_started" };
         return readErrorResult(error, started);
       }
     },
   };
+  return { ...tool, async execute(input, context) {
+    const result = await tool.execute(input, context);
+    if (result.isError || typeof input.file_path !== "string" || /^shell-output:/i.test(input.file_path)) return result;
+    try {
+      const path = await resolveToolPathInContext(input.file_path, context, "read");
+      const instructions = await targetProjectInstructions([path], context, host);
+      if (!instructions) return result;
+      // Keep the ordinary Read output budget, including the additional rule blocks.
+      const instructionBytes = Buffer.byteLength(JSON.stringify(instructions.content), "utf8");
+      let remaining = Math.max(0, MAX_READ_BYTES - instructionBytes - 300);
+      const content = result.content.map(block => {
+        if (block.type !== "text") return block;
+        const bytes = Buffer.from(block.text, "utf8");
+        if (bytes.byteLength <= remaining) { remaining -= bytes.byteLength; return block; }
+        const text = new TextDecoder().decode(bytes.subarray(0, remaining));
+        remaining = 0;
+        return { type: "text" as const, text: text + "\n[Read output shortened to include project instructions; repeat Read for the file body.]" };
+      });
+      return { ...result, content: [...instructions.content, ...content], metadata: { ...result.metadata, ...instructions.metadata } };
+    } catch (error) { return readErrorResult(error); }
+  } };
 }
 
 export const fileReadTool: ToolDefinition = createFileReadTool();
+
+function boundedReadTrailer(input: { offset: number; slice: ReadSlice; total: number; incompleteLine: boolean }): string {
+  const last = input.offset + input.slice.emitted - 1;
+  const next = last + 1;
+  const continuation = last < input.total ? ` Use offset=${next} to continue within the scanned prefix.`
+    : " The scan budget prevents continuing beyond this prefix; use a smaller file or a dedicated bounded slice.";
+  return `(Input scan capped at 1 MiB; total lines unknown. Showing lines ${input.offset}-${last}.${input.slice.byteCapped ? ` Output capped at ${MAX_READ_BYTES_LABEL}.` : ""}${input.incompleteLine && last === input.total ? " Last shown line is incomplete." : ""}${continuation})`;
+}
 
 async function readShellOutput(
   input: Record<string, unknown>,
@@ -320,7 +387,7 @@ async function inspectFileInfo(
   host: FileToolHost,
 ): Promise<import("@vykor/agent-contracts").ToolResult> {
   let item: Awaited<ReturnType<FileOperations["stat"]>> | undefined;
-  try { item = await operations.stat(filePath); }
+  try { item = await operations.stat(filePath, context.abortSignal); }
   catch (error) { if (!isFileNotFoundError(error)) throw error; }
   const kind = !item ? "missing" : item.isSymbolicLink ? "symlink"
     : item.isFile ? "file" : item.isDirectory ? "directory" : "other";
@@ -337,7 +404,10 @@ async function inspectFileInfo(
     }
   }
   if (item?.isFile) {
-    const bytes = await operations.readBytes(filePath);
+    if ((item.sizeBytes ?? 0) > MAX_READ_INFO_BYTES) return readPrecondition(`Full-file SHA-256 hash exceeds the ${MAX_READ_INFO_BYTES} byte info_only hash limit; no hash was computed. Use a smaller file or an external full-file hashing workflow.`);
+    const bytes = await operations.readBytes(filePath, { maxBytes: MAX_READ_INFO_BYTES + 1, signal: context.abortSignal });
+    context.abortSignal?.throwIfAborted();
+    if (bytes.byteLength > MAX_READ_INFO_BYTES) return readPrecondition(`Full-file SHA-256 hash exceeds the ${MAX_READ_INFO_BYTES} byte info_only hash limit; no hash was computed. A prefix is not a full-file hash.`);
     info.sizeBytes = bytes.byteLength;
     info.sha256 = createHash("sha256").update(bytes).digest("hex");
   }

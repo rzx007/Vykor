@@ -22,6 +22,7 @@ import {
   toolExecutionTimeoutMs,
 } from "./query-tool-limits";
 import type { ToolFailureMemory } from "./tool-failure-memory";
+import { validProjectInstructionKeys } from "./project-instructions";
 import {
   defaultRecoveryHint,
   externalToolMetadata,
@@ -194,7 +195,14 @@ export async function executeCheckedTools(
           toolUseId: toolUse.id,
           toolName: toolUse.name,
           toolAttemptId,
-          metadata: externalToolMetadata(returned.metadata),
+          metadata: {
+            ...externalToolMetadata(returned.metadata),
+            ...(isTrustedSummary(toolUse, tool) && returned.metadata?.hostProjectInstructionHardLimit === true
+              ? { hostProjectInstructionHardLimit: true } : {}),
+          },
+          hostProjectInstructionKeys: isTrustedSummary(toolUse, tool)
+            ? validProjectInstructionKeys(returned.metadata?.hostProjectInstructionKeys)
+            : undefined,
           hostFileFacts:
             isTrustedSummary(toolUse, tool) && !returned.isError
               ? validHostFileFacts(returned.metadata?.hostFileFacts)
@@ -204,7 +212,10 @@ export async function executeCheckedTools(
             : undefined,
         } satisfies ToolExecutionResult;
         // Only the checked host can prove a dispatched tool was never invoked.
-        if (normalized.executionState === "not_started") normalized.executionState = "unknown";
+        if (normalized.executionState === "not_started"
+          && !(normalized.hostProjectInstructionKeys && normalized.isError && normalized.failureKind === "precondition")) {
+          normalized.executionState = "unknown";
+        }
         return finishResult(normalized);
       };
       try {

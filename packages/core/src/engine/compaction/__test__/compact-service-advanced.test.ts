@@ -8,6 +8,7 @@ import {
 import type { Message, HookResult } from "@vykor/agent-contracts";
 import type { StreamEvent, HookExecutor as IHookExecutor } from "@vykor/agent-contracts";
 import { AgentExecutionLimitError, ModelRequestFailure } from "@vykor/agent-contracts";
+import { toolResultReferenceHint } from "../../tools/tool-result-feedback.js";
 
 it("counts replayable reasoning but not display-only think text", () => {
   const service = new CompactService();
@@ -90,6 +91,168 @@ function bigConversation(turns: number): Message[] {
 
 const SMALL_MAX = 20_000 + 13_000 + 100; // threshold ~= 100 tokens
 
+describe("summary validation before committing compacted history", () => {
+  it.each(["auto", "manual", "reactive"] as const)("preserves the original history when %s summary validation fails", async trigger => {
+    const messages = bigConversation(15);
+    messages[0] = { type: "user", content: `Preserve this original text: ${"x".repeat(20_000)}` };
+    const before = structuredClone(messages);
+    const progress: CompactProgressEvent[] = [];
+    const hook = makeHookExecutor();
+    let requests = 0;
+    const svc = new CompactService(SMALL_MAX, 2, {
+      client: { async *submitMessage() {
+        requests++;
+        yield { type: "text_delta", delta: "<analysis>Only a draft.</analysis>" };
+        yield { type: "complete", stopReason: "end_turn" };
+      } },
+      hookExecutor: hook,
+      progressCallback: event => { progress.push(event); },
+    });
+
+    await expect(svc.autoCompact(messages, trigger)).rejects.toThrow(/summary/i);
+
+    expect(requests).toBe(2);
+    expect(messages).toEqual(before);
+    expect(progress.some(event => event.phase === "context_collapse_end")).toBe(true);
+    expect(progress.some(event => event.phase === "compact_failed")).toBe(true);
+    expect(progress.some(event => event.phase === "compact_end")).toBe(false);
+    expect(hook.calls.map(call => call.event)).toEqual(["pre_compact"]);
+  });
+
+  it("corrects the summary format once before accepting it", async () => {
+    const prompts: string[] = [];
+    const progress: CompactProgressEvent[] = [];
+    const svc = new CompactService(SMALL_MAX, 2, {
+      client: { async *submitMessage(prompt) {
+        prompts.push(prompt);
+        yield { type: "text_delta", delta: prompts.length === 1
+          ? "<summary> </summary>"
+          : "<summary>Keep the source files; validation is still pending.</summary>" };
+        yield { type: "complete", stopReason: "end_turn" };
+      } },
+      progressCallback: event => { progress.push(event); },
+    });
+
+    const result = await svc.autoCompact(bigConversation(15));
+
+    expect(prompts).toHaveLength(2);
+    expect(prompts[1]).toContain("<summary>");
+    expect(prompts[1]).not.toBe(prompts[0]);
+    expect(result).toContainEqual(expect.objectContaining({
+      type: "assistant", compactRole: "summary",
+      content: expect.stringContaining("Summary:\nKeep the source files; validation is still pending."),
+    }));
+    expect(progress.filter(event => event.phase === "compact_retry")).toHaveLength(1);
+    expect(progress.filter(event => event.phase === "compact_end")).toHaveLength(1);
+  });
+
+  it("does not reset format correction after a prompt-too-long retry", async () => {
+    const prompts: string[] = [];
+    const svc = new CompactService(SMALL_MAX, 2, {
+      client: { async *submitMessage(prompt) {
+        prompts.push(prompt);
+        if (prompts.length === 2) throw new Error("prompt is too long");
+        yield { type: "text_delta", delta: "<analysis>No usable summary.</analysis>" };
+        yield { type: "complete", stopReason: "end_turn" };
+      } },
+    });
+
+    await expect(svc.autoCompact(bigConversation(15))).rejects.toThrow(/summary/i);
+    expect(prompts).toHaveLength(3);
+    expect(prompts[2]!.length).toBeLessThan(prompts[1]!.length);
+  });
+
+  it("corrects a completed empty response instead of falling back", async () => {
+    let requests = 0;
+    const svc = new CompactService(SMALL_MAX, 2, { client: { async *submitMessage() {
+      requests++;
+      yield { type: "text_delta", delta: requests === 1 ? "" : "<summary>The task is still pending.</summary>" };
+      yield { type: "complete", stopReason: "end_turn" };
+    } } });
+    const result = await svc.autoCompact(bigConversation(15));
+    expect(requests).toBe(2);
+    expect(result).toContainEqual(expect.objectContaining({ compactRole: "summary", content: expect.stringContaining("The task is still pending.") }));
+  });
+
+  it("preserves history when correction fails with a request error", async () => {
+    let requests = 0;
+    const unavailable = new Error("Summary service unavailable during correction");
+    const svc = new CompactService(SMALL_MAX, 2, { client: { async *submitMessage() {
+      if (++requests > 1) throw unavailable;
+      yield { type: "text_delta", delta: "<analysis>No usable summary.</analysis>" };
+      yield { type: "complete", stopReason: "end_turn" };
+    } } });
+    const messages = bigConversation(15);
+    const before = structuredClone(messages);
+
+    await expect(svc.autoCompact(messages)).rejects.toMatchObject({ cause: unavailable });
+    expect(requests).toBe(2);
+    expect(messages).toEqual(before);
+  });
+
+  it("does not bypass validation after repeated invalid summaries", async () => {
+    let requests = 0;
+    const svc = new CompactService(SMALL_MAX, 2, { client: { async *submitMessage() {
+      requests++;
+      yield { type: "text_delta", delta: requests <= 6
+        ? "<analysis>No retained summary.</analysis>"
+        : "<summary>The valid summary can still be accepted.</summary>" };
+      yield { type: "complete", stopReason: "end_turn" };
+    } } });
+    const messages = bigConversation(15);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await expect(svc.autoCompact(messages)).rejects.toThrow(/summary/i);
+    }
+
+    const result = await svc.autoCompact(messages);
+    expect(requests).toBe(7);
+    expect(result).toContainEqual(expect.objectContaining({
+      compactRole: "summary", content: expect.stringContaining("The valid summary can still be accepted."),
+    }));
+  });
+
+  it("does not fall back if reporting the invalid summary retry fails", async () => {
+    const reportingFailure = new Error("Retry progress unavailable");
+    let requests = 0;
+    const svc = new CompactService(SMALL_MAX, 2, {
+      client: { async *submitMessage() {
+        requests++;
+        yield { type: "text_delta", delta: "<analysis>No usable summary.</analysis>" };
+        yield { type: "complete", stopReason: "end_turn" };
+      } },
+      progressCallback: event => { if (event.phase === "compact_retry") throw reportingFailure; },
+    });
+    const messages = bigConversation(15);
+    const before = structuredClone(messages);
+    await expect(svc.autoCompact(messages)).rejects.toMatchObject({ name: "CompactSummaryValidationError", cause: reportingFailure });
+    expect(requests).toBe(1);
+    expect(messages).toEqual(before);
+  });
+
+  it("preserves validation failure if reporting a later context retry fails", async () => {
+    const reportingFailure = new Error("Context retry progress unavailable");
+    let requests = 0;
+    const svc = new CompactService(SMALL_MAX, 2, {
+      client: { async *submitMessage() {
+        if (++requests > 1) throw new Error("prompt is too long");
+        yield { type: "text_delta", delta: "<analysis>No usable summary.</analysis>" };
+        yield { type: "complete", stopReason: "end_turn" };
+      } },
+      progressCallback: event => { if (event.checkpoint === "compact_retry_prompt_too_long") throw reportingFailure; },
+    });
+    await expect(svc.autoCompact(bigConversation(15))).rejects.toMatchObject({ name: "CompactSummaryValidationError", cause: reportingFailure });
+    expect(requests).toBe(2);
+  });
+
+  it("retains the simple fallback for ordinary summary request failures", async () => {
+    const svc = new CompactService(SMALL_MAX, 2, { client: { async *submitMessage() {
+      throw new Error("Summary service unavailable");
+    } } });
+    const result = await svc.autoCompact(bigConversation(15));
+    expect(result).toContainEqual(expect.objectContaining({ compactRole: "boundary", content: expect.stringContaining("Compaction kind: simple") }));
+  });
+});
+
 it("never converts a host limit rejection into compact fallback or prompt-too-long retry", async () => {
   const limit = new AgentExecutionLimitError("input exceeds available context size: host closed");
   let calls = 0;
@@ -125,6 +288,60 @@ it("lowers the compaction line as the model output reserve grows", async () => {
 // ---------------------------------------------------------------------------
 
 describe("microCompact clearing policy", () => {
+  it("does not expose a clipped reference hint after deterministic context collapse", async () => {
+    const ref = { id: `opaque-reference-${"x".repeat(4500)}-END`, toolName: "Write", totalChars: 9000 };
+    const client = makeSummaryClient("<summary>Inspect the write outcome before repeating it.</summary>");
+    const progress: CompactProgressEvent[] = [];
+    const svc = new CompactService(SMALL_MAX, 1, { client, progressCallback: event => { progress.push(event); } });
+    const messages: Message[] = [
+      { type: "assistant", content: "", toolUses: [{ type: "tool_use", id: "large-ref", name: "Write", input: { file_path: "/repo/report.ts", content: "updated" } }] },
+      { type: "tool_result", toolUseId: "large-ref", executionState: "unknown", resultRef: ref,
+        content: [{ type: "text", text: "Inspect before retrying. ".repeat(300) }, toolResultReferenceHint(ref)] },
+      { type: "user", content: "Preserve existing files. ".repeat(300) },
+      { type: "user", content: "Continue the current task." },
+    ];
+    const before = structuredClone(messages);
+    await svc.autoCompact(messages);
+    expect(progress.some(event => event.phase === "context_collapse_end")).toBe(true);
+    expect(client.lastPrompt).toMatch(/omitted[^\n]*resultRef|resultRef[^\n]*omitted/i);
+    expect(client.lastPrompt).not.toContain("opaque-reference-");
+    expect(client.lastPrompt).not.toContain("tool-output-ref");
+    expect(messages).toEqual(before);
+  });
+
+  it("sends paired calls and outcomes through real compaction and F03 correction without mutating history", async () => {
+    const prompts: string[] = [];
+    const svc = new CompactService(SMALL_MAX, 1, { client: { async *submitMessage(prompt) {
+      prompts.push(prompt);
+      yield { type: "text_delta", delta: prompts.length === 1 ? "<analysis>Draft only.</analysis>" : "<summary>Preserve the unknown scan outcome and existing source files.</summary>" };
+      yield { type: "complete", stopReason: "end_turn" };
+    } } });
+    const messages: Message[] = [
+      { type: "assistant", content: "", toolUses: [
+        { type: "tool_use", id: "saved", name: "Write", input: { file_path: "/repo/saved.ts", content: "saved content" } },
+        { type: "tool_use", id: "scan", name: "Shell", input: { command: "inspect --target special-resource-42" } },
+      ] },
+      { type: "tool_result", toolUseId: "saved", content: [{ type: "text", text: "saved output ".repeat(800) }],
+        compactSummary: "Write observed: /repo/saved.ts", executionState: "completed", isError: false },
+      { type: "tool_result", toolUseId: "scan", content: [{ type: "text", text: "scan output ".repeat(800) }], executionState: "unknown", isError: true,
+        resultRef: { id: "result:scan-attempt-7", toolName: "Shell", totalChars: 9600 } },
+      ...bigConversation(4),
+    ];
+    const before = structuredClone(messages);
+    const result = await svc.autoCompact(messages);
+    expect(prompts).toHaveLength(2);
+    for (const prompt of prompts) {
+      expect(prompt).toContain('ToolCall: id="scan"; name="Shell"');
+      expect(prompt).toContain("special-resource-42");
+      expect(prompt).toContain('ToolResult: id="scan"; name="Shell"; match=paired');
+      expect(prompt).toContain('executionState="unknown"');
+      expect(prompt).toContain("result:scan-attempt-7");
+      expect(prompt.split("Write observed: /repo/saved.ts")).toHaveLength(2);
+    }
+    expect(result).toContainEqual(expect.objectContaining({ compactRole: "summary", content: expect.stringContaining("Preserve the unknown scan outcome") }));
+    expect(messages).toEqual(before);
+  });
+
   it("retains controlled facts after clearing old bodies without accumulating tokens", () => {
     const svc = new CompactService(100_000, 1);
     const summaries = [

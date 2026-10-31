@@ -38,6 +38,8 @@ export type { RunToolResultStore } from "./result-data.js";
 export { assertToolResultId, ToolResultAccessError, toolResultBounds, toolResultText, toolResultList, toolResultPage, toolResultSearch } from "./result-text.js";
 
 export interface ToolResult {
+  /** Checked builtin proof; free tool text/metadata cannot establish visible project rules. */
+  hostProjectInstructionKeys?: string[];
   /** Added by the trusted result archive after preserving the original output. */
   resultRef?: ToolResultRef;
   content: ContentBlock[];

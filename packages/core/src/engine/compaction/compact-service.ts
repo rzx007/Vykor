@@ -9,7 +9,7 @@
  *   1. microCompact      —— 清空旧工具结果正文（零模型调用）
  *   2. tryContextCollapse —— 对超长文本做头尾截断（零模型调用）
  *   3. llmCompact         —— 用 LLM 把旧消息摘要成一条 summary
- *   4. simpleCompact      —— 无 client / LLM 失败时的占位兜底
+ *   4. simpleCompact      —— 无 client / 普通请求失败时的占位兜底；验收失败保留原历史
  *
  * 对齐 Python vykor v0.1.9 services/compact。
  */
@@ -29,7 +29,7 @@ import {
   tryContextCollapseMessages,
 } from "./compact-messages";
 import { buildCompactPrompt, deriveWorkLog, extractRecentFiles } from "./compact-prompt";
-import { collectSummary, formatSummary, isPromptTooLongError } from "./compact-summary";
+import { collectSummary, CompactSummaryValidationError, formatSummary, isPromptTooLongError } from "./compact-summary";
 import { appendContinuityExcerpts } from "./compact-continuity";
 export { isPromptTooLongError } from "./compact-summary";
 import type {
@@ -186,15 +186,25 @@ export class CompactService {
    * 1. 未超阈值 → 原样返回
    * 2. 连续 LLM 失败过多 → 只做 microCompact（避免雪崩）
    * 3. microCompact → 仍超则 tryContextCollapse → 仍超则 llmCompact
-   * 4. 无 client 或 llmCompact 抛错 → simpleCompact 兜底
+   * 4. 无 client 或普通请求失败 → simpleCompact；摘要验收失败向上抛出
    */
   async autoCompact(
     messages: Message[],
     trigger: CompactTrigger = "auto",
     signal?: AbortSignal,
     inputTokenOverhead = 0,
+    measuredInputTokens?: number,
   ): Promise<Message[]> {
-    const estimated = this.estimateTokens(messages);
+    const estimate = (working: Message[]): number => {
+      // A provider measurement covers this exact history plus system/tools.
+      // Any actual rewrite invalidates it; resume the existing estimator then.
+      const unchanged = working.length === messages.length
+        && working.every((message, index) => message === messages[index]);
+      return trigger === "auto" && measuredInputTokens !== undefined && unchanged
+        ? measuredInputTokens - inputTokenOverhead
+        : this.estimateTokens(working);
+    };
+    const estimated = estimate(messages);
     const inputBudget =
       this.maxTokens - this.outputReserve - AUTOCOMPACT_BUFFER_TOKENS - inputTokenOverhead;
     // 接口已确认超长时，不能继续相信本地估算；至少尝试缩小 20%。
@@ -212,7 +222,7 @@ export class CompactService {
 
     // 第一层：便宜清理。往往单独就足够回到阈值以下。
     let working = this.microCompact(messages);
-    if (this.estimateTokens(working) < threshold) {
+    if (estimate(working) < threshold) {
       return working;
     }
 
@@ -233,7 +243,7 @@ export class CompactService {
         checkpoint: "context_collapse_end",
         metadata: this.recordCheckpoint("context_collapse_end", trigger, working),
       });
-      if (this.estimateTokens(working) < threshold) {
+      if (estimate(working) < threshold) {
         return working;
       }
     }
@@ -248,7 +258,9 @@ export class CompactService {
         if (isAgentExecutionLimitError(err) || isModelAttemptControlFailure(err)) throw err;
         if (signal?.aborted) throw signal.reason;
         if (err instanceof CompactContextProviderError) throw err;
-        this.consecutiveFailures++;
+        // Invalid content must not fall back or eventually bypass validation via the failure circuit.
+        const invalidSummary = err instanceof CompactSummaryValidationError;
+        if (!invalidSummary) this.consecutiveFailures++;
         await this.emitProgress({
           phase: "compact_failed",
           trigger,
@@ -258,11 +270,12 @@ export class CompactService {
             reason: String(err instanceof Error ? err.message : err),
             consecutiveFailures: this.consecutiveFailures,
           }),
-        });
+        }, invalidSummary ? err : undefined);
+        if (invalidSummary) throw err;
       }
     }
 
-    // 第四层：占位摘要兜底（无 client 或 LLM 失败）。
+    // 第四层：占位摘要兜底（无 client 或普通请求失败，不含摘要验收失败）。
     return this.simpleCompact(working);
   }
 
@@ -388,18 +401,36 @@ export class CompactService {
     }
     const compactPrompt = buildCompactPrompt(context);
 
-    let summaryText = "";
+    let formatted = "";
     let ptlRetries = 0;
+    let correctionError: CompactSummaryValidationError | undefined;
 
     // 摘要循环：成功则 break；PTL 且还能截断则 continue；其它错误抛出。
     // eslint-disable-next-line no-constant-condition
     while (true) {
       try {
-        summaryText = await collectSummary(this.client, summarizable, compactPrompt, signal);
+        signal?.throwIfAborted();
+        const prompt = correctionError
+          ? `${compactPrompt}\n\nYour previous response did not provide a usable summary. Return exactly one complete <summary>...</summary> section with non-empty task state. An analysis draft alone is not a summary.`
+          : compactPrompt;
+        const summaryText = await collectSummary(this.client, summarizable, prompt, signal);
+        formatted = formatSummary(summaryText);
         break;
       } catch (err) {
         if (isAgentExecutionLimitError(err) || isModelAttemptControlFailure(err)) throw err;
         if (signal?.aborted) throw signal.reason;
+        if (err instanceof CompactSummaryValidationError && !correctionError) {
+          correctionError = err;
+          await this.emitProgress({
+            phase: "compact_retry",
+            trigger,
+            message: "Compaction returned an invalid summary; requesting one format correction.",
+            attempt: 1,
+            checkpoint: "compact_retry_invalid_summary",
+            metadata: this.recordCheckpoint("compact_retry_invalid_summary", trigger, summarizable),
+          }, err);
+          continue;
+        }
         if (isPromptTooLongError(err) && ptlRetries < MAX_PTL_RETRIES) {
           const truncated = this.truncateHeadForPtlRetry(summarizable);
           if (truncated) {
@@ -418,16 +449,16 @@ export class CompactService {
                 summarizable,
                 { ptlRetries },
               ),
-            });
+            }, correctionError);
             continue;
           }
+        }
+        if (correctionError && !(err instanceof CompactSummaryValidationError)) {
+          throw new CompactSummaryValidationError("Compaction correction failed before a usable summary was returned.", { cause: err });
         }
         throw err;
       }
     }
-
-    const formatted = formatSummary(summaryText) ||
-      "[Conversation compacted via LLM summary]";
 
     const summary: Message = {
       type: "assistant",
@@ -591,9 +622,15 @@ export class CompactService {
   }
 
   /** 若已注册 progressCallback 则转发事件。 */
-  private async emitProgress(event: CompactProgressEvent): Promise<void> {
+  private async emitProgress(event: CompactProgressEvent, validationFailure?: CompactSummaryValidationError): Promise<void> {
     if (!this.progressCallback) return;
-    await this.progressCallback(event);
+    try {
+      await this.progressCallback(event);
+    } catch (error) {
+      if (!validationFailure || isAgentExecutionLimitError(error) || isModelAttemptControlFailure(error)) throw error;
+      // Reporting failures must not turn known-invalid summaries into fallback or resumed work.
+      throw new CompactSummaryValidationError(validationFailure.message, { cause: error });
+    }
   }
 }
 

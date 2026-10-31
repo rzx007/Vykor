@@ -3,6 +3,11 @@ export interface PermissionDecision {
   reason?: string;
 }
 
+export interface ToolPermissionCheckContext {
+  /** A concrete operation still needs confirmation in ordinary approval modes. */
+  requireConfirmation?: boolean;
+}
+
 /** User-facing authorization presets, independent from read-only planning. */
 export type ApprovalMode = "ask" | "auto_review" | "full_access";
 export type WorkMode = "execute" | "plan";
@@ -45,6 +50,8 @@ export interface ApprovalReviewInput {
 
 export interface AgentPermissionRequest {
   toolName: string;
+  /** Host-scoped concrete operation; never reuse or create a tool-wide session grant. */
+  confirmation?: "once";
   /** Captured host registration; never supplied by the model. */
   toolSource?: string;
   toolDescription?: string;
@@ -67,5 +74,6 @@ export interface PermissionChecker {
     input: Record<string, unknown>,
     /** Host-owned schema declarations, used to distinguish business fields from aliases. */
     inputSchema?: Record<string, unknown>,
+    context?: ToolPermissionCheckContext,
   ): Promise<PermissionDecision>;
 }

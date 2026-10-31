@@ -10,11 +10,17 @@ function createMockStreamClient(responses: StreamEvent[][]): {
   getCallCount: () => number;
 } {
   let callCount = 0;
+  let responseIndex = 0;
   return {
     client: {
       streamMessage: async function* (params: any) {
-        const idx = Math.min(callCount, responses.length - 1);
         callCount++;
+        if (params.system === "You are a conversation summarizer.") {
+          yield { type: "text_delta", delta: "<summary>Earlier work compacted; continue the current task.</summary>" };
+          yield { type: "complete", stopReason: "end_turn" };
+          return;
+        }
+        const idx = Math.min(responseIndex++, responses.length - 1);
         for (const event of responses[idx]!) {
           yield event;
         }

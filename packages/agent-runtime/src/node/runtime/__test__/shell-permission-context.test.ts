@@ -24,6 +24,29 @@ function environment(family: ShellDescriptor["family"]): ExecutionEnvironmentHan
 }
 
 describe("runtime Shell permission context", () => {
+  it.each([
+    ["ask", "execute", "ask"],
+    ["auto_review", "execute", "ask"],
+    ["full_access", "execute", "allow"],
+    ["full_access", "plan", "deny"],
+  ] as const)("applies session approval %s and work mode %s to PowerShell scripts", async (approvalMode, workMode, action) => {
+    const runtime = await createVykorRuntime({
+      settings: { model: "test", apiFormat: "anthropic", permission: { mode: "ask" } },
+      configuration: {
+        approvalMode, workMode,
+        client: { async *streamMessage() { yield { type: "complete" as const, stopReason: "end_turn" as const }; } },
+      },
+      executionEnvironment: environment("powershell"),
+    });
+    try {
+      await expect(runtime.permissionChecker.checkTool("Shell", {
+        command: "$ErrorActionPreference='SilentlyContinue'; node -v; npx -v; Get-Command python | Select-Object Source",
+      })).resolves.toMatchObject({ action });
+    } finally {
+      await runtime.close();
+    }
+  });
+
   it.skipIf(resolveHostShellLauncher().kind === "cmd")("uses the same cached host launcher as the default Shell executor", async () => {
     const runtime = await createVykorRuntime({
       settings: { model: "test", apiFormat: "anthropic", permission: { mode: "full_auto" } },

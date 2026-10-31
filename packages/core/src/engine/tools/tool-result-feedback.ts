@@ -74,6 +74,8 @@ export function externalToolMetadata(
     "toolFeedbackVersion",
     "toolProgress",
     "hostFileFacts",
+    "hostProjectInstructionKeys",
+    "hostProjectInstructionHardLimit",
     "mcpResult",
     "_meta",
     "pluginApp",

@@ -66,7 +66,7 @@ describe("context compaction through real provider adapters", () => {
         const error = { code: "context_length_exceeded", message: "Input rejected" };
         return sse([type === "response.failed" ? { type, response: { error } } : { type, error }]);
       }
-      return success(body.instructions === "You are a conversation summarizer." ? "Task progress summarized" : "Task continued");
+      return success(body.instructions === "You are a conversation summarizer." ? "<summary>Task progress summarized</summary>" : "Task continued");
     });
     const query = engine(codexClient());
     query.loadMessages(history());
@@ -107,8 +107,11 @@ describe("context compaction through real provider adapters", () => {
     const requests: Array<{ max_tokens?: number; max_completion_tokens?: number }> = [];
     const client = new OpenAICompatibleClient({ apiKey: "offline-test" });
     client.client = new OpenAI({ apiKey: "offline-test", maxRetries: 0, fetch: async (_url, init) => {
-      requests.push(JSON.parse(String(init?.body)));
-      return sse([{ choices: [{ delta: { content: "Task progress retained" }, finish_reason: "stop" }] }]);
+      const body = JSON.parse(String(init?.body));
+      requests.push(body);
+      const content = body.messages[0]?.content === "You are a conversation summarizer."
+        ? "<summary>Task progress retained</summary>" : "Task progress retained";
+      return sse([{ choices: [{ delta: { content }, finish_reason: "stop" }] }]);
     } });
     const query = engine(client, 48_000);
     query.loadMessages(history());
@@ -121,11 +124,14 @@ describe("context compaction through real provider adapters", () => {
   it("recovers a code-less overflow inside the real OpenAI SDK's HTTP error wrapper", async () => {
     let calls = 0;
     const client = new OpenAICompatibleClient({ apiKey: "offline-test" });
-    client.client = new OpenAI({ apiKey: "offline-test", maxRetries: 0, fetch: async () => {
+    client.client = new OpenAI({ apiKey: "offline-test", maxRetries: 0, fetch: async (_url, init) => {
       if (++calls === 1) return new Response(JSON.stringify({ error: {
         type: "invalid_request_error", message: "prompt is too long: 210000 tokens > 200000 maximum",
       } }), { status: 400, headers: { "content-type": "application/json" } });
-      return sse([{ choices: [{ delta: { content: "Task continued" }, finish_reason: "stop" }] }]);
+      const body = JSON.parse(String(init?.body));
+      const content = body.messages[0]?.content === "You are a conversation summarizer."
+        ? "<summary>Task continued</summary>" : "Task continued";
+      return sse([{ choices: [{ delta: { content }, finish_reason: "stop" }] }]);
     } });
     const query = engine(client);
     query.loadMessages(history());
@@ -149,7 +155,7 @@ describe("context compaction through real provider adapters", () => {
       calls++;
       if (calls === 1) return sse([{ type: "response.failed", response: { error: { code: "context_length_exceeded", message: "Input rejected" } } }]);
       const body = JSON.parse(String(init?.body));
-      return success(body.instructions === "You are a conversation summarizer." ? "Task summarized" : "Task continued");
+      return success(body.instructions === "You are a conversation summarizer." ? "<summary>Task summarized</summary>" : "Task continued");
     });
     const query = engine(codexClient());
     query.loadMessages(history());

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { link, lstat, mkdir, open, readFile, readdir, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, join, posix, relative } from "node:path";
 import type { ToolContext } from "@vykor/agent-contracts";
+import { hostFileMutationKey, withFileMutationLocks, withUnidentifiedFileMutationLock } from "@vykor/execution-node";
 import type {
   EnvironmentFileSystem,
   EnvironmentDirectoryScanOptions,
@@ -86,6 +87,11 @@ export async function fileSnapshotMatches(operations: FileOperations, path: stri
 }
 
 export class HostFileOperations implements FileOperations {
+  async withMutationLock<T>(paths: readonly string[], work: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    const keys = await Promise.all(paths.map(path => hostFileMutationKey(path, signal)));
+    return withFileMutationLocks(keys, work, signal);
+  }
+
   private readonly verifiedNtfsVolumes = new Set<string>();
   openRead(path: string, signal?: AbortSignal) { return openHostFileReader(path, signal, this.verifiedNtfsVolumes); }
   async scanDirectory(path: string, options: EnvironmentDirectoryScanOptions): Promise<EnvironmentDirectoryScanResult> {
@@ -313,6 +319,11 @@ rm -- "$1"`;
 
 export class WslFileOperations implements FileOperations {
   constructor(private readonly environment: ExecutionEnvironmentHandle) {}
+
+  // A WSL path may alias a host target through mounts. Do not infer identity from /mnt strings.
+  withMutationLock<T>(_paths: readonly string[], work: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    return withUnidentifiedFileMutationLock(work, signal);
+  }
 
   openRead(path: string, signal?: AbortSignal) { return openWslFileReader(this.environment, path, signal); }
 

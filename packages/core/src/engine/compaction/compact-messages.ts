@@ -2,7 +2,7 @@ import type { Message, ContentBlock } from "@vykor/agent-contracts";
 import type { CompactTrigger } from "./compact-types";
 import { boundaryFallsInsideToolGroup as historyBoundaryFallsInsideToolGroup } from "../../utils/message-history";
 import { estimateTokens as estimateTextTokens } from "../../utils/token-counter";
-import { toolFeedbackFields } from "../tools/tool-result-feedback";
+import { toolFeedbackFields, toolResultReferenceHint } from "../tools/tool-result-feedback";
 import { appendContinuityExcerpts, splitOwnedContinuity } from "./compact-continuity";
 
 /** Token 估算的保守膨胀系数，降低低估导致超窗的风险。 */
@@ -230,15 +230,19 @@ export function tryContextCollapseMessages(messages: Message[], keepRecent: numb
     // tool_result：content 为 block 数组
     if (msg.type === "tool_result") {
       let bodyChanged = false;
+      const referenceHint = msg.resultRef ? toolResultReferenceHint(msg.resultRef) : undefined;
       const blocks = msg.content.map((b) => {
         if (isTextBlock(b)) {
+          // 宿主引用保留完整，交给转录器统一保留或省略，不能先截成残缺 ID。
+          if (referenceHint?.type === "text" && b.text === referenceHint.text) return b;
           const collapsed = collapseText(b.text);
           if (collapsed !== b.text) changed = bodyChanged = true;
           return { type: "text" as const, text: collapsed };
         }
         return b;
       });
-      return { ...msg, content: bodyChanged ? prependToolFacts(blocks, toolFactsText(msg)) : blocks } as Message;
+      return { ...msg, ...(bodyChanged ? { hostProjectInstructionKeys: undefined } : {}),
+        content: bodyChanged ? prependToolFacts(blocks, toolFactsText(msg)) : blocks } as Message;
     }
     return msg;
   });
@@ -368,6 +372,7 @@ export function microCompactMessages(messages: Message[], keepRecent: number): M
     if (alreadyCleared) return msg;
     return {
       ...msg,
+      hostProjectInstructionKeys: undefined,
       content,
     };
   });

@@ -4,6 +4,8 @@ import type { ToolUseBlock } from "@vykor/agent-contracts";
 export interface TrajectoryCall {
   toolUse: ToolUseBlock;
   result: ToolExecutionResult;
+  /** Host classification of delivered rule context; execution facts remain unchanged. */
+  projectInstructionProgress?: boolean;
 }
 
 export interface TrajectoryEvent {
@@ -37,7 +39,7 @@ export class DefaultTrajectoryTracker implements TrajectoryTracker {
       if (EXEMPT_TOOLS.has(call.toolUse.name)) continue;
       // Identical acknowledgements, images and empty successful results can all
       // represent progress. Text novelty is not a reliable execution limit.
-      if (!call.result.isError) {
+      if (!call.result.isError || call.projectInstructionProgress) {
         this.consecutiveFailures = 0;
         control.guidance = undefined;
         continue;

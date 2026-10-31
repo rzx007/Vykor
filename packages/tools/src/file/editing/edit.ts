@@ -10,6 +10,8 @@ import { decodeUtf8Text } from "../text-content.js";
 import { EditPlanError, parseTextEdits, planTextEdits } from "./edit-plan.js";
 import { editFailureResult } from "./edit-feedback.js";
 import { fileDigest, hostFileFacts } from "../read.js";
+import { withFileMutationLock } from "../mutation-lock.js";
+import { targetProjectInstructions } from "../instructions.js";
 
 const replacementProperties = {
   old_string: { type: "string", description: "Copy the shortest unique text observed in the current file, with enough context to identify it. Do not reconstruct unrelated values." },
@@ -49,36 +51,41 @@ export function createFileEditTool(host: FileToolHost = {}): ToolDefinition {
       let writeStarted = false;
       try {
         const filePath = await resolveToolPathInContext(rawPath, context, "write");
-        if (managedPersistencePathKind(filePath, cwd)) return refused("Error: this is a managed persistence path. Use the Remember tool instead.", "policy");
-        if (isSystemPath(rawPath) || isSystemPath(filePath)) return refused(`Error: editing system directory files is not allowed: ${filePath}`, "policy");
-        for (const operation of ["read", "write"] as const) {
-          const denied = await sandboxPathError(filePath, cwd, operation, host.settings, context.environment);
-          if (denied) return refused(denied, "policy");
-        }
         const operations = fileOperationsFor(context);
-        const item = await operations.stat(filePath);
-        if (!item.isFile || item.isSymbolicLink) return refused("Edit requires a regular file, not a directory or symbolic link.", "precondition");
-        const beforeBytes = await operations.readBytes(filePath);
-        if (typeof input.expected_sha256 === "string" && createHash("sha256").update(beforeBytes).digest("hex") !== input.expected_sha256.toLowerCase()) {
-          return refused("Edit conflict: the existing file no longer matches expected_sha256. Read the current file again.", "precondition");
-        }
-        let original: string;
-        try { original = decodeUtf8Text(beforeBytes); }
-        catch { return refused("Edit requires valid UTF-8 text; binary or invalid content was not modified.", "precondition"); }
-        let plan: ReturnType<typeof planTextEdits>;
-        try { plan = planTextEdits(original, input); }
-        catch (error) {
-          if (error instanceof EditPlanError) return editFailureResult(error, original);
-          throw error;
-        }
-        if (!await fileSnapshotMatches(operations, filePath, beforeBytes)) return refused("Edit conflict: the file changed after reading it. Read its current state before trying again.", "precondition");
-        writeStarted = true;
-        await operations.writeTextAtomic(filePath, plan.content);
-        return {
-          content: [{ type: "text", text: `Successfully edited ${filePath}${plan.editCount > 1 ? ` (${plan.editCount} edits)` : ""}` }],
-          executionState: "completed", compactSummary: `Edit completed: ${filePath}; edits=${plan.editCount}`,
-          metadata: { editCount: plan.editCount, hostFileFacts: hostFileFacts(context, [{ path: filePath, operation: "edit", beforeDigest: fileDigest(beforeBytes), afterDigest: fileDigest(new TextEncoder().encode(plan.content)) }]) },
-        };
+        return await withFileMutationLock(operations, [filePath], context, async () => {
+          if (managedPersistencePathKind(filePath, cwd)) return refused("Error: this is a managed persistence path. Use the Remember tool instead.", "policy");
+          if (isSystemPath(rawPath) || isSystemPath(filePath)) return refused(`Error: editing system directory files is not allowed: ${filePath}`, "policy");
+          for (const operation of ["read", "write"] as const) {
+            const denied = await sandboxPathError(filePath, cwd, operation, host.settings, context.environment);
+            if (denied) return refused(denied, "policy");
+          }
+          const instructions = await targetProjectInstructions([filePath], context, host, true);
+          if (instructions) return instructions;
+          const item = await operations.stat(filePath);
+          if (!item.isFile || item.isSymbolicLink) return refused("Edit requires a regular file, not a directory or symbolic link.", "precondition");
+          const beforeBytes = await operations.readBytes(filePath);
+          if (typeof input.expected_sha256 === "string" && createHash("sha256").update(beforeBytes).digest("hex") !== input.expected_sha256.toLowerCase()) {
+            return refused("Edit conflict: the existing file no longer matches expected_sha256. Read the current file again.", "precondition");
+          }
+          let original: string;
+          try { original = decodeUtf8Text(beforeBytes); }
+          catch { return refused("Edit requires valid UTF-8 text; binary or invalid content was not modified.", "precondition"); }
+          let plan: ReturnType<typeof planTextEdits>;
+          try { plan = planTextEdits(original, input); }
+          catch (error) {
+            if (error instanceof EditPlanError) return editFailureResult(error, original);
+            throw error;
+          }
+          if (!await fileSnapshotMatches(operations, filePath, beforeBytes)) return refused("Edit conflict: the file changed after reading it. Read its current state before trying again.", "precondition");
+          context.abortSignal?.throwIfAborted();
+          writeStarted = true;
+          await operations.writeTextAtomic(filePath, plan.content);
+          return {
+            content: [{ type: "text", text: `Successfully edited ${filePath}${plan.editCount > 1 ? ` (${plan.editCount} edits)` : ""}` }],
+            executionState: "completed", compactSummary: `Edit completed: ${filePath}; edits=${plan.editCount}`,
+            metadata: { editCount: plan.editCount, hostFileFacts: hostFileFacts(context, [{ path: filePath, operation: "edit", beforeDigest: fileDigest(beforeBytes), afterDigest: fileDigest(new TextEncoder().encode(plan.content)) }]) },
+          };
+        });
       } catch (error) {
         if (!writeStarted && isFileNotFoundError(error)) return refused("Edit target does not exist. Check the current path; use Write to create a new file.", "precondition");
         return {

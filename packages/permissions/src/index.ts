@@ -4,7 +4,7 @@ import type {
   PermissionSettings,
   PathRuleConfig,
 } from "@vykor/host-config";
-import type { PermissionDecision } from "@vykor/agent-contracts";
+import type { PermissionDecision, ToolPermissionCheckContext } from "@vykor/agent-contracts";
 import { canonicalToolName, canonicalToolNames } from "@vykor/agent-contracts";
 import { posix, win32 } from "node:path";
 import { analyzeShellCommands, type PermissionShellDialect } from "./shell-commands.js";
@@ -110,6 +110,21 @@ export class PermissionChecker {
   }
 
   async checkTool(
+    toolName: string,
+    input: Record<string, unknown>,
+    inputSchema?: Record<string, unknown>,
+    context?: ToolPermissionCheckContext,
+  ): Promise<PermissionDecision> {
+    const decision = await this.checkToolPolicy(toolName, input, inputSchema);
+    // Apply the session's approval mode once, after all tool and command checks.
+    // Full access never overrides a deny, including read-only planning limits.
+    if (decision.action === "deny") return decision;
+    if (this.mode === "full_auto") return { action: "allow", reason: "Full auto mode" };
+    if (context?.requireConfirmation) return { action: "ask", reason: "The concrete operation requires confirmation" };
+    return decision;
+  }
+
+  private async checkToolPolicy(
     toolName: string,
     input: Record<string, unknown>,
     inputSchema?: Record<string, unknown>,
@@ -231,13 +246,12 @@ export class PermissionChecker {
       matchedRule ??= decision;
     }
 
-    if (this.mode !== "full_auto" && this.autoApproveTools.size > 0 && this.autoApproveTools.has(toolName)) {
-      return { action: "allow", reason: `Tool '${toolName}' is auto-approved` };
-    }
     if (this.allowedTools.size > 0 && !this.allowedTools.has(toolName)) {
       return { action: "deny", reason: `Tool '${toolName}' is not in allowed list` };
     }
-    if (this.mode === "full_auto") return { action: "allow", reason: "Full auto mode" };
+    if (this.autoApproveTools.size > 0 && this.autoApproveTools.has(toolName)) {
+      return { action: "allow", reason: `Tool '${toolName}' is auto-approved` };
+    }
     if (pathAllowReason !== null) return { action: "allow", reason: pathAllowReason };
     if (matchedRule) return matchedRule;
 

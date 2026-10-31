@@ -13,7 +13,7 @@ export function createBrowserDeveloperTool(host: BrowserHost | undefined): ToolD
   return {
     name: DEVELOPER_TOOL_NAME,
     description: available
-      ? "Inspect the active desktop browser tab for troubleshooting: DOM structure, computed styles, and bounded console/network diagnostics. Each inspection needs its own approval; this tool cannot run arbitrary JavaScript or raw CDP commands."
+      ? "Inspect the active desktop browser tab for troubleshooting: DOM structure, computed styles, and bounded console/network diagnostics. Each inspection requests operation permission under the current session approval policy; this tool cannot run arbitrary JavaScript or raw CDP commands."
       : "Browser developer inspection is unavailable in this runtime because the desktop browser host does not support it. Do not call this tool.",
     inputSchema: {
       type: "object",

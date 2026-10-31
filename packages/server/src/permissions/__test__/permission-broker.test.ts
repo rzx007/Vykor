@@ -210,6 +210,52 @@ describe("StorePermissionBroker", () => {
     });
   });
 
+  it.each(["PluginInstall", "McpConfigure"])("requires exact %s confirmation despite an earlier session tool grant", async toolName => {
+    await withBroker(async ({ broker, store }) => {
+      const outer = broker.ask({ sessionId: "s1", runId: "r1", toolName });
+      const grant = store.permissions.list({ status: "pending" })[0]!;
+      broker.reply({ requestId: grant.id, status: "approved", decision: "session" });
+      await expect(outer).resolves.toEqual({ status: "approved", decision: "session" });
+
+      const first = broker.ask({ sessionId: "s1", runId: "r1", toolName, confirmation: "once", input: { candidate: "first" } });
+      const pending = store.permissions.list({ status: "pending", toolName });
+      expect(pending).toHaveLength(1);
+      expect(pending[0]).toMatchObject({ payload: { confirmation: "once", input: { candidate: "first" } } });
+      expect(pending[0]!.payload.reusedApprovalRequestId).toBeUndefined();
+      broker.reply({ requestId: pending[0]!.id, status: "approved", decision: "session" });
+      await expect(first).resolves.toEqual({ status: "approved", decision: "once" });
+
+      const second = broker.ask({ sessionId: "s1", runId: "r1", toolName, confirmation: "once", input: { candidate: "second" } });
+      const next = store.permissions.list({ status: "pending", toolName });
+      expect(next).toHaveLength(1);
+      expect(next[0]).toMatchObject({ payload: { confirmation: "once", input: { candidate: "second" } } });
+      broker.reply({ requestId: next[0]!.id, status: "denied", decision: "once" });
+      await expect(second).resolves.toEqual({ status: "denied", decision: "once" });
+      expect(broker.listApprovals()).toEqual([store.permissions.get(grant.id)]);
+
+      await expect(broker.ask({ sessionId: "s1", runId: "r1", toolName })).resolves.toEqual({ status: "approved", decision: "session" });
+      expect(store.permissions.list({ toolName }).at(-1)).toMatchObject({ payload: { reusedApprovalRequestId: grant.id } });
+    });
+  });
+
+  it.each(["PluginInstall", "McpConfigure"])("does not promote one exact %s candidate approval to a session grant", async toolName => {
+    await withBroker(async ({ broker, store }) => {
+      const first = broker.ask({ sessionId: "s1", toolName, confirmation: "once", input: { candidate: "first" } });
+      const pending = store.permissions.list({ status: "pending" })[0]!;
+      const replied = broker.reply({ requestId: pending.id, status: "approved", decision: "session" });
+      expect(replied.decision).toBe("once");
+      expect(replied.payload.confirmation).toBe("once");
+      await expect(first).resolves.toEqual({ status: "approved", decision: "once" });
+      expect(broker.listApprovals()).toEqual([]);
+
+      const second = broker.ask({ sessionId: "s1", toolName, confirmation: "once", input: { candidate: "second" } });
+      const next = store.permissions.list({ status: "pending" });
+      expect(next).toHaveLength(1);
+      broker.reply({ requestId: next[0]!.id, status: "denied" });
+      await expect(second).resolves.toEqual({ status: "denied" });
+    });
+  });
+
   it("routes child asks to the parent session and reuses parent session approvals", async () => {
     await withBroker(async ({ broker, store }) => {
       store.sessions.create({ id: "child", parentId: "s1", cwd: process.cwd(), model: "m" });

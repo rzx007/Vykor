@@ -86,9 +86,14 @@ flowchart TD
   U --> V{"prompt-too-long?"}
   V -- "是，且重试未耗尽" --> W["截掉更早 prompt round 后重试"]
   W --> U
-  V -- "否，成功" --> X["写入 Summary + Compact boundary marker + recent messages"]
+  V -- "否，请求完成" --> AA{"摘要结构与正文有效?"}
+  AA -- "是" --> X["写入 Summary + Compact boundary marker + recent messages"]
+  AA -- "否，尚未纠正" --> AB["要求一次完整非空摘要"]
+  AB --> U
+  AA -- "否，已经纠正" --> AC["报告失败并保留原历史，结束本轮"]
   X --> Z
-  V -- "其他失败或重试耗尽" --> Y["记录失败，simpleCompact() 兜底"]
+  V -- "纠正请求失败或重试耗尽" --> AC
+  V -- "普通请求失败或重试耗尽" --> Y["记录失败，simpleCompact() 兜底"]
   Y --> Z
 ```
 
@@ -105,7 +110,7 @@ messages
   │
   ├─ 5. LLM compact：摘要 older messages，保留 recent messages
   │
-  └─ 6. 失败兜底：simpleCompact
+  └─ 6. 无客户端或普通请求失败：simpleCompact；摘要验收失败保留原历史并结束本轮
 ```
 
 ### 1. microCompact
@@ -148,7 +153,17 @@ messages
 - `<analysis>`：用于模型推理的压缩分析
 - `<summary>`：真正保留到历史里的继续工作摘要
 
-写回历史时，`formatSummary()` 会移除 `<analysis>`，把 `<summary>` 内容整理为 `Summary:` 段。
+写回历史前，`formatSummary()` 会移除可选的 `<analysis>` 草稿，要求恰好一个闭合且正文非空的 `<summary>`，再把正文整理为 `Summary:` 段。空响应、只有草稿、空正文、未闭合、重复或嵌套摘要均不合格。
+
+首次不合格时，通过同一个摘要客户端请求一次格式纠正；纠正额度属于整个压缩操作，不因上下文超长截头重试而重置。每次请求继续经过既有准入、预算、取消和用量结算；模型请求已完成但摘要内容不合格，仍保留其真实用量和完成事实。
+
+两次摘要均不合格，或纠正请求失败时，抛出内部 `CompactSummaryValidationError`。引擎保留压缩前历史，结束本轮，不继续发送主模型请求或执行工具。旧的已保存摘要不重新验收或迁移。
+
+摘要输入由 `packages/core/src/engine/compaction/compact-transcript.ts` 构建。assistant 的正文和独立 `toolUses` 一起转录；每个工具调用记录 ID、名称和有界 JSON 参数，解析失败时记录 `inputError`，不把空对象占位当成真实参数。结果按 `toolUseId` 配对，仅在调用和结果 ID 均唯一且调用先出现时标记 `paired`；重复 ID 为 `ambiguous`，孤立或逆序结果为 `unmatched`，不推断执行成功。
+
+单条源消息最多转录 4,000 字符，计入角色、标签、转义与省略标记。完整身份、显式执行状态、错误标志、结果引用和受控事实优先，参数及正文使用剩余预算；长参数保留头尾并标为不完整 JSON 摘录，最低预算包括标记与两端摘录。放不下的调用或事实明确整项省略，不能截短不透明 ID 后当作有效引用。已有事实前缀和匹配当前 `resultRef` 的宿主补读提示按完整文本块去重，引用由元数据统一保留或省略；图片仅用占位说明。转录不修改原历史、不调用工具或读取引用，也不改变摘要验收与失败提交边界。
+
+前置 context collapse 不压短匹配当前 `resultRef` 的宿主补读提示，而是将完整提示交给转录器处理。否则提示先被切成头尾摘录后，就无法精确去重，残缺 ID 会再次进入摘要正文。
 
 ---
 
@@ -256,13 +271,17 @@ LLM 摘要请求不会发送原始图片 payload，而是替换为：
 
 ## 失败策略
 
-`CompactService` 的失败处理遵循“压缩失败不阻断对话”：
+`CompactService` 区分普通请求失败与不可使用的摘要：
 
-1. LLM compact 失败会递增 `consecutiveFailures`。
+1. 普通 LLM 请求失败会递增 `consecutiveFailures`。
 2. 连续失败达到 `3` 次后，后续只做 `microCompact()`。
-3. 没有 client 或 LLM compact 失败时，兜底使用 `simpleCompact()`。
+3. 没有 client 或普通 LLM 请求失败时，兜底使用 `simpleCompact()`。
+4. 摘要验收最终失败或纠正请求失败时，不进入简单压缩，也不递增普通失败计数，避免后续绕过验收；报告 `compact_failed` 后向上抛错。
+5. 取消、运行预算和请求准入错误保持原有传播方式，不转换成格式纠正或简单压缩。
 
 `simpleCompact()` 会保留 system messages 和 recent messages，中间插入占位摘要与 compact boundary marker。
+
+候选历史只在整个压缩成功后交回引擎。失败时可以已有 context collapse 的诊断进度，但不能报告最终 `compact_end`、触发 `post_compact` 或提交完整摘要边界。
 
 ---
 
@@ -272,6 +291,9 @@ LLM 摘要请求不会发送原始图片 payload，而是替换为：
 
 - `packages/core/src/engine/__test__/index.test.ts`
 - `packages/core/src/engine/compaction/__test__/compact-service-advanced.test.ts`
+- `packages/core/src/engine/compaction/__test__/compact-summary.test.ts`
+- `packages/core/src/engine/compaction/__test__/compact-transcript.test.ts`
+- `packages/core/src/engine/__test__/summary-validation.test.ts`
 - `packages/core/src/engine/__test__/integration.test.ts`
 
 覆盖点包括：
@@ -285,6 +307,10 @@ LLM 摘要请求不会发送原始图片 payload，而是替换为：
 - pre/post compact hooks
 - progress callback 与 checkpoints
 - `QueryEngine.compact()` 手动触发路径
+- 摘要验收、一次格式纠正、纠正与截头重试的独立额度
+- 工具名称、参数与结果 ID 配对，超预算省略和完整执行事实
+- 自动、手动和被动压缩失败后保留历史，停止主请求与工具执行
+- 纠正请求的准入、取消和逐请求用量结算
 
 ---
 

@@ -42,7 +42,7 @@ export interface BrowserDeveloperExecuteInput {
   cwd: string;
   /** Ordinary, reusable-or-not site approval under the existing Browser tool name. */
   approveOrigin: (reason: string) => Promise<boolean>;
-  /** A separate, once-only developer approval for this single inspection. */
+  /** Permission for this inspection; ordinary approval modes require a separate, once-only decision. */
   approveDeveloper: (reason: string) => Promise<boolean>;
 }
 

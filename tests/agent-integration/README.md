@@ -4,9 +4,13 @@
 
 `__test__/context-compaction.integration.test.ts` 连接真实 Codex / OpenAI 客户端与 Core，只替换网络响应，覆盖流内超长恢复、工具定义限制不压缩历史及摘要输出上限。它还连接真实 SQLite 目标用量账本，验证无限预算时恢复后逐次记账、显式预算下未知用量仍暂停。
 
+`__test__/scoped-instructions.integration.test.ts` 将真实 Read/Write 工厂接入 QueryEngine 受检模型循环，覆盖小规则交付后相同 Write 重试成功、90 KB 规则跨多轮完整交付且默认轨迹不误报连续失败、同批 Read 交付与 Write 等待、无规则进展时继续拦截及真实轮数上限。另一负例让独立 Read 每轮提供新规则，但 Write 的规则超过硬上限，验证它仍累计文件条件失败并保留原文件。临时目录中的实际文件内容与返回的规则片段同时核对，不只依赖工具层夹具。
+
 文件工作流与内容复用回归分别验证调用状态和实际文件内容：框架在调用前拒绝时保持 `not_started`；工具已被调用后，其自报的 `not_started` 由共同入口归为 `unknown`。真实 Write/Edit 的调用次数、文件未被错误覆盖、内容复用重新检查权限及显式纠正后成功的断言同时保留，不能仅凭执行状态推断文件是否改写。
 
 `__test__/approval-review.integration.test.ts` 验证定时任务输入经过独立审查、用户指令核实和审批存储后，能在审查输出截断并重试成功时解除 BackgroundShellCreate 的等待，且不留下待人工确认的请求。
+
+`__test__/full-access-authorization.integration.test.ts` 将真实权限检查器、受检工具执行、浏览器工具、安装配置工具、会话审批适配器和 SQLite 审批仓库接在一起：完全访问连续访问来源、重复开发检查、固定预览插件安装和 MCP 添加均不产生普通审批；普通模式仍逐项确认，具体操作不复用或创建工具级会话授权。内部两条请求入口不能绕过禁止名单或本轮工具范围，工具超时会使等待请求过期，迟到批准不能产生副作用；真正的业务提问仍返回用户答案。外部浏览器、插件来源和网络连接使用受控服务，不访问第三方。
 
 `__test__/mcp-discovery-continuation.integration.test.ts` 将实际 `McpToolCall` 与 Core 循环连接，验证同一批次搜索加载工具后，下一次调用可以重新检查权限；同时覆盖权限拒绝、同名非 MCP 来源和不存在的目标。只替换模型响应与目标执行，不手写转发工具。
 

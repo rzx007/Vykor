@@ -1,22 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createBrowserTool, isBrowserPermissionApproved } from "../browser-tool.js";
+import { createBrowserTool } from "../browser-tool.js";
 
-describe("isBrowserPermissionApproved", () => {
-  it("accepts a plain yes answer", () => {
-    expect(isBrowserPermissionApproved("yes")).toBe(true);
-  });
-
-  it("accepts yes submitted through the AskUser answer card", () => {
-    expect(
-      isBrowserPermissionApproved(JSON.stringify({ selected: {}, custom: { 0: "yes" } })),
-    ).toBe(true);
-  });
-
-  it("does not approve unrelated structured answers", () => {
-    expect(
-      isBrowserPermissionApproved(JSON.stringify({ selected: {}, custom: { 0: "no" } })),
-    ).toBe(false);
+describe("Browser permissions", () => {
+  it("does not turn a user-question callback into an approval capability", async () => {
+    let started = false;
+    const tool = createBrowserTool({ execute: async ({ approve }) => {
+      if (await approve("Allow this site?")) started = true;
+      return { url: "https://example.test", title: "Fixture", pageText: "" };
+    } }, async () => "unused.png", async () => ({}));
+    expect(await tool.execute({ action: "inspect" }, {
+      cwd: ".", sessionId: "session", askUserPrompt: async () => "yes",
+    })).toMatchObject({ isError: true });
+    expect(started).toBe(false);
   });
 
   it("uses the runtime permission callback instead of a text answer", async () => {

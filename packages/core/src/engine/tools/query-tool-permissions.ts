@@ -3,6 +3,8 @@ import type {
   AgentExecutionContext,
   PermissionChecker as IPermissionChecker,
   HookExecutor as IHookExecutor,
+  AgentPermissionDecision,
+  AgentPermissionRequest,
 } from "@vykor/agent-contracts";
 import type { ToolExecutionResult } from "@vykor/agent-contracts";
 import type { PreparedToolCall } from "./query-tool-preparation";
@@ -67,7 +69,6 @@ export async function authorizeToolCall(
   if (decision.action === "ask" && !confirmed) {
     let allowed = false;
     if (execution) {
-      const requestId = `permission_${randomUUID()}`;
       const request = {
         toolName: toolUse.name,
         toolSource:
@@ -83,18 +84,7 @@ export async function authorizeToolCall(
         "not_started",
         identity,
       );
-      await execution.emit({
-        type: "permission.requested",
-        data: { requestId, request },
-      });
-      const approval = await execution.effects.requestPermission(
-        request,
-        execution.scope,
-      );
-      await execution.emit({
-        type: "permission.resolved",
-        data: { requestId, decision: approval },
-      });
+      const approval = await requestPermissionDecision(request, execution);
       allowed = approval.status === "approved";
     }
     signal?.throwIfAborted();
@@ -144,6 +134,21 @@ export async function authorizeToolCall(
     };
   }
   signal?.throwIfAborted();
+}
+
+/** The only host interaction after the current policy has requested approval. */
+export async function requestPermissionDecision(
+  request: AgentPermissionRequest,
+  execution: AgentExecutionContext | undefined,
+): Promise<AgentPermissionDecision> {
+  if (!execution) return { status: "denied", reason: "No permission effect configured" };
+  execution.scope.signal.throwIfAborted();
+  const requestId = `permission_${randomUUID()}`;
+  await execution.emit({ type: "permission.requested", data: { requestId, request } });
+  const decision = await execution.effects.requestPermission(request, execution.scope);
+  execution.scope.signal.throwIfAborted();
+  await execution.emit({ type: "permission.resolved", data: { requestId, decision } });
+  return decision;
 }
 
 /** Host facts only; a stage event never authorizes or commits a tool result. */

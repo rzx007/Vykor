@@ -45,7 +45,7 @@ describe("request context compaction", () => {
     const client: StreamingMessageClient = {
       async *streamMessage(params) {
         if (params.system === "You are a conversation summarizer.") {
-          yield { type: "text_delta", delta: "Earlier work summarized." };
+          yield { type: "text_delta", delta: "<summary>Earlier work summarized.</summary>" };
         } else {
           mainRequests.push(params);
         }
@@ -92,7 +92,7 @@ describe("request context compaction", () => {
       async *streamMessage(params) {
         if (params.system === "You are a conversation summarizer.") {
           summaries++;
-          yield { type: "text_delta", delta: "Earlier work summarized." };
+          yield { type: "text_delta", delta: "<summary>Earlier work summarized.</summary>" };
           yield { type: "usage", usage: { inputTokens: 10, outputTokens: 2 } };
           yield { type: "complete", stopReason: "end_turn" };
           return;
@@ -156,7 +156,7 @@ describe("request context compaction", () => {
       async *streamMessage(params) {
         if (params.system === "You are a conversation summarizer.") {
           summaries++;
-          yield { type: "text_delta", delta: "Earlier work summarized." };
+          yield { type: "text_delta", delta: "<summary>Earlier work summarized.</summary>" };
           yield { type: "complete", stopReason: "end_turn" };
           return;
         }
@@ -211,7 +211,7 @@ describe("request context compaction", () => {
       async *streamMessage(params) {
         requests.push(params);
         if (params.system === "You are a conversation summarizer.") {
-          yield { type: "text_delta", delta: "Unnecessary summary" };
+          yield { type: "text_delta", delta: "<summary>Unnecessary summary</summary>" };
           yield { type: "complete", stopReason: "end_turn" };
           return;
         }
@@ -240,7 +240,7 @@ describe("request context compaction", () => {
           if (params.maxTokens! > expected) throw new ModelRequestFailure("max_tokens exceeds model output limit", {
             kind: "invalid_request", phase: "request", retryable: false, statusCode: 400,
           });
-          yield { type: "text_delta", delta: "Verified task progress retained." };
+          yield { type: "text_delta", delta: "<summary>Verified task progress retained.</summary>" };
         }
         yield { type: "complete", stopReason: "end_turn" };
       },
@@ -271,7 +271,7 @@ describe("request context compaction", () => {
       async *streamMessage(params) {
         if (params.system === "You are a conversation summarizer.") {
           summaries.push(params);
-          yield { type: "text_delta", delta: "Verified task progress retained." };
+          yield { type: "text_delta", delta: "<summary>Verified task progress retained.</summary>" };
         }
         yield { type: "complete", stopReason: "end_turn" };
       },

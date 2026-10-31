@@ -58,7 +58,10 @@ describe("resolveToolPathInContext", () => {
 
     const result = await executeToolFixture(host => createFileReadTool(host), { file_path: "src/app.ts" }, context);
 
-    expect(readBytes).toHaveBeenCalledWith("/workspace/src/app.ts");
+    expect(readBytes).toHaveBeenCalledWith("/workspace/src/app.ts", {
+      maxBytes: 1024 * 1024 + 1,
+      signal: undefined,
+    });
     expect(result.isError).toBeFalsy();
     expect((result.content[0] as { text: string }).text).toBe(
       "1: hello\n\n(End of file - total 1 lines)",

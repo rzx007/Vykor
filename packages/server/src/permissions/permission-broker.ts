@@ -17,6 +17,8 @@ export interface PermissionAskInput {
   toolName: string;
   reason?: string;
   input?: Record<string, unknown>;
+  /** Confirm this exact operation without reusing or creating a session grant. */
+  confirmation?: "once";
   signal?: AbortSignal;
   approvalMode?: ApprovalMode;
   runtimeRevision?: number;
@@ -94,7 +96,7 @@ export class StorePermissionBroker implements PermissionBroker {
     const permissionSessionId = isDeveloper
       ? input.sessionId
       : this.resolvePermissionSessionId(input.sessionId);
-    const reusable = isDeveloper
+    const reusable = isDeveloper || input.confirmation === "once"
       ? undefined
       : this.findSessionApproval(input.sessionId, input.toolName);
     const shouldReview = input.approvalMode === "auto_review" && !reusable
@@ -108,6 +110,7 @@ export class StorePermissionBroker implements PermissionBroker {
       payload: {
         reason: input.reason,
         input: input.input ?? {},
+        ...(input.confirmation ? { confirmation: input.confirmation } : {}),
         ...(permissionSessionId !== input.sessionId ? { childSessionId: input.sessionId } : {}),
         ...(permissionSessionId !== input.sessionId && input.runId ? { childRunId: input.runId } : {}),
         ...(input.traceId ? { traceId: input.traceId } : {}),
@@ -177,10 +180,10 @@ export class StorePermissionBroker implements PermissionBroker {
     }
 
     const previousEventSeq = this.latestEventSeq();
-    // Even if a client submits "session", a developer inspection is only ever
-    // approved for this single request.
+    // Exact-operation confirmations and developer inspections cannot become
+    // reusable tool grants, even if a client submits "session".
     const decision =
-      current.toolName === "BrowserDeveloper" && input.status === "approved"
+      (current.toolName === "BrowserDeveloper" || current.payload.confirmation === "once") && input.status === "approved"
         ? "once"
         : input.decision;
     const replied = this.permissions.reply({

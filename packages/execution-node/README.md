@@ -1,12 +1,13 @@
 # @vykor/execution-node
 
-提供 Node 端后台非 PTY 进程、磁盘输出日志、Agent 框架子 Agent 的执行观察，以及当前的代码符号和 ripgrep 查询。交互 PTY 由 terminal-node 提供；子 Agent 的真实创建、取消和关闭由 Agent 框架负责。
+提供 Node 端后台非 PTY 进程、磁盘输出日志、Agent 框架子 Agent 的执行观察、文件修改协调，以及当前的代码符号和 ripgrep 查询。交互 PTY 由 terminal-node 提供；子 Agent 的真实创建、取消和关闭由 Agent 框架负责。
 
 ## 目录导航
 
 - [src/](src/README.md)：包公开导出和能力导航。
 - [src/executions/](src/executions/README.md)：资源所有者、后台进程、子 Agent 观察及输出日志。
 - [src/lsp/](src/lsp/README.md)：当前代码符号、引用查询实现与能力限制。
+- [src/files/](src/files/README.md)：跨会话共享的文件修改锁、路径身份与未知后端独占保护。
 
 ## 入口、流程与资源归属
 
@@ -30,9 +31,11 @@ try {
 
 包只依赖 agent-contracts、host-config、environment 和 sandbox，不引用 services、core 或 agent-runtime；没有模块级默认 supervisor 或 registry。
 
+文件修改从 `hostFileMutationKey` 与 `withFileMutationLocks` 进入，同一 JavaScript 宿主中的不同会话和 owner 共用队列；WSL 或无法确认目标身份的后端使用 `withUnidentifiedFileMutationLock`。锁覆盖调用方传入的完整读取、规划、复核和修改回调，结束后自动释放，不归 owner 持有或关闭。具体边界和取消行为见 [files 说明](src/files/README.md)。
+
 ## 新增代码与检查
 
-后台执行和日志放 executions，代码查询放 lsp，保留这两个分类。单模块测试放所属目录的 `__test__/`，跨包执行行为使用仓库现有集成测试入口。
+后台执行和日志放 executions，代码查询放 lsp，文件修改协调放 files。单模块测试放所属目录的 `__test__/`，跨包执行行为使用仓库现有集成测试入口。
 
 ```bash
 pnpm --filter @vykor/execution-node test

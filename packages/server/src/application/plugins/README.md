@@ -1,20 +1,19 @@
 # 插件安装工具
 
-把插件安装操作接入当前应用，并在需要时请求安装确认。
+把插件安装操作接入当前应用，通过统一权限入口取得本次安装授权。
 
 ## 入口与流程
 
-`plugin-install-tool.ts` 组装安装工具，确认辅助函数与应用权限能力协作，再交给插件服务完成实际操作。
+`plugin-install-tool.ts` 先让插件服务预览来源，拿到插件身份、内容摘要和申请权限，再调用 `ToolContext.requestPermission`。统一权限策略决定直接批准、拒绝或等待用户；批准后仍用预览时的摘要固定待安装内容，交给插件服务完成安装，最后刷新活动运行。安装确认不再借用 `AskUser` 提问入口。
 
 ## 状态归属
 
-插件内容由插件服务管理，确认状态归属当前权限请求与会话。
+插件内容由插件服务管理，审批状态归属当前权限请求与会话。工具只在当前调用中保存预览结果；权限拒绝、过期或运行取消时不安装。
 
 ## 主要文件
 
 | 文件 | 主要接口或用途 |
 | --- | --- |
-| [ask-install-confirmation.ts](./ask-install-confirmation.ts) | `askInstallConfirmation` |
 | [plugin-install-tool.ts](./plugin-install-tool.ts) | `createPluginInstallTool` |
 
 ## 测试与维护

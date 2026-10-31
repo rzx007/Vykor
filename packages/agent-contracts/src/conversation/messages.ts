@@ -32,6 +32,8 @@ export interface AssistantMessage {
 export type AssistantMessagePhase = "commentary" | "final_answer";
 
 export interface ToolResultMessage {
+  /** Trusted builtin rule versions actually included in this tool result. */
+  hostProjectInstructionKeys?: string[];
   resultRef?: import("../tools/result-data.js").ToolResultRef;
   type: "tool_result";
   toolUseId: string;

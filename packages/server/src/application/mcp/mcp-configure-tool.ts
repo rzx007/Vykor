@@ -4,7 +4,6 @@ import { assertValidMcpServerConfig } from "@vykor/host-config";
 import { type ToolDefinition, type ToolResult } from "@vykor/agent-contracts";
 import { summarizeMcpEndpoint } from "@vykor/mcp";
 import { PermissionChecker } from "@vykor/permissions";
-import { askInstallConfirmation } from "../plugins/ask-install-confirmation.js";
 import {
   McpConfigApplicationError,
   type McpConfigApplicationService,
@@ -126,28 +125,28 @@ export function createMcpConfigureTool(
             true,
           );
         }
-        if (!context.askUserPrompt)
+        if (!context.requestPermission)
           return reply(
-            "当前没有可用的确认入口，未保存或启动服务。请在桌面 MCP 管理页面添加。",
+            "当前没有可用的权限审批入口，未保存或启动服务。请在桌面 MCP 管理页面添加。",
             true,
           );
         const target =
           config.type === "stdio"
             ? `启动命令：${JSON.stringify([config.command, ...(config.args ?? [])])}\n环境变量名：${Object.keys(config.env ?? {}).join("、") || "无"}`
             : `服务地址：${summarizeMcpEndpoint(config.url)}\n请求头名称：${Object.keys(config.headers ?? {}).join("、") || "无"}`;
-        const confirmed = await askInstallConfirmation(
-          context.askUserPrompt,
-          [
+        const approval = await context.requestPermission({
+          toolName: "McpConfigure",
+          reason: [
             `确认添加全局 MCP 服务 ${JSON.stringify(name)}？这会影响其他会话。`,
             target,
             config.type === "stdio"
               ? "连接时会启动第三方进程，npx/uvx 可能下载并运行软件。"
               : "连接时会向该第三方服务发送请求。",
-            "本工具不安装系统依赖，也不代替你完成 OAuth 授权。回复“确认添加”才会继续。",
+            "本工具不安装系统依赖，也不代替你完成 OAuth 授权。",
           ].join("\n"),
-          "确认添加",
-        );
-        if (!confirmed) return reply("已取消添加，未保存或启动 MCP 服务。");
+          input,
+        });
+        if (approval.status !== "approved") return reply("已取消添加，未保存或启动 MCP 服务。");
         if (context.abortSignal?.aborted || context.runAbortSignal?.aborted)
           return reply("操作已取消，未保存 MCP 配置。", true);
         const result = await service.add({ name, config });

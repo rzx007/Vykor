@@ -23,6 +23,7 @@ interface ToolBatchRecovery {
  */
 export function decideToolBatchRecovery(input: {
   results: readonly ToolExecutionResult[];
+  projectInstructionProgress: ReadonlySet<string>;
   correctionTurns: Readonly<CorrectionTurns>;
   recoveryToolTurnsRemaining: number | null;
   recoveringAtTurnStart: boolean;
@@ -31,16 +32,17 @@ export function decideToolBatchRecovery(input: {
   const { results, recoveringAtTurnStart } = input;
   let recoveryToolTurnsRemaining = input.recoveryToolTurnsRemaining;
   const correctionTurns = { ...input.correctionTurns };
+  const ruleProgress = (result: ToolExecutionResult) => input.projectInstructionProgress.has(result.toolUseId);
   // A successful alternative cancels recovery in either result order, but only
   // an entirely successful batch resets accumulated correction failures.
-  if (results.some((result) => !result.isError))
+  if (results.some((result) => !result.isError || ruleProgress(result)))
     recoveryToolTurnsRemaining = null;
   if (results.every((result) => !result.isError)) {
     correctionTurns.invalid_input = correctionTurns.precondition = 0;
   }
   for (const kind of ["invalid_input", "precondition"] as const) {
     const failed = results.filter(
-      (result) => result.isError && result.failureKind === kind,
+      (result) => result.isError && result.failureKind === kind && !ruleProgress(result),
     );
     if (failed.length) correctionTurns[kind]++;
     if (correctionTurns[kind] >= TOOL_CORRECTION_LIMITS[kind]) {

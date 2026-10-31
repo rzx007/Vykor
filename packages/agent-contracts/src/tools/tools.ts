@@ -6,6 +6,12 @@ import type { AgentExecutionContext } from "../execution/execution.js";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 
 export interface ToolContext {
+  /** Host-owned visible-history state for lazy, path-scoped project rules. */
+  projectInstructions?: {
+    claim(key: string): "new" | "pending" | "visible";
+    /** Ordinary Read permission must allow this additional file without prompting. */
+    canRead(path: string): Promise<boolean>;
+  };
   /** Host-bound authorized archive; model input cannot choose another session. */
   toolResults?: import("./result-data.js").RunToolResultStore;
   cwd: string;
@@ -40,9 +46,10 @@ export interface ToolContext {
   invokeTool?: (name: string, input: Record<string, unknown>, options?: { signal?: AbortSignal; deadlineAt?: number }) => Promise<ToolResult>;
   /** Host-owned interactive user question. */
   askUserPrompt?: (question: string) => Promise<string>;
-  /** Request a normal persisted Permission decision from the host. */
+  /** Request operation permission through current policy; an optional signal can only narrow its lifetime. */
   requestPermission?: (
     request: AgentPermissionRequest,
+    options?: { signal?: AbortSignal },
   ) => Promise<AgentPermissionDecision>;
   agent?: AgentExecutionContext;
 }

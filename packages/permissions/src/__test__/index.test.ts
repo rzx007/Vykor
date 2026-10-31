@@ -321,17 +321,24 @@ describe("autoApproveTools (swarm worker read-only auto-approval)", () => {
     await expect(checker.checkTool("Write", {})).resolves.toMatchObject({ action: "deny" });
   });
 
-  it("autoApprove放行 even when an allowedTools whitelist is set (order correct)", async () => {
-    // allowedTools whitelist does NOT contain Read, but autoApprove is checked
-    // first and放行 it.
+  it("keeps the allowedTools ceiling ahead of auto approval in default mode", async () => {
     const checker = new PermissionChecker({
       mode: "default",
       allowedTools: ["SomeOtherTool"],
       autoApproveTools: ["Read"],
     });
     const result = await checker.checkTool("Read", { path: "/foo" });
-    expect(result.action).toBe("allow");
-    expect(result.reason).toBe("Tool 'Read' is auto-approved");
+    expect(result.action).toBe("deny");
+  });
+
+  it.each(["ask", "auto_review", "full_access"] as const)("keeps the allowedTools ceiling ahead of auto approval in %s mode", async mode => {
+    const checker = new PermissionChecker({
+      mode,
+      shellDialect: "powershell",
+      allowedTools: ["Read"],
+      autoApproveTools: ["Shell"],
+    });
+    await expect(checker.checkTool("Shell", { command: "node -v" })).resolves.toMatchObject({ action: "deny" });
   });
 
   it("no autoApproveTools → behavior unchanged (default mode asks)", async () => {

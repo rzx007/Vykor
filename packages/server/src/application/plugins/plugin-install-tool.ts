@@ -1,6 +1,5 @@
 import type { ToolDefinition, ToolResult } from "@vykor/agent-contracts";
 import type { PluginService } from "../settings-api.js";
-import { askInstallConfirmation } from "./ask-install-confirmation.js";
 
 const reply = (text: string, isError = false): ToolResult => ({
   content: [{ type: "text", text }],
@@ -15,7 +14,7 @@ export function createPluginInstallTool(
 ): ToolDefinition {
   return {
     name: "PluginInstall",
-    description: "Install an existing Vykor Native Plugin from a local .zip/.tar/.tar.gz/.tgz file or a Git URL. Preview the exact identity and permissions and ask the user before installing. New plugins become available in the next conversation.",
+    description: "Install an existing Vykor Native Plugin from a local .zip/.tar/.tar.gz/.tgz file or a Git URL. Preview the exact identity and permissions and request permission before installing. New plugins become available in the next conversation.",
     inputSchema: {
       type: "object",
       properties: {
@@ -27,7 +26,7 @@ export function createPluginInstallTool(
       required: ["source"],
     },
     async execute(input, context) {
-      if (!context.askUserPrompt) return reply("对话安装需要可用的用户确认入口。", true);
+      if (!context.requestPermission) return reply("对话安装需要可用的权限审批入口。", true);
       const source = input.source;
       if (source !== "archive" && source !== "git") return reply("source 必须是 archive 或 git。", true);
       if (source === "archive" && (typeof input.path !== "string" || !input.path.trim())) {
@@ -44,15 +43,29 @@ export function createPluginInstallTool(
           ? await plugins.previewArchive!({ cwd: context.cwd, archivePath: input.path as string })
           : await plugins.previewGit!({ cwd: context.cwd, url: input.url as string, ...(input.ref ? { ref: input.ref as string } : {}) });
         const origin = source === "archive" ? input.path as string : `${input.url}@${"commit" in candidate ? candidate.commit : ""}`;
-        const question = [
+        const reason = [
           `确认安装插件 ${candidate.identity.displayName ?? candidate.identity.name} (${candidate.identity.id}, v${candidate.identity.version})？`,
           `来源：${origin}`,
           `申请权限：${candidate.requestedPermissions.length ? candidate.requestedPermissions.join("、") : "无"}`,
-          "回复“确认安装”才会继续。",
         ].join("\n");
-        if (!await askInstallConfirmation(context.askUserPrompt, question, "确认安装")) return reply("已取消插件安装。");
+        const approval = await context.requestPermission({
+          toolName: "PluginInstall",
+          reason,
+          input: {
+            ...input,
+            preview: structuredClone({
+              identity: candidate.identity,
+              requestedPermissions: candidate.requestedPermissions,
+              ...("archiveDigest" in candidate ? { archiveDigest: candidate.archiveDigest } : {
+                sourceDigest: candidate.sourceDigest, commit: candidate.commit,
+              }),
+            }),
+          },
+        });
+        if (approval.status !== "approved") return reply("已取消插件安装。");
         const approvedPermissions = candidate.approvalRequired ? candidate.requestedPermissions : [];
         return await withMutation(async () => {
+        if (context.abortSignal?.aborted || context.runAbortSignal?.aborted) return reply("操作已取消，未安装插件。", true);
         const result = source === "archive" && "archiveDigest" in candidate
           ? await plugins.installArchive!({
               cwd: context.cwd,

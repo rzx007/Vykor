@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ToolRegistry } from "@vykor/core";
-import { type ToolContext } from "@vykor/agent-contracts";
+import { type AgentPermissionDecision, type AgentPermissionRequest, type ToolContext } from "@vykor/agent-contracts";
 import { type McpRuntimeSyncResult, type Settings } from "@vykor/host-config";
 import { createRunCapabilityView } from "@vykor/agent-runtime";
 import { PermissionChecker } from "@vykor/permissions";
@@ -20,44 +20,38 @@ function world(sync: McpRuntimeSyncResult = unavailable) {
       buildMcpAuthServerSnapshot({ name, config, credential: undefined, runtimeStatus: sync.status })) }),
   });
   const host={settings,canConfigure:()=>true};
-  const ask = vi.fn(async (_question: string) => "确认添加");
-  return { tool: createMcpConfigureTool(service, "root",host), host, coordinator, ask,
-    context: { cwd: "/work", sessionId: "root", askUserPrompt: ask } as ToolContext,
+  const requestPermission = vi.fn(async (_request: AgentPermissionRequest): Promise<AgentPermissionDecision> => ({ status: "approved" }));
+  return { tool: createMcpConfigureTool(service, "root",host), host, coordinator, requestPermission,
+    context: { cwd: "/work", sessionId: "root", requestPermission } as ToolContext,
     settings: () => settings };
 }
 const local = { action: "add", name: "blender", config: { type: "stdio", command: "uvx", args: ["--python", "3.11", "mcp-for-blender"] } };
 const text = (result: Awaited<ReturnType<ReturnType<typeof createMcpConfigureTool>["execute"]>>) => JSON.stringify(result);
 
 describe("McpConfigure", () => {
-  it.each([
-    JSON.stringify({ selected: {}, custom: { 0: "确认添加" } }),
-    JSON.stringify({ selected: { 0: [0] }, custom: {} }),
-  ])("accepts actual desktop confirmation replies: %s", async (answer) => {
+  it("saves the approved operation using only a standard permission host", async () => {
     const w = world();
-    w.ask.mockResolvedValue(answer);
-    await w.tool.execute(local, w.context);
+    const result = await w.tool.execute(local, w.context);
+    expect(result.isError).not.toBe(true);
     expect(w.settings().mcpServers?.blender).toEqual(local.config);
-    const prompt = JSON.parse(w.ask.mock.calls[0]![0]);
-    expect(prompt.questions).toEqual([expect.objectContaining({ type: "radio", options: ["确认添加", "取消"] })]);
+    expect(w.requestPermission).toHaveBeenCalledWith({
+      toolName: "McpConfigure", reason: expect.stringContaining("uvx"), input: local,
+    });
   });
 
-  it.each([
-    { selected: { 0: [1] }, custom: {} },
-    { selected: {}, custom: {} },
-    { selected: { 0: [0, 1] }, custom: {} },
-    { selected: { 0: [0] }, custom: { 0: "取消" } },
-  ])("never approves cancellation, skip or conflicting desktop replies: %j", async (answer) => {
+  it.each(["denied", "expired"] as const)("does not save or connect when permission is %s", async (status) => {
     const w = world();
-    w.ask.mockResolvedValue(JSON.stringify(answer));
+    w.requestPermission.mockResolvedValue({ status });
     await w.tool.execute(local, w.context);
+    expect(w.requestPermission).toHaveBeenCalledOnce();
     expect(w.settings().mcpServers).toEqual({});
     expect(w.coordinator.reconcileGlobal).not.toHaveBeenCalled();
   });
   it("confirms global process execution, persists one entry and reports an unverified connection honestly", async () => {
     const w = world();
     const result = await w.tool.execute(local, w.context);
-    expect(w.ask.mock.calls[0]?.[0]).toContain("uvx");
-    expect(w.ask.mock.calls[0]?.[0]).toContain("全局");
+    expect(w.requestPermission.mock.calls[0]?.[0].reason).toContain("uvx");
+    expect(w.requestPermission.mock.calls[0]?.[0].reason).toContain("全局");
     expect(w.settings().mcpServers?.blender).toEqual(local.config);
     expect(w.coordinator.reconcileGlobal).toHaveBeenCalledOnce();
     expect(text(result)).toContain("已保存");
@@ -71,7 +65,7 @@ describe("McpConfigure", () => {
     const result = await w.tool.execute({ action: "list" }, w.context);
     expect(text(result)).toContain("blender");
     expect(text(result)).not.toContain("secret-value");
-    expect(w.ask.mock.calls[0]?.[0]).not.toContain("secret-value");
+    expect(w.requestPermission.mock.calls[0]?.[0].reason).not.toContain("secret-value");
   });
 
   it("never overwrites an existing name on retries", async () => {
@@ -80,22 +74,24 @@ describe("McpConfigure", () => {
     const result = await w.tool.execute({ ...local, config: { type: "stdio", command: "other" } }, w.context);
     expect(result.isError).toBe(true);
     expect(w.settings().mcpServers?.blender).toEqual(local.config);
-    expect(w.ask).toHaveBeenCalledOnce();
+    expect(w.requestPermission).toHaveBeenCalledOnce();
   });
 
-  it.each(["取消", "yes"])("does not save or connect without exact confirmation: %s", async (answer) => {
+  it("fails closed without a permission host even when a user-question host exists", async () => {
     const w = world();
-    w.ask.mockResolvedValue(answer);
-    await w.tool.execute(local, w.context);
+    const askUserPrompt = vi.fn(async () => "确认添加");
+    const result = await w.tool.execute(local, { cwd: "/work", sessionId: "root", askUserPrompt });
+    expect(result.isError).toBe(true);
     expect(w.settings().mcpServers).toEqual({});
     expect(w.coordinator.reconcileGlobal).not.toHaveBeenCalled();
+    expect(askUserPrompt).not.toHaveBeenCalled();
   });
 
   it("rejects invalid configuration and missing interactive host before mutation", async () => {
     const w = world();
     expect((await w.tool.execute({ ...local, config: { type: "http" } }, w.context)).isError).toBe(true);
     expect((await w.tool.execute(local, { cwd: "/work", sessionId: "root" })).isError).toBe(true);
-    expect(w.ask).not.toHaveBeenCalled();
+    expect(w.requestPermission).not.toHaveBeenCalled();
     expect(w.settings().mcpServers).toEqual({});
   });
 
@@ -105,7 +101,7 @@ describe("McpConfigure", () => {
     w.host.canConfigure=()=>false;
     expect((await w.tool.execute(local, { ...w.context, capabilityView: { pluginId: "plugin" } as any })).isError).toBe(true);
     expect(w.settings().mcpServers).toEqual({});
-    expect(w.ask).not.toHaveBeenCalled();
+    expect(w.requestPermission).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -119,13 +115,13 @@ describe("McpConfigure", () => {
     const scope = location === "direct" ? { capabilityView: view } : { agent: { capabilityView: view } };
     const context = { ...w.context, ...scope } as ToolContext;
     expect((await w.tool.execute({ action: "list" }, context)).isError).not.toBe(true);
-    expect(w.ask).not.toHaveBeenCalled();
+    expect(w.requestPermission).not.toHaveBeenCalled();
     expect((await w.tool.execute(local, context)).isError).not.toBe(true);
-    expect(w.ask).toHaveBeenCalledOnce();
+    expect(w.requestPermission).toHaveBeenCalledOnce();
     expect(w.settings().mcpServers?.blender).toEqual(local.config);
     const blocked = world();
     expect((await blocked.tool.execute(local, { ...blocked.context, ...scope, sessionId: "child" } as ToolContext)).isError).toBe(true);
-    expect(blocked.ask).not.toHaveBeenCalled();
+    expect(blocked.requestPermission).not.toHaveBeenCalled();
     blocked.host.canConfigure=()=>false;
     const explicit = createRunCapabilityView({ toolRegistry: new ToolRegistry(), pluginIds: new Set(ids) }, ids[0]!);
     expect((await blocked.tool.execute(local, { ...blocked.context, capabilityView: explicit })).isError).toBe(true);
@@ -145,7 +141,7 @@ describe("McpConfigure", () => {
     w.host.settings=settings;
     expect((await w.tool.execute(local, w.context)).isError).toBe(true);
     expect(w.settings().mcpServers).toEqual({});
-    expect(w.ask).not.toHaveBeenCalled();
+    expect(w.requestPermission).not.toHaveBeenCalled();
   });
 
   it("honors denied command patterns before asking to start a local server", async () => {
@@ -163,14 +159,15 @@ describe("McpConfigure", () => {
     expect(w.settings().mcpServers?.remote).toEqual(config);
     expect(text(result)).toContain("授权");
     expect(text(result)).not.toContain("secret-value");
-    expect(w.ask.mock.calls[0]?.[0]).not.toContain("secret-value");
+    expect(w.requestPermission.mock.calls[0]?.[0].reason).not.toContain("secret-value");
   });
 
   it("does not persist when the run is cancelled during confirmation", async () => {
     const w = world();
     const controller = new AbortController();
-    w.ask.mockImplementation(async () => { controller.abort(); return "确认添加"; });
+    w.requestPermission.mockImplementation(async () => { controller.abort(); return { status: "approved" }; });
     await w.tool.execute(local, { ...w.context, abortSignal: controller.signal });
+    expect(w.requestPermission).toHaveBeenCalledOnce();
     expect(w.settings().mcpServers).toEqual({});
     expect(w.coordinator.reconcileGlobal).not.toHaveBeenCalled();
   });

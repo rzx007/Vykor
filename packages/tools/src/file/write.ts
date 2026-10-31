@@ -7,6 +7,8 @@ import { isFileNotFoundError, fileOperationsFor, fileSnapshotMatches } from "./o
 import { managedPersistencePathKind } from "./access/managed-persistence-path.js";
 import { isSystemPath } from "./access/file-mutation-guard.js";
 import { fileDigest, hostFileFacts } from "./read.js";
+import { withFileMutationLock } from "./mutation-lock.js";
+import { targetProjectInstructions } from "./instructions.js";
 
 const SHA256_PATTERN = /^[0-9a-f]{64}$/i;
 const MAX_SUMMARY_LENGTH = 1000;
@@ -100,81 +102,87 @@ export function createFileWriteTool(host: FileToolHost = {}): ToolDefinition {
       let writeStarted = false;
       try {
         const filePath = await resolveToolPathInContext(rawPath, context, "write");
-        if (managedPersistencePathKind(filePath, cwd)) {
-          return {
-            content: [{ type: "text", text: "Error: this is a managed persistence path. Use the Remember tool instead." }],
-            isError: true,
-            failureKind: "policy",
-            executionState: "not_started",
-          };
-        }
-
-        // Guard raw Windows-style paths even when the resolver runs on another platform.
-        if (isSystemPath(rawPath) || isSystemPath(filePath)) {
-          return {
-            content: [{ type: "text", text: `Error: writing to system directory is not allowed: ${filePath}` }],
-            isError: true,
-            failureKind: "policy",
-            executionState: "not_started",
-          };
-        }
-
-        const sandboxError = await sandboxPathError(filePath, cwd, "write", host.settings, context.environment);
-        if (sandboxError) {
-          return {
-            content: [{ type: "text", text: sandboxError }],
-            isError: true,
-            failureKind: "policy",
-            executionState: "not_started",
-            recoveryHint: "此路径被写入策略限制；不能换工具绕过。",
-          };
-        }
-
         const operations = fileOperationsFor(context);
-        let existing: Uint8Array | undefined;
-        try {
-          const item = await operations.stat(filePath);
-          if (!item.isFile || item.isSymbolicLink) return refused(`Cannot write over a non-file path: ${filePath}`, "precondition");
-          const readSandboxError = await sandboxPathError(filePath, cwd, "read", host.settings, context.environment);
-          if (readSandboxError) {
+        return await withFileMutationLock(operations, [filePath], context, async () => {
+          if (managedPersistencePathKind(filePath, cwd)) {
             return {
-              content: [{ type: "text", text: readSandboxError }],
+              content: [{ type: "text", text: "Error: this is a managed persistence path. Use the Remember tool instead." }],
               isError: true,
               failureKind: "policy",
               executionState: "not_started",
             };
           }
-          existing = await operations.readBytes(filePath);
-        } catch (error) {
-          if (!isFileNotFoundError(error)) throw error;
-        }
 
-        if (!existing) {
-          if (expectedSha256 !== undefined) {
-            return refused("expected_sha256 cannot be used when creating a new file.", "precondition");
+          // Guard raw Windows-style paths even when the resolver runs on another platform.
+          if (isSystemPath(rawPath) || isSystemPath(filePath)) {
+            return {
+              content: [{ type: "text", text: `Error: writing to system directory is not allowed: ${filePath}` }],
+              isError: true,
+              failureKind: "policy",
+              executionState: "not_started",
+            };
           }
-          writeStarted = true;
-          await operations.createTextExclusive(filePath, content);
-          return completed("created", filePath, content, undefined, context);
-        }
 
-        const requested = new TextEncoder().encode(content);
-        if (Buffer.from(existing).equals(Buffer.from(requested))) {
-          return completed("unchanged", filePath, content, existing, context);
-        }
-        if (expectedSha256 !== undefined && sha256(existing) !== expectedSha256.toLowerCase()) {
-          return refused(
-            "Write conflict: the existing file no longer matches expected_sha256.",
-            "precondition",
-            "重新 Read 目标文件确认当前内容，再决定是否覆盖；不要绕过 hash 校验。",
-          );
-        }
-        if (!await fileSnapshotMatches(operations, filePath, existing)) {
-          return refused("Write conflict: the file changed after reading it.", "precondition", "重新 Read 当前文件后再决定修改；不要覆盖其他进程的新内容。");
-        }
-        writeStarted = true;
-        await operations.writeTextAtomic(filePath, content);
-        return completed("overwrote", filePath, content, existing, context);
+          const sandboxError = await sandboxPathError(filePath, cwd, "write", host.settings, context.environment);
+          if (sandboxError) {
+            return {
+              content: [{ type: "text", text: sandboxError }],
+              isError: true,
+              failureKind: "policy",
+              executionState: "not_started",
+              recoveryHint: "此路径被写入策略限制；不能换工具绕过。",
+            };
+          }
+
+          const instructions = await targetProjectInstructions([filePath], context, host, true);
+          if (instructions) return instructions;
+          let existing: Uint8Array | undefined;
+          try {
+            const item = await operations.stat(filePath);
+            if (!item.isFile || item.isSymbolicLink) return refused(`Cannot write over a non-file path: ${filePath}`, "precondition");
+            const readSandboxError = await sandboxPathError(filePath, cwd, "read", host.settings, context.environment);
+            if (readSandboxError) {
+              return {
+                content: [{ type: "text", text: readSandboxError }],
+                isError: true,
+                failureKind: "policy",
+                executionState: "not_started",
+              };
+            }
+            existing = await operations.readBytes(filePath);
+          } catch (error) {
+            if (!isFileNotFoundError(error)) throw error;
+          }
+
+          if (!existing) {
+            if (expectedSha256 !== undefined) {
+              return refused("expected_sha256 cannot be used when creating a new file.", "precondition");
+            }
+            context.abortSignal?.throwIfAborted();
+            writeStarted = true;
+            await operations.createTextExclusive(filePath, content);
+            return completed("created", filePath, content, undefined, context);
+          }
+
+          const requested = new TextEncoder().encode(content);
+          if (Buffer.from(existing).equals(Buffer.from(requested))) {
+            return completed("unchanged", filePath, content, existing, context);
+          }
+          if (expectedSha256 !== undefined && sha256(existing) !== expectedSha256.toLowerCase()) {
+            return refused(
+              "Write conflict: the existing file no longer matches expected_sha256.",
+              "precondition",
+              "重新 Read 目标文件确认当前内容，再决定是否覆盖；不要绕过 hash 校验。",
+            );
+          }
+          if (!await fileSnapshotMatches(operations, filePath, existing)) {
+            return refused("Write conflict: the file changed after reading it.", "precondition", "重新 Read 当前文件后再决定修改；不要覆盖其他进程的新内容。");
+          }
+          context.abortSignal?.throwIfAborted();
+          writeStarted = true;
+          await operations.writeTextAtomic(filePath, content);
+          return completed("overwrote", filePath, content, existing, context);
+        });
       } catch (error) {
         return {
           content: [{ type: "text", text: `Error writing file: ${error}` }],

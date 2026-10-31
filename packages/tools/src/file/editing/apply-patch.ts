@@ -2,6 +2,7 @@ import type { FileToolHost } from "../../ports/policy.js";
 import { createHash } from "node:crypto";
 import { applyPatch as applyParsedPatch, parsePatch, type ParsedDiff } from "diff";
 import type { ToolContext, ToolDefinition, ToolResult } from "@vykor/agent-contracts";
+import { targetProjectInstructions } from "../instructions.js";
 import type { EnvironmentPathOperation } from "@vykor/environment";
 import { resolveToolPathInContext } from "../access/environment-path.js";
 import { sandboxPathError } from "../access/sandbox-guard.js";
@@ -17,6 +18,7 @@ import {
 import { convertToLineEnding, detectLineEnding, normalizeLineEndings } from "./edit-replacers.js";
 import { decodeUtf8Text, isBinaryContent } from "../text-content.js";
 import { fileDigest, hostFileFacts } from "../read.js";
+import { withFileMutationLock } from "../mutation-lock.js";
 
 export type PatchFailureKind = "invalid_input" | "precondition" | "policy" | "command";
 
@@ -72,6 +74,10 @@ interface ClassifiedFile {
   operation: PatchOperation;
   relativePath: string;
   file: ParsedDiff;
+}
+
+interface ResolvedPatchFile extends ClassifiedFile {
+  executionPath: string;
 }
 
 function classifyFile(file: ParsedDiff, style: PatchPathStyle): ClassifiedFile {
@@ -165,10 +171,9 @@ interface PlanDependencies {
   cwd: string;
 }
 
-async function planChange(item: ClassifiedFile, deps: PlanDependencies): Promise<PatchChange> {
+async function planChange(item: ResolvedPatchFile, deps: PlanDependencies): Promise<PatchChange> {
   const { context, operations, cwd, host } = deps;
-  const resolveOperation: EnvironmentPathOperation = item.operation === "create" ? "write" : "read";
-  const executionPath = await resolveToolPathInContext(item.relativePath, context, resolveOperation);
+  const { executionPath } = item;
 
   if (managedPersistencePathKind(executionPath, cwd)) {
     throw new PatchToolError("policy", `Patch targets a managed persistence path: ${executionPath}`);
@@ -214,7 +219,8 @@ async function planChange(item: ClassifiedFile, deps: PlanDependencies): Promise
   };
 }
 
-export async function planPatch(patch: string, context: ToolContext, host: FileToolHost = {}): Promise<PatchPlan> {
+/** Parse every target without observing file contents; all target locks precede planning. */
+function parsePatchFiles(patch: string, context: ToolContext): ClassifiedFile[] {
   if (typeof patch !== "string") {
     throw new PatchToolError("invalid_input", "patch must be a string.");
   }
@@ -238,8 +244,6 @@ export async function planPatch(patch: string, context: ToolContext, host: FileT
   }
 
   const style = pathStyle(context);
-  const cwd = context.cwd ?? process.cwd();
-  const operations = fileOperationsFor(context);
   let classified: ClassifiedFile[];
   try {
     classified = parsed.map((file) => classifyFile(file, style));
@@ -256,12 +260,28 @@ export async function planPatch(patch: string, context: ToolContext, host: FileT
     }
     seen.add(identity);
   }
+  return classified;
+}
 
+async function resolvePatchFiles(files: ClassifiedFile[], context: ToolContext): Promise<ResolvedPatchFile[]> {
+  return Promise.all(files.map(async item => {
+    const operation: EnvironmentPathOperation = item.operation === "create" ? "write" : "read";
+    return { ...item, executionPath: await resolveToolPathInContext(item.relativePath, context, operation) };
+  }));
+}
+
+async function planResolvedPatch(files: ResolvedPatchFile[], deps: PlanDependencies): Promise<PatchPlan> {
   const changes: PatchChange[] = [];
-  for (const item of classified) {
-    changes.push(await planChange(item, { context, operations, cwd, host }));
+  for (const item of files) {
+    changes.push(await planChange(item, deps));
   }
   return { changes };
+}
+
+/** Read-only preview. Mutation callers must hold the complete target set through execution. */
+export async function planPatch(patch: string, context: ToolContext, host: FileToolHost = {}): Promise<PatchPlan> {
+  const files = await resolvePatchFiles(parsePatchFiles(patch, context), context);
+  return planResolvedPatch(files, { context, host, operations: fileOperationsFor(context), cwd: context.cwd ?? process.cwd() });
 }
 
 const MAX_SUMMARY_LENGTH = 1000;
@@ -447,9 +467,16 @@ export function createApplyPatchTool(host: FileToolHost = {}): ToolDefinition {
     async execute(input, context) {
       let planning = true;
       try {
-        const plan = await planPatch(input.patch as string, context, host);
-        planning = false;
-        return await executePatchPlan(plan, fileOperationsFor(context), context);
+        const files = await resolvePatchFiles(parsePatchFiles(input.patch as string, context), context);
+        const operations = fileOperationsFor(context);
+        return await withFileMutationLock(operations, files.map(file => file.executionPath), context, async () => {
+          const plan = await planResolvedPatch(files, { context, host, operations, cwd: context.cwd ?? process.cwd() });
+          const instructions = await targetProjectInstructions(files.map(file => file.executionPath), context, host, true);
+          if (instructions) return instructions;
+          context.abortSignal?.throwIfAborted();
+          planning = false;
+          return executePatchPlan(plan, operations, context);
+        });
       } catch (error) {
         return patchErrorResult(error, planning ? "not_started" : "unknown");
       }

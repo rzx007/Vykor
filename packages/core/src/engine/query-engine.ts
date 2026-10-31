@@ -1,4 +1,5 @@
 import { createToolExecutionContext } from "./tools/tool-execution-context";
+import { projectInstructionProgress, projectInstructionState, protectedProjectInstructionBlocks } from "./tools/project-instructions";
 import { createTurnRequest, composeTurnPrompt, appendSystemGuidance } from "./turn-context";
 import { runModelAttempt } from "./model/model-attempt-runner";
 import { isModelAttemptControlFailure } from "./model/model-attempt-control";
@@ -25,6 +26,8 @@ import {
   type CompactTrigger,
 } from "./compaction/compact-service";
 import { CostTracker } from "./usage/cost-tracker";
+import { ContextInputMeasurement } from "./usage/context-input-measurement";
+import { CompactSummaryValidationError } from "./compaction/compact-summary";
 import { ModelRequestFailure } from "@vykor/agent-contracts";
 import {
   nextModelRetryDelay,
@@ -70,6 +73,8 @@ const RECOVERY_FINALIZATION_PROMPT =
   "Stop using tools for this response. Explain the blocker, summarize what was attempted, and state what input or external change is needed to continue.";
 const CHILD_FINALIZATION_PROMPT =
   "Stop using tools for this response. This delegated run reached its turn limit. State what was completed, what remains unfinished, and the evidence you have. Do not claim the task is verified.";
+const OUTPUT_CONTINUATION_PROMPT =
+  "Continue the previous assistant response from where it was cut off. Do not repeat its existing text. Complete the remaining answer.";
 
 function userContentToText(content: string | ContentBlock[]): string {
   if (typeof content === "string") return content;
@@ -179,6 +184,7 @@ export class QueryEngine implements IQueryEngine {
   >();
   private compactService: CompactService;
   private costTracker: CostTracker;
+  private readonly contextInputMeasurement = new ContextInputMeasurement();
   private systemPrompt: string | undefined;
   private lastRunPrompt: { systemPrompt: string | undefined } | undefined;
   private lastMemoryReminderText: string | undefined;
@@ -346,6 +352,8 @@ export class QueryEngine implements IQueryEngine {
     let correctionTurns = { invalid_input: 0, precondition: 0 };
     let forceFinalResponse = false;
     let childFinalizing = false;
+    let outputContinuations = 0;
+    let continuingOutput = false;
     let preparedNextRequestConfiguration: QueryRequestConfiguration | undefined;
 
     // The host may freeze a Run-scoped ceiling. It is applied locally to every
@@ -449,9 +457,12 @@ export class QueryEngine implements IQueryEngine {
               : RECOVERY_FINALIZATION_PROMPT,
           )
         : budgetSystem;
-      const system = trajectoryControl.guidance
+      const trajectorySystem = trajectoryControl.guidance
         ? appendSystemGuidance(recoverySystem, trajectoryControl.guidance)
         : recoverySystem;
+      const system = continuingOutput && !forcedFinalTurn
+        ? appendSystemGuidance(trajectorySystem, OUTPUT_CONTINUATION_PROMPT)
+        : trajectorySystem;
       // 历史以外的输入也占用上下文：使用本轮实际系统提示和可见工具定义。
       const inputTokenOverhead = this.compactService.estimateTokens([
         { type: "system", content: system ?? "" },
@@ -459,7 +470,20 @@ export class QueryEngine implements IQueryEngine {
           name: tool.name, description: tool.description, inputSchema: tool.inputSchema,
         }))) : "" },
       ]);
-      await this.compactHistory(requestConfiguration, options, "auto", inputTokenOverhead);
+      const buildRequest = () => createTurnRequest({
+        model: requestConfiguration.model,
+        messages: this.messages,
+        system,
+        tools,
+        maxOutputTokens: requestConfiguration.maxOutputTokens,
+        reasoningEffort: requestConfiguration.reasoningEffort,
+        supportsImageInput: requestConfiguration.supportsImageInput,
+      });
+      const measuredInputTokens = this.contextInputMeasurement.estimate(
+        buildRequest(), requestConfiguration, this.messages,
+        messages => this.compactService.estimateTokens(messages),
+      );
+      await this.compactHistory(requestConfiguration, options, "auto", inputTokenOverhead, measuredInputTokens);
       this.appliedRequestConfiguration = requestConfiguration;
       if (this.options.resolveRequestConfiguration) {
         await options.execution?.emit({
@@ -490,16 +514,8 @@ export class QueryEngine implements IQueryEngine {
       let toolUses: ToolUseBlock[] = [];
       let stopReason = "end_turn";
 
-      const buildRequest = () => createTurnRequest({
-        model: requestConfiguration.model,
-        messages: this.messages,
-        system,
-        tools,
-        maxOutputTokens: requestConfiguration.maxOutputTokens,
-        reasoningEffort: requestConfiguration.reasoningEffort,
-        supportsImageInput: requestConfiguration.supportsImageInput,
-      });
       let request = buildRequest();
+      let inputBoundary = this.contextInputMeasurement.capture(request, requestConfiguration, this.messages);
 
       // 网络重试冻结请求；接口明确报超长时，仅允许压缩后重建请求一次。
       // 工具执行和整个 Run 不重跑。
@@ -543,6 +559,7 @@ export class QueryEngine implements IQueryEngine {
             await this.compactHistory(requestConfiguration, options, "reactive", inputTokenOverhead);
             if (this.compactService.estimateTokens(this.messages) < before) {
               request = buildRequest();
+              inputBoundary = this.contextInputMeasurement.capture(request, requestConfiguration, this.messages);
               attempt++;
               continue;
             }
@@ -587,6 +604,7 @@ export class QueryEngine implements IQueryEngine {
         // must not strand a request whose provider has already returned.
         toolUses = attemptToolUses;
         this.settleModelAttempt(attemptUsage, false);
+        this.contextInputMeasurement.record(inputBoundary, attemptUsage);
         if (forcedFinalTurn && toolUses.length > 0) {
           // A provider can still emit a tool call when tools were omitted.
           // Reject it before recording an unexecuted call as committed history.
@@ -610,12 +628,6 @@ export class QueryEngine implements IQueryEngine {
         );
 
         for (const progress of modelAttempt.progress) yield progress;
-        if (isTruncatedStopReason(stopReason) && toolUses.length === 0) {
-          const notice =
-            "\n\n⚠️ *回复已被截断：本轮输出长度达到上限。可发送「继续」让模型接着写完。*";
-          assistantText += notice;
-          yield { type: "text_delta", delta: notice };
-        }
         for (const toolUse of toolUses) {
           yield { type: "tool_use_start", toolUse };
         }
@@ -639,12 +651,16 @@ export class QueryEngine implements IQueryEngine {
           });
         }
 
-        yield { type: "complete", stopReason };
+        // Tool-free completion is emitted after the boundary decision, so a
+        // terminal truncation notice still precedes its completion event.
+        if (toolUses.length > 0) yield { type: "complete", stopReason };
         forceFinalResponse = false;
         break;
       }
 
       if (toolUses.length > 0) {
+        continuingOutput = false;
+        outputContinuations = 0;
         // 执行所有请求的工具调用，并将结果作为工具结果消息加入历史记录
         const recoveringAtTurnStart = recoveryToolTurnsRemaining !== null;
         const { results, fatalFailure, discoveryBlockedCalls } =
@@ -668,13 +684,13 @@ export class QueryEngine implements IQueryEngine {
             generationId,
           );
         const deliveredResults: ToolExecutionResult[] = [];
-        for (let i = 0; i < results.length; i++) {
+        const preparedResults = results.map((original, i) => {
           const toolUse = toolUses[i]!;
           const tool = requestToolRegistry.get(toolUse.name);
           const rawResult = withToolInputReuseHint(
             tool,
             toolUse,
-            results[i]!,
+            original,
             this.messages,
           );
           const result = {
@@ -684,6 +700,13 @@ export class QueryEngine implements IQueryEngine {
               contribution?.exposeToolResultIds,
             ),
           };
+          return { rawResult, result, modelResult: { ...result, content: this.budgetToolResultContent(result) } };
+        });
+        const ruleProgress = projectInstructionProgress(preparedResults.map(prepared => prepared.modelResult));
+        for (let i = 0; i < preparedResults.length; i++) {
+          const toolUse = toolUses[i]!;
+          const tool = requestToolRegistry.get(toolUse.name);
+          const { rawResult, result, modelResult } = preparedResults[i]!;
           const recoveryGuard = result.metadata?.recoveryGuard;
           // A rejected retry never ran, and its failure is already recorded. Re-recording it
           // would refresh the record to the current evidence revision, which silently voids
@@ -694,8 +717,10 @@ export class QueryEngine implements IQueryEngine {
           // the identical direct/proxy call valid on the very next request.
           // The host also records this for an invoked proxy whose outer outcome is unknown.
           const awaitingDefinition = discoveryBlockedCalls.has(toolUse.id);
+          const awaitingProjectRules = ruleProgress.has(result.toolUseId);
           if (
             !awaitingDefinition &&
+            !awaitingProjectRules &&
             result.isError &&
             !toolUse.inputError &&
             !recoveryGuard &&
@@ -705,16 +730,17 @@ export class QueryEngine implements IQueryEngine {
           }
           if (recoveryGuard) {
             recoveryToolTurnsRemaining ??= RECOVERY_TOOL_TURNS;
-          } else if (!result.isError) {
+          } else if (!result.isError || awaitingProjectRules) {
             failedToolCalls.noteEvidence();
           }
           this.messages.push({
             type: "tool_result",
             toolUseId: result.toolUseId,
-            content: this.budgetToolResultContent(result),
+            content: modelResult.content,
             isError: result.isError,
             ...toolFeedbackFields(result),
             ...(result.resultRef ? { resultRef: result.resultRef } : {}),
+            ...(result.hostProjectInstructionKeys ? { hostProjectInstructionKeys: result.hostProjectInstructionKeys } : {}),
           });
           // Keep the model-only result formatting out of host-facing events for
           // retained plugin results. Ordinary results keep their existing
@@ -749,6 +775,7 @@ export class QueryEngine implements IQueryEngine {
         }
         const recovery = decideToolBatchRecovery({
           results,
+          projectInstructionProgress: ruleProgress,
           correctionTurns,
           recoveryToolTurnsRemaining,
           recoveringAtTurnStart,
@@ -760,6 +787,7 @@ export class QueryEngine implements IQueryEngine {
                 calls: toolUses.map((toolUse, index) => ({
                   toolUse,
                   result: results[index]!,
+                  projectInstructionProgress: ruleProgress.has(results[index]!.toolUseId),
                 })),
               },
               trajectoryControl,
@@ -798,6 +826,12 @@ export class QueryEngine implements IQueryEngine {
       }
       if (turnCount + 1 >= maxTurnsLimit()) {
         options.execution?.closeSteering();
+        if (isTruncatedStopReason(stopReason)) {
+          const notice = this.appendOutputTruncationNotice();
+          assistantText += notice;
+          yield { type: "text_delta", delta: notice };
+        }
+        yield { type: "complete", stopReason };
         // The reserved child finalization is never a success signal: it only
         // leaves committed text for the caller to treat as an incomplete result.
         if (childFinalizing) {
@@ -808,8 +842,15 @@ export class QueryEngine implements IQueryEngine {
         }
         return;
       }
-      const followUp = await this.consumeFollowUps(options, true);
+      const canContinueOutput = isTruncatedStopReason(stopReason)
+        && !forcedFinalTurn && outputContinuations < 2;
+      // Automatic continuation must leave steering open for input arriving in
+      // the next segment. A real follow-up always wins at this boundary.
+      const followUp = await this.consumeFollowUps(options, !canContinueOutput);
       if (followUp.accepted) {
+        yield { type: "complete", stopReason };
+        outputContinuations = 0;
+        continuingOutput = false;
         turnCount++;
         preparedNextRequestConfiguration = this.preserveAcceptedFollowUp(
           followUp.requestConfiguration,
@@ -817,10 +858,31 @@ export class QueryEngine implements IQueryEngine {
         );
         continue;
       }
+      if (canContinueOutput) {
+        yield { type: "complete", stopReason };
+        options.signal?.throwIfAborted();
+        options.execution?.scope.signal.throwIfAborted();
+        outputContinuations++;
+        continuingOutput = true;
+        turnCount++;
+        continue;
+      }
+      if (isTruncatedStopReason(stopReason)) {
+        yield { type: "text_delta", delta: this.appendOutputTruncationNotice() };
+      }
+      yield { type: "complete", stopReason };
       return;
     }
 
     throw new MaxTurnsExceeded(maxTurnsLimit());
+  }
+
+  private appendOutputTruncationNotice(): string {
+    const notice = "\n\n⚠️ *回复已被截断：本轮输出长度达到上限。可发送「继续」让模型接着写完。*";
+    const last = this.messages.at(-1);
+    if (last?.type === "assistant") last.content += notice;
+    else this.messages.push({ type: "assistant", content: notice, phase: "final_answer" });
+    return notice;
   }
 
   private async consumeFollowUps(
@@ -917,6 +979,7 @@ export class QueryEngine implements IQueryEngine {
     options: SubmitMessageOptions,
     trigger: CompactTrigger,
     inputTokenOverhead: number,
+    measuredInputTokens?: number,
   ): Promise<void> {
     this.compactService.setClient(this.createCompactClient(
       configuration.client, configuration.model, options.execution,
@@ -931,11 +994,12 @@ export class QueryEngine implements IQueryEngine {
     }));
     try {
       this.messages = await this.compactService.autoCompact(
-        this.messages, trigger, options.signal, inputTokenOverhead,
+        this.messages, trigger, options.signal, inputTokenOverhead, measuredInputTokens,
       );
     } catch (error) {
       if (isAgentExecutionLimitError(error) || isModelAttemptControlFailure(error)) throw error;
       if (options.signal?.aborted) throw options.signal.reason;
+      if (error instanceof CompactSummaryValidationError) throw error;
       if (trigger === "reactive") throw error;
       // 保留自动压缩失败时继续当前请求的既有行为。
     } finally {
@@ -993,6 +1057,7 @@ export class QueryEngine implements IQueryEngine {
    * 用于手动调用压缩消息历史，以控制上下文长度
    */
   async compact(): Promise<void> {
+    this.contextInputMeasurement.clear();
     // 手动维护可能发生在模型或客户端切换后，不能沿用上次运行的摘要配置。
     const configuration = await this.resolveRequestConfiguration({});
     if (configuration.contextWindow !== undefined) {
@@ -1017,6 +1082,7 @@ export class QueryEngine implements IQueryEngine {
   }
 
   clear(): void {
+    this.contextInputMeasurement.clear();
     this.messages = [];
     this.costTracker.reset();
     this.lastRunPrompt = undefined;
@@ -1100,6 +1166,7 @@ export class QueryEngine implements IQueryEngine {
   }
 
   loadMessages(messages: Message[]): void {
+    this.contextInputMeasurement.clear();
     this.messages = [...messages];
   }
 
@@ -1137,6 +1204,8 @@ export class QueryEngine implements IQueryEngine {
   }> {
     const discoveryBlockedCalls = new Set<string>();
     const catalogNames = new Set(toolDiscovery?.catalog.map((row) => row.name));
+    const projectInstructions = projectInstructionState(this.messages, async path =>
+      (await this.permissionChecker.checkTool("Read", { file_path: path })).action === "allow");
     const outcome = await executeCheckedTools({
       toolUses,
       generationId,
@@ -1158,6 +1227,7 @@ export class QueryEngine implements IQueryEngine {
             signal,
             execution,
             requestConfiguration,
+            projectInstructions,
             toolDiscovery: toolUse.name === toolDiscovery?.searchToolName ? toolDiscovery : undefined,
             onUnexposedTool: name => {
               if (catalogNames.has(name)) discoveryBlockedCalls.add(toolUse.id);
@@ -1304,13 +1374,14 @@ export class QueryEngine implements IQueryEngine {
     });
   }
 
-  private budgetToolResultContent(result: Pick<ToolExecutionResult, "content" | "resultRef">): ContentBlock[] {
+  private budgetToolResultContent(result: Pick<ToolExecutionResult, "content" | "resultRef" | "hostProjectInstructionKeys">): ContentBlock[] {
+    const instructions = protectedProjectInstructionBlocks(result);
     const hint = result.resultRef ? toolResultReferenceHint(result.resultRef) : undefined;
     const content = hint?.type === "text"
       ? result.content.filter(block => block.type !== "text" || block.text !== hint.text)
       : result.content;
-    const budgeted = applyToolOutputBudget(content, this.options.toolOutputPolicy);
-    return hint ? [...budgeted, hint] : budgeted;
+    const budgeted = applyToolOutputBudget(content.filter(block => !instructions.includes(block)), this.options.toolOutputPolicy);
+    return hint ? [...instructions, ...budgeted, hint] : [...instructions, ...budgeted];
   }
 
   private createToolContext(
@@ -1323,13 +1394,17 @@ export class QueryEngine implements IQueryEngine {
       onUnexposedTool?: (name: string) => void;
       reportFatalFailure?: (error: unknown) => void;
       dispatchSignal?: AbortSignal;
+      projectInstructions?: ToolContext["projectInstructions"];
     },
   ): ToolContext {
-    const { signal, execution, requestConfiguration, toolDiscovery, onUnexposedTool, reportFatalFailure, dispatchSignal } = options;
+    const { signal, execution, requestConfiguration, toolDiscovery, onUnexposedTool, reportFatalFailure, dispatchSignal, projectInstructions } = options;
     const context = createToolExecutionContext({
       cwd: this.cwd, sessionId: this.sessionId, environment: this.options.executionEnvironment,
       toolUse, toolAttemptId, toolRegistry, signal, execution, requestConfiguration, toolDiscovery,
+      permissionChecker: this.permissionChecker,
       setPlanMode: this.options.setPlanMode,
+      projectInstructions: projectInstructions && this.isTrustedSummary(toolUse, toolRegistry.get(toolUse.name)!, toolRegistry, execution)
+        ? projectInstructions : undefined,
       readToolResult: id => {
         const entry = this.recentToolResults.get(id);
         const binding =
@@ -1394,7 +1469,7 @@ export class QueryEngine implements IQueryEngine {
               call,
               attemptId,
               toolRegistry,
-              { signal: innerSignal, execution: innerExecution, requestConfiguration, ...control },
+              { signal: innerSignal, execution: innerExecution, requestConfiguration, projectInstructions, ...control },
             ),
           isTrustedSummary: () => false,
         });

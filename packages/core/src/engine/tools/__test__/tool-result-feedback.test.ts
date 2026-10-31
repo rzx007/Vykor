@@ -39,6 +39,9 @@ describe("formatToolResultForModel", () => {
   it("strips tool-supplied operation identities from free metadata", () => {
     expect(externalToolMetadata({ operationId: "forged", parentOperationId: "forged-parent", toolAttemptId: "forged-attempt", useful: 1 })).toEqual({ useful: 1 });
   });
+  it("strips tool-supplied project instruction hard-limit facts from free metadata", () => {
+    expect(externalToolMetadata({ hostProjectInstructionHardLimit: true, useful: 1 })).toEqual({ useful: 1 });
+  });
   it("labels explicit unknown output even when isError is absent", () => {
     const content = formatToolResultForModel({ toolUseId: "unknown", toolName: "Write", executionState: "unknown",
       content: [{ type: "text", text: "existing output" }] });

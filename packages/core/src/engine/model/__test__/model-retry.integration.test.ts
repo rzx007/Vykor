@@ -563,7 +563,7 @@ describe("QueryEngine model network retry", () => {
     }
   });
 
-  it("treats a length-limited response as complete without retrying", async () => {
+  it("treats length-limited segments as completed generations without network retries", async () => {
     let calls = 0;
     const client = {
       streamMessage: async function* (): AsyncIterable<StreamEvent> {
@@ -577,20 +577,20 @@ describe("QueryEngine model network retry", () => {
     });
 
     const events = await collect(engine);
-    expect(calls).toBe(1);
+    expect(calls).toBe(3);
     expect(events.some((event) => event.type === "model_retry")).toBe(false);
     const notices = events.filter(
       (event) => event.type === "text_delta" && event.delta.includes("回复已被截断"),
     );
     expect(notices).toHaveLength(1);
-    // The truncation notice must precede the final complete.
+    // Only the terminal cap adds a notice, before its final completion event.
     const noticeIndex = events.findIndex(
       (event) => event.type === "text_delta" && event.delta.includes("回复已被截断"),
     );
-    const completeIndex = events.findIndex((event) => event.type === "complete");
+    const completeIndex = events.findLastIndex((event) => event.type === "complete");
     expect(noticeIndex).toBeGreaterThanOrEqual(0);
     expect(noticeIndex).toBeLessThan(completeIndex);
-    expect(events.filter((event) => event.type === "complete")).toHaveLength(1);
+    expect(events.filter((event) => event.type === "complete")).toHaveLength(3);
   });
 
   it("retries a network failure once, then accepts a length-limited completion", async () => {
@@ -622,7 +622,8 @@ describe("QueryEngine model network retry", () => {
       await vi.advanceTimersByTimeAsync(30_000);
       await run;
 
-      expect(calls).toBe(2);
+      expect(calls).toBe(4);
+      expect(events.filter(event => event.type === "model_retry")).toHaveLength(1);
       const notices = events.filter(
         (event) => event.type === "text_delta" && event.delta.includes("回复已被截断"),
       );

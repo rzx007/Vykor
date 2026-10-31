@@ -16,6 +16,8 @@
 
 本层没有全局运行状态或持久文件；工作区绑定和元数据是返回的新对象，进程、终端和文件资源由接口实现持有并释放。
 
+`files.withMutationLock(paths, work, signal)` 是可选的文件修改协调能力。调用方先收集全部执行路径，再在回调中完成读取、规划、复核和实际写入或删除。实现必须在不同会话与文件操作实例间共享状态；等待可以取消，已开始的回调要等实际 I/O 结束才释放。文件工具对未提供此能力的自定义后端使用进程内独占保护。本层只定义契约，锁队列归 `execution-node`。
+
 文件状态可包含 `sizeBytes` 与毫秒时间戳 `modifiedAt`。`EnvironmentFileSystem.readBytes` 接受可选的 `maxBytes` 和取消信号；实现方最多读取该字节数，省略上限时保持整文件读取。需要判断截断的调用方可请求上限再加一个字节。
 
 `stat(path, signal)`、`listDir(path, signal)` 与 `paths.canonicalize(path, signal)` 接受可选取消信号，供请求在目录遍历和真实路径检查期间停止。

@@ -50,7 +50,7 @@ function fixture(options: {
   const engine = new QueryEngine({ async *streamMessage(params) {
     if (params.system === "You are a conversation summarizer.") {
       compactRequests.push(params);
-      yield { type: "text_delta", delta: "Scripted history summary" } as const;
+      yield { type: "text_delta", delta: "<summary>Scripted history summary</summary>" } as const;
       yield { type: "complete", stopReason: "end_turn" } as const;
       return;
     }

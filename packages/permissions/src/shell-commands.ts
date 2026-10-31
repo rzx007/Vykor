@@ -6,7 +6,7 @@ interface ShellCommandAnalysis {
 }
 
 // These change how following text or relative paths are interpreted. Their
-// semantics require more than literal command boundaries, so ask the user.
+// semantics require more than literal command boundaries, so analysis stays incomplete.
 const INDIRECT_COMMANDS = new Set([
   "cd", "chdir", "pushd", "popd", "set-location", "sl", "push-location", "pop-location",
   ".", "source", "eval", "exec", "invoke-expression", "iex", "invoke-command", "icm",
@@ -24,21 +24,24 @@ function isIndirectCommand(firstWord: string): boolean {
 
 /**
  * Recognize only literal commands, never execute or expand shell input.
- * Unsupported syntax can still expose literal deny candidates, but never allow.
+ * Unsupported syntax can still expose literal deny candidates, but cannot
+ * establish a complete analysis for ordinary command allowances.
  * This deliberately is not a general shell parser.
  */
 export function analyzeShellCommands(source: string, dialect?: PermissionShellDialect): ShellCommandAnalysis {
   const ordinaryCharacters = !/[^\S \t\r\n]|\p{Cf}|\p{Cs}|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]/u.test(source)
     && (dialect === "powershell" || !source.includes("\r"));
-  if (!dialect || dialect === "cmd") {
+  const supportedDialect = dialect === "posix" || dialect === "powershell";
+  if (!supportedDialect) {
     // Only the shared, unquoted subset is safe without a supported interpreter.
     const complete = ordinaryCharacters && /^[\w./:\\ -]+$/.test(source.trim()) && !isIndirectCommand(source.trim().split(/ +/)[0]!);
-    return { commands: complete ? [{ source: source.trim(), denyCandidate: source.trim().replace(/ +/g, " ") }] : [], complete };
+    if (complete) return { commands: [{ source: source.trim(), denyCandidate: source.trim().replace(/ +/g, " ") }], complete };
+    // Retain literal candidates for deny checks without granting ordinary approval.
   }
 
   const commands: ShellCommandAnalysis["commands"] = [];
   let commandStart = 0;
-  let complete = ordinaryCharacters;
+  let complete = ordinaryCharacters && supportedDialect;
   let quote: "'" | '"' | undefined;
   let word = "";
   let wordStarted = false;

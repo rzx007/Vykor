@@ -11,6 +11,10 @@
 
 消费方检查工具请求，返回允许、拒绝或询问用户的结果；宿主需要询问时，再交换 `AgentPermissionRequest` 和 `AgentPermissionDecision`。Hook 执行器接收事件与上下文，返回是否阻止。这里定义数据和接口，不运行审批策略或扩展命令。
 
+`PermissionChecker.checkTool()` 的可选 `ToolPermissionCheckContext.requireConfirmation` 表示工具内部已解析出的具体操作需要确认：普通审批模式保留这次确认，完全访问在禁止规则检查后统一放行。来源和参数定义取自当前运行的工具绑定，不接受工具自行声明的来源。
+
+交给宿主的具体操作请求带 `AgentPermissionRequest.confirmation: once`，持久审批不能复用工具级会话授权，批准也只对该操作生效。工具调用的取消和超时信号随权限请求传递，不能由调用方放宽。
+
 权限记录、当前模式、Hook 注册和执行状态由消费方保存。新增此类定义放本目录，测试建议放同层 `__test__/`。
 
 

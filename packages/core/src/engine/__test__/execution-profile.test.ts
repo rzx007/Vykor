@@ -46,7 +46,7 @@ describe("run execution profile", () => {
         failedGeneration = true;
         throw new ModelRequestFailure("temporary", { kind: "network", phase: "stream", retryable: true });
       }
-      yield { type: "text_delta" as const, delta: "summary" };
+      yield { type: "text_delta" as const, delta: params.system === "You are a conversation summarizer." ? "<summary>summary</summary>" : "summary" };
       yield { type: "complete" as const, stopReason: "end_turn" };
     } };
     const engine = new QueryEngine(client, new ToolRegistry(), { checkTool: async () => ({ action: "allow" }) },
