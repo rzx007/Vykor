@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "route": "openai",
+  "source": {
+    "kind": "observed",
+    "description": "tokenharbor / mimo-v2.5:free; one public tool probe; output cap 128; billing not independently verified",
+    "capturedAt": "2026-10-30T22:37:06.951Z"
+  },
+  "request": {
+    "method": "POST",
+    "path": "/v1/chat/completions",
+    "body": {
+      "model": "mimo-v2.5:free",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Call Echo once with value public-probe. Do not write prose."
+        }
+      ],
+      "max_tokens": 128,
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      },
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "Echo",
+            "description": "Return the public probe",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "value"
+              ],
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "text/event-stream; charset=utf-8"
+    },
+    "chunks": [
+      "data: {\"id\":\"chatcmpl-75902849ec6b4dc9b8455e0e7e9b1ba8\",\"object\":\"chat.completion.chunk\",\"created\":1793399826,\"model\":\"mimo-v2.5\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"\"},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-75902849ec6b4dc9b8455e0e7e9b1ba8\",\"object\":\"chat.completion.chunk\",\"created\":1793399826,\"model\":\"mimo-v2.5\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-fbb35496-c799-4092-8187-a705f668e073\",\"type\":\"function\",\"function\":{\"name\":\"Echo\",\"arguments\":\"\"}}]},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-75902849ec6b4dc9b8455e0e7e9b1ba8\",\"object\":\"chat.completion.chunk\",\"created\":1793399826,\"model\":\"mimo-v2.5\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"value\\\":\\\"public-probe\\\"}\"}}]},\"finish_reason\":null}]}\n\ndata: {\"id\":\"chatcmpl-75902849ec6b4dc9b8455e0e7e9b1ba8\",\"object\":\"chat.completion.chunk\",\"created\":1793399826,\"model\":\"mimo-v2.5\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\ndata: {\"id\":\"chatcmpl-75902849ec6b4dc9b8455e0e7e9b1ba8\",\"object\":\"chat.completion.chunk\",\"created\":1793399826,\"model\":\"mimo-v2.5\",\"choices\":[],\"usage\":{\"prompt_tokens\":98,\"completion_tokens\":21,\"total_tokens\":119}}\n\ndata: [DONE]\n\n"
+    ]
+  }
+}

@@ -6,3 +6,6 @@ docs/superpowers/reviews/2026-10-27-storage-optimization-baseline-context.json -
 # Raw logs and patches retain their original whitespace as evidence.
 docs/superpowers/reviews/2026-10-27-storage-hot-path/** -text -whitespace
 packages/server/src/application/session/execution/__test__/tool-operation-hot-path.bench.mjs text eol=lf
+
+# Observed recordings are checked against the manifest using their original bytes.
+packages/api/src/providers/recordings/__test__/fixtures/*.observed.json -text

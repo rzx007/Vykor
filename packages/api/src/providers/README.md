@@ -8,6 +8,7 @@
 - [anthropic.ts](anthropic.ts)：Anthropic 原生消息流。
 - [openai.ts](openai.ts)：OpenAI 兼容聊天接口。
 - [codex.ts](codex.ts)：Codex 订阅 HTTP 流与请求头。
+- [recordings/](recordings/README.md)：真实供应商 HTTP 观测、脱敏和无网络回放。
 
 ## 调用与状态
 

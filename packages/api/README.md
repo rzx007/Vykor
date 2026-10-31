@@ -10,6 +10,7 @@
 - [src/providers/media/](src/providers/media/README.md)：图片读取、压缩和请求内容转换。
 - [src/providers/requests/](src/providers/requests/README.md)：请求头模板、取消和超时。
 - [src/providers/streaming/](src/providers/streaming/README.md)：思考块拆分和 token 用量整理。
+- [src/providers/recordings/](src/providers/recordings/README.md)：真实 HTTP 样本的脱敏、来源清单和离线回放。
 - [src/models/](src/models/README.md)：模型列表、缓存和可直接使用 API Key 的服务商筛选。
 - [src/errors/](src/errors/README.md)：把服务商错误转换为统一失败信息。
 

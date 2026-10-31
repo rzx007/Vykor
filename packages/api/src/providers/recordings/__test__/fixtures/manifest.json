@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "requiredRoutes": [
+    "openai",
+    "codex"
+  ],
+  "recordings": [
+    {
+      "route": "openai",
+      "file": "openai.observed.json",
+      "sha256": "a991aeec103322079184d9ba49dce6cd7e3e7be3ba3788e72077245507c6b581",
+      "outcome": "complete"
+    },
+    {
+      "route": "codex",
+      "file": "codex.observed.json",
+      "sha256": "329428feaff549dbfb31df9455fc1b298990d4f3581fadbdb397e668d1414e24",
+      "outcome": "complete"
+    }
+  ],
+  "unavailable": [
+    {
+      "route": "anthropic",
+      "status": "not_configured",
+      "reason": "No Anthropic environment key, stored anthropic credential or custom native Anthropic route; primary configured API format is OpenAI. Existing synthetic adapter tests are not recordings."
+    }
+  ],
+  "transport": {
+    "http": "observed SSE",
+    "websocket": "not_applicable: current API clients implement HTTP SSE only"
+  },
+  "sanitization": [
+    "No request headers or origin persisted",
+    "Only content-type/retry-after response headers retained",
+    "Explicit credentials and caller private values replaced before persistence",
+    "Network chunks combined after redaction; SSE event ordering and tool JSON fragments retained",
+    "Public probe prompt and output retained; no private conversation submitted"
+  ]
+}
