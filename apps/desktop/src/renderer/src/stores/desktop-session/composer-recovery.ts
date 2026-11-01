@@ -70,6 +70,7 @@ const draft = z.object({
   textSelections: z.array(z.object({ id: string, text: string })).optional(),
 })
 const submission = z.object({
+  browserAnnotationContext: string.nullable().optional(),
   id: string.min(1),
   sessionId: string.min(1),
   items: z.array(item),

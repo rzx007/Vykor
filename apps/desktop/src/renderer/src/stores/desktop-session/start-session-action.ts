@@ -1,4 +1,6 @@
 import type { CreateDesktopSessionInput } from "@shared/session-types"
+import { captureBrowserAnnotationContext } from "@renderer/components/desktop/tools/browser/browser-prompt-context"
+import { utilityPanelScopeId } from "@renderer/components/desktop/layout/main-layout/utility-panel/utility-panel-state"
 import { errorMessage } from "./error-state"
 import { formatSessionTitle, upsertSession } from "./helpers"
 import {
@@ -96,6 +98,8 @@ export function createStartSessionAction(
       }
     })
     try {
+      const capturing = captureBrowserAnnotationContext(utilityPanelScopeId(null, selectedProject?.id ?? null))
+      const browserAnnotationContext = capturing ? await capturing : null
       const sessionInput: CreateDesktopSessionInput =
         workspaceMode === "project" && selectedProject
           ? {
@@ -120,6 +124,7 @@ export function createStartSessionAction(
       startedSessionId = session.id
       // 创建第一个提交
       const firstSubmission: PendingPromptSubmission = {
+        browserAnnotationContext,
         id: promptSubmissionId,
         sessionId: session.id,
         content: prompt,

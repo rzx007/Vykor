@@ -40,6 +40,8 @@ export interface PendingPromptAttachmentSnapshot extends DesktopPromptAttachment
 }
 
 export interface PendingPromptSubmission {
+  /** undefined: not captured yet; null: captured without saved page annotations. */
+  browserAnnotationContext?: string | null
   draftAttachmentIds?: string[]
   dismissed?: boolean
   draftDocument?: ComposerDocument
@@ -56,6 +58,7 @@ export interface PendingPromptSubmission {
 }
 
 export interface PendingPromptEdit {
+  browserAnnotationContext?: string | null
   id: string
   sessionId: string
   sourceMessageId: string

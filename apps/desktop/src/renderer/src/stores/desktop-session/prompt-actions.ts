@@ -1,4 +1,5 @@
 import { pluginAppModelContexts } from "@renderer/components/desktop/shell/plugin-apps/plugin-app-model-context"
+import { captureBrowserAnnotationContext, stripBrowserAnnotationContext } from "@renderer/components/desktop/tools/browser/browser-prompt-context"
 import { errorMessage } from "./error-state"
 import { createPromptSubmissionSender } from "./prompt-submission"
 import { markComposerSessionTransient } from "./composer-recovery"
@@ -24,6 +25,7 @@ interface PromptActionsContext extends DesktopStoreContext {
 
 export function createPromptActions(context: PromptActionsContext): PromptActions {
   const { get, set } = context
+  const editsInFlight = new Map<string, Promise<void>>()
   return {
     submitPromptSubmission: createPromptSubmissionSender(context),
     async retryPromptSubmission(inputId, targetSessionId) {
@@ -84,6 +86,7 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       const runtime = getSessionRuntime(current, sessionId)
       const matching = Object.values(runtime.pendingPromptSubmissions).find(
         (submission) =>
+          submission.phase !== "accepted" &&
           submission.content === prompt &&
           JSON.stringify(submission.pluginAppContextIds ?? []) ===
             JSON.stringify(appContexts.map((entry) => entry.id)) &&
@@ -123,8 +126,6 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       content,
       document = composerDocument([{ type: "text", text: content }])
     ) {
-      const prompt = selectComposerDocumentText(document)
-      const items = document.items
       const current = get()
       const sessionId = current.activeSessionId
       if (sessionId && current.pendingModeChanges[sessionId]) return
@@ -134,6 +135,8 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       const sourceInput = sourceMessage?.inputId
         ? current.sessionView?.inputs.find((input) => input.id === sourceMessage.inputId)
         : undefined
+      const items = stripBrowserAnnotationContext(document.items, sourceInput?.items)
+      const prompt = selectComposerDocumentText({ ...document, items })
       const attachments = [...(sourceInput?.attachments ?? [])]
         .sort((left, right) => left.seq - right.seq)
         .map(({ assetId, intent, displayName }) => ({ assetId, intent, displayName }))
@@ -145,7 +148,7 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
         return
 
       const runtime = getSessionRuntime(current, sessionId)
-      const edit: PendingPromptEdit =
+      let edit: PendingPromptEdit =
         runtime.pendingPromptEdit?.sourceMessageId === sourceMessageId &&
         sameInputItems(runtime.pendingPromptEdit.items, items) &&
         sameAttachmentSnapshot(runtime.pendingPromptEdit.attachments, attachments)
@@ -158,6 +161,8 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
               items,
               attachments,
             }
+      const existing = editsInFlight.get(edit.id)
+      if (existing) return existing
 
       replaceRuntime(sessionId, (currentRuntime) =>
         beginOperation(
@@ -171,33 +176,54 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
           }
         )
       )
-      try {
-        await window.desktop.sessions.editLatestPrompt({
-          id: edit.id,
-          sessionId,
-          items,
-          sourceMessageId,
-          attachments,
-        })
-        replaceRuntime(sessionId, (currentRuntime) =>
-          removeOperation(
-            currentRuntime.pendingPromptEdit?.id === edit.id
-              ? { ...currentRuntime, pendingPromptEdit: null }
-              : currentRuntime,
-            edit.id
+      const request = submitEdit(sessionId)
+      editsInFlight.set(edit.id, request)
+      void request.finally(() => { editsInFlight.delete(edit.id) }).catch(() => undefined)
+      return request
+
+      async function submitEdit(sessionId: string): Promise<void> {
+        try {
+          if (edit.browserAnnotationContext === undefined) {
+            const capturing = captureBrowserAnnotationContext(`session:${sessionId}`)
+            const browserAnnotationContext = capturing ? await capturing : null
+            if (get().sessionRuntimes[sessionId]?.pendingPromptEdit?.id !== edit.id) return
+            edit = { ...edit, browserAnnotationContext }
+            replaceRuntime(sessionId, runtime => ({ ...runtime, pendingPromptEdit: edit }))
+          }
+          await window.desktop.sessions.editLatestPrompt({
+            id: edit.id,
+            sessionId,
+            items: edit.browserAnnotationContext
+              ? [...edit.items, { type: "text", text: edit.browserAnnotationContext }]
+              : edit.items,
+            sourceMessageId,
+            attachments,
+          })
+          if (!get().sessionRuntimes[sessionId]) return
+          replaceRuntime(sessionId, (currentRuntime) =>
+            removeOperation(
+              currentRuntime.pendingPromptEdit?.id === edit.id
+                ? { ...currentRuntime, pendingPromptEdit: null }
+                : currentRuntime,
+              edit.id
+            )
           )
-        )
-      } catch (error) {
-        const message = errorMessage(error)
-        const confirmed = !getSessionRuntime(get(), sessionId).pendingPromptEdit
-        replaceRuntime(sessionId, (currentRuntime) =>
-          confirmed
-            ? removeOperation(currentRuntime, edit.id)
-            : failOperation(currentRuntime, edit.id, message, Date.now())
-        )
-        if (!confirmed) throw error
-      } finally {
-        context.scheduleSelectedProjectGitRefresh(true)
+        } catch (error) {
+          if (!get().sessionRuntimes[sessionId]) return
+          const message = errorMessage(error)
+          const confirmed = getSessionRuntime(get(), sessionId).pendingPromptEdit?.id !== edit.id
+          replaceRuntime(sessionId, (currentRuntime) =>
+            confirmed
+              ? removeOperation(currentRuntime, edit.id)
+              : failOperation(currentRuntime, edit.id, message, Date.now())
+          )
+          if (!confirmed) throw error
+        } finally {
+          const runtime = get().sessionRuntimes[sessionId]
+          if (runtime?.operations[edit.id] && runtime.pendingPromptEdit?.id !== edit.id)
+            replaceRuntime(sessionId, value => removeOperation(value, edit.id))
+          context.scheduleSelectedProjectGitRefresh(true)
+        }
       }
     },
 
