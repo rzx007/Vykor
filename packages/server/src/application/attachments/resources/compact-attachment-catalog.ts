@@ -104,8 +104,9 @@ function formatReference(
     ? ""
     : `\n  representation: kind=${safeValue(representation.kind)} processor=${safeValue(representation.processor)}@${safeValue(representation.processorVersion)} truncated=${representation.text.length > maxPreviewChars}\n  <attachment-preview untrusted=\"true\">\n${representation.text.slice(0, maxPreviewChars)}\n  </attachment-preview>`;
 
+  const save = available ? ` Use SaveAttachment with attachment_uri=${resourceUri} and a workspace file_path to save the original file for local processing; existing files are never overwritten.` : "";
   const source = reference.inputId ? `inputId=${safeValue(reference.inputId)}` : "source=generated";
-  return `- assetId=${safeValue(reference.assetId)} ${source} name=${JSON.stringify(reference.displayName)} mediaType=${safeValue(reference.mediaType)} sizeBytes=${reference.sizeBytes} intent=${safeValue(reference.intent)} status=${available ? "available" : "unavailable"}\n  resource: ${resourceUri}\n  access: ${access}${preview}`;
+  return `- assetId=${safeValue(reference.assetId)} ${source} name=${JSON.stringify(reference.displayName)} mediaType=${safeValue(reference.mediaType)} sizeBytes=${reference.sizeBytes} intent=${safeValue(reference.intent)} status=${available ? "available" : "unavailable"}\n  resource: ${resourceUri}\n  access: ${access}${save}${preview}`;
 }
 
 function isReadableText(reference: CatalogReference): boolean {

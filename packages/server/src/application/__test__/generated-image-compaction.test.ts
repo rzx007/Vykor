@@ -110,6 +110,15 @@ async function createFixture() {
       expect(attachment?.assetId).toBeDefined();
       return { callId: id, assetId: attachment.assetId!, uri: `attachment://${attachment.assetId}/${encodeURIComponent(attachment.displayName!)}` };
     },
+    async save(sessionId: string, uri: string, filePath: string) {
+      const id = `save-generated-${++calls}`;
+      pendingCall = { type: "tool_use", id, name: "SaveAttachment", input: { attachment_uri: uri, file_path: filePath } };
+      const run = await prompt(sessionId, "Save the earlier generated image as an original workspace file.");
+      expect(run.error).toBeUndefined();
+      const result = agents.get(sessionId)!.getHistory().find((message) => message.type === "tool_result" && message.toolUseId === id);
+      expect(result).toBeDefined();
+      expect(result?.type === "tool_result" && result.isError, JSON.stringify(result)).not.toBe(true);
+    },
     async compact(sessionId: string, forceSummary: boolean) {
       if (forceSummary) {
         const agent = agents.get(sessionId)!;
@@ -174,6 +183,9 @@ describe("manual compaction of generated image references", () => {
       await readOriginal();
       await fixture.reopen(session.id);
       await readOriginal();
+      const savedOriginal = join(fixture.directory, "saved-generated-original.png");
+      await fixture.save(session.id, original.uri, savedOriginal);
+      expect(readFileSync(savedOriginal)).toEqual(png);
       const continuation = await fixture.prompt(session.id, "Continue using the earlier generated image.");
       expect(continuation.error).toBeUndefined();
       expect(continuation).toMatchObject({ status: "completed" });

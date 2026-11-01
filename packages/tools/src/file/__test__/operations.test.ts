@@ -138,6 +138,44 @@ describe("bounded file reads and metadata", () => {
 });
 
 describe("atomic host file operations", () => {
+  it("exclusively creates binary files without changing bytes or retaining temporary files", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vk-exclusive-bytes-")); roots.push(root);
+    const file = join(root, "nested", "saved.bin");
+    const bytes = Uint8Array.from([9, 0, 0xff, 0x80, 0xc3, 0x28, 10, 8]).subarray(1, 7);
+    const operations = new HostFileOperations();
+
+    await operations.createBytesExclusive(file, bytes);
+
+    expect(await readFile(file)).toEqual(Buffer.from([0, 0xff, 0x80, 0xc3, 0x28, 10]));
+    expect(await readdir(join(root, "nested"))).toEqual(["saved.bin"]);
+  });
+
+  it("refuses to overwrite an existing binary target and keeps its original bytes", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vk-exclusive-existing-")); roots.push(root);
+    const file = join(root, "saved.bin");
+    await writeFile(file, Buffer.from([0xff, 0, 1]));
+
+    await expect(new HostFileOperations().createBytesExclusive(file, Uint8Array.from([2, 3])))
+      .rejects.toMatchObject({ code: "EEXIST" });
+
+    expect(await readFile(file)).toEqual(Buffer.from([0xff, 0, 1]));
+    expect(await readdir(root)).toEqual(["saved.bin"]);
+  });
+
+  it("publishes exactly one complete binary file when independent writers race", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vk-exclusive-race-")); roots.push(root);
+    const file = join(root, "saved.bin");
+    const candidates = Array.from({ length: 8 }, (_, index) => Buffer.alloc(4096, index));
+
+    const results = await Promise.allSettled(candidates.map(bytes => new HostFileOperations().createBytesExclusive(file, bytes)));
+
+    const winner = results.findIndex(result => result.status === "fulfilled");
+    expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter(result => result.status === "rejected").every(result => result.reason.code === "EEXIST")).toBe(true);
+    expect(await readFile(file)).toEqual(candidates[winner]);
+    expect(await readdir(root)).toEqual(["saved.bin"]);
+  });
+
   it("creates a new file exclusively and creates parent directories", async () => {
     const root = await mkdtemp(join(tmpdir(), "vk-atomic-create-"));
     roots.push(root);
@@ -288,6 +326,68 @@ describe("FileNotFoundError mapping", () => {
 });
 
 describe("atomic WSL file operations", () => {
+  it("sends exclusive binary contents to the WSL executor as raw bytes with a positional path", async () => {
+    const calls: string[][] = [];
+    const writes: Buffer[] = [];
+    const hostile = "/tmp/a;touch-pwned.bin";
+    const bytes = Uint8Array.from([0, 0xff, 0x80, 0xc3, 0x28, 10]);
+    const operations = new WslFileOperations(wslEnvironment(async argv => {
+      calls.push(argv);
+      return { ...environmentExit(0), write(data: string | Uint8Array) { writes.push(Buffer.from(data)); } };
+    }) as any);
+
+    await operations.createBytesExclusive(hostile, bytes);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.slice(-2)).toEqual(["vk-exclusive", hostile]);
+    expect(calls[0]?.[2]).not.toContain("touch-pwned");
+    expect(Buffer.concat(writes)).toEqual(Buffer.from([0, 0xff, 0x80, 0xc3, 0x28, 10]));
+  });
+
+  it("never falls back to the host filesystem when WSL binary creation fails", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vk-exclusive-no-host-")); roots.push(root);
+    const file = join(root, "host-target.bin");
+    const operations = new WslFileOperations(wslEnvironment(async () => environmentExit(1)) as any);
+
+    await expect(operations.createBytesExclusive(file, Uint8Array.from([0, 0xff]))).rejects.toThrow();
+
+    expect(await readdir(root)).toEqual([]);
+  });
+
+  it.skipIf(process.platform === "win32" && !shell)("preserves binary contents through the actual WSL exclusive-create script", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vk-wsl-exclusive-bytes-")); roots.push(root);
+    const file = join(root, "nested", "saved.bin");
+    const operations = new WslFileOperations(wslEnvironment(async argv => scriptProcess(argv)) as any);
+
+    await operations.createBytesExclusive(file.replaceAll("\\", "/"), Uint8Array.from([0, 0xff, 0x80, 0xc3, 0x28, 10]));
+    await expect(operations.createBytesExclusive(file.replaceAll("\\", "/"), Uint8Array.from([1, 2]))).rejects.toThrow();
+
+    expect(await readFile(file)).toEqual(Buffer.from([0, 0xff, 0x80, 0xc3, 0x28, 10]));
+    expect(await readdir(join(root, "nested"))).toEqual(["saved.bin"]);
+  });
+
+  it.skipIf(process.platform === "win32" && !shell)("refuses an existing WSL directory instead of creating a file inside it", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vk-wsl-exclusive-directory-")); roots.push(root);
+    const directory = join(root, "existing");
+    await mkdir(directory);
+    const operations = new WslFileOperations(wslEnvironment(async argv => scriptProcess(argv)) as any);
+
+    await expect(operations.createTextExclusive(directory.replaceAll("\\", "/"), "body")).rejects.toMatchObject({ code: "EEXIST" });
+
+    expect(await readdir(directory)).toEqual([]);
+    expect(await readdir(root)).toEqual(["existing"]);
+  });
+
+  it.skipIf(process.platform === "win32" && !shell)("reports an existing WSL file as a precondition without replacing bytes", async () => {
+    const root = await mkdtemp(join(tmpdir(), "vk-wsl-exclusive-file-")); roots.push(root);
+    const file = join(root, "existing.bin");
+    await writeFile(file, Buffer.from([0, 255, 128]));
+    const operations = new WslFileOperations(wslEnvironment(async argv => scriptProcess(argv)) as any);
+    await expect(operations.createBytesExclusive(file.replaceAll("\\", "/"), Buffer.from("new"))).rejects.toMatchObject({ code: "EEXIST" });
+    expect(await readFile(file)).toEqual(Buffer.from([0, 255, 128]));
+    expect(await readdir(root)).toEqual(["existing.bin"]);
+  });
+
   it("passes write paths as positional arguments without shell injection", async () => {
     const calls: string[][] = [];
     const hostile = "/tmp/a;touch-pwned.txt";
@@ -377,4 +477,19 @@ function environmentProcess(output: string) {
 
 function environmentExit(exitCode: number) {
   return { write() {}, end() {}, onOutput() { return () => {}; }, async wait() { return { exitCode }; }, async signal() {} };
+}
+
+function scriptProcess(argv: string[]) {
+  const input: Buffer[] = [];
+  let exitCode = 1;
+  return {
+    ...environmentExit(0),
+    write(data: string | Uint8Array) { input.push(Buffer.from(data)); },
+    end() {
+      const result = spawnSync(shell, argv.slice(1), { input: Buffer.concat(input), windowsHide: true });
+      if (result.error) throw result.error;
+      exitCode = result.status ?? 1;
+    },
+    async wait() { return { exitCode }; },
+  };
 }

@@ -3,6 +3,7 @@ import type {
   AgentRunScope,
   StreamingMessageClient,
   ToolDefinition,
+  ToolContext,
   AgentOutputContract,
   RunToolBinding,
   RunToolResultStore,
@@ -61,6 +62,8 @@ export interface AgentEffectOverrides {
 
 /** Opinionated runtime configuration exposed by the programmatic agent API. */
 export interface VykorAgentConfiguration {
+  /** Host-only attachment access bound to the actual root or child invocation; never model input. */
+  readAttachment?: (uri: string, context: ToolContext) => Promise<Uint8Array>;
   jobArchiveForSession?: (sessionId: string) => { agent?: Pick<AgentJobHost, "list" | "read">; process?: Pick<AgentJobHost, "list" | "read"> };
   /** Trusted host-owned result validation; ordinary chat output remains unrestricted when omitted. */
   outputContract?: AgentOutputContract;

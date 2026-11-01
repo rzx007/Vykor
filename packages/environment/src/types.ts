@@ -182,6 +182,8 @@ export interface EnvironmentFileSystem {
   readBytes(path: string, options?: EnvironmentReadBytesOptions): Promise<Uint8Array>;
   writeText(path: string, content: string): Promise<void>;
   writeBytes(path: string, content: Uint8Array): Promise<void>;
+  /** Publish complete bytes only if the target does not exist; never overwrite or expose a partial target. */
+  createBytesExclusive?(path: string, content: Uint8Array): Promise<void>;
   createTextExclusive(path: string, content: string): Promise<void>;
   writeTextAtomic(path: string, content: string): Promise<void>;
   removeFile(path: string): Promise<void>;

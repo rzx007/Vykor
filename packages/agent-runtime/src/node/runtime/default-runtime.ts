@@ -194,6 +194,7 @@ export async function createVykorRuntime(
         toolDecorators: configuration.toolDecorators,
         host: {
           settings,
+          readAttachment: configuration.readAttachment,
           shellOutputLogs: createShellOutputLogHost(),
           outputPolicy: readToolOutputPolicy(),
         },

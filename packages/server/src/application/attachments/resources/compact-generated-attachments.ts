@@ -72,7 +72,7 @@ function attachmentPart(reference: GeneratedImageReference): ReplaceTranscriptPa
 
 function resourceFooter(references: GeneratedImageReference[]): string {
   if (!references.length) return "";
-  let footer = `${FOOTER_MARKER}Use Read or ImageGeneration images with these conversation-owned resources:`;
+  let footer = `${FOOTER_MARKER}Use Read, SaveAttachment (attachment_uri and workspace file_path), or ImageGeneration images with these conversation-owned resources:`;
   for (const reference of references.slice(-20)) {
     const line = `\n- ${attachmentResourceUri(reference.assetId, reference.displayName)}`;
     if (footer.length + line.length > 12_000) break;

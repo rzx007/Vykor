@@ -18,6 +18,7 @@
 | [instructions.ts](./instructions.ts) | 按当前目标发现嵌套目录项目规则，四种文件工具共用 |
 | [text-content.ts](./text-content.ts) | `BINARY_SAMPLE_CHARS`、`BINARY_CONTROL_RATIO`、`isBinaryContent` |
 | [write.ts](./write.ts) | `createFileWriteTool`、`fileWriteTool` |
+| [save-attachment.ts](./save-attachment.ts) | `createSaveAttachmentTool`：将宿主授权的附件原始字节保存为新文件 |
 
 ## 分类目录
 
@@ -32,6 +33,8 @@
 主要入口或定义见 [index.ts](./index.ts)。
 
 从文件工具工厂进入，先解析路径并执行访问检查，再读取或写入内容，按需要生成预览和返回结果。
+
+`SaveAttachment` 接收会话中的 `attachment_uri` 和目的地 `file_path`。宿主每次读取原始字节前验证会话引用与文件完整性，工具再通过与 Write 相同的路径、沙盒、系统目录、托管记忆路径和项目说明检查，在修改锁内独占创建目标。已有文件、目录和符号链接不会被覆盖。图片、文本、Office、PDF、压缩包及二进制文件都按原始字节保存；不自动转换、执行或解压。成功结果返回执行环境路径、字节数及摘要，便于后续 Shell 或文档工具使用；不需要视觉模型或图片生成密钥。自定义环境缺少安全二进制创建能力时明确拒绝，不降级到宿主写入。
 
 `Read` 成功后，`targetProjectInstructions()` 先解析实际目标，再沿其真实目录到工作区真实根之间的祖先链检查 `AGENTS.md`、`CLAUDE.md` 和 `.claude/CLAUDE.md`，不扫描其它子树；创建新文件时，从最近存在的父目录解析真实位置。目录链接或 Windows junction 仅作为目标别名，不额外引入别名路径上的规则链：例如 `link → package/sub` 必须加载 `package/AGENTS.md`，显示的 scope 也是实际目录；规则仍按真实目录由浅到深、具体目录优先，同目录 `AGENTS.md` 优先。根规则继续由初始系统提示负责。使用当前环境的执行路径和文件接口，真实路径必须仍在同一工作区。每份规则分别检查普通 `Read` 权限与 sandbox，并绑定已打开的文件对象重新检查真实路径后才读取；无真实路径或对象识别能力时不降级到宿主文件读取。
 
@@ -50,6 +53,8 @@ WSL 挂载路径及缺少此能力的自定义后端无法可靠归一到本机�
 本机锁标识保守合并大小写及 Unicode 组合形式；在能区分这些名称的磁盘上，两个不同文件可能额外串行。实际读写路径不变，普通不同目标仍可并行。这也覆盖非 Windows 上常见的大小写不敏感磁盘，不能仅用操作系统名称推断磁盘规则。
 
 `HostFileOperations` 和 `WslFileOperations` 的 `stat` 返回目标大小 `sizeBytes` 与毫秒时间戳 `modifiedAt`。`readBytes(path, { maxBytes, signal })` 可限制实际读取的字节数并响应取消；未传 `maxBytes` 时保持整文件读取。调用方需要判断是否截断时，可多请求一个字节。读取不会修改文件，路径权限检查仍由调用方完成。
+
+`createBytesExclusive(path, bytes)` 在同目录临时文件中写完原始字节，再用硬链接独占发布目标；已有文件、目录或链接以及并发竞争均不会被覆盖。`createTextExclusive` 只负责 UTF-8 编码，复用同一创建流程。WSL 通过环境进程的二进制标准输入写入临时文件，并用 `ln -T` 防止已有目录被当作保存位置；执行失败不会回退到宿主文件系统。
 
 `stat(path, signal)` 与 `listDir(path, signal)` 也接受取消信号。本机调用在系统查询前后检查取消；WSL 将取消信号交给执行进程。
 

@@ -39,4 +39,6 @@ prepareModelMetadata 接收当前 session；默认应用沿现有 settings/catal
 
 Agent 加载器将环境获取接成按会话调用的异步工厂。Node 创建 root 或 child 时，加载器核对该实际会话的持久记录与目录，再用本次有效设置申请环境租约；各实例分别接管和释放自己的租约。
 
+应用通过加载器的 `readAttachment` 回调接入会话附件授权及原始字节校验，由 Node 默认注册表创建内置 `SaveAttachment`；不通过额外工具数组注册写入工具，以保留项目说明注入和文件变更事实的共用检查。
+
 普通权限与审批通过后，执行入口调用当前 Run 的 `checkToolDispatch`，核对 owner、会话、Run、输入归属、cwd、最终工具绑定和运行修订。检查失败终止本 Run；工具普通错误与 unknown 只反馈本次调用，不限制其他新调用，也不自动重试。实际调用 Promise 一直跟踪到工具真正结束。

@@ -6,7 +6,9 @@
 
 `createAttachmentReadTool()` 接收工具请求，解析 `attachment://` 地址，并按当前会话的持久附件引用验证访问范围。图片通过 `createAttachmentImageReader()` 重新读取原始字节，校验大小、SHA-256 和引用状态；支持图片的模型收到原生图片，否则只返回本地 OCR 识别的文字或明确的能力错误。文本及 Office 文件继续由文本读取器分段返回。
 
-`AttachmentImageReader` 同时供图片加工工具使用；它返回宿主内部的原始字节和内容路径，调用方可将字节转换为图像接口所需的数据地址。原始存储路径不会进入模型文本或摘要。读取不依赖上传时的内存状态、运行许可或工作目录文件。
+`createAttachmentContentReader().readContent()` 为图片、文本、Office 和其他二进制附件返回未经解码的原始字节，供保存到工作区等写入流程使用。它与 `AttachmentImageReader` 共用授权、大小、SHA-256 和读后状态检查；图片读取器只额外筛选媒体类型，不会为非图片重复读取文件。
+
+读取器返回宿主内部的原始字节和内容路径，图片加工调用方可将字节转换为图像接口所需的数据地址。原始存储路径不会进入模型文本或摘要。读取不依赖上传时的内存状态、运行许可或工作目录文件。
 
 ## 状态归属
 
@@ -16,7 +18,7 @@
 
 | 文件 | 主要接口或用途 |
 | --- | --- |
-| [attachment-access.ts](./attachment-access.ts) | 会话授权，以及 `AttachmentTextReader`、`AttachmentImageReader` 和本地 OCR 的读取入口 |
+| [attachment-access.ts](./attachment-access.ts) | 会话授权，以及 `AttachmentContentReader`、`AttachmentTextReader`、`AttachmentImageReader` 和本地 OCR 的读取入口 |
 | [attachment-read-tool.ts](./attachment-read-tool.ts) | `createAttachmentReadTool` |
 | [attachment-uri.ts](./attachment-uri.ts) | `attachmentResourceUri()` 统一生成资源地址；`isAttachmentUri()`、`parseAttachmentUri()` 识别和解析地址 |
 

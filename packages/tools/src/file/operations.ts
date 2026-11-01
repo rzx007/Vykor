@@ -173,12 +173,16 @@ export class HostFileOperations implements FileOperations {
   }
 
   async createTextExclusive(path: string, content: string): Promise<void> {
+    await this.createBytesExclusive(path, new TextEncoder().encode(content));
+  }
+
+  async createBytesExclusive(path: string, content: Uint8Array): Promise<void> {
     await mkdir(dirname(path), { recursive: true });
     const temporary = join(dirname(path), `.vykor-write-${randomUUID()}`);
     try {
       const handle = await open(temporary, "wx");
       try {
-        await handle.writeFile(content, "utf8");
+        await handle.writeFile(content);
         await handle.sync();
       } finally {
         await handle.close();
@@ -311,7 +315,10 @@ mkdir -p -- "$parent"
 tmp=$(mktemp -- "$parent/.vykor-write.XXXXXX")
 trap 'rm -f -- "$tmp"' EXIT
 cat > "$tmp"
-ln -- "$tmp" "$target"`;
+if ! ln -T -- "$tmp" "$target"; then
+  if [ -e "$target" ] || [ -L "$target" ]; then exit 17; fi
+  exit 1
+fi`;
 
 const WSL_REMOVE_SCRIPT = `set -eu
 if [ -L "$1" ] || [ ! -f "$1" ]; then echo "Refusing to remove non-file path: $1" >&2; exit 4; fi
@@ -401,11 +408,16 @@ export class WslFileOperations implements FileOperations {
   }
 
   async createTextExclusive(path: string, content: string): Promise<void> {
+    await this.createBytesExclusive(path, new TextEncoder().encode(content));
+  }
+
+  async createBytesExclusive(path: string, content: Uint8Array): Promise<void> {
     const result = await this.run(
       ["/bin/sh", "-c", WSL_EXCLUSIVE_CREATE_SCRIPT, "vk-exclusive", path],
-      new TextEncoder().encode(content),
+      content,
       true,
     );
+    if (result.exitCode === 17) throw Object.assign(new Error(`Path already exists: ${path}`), { code: "EEXIST" });
     if (result.exitCode !== 0) throw new Error(result.output || `Cannot exclusively create file: ${path}`);
   }
 

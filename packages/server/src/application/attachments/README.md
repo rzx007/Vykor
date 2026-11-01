@@ -6,6 +6,8 @@
 
 `AttachmentService` 处理登记与读取，`createDaemonAttachmentServices()` 组装依赖；随后交给 routing 决定输入方式，resources 提供会话资源，tools 提供受控读取。
 
+宿主将 `tools/attachment-access.ts` 的通用原字节读取器接到 [SaveAttachment 文件工具](../../../../tools/src/file/save-attachment.ts)。该入口复用会话授权和完整性校验，按执行环境写入新文件；用户上传的任意格式和经可信图片生成调用建立的附件引用都能使用。引用保存在会话记录中，因此重启、编辑重发和手动压缩后仍可重新验证并保存。
+
 ## 状态归属
 
 附件记录与内容由 services 的存储能力管理；本目录持有服务依赖和处理期间的数据。

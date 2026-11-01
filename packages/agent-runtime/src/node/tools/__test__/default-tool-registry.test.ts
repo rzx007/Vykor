@@ -7,6 +7,20 @@ import { createDefaultToolRegistry } from "../default-tool-registry.js";
 import { SkillRegistry } from "@vykor/skills";
 
 describe("createDefaultToolRegistry", () => {
+  it("registers attachment saving as a trusted builtin only when the host supplies an authorized reader", () => {
+    const registry = createDefaultToolRegistry({
+      host: { readAttachment: async () => new Uint8Array([1, 2, 3]) },
+    });
+    expect(registry.get("SaveAttachment")?.name).toBe("SaveAttachment");
+    expect(registry.inspect("SaveAttachment")?.source).toEqual({ kind: "builtin" });
+    expect(registry.get("SaveAttachment")?.execution).toEqual({ domain: "control_plane", supportedEnvironments: ["local", "wsl"] });
+  });
+
+  it("omits attachment saving from SDK registries without an authorized host reader", () => {
+    expect(createDefaultToolRegistry().has("SaveAttachment")).toBe(false);
+    expect(createDefaultToolRegistry({ host: {} }).has("SaveAttachment")).toBe(false);
+  });
+
   it("creates a host-bound builtin definition and retains its source", () => {
     const registry = createDefaultToolRegistry();
     expect(registry.get("Read")?.name).toBe(fileReadTool.name);

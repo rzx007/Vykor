@@ -71,7 +71,7 @@ export interface AttachmentTextReader {
 }
 
 /** Host-only original bytes and source; paths must never be included in model text. */
-export interface AttachmentImageContent {
+export interface AttachmentContent {
   assetId: string;
   displayName: string;
   mediaType: string;
@@ -79,13 +79,26 @@ export interface AttachmentImageContent {
   path: string;
 }
 
+export type AttachmentImageContent = AttachmentContent;
+
+export interface AttachmentContentReadInput {
+  authorizationSessionId: string;
+  assetId: string;
+  signal?: AbortSignal;
+}
+
+export interface AttachmentContentReader {
+  readContent(input: AttachmentContentReadInput): Promise<AttachmentContent>;
+}
+
 export interface AttachmentImageReader {
   /** An authorized non-image returns undefined so Read can continue as text. */
-  readImage(input: {
-    authorizationSessionId: string;
-    assetId: string;
-    signal?: AbortSignal;
-  }): Promise<AttachmentImageContent | undefined>;
+  readImage(input: AttachmentContentReadInput): Promise<AttachmentImageContent | undefined>;
+}
+
+interface AttachmentContentReaderOptions {
+  store: AttachmentSessionReferenceQueries;
+  attachments: Pick<AttachmentService, "get" | "openContent" | "resolveReadyContentPath">;
 }
 
 // Stable display lines let offset/limit reach long paragraphs without dropping
@@ -166,70 +179,85 @@ export function createAttachmentTextReader(options: {
   };
 }
 
-export function createAttachmentImageReader(options: {
-  store: AttachmentSessionReferenceQueries;
-  attachments: Pick<AttachmentService, "get" | "openContent" | "resolveReadyContentPath">;
-}): AttachmentImageReader {
+export function createAttachmentContentReader(options: AttachmentContentReaderOptions): AttachmentContentReader {
+  return {
+    async readContent(input) {
+      input.signal?.throwIfAborted();
+      const reference = validateReference(options.store, input.authorizationSessionId, input.assetId);
+      return readReferencedContent(options, input, reference);
+    },
+  };
+}
+
+export function createAttachmentImageReader(options: AttachmentContentReaderOptions): AttachmentImageReader {
   return {
     async readImage(input) {
       input.signal?.throwIfAborted();
       const reference = validateReference(options.store, input.authorizationSessionId, input.assetId);
       if (!reference.mediaType.startsWith("image/")) return undefined;
-      const asset = options.attachments.get(input.assetId);
-      if (asset.status !== "ready" || !asset.sha256 || asset.id !== reference.assetId ||
-          asset.mediaType !== reference.mediaType || asset.sizeBytes !== reference.sizeBytes) {
-        throw new Error("attachment_resource_unavailable");
-      }
-      // Resolve through Blob storage first, including its regular-file and size checks.
-      const source = await options.attachments.resolveReadyContentPath(input.assetId);
-      if (source.assetId !== asset.id || source.mediaType !== asset.mediaType || source.sizeBytes !== asset.sizeBytes) {
-        throw new Error("attachment_resource_unavailable");
-      }
-      const opened = await options.attachments.openContent(input.assetId);
-      const reader = opened.content.getReader();
-      const chunks: Uint8Array[] = [];
-      const digest = createHash("sha256");
-      let size = 0;
-      try {
-        if (opened.asset.id !== asset.id || opened.sha256 !== asset.sha256 ||
-            opened.mediaType !== asset.mediaType || opened.sizeBytes !== asset.sizeBytes) {
-          throw new Error("attachment_resource_unavailable");
-        }
-        while (true) {
-          input.signal?.throwIfAborted();
-          const chunk = await reader.read();
-          if (chunk.done) break;
-          size += chunk.value.byteLength;
-          if (size > source.sizeBytes) throw new Error("attachment_resource_unavailable");
-          chunks.push(chunk.value);
-          digest.update(chunk.value);
-        }
-        input.signal?.throwIfAborted();
-        if (size !== source.sizeBytes || digest.digest("hex") !== asset.sha256) {
-          throw new Error("attachment_resource_unavailable");
-        }
-        // An edit/delete can revoke the durable reference while bytes are being read.
-        validateReference(options.store, input.authorizationSessionId, input.assetId);
-        const current = options.attachments.get(input.assetId);
-        if (current.status !== "ready" || current.sha256 !== asset.sha256 ||
-            current.mediaType !== asset.mediaType || current.sizeBytes !== asset.sizeBytes) {
-          throw new Error("attachment_resource_unavailable");
-        }
-        return {
-          assetId: asset.id,
-          displayName: reference.displayName,
-          mediaType: source.mediaType,
-          bytes: Buffer.concat(chunks, size),
-          path: source.path,
-        };
-      } catch (error) {
-        await reader.cancel(error).catch(() => undefined);
-        throw error;
-      } finally {
-        reader.releaseLock();
-      }
+      return readReferencedContent(options, input, reference);
     },
   };
+}
+
+async function readReferencedContent(
+  options: AttachmentContentReaderOptions,
+  input: AttachmentContentReadInput,
+  reference: AttachmentReference,
+): Promise<AttachmentContent> {
+  const asset = options.attachments.get(input.assetId);
+  if (asset.status !== "ready" || !asset.sha256 || asset.id !== reference.assetId ||
+      asset.mediaType !== reference.mediaType || asset.sizeBytes !== reference.sizeBytes) {
+    throw new Error("attachment_resource_unavailable");
+  }
+  // Resolve through Blob storage first, including its regular-file and size checks.
+  const source = await options.attachments.resolveReadyContentPath(input.assetId);
+  if (source.assetId !== asset.id || source.mediaType !== asset.mediaType || source.sizeBytes !== asset.sizeBytes) {
+    throw new Error("attachment_resource_unavailable");
+  }
+  const opened = await options.attachments.openContent(input.assetId);
+  const reader = opened.content.getReader();
+  const chunks: Uint8Array[] = [];
+  const digest = createHash("sha256");
+  let size = 0;
+  try {
+    if (opened.asset.id !== asset.id || opened.sha256 !== asset.sha256 ||
+        opened.mediaType !== asset.mediaType || opened.sizeBytes !== asset.sizeBytes) {
+      throw new Error("attachment_resource_unavailable");
+    }
+    while (true) {
+      input.signal?.throwIfAborted();
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      size += chunk.value.byteLength;
+      if (size > source.sizeBytes) throw new Error("attachment_resource_unavailable");
+      chunks.push(chunk.value);
+      digest.update(chunk.value);
+    }
+    input.signal?.throwIfAborted();
+    if (size !== source.sizeBytes || digest.digest("hex") !== asset.sha256) {
+      throw new Error("attachment_resource_unavailable");
+    }
+    // An edit/delete can revoke the durable reference while bytes are being read.
+    validateReference(options.store, input.authorizationSessionId, input.assetId);
+    const current = options.attachments.get(input.assetId);
+    if (current.status !== "ready" || current.sha256 !== asset.sha256 ||
+        current.mediaType !== asset.mediaType || current.sizeBytes !== asset.sizeBytes) {
+      throw new Error("attachment_resource_unavailable");
+    }
+    return {
+      assetId: asset.id,
+      displayName: reference.displayName,
+      mediaType: source.mediaType,
+      bytes: Buffer.concat(chunks, size),
+      path: source.path,
+    };
+  } catch (error) {
+    await reader.cancel(error).catch(() => undefined);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 export function createAttachmentOcrService(options: {

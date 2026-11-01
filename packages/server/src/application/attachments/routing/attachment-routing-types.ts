@@ -25,7 +25,7 @@ export interface AttachmentRoutingDecision {
   assetId: string;
   intent: SessionInputAttachmentRecord["intent"];
   mediaType: string;
-  route: "native_image" | "image_to_text_tool" | "text_inline" | "text_resource" | "blocked";
+  route: "native_image" | "image_to_text_tool" | "text_inline" | "text_resource" | "file_resource" | "blocked";
   reason?: AttachmentRoutingErrorCode;
   complete?: boolean;
   resourceUri?: string;

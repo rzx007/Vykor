@@ -142,6 +142,7 @@ export interface DaemonAgentLoaderOptions {
   modelAttempts?: VykorAgentOptions["modelAttempts"];
   bindToolDispatch?: VykorAgentOptions["bindToolDispatch"];
   toolResults?: VykorAgentOptions["toolResults"];
+  readAttachment?: VykorAgentOptions["readAttachment"];
   terminalProviderForSession?(session: SessionRecord): TerminalProvider;
   shellAdmissionForSession?(session: SessionRecord): ShellAdmissionPorts;
   jobArchiveForSession?: VykorAgentOptions["jobArchiveForSession"];
@@ -332,6 +333,7 @@ export function createDaemonAgentLoader(
       ...(options.modelAttempts ? { modelAttempts: options.modelAttempts } : {}),
       ...(options.bindToolDispatch ? { bindToolDispatch: options.bindToolDispatch } : {}),
       ...(options.toolResults ? { toolResults: options.toolResults } : {}),
+      ...(options.readAttachment ? { readAttachment: options.readAttachment } : {}),
       reasoningEffort,
       capabilityOverrides: {
         ...(options.schedules ? { schedules: options.schedules } : {}),

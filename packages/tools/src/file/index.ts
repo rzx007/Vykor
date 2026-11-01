@@ -10,3 +10,4 @@ export * from "./preview.js";
 export * from "./read.js";
 export * from "./access/sandbox-guard.js";
 export * from "./write.js";
+export * from "./save-attachment.js";

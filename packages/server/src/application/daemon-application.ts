@@ -132,7 +132,9 @@ import {
   createAttachmentOcrService,
   createAttachmentTextReader,
   createAttachmentImageReader,
+  createAttachmentContentReader,
 } from "./attachments/tools/attachment-access.js";
+import { parseAttachmentUri } from "./attachments/tools/attachment-uri.js";
 import { createAttachmentReadTool } from "./attachments/tools/attachment-read-tool.js";
 import { resolveSessionAttachmentCapabilities, supportsNativeImageInput } from "./attachments/routing/attachment-capabilities.js";
 import {
@@ -511,6 +513,7 @@ export class DaemonApplication implements DurableAgentApplication {
         store: attachmentReferences,
         attachments: this.attachments,
       });
+      const attachmentContents = createAttachmentContentReader({ store: attachmentReferences, attachments: this.attachments });
       const attachmentHistoryRouter = new AttachmentCapabilityRouter({
         resolveReadyContentPath: assetId => this.attachments.resolveReadyContentPath(assetId),
         readReadyText: (assetId, input) => this.attachments.readReadyText(assetId, input),
@@ -538,6 +541,15 @@ export class DaemonApplication implements DurableAgentApplication {
       const toolResults = new ToolResultService({ store, ownerLease: () => this.ownerLease,
         accepting: () => this.readyState === "ready" && this.operationGate.accepting });
       const loadAgent = createDaemonAgentLoader({
+        readAttachment: async (uri, context) => {
+          const authorizationSessionId = context.sessionId
+            ? attachmentAuthorizationSessions.resolve(context.sessionId) : undefined;
+          if (!authorizationSessionId) throw new Error("attachment_resource_access_denied");
+          const { assetId } = parseAttachmentUri(uri);
+          return (await attachmentContents.readContent({ authorizationSessionId, assetId,
+            ...(context.abortSignal ? { signal: context.abortSignal } : {}),
+          })).bytes;
+        },
         bindToolDispatch,
         toolResults: (scope, tools) => toolResults.forRun(scope, tools),
         modelAttempts,

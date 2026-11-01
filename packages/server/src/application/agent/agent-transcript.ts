@@ -76,7 +76,7 @@ export function buildAgentTranscript(
         input: part.input ?? {},
       }));
     const text = [textFromParts(messageParts), ...attachments.map(attachment =>
-      `附件资源：${attachmentResourceUri(attachment.assetId, attachment.displayName)}；可通过 Read 重新读取，图片可作为 ImageGeneration 的 images。`,
+      `附件资源：${attachmentResourceUri(attachment.assetId, attachment.displayName)}；可通过 Read 重新读取，或通过 SaveAttachment 保存到工作区；图片可作为 ImageGeneration 的 images。`,
     )].filter(Boolean).join("\n");
     const reasoning = reasoningFromParts(messageParts);
     const reasoningReplay = reasoningReplayFromParts(messageParts);

@@ -20,6 +20,8 @@
 
 文件状态可包含 `sizeBytes` 与毫秒时间戳 `modifiedAt`。`EnvironmentFileSystem.readBytes` 接受可选的 `maxBytes` 和取消信号；实现方最多读取该字节数，省略上限时保持整文件读取。需要判断截断的调用方可请求上限再加一个字节。
 
+`files.createBytesExclusive(path, bytes)` 是可选的二进制独占创建能力：完整写入后才发布目标，已有文件、目录或链接一律拒绝，并发创建也只能有一个成功。需要保护既有文件的调用方在后端未提供该能力时必须返回不支持，不能用先 `stat` 再 `writeBytes` 代替。
+
 `stat(path, signal)`、`listDir(path, signal)` 与 `paths.canonicalize(path, signal)` 接受可选取消信号，供请求在目录遍历和真实路径检查期间停止。
 
 需要把授权与实际读取绑定时使用可选的 `files.openRead(path, signal)`。它返回已打开对象的 `canonicalPath`、`stat`、单次 `readBytes({maxBytes, signal})` 和幂等的 `close()`。调用方先按实际对象路径检查权限，再从同一个对象读取，并在 `finally` 等待关闭；实现不能重新按路径打开文件。不具备可靠对象识别能力时返回 `ENOTSUP`，调用方不得回退到普通 `readBytes`。句柄与进程归实现方持有，调用方负责关闭。

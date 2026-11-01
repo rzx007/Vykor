@@ -24,6 +24,7 @@ import {
   createFileEditTool,
   createFileReadTool,
   createFileWriteTool,
+  createSaveAttachmentTool,
   createGlobTool,
   createGrepTool,
   notebookEditTool,
@@ -121,6 +122,9 @@ export function createDefaultToolRegistry(
   );
   registerBuiltin(createFileReadTool(options.host), environment());
   registerBuiltin(createFileWriteTool(options.host), environment());
+  if (options.host?.readAttachment) {
+    registerBuiltin(createSaveAttachmentTool({ ...options.host, readAttachment: options.host.readAttachment }), controlPlane());
+  }
   registerBuiltin(createFileEditTool(options.host), environment());
   registerBuiltin(createApplyPatchTool(options.host), environment());
   registerBuiltin(createGlobTool(options.host), environment());

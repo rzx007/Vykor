@@ -20,6 +20,17 @@ const overriddenTool = {
 };
 
 describe("deriveChildAgentOptions", () => {
+  it("passes the host attachment reader through with the child's actual execution context", async () => {
+    const childOptions = deriveChildAgentOptions({
+      configuration: { readAttachment: async (_uri, context) => new TextEncoder().encode(context.sessionId) },
+      settings: {} as Settings,
+      child: { description: "save", prompt: "save the attachment", agent: "worker", cwd: "/repo" },
+      cwd: "/repo", sessionId: "child",
+    });
+    const bytes = await childOptions.readAttachment!("attachment://asset/image.png", { cwd: "/repo", sessionId: "child" });
+    expect(new TextDecoder().decode(bytes)).toBe("child");
+  });
+
   it("resolves role inherit to the actual parent model, provider and effort", () => {
     const options = deriveChildAgentOptions({
       configuration: { model: "actual-parent", provider: "actual-provider", effort: "high", reasoningEffort: "high" },
