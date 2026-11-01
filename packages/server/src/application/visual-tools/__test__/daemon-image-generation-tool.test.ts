@@ -1,6 +1,13 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { isAbsolute, join, relative } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { AttachmentBlobStore, SessionStore } from "@vykor/services";
 
 import { createDaemonImageGenerationTool } from "../daemon-image-generation-tool.js";
+import { AttachmentService } from "../../attachments/attachment-service.js";
+import { createAttachmentAuthorizationSessionResolver, createAttachmentImageReader } from "../../attachments/tools/attachment-access.js";
+import { streamOf } from "../remote-image-source.js";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -151,6 +158,128 @@ describe("daemon ImageGeneration tool", () => {
     expect(requests[0]?.body).not.toHaveProperty("return_base64");
   });
 
+  it("resolves conversation attachment references to image bytes before sending them to the provider", async () => {
+    vi.stubEnv("AGNES_API_KEY", "agnes-test-key");
+    const requests = captureFetch();
+    const tool = createDaemonImageGenerationTool({
+      attachments: attachmentHarness().service as any,
+      authorizationSessions: { resolve: (sessionId: string) => sessionId === "worker" ? "owner" : undefined },
+      attachmentImages: {
+        async readImage({ authorizationSessionId, assetId }: { authorizationSessionId: string; assetId: string }) {
+          if (authorizationSessionId !== "owner" || assetId !== "att-original") throw new Error("attachment_resource_access_denied");
+          return { assetId, displayName: "original.png", mediaType: "image/png", bytes: PNG_BYTES, path: "C:/private/blobs/original" };
+        },
+      },
+    });
+
+    await tool.execute({
+      prompt: "crop the product screenshot",
+      images: ["attachment://att-original/original.png", "https://example.com/style.png"],
+    }, { cwd: "C:/work", sessionId: "worker" } as any);
+
+    expect(requests[0]?.body).toMatchObject({
+      extra_body: { image: [`data:image/png;base64,${PNG_BASE64}`, "https://example.com/style.png"] },
+    });
+    expect(JSON.stringify(requests)).not.toContain("attachment://");
+    expect(JSON.stringify(requests)).not.toContain("C:/private");
+  });
+
+  it.each(["foreign", "missing", undefined])("rejects attachment references from %s sessions before calling the provider", async sessionId => {
+    vi.stubEnv("AGNES_API_KEY", "agnes-test-key");
+    const requests = captureFetch();
+    const tool = createDaemonImageGenerationTool({
+      attachments: attachmentHarness().service as any,
+      authorizationSessions: { resolve: (id: string) => id === "foreign" ? "foreign" : undefined },
+      attachmentImages: { readImage: async () => { throw new Error("Cannot open C:/private/blobs/original: attachment_resource_access_denied"); } },
+    });
+
+    const result = await tool.execute({ prompt: "crop", images: ["attachment://att-original/original.png"] }, { cwd: "C:/work", sessionId } as any);
+
+    expect(requests).toEqual([]);
+    expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
+    expect(JSON.stringify(result)).not.toContain("C:/private");
+  });
+
+  it.each([
+    "attachment://att-original/..",
+    "attachment://att-original/original.png?token=secret",
+    "C:/private/blobs/original",
+    "file:///C:/private/blobs/original",
+  ])("rejects invalid or local reference image %s before calling the provider", async image => {
+    vi.stubEnv("AGNES_API_KEY", "agnes-test-key");
+    const requests = captureFetch();
+    const result = await createTool().execute({ prompt: "crop", images: [image] }, { cwd: "C:/work", sessionId: "owner" } as any);
+
+    expect(requests).toEqual([]);
+    expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
+    expect(JSON.stringify(result)).not.toContain("C:/private");
+  });
+
+  it("does not send an authorized non-image attachment to the image provider", async () => {
+    vi.stubEnv("AGNES_API_KEY", "agnes-test-key");
+    const requests = captureFetch();
+    const tool = createDaemonImageGenerationTool({
+      attachments: attachmentHarness().service as any,
+      authorizationSessions: { resolve: () => "owner" },
+      attachmentImages: { readImage: async () => undefined },
+    });
+    const result = await tool.execute({ prompt: "crop", images: ["attachment://att-text/notes.txt"] }, { cwd: "C:/work", sessionId: "owner" } as any);
+
+    expect(requests).toEqual([]);
+    expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
+  });
+
+  it("uses the original persisted bytes after reopening the conversation store and denies other conversations", async () => {
+    vi.stubEnv("AGNES_API_KEY", "agnes-test-key");
+    const requests = captureFetch();
+    const directory = mkdtempSync(join(tmpdir(), "vykor-image-reference-"));
+    const storePath = join(directory, "store.db");
+    let store = new SessionStore({ path: storePath });
+    const blobs = new AttachmentBlobStore({ root: join(directory, "attachments") });
+    try {
+      let attachments = new AttachmentService({ store: store.attachments, blobs });
+      const asset = await attachments.import({
+        displayName: "product.png",
+        declaredMediaType: "image/png",
+        content: streamOf(PNG_BYTES),
+      });
+      for (const id of ["owner", "other"]) store.sessions.create({ id, cwd: directory, model: "test" });
+      store.conversationTransactions.admitPrompt({
+        sessionId: "owner",
+        content: "Use this product screenshot",
+        attachments: [{ assetId: asset.id }],
+      });
+      store.close();
+      store = new SessionStore({ path: storePath });
+      attachments = new AttachmentService({ store: store.attachments, blobs });
+      const tool = createDaemonImageGenerationTool({
+        attachments,
+        authorizationSessions: createAttachmentAuthorizationSessionResolver({
+          store: { getSession: id => store.sessions.get(id) },
+          liveChildren: { resolveRootSessionId: () => undefined },
+        }),
+        attachmentImages: createAttachmentImageReader({
+          store: { listSessionInputAttachments: id => store.conversations.listSessionInputAttachments(id) },
+          attachments,
+        }),
+      });
+      const input = { prompt: "crop the uploaded screenshot", images: [`attachment://${asset.id}/product.png`] };
+
+      await tool.execute(input, { cwd: directory, sessionId: "owner" });
+      const denied = await tool.execute(input, { cwd: directory, sessionId: "other" });
+
+      expect(requests).toHaveLength(1);
+      expect(requests[0]?.body).toMatchObject({ extra_body: { image: [`data:image/png;base64,${PNG_BASE64}`] } });
+      expect(denied).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
+      expect(JSON.stringify(denied)).not.toContain(directory);
+    } finally {
+      store.close();
+      const withinTemp = relative(tmpdir(), directory);
+      if (!withinTemp || withinTemp.startsWith("..") || isAbsolute(withinTemp)) throw new Error("Fixture escaped temporary directory");
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it("rejects a missing API key without calling the provider", async () => {
     vi.stubEnv("AGNES_API_KEY", "");
     const requests = captureFetch();
@@ -233,7 +362,8 @@ describe("daemon ImageGeneration tool", () => {
       bytes: PNG_BYTES,
     }]);
     expect(result.content[0]?.text).toContain("att-generated-1");
-    expect(result.content[0]?.text).not.toMatch(/[A-Z]:[\\/]|\.vykor[\\/]images/i);
+    expect(result.content[0]?.text).toContain("attachment://att-generated-1/generated-image-1.png");
+    expect(result.content[0]?.text).not.toMatch(/\b[A-Z]:[\\/]|\.vykor[\\/]images/i);
     expect(result.metadata).toEqual({
       generatedImages: [{
         assetId: "att-generated-1",

@@ -6,6 +6,7 @@ import type { ReplaceTranscriptMessageInput, ReplaceTranscriptPartInput } from "
 import type { SessionMessagePartRecord, SessionMessageRecord } from "@vykor/domain-contracts/sessions";
 import { publicToolResult } from "@vykor/agent-contracts";
 import { publicTextFromParts } from "../../session/transcript-text.js";
+import { attachmentResourceUri } from "../attachments/tools/attachment-uri.js";
 
 type UserMessageContent = Extract<Message, { type: "user" }>["content"];
 
@@ -25,6 +26,7 @@ export interface AgentTranscript {
 export function buildAgentTranscript(
   messages: SessionMessageRecord[],
   parts: SessionMessagePartRecord[],
+  attachmentContentByMessageId: Readonly<Record<string, ContentBlock[]>> = {},
 ): AgentTranscript {
   const byMessage = new Map<string, SessionMessagePartRecord[]>();
   for (const part of parts) {
@@ -45,7 +47,13 @@ export function buildAgentTranscript(
     if (attachments.length > 0) attachmentsByMessageId[message.id] = attachments;
     if (message.role === "user") {
       const text = textFromParts(messageParts);
-      if (text.trim()) {
+      const attachmentContent = attachmentContentByMessageId[message.id];
+      if (attachmentContent?.length) {
+        output.push({ type: "user", content: [
+          ...(text.trim() ? [{ type: "text" as const, text }] : []),
+          ...attachmentContent,
+        ] });
+      } else if (text.trim()) {
         output.push({ type: "user", content: text,
           ...(messageParts.some((part) => part.type === "text" && part.metadata.compactRole === "boundary") ? { compactRole: "boundary" as const } : {}),
         });
@@ -67,7 +75,9 @@ export function buildAgentTranscript(
         name: part.toolName!,
         input: part.input ?? {},
       }));
-    const text = textFromParts(messageParts);
+    const text = [textFromParts(messageParts), ...attachments.map(attachment =>
+      `附件资源：${attachmentResourceUri(attachment.assetId, attachment.displayName)}；可通过 Read 重新读取，图片可作为 ImageGeneration 的 images。`,
+    )].filter(Boolean).join("\n");
     const reasoning = reasoningFromParts(messageParts);
     const reasoningReplay = reasoningReplayFromParts(messageParts);
     const reasoningSegments = messageParts

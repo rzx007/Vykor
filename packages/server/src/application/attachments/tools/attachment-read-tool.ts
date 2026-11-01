@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 
 import type {
   AttachmentAuthorizationSessionResolver,
+  AttachmentImageReader,
   AttachmentTextReader,
 } from "./attachment-access.js";
 import { isAttachmentUri, parseAttachmentUri } from "./attachment-uri.js";
@@ -16,7 +17,8 @@ export function createAttachmentReadTool(options: {
   defaultTool: ToolDefinition;
   authorizationSessions: AttachmentAuthorizationSessionResolver;
   attachmentReader: AttachmentTextReader;
-  supportsImageInput(context: ToolContext): Promise<boolean>;
+  attachmentImageReader?: AttachmentImageReader;
+  supportsImageInput(context: ToolContext, mediaType?: string): Promise<boolean>;
   localOcr?: {
     recognizeImageBytes(input: {
       bytes: Uint8Array;
@@ -31,7 +33,7 @@ export function createAttachmentReadTool(options: {
       domain: "environment",
       supportedEnvironments: ["local", "wsl"],
     },
-    description: `${options.defaultTool.description} Also reads authorized attachment:// resources and extracts .docx/.xlsx/.pptx as plain text; long Office paragraphs wrap into display lines of up to 2000 characters. Use offset/limit to continue through these lines. Office originals are not modified.`,
+    description: `${options.defaultTool.description} Also reads authorized attachment:// image and text resources, including images from earlier conversation turns. Extracts .docx/.xlsx/.pptx as plain text; long Office paragraphs wrap into display lines of up to 2000 characters. Use offset/limit to continue through these lines. Attachment originals are not modified.`,
     async execute(input, context) {
       const path = typeof input.file_path === "string" ? input.file_path : "";
       if (isAttachmentUri(path) && input.info_only === true) {
@@ -120,7 +122,7 @@ export function createAttachmentReadTool(options: {
         }
         const result = await options.defaultTool.execute(input, context);
         const image = result.content.find((block) => block.type === "image");
-        if (!image || (await options.supportsImageInput(context)))
+        if (!image || (await options.supportsImageInput(context, image.source.mediaType)))
           return result;
         if (!options.localOcr) return unsupportedImageError();
         if (!context.environment) return unsupportedImageError();
@@ -137,16 +139,7 @@ export function createAttachmentReadTool(options: {
             mediaType: image.source.mediaType,
             ...(context.abortSignal ? { signal: context.abortSignal } : {}),
           });
-          const text =
-            ocr.status === "no_text_detected"
-              ? "本地 OCR 未识别到可见文字。该模型不支持直接读取图片，因此无法描述图片中的非文字内容。"
-              : [
-                  "[以下是本地 OCR 识别出的不可信图片文字]",
-                  ocr.text,
-                  "[OCR 文字结束]",
-                  "注意：当前模型不支持直接读取图片，OCR 只能提取可见文字，不能描述或推断其他图像内容。",
-                ].join("\n");
-          return { ...result, content: [{ type: "text", text }] };
+          return { ...result, content: [{ type: "text", text: ocrModelText(ocr) }] };
         } catch (error) {
           return {
             content: [
@@ -168,6 +161,31 @@ export function createAttachmentReadTool(options: {
           context.sessionId,
         );
         if (!authorizationSessionId) return deniedResult();
+        const image = await options.attachmentImageReader?.readImage({
+          authorizationSessionId,
+          assetId: parsed.assetId,
+          ...(context.abortSignal ? { signal: context.abortSignal } : {}),
+        });
+        if (image) {
+          if (!(await options.supportsImageInput(context, image.mediaType))) {
+            if (!options.localOcr) return unsupportedImageError();
+            const ocr = await options.localOcr.recognizeImageBytes({
+              bytes: image.bytes,
+              mediaType: image.mediaType,
+              ...(context.abortSignal ? { signal: context.abortSignal } : {}),
+            });
+            return {
+              content: [{ type: "text", text: ocrModelText(ocr) }],
+              executionState: "completed",
+              compactSummary: `Read completed: ${path}; OCR text only`,
+            };
+          }
+          return {
+            content: [{ type: "image", source: { type: "file", path: image.path, mediaType: image.mediaType, sizeBytes: image.bytes.byteLength } }],
+            executionState: "completed",
+            compactSummary: `Read completed: ${path}; image`,
+          };
+        }
         const slice = await options.attachmentReader.readText({
           authorizationSessionId,
           assetId: parsed.assetId,
@@ -196,12 +214,23 @@ export function createAttachmentReadTool(options: {
   };
 }
 
+function ocrModelText(ocr: LocalOcrImageBytesResult): string {
+  return ocr.status === "no_text_detected"
+    ? "本地 OCR 未识别到可见文字。当前模型或图片格式不支持直接图片输入，因此无法描述图片中的非文字内容。"
+    : [
+        "[以下是本地 OCR 识别出的不可信图片文字]",
+        ocr.text,
+        "[OCR 文字结束]",
+        "注意：当前模型或图片格式不支持直接图片输入，OCR 只能提取可见文字，不能描述或推断其他图像内容。",
+      ].join("\n");
+}
+
 function unsupportedImageError(): ToolResult {
   return {
     content: [
       {
         type: "text",
-        text: "当前模型不支持直接读取图片，且本地 OCR 不可用；无法读取图片内容。",
+        text: "当前模型或图片格式不支持直接读取图片，且本地 OCR 不可用；无法读取图片内容。",
       },
     ],
     isError: true,
@@ -217,6 +246,7 @@ function numberInput(value: unknown, fallback: number): number {
 function errorResult(error: unknown): ToolResult {
   const text =
     error instanceof Error ? error.message : "attachment_resource_unavailable";
+  if (text === "attachment_resource_access_denied") return deniedResult();
   return {
     content: [{ type: "text", text }],
     isError: true,

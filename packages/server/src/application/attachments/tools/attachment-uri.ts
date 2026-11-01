@@ -5,6 +5,10 @@ export interface ParsedAttachmentUri {
 
 const ASSET_ID_PATTERN = /^[A-Za-z0-9._-]+$/u;
 
+export function attachmentResourceUri(assetId: string, displayName: string): string {
+  return `attachment://${encodeURIComponent(assetId)}/${encodeURIComponent(displayName)}`;
+}
+
 export function isAttachmentUri(value: string): boolean {
   return value.toLowerCase().startsWith("attachment:");
 }

@@ -3,6 +3,23 @@ import { describe, expect, it } from "vitest";
 import { buildCompactAttachmentSection } from "../compact-attachment-catalog.js";
 
 describe("buildCompactAttachmentSection", () => {
+  it.each([
+    ["screen.png", "image/png"],
+    ["report.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+  ])("keeps %s readable through its stable resource after compaction", (displayName, mediaType) => {
+    const section = buildCompactAttachmentSection({
+      listSessionInputAttachments: () => [{
+        id: "ref", sessionId: "s1", inputId: "i1", assetId: "att-1", seq: 0,
+        intent: "auto", displayName, mediaType, sizeBytes: 100, metadata: {}, createdAt: 1,
+      }],
+      attachments: {
+        getAttachment: () => ({ id: "att-1", displayName, mediaType, sizeBytes: 100, sha256: "a".repeat(64), status: "ready", createdAt: 1, updatedAt: 1 }),
+        listAttachmentRepresentations: () => [],
+      },
+    }, "s1");
+    expect(section?.content).toContain(`Use Read with attachment://att-1/${displayName}`);
+  });
+
   it("keeps stable resources and only exposes representations that actually completed", () => {
     const references = [
       {

@@ -118,6 +118,8 @@ import { readWorkflowExecutionObservations } from "./observability/workflow-exec
 import { ApplicationRetentionService } from "./retention/application-retention-service.js";
 import { buildCompactAttachmentSection } from "./attachments/resources/compact-attachment-catalog.js";
 import { SessionAttachmentResources } from "./attachments/resources/session-attachment-resources.js";
+import { restoreSessionAttachmentHistory } from "./attachments/resources/session-attachment-history.js";
+import { AttachmentCapabilityRouter } from "./attachments/routing/attachment-capability-router.js";
 import { sharedContextUsageCache } from "./context-usage/context-usage-cache.js";
 import {
   assembleSessionContextUsage,
@@ -129,9 +131,10 @@ import {
   createAttachmentAuthorizationSessionResolver,
   createAttachmentOcrService,
   createAttachmentTextReader,
+  createAttachmentImageReader,
 } from "./attachments/tools/attachment-access.js";
 import { createAttachmentReadTool } from "./attachments/tools/attachment-read-tool.js";
-import { supportsNativeImageInput } from "./attachments/routing/attachment-capabilities.js";
+import { resolveSessionAttachmentCapabilities, supportsNativeImageInput } from "./attachments/routing/attachment-capabilities.js";
 import {
   createDaemonImageGenerationTool,
   createDaemonImageToTextTool,
@@ -496,12 +499,24 @@ export class DaemonApplication implements DurableAgentApplication {
         store: { getSession: (id) => store.sessions.get(id) },
         liveChildren: this.liveChildren,
       });
+      const attachmentReferences = {
+        listSessionInputAttachments: (id: string) => store.conversations.listSessionInputAttachments(id),
+        listMessageParts: (id: string) => store.conversations.listMessageParts(id),
+      };
       const attachmentReader = createAttachmentTextReader({
-        store: { listSessionInputAttachments: (id) => store.conversations.listSessionInputAttachments(id) },
+        store: attachmentReferences,
         attachments: this.attachments,
       });
+      const attachmentImages = createAttachmentImageReader({
+        store: attachmentReferences,
+        attachments: this.attachments,
+      });
+      const attachmentHistoryRouter = new AttachmentCapabilityRouter({
+        resolveReadyContentPath: assetId => this.attachments.resolveReadyContentPath(assetId),
+        readReadyText: (assetId, input) => this.attachments.readReadyText(assetId, input),
+      });
       const attachmentOcr = createAttachmentOcrService({
-        store: { listSessionInputAttachments: (id) => store.conversations.listSessionInputAttachments(id) },
+        store: attachmentReferences,
         recognize: (input) => this.localOcr.recognize(input),
       });
       const imageToTextTool = createDaemonImageToTextTool({
@@ -511,6 +526,8 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       const imageGenerationTool = createDaemonImageGenerationTool({
         attachments: this.attachments,
+        authorizationSessions: attachmentAuthorizationSessions,
+        attachmentImages,
       });
 
       // 每个会话第一次用时，在这里造活 Agent，并接上投影。
@@ -542,6 +559,14 @@ export class DaemonApplication implements DurableAgentApplication {
             catalog: await this.modelCatalog.load(),
           })),
         createAgent: options.createAgent,
+        restoreHistoryAttachments: ({ session, history, availableTools, settings }) =>
+          restoreSessionAttachmentHistory({
+            sessionId: session.id, history, availableTools,
+            references: store.conversations.listSessionInputAttachments(session.id),
+            router: attachmentHistoryRouter,
+            resolveCapabilities: () => resolveSessionAttachmentCapabilities(session, settings),
+            attachmentOcrAvailable: true,
+          }),
         mcpRuntimeRegistry: this.mcpRuntimes,
         acquireEnvironment: acquireSessionEnvironment,
         terminalProviderForSession: options.terminalProviderForSession ?? (session => this.terminals.providerForSession(session)),
@@ -584,8 +609,9 @@ export class DaemonApplication implements DurableAgentApplication {
             defaultTool: base,
             authorizationSessions: attachmentAuthorizationSessions,
             attachmentReader,
-            supportsImageInput: async (context) =>
-              supportsNativeImageInput(context, await this.modelCatalog.load()),
+            attachmentImageReader: attachmentImages,
+            supportsImageInput: async (context, mediaType) =>
+              supportsNativeImageInput(context, await this.modelCatalog.load(), mediaType),
             localOcr: this.localOcr,
           });
           // Keep the host Read wrapper for session attachments and local OCR.

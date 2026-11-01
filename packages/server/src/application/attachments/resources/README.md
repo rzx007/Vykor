@@ -4,7 +4,11 @@
 
 ## 入口与流程
 
-`SessionAttachmentResources` 查询本会话可用附件；`buildCompactAttachmentSection()` 生成压缩上下文中的附件目录。
+`restoreSessionAttachmentHistory()` 在 daemon loader 新建会话执行实例时，核对历史消息与数据库中的会话、原输入附件引用，再通过 `AttachmentCapabilityRouter` 按当前模型和工具能力恢复内容。恢复结果由 `buildAgentTranscript()` 合并到对应的用户消息；编辑重发、空闲回收、服务重启共用这个入口。
+
+每个附件都保留稳定的 `attachment://` 地址，供 Read 重读及 ImageGeneration 使用。单个附件丢失、权限不符或当前能力不支持时，保留明确的资源状态并继续恢复其他附件；不复用数据库中保存的本地路径。
+
+`SessionAttachmentResources` 管理运行期间的临时只读文本文件；`buildCompactAttachmentSection()` 生成压缩上下文中的附件目录，图片和 Office 文件也保留按需读取入口。
 
 ## 状态归属
 
@@ -16,6 +20,7 @@
 | --- | --- |
 | [compact-attachment-catalog.ts](./compact-attachment-catalog.ts) | `CompactAttachmentAssetQueries`、`CompactAttachmentSectionStore`、`CompactAttachmentSectionOptions`、`buildCompactAttachmentSection` |
 | [session-attachment-resources.ts](./session-attachment-resources.ts) | `SessionAttachmentResourcesOptions`、`SessionAttachmentResources` |
+| [session-attachment-history.ts](./session-attachment-history.ts) | `restoreSessionAttachmentHistory`，按会话权限和当前能力恢复历史附件 |
 
 ## 测试与维护
 

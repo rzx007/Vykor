@@ -5,6 +5,7 @@ import {
   modelInputCapabilities,
   resolveEffectiveImageSupport,
   resolveRuntimeAttachmentCapabilities,
+  supportsNativeImageInput,
 } from "../attachment-capabilities.js";
 
 afterEach(() => {
@@ -12,6 +13,20 @@ afterEach(() => {
 });
 
 describe("attachment input capabilities", () => {
+  it.each([
+    ["image/png", "native", true],
+    ["image/bmp", "native", false],
+    ["image/png", "unsupported", false],
+  ] as const)("checks %s against the model's %s support and the provider media types", (mediaType, imageInputSupport, expected) => {
+    expect(supportsNativeImageInput({
+      requestConfiguration: { model: "custom-vision", provider: "custom" },
+      settings: { customProviders: [{
+        id: "custom", displayName: "Custom", baseUrl: "https://fixture.invalid/v1", apiFormat: "openai",
+        models: [{ id: "custom-vision", displayName: "Vision", imageInputSupport }],
+      }] },
+    }, {}, mediaType)).toBe(expected);
+  });
+
   it("maps explicit model input modalities without guessing from the model name", () => {
     expect(modelInputCapabilities({ modalities: { input: ["text", "image"] } }))
       .toEqual({ image: "native" });

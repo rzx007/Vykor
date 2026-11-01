@@ -28,6 +28,7 @@ import type {
 import type {
   AgentEffects,
   AgentEventListener,
+  ContentBlock,
   ToolDefinition,
 } from "@vykor/agent-contracts";
 import type { McpRuntimeRegistry } from "@vykor/mcp";
@@ -131,6 +132,10 @@ export interface DaemonAgentLoaderOptions {
   /** Returns the durable record so a warm Agent can read a later selection. */
   getSession?: (sessionId: string) => SessionRecord | undefined;
   createAgent?: CreateDaemonAgent;
+  restoreHistoryAttachments?(context: Omit<LoadDaemonAgentContext, "parts"> & {
+    availableTools: readonly string[];
+    settings?: Settings;
+  }): Promise<Record<string, ContentBlock[]>>;
   requestPermission?: AgentEffects["requestPermission"];
   askUserPrompt?: AgentEffects["askUserPrompt"];
   schedules?: AgentScheduleEffects;
@@ -379,7 +384,11 @@ export function createDaemonAgentLoader(
     try {
       // 重启 daemon / 热加载 session 时，内存 Agent 是空的；必须先灌历史再对外暴露，
       // 否则下一句 prompt 会丢上下文。
-      const transcript = buildAgentTranscript(history, parts);
+      const attachmentContent = await options.restoreHistoryAttachments?.({
+        session, history, settings,
+        availableTools: (hosted.host?.inspect().tools ?? []).map(tool => tool.name),
+      });
+      const transcript = buildAgentTranscript(history, parts, attachmentContent);
       agent.loadHistory(transcript.messages);
       // Agent 有了，投影才能建。先把纸箱里攒的事件按顺序喂给它。
       eventSink = options.createEventSink?.(agent, session);

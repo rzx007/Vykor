@@ -2,6 +2,11 @@ import type { ToolDefinition } from "@vykor/agent-contracts";
 import { sniffAttachmentMediaType } from "@vykor/services";
 
 import type { AttachmentService } from "../attachments/attachment-service.js";
+import type {
+  AttachmentAuthorizationSessionResolver,
+  AttachmentImageReader,
+} from "../attachments/tools/attachment-access.js";
+import { attachmentResourceUri, isAttachmentUri, parseAttachmentUri } from "../attachments/tools/attachment-uri.js";
 import {
   downloadRemoteImage as defaultDownloadRemoteImage,
   streamOf,
@@ -16,6 +21,8 @@ const RATIO_VALUES = ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"]
 
 export interface DaemonImageGenerationToolOptions {
   attachments: Pick<AttachmentService, "limits" | "import" | "delete">;
+  authorizationSessions?: AttachmentAuthorizationSessionResolver;
+  attachmentImages?: AttachmentImageReader;
   downloadRemoteImage?: (
     url: URL,
     signal?: AbortSignal,
@@ -41,7 +48,7 @@ export function createDaemonImageGenerationTool(
       network: true,
     },
     description:
-      "Generate or edit an image with Agnes Image 2.5 Flash. Use a text prompt for text-to-image, and optional reference image URLs or data URIs for image-to-image or multi-image composition. Returns durable image attachments.",
+      "Generate or edit an image with Agnes Image 2.5 Flash. Use a text prompt for text-to-image, and optional authorized attachment:// references, image URLs or data URIs for image-to-image or multi-image composition. Use attachment:// references from conversation history to edit previously uploaded or generated images. Returns durable image attachments.",
     inputSchema: {
       type: "object",
       properties: {
@@ -59,7 +66,7 @@ export function createDaemonImageGenerationTool(
         images: {
           type: "array",
           items: { type: "string" },
-          description: "Reference images as public HTTPS URLs or data:image/...;base64,... URIs.",
+          description: "Reference images as authorized conversation attachment:// URIs, public HTTPS URLs, or data:image/...;base64,... URIs. Do not pass local file paths.",
         },
         model: {
           type: "string",
@@ -88,6 +95,44 @@ export function createDaemonImageGenerationTool(
       }
       const baseUrl = optionalString(process.env.AGNES_IMAGE_BASE_URL) ?? DEFAULT_BASE_URL;
 
+      // Resolve against durable conversation ownership on every call, including after
+      // an Agent rebuild. Provider requests never receive private Blob paths or URIs.
+      const referenceImages: string[] = [];
+      try {
+        for (const reference of images.value) {
+          context.abortSignal?.throwIfAborted();
+          if (!isAttachmentUri(reference)) {
+            referenceImages.push(reference);
+            continue;
+          }
+          const authorizationSessionId = context.sessionId
+            ? options.authorizationSessions?.resolve(context.sessionId)
+            : undefined;
+          if (!authorizationSessionId || !options.attachmentImages) {
+            throw new Error("attachment_resource_access_denied");
+          }
+          const { assetId } = parseAttachmentUri(reference);
+          const image = await options.attachmentImages.readImage({
+            authorizationSessionId,
+            assetId,
+            ...(context.abortSignal ? { signal: context.abortSignal } : {}),
+          });
+          if (!image) throw new Error("attachment_image_required");
+          context.abortSignal?.throwIfAborted();
+          referenceImages.push(`data:${image.mediaType};base64,${Buffer.from(image.bytes).toString("base64")}`);
+        }
+      } catch {
+        if (context.abortSignal?.aborted) {
+          return {
+            content: [{ type: "text", text: "ImageGeneration interrupted before requesting image generation." }],
+            isError: true,
+            failureKind: "interrupted",
+            executionState: "not_started",
+          };
+        }
+        return policyError("ImageGeneration cannot use this attachment: it is unavailable, not an image, or outside this conversation.");
+      }
+
       const generationAbortScope = createToolAbortScope(context.abortSignal, 1980_000);
       try {
         const response = await fetch(imagesGenerationsUrl(baseUrl), {
@@ -98,7 +143,7 @@ export function createDaemonImageGenerationTool(
             prompt: prompt.value,
             size: size.value,
             ratio: ratio.value,
-            images: images.value,
+            images: referenceImages,
           })),
           signal: generationAbortScope.signal,
         });
@@ -210,7 +255,7 @@ export function createDaemonImageGenerationTool(
 
         const revisedPrompt = json.data[0]?.revised_prompt;
         let text = generatedImages
-          .map((image, index) => `Generated image ${index + 1}: attachment ${image.assetId}`)
+          .map((image, index) => `Generated image ${index + 1}: ${attachmentResourceUri(image.assetId, image.displayName)} (attachment ${image.assetId})`)
           .join("\n");
         if (revisedPrompt) text += `\nRevised prompt: ${revisedPrompt}`;
         return {
@@ -294,9 +339,22 @@ function readEnum<T extends string>(
 function readImages(value: unknown): { value: string[] } | { error: string } {
   if (value === undefined) return { value: [] };
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim())) {
-    return { error: "images must be an array of image URLs or data URIs." };
+    return { error: "images must be an array of attachment references, HTTPS image URLs or image data URIs." };
   }
-  return { value: value.map((item) => item.trim()) };
+  const images: string[] = value.map((item) => item.trim());
+  try {
+    for (const image of images) {
+      if (isAttachmentUri(image)) {
+        parseAttachmentUri(image);
+      } else if (!/^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/]+={0,2}$/i.test(image)) {
+        const url = new URL(image);
+        if (url.protocol !== "https:" || url.username || url.password) throw new Error("unsupported image reference");
+      }
+    }
+  } catch {
+    return { error: "images accepts valid attachment:// references, HTTPS image URLs or base64 image data URIs; local paths are not supported." };
+  }
+  return { value: images };
 }
 
 function policyError(text: string) {
@@ -304,6 +362,7 @@ function policyError(text: string) {
     content: [{ type: "text" as const, text }],
     isError: true,
     failureKind: "policy" as const,
+    executionState: "not_started" as const,
   };
 }
 

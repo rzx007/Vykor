@@ -47,6 +47,23 @@ function harness() {
 }
 
 describe("AttachmentCapabilityRouter", () => {
+  it("keeps a stable readable and editable resource beside native images without OCR", async () => {
+    const { router } = harness();
+    const result = await router.route({
+      text: "inspect",
+      attachments: [attachment("screen", 0, { displayName: "界面 shot.png" })],
+      modelCapabilities: { image: "native" },
+      providerCapabilities: { image: "native", imageMediaTypes: ["image/png"] },
+      availableTools: ["Read", "ImageGeneration"],
+    });
+    const hints = result.content.filter(block => block.type === "text").map(block => block.text).join("\n");
+    expect(hints).toContain("attachment://screen/%E7%95%8C%E9%9D%A2%20shot.png");
+    expect(hints).toContain("Read");
+    expect(hints).toContain("ImageGeneration");
+    expect(hints).not.toContain("D:/daemon/blobs");
+    expect(result.content.some(block => block.type === "image")).toBe(true);
+  });
+
   it("keeps modern Office uploads lazy and requires Read", async () => {
     const {router,readReadyText,resolveReadyContentPath}=harness();
     const input={text:"read",attachments:[attachment("office",0,{displayName:"report.docx",mediaType:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"})],modelCapabilities:{image:"unsupported" as const},providerCapabilities:{image:"unsupported" as const},availableTools:["Read"]};
@@ -302,7 +319,9 @@ describe("AttachmentCapabilityRouter", () => {
       content: [
         { type: "text", text: "compare" },
         { type: "image", source: { path: "D:/daemon/blobs/first" } },
+        { type: "text", text: expect.stringContaining("attachment://first/first.png") },
         { type: "image", source: { path: "D:/daemon/blobs/second" } },
+        { type: "text", text: expect.stringContaining("attachment://second/second.png") },
       ],
     });
   });

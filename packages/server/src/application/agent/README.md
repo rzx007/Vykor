@@ -31,7 +31,7 @@ Daemon 为根会话启用 30 分钟空闲回收，每 30 秒检查一次；独�
 | 文件 | 主要接口或用途 |
 | --- | --- |
 | [agent-pool.ts](./agent-pool.ts) | `AgentPoolSessionQueries`、`AgentPoolContext`、`AgentPool` |
-| [agent-transcript.ts](./agent-transcript.ts) | `AgentTranscriptAttachment`、`AgentTranscript`、`buildAgentTranscript`、`agentMessagesToTranscript` |
+| [agent-transcript.ts](./agent-transcript.ts) | `AgentTranscriptAttachment`、`AgentTranscript`、`buildAgentTranscript`、`agentMessagesToTranscript`；历史加载时合并附件资源服务重新解析的内容，不直接信任持久化本地路径 |
 | [daemon-agent-event-projector.ts](./daemon-agent-event-projector.ts) | `DaemonAgentEventProjectorContext`、`DaemonAgentEventProjector` |
 | [index.ts](./index.ts) | 汇总本分类的公开接口 |
 | [live-child-agent-directory.ts](./live-child-agent-directory.ts) | `LiveChildAgentDirectory` |

@@ -3564,7 +3564,7 @@
     },
     {
       "path": "packages/server/src/application/agent/agent-transcript.ts",
-      "line": 118,
+      "line": 128,
       "text": "    value.kind === \"plugin_ui_action\" || value.kind === \"plugin_app_action\" ||",
       "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
     },
@@ -3582,25 +3582,25 @@
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 181,
+      "line": 184,
       "text": "  readonly pluginUiHistory?: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 234,
+      "line": 237,
       "text": "  readonly pluginUiHistory: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 419,
+      "line": 422,
       "text": "      this.pluginUiHistory = new PluginUiHistoryService({ store });",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 1072,
+      "line": 1098,
       "text": "        recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },

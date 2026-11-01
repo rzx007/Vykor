@@ -1,5 +1,7 @@
 import type { CompactContextSection } from "@vykor/core";
 import type { AttachmentAssetRecord, AttachmentRepresentationRecord, SessionInputAttachmentRecord } from "@vykor/domain-contracts/attachments";
+import { officeFormat, OFFICE_MEDIA_TYPES } from "@vykor/domain-contracts/attachments";
+import { attachmentResourceUri } from "../tools/attachment-uri.js";
 
 export interface CompactAttachmentAssetQueries {
   getAttachment(
@@ -71,7 +73,7 @@ function formatReference(
   const access = !available
     ? "The original attachment is unavailable; do not claim to have read it."
     : reference.mediaType.startsWith("image/")
-      ? "Use ImageToText to inspect this image; no image contents are known yet."
+      ? `Use Read with ${resourceUri} to inspect this image under the current model capabilities. Use ImageToText to inspect this image's visible text only. Use this resource URI in ImageGeneration images when editing; no image contents are known yet.`
       : isReadableText(reference)
         ? `Use Read with ${resourceUri} to inspect the text.`
         : "No supported inspection tool is available; do not claim to have read it.";
@@ -93,14 +95,12 @@ function formatReference(
 }
 
 function isReadableText(reference: SessionInputAttachmentRecord): boolean {
+  const format = officeFormat(reference.displayName);
   return reference.mediaType.startsWith("text/") ||
+    (format !== undefined && reference.mediaType === OFFICE_MEDIA_TYPES[format]) ||
     reference.intent === "tool_resource" ||
     ["application/json", "application/xml", "application/yaml", "application/toml"]
       .includes(reference.mediaType);
-}
-
-function attachmentResourceUri(assetId: string, displayName: string): string {
-  return `attachment://${assetId}/${encodeURIComponent(displayName)}`;
 }
 
 function safeValue(value: string): string {

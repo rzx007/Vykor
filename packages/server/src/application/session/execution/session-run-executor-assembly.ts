@@ -1,14 +1,12 @@
 import { discoverVykorExtensions } from "@vykor/agent-runtime";
 import type { Settings } from "@vykor/host-config";
-import { readSessionRuntimeConfig } from "../configuration/runtime-configuration.js";
 import type { SessionRecord } from "@vykor/domain-contracts/sessions";
 import type { SessionUserInputItem } from "@vykor/domain-contracts/inputs";
 import type { SessionStore } from "@vykor/services";
 
 import type { AttachmentService } from "../../attachments/attachment-service.js";
 import { AttachmentCapabilityRouter } from "../../attachments/routing/attachment-capability-router.js";
-import { resolveRuntimeAttachmentCapabilities } from "../../attachments/routing/attachment-capabilities.js";
-import { createDefaultModelService } from "../../default-services/models/model-service.js";
+import { resolveSessionAttachmentCapabilities } from "../../attachments/routing/attachment-capabilities.js";
 import { conversationContextCatalog } from "../transcript/session-conversation-context.js";
 import { materializeSessionInput } from "../interactions/session-input-materializer.js";
 import { SessionRunExecutor, type SessionRunExecutorContext } from "./session-run-executor.js";
@@ -60,12 +58,7 @@ export function assembleSessionRunExecutor(options: SessionRunExecutorAssemblyOp
     routeAttachments: (input) => attachmentRouter.route(input),
     resolveCapabilities: async (session) => {
       const settings = await options.resolveSessionSettings(session.cwd);
-      const modelProviders = await createDefaultModelService(settings ? { current: settings } : undefined).list();
-      return resolveRuntimeAttachmentCapabilities({
-        runtime: readSessionRuntimeConfig(session, settings?.provider ? { provider: settings.provider } : undefined),
-        settings,
-        modelProviders,
-      });
+      return resolveSessionAttachmentCapabilities(session, settings);
     },
   });
   return { executor, materializeSteerInput };

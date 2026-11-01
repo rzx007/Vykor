@@ -4,6 +4,21 @@ import { CompactService } from "@vykor/core";
 import { agentMessagesToTranscript, buildAgentTranscript } from "../agent-transcript.js";
 
 describe("agent transcript codec", () => {
+  it("keeps generated images discoverable through stable resource URIs after rebuilding", () => {
+    const transcript = buildAgentTranscript([
+      { id: "generated", sessionId: "s1", seq: 1, role: "assistant", metadata: {}, createdAt: 1, updatedAt: 1 },
+    ], [{
+      id: "generated-image", sessionId: "s1", messageId: "generated", seq: 1,
+      type: "attachment", status: "completed", assetId: "generated-image", intent: "tool_resource",
+      displayName: "result.png", mediaType: "image/png", sizeBytes: 4,
+      metadata: { source: "image_generation", localPath: "never-send-this" }, createdAt: 1, updatedAt: 1,
+    }]);
+    expect(transcript.messages).toContainEqual({
+      type: "assistant", content: expect.stringContaining("attachment://generated-image/result.png"),
+    });
+    expect(JSON.stringify(transcript.messages)).not.toContain("never-send-this");
+  });
+
   it("round trips host result references while rejecting unversioned legacy metadata", () => {
     const ref = { id: "result_opaque", toolName: "Read", totalChars: 300_000 };
     const input: any[] = [

@@ -8,9 +8,20 @@ import {
   providerInputCapabilities,
 } from "@vykor/api";
 import type { Settings, InputSupport, ModelInputCapabilities } from "@vykor/host-config";
-import type { SessionRuntimeConfig } from "@vykor/domain-contracts/sessions";
+import type { SessionRecord, SessionRuntimeConfig } from "@vykor/domain-contracts/sessions";
 import type { ModelProviderInfo } from "../../settings-api.js";
 import { readCatalogProvider } from "../../default-services/models/catalog-provider-mapping.js";
+import { createDefaultModelService } from "../../default-services/models/model-service.js";
+import { readSessionRuntimeConfig } from "../../session/configuration/runtime-configuration.js";
+
+/** Both fresh inputs and restored history use the same current model/provider capabilities. */
+export async function resolveSessionAttachmentCapabilities(session: SessionRecord, settings?: Settings) {
+  return resolveRuntimeAttachmentCapabilities({
+    runtime: readSessionRuntimeConfig(session, settings?.provider ? { provider: settings.provider } : undefined),
+    settings,
+    modelProviders: await createDefaultModelService(settings ? { current: settings } : undefined).list(),
+  });
+}
 
 export function supportsNativeImageInput(
   context: {
@@ -18,6 +29,7 @@ export function supportsNativeImageInput(
     settings?: Pick<Settings, "provider" | "customProviders">;
   },
   catalog: ModelsDevCatalog,
+  mediaType?: string,
 ): boolean {
   const request = context.requestConfiguration;
   if (!request) return false;
@@ -34,6 +46,8 @@ export function supportsNativeImageInput(
           ? "anthropic"
           : undefined;
   if (!backend) return false;
+  const providerCapabilities = providerInputCapabilities(backend);
+  if (mediaType && !providerCapabilities.imageMediaTypes.includes(mediaType)) return false;
 
   const provider = providerName ? readCatalogProvider(catalog, providerName) : undefined;
   const model = Object.entries(provider?.models ?? {}).find(([id, value]) =>
@@ -45,7 +59,7 @@ export function supportsNativeImageInput(
     : normalizeInputSupport(customModel?.imageInputSupport);
   return resolveEffectiveImageSupport(
     { image: modelSupport },
-    providerInputCapabilities(backend),
+    providerCapabilities,
   ) === "native";
 }
 
