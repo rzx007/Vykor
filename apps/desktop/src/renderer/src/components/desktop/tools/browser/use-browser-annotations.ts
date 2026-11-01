@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react"
-import type { BrowserAnnotationSnapshot } from "@shared/browser-annotation"
+import type { BrowserAnnotationRecord, BrowserAnnotationSnapshot } from "@shared/browser-annotation"
 
-export type BrowserAnnotationHookOptions = { tabId: string; visible: boolean; ready: boolean }
+export type BrowserAnnotationHookOptions = {
+  tabId: string; visible: boolean; ready: boolean
+  onSaved?(record: BrowserAnnotationRecord): void
+  onRemoved?(annotationId: string): void
+}
 export type BrowserAnnotationUi = {
   snapshot: BrowserAnnotationSnapshot | null; draft: string; pending: boolean; error: string | null
   selection: BrowserAnnotationSnapshot["selection"]; viewedAnnotationId: string | null
@@ -117,8 +121,15 @@ export function useBrowserAnnotations(options: BrowserAnnotationHookOptions): Br
   }
   async function save(): Promise<void> {
     if (!current.current?.selection || !draftRef.current.trim()) return
-    const result = await perform(page => window.desktop.browser.addAnnotation({ tabId: options.tabId, pageRevision: page.pageRevision,
-      selectionId: page.selection!.selectionId, comment: draftRef.current }))
+    // Capture this operation's owner before awaiting; a different chat can render while IPC is pending.
+    const onSaved = options.onSaved
+    const result = await perform(async page => {
+      const previousIds = new Set(page.annotations.map(value => value.record.id))
+      const next = await window.desktop.browser.addAnnotation({ tabId: options.tabId, pageRevision: page.pageRevision,
+        selectionId: page.selection!.selectionId, comment: draftRef.current })
+      for (const { record } of next.annotations) if (!previousIds.has(record.id)) onSaved?.(record)
+      return next
+    })
     if (result) { setDraft(""); draftRef.current = ""; setEditing(false); setViewed(null) }
   }
   async function focus(annotationId: string): Promise<void> {
@@ -126,7 +137,12 @@ export function useBrowserAnnotations(options: BrowserAnnotationHookOptions): Br
     if (result) { setViewed(annotationId); setEditing(false); setListOpen(true) }
   }
   async function remove(annotationId: string): Promise<void> {
-    const result = await perform(page => window.desktop.browser.removeAnnotation({ tabId: options.tabId, pageRevision: page.pageRevision, annotationId }))
+    const onRemoved = options.onRemoved
+    const result = await perform(async page => {
+      const next = await window.desktop.browser.removeAnnotation({ tabId: options.tabId, pageRevision: page.pageRevision, annotationId })
+      onRemoved?.(annotationId)
+      return next
+    })
     if (result && viewedAnnotationId === annotationId) setViewed(null)
   }
   function cancelEditor(): void {

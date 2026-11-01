@@ -1,5 +1,5 @@
 import { pluginAppModelContexts } from "@renderer/components/desktop/shell/plugin-apps/plugin-app-model-context"
-import { captureBrowserAnnotationContext, stripBrowserAnnotationContext } from "@renderer/components/desktop/tools/browser/browser-prompt-context"
+import { formatBrowserAnnotationContext, readBrowserAnnotationContext, stripBrowserAnnotationContext } from "@renderer/components/desktop/tools/browser/browser-annotation-context"
 import { errorMessage } from "./error-state"
 import { createPromptSubmissionSender } from "./prompt-submission"
 import { markComposerSessionTransient } from "./composer-recovery"
@@ -60,6 +60,9 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
         markComposerSessionTransient(options.target.sessionId)
       if (sessionId && get().pendingModeChanges[sessionId]) return
       const appContexts = pluginAppModelContexts.forSession(sessionId ?? null)
+      const browserAnnotationContext = formatBrowserAnnotationContext(
+        get().composerDraftsByScope[`session:${sessionId}`]?.browserAnnotations ?? []
+      )
       const attachmentDrafts = [...(options?.attachments ?? [])]
       if (!sessionId || attachmentDrafts.some((attachment) => attachment.status !== "ready")) return
       const attachments = attachmentDrafts.flatMap((attachment) =>
@@ -77,7 +80,7 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       )
       if (
         attachments.length !== attachmentDrafts.length ||
-        (!hasMeaningfulItems(items) && attachments.length === 0 && appContexts.length === 0)
+        (!hasMeaningfulItems(items) && attachments.length === 0 && appContexts.length === 0 && !browserAnnotationContext)
       ) {
         return
       }
@@ -87,6 +90,7 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       const matching = Object.values(runtime.pendingPromptSubmissions).find(
         (submission) =>
           submission.phase !== "accepted" &&
+          (submission.browserAnnotationContext ?? null) === browserAnnotationContext &&
           submission.content === prompt &&
           JSON.stringify(submission.pluginAppContextIds ?? []) ===
             JSON.stringify(appContexts.map((entry) => entry.id)) &&
@@ -99,6 +103,7 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
         return
       }
       const submission: PendingPromptSubmission = {
+        browserAnnotationContext,
         id: globalThis.crypto.randomUUID(),
         sessionId,
         content: prompt,
@@ -137,23 +142,27 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
         : undefined
       const items = stripBrowserAnnotationContext(document.items, sourceInput?.items)
       const prompt = selectComposerDocumentText({ ...document, items })
+      const sourceText = selectComposerDocumentText(composerDocument(sourceInput?.items ?? document.items))
+      const sourceContext = readBrowserAnnotationContext(sourceText)
+      const browserAnnotationContext = sourceContext ? sourceText.slice(sourceContext.text.length) : null
       const attachments = [...(sourceInput?.attachments ?? [])]
         .sort((left, right) => left.seq - right.seq)
         .map(({ assetId, intent, displayName }) => ({ assetId, intent, displayName }))
       if (
-        (!hasMeaningfulItems(items) && attachments.length === 0) ||
+        (!hasMeaningfulItems(items) && attachments.length === 0 && !browserAnnotationContext) ||
         !sourceMessageId ||
         !sessionId
       )
         return
 
       const runtime = getSessionRuntime(current, sessionId)
-      let edit: PendingPromptEdit =
+      const edit: PendingPromptEdit =
         runtime.pendingPromptEdit?.sourceMessageId === sourceMessageId &&
         sameInputItems(runtime.pendingPromptEdit.items, items) &&
         sameAttachmentSnapshot(runtime.pendingPromptEdit.attachments, attachments)
           ? runtime.pendingPromptEdit
           : {
+              browserAnnotationContext,
               id: globalThis.crypto.randomUUID(),
               sessionId,
               sourceMessageId,
@@ -183,13 +192,6 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
 
       async function submitEdit(sessionId: string): Promise<void> {
         try {
-          if (edit.browserAnnotationContext === undefined) {
-            const capturing = captureBrowserAnnotationContext(`session:${sessionId}`)
-            const browserAnnotationContext = capturing ? await capturing : null
-            if (get().sessionRuntimes[sessionId]?.pendingPromptEdit?.id !== edit.id) return
-            edit = { ...edit, browserAnnotationContext }
-            replaceRuntime(sessionId, runtime => ({ ...runtime, pendingPromptEdit: edit }))
-          }
           await window.desktop.sessions.editLatestPrompt({
             id: edit.id,
             sessionId,

@@ -6,6 +6,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { Composer } from "../composer"
 import type { ComposerPickerItem } from "../composer-picker"
 import { composerDocument } from "@renderer/stores/desktop-session/composer-document"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session/store"
+import type { BrowserAnnotationRecord } from "@shared/browser-annotation"
 
 vi.mock("@tanstack/react-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@tanstack/react-router")>()),
@@ -28,6 +30,75 @@ const models = [
   },
   { id: "other-model", label: "另一个模型", provider: "本地", providerName: "local" },
 ]
+
+it("does not carry an unfinished annotation edit into another composer scope", async () => {
+  const state = useDesktopSessionStore.getState()
+  const previousDrafts = state.composerDraftsByScope
+  const record: BrowserAnnotationRecord = {
+    id: "shared-annotation",
+    pageUrl: "https://example.test",
+    target: "提交",
+    selector: "#submit",
+    locatorKind: "unique-id",
+    tagName: "button",
+    role: "button",
+    name: "提交",
+    comment: "第一份意见",
+  }
+  state.putBrowserAnnotation("session:annotation-a", record)
+  state.putBrowserAnnotation("session:annotation-b", { ...record, comment: "第二份意见" })
+  async function renderScope(scope: string) {
+    await act(async () =>
+      root.render(
+        <Composer
+          id={`native-${scope}`}
+          composerScope={scope}
+          draft={composerDocument([])}
+          sending={false}
+          models={models}
+          selectedModel="test-model"
+          selectedProvider="local"
+          modelLabel="测试模型"
+          permissionMode="ask"
+          effort={null}
+          onDraftChange={vi.fn()}
+          onSubmit={onSubmit}
+          onSelectModel={onSelectModel}
+          onSelectPermissionMode={vi.fn()}
+          onSelectEffort={onSelectEffort}
+        />
+      )
+    )
+  }
+  try {
+    await renderScope("session:annotation-a")
+    const trigger = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
+      button.textContent?.includes("条批注")
+    )!
+    await act(async () => trigger.click())
+    await act(async () =>
+      document.querySelector<HTMLButtonElement>('[aria-label="编辑批注 1"]')!.click()
+    )
+    const textarea = document.querySelector("textarea")!
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(
+        textarea,
+        "尚未保存的第一份意见"
+      )
+      textarea.dispatchEvent(new Event("input", { bubbles: true }))
+    })
+    await renderScope("session:annotation-b")
+    expect(document.querySelector("textarea")).toBeNull()
+    expect(
+      useDesktopSessionStore.getState().composerDraftsByScope["session:annotation-b"]
+        ?.browserAnnotations?.[0]?.comment
+    ).toBe("第二份意见")
+  } finally {
+    await act(async () =>
+      useDesktopSessionStore.setState({ composerDraftsByScope: previousDrafts })
+    )
+  }
+})
 
 beforeEach(() => {
   vi.clearAllMocks()

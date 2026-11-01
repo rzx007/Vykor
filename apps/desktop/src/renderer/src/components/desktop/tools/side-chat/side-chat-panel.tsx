@@ -335,6 +335,7 @@ export function SideChatPanel({
     (targetDraft.document.items.length ||
       targetDraft.attachments.length ||
       targetDraft.attachmentPreparation?.pending.length ||
+      targetDraft.browserAnnotations?.length ||
       targetDraft.textSelections?.length)
   )
   const scope =
@@ -345,6 +346,8 @@ export function SideChatPanel({
     (state) => state.composerDraftsByScope[scope]?.attachmentPreparation
   )
   const textSelections = (scope === preforkScope ? preforkDraft : targetDraft)?.textSelections ?? []
+  const annotationCount =
+    (scope === preforkScope ? preforkDraft : targetDraft)?.browserAnnotations?.length ?? 0
   const storedTarget = verifiedTargetId
     ? sessions.find((item) => item.id === verifiedTargetId)
     : undefined
@@ -601,7 +604,7 @@ export function SideChatPanel({
     )
       return
     if (
-      (!selectComposerDocumentText(draft).trim() && !attachments.length) ||
+      (!selectComposerDocumentText(draft).trim() && !attachments.length && !annotationCount) ||
       !areDesktopAttachmentsSendable(attachments)
     )
       return
@@ -911,7 +914,11 @@ export function SideChatPanel({
               canSubmit={
                 !unavailable &&
                 areDesktopAttachmentsSendable(attachments) &&
-                !!(selectComposerDocumentText(draft).trim() || attachments.length)
+                !!(
+                  selectComposerDocumentText(draft).trim() ||
+                  attachments.length ||
+                  annotationCount
+                )
               }
               onDraftChange={(next) => {
                 setError(null)

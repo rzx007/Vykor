@@ -5,6 +5,11 @@ import { AttachmentGroup } from "@renderer/components/ui/attachment"
 import { Button } from "@renderer/components/ui/button"
 import { Message, MessageContent } from "@renderer/components/ui/message"
 import {
+  readBrowserAnnotationContext,
+  stripBrowserAnnotationContext,
+  type BrowserAnnotationContextRecord,
+} from "@renderer/components/desktop/tools/browser/browser-annotation-context"
+import {
   composerDocument,
   selectComposerDocumentText,
   type ComposerDocument,
@@ -42,8 +47,22 @@ export function UserMessage({
   userActions?: UserMessageActions
 }): React.JSX.Element {
   const searchReveal = useConversationSearchMatch(message.id)
-  const content = messageTextContent(parts)
+  const sourceContent = messageTextContent(parts)
+  const annotationContext = readBrowserAnnotationContext(sourceContent)
+  const content = annotationContext?.text ?? sourceContent
   const items = readUserItems(parts)
+  const documentItems =
+    inputItems ??
+    parts.flatMap((part) =>
+      part.type === "text" && Array.isArray(part.metadata.items)
+        ? (part.metadata.items as SessionUserInputItem[])
+        : []
+    )
+  const document = composerDocument(
+    stripBrowserAnnotationContext(
+      documentItems.length ? documentItems : [{ type: "text", text: sourceContent }]
+    )
+  )
   const attachmentParts = parts
     .filter((part): part is DesktopAttachmentSessionPart => part.type === "attachment")
     .sort((left, right) => left.seq - right.seq)
@@ -56,14 +75,8 @@ export function UserMessage({
         partIds: parts.filter((part) => part.type === "text").map((part) => part.id),
       }}
       items={items}
-      document={composerDocument(
-        inputItems ??
-          parts.flatMap((part) =>
-            part.type === "text" && Array.isArray(part.metadata.items)
-              ? (part.metadata.items as SessionUserInputItem[])
-              : []
-          )
-      )}
+      annotations={annotationContext?.annotations ?? []}
+      document={document}
       attachmentParts={attachmentParts}
       timestamp={message.updatedAt}
       userActions={userActions}
@@ -76,6 +89,7 @@ function UserMessageBlock({
   searchReveal,
   searchSource,
   items,
+  annotations,
   document,
   attachmentParts,
   timestamp,
@@ -85,6 +99,7 @@ function UserMessageBlock({
   searchReveal: ReturnType<typeof useConversationSearchMatch>
   searchSource: { messageId: string; partIds: string[] }
   items: UserDisplayItem[]
+  annotations: BrowserAnnotationContextRecord[]
   document: ComposerDocument
   attachmentParts: DesktopAttachmentSessionPart[]
   timestamp: number
@@ -95,7 +110,9 @@ function UserMessageBlock({
   const setEditing = userActions?.onEditingChange ?? setLocalEditing
   useRetainTranscriptRow(editing)
   const [draft, setDraft] = useState(document)
-  const canEdit = Boolean(userActions?.canEdit && (content.trim() || attachmentParts.length > 0))
+  const canEdit = Boolean(
+    userActions?.canEdit && (content.trim() || annotations.length > 0 || attachmentParts.length > 0)
+  )
   const containsImage = attachmentParts.some((part) => part.mediaType.startsWith("image/"))
   const containsFile = attachmentParts.some((part) => !part.mediaType.startsWith("image/"))
   const alignMixedAttachmentHeights = containsImage && containsFile
@@ -108,7 +125,9 @@ function UserMessageBlock({
 
   if (editing && userActions) {
     const canSubmitEdit = Boolean(
-      selectComposerDocumentText(draft).trim() || attachmentParts.length > 0
+      selectComposerDocumentText(draft).trim() ||
+      annotations.length > 0 ||
+      attachmentParts.length > 0
     )
     return (
       <Message align="end" className="group/msg">
@@ -203,10 +222,11 @@ function UserMessageBlock({
             ))}
           </AttachmentGroup>
         ) : null}
-        {content.trim() || items.length > 0 ? (
+        {content.trim() || items.length > 0 || annotations.length > 0 ? (
           <UserMessageBubble
             content={content}
             items={items}
+            annotations={annotations}
             searchReveal={searchReveal}
             searchSource={searchSource}
           />
@@ -241,7 +261,7 @@ function readUserItems(parts: DesktopSessionPart[]): UserDisplayItem[] {
     if (part.type !== "text") continue
     const items = part.metadata.items
     if (!Array.isArray(items)) continue
-    return renderUserItems(items as SessionUserInputItem[])
+    return renderUserItems(stripBrowserAnnotationContext(items as SessionUserInputItem[]))
   }
   return []
 }

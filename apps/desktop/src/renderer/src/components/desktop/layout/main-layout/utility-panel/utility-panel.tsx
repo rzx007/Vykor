@@ -49,6 +49,7 @@ import {
   selectActiveWorkspaceProject,
   useDesktopSessionStore,
 } from "@renderer/stores/desktop-session"
+import { NEW_CONVERSATION_SCOPE } from "@renderer/stores/desktop-session/composer-draft-state"
 import { prepareFileOpenRequest } from "./file-open-request"
 import {
   readPersistedUtilityFileTabs,
@@ -798,6 +799,7 @@ export function UtilityPanel({
             <BrowserTool
               key={tab.id}
               tab={tab}
+              composerScope={scopeId.startsWith("session:") ? scopeId : NEW_CONVERSATION_SCOPE}
               active={activeTab?.id === tab.id}
               visible={open && activeTab?.id === tab.id}
               onUpdate={(patch) => updateBrowserTab(tab.id, patch)}

@@ -1,6 +1,5 @@
 import { clearSubmittedDraft } from "./composer-draft-state"
 import { pluginAppModelContexts } from "@renderer/components/desktop/shell/plugin-apps/plugin-app-model-context"
-import { captureBrowserAnnotationContext } from "@renderer/components/desktop/tools/browser/browser-prompt-context"
 import { isTransientComposerSession, saveComposerRecovery } from "./composer-recovery"
 import { errorMessage } from "./error-state"
 import {
@@ -73,36 +72,7 @@ export function createPromptSubmissionSender(
         const current =
           get().sessionRuntimes[pending.sessionId]?.pendingPromptSubmissions[pending.id]
         if (!accepted && current && current.phase !== "accepted") {
-          if (current.browserAnnotationContext === undefined) {
-            const capturing = get().activeSessionId === pending.sessionId
-              ? captureBrowserAnnotationContext(`session:${pending.sessionId}`)
-              : null
-            const browserAnnotationContext = capturing ? await capturing : null
-            // Capture once per input ID, before saving or admitting the request.
-            const latest = get().sessionRuntimes[pending.sessionId]?.pendingPromptSubmissions[pending.id]
-            if (!latest) return
-            if (latest.phase === "accepted") {
-              settlePromptSubmission(context, latest)
-              return
-            }
-            set((state) => {
-              const runtime = state.sessionRuntimes[pending.sessionId]!
-              return {
-                sessionRuntimes: {
-                  ...state.sessionRuntimes,
-                  [pending.sessionId]: {
-                    ...runtime,
-                    pendingPromptSubmissions: updatePendingPromptSubmission(
-                      runtime.pendingPromptSubmissions,
-                      pending.id,
-                      (value) => ({ ...value, browserAnnotationContext })
-                    ),
-                  },
-                },
-              }
-            })
-          }
-          const snapshot = get().sessionRuntimes[pending.sessionId]!.pendingPromptSubmissions[pending.id]!
+          const snapshot = current
           // A failed write must prevent admission, otherwise a restart could lose the original ID.
           if (
             !isTransientComposerSession(get(), pending.sessionId) &&

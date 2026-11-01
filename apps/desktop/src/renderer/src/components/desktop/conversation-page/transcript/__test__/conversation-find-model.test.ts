@@ -42,3 +42,35 @@ it("does not search reasoning, tool bodies or replaced model attempts", () => {
   ]
   expect(findConversationMatches(messages, parts, "secret")).toEqual([])
 })
+
+const annotationContext =
+  '\n\n<browser_annotations>\n{"url":"http://localhost/design","annotations":[{"target":"提交按钮","selector":"#submit","comment":"增加留白"}]}\n</browser_annotations>'
+
+it.each([false, true])(
+  "does not match hidden annotation payloads in user messages (split=%s)",
+  (split) => {
+    const parts = split
+      ? [
+          { ...part, id: "u1", messageId: "u", text: "修改页面" },
+          { ...part, id: "u2", messageId: "u", text: annotationContext },
+        ]
+      : [{ ...part, id: "u1", messageId: "u", text: `修改页面${annotationContext}` }]
+    expect(findConversationMatches(messages, parts, "修改页面")).toEqual([
+      { messageId: "u", partIds: ["u1"], tokens: ["修改页面"] },
+    ])
+    expect(findConversationMatches(messages, parts, "#submit")).toEqual([])
+    expect(findConversationMatches(messages, parts, "browser_annotations")).toEqual([])
+    expect(findConversationMatches(messages, parts, "增加留白")).toEqual([])
+  }
+)
+
+it("still searches annotation examples in assistant messages and non-trailing user text", () => {
+  const parts = [
+    { ...part, id: "a1", messageId: "a", text: annotationContext },
+    { ...part, id: "u1", messageId: "u", text: `${annotationContext}\n保留这个示例` },
+  ]
+  expect(findConversationMatches(messages, parts, "#submit").map((hit) => hit.messageId)).toEqual([
+    "u",
+    "a",
+  ])
+})

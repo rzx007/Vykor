@@ -24,6 +24,7 @@ import {
 import type { DesktopContextUsageSnapshot } from "@shared/context-usage-types"
 import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
 import { NEW_CONVERSATION_SCOPE } from "@renderer/stores/desktop-session/composer-draft-state"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session/store"
 import { selectGoalObjective } from "@renderer/stores/desktop-session/goal-actions"
 import type { ComposerPickerCommand, ComposerPickerItem } from "../composer/composer-picker"
 import { Composer } from "../composer/composer"
@@ -169,6 +170,7 @@ export function NewConversationStart({
   contextUsage?: DesktopContextUsageSnapshot | null
   onOpenContextUsage?: () => void | Promise<boolean | void>
 }): React.JSX.Element {
+  const annotationCount = useDesktopSessionStore(state => state.composerDraftsByScope[NEW_CONVERSATION_SCOPE]?.browserAnnotations?.length ?? 0)
   const [activePicker, setActivePicker] = useState<StartPicker | "model" | null>(null)
   const [avatarName] = useState(() => crypto.randomUUID())
   const [projectQuery, setProjectQuery] = useState("")
@@ -559,7 +561,7 @@ export function NewConversationStart({
               !setupStep &&
               (goalMode
                 ? selectGoalObjective(draft)
-                : draft.items.length > 0 || attachments.length > 0) &&
+                : draft.items.length > 0 || attachments.length > 0 || annotationCount > 0) &&
               areDesktopAttachmentsSendable(attachments) &&
               (selectedProject || workspaceMode === "outside_project")
             )}

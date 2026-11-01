@@ -5,6 +5,7 @@ export async function submitConversationDraft(
     sessionId: string | null
     content: string
     attachmentCount: number
+    annotationCount?: number
     ready: boolean
     blocked: boolean
     goalMode: boolean
@@ -12,7 +13,7 @@ export async function submitConversationDraft(
   submit: () => Promise<void>
 ): Promise<void> {
   const hasContext =
-    !input.goalMode && pluginAppModelContexts.forSession(input.sessionId).length > 0
+    !input.goalMode && ((input.annotationCount ?? 0) > 0 || pluginAppModelContexts.forSession(input.sessionId).length > 0)
   if (
     (!input.content.trim() && input.attachmentCount === 0 && !hasContext) ||
     !input.ready ||

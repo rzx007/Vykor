@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto"
 import type { WebContents } from "electron"
 import type {
   AddAnnotationInput,
@@ -439,7 +440,7 @@ export class BrowserAnnotationController {
       page.assertCurrent()
       const record: BrowserAnnotationRecord = {
         ...selection.target,
-        id: `a-${++this.sequence}`,
+        id: `a-${randomUUID()}`,
         pageUrl: state.pageUrl,
         comment,
       }

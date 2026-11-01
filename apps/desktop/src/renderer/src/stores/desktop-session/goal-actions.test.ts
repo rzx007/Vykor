@@ -146,6 +146,31 @@ describe("goal actions", () => {
     expect(window.desktop.sessions.goalAction).not.toHaveBeenCalled()
   })
 
+  it("keeps the ordinary annotation package after creating a goal", async () => {
+    const scope = sessionComposerScope("s1")
+    const annotation = {
+      id: "ordinary-annotation",
+      pageUrl: "https://example.test",
+      target: "提交",
+      selector: "#submit",
+      locatorKind: "unique-id" as const,
+      tagName: "button",
+      role: "button",
+      name: "提交",
+      comment: "留待普通消息发送",
+    }
+    draft(scope, "创建目标")
+    useDesktopSessionStore.getState().putBrowserAnnotation(scope, annotation)
+    useDesktopSessionStore.getState().setGoalMode(scope, true)
+    await useDesktopSessionStore.getState().submitGoal(scope)
+    expect(window.desktop.sessions.createGoal).toHaveBeenCalledWith(
+      expect.objectContaining({ items: [{ type: "text", text: "创建目标" }] })
+    )
+    expect(useDesktopSessionStore.getState().composerDraftsByScope[scope]?.browserAnnotations).toEqual([
+      annotation,
+    ])
+  })
+
   it("exits editing and restores ordinary text and files after cancelling the goal", async () => {
     const scope = sessionComposerScope("s1")
     draft(scope, "原聊天草稿", [attachment()])

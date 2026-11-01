@@ -10,6 +10,12 @@ import { readComposerRecovery, saveComposerRecovery } from "./composer-recovery"
 import { toast } from "@renderer/lib/toast"
 import { isTopLevelSession, upsertSession } from "./helpers"
 import { createAttachmentActions } from "./attachment-actions"
+import {
+  clearBrowserAnnotations,
+  putBrowserAnnotation,
+  removeBrowserAnnotation,
+  updateBrowserAnnotationComment,
+} from "./composer-draft-state"
 import { attachDesktopDaemonStatusEvents, createBootstrapActions } from "./bootstrap-actions"
 import { createInitialState } from "./initial-state"
 import { createProjectActions } from "./project-actions"
@@ -59,6 +65,10 @@ export const useDesktopSessionStore = create<DesktopSessionState>((set, get) => 
     ...createGoalActions(context),
     ...createPromptActions(context),
     ...createAttachmentActions(context),
+    putBrowserAnnotation: (scope, record) => set((state) => putBrowserAnnotation(state, scope, record)),
+    updateBrowserAnnotationComment: (scope, id, comment) => set((state) => updateBrowserAnnotationComment(state, scope, id, comment)),
+    removeBrowserAnnotation: (scope, id) => set((state) => removeBrowserAnnotation(state, scope, id)),
+    clearBrowserAnnotations: (scope) => set((state) => clearBrowserAnnotations(state, scope)),
     ...createQueuedPromptActions(context),
     applySessionUpdate: createApplySessionUpdate(context),
     applyActivityUpdate: (update: DesktopActivityUpdate) => {

@@ -113,6 +113,7 @@ function Harness() {
     <ImageViewerProvider onOpenImage={(source) => requests.push(source)}>
       <BrowserTool
         tab={tab}
+        composerScope="session:browser"
         active={active}
         visible={active}
         onUpdate={(patch) => setTab((current) => ({ ...current, ...patch }))}

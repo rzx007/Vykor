@@ -12,6 +12,7 @@ import type {
   DesktopSessionGoalActionInput,
 } from "@shared/session-types"
 import type { DesktopAttachmentSupport } from "@shared/attachment-types"
+import type { BrowserAnnotationRecord } from "@shared/browser-annotation"
 import type {
   DesktopAttachmentDraft,
   DesktopAttachmentUploadEvent,
@@ -40,7 +41,7 @@ export interface PendingPromptAttachmentSnapshot extends DesktopPromptAttachment
 }
 
 export interface PendingPromptSubmission {
-  /** undefined: not captured yet; null: captured without saved page annotations. */
+  /** Serialized feedback shown in the composer; retries reuse the same snapshot. */
   browserAnnotationContext?: string | null
   draftAttachmentIds?: string[]
   dismissed?: boolean
@@ -247,6 +248,13 @@ export interface QueuedPromptActions {
   cancelQueuedPrompt: (inputId: string, queuedRunId: string) => Promise<void>
 }
 
+export interface BrowserAnnotationDraftActions {
+  putBrowserAnnotation: (scope: string, record: BrowserAnnotationRecord) => void
+  updateBrowserAnnotationComment: (scope: string, id: string, comment: string) => void
+  removeBrowserAnnotation: (scope: string, id: string) => void
+  clearBrowserAnnotations: (scope: string) => void
+}
+
 export interface AttachmentActions {
   addImageFeedback: (
     scope: string,
@@ -284,6 +292,7 @@ export interface DesktopSessionState
     GoalActions,
     PromptActions,
     AttachmentActions,
+    BrowserAnnotationDraftActions,
     QueuedPromptActions {
   composerDraftsByScope: ComposerDraftState["composerDraftsByScope"]
   goalsBySession: Record<string, SessionGoal | null>

@@ -26,3 +26,13 @@ it("does not use another session's context or bypass attachment, busy or goal ch
   await submitConversationDraft({ ...input, sessionId: "s", goalMode: true }, send)
   expect(send).not.toHaveBeenCalled()
 })
+
+it("admits annotation-only drafts while retaining busy, upload and goal guards", async () => {
+  const received: string[] = []
+  const input = { sessionId: "s", content: "", attachmentCount: 0, annotationCount: 2, ready: true, blocked: false, goalMode: false }
+  await submitConversationDraft(input, async () => { received.push("annotations") })
+  await submitConversationDraft({ ...input, blocked: true }, async () => { received.push("busy") })
+  await submitConversationDraft({ ...input, ready: false }, async () => { received.push("uploading") })
+  await submitConversationDraft({ ...input, goalMode: true }, async () => { received.push("goal") })
+  expect(received).toEqual(["annotations"])
+})

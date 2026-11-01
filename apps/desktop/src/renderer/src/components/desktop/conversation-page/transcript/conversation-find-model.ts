@@ -1,5 +1,6 @@
 import { isSupersededModelPart } from "@vykor/application-client"
 import type { DesktopSessionMessage, DesktopSessionPart } from "@shared/session-types"
+import { readBrowserAnnotationContext } from "@renderer/components/desktop/tools/browser/browser-annotation-context"
 
 export interface ConversationSearchTarget {
   sessionId: string
@@ -33,8 +34,16 @@ export function findConversationMatches(
     .flatMap((message) => {
       if (message.role !== "user" && message.role !== "assistant") return []
       const texts = byMessage.get(message.id) ?? []
-      const text = texts
-        .map((part) => part.text)
+      const content = texts.map((part) => part.text!).join("")
+      const annotations = message.role === "user" ? readBrowserAnnotationContext(content) : null
+      let remaining = annotations?.text.length ?? content.length
+      const visibleTexts = texts.map((part) => {
+        const text = part.text!.slice(0, remaining)
+        remaining -= text.length
+        return { part, text }
+      })
+      const text = visibleTexts
+        .map(({ text }) => text)
         .join("\n")
         .toLowerCase()
       if (!tokens.every((token) => text.includes(token))) return []
@@ -42,9 +51,9 @@ export function findConversationMatches(
         {
           messageId: message.id,
           tokens,
-          partIds: texts
-            .filter((part) => tokens.some((token) => part.text!.toLowerCase().includes(token)))
-            .map((part) => part.id),
+          partIds: visibleTexts
+            .filter(({ text }) => tokens.some((token) => text.toLowerCase().includes(token)))
+            .map(({ part }) => part.id),
         },
       ]
     })

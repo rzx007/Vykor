@@ -30,6 +30,7 @@ it("clears loading after the empty tab's internal blank page finishes", async ()
     return (
       <BrowserTool
         tab={tab}
+        composerScope="new-conversation"
         active
         visible={false}
         onUpdate={(patch) => setTab((current) => ({ ...current, ...patch }))}
@@ -82,7 +83,7 @@ it("does not unbind a live webview when only the application theme changes", asy
     canGoForward: false,
   }
   const render = () =>
-    root.render(<BrowserTool tab={tab} active visible={false} onUpdate={() => {}} />)
+    root.render(<BrowserTool tab={tab} composerScope="session:a" active visible={false} onUpdate={() => {}} />)
   try {
     await act(async () => {
       render()

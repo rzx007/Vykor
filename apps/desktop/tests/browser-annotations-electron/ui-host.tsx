@@ -9,6 +9,6 @@ function Preview() {
   Object.assign(window, { setAnnotationTestTheme: (theme: "light" | "dark") => appearance.setPreference("theme", theme) })
   const url = new URLSearchParams(location.search).get("page")!
   const [tab, setTab] = useState<BrowserToolTab>({ id: "qa-browser", title: "批注检查", url, input: url, loading: true, canGoBack: false, canGoForward: false })
-  return <main className="relative h-screen w-screen"><BrowserTool tab={tab} active visible onUpdate={patch => setTab(previous => ({ ...previous, ...patch }))} /></main>
+  return <main className="relative h-screen w-screen"><BrowserTool tab={tab} composerScope="session:qa-browser" active visible onUpdate={patch => setTab(previous => ({ ...previous, ...patch }))} /></main>
 }
 createRoot(document.getElementById("root")!).render(<AppearanceProvider><Preview /></AppearanceProvider>)

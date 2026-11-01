@@ -15,9 +15,11 @@
 
 组件从本目录入口导入 `useDesktopSessionStore`；业务代码也保持在本目录。
 
-普通发送和编辑后重发会读取当前聊天可见浏览器页的已保存批注，把页面地址、目标、选择器和意见附到本次消息中。读取复用 `tools/browser/browser-prompt-context.ts` 和现有批注 IPC；页面切换后的过期结果不附加。新会话在创建前读取草稿页，避免打开新会话时丢失页面范围。
+浏览器保存成功的批注进入 `composerDraftsByScope[scope].browserAnnotations`，和正文、附件共用 `new-conversation` 或 `session:<id>` 范围。输入框可修改意见、删除单条或清空待发送批注；这些操作只改变当前草稿包。批注随草稿迁移，并由 `composer-recovery.ts` 在本机校验、保存和恢复；只有批注、没有正文或附件的草稿也会保留。
 
-`PendingPromptSubmission.browserAnnotationContext` 保存发送时的批注快照：`undefined` 表示尚未读取，`null` 表示已读但没有批注。快照与待发送记录一起保存，失败、重启恢复及重试均复用原快照；读取失败则保留消息供重试。编辑后重发先移除原消息尾部的自动批注块，再附本次快照，避免不断重复追加。
+普通发送与新会话首条消息使用当前草稿的批注包，调用 `tools/browser/browser-annotation-context.ts` 生成同步快照。空正文可以只发送批注；移除批注包后，发送入口不会重新从页面读取旧记录。编辑历史消息保留该消息原有的批注，独立于主输入框尚未发送的草稿。
+
+`PendingPromptSubmission.browserAnnotationContext` 保存发送时的批注快照，空值表示没有批注。快照与待发送记录一起保存，失败、重启恢复及重试均复用原快照。发送成功只移除已发送且未改动的批注，保留期间新增或修改的意见；失败保留草稿。历史编辑先移除正文中的旧批注块，再附回原快照，避免重复追加。
 
 ## 四层状态放在哪里
 

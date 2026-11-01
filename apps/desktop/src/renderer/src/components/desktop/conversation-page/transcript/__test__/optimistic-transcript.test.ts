@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest"
+import { createElement } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
 
 import type { PendingPromptSubmission } from "@renderer/stores/desktop-session/types"
 import type {
@@ -8,6 +10,7 @@ import type {
   DesktopSessionRun,
 } from "@shared/session-types"
 import { buildConversationEntries } from "../../message/models/conversation-turn-model"
+import { UserMessage } from "../../message/blocks/user-message"
 import { derivePendingHandoffSubmission, mergeOptimisticTranscript } from "../optimistic-transcript"
 
 const submission: PendingPromptSubmission = {
@@ -99,6 +102,37 @@ describe("mergeOptimisticTranscript", () => {
       },
     ])
   })
+
+  it.each(["", "按批注修改"])(
+    "shows an annotation package before the server confirms it (body=%s)",
+    (content) => {
+      const browserAnnotationContext =
+        '\n\n<browser_annotations>\n{"url":"http://localhost/design","annotations":[{"target":"按钮","selector":"#submit","comment":"增加留白"}]}\n</browser_annotations>'
+      const result = mergeOptimisticTranscript(
+        [],
+        [],
+        [
+          {
+            ...submission,
+            content,
+            items: content ? [{ type: "text", text: content }] : [],
+            browserAnnotationContext,
+            phase: "submitting",
+          },
+        ]
+      )
+      const html = renderToStaticMarkup(
+        createElement(UserMessage, {
+          message: result.messages[0]!,
+          parts: result.parts,
+        })
+      )
+      expect(html).toContain("1 条批注")
+      expect(html).not.toContain("browser_annotations")
+      expect(html).not.toContain("#submit")
+      if (content) expect(html).toContain(content)
+    }
+  )
 
   it("keeps the local bubble until the authoritative user message has renderable content", () => {
     const authoritative: DesktopSessionMessage = {

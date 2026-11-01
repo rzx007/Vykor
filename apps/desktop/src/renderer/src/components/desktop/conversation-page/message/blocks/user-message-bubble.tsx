@@ -2,6 +2,12 @@ import type { ConversationSearchMatch } from "../../transcript/conversation-find
 import { Box, ChevronDown, ChevronUp } from "lucide-react"
 import { useState } from "react"
 import { cn } from "@renderer/lib/utils"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@renderer/components/ui/collapsible"
+import type { BrowserAnnotationContextRecord } from "@renderer/components/desktop/tools/browser/browser-annotation-context"
 import { PluginMentionIcon } from "./plugin-mention-icon"
 import type { UserDisplayItem } from "./user-display-items"
 
@@ -11,6 +17,7 @@ const collapsibleUserMessageLines = 14
 export function UserMessageBubble({
   content,
   items,
+  annotations = [],
   searchReveal = null,
   searchSource,
 }: {
@@ -18,6 +25,7 @@ export function UserMessageBubble({
   searchReveal?: ConversationSearchMatch | null
   searchSource?: { messageId: string; partIds: string[] }
   items: UserDisplayItem[]
+  annotations?: BrowserAnnotationContextRecord[]
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(() => Boolean(searchReveal))
   const [previousReveal, setPreviousReveal] = useState(searchReveal)
@@ -76,6 +84,26 @@ export function UserMessageBubble({
           <span>{!collapsed ? "收起" : "显示更多"}</span>
           {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
         </button>
+      ) : null}
+      {annotations.length > 0 ? (
+        <Collapsible className="px-4 pb-3">
+          <CollapsibleTrigger className="flex min-h-7 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground motion-reduce:transition-none [&[data-panel-open]>svg]:rotate-180">
+            <span>{annotations.length} 条批注</span>
+            <ChevronDown className="size-3.5 transition-transform motion-reduce:transition-none" />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <ol className="mt-2 space-y-3 text-sm">
+              {annotations.map((annotation, index) => (
+                <li key={index}>
+                  <div className="font-medium">{annotation.target}</div>
+                  <div className="whitespace-pre-wrap text-muted-foreground">
+                    {annotation.comment}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </CollapsibleContent>
+        </Collapsible>
       ) : null}
     </div>
   )

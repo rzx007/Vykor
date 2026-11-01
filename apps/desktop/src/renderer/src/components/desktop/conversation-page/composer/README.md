@@ -48,12 +48,15 @@ Context Picker 当前提供：
 | `skill-mention-node.tsx` | Skill 的 Lexical 原子节点 |
 | `resource-mention-node.tsx` | 文件/资源/历史会话上下文的 Lexical 原子节点 |
 | `composer-attachments.tsx` | 待发送附件的预览、进度、取消、重试和移除 |
+| `composer-browser-annotations.tsx` | 待发送批注包入口、悬停或点击展开、编辑和移除 |
 | `composer-file-input.ts` | 拖拽、粘贴和文件输入解析 |
 | `context-usage-control.tsx` | 当前上下文用量入口 |
 | `goal-banner.tsx` | 当前目标状态、详情、暂停/继续和取消入口 |
 | `../../../../stores/desktop-session/goal-actions.ts` | 按会话隔离的目标草稿、请求和状态同步 |
 
 图片打开时，`ComposerAttachments` 才从本输入框的附件收集已就绪图片快照，保留 `draftId`，以显式传入的 `composerScope` 隔离主聊天、新聊天和侧聊。打开流程复用图片查看器；没有作用域时只读打开单张，不从控件 ID 推断归属。侧聊额外携带现有目标的有效性检查，销毁或切换目标后旧快照不能重建旧草稿。
+
+`ComposerBrowserAnnotations` 接收当前输入草稿中的批注，只显示批注数量、元素标签、目标和意见。悬停、聚焦或点击入口会展开输入框上方的列表；编辑时用保存按钮或 Ctrl / ⌘ + Enter 提交，Escape 取消编辑或关闭列表。展开状态与未保存意见由组件持有，保存、逐条删除和清空通过回调交给草稿持有方处理；这些操作不提交消息，空包不显示入口。
 
 ## 数据模型
 
@@ -153,6 +156,7 @@ Composer 触发的系统操作通过 metadata presentation 展示，不作为普
 - `composer/__test__/rich-prompt-input.interaction.test.tsx`
 - `composer/__test__/composer.attach-button.test.ts`
 - `composer/__test__/composer-attachment-preview.test.ts`
+- `composer/__test__/composer-browser-annotations.test.tsx`
 - `packages/protocol/src/session/__test__/session-input-items.test.ts`
 - `packages/server/src/application/session/interactions/__test__/session-input-materializer.test.ts`
 

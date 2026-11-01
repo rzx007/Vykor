@@ -68,6 +68,17 @@ const draft = z.object({
   document,
   attachments: z.array(attachment),
   textSelections: z.array(z.object({ id: string, text: string })).optional(),
+  browserAnnotations: z.array(z.object({
+    id: string,
+    pageUrl: string,
+    target: string,
+    selector: string,
+    locatorKind: z.enum(["unique-id", "semantic", "path"]),
+    tagName: string,
+    role: string,
+    name: string,
+    comment: string,
+  })).optional(),
 })
 const submission = z.object({
   browserAnnotationContext: string.nullable().optional(),
@@ -180,7 +191,7 @@ export function saveComposerRecovery(state: RecoveryState): boolean {
         ([scope, value]) =>
           !scope.startsWith("linked-chat:") &&
           !isTransientComposerSession(state, scope.replace(/^session:/, "")) &&
-          (value.document.items.length || value.attachments.length || value.textSelections?.length)
+          (value.document.items.length || value.attachments.length || value.textSelections?.length || value.browserAnnotations?.length)
       )
     )
     const submissions = Object.entries(state.sessionRuntimes)

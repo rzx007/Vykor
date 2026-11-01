@@ -15,6 +15,7 @@ import type {
   QueuedPromptAction,
 } from "@renderer/stores/desktop-session/types"
 import type { DesktopSessionInput, DesktopSessionRun } from "@shared/session-types"
+import { readBrowserAnnotationContext } from "@renderer/components/desktop/tools/browser/browser-annotation-context"
 
 interface PendingPrompt {
   input: DesktopSessionInput
@@ -24,7 +25,14 @@ interface PendingPrompt {
 
 type LocalPendingSubmission = Pick<
   PendingPromptSubmission,
-  "id" | "sessionId" | "content" | "phase" | "placement" | "error" | "dismissed"
+  | "id"
+  | "sessionId"
+  | "content"
+  | "phase"
+  | "placement"
+  | "error"
+  | "dismissed"
+  | "browserAnnotationContext"
 > & { attachments?: PendingPromptSubmission["attachments"] }
 
 export function PendingPromptQueue({
@@ -87,6 +95,7 @@ export function PendingPromptQueue({
           <ItemContent className="min-w-0 gap-1 pt-1 group-data-[size=xs]/item:gap-1">
             <PendingPromptTitle
               content={visibleLocalSubmission.content}
+              browserAnnotationContext={visibleLocalSubmission.browserAnnotationContext}
               attachments={visibleLocalSubmission.attachments}
             />
             {visibleLocalSubmission.phase === "failed" && visibleLocalSubmission.error ? (
@@ -194,14 +203,19 @@ export function PendingPromptQueue({
 
 function PendingPromptTitle({
   content,
+  browserAnnotationContext,
   attachments = [],
 }: {
   content: string
+  browserAnnotationContext?: string | null
   attachments?: readonly { displayName?: string }[]
 }): React.JSX.Element {
-  const attachmentOnly = !content.trim() && attachments.length > 0
+  const context = readBrowserAnnotationContext(content + (browserAnnotationContext ?? ""))
+  const text = context?.text ?? content
+  const annotationCount = context?.annotations.length ?? 0
+  const attachmentOnly = !text.trim() && !annotationCount && attachments.length > 0
   const firstName = attachments[0]?.displayName?.trim()
-  let summary = content
+  let summary = !text.trim() && annotationCount ? `${annotationCount} 条批注` : text
   if (attachmentOnly) {
     summary = firstName
       ? firstName + (attachments.length > 1 ? ` 等 ${attachments.length} 个附件` : "")

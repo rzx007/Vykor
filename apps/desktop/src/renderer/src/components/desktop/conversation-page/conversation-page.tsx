@@ -224,6 +224,7 @@ function ConversationPane({
   )
   const attachmentPreparation = useDesktopSessionStore((state) => state.composerDraftsByScope[composerScope]?.attachmentPreparation)
   const draftText = selectComposerDocumentText(draft)
+  const annotationCount = useDesktopSessionStore(state => state.composerDraftsByScope[composerScope]?.browserAnnotations?.length ?? 0)
   const goal = useDesktopSessionStore((state) =>
     activeSessionId ? state.goalsBySession[activeSessionId] : null
   )
@@ -258,6 +259,7 @@ function ConversationPane({
         sessionId: activeSessionId,
         content,
         attachmentCount: attachments.length,
+        annotationCount,
         ready,
         blocked: sending || modeChangePending || Boolean(archived),
         goalMode,
@@ -388,6 +390,7 @@ function ConversationPane({
     Boolean(
       draftText.trim() ||
       attachments.length > 0 ||
+      (!goalMode && annotationCount > 0) ||
       appContextEntries.some((entry) => entry.source.sessionId === activeSessionId)
     )
 

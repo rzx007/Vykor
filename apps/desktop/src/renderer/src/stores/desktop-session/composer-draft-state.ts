@@ -1,5 +1,7 @@
 import type { DesktopSessionView } from "@shared/session-types"
+import type { BrowserAnnotationRecord } from "@shared/browser-annotation"
 import type { DesktopSessionState, PendingPromptSubmission } from "./types"
+import { readBrowserAnnotationContext } from "@renderer/components/desktop/tools/browser/browser-annotation-context"
 import type {
   DesktopAttachmentCandidate,
   DesktopAttachmentDraft,
@@ -20,6 +22,7 @@ export interface DesktopComposerDraft {
   attachments: DesktopAttachmentDraft[]
   attachmentPreparation?: { pending: string[]; error: string | null }
   textSelections?: Array<{ id: string; text: string }>
+  browserAnnotations?: BrowserAnnotationRecord[]
 }
 
 export interface ComposerDraftState {
@@ -67,6 +70,50 @@ export function setDraftDocument(
   const current = draftForScope(state, scope)
   if (JSON.stringify(current.document) === JSON.stringify(document)) return state
   return replaceScope(state, scope, { ...current, document })
+}
+
+export function putBrowserAnnotation(
+  state: ComposerDraftState,
+  scope: string,
+  record: BrowserAnnotationRecord
+): ComposerDraftState {
+  const current = draftForScope(state, scope)
+  const annotations = current.browserAnnotations ?? []
+  if (annotations.some((value) => value.id === record.id)) return state
+  return replaceScope(state, scope, { ...current, browserAnnotations: [...annotations, { ...record }] })
+}
+
+export function updateBrowserAnnotationComment(
+  state: ComposerDraftState,
+  scope: string,
+  id: string,
+  comment: string
+): ComposerDraftState {
+  const current = state.composerDraftsByScope[scope]
+  if (!current?.browserAnnotations?.some((value) => value.id === id && value.comment !== comment)) return state
+  return replaceScope(state, scope, {
+    ...current,
+    browserAnnotations: current.browserAnnotations.map((value) => value.id === id ? { ...value, comment } : value),
+  })
+}
+
+export function removeBrowserAnnotation(
+  state: ComposerDraftState,
+  scope: string,
+  id: string
+): ComposerDraftState {
+  const current = state.composerDraftsByScope[scope]
+  if (!current?.browserAnnotations?.some((value) => value.id === id)) return state
+  return replaceScope(state, scope, {
+    ...current,
+    browserAnnotations: current.browserAnnotations.filter((value) => value.id !== id),
+  })
+}
+
+export function clearBrowserAnnotations(state: ComposerDraftState, scope: string): ComposerDraftState {
+  const current = state.composerDraftsByScope[scope]
+  if (!current?.browserAnnotations?.length) return state
+  return replaceScope(state, scope, { ...current, browserAnnotations: [] })
 }
 
 export function addCandidates(
@@ -244,8 +291,15 @@ export function clearSubmittedDraft(
   const sentDocument = pending.draftDocument ?? composerDocument(pending.items)
   const assets = new Set(pending.attachments.map((value) => value.assetId))
   const draftIds = pending.draftAttachmentIds ? new Set(pending.draftAttachmentIds) : null
+  const sentAnnotations = readBrowserAnnotationContext(pending.browserAnnotationContext ?? "")?.annotations ?? []
   const updated: DesktopComposerDraft = {
     ...current,
+    ...(current.browserAnnotations ? {
+      browserAnnotations: current.browserAnnotations.filter(record => !sentAnnotations.some(sent =>
+        sent.id === record.id && sent.pageUrl === record.pageUrl && sent.comment === record.comment &&
+        sent.selector === record.selector && sent.target === record.target
+      )),
+    } : {}),
     document: sameComposerDocument(current.document, sentDocument)
       ? composerDocument([])
       : current.document,

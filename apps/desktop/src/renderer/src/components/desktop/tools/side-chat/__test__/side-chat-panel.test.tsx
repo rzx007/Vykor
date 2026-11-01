@@ -14,6 +14,7 @@ import type {
   DesktopAuxSessionUpdate,
   DesktopSessionUpdate,
   DesktopSessionView,
+  SendDesktopPromptInput,
 } from "@shared/session-types"
 import { SideChatPanel, appendSideChatQuote, sideChatTargets, canUseSideChatImageScope, destroySideChat } from "../side-chat-panel"
 import { SideChatSelectionActions } from "../side-chat-selection-actions"
@@ -254,6 +255,45 @@ it("opening and quoting uses the side draft without creating a session or changi
   expect(selectDraftText(useDesktopSessionStore.getState(), "session:main")).toBe("main draft")
   expect(fork).not.toHaveBeenCalled()
   expect(sendPrompt).not.toHaveBeenCalled()
+})
+
+it("sends an annotation-only side draft and consumes only that scope's package", async () => {
+  sideChatTargets.set("main", "side-main")
+  const state = useDesktopSessionStore.getState()
+  const annotation = {
+    id: "side-annotation",
+    pageUrl: "https://example.test",
+    target: "提交",
+    selector: "#submit",
+    locatorKind: "unique-id" as const,
+    tagName: "button",
+    role: "button",
+    name: "提交",
+    comment: "调整侧聊按钮间距",
+  }
+  const mainAnnotation = { ...annotation, id: "main-annotation", comment: "保留主聊天意见" }
+  state.putBrowserAnnotation("session:side-main", annotation)
+  state.putBrowserAnnotation("session:main", mainAnnotation)
+  await mount()
+  expect(container.querySelector('[contenteditable="true"]')?.textContent).toBe("")
+  expect(container.textContent).toContain("1 条批注")
+  expect(container.querySelector<HTMLButtonElement>('[aria-label="发送"]')?.disabled).toBe(false)
+  await submit()
+  expect(sendPrompt).toHaveBeenCalledOnce()
+  const request = sendPrompt.mock.calls[0]![0] as SendDesktopPromptInput
+  expect(request.sessionId).toBe("side-main")
+  const text = request.items
+    .filter((item) => item.type === "text")
+    .map((item) => item.text)
+    .join("")
+  expect(text).toContain("调整侧聊按钮间距")
+  expect(text).not.toContain("保留主聊天意见")
+  expect(
+    useDesktopSessionStore.getState().composerDraftsByScope["session:side-main"]?.browserAnnotations
+  ).toEqual([])
+  expect(
+    useDesktopSessionStore.getState().composerDraftsByScope["session:main"]?.browserAnnotations
+  ).toEqual([mainAnnotation])
 })
 
 it("ignores previous durable target associations stored in localStorage", async () => {

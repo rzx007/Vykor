@@ -6,6 +6,64 @@ import type { DesktopSessionInput, DesktopSessionRun } from "@shared/session-typ
 import { PendingPromptQueue } from "../pending-prompt-queue"
 
 describe("PendingPromptQueue", () => {
+  it.each([
+    { source: "local", content: "", label: "1 条批注" },
+    { source: "local", content: "按批注修改", label: "按批注修改" },
+    { source: "server", content: "", label: "1 条批注" },
+    { source: "server", content: "按批注修改", label: "按批注修改" },
+  ])(
+    "hides annotation JSON and keeps a readable queued title ($source, $content)",
+    ({ source, content, label }) => {
+      const browserAnnotationContext =
+        '\n\n<browser_annotations>\n{"url":"http://localhost/design","annotations":[{"target":"按钮","selector":"#submit","comment":"增加留白"}]}\n</browser_annotations>'
+      const input: DesktopSessionInput = {
+        id: "input",
+        sessionId: "chat",
+        seq: 1,
+        delivery: "queue",
+        content: content + browserAnnotationContext,
+        items: [],
+        attachments: [],
+        metadata: {},
+        createdAt: 1,
+      }
+      const run: DesktopSessionRun = {
+        id: "queued",
+        sessionId: "chat",
+        inputId: "input",
+        status: "pending",
+        metadata: {},
+        createdAt: 1,
+        updatedAt: 1,
+      }
+      const html = renderToStaticMarkup(
+        createElement(PendingPromptQueue, {
+          prompts: source === "server" ? [{ input, run }] : [],
+          localSubmissions:
+            source === "local"
+              ? [
+                  {
+                    id: "input",
+                    sessionId: "chat",
+                    content,
+                    browserAnnotationContext,
+                    phase: "submitting",
+                    placement: "queue",
+                  },
+                ]
+              : [],
+          activeRunId: "active",
+          onPromote: () => {},
+          onCancel: () => {},
+        })
+      )
+      expect(html).toContain(label)
+      expect(html).not.toContain("browser_annotations")
+      expect(html).not.toContain("#submit")
+      expect(html).not.toContain("增加留白")
+    }
+  )
+
   it("offers recovery for failed sends and keeps dismissed records out of the UI", () => {
     const failed = {
       id: "failed",

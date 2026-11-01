@@ -274,6 +274,7 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
             [scope]: (composer.ordinaryDraft
               ? (current.composerDraftsByScope[`goal-ordinary:${scope}`] ?? composer.ordinaryDraft)
               : undefined) ?? {
+              ...currentDraft,
               document: sameComposerDocument(currentDraft.document, document)
                 ? emptyComposerDocument
                 : currentDraft.document,

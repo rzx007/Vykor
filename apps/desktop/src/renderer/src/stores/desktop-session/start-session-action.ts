@@ -1,6 +1,5 @@
 import type { CreateDesktopSessionInput } from "@shared/session-types"
-import { captureBrowserAnnotationContext } from "@renderer/components/desktop/tools/browser/browser-prompt-context"
-import { utilityPanelScopeId } from "@renderer/components/desktop/layout/main-layout/utility-panel/utility-panel-state"
+import { formatBrowserAnnotationContext } from "@renderer/components/desktop/tools/browser/browser-annotation-context"
 import { errorMessage } from "./error-state"
 import { formatSessionTitle, upsertSession } from "./helpers"
 import {
@@ -38,6 +37,9 @@ export function createStartSessionAction(
     const document = options?.document ?? composerDocument([{ type: "text", text: content }])
     const items = document.items
     const prompt = selectComposerDocumentText(document)
+    const browserAnnotationContext = formatBrowserAnnotationContext(
+      get().composerDraftsByScope[NEW_CONVERSATION_SCOPE]?.browserAnnotations ?? []
+    )
     const attachmentDrafts = [...(options?.attachments ?? [])]
     if (attachmentDrafts.some((attachment) => attachment.status !== "ready")) return null
     const attachments = attachmentDrafts.flatMap((attachment) =>
@@ -68,7 +70,7 @@ export function createStartSessionAction(
     const model = selectedModel ?? defaultModel
     const provider = selectedProvider ?? defaultProvider
     if (
-      (!hasMeaningfulItems(items) && attachments.length === 0) ||
+      (!hasMeaningfulItems(items) && attachments.length === 0 && !browserAnnotationContext) ||
       Object.values(get().newConversationRuntime.operations).some(
         (operation) => operation.kind === "create-session" && operation.phase === "pending"
       )
@@ -98,8 +100,6 @@ export function createStartSessionAction(
       }
     })
     try {
-      const capturing = captureBrowserAnnotationContext(utilityPanelScopeId(null, selectedProject?.id ?? null))
-      const browserAnnotationContext = capturing ? await capturing : null
       const sessionInput: CreateDesktopSessionInput =
         workspaceMode === "project" && selectedProject
           ? {

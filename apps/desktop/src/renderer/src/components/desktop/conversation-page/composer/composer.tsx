@@ -14,8 +14,10 @@ import type {
   DesktopSessionRecord,
 } from "@shared/session-types"
 import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session/store"
 import { PluginAppComposerContext } from "../../shell/plugin-apps/composer-context"
 import { ComposerAttachments } from "./composer-attachments"
+import { ComposerBrowserAnnotations } from "./composer-browser-annotations"
 import { readComposerDrop } from "./composer-file-input"
 import { ComposerSendButton, PermissionModeMenu, permissionModeIcons } from "./controls"
 import { ContextUsageControl } from "./context-usage-control"
@@ -139,6 +141,9 @@ export function Composer({
   onRemoveAttachment?: (draftId: string) => void | Promise<void>
   contextContent?: ReactNode
 }): React.JSX.Element {
+  const browserAnnotations = useDesktopSessionStore(state =>
+    composerScope ? state.composerDraftsByScope[composerScope]?.browserAnnotations : undefined
+  )
   const preparingAttachments = Boolean(attachmentPreparation?.pending.length)
   const [attachmentActionError, setAttachmentActionError] = useState<string | null>(null)
   const attachmentAction = async (action: () => void | Promise<void>, label: string): Promise<void> => {
@@ -292,6 +297,18 @@ export function Composer({
         </div>
       ) : null}
       {contextContent}
+      {composerScope && !goalMode && !goalEditing && browserAnnotations?.length ? (
+        <div className="flex px-3 pt-3">
+          <ComposerBrowserAnnotations
+            key={composerScope}
+            annotations={browserAnnotations}
+            disabled={sending}
+            onUpdateComment={(id, comment) => useDesktopSessionStore.getState().updateBrowserAnnotationComment(composerScope, id, comment)}
+            onRemove={id => useDesktopSessionStore.getState().removeBrowserAnnotation(composerScope, id)}
+            onClear={() => useDesktopSessionStore.getState().clearBrowserAnnotations(composerScope)}
+          />
+        </div>
+      ) : null}
       {!goalEditing && !goalMode && <PluginAppComposerContext sessionId={activeSessionId} readOnly={sending} />}
       {attachmentActionError || attachmentPreparation?.error ? (
         <p role="alert" className="px-3 pt-2 text-xs text-destructive">

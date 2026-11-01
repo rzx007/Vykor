@@ -8,6 +8,7 @@ import { readActivityPersistence } from "./activity-persistence"
 import type {
   BootstrapActions,
   AttachmentActions,
+  BrowserAnnotationDraftActions,
   DesktopRuntimeState,
   DesktopSessionState,
   ProjectActions,
@@ -40,6 +41,7 @@ export function createInitialState(): Omit<
   DesktopSessionState,
   | keyof BootstrapActions
   | keyof AttachmentActions
+  | keyof BrowserAnnotationDraftActions
   | keyof ProjectActions
   | keyof SessionActions
   | keyof GoalActions

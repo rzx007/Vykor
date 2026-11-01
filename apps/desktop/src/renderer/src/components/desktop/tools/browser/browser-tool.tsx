@@ -22,6 +22,8 @@ import { ButtonGroup } from "@renderer/components/ui/button-group"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@renderer/components/ui/input-group"
 import { Separator } from "@renderer/components/ui/separator"
 import { cn } from "@renderer/lib/utils"
+import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
+import { NEW_CONVERSATION_SCOPE } from "@renderer/stores/desktop-session/composer-draft-state"
 import { isSafeImagePreviewLayout } from "@shared/safe-image-preview"
 import { useImageViewer } from "../../image-viewer/image-viewer-provider"
 import type { ImageSource } from "../../image-viewer/image-source"
@@ -49,6 +51,7 @@ export type BrowserToolTab = {
 
 type BrowserToolProps = {
   tab: BrowserToolTab
+  composerScope: string
   active: boolean
   visible: boolean
   onUpdate: (patch: Partial<BrowserToolTab>) => void
@@ -70,10 +73,21 @@ type BrowserWebviewElement = HTMLElement & {
 
 export function BrowserTool({
   tab,
+  composerScope,
   active,
   visible,
   onUpdate,
 }: BrowserToolProps): React.JSX.Element {
+  const composerOwnerRef = useRef({ scope: composerScope, active: true })
+  if (composerOwnerRef.current.scope !== composerScope) {
+    composerOwnerRef.current.active = false
+    composerOwnerRef.current = { scope: composerScope, active: true }
+  }
+  const composerOwner = composerOwnerRef.current
+  useEffect(() => {
+    composerOwner.active = true
+    return () => { composerOwner.active = false }
+  }, [composerOwner])
   const webviewRef = useRef<BrowserWebviewElement | null>(null)
   const webviewReadyRef = useRef(false)
   const activeRef = useRef(active)
@@ -93,6 +107,17 @@ export function BrowserTool({
     tabId: tab.id,
     visible,
     ready: pageReady && !tab.loading && Boolean(tab.url),
+    onSaved: (record) => {
+      // An old new-conversation owner must not refill the next new conversation after migration.
+      const state = useDesktopSessionStore.getState()
+      if (composerScope !== NEW_CONVERSATION_SCOPE || (composerOwner.active && state.activeSessionId === null))
+        state.putBrowserAnnotation(composerScope, record)
+    },
+    onRemoved: (id) => {
+      const state = useDesktopSessionStore.getState()
+      if (composerScope !== NEW_CONVERSATION_SCOPE || (composerOwner.active && state.activeSessionId === null))
+        state.removeBrowserAnnotation(composerScope, id)
+    },
   })
   const { resolvedTheme } = useAppearance()
 

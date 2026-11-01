@@ -90,8 +90,9 @@ export function mergeOptimisticTranscript(
 function optimisticParts(submission: PendingPromptSubmission): DesktopSessionPart[] {
   const messageId = `optimistic-message:${submission.id}`
   const items = submission.items
+  const content = submission.content + (submission.browserAnnotationContext ?? "")
   const textParts: DesktopSessionPart[] =
-    submission.content || (Array.isArray(items) && items.length > 0)
+    content || (Array.isArray(items) && items.length > 0)
       ? [
           {
             id: `optimistic-part:${submission.id}`,
@@ -100,7 +101,7 @@ function optimisticParts(submission: PendingPromptSubmission): DesktopSessionPar
             seq: 0,
             type: "text",
             status: "completed",
-            text: submission.content,
+            text: content,
             metadata: {
               optimistic: true,
               ...(Array.isArray(items) ? { items } : {}),
