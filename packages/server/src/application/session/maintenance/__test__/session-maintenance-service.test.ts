@@ -20,6 +20,7 @@ const session = {
 };
 
 function createMaintenance(agent: Record<string, any>, options: { personalizationUpdater?: (messages: any[]) => number } = {}) {
+  agent = { loadHistory: vi.fn(), ...agent };
   const replaced = { messages: [{ id: "persisted-message" }], parts: [{ id: "persisted-part" }] };
   let presentationSequence = 0;
   const store = {
@@ -112,7 +113,7 @@ describe("SessionMaintenanceService", () => {
         agentPool: {
           configured: true,
           acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
-acquireSession: async () => ({ compact }),
+acquireSession: async () => ({ compact, loadHistory() {} }),
           hasActiveWorkForSession: () => false,
           hasActiveWorkForCwd: () => false,
         } as any,
@@ -135,19 +136,34 @@ acquireSession: async () => ({ compact }),
   });
 
   it("persists the compacted transcript and broadcasts the replacement", async () => {
-    const compact = vi.fn(async () => ({ history: [], beforeMessageCount: 3, afterMessageCount: 2 }));
+    const compact = vi.fn(async () => ({ history: [], beforeMessageCount: 3, afterMessageCount: 0 }));
     const { maintenance, store, broadcastSince, replaced } = createMaintenance({ compact });
 
     const result = await maintenance.compact("s1");
 
     expect(compact).toHaveBeenCalledOnce();
-    expect(store.replaceTranscript).toHaveBeenCalledWith({ sessionId: "s1", messages: [] });
+    expect(store.replaceTranscript).toHaveBeenCalledWith({ sessionId: "s1", messages: [{
+      role: "system", metadata: { presentation: { kind: "context_compaction", phase: "completed" } },
+      parts: [{ type: "text", status: "completed", text: "已压缩上下文" }],
+    }] });
     expect(store.upsertMessagePart.mock.calls.map(([part]) => part.text)).toEqual([
       "正在压缩上下文",
-      "已压缩上下文",
     ]);
-    expect(result).toEqual({ messageCount: 2, ...replaced });
+    expect(result).toEqual({ messageCount: 0, ...replaced });
     expect(broadcastSince).toHaveBeenCalledWith(7);
+  });
+
+  it("drops the compacted in-memory runtime when saving the replacement fails", async () => {
+    const { maintenance, store, agentPool } = createMaintenance({
+      compact: async () => ({ history: [], beforeMessageCount: 3, afterMessageCount: 0 }),
+    });
+    store.replaceTranscript.mockImplementation(() => { throw new Error("database save failed"); });
+
+    await expect(maintenance.compact("s1")).rejects.toThrow("database save failed");
+    expect(agentPool.close).toHaveBeenCalledWith("s1");
+    expect(store.upsertMessagePart.mock.calls.map(([part]) => part.text)).toEqual([
+      "正在压缩上下文", "上下文压缩失败",
+    ]);
   });
 
   it("replaces a rewound transcript and closes its stale runtime", async () => {

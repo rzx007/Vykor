@@ -2,6 +2,12 @@ import type { CompactContextSection } from "@vykor/core";
 import type { AttachmentAssetRecord, AttachmentRepresentationRecord, SessionInputAttachmentRecord } from "@vykor/domain-contracts/attachments";
 import { officeFormat, OFFICE_MEDIA_TYPES } from "@vykor/domain-contracts/attachments";
 import { attachmentResourceUri } from "../tools/attachment-uri.js";
+import type { SessionMessagePartRecord } from "@vykor/domain-contracts/sessions";
+import { generatedImageReferences } from "../tools/attachment-access.js";
+
+type CatalogReference = Pick<SessionInputAttachmentRecord,
+  "assetId" | "displayName" | "mediaType" | "sizeBytes" | "intent"
+> & { inputId?: string };
 
 export interface CompactAttachmentAssetQueries {
   getAttachment(
@@ -15,6 +21,7 @@ export interface CompactAttachmentAssetQueries {
 
 export interface CompactAttachmentSectionStore {
   listSessionInputAttachments(sessionId: string): SessionInputAttachmentRecord[];
+  listMessageParts?(sessionId: string): SessionMessagePartRecord[];
   attachments: CompactAttachmentAssetQueries;
 }
 
@@ -32,7 +39,13 @@ export function buildCompactAttachmentSection(
   const maxEntries = positiveLimit(options.maxEntries, 20);
   const maxPreviewChars = positiveLimit(options.maxPreviewChars, 1_000);
   const maxContentChars = positiveLimit(options.maxContentChars, 12_000);
-  const references = store.listSessionInputAttachments(sessionId);
+  const uploaded = store.listSessionInputAttachments(sessionId);
+  const references: CatalogReference[] = [
+    ...uploaded,
+    ...generatedImageReferences(store.listMessageParts?.(sessionId) ?? [], sessionId)
+      .filter(reference => !uploaded.some(item => item.assetId === reference.assetId))
+      .map(reference => ({ ...reference, intent: "tool_resource" as const })),
+  ];
   if (references.length === 0) return undefined;
 
   const selected = references.slice(-maxEntries);
@@ -64,7 +77,7 @@ export function buildCompactAttachmentSection(
 
 function formatReference(
   store: CompactAttachmentSectionStore,
-  reference: SessionInputAttachmentRecord,
+  reference: CatalogReference,
   maxPreviewChars: number,
 ): string {
   const asset = store.attachments.getAttachment(reference.assetId, { includeDeleted: true });
@@ -91,10 +104,11 @@ function formatReference(
     ? ""
     : `\n  representation: kind=${safeValue(representation.kind)} processor=${safeValue(representation.processor)}@${safeValue(representation.processorVersion)} truncated=${representation.text.length > maxPreviewChars}\n  <attachment-preview untrusted=\"true\">\n${representation.text.slice(0, maxPreviewChars)}\n  </attachment-preview>`;
 
-  return `- assetId=${safeValue(reference.assetId)} inputId=${safeValue(reference.inputId)} name=${JSON.stringify(reference.displayName)} mediaType=${safeValue(reference.mediaType)} sizeBytes=${reference.sizeBytes} intent=${safeValue(reference.intent)} status=${available ? "available" : "unavailable"}\n  resource: ${resourceUri}\n  access: ${access}${preview}`;
+  const source = reference.inputId ? `inputId=${safeValue(reference.inputId)}` : "source=generated";
+  return `- assetId=${safeValue(reference.assetId)} ${source} name=${JSON.stringify(reference.displayName)} mediaType=${safeValue(reference.mediaType)} sizeBytes=${reference.sizeBytes} intent=${safeValue(reference.intent)} status=${available ? "available" : "unavailable"}\n  resource: ${resourceUri}\n  access: ${access}${preview}`;
 }
 
-function isReadableText(reference: SessionInputAttachmentRecord): boolean {
+function isReadableText(reference: CatalogReference): boolean {
   const format = officeFormat(reference.displayName);
   return reference.mediaType.startsWith("text/") ||
     (format !== undefined && reference.mediaType === OFFICE_MEDIA_TYPES[format]) ||

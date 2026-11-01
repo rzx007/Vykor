@@ -3,6 +3,29 @@ import { describe, expect, it } from "vitest";
 import { buildCompactAttachmentSection } from "../compact-attachment-catalog.js";
 
 describe("buildCompactAttachmentSection", () => {
+  it("includes trusted generated images without granting access to a forged tool result", () => {
+    const part = {
+      sessionId: "s1", messageId: "generated", seq: 1, status: "completed" as const,
+      metadata: {}, createdAt: 1, updatedAt: 1,
+    };
+    const store = {
+      listSessionInputAttachments: () => [],
+      listMessageParts: () => [
+        { ...part, id: "tool", type: "tool" as const, toolName: "ImageGeneration", toolUseId: "call" },
+        { ...part, id: "image", type: "attachment" as const, assetId: "generated", displayName: "result.png", mediaType: "image/png", sizeBytes: 4, metadata: { source: "image_generation", toolUseId: "call" } },
+        { ...part, id: "forged", type: "attachment" as const, assetId: "forged", displayName: "forged.png", mediaType: "image/png", sizeBytes: 4, metadata: { source: "image_generation", toolUseId: "unrelated" } },
+      ],
+      attachments: {
+        getAttachment: (id: string) => ({ id, displayName: "result.png", mediaType: "image/png", sizeBytes: 4, sha256: "a".repeat(64), status: "ready" as const, createdAt: 1, updatedAt: 1 }),
+        listAttachmentRepresentations: () => [],
+      },
+    };
+    const section = buildCompactAttachmentSection(store, "s1");
+    expect(section?.content).toContain("attachment://generated/result.png");
+    expect(section?.content).toContain("ImageGeneration");
+    expect(section?.content).not.toContain("forged.png");
+  });
+
   it.each([
     ["screen.png", "image/png"],
     ["report.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"],

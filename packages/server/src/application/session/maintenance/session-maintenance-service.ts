@@ -21,7 +21,7 @@ import {
   type DaemonOperationGate,
   type DaemonOperationLease,
 } from "../../control/daemon-operation-gate.js";
-import { agentMessagesToTranscript } from "../../agent/agent-transcript.js";
+import { preserveCompactedAttachments } from "../../attachments/resources/compact-generated-attachments.js";
 import { estimateCostUsd } from "../../../shared/usage.js";
 import { ApplicationError } from "../../../shared/application-error.js";
 import type { ContextUsageCache } from "../../context-usage/context-usage-cache.js";
@@ -151,6 +151,7 @@ export class SessionMaintenanceService {
     );
     try {
       const agent = await this.context.agentPool.acquireSession(sessionId);
+      const sourceParts = this.context.data.conversations.listMessageParts(sessionId);
       const before = this.context.events.checkpoint();
       this.appendCompactionPresentation(sessionId, "started");
       let compacted: Awaited<ReturnType<typeof agent.compact>>;
@@ -161,12 +162,21 @@ export class SessionMaintenanceService {
         this.context.events.publishSince(before);
         throw error;
       }
-      const replaced =
-        this.context.data.conversationTransactions.replaceTranscript({
-          sessionId,
-          messages: agentMessagesToTranscript(compacted.history),
-        });
-      this.appendCompactionPresentation(sessionId, "completed");
+      let replaced: ReturnType<SessionStore["conversationTransactions"]["replaceTranscript"]>;
+      let messageCount: number;
+      try {
+        const preserved = preserveCompactedAttachments({ sessionId, history: compacted.history, parts: sourceParts });
+        // Reference ownership and the new transcript move together; there is no unreferenced interval.
+        replaced = this.context.data.conversationTransactions.replaceTranscript({ sessionId, messages: preserved.messages });
+        agent.loadHistory(preserved.history);
+        messageCount = preserved.history.length;
+      } catch (error) {
+        // compact() already changed memory. Reload from the durable transcript after a failed save.
+        await this.context.agentPool.close(sessionId).catch(() => undefined);
+        this.appendCompactionPresentation(sessionId, "failed");
+        this.context.events.publishSince(before);
+        throw error;
+      }
       this.context.events.publishSince(before);
       this.context.contextUsageCache?.invalidate(sessionId);
       try {
@@ -180,7 +190,7 @@ export class SessionMaintenanceService {
         // Best-effort refresh; invalidate already dropped the stale snapshot.
       }
       return {
-        messageCount: compacted.afterMessageCount,
+        messageCount,
         messages: replaced.messages,
         parts: replaced.parts,
       };

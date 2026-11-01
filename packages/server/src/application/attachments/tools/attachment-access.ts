@@ -22,6 +22,30 @@ export interface AttachmentSessionReferenceQueries {
 
 type AttachmentReference = Pick<SessionInputAttachmentRecord, "assetId" | "displayName" | "mediaType" | "sizeBytes">;
 
+export interface GeneratedImageReference extends AttachmentReference {
+  toolUseId: string;
+}
+
+/** Only a successful generation in this message can establish a generated attachment reference. */
+export function generatedImageReferences(parts: readonly SessionMessagePartRecord[], sessionId: string): GeneratedImageReference[] {
+  const references: GeneratedImageReference[] = [];
+  for (const part of parts) {
+    if (part.sessionId !== sessionId || part.type !== "attachment" || !part.assetId ||
+        part.status !== "completed" || part.metadata.source !== "image_generation" || !isCommittedModelPart(part) ||
+        typeof part.displayName !== "string" || !part.displayName ||
+        typeof part.mediaType !== "string" || !part.mediaType ||
+        typeof part.sizeBytes !== "number" || !Number.isSafeInteger(part.sizeBytes) || part.sizeBytes < 0) continue;
+    // Free plugin result metadata may claim generatedImages; the matching host tool call grants access.
+    if (typeof part.metadata.toolUseId !== "string" || !parts.some(tool =>
+      tool.sessionId === sessionId && tool.messageId === part.messageId && tool.type === "tool" &&
+      tool.toolName === "ImageGeneration" && tool.toolUseId === part.metadata.toolUseId &&
+      tool.status === "completed" && !tool.isError && isCommittedModelPart(tool),
+    )) continue;
+    references.push({ assetId: part.assetId, displayName: part.displayName, mediaType: part.mediaType, sizeBytes: part.sizeBytes, toolUseId: part.metadata.toolUseId });
+  }
+  return references;
+}
+
 export interface AttachmentAuthorizationSessionResolver {
   resolve(executionSessionId: string): string | undefined;
 }
@@ -241,21 +265,9 @@ function validateReference(
         .listSessionInputAttachments(sessionId)
         .find((item) => item.assetId === assetId);
     if (reference) return reference;
-    const parts = store.listMessageParts?.(sessionId) ?? [];
-    for (const part of parts) {
-      if (part.sessionId !== sessionId || part.type !== "attachment" || part.assetId !== assetId ||
-          part.status !== "completed" || part.metadata.source !== "image_generation" || !isCommittedModelPart(part) ||
-          typeof part.displayName !== "string" || !part.displayName ||
-          typeof part.mediaType !== "string" || !part.mediaType ||
-          typeof part.sizeBytes !== "number" || !Number.isSafeInteger(part.sizeBytes) || part.sizeBytes < 0) continue;
-      // Free plugin result metadata may claim generatedImages; only the matching host tool call grants access.
-      if (typeof part.metadata.toolUseId !== "string" || !parts.some(tool =>
-        tool.sessionId === sessionId && tool.messageId === part.messageId && tool.type === "tool" &&
-        tool.toolName === "ImageGeneration" && tool.toolUseId === part.metadata.toolUseId &&
-        tool.status === "completed" && !tool.isError && isCommittedModelPart(tool),
-      )) continue;
-      return { assetId, displayName: part.displayName, mediaType: part.mediaType, sizeBytes: part.sizeBytes };
-    }
+    const generated = generatedImageReferences(store.listMessageParts?.(sessionId) ?? [], sessionId)
+      .find(candidate => candidate.assetId === assetId);
+    if (generated) return generated;
   } catch {
     // Deliberately collapse missing sessions and storage details into one access error.
   }

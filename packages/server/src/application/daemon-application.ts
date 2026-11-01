@@ -691,6 +691,7 @@ export class DaemonApplication implements DurableAgentApplication {
         supplementalSections: (sessionId) => {
           const section = buildCompactAttachmentSection({
             listSessionInputAttachments: (id) => store.conversations.listSessionInputAttachments(id),
+            listMessageParts: (id) => store.conversations.listMessageParts(id),
             attachments: store.attachments,
           }, sessionId);
           return section ? [section] : [];

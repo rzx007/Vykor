@@ -10,6 +10,8 @@
 
 `SessionAttachmentResources` 管理运行期间的临时只读文本文件；`buildCompactAttachmentSection()` 生成压缩上下文中的附件目录，图片和 Office 文件也保留按需读取入口。
 
+`preserveCompactedAttachments()` 在手动压缩保存前复用授权判定，保留生成图引用和最小调用凭据；仍在近期消息中的附件留在原生成调用旁，已摘要的引用归入现有压缩完成记录。模型只接收有界 URI 目录，原参数、结果和图片字节不会被复制进归档凭据。重复压缩按资产去重；载体消息或会话删除后，既有授权查询会撤销读取权限。
+
 ## 状态归属
 
 附件事实来自存储；本目录生成资源引用与文本目录，不另建附件存储。
@@ -19,6 +21,7 @@
 | 文件 | 主要接口或用途 |
 | --- | --- |
 | [compact-attachment-catalog.ts](./compact-attachment-catalog.ts) | `CompactAttachmentAssetQueries`、`CompactAttachmentSectionStore`、`CompactAttachmentSectionOptions`、`buildCompactAttachmentSection` |
+| [compact-generated-attachments.ts](./compact-generated-attachments.ts) | `preserveCompactedAttachments`，在压缩时保留可信生成图与可发现的资源地址 |
 | [session-attachment-resources.ts](./session-attachment-resources.ts) | `SessionAttachmentResourcesOptions`、`SessionAttachmentResources` |
 | [session-attachment-history.ts](./session-attachment-history.ts) | `restoreSessionAttachmentHistory`，按会话权限和当前能力恢复历史附件 |
 
