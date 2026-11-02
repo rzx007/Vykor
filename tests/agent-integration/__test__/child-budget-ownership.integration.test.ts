@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { AgentChildHandle, ToolResult } from "@vykor/agent-contracts";
 import { createLifecycleFixture, invokeLifecycleTool } from "./fixtures/task-lifecycle-fixture.js";
 
@@ -34,7 +34,8 @@ describe.each(["sdk", "daemon"] as const)("child budget ownership: %s", mode => 
       expect(results.every(result => !result.isError)).toBe(true);
       expect(handle.activity?.modelTurns).toBe(42);
       expect(f.agent.host.inspect().childBudget).toMatchObject({ activeChildren: 0, totalChildren: 1 });
-      if (f.store) expect(f.store.runs.getRun(receipt.runId)?.status).toBe("completed");
+      // waitRun 确认实际执行停止；daemon 随后才完成终态保存。
+      if (f.store) await vi.waitFor(() => expect(f.store!.runs.getRun(receipt.runId)?.status).toBe("completed"));
     } finally { await f.close(); }
   });
 
@@ -71,7 +72,7 @@ describe.each(["sdk", "daemon"] as const)("child budget ownership: %s", mode => 
       expect(handle.runId).toBe(runId);
       expect(handle.state).toBe("idle");
       expect(f.agent.host.inspect().childBudget).toMatchObject({ activeChildren: 0, totalChildren: 1 });
-      if (f.store) expect(f.store.runs.getRun(runId)?.status).toBe("failed");
+      if (f.store) await vi.waitFor(() => expect(f.store!.runs.getRun(runId)?.status).toBe("failed"));
     } finally { await f.close(); }
   });
 

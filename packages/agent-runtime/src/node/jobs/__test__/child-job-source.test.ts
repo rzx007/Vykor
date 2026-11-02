@@ -29,7 +29,7 @@ it("checks the expected run again when concurrent follow-ups reach admission", a
 });
 
 it("returns canonical failure facts through live list, read and wait", async () => {
-  const f = await createLifecycleFixture("sdk", { failure: { label: "budget-shape", kind: "max_turns" } });
+  const f = await createLifecycleFixture("sdk", { maxTurns: 2, failure: { label: "budget-shape", kind: "max_turns" } });
   try {
     const first = await f.spawn("budget-shape");
     const waited = await f.wait(first.target);
