@@ -1132,6 +1132,8 @@ describe("VykorHttpServer", () => {
       });
       expect(forkedResponse.status).toBe(201);
       const forked = (await forkedResponse.json()) as { session: { id: string } };
+      // Forking starts a background warm-up; join its loader before exclusive deletion.
+      await second.application.control.inspectRuntimeHooks(forked.session.id);
       const removedFork = await fetch(`${secondListen.url}/sessions/${forked.session.id}/hard`, {
         method: "DELETE",
         headers: auth(token),
@@ -3373,19 +3375,35 @@ describe("VykorHttpServer", () => {
           body: JSON.stringify({ id: "s1", cwd: process.cwd(), model: "m" }),
         });
         await new Promise((resolve) => setTimeout(resolve, 20));
-        const response = await fetch(`${baseUrl}/sessions/s1/compact`, {
-          method: "POST",
-          headers: auth(token),
-        });
-        expect(response.status).toBe(200);
-        const body = (await response.json()) as {
-          messageCount: number;
-          messages: Array<{ role: string }>;
-          parts: Array<{ text?: string }>;
-        };
-        expect(body.messageCount).toBe(1);
-        expect(body.messages).toHaveLength(1);
-        expect(body.parts[0]?.text).toBe("summary");
+        for (let iteration = 0; iteration < 2; iteration++) {
+          const response = await fetch(`${baseUrl}/sessions/s1/compact`, {
+            method: "POST",
+            headers: auth(token),
+          });
+          expect(response.status).toBe(200);
+          const body = (await response.json()) as {
+            messageCount: number;
+            messages: Array<{ id: string; role: string }>;
+            parts: Array<{ messageId: string; type: string; text?: string }>;
+          };
+          // Model history excludes the persisted compaction presentation record.
+          expect(body.messageCount).toBe(1);
+          expect(body.messages.map(message => message.role)).toEqual(["assistant", "system"]);
+          expect(body.messages[1]).toMatchObject({
+            metadata: { presentation: { kind: "context_compaction", phase: "completed" } },
+          });
+          expect(body.parts.filter(part => part.messageId === body.messages[0]!.id))
+            .toMatchObject([{ type: "text", text: "summary" }]);
+          expect(body.parts.filter(part => part.messageId === body.messages[1]!.id))
+            .toMatchObject([{ type: "text", text: "已压缩上下文" }]);
+
+          const [storedMessages, storedParts] = await Promise.all([
+            fetch(`${baseUrl}/sessions/s1/messages`, { headers: auth(token) }).then(result => result.json()),
+            fetch(`${baseUrl}/sessions/s1/parts`, { headers: auth(token) }).then(result => result.json()),
+          ]);
+          expect(storedMessages.messages).toEqual(body.messages);
+          expect(storedParts.parts).toEqual(body.parts);
+        }
         const events = (await (
           await fetch(`${baseUrl}/events`, { headers: auth(token) })
         ).json()) as {
