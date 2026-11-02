@@ -214,7 +214,7 @@ export function UtilityPanel({
     fileStateVisible || visibleTabs.some((tab) => tab.filePath === loadingFilePath)
       ? loadingFilePath
       : null
-  // Background app results may add a tab, but only an explicit selection may show their frame.
+  // Background results may add a tab; a panel request selects the frame to show.
   const activeTab = visibleTabs.find((tab) => tab.id === activeTabId) ?? storedVisibleTabs[0]
   const appPanelRequest = pluginApps?.panelRequest
   useEffect(() => {

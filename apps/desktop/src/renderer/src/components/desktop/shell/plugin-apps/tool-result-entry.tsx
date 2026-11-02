@@ -62,7 +62,7 @@ export function PluginAppToolResultEntry({ part }: { part: DesktopSessionPart })
       }
       void open().then(() => setError(undefined), () => setError("应用来源不可用，请检查插件状态。")).finally(() => setBusy(false))
     }}><AppWindow data-icon="inline-start" />{busy ? "正在打开…" : `查看${page?.title ?? title}`}<ArrowUpRight data-icon="inline-end" /></Button>
-    {page && <span className="text-muted-foreground">已在右侧面板打开</span>}
+    {page && <span className="text-muted-foreground">{page.visible ? "正在右侧显示" : "点击在右侧查看"}</span>}
     {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
   </div>
 }

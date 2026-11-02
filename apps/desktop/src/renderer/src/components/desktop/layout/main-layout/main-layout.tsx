@@ -1,5 +1,5 @@
 import type { ConversationSearchTarget } from "../../conversation-page/transcript/conversation-find-model"
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Outlet, useNavigate, useRouter, useRouterState } from "@tanstack/react-router"
 import {
   Group,
@@ -12,7 +12,7 @@ import {
 
 import { ConversationPane } from "@renderer/components/desktop/conversation-page"
 import {
-  usePluginApps,
+  usePluginAppPanelState,
   usePluginAppPanelRequest,
 } from "@renderer/components/desktop/shell/plugin-apps/provider"
 import { appendSideChatQuote } from "@renderer/components/desktop/tools/side-chat/side-chat-panel"
@@ -147,11 +147,7 @@ export function MainLayout(): React.JSX.Element {
   const openUtilityTool = utilityPanel.openTool
   const openWorkflowPanel = useCallback(() => openUtilityTool("workflows"), [openUtilityTool])
   const appPanelRequest = usePluginAppPanelRequest()
-  const pluginApps = usePluginApps()
-  useLayoutEffect(() => {
-    pluginApps?.setActiveSession(activeSessionId)
-    return () => pluginApps?.setActiveSession(null)
-  }, [pluginApps, activeSessionId])
+  usePluginAppPanelState(activeSessionId, panelOpen)
   const handledAppPanelRequest = useRef(0)
   useEffect(() => {
     if (!appPanelRequest || handledAppPanelRequest.current === appPanelRequest.sequence) return

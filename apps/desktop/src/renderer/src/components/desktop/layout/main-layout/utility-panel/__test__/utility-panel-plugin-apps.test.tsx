@@ -3,9 +3,11 @@ import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import type { DesktopPluginAppsAPI, PluginAppMount } from "@shared/plugin-app-types"
+import type { DesktopSessionPart } from "@shared/session-types"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { emptySessionView } from "@renderer/stores/desktop-session/store-test-fixtures"
-import { PluginAppsProvider, usePluginApps } from "@renderer/components/desktop/shell/plugin-apps/provider"
+import { PluginAppsProvider, usePluginApps, usePluginAppPanelState } from "@renderer/components/desktop/shell/plugin-apps/provider"
+import { usePluginAppResults } from "@renderer/components/desktop/shell/plugin-apps/use-plugin-app-results"
 import type { PluginAppPageManager } from "@renderer/components/desktop/shell/plugin-apps/page-manager"
 import { mount } from "@renderer/components/desktop/shell/plugin-apps/__test__/fixtures.test-support"
 import { UtilityPanel } from "../utility-panel"
@@ -31,6 +33,8 @@ vi.mock("@modelcontextprotocol/ext-apps/app-bridge", () => ({ AppBridge: class {
   getAppCapabilities() { return { availableDisplayModes: ["inline", "fullscreen"] } }
   setRequestHandler() {}
   setHostContext() {}
+  async sendToolInput() {}
+  async sendToolResult() {}
   async teardownResource() {}
 } }))
 vi.mock("@renderer/hooks/use-active-workspace-is-git", () => ({ useActiveWorkspaceIsGit: () => false }))
@@ -40,6 +44,7 @@ const initialStore = useDesktopSessionStore.getState()
 let container: HTMLDivElement, root: Root, manager: PluginAppPageManager
 let renderedSession: string, renderedOpen: boolean
 let renderedSummary: boolean
+let renderedParts: DesktopSessionPart[]
 let calls: ReturnType<typeof createAPI>
 const animationFrames = new Map<number, FrameRequestCallback>()
 async function paint() {
@@ -68,19 +73,22 @@ function createAPI() {
     cancelTool: vi.fn(async () => {}), getAction: vi.fn(),
   }
 }
-function Panel({ sessionId, open }: { sessionId: string; open: boolean }) {
+function Panel({ sessionId, open, parts }: { sessionId: string; open: boolean; parts: DesktopSessionPart[] }) {
   manager = usePluginApps()!
+  usePluginAppPanelState(sessionId, open)
+  usePluginAppResults(parts)
   return <UtilityPanel key={sessionId} scopeId={`session:${sessionId}`} open={open} maximized={false}
     onToggleMaximized={() => {}} onClose={() => {}} fileOpenRequest={null} reviewOpenRequest={null}
     terminalOpenRequest={null} toolOpenRequest={null} onOpenFile={() => {}} onOpenReview={() => {}} onOpenTerminal={() => {}} />
 }
-async function render(sessionId = renderedSession, open = renderedOpen, summary = renderedSummary) {
+async function render(sessionId = renderedSession, open = renderedOpen, summary = renderedSummary, parts = renderedParts) {
   renderedSession = sessionId; renderedOpen = open
   renderedSummary = summary
+  renderedParts = parts
   await act(async () => {
     useDesktopSessionStore.setState({ activeSessionId: sessionId, sessionView: emptySessionView(sessionId) })
     root.render(<PluginAppsProvider>
-      <Panel sessionId={sessionId} open={open} />
+      <Panel sessionId={sessionId} open={open} parts={parts} />
       {summary && <SessionSummaryPopover view={emptySessionView(sessionId)} workspace={null} canOpenReview={false}
         onOpenReview={() => {}} onOpenAgents={() => {}} onOpenFile={() => {}} />}
     </PluginAppsProvider>)
@@ -102,6 +110,7 @@ beforeEach(() => {
   destroySideChat.mockReset()
   useCodePreviewDrafts.setState({ drafts: {} })
   renderedSummary = false
+  renderedParts = []
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
   useDesktopSessionStore.setState(initialStore, true)
   calls = createAPI(); bridges.length = 0
@@ -176,6 +185,45 @@ it("keeps an empty panel on its start page until the new live app is selected fr
   expect(peer.document.querySelector("textarea")!.value).toBe("未保存草稿")
 })
 
+it("selects a freshly created canvas once and keeps its actual frame and draft after collapsing and further results", async () => {
+  await render("canvas", true, true)
+  const mounted: PluginAppMount = { ...mount, mountId: "canvas-page", url: "about:blank", state: {
+    ...mount.state, source: { sessionId: "canvas", appId: "canvas-app" },
+    app: { ...mount.state.app, pluginId: "dev.vykor.excalidraw", id: "canvas-app", sessionId: "canvas" },
+  } }
+  calls.mounts.set(mounted.mountId, mounted)
+  Object.assign(calls, { openToolResult: vi.fn(async ({ sourcePartId }: { sourcePartId: string }) => ({ mounted, initial: { sourcePartId, arguments: {}, result: { content: [] } } })) })
+  const created: DesktopSessionPart = { id: "create", sessionId: "canvas", messageId: "reply", seq: 1,
+    type: "tool", status: "completed", toolName: "mcp__excalidraw__create_diagram", createdAt: Date.now(), updatedAt: Date.now(),
+    metadata: { pluginAppSource: { pluginId: "dev.vykor.excalidraw" } },
+  }
+  await render("canvas", true, true, [{ ...created, status: "running" }])
+  await render("canvas", true, true, [created])
+  await act(async () => bridges.at(-1)!.oninitialized!())
+  await paint()
+  const page = manager.snapshot()[0]!, request = manager.panelRequest
+  const liveFrame = frame(page.id), peer = liveFrame.contentWindow!
+  peer.document.body.innerHTML = '<textarea>旅行计划草稿</textarea>'
+  assertVisible(page.id, true)
+  expect(document.body.textContent).toContain("正在显示")
+  await render("canvas", false)
+  assertVisible(page.id, false)
+  expect(document.body.textContent).toContain("点击打开")
+  expect(document.body.textContent).not.toContain("正在显示")
+  const read = { ...created, id: "read", toolName: "mcp__excalidraw__read_scene" }
+  const again = { ...created, id: "new-create" }
+  await render("canvas", false, true, [created, read, again])
+  expect(manager.panelRequest).toBe(request)
+  assertVisible(page.id, false)
+  await render("canvas", true)
+  assertVisible(page.id, true)
+  expect(frame(page.id)).toBe(liveFrame)
+  expect(liveFrame.contentWindow).toBe(peer)
+  expect(peer.document.querySelector("textarea")!.value).toBe("旅行计划草稿")
+  expect(calls.close).not.toHaveBeenCalled()
+  expect(calls.release).not.toHaveBeenCalled()
+})
+
 it("cancels hidden confirmations but lets an accepted original operation finish while collapsed", async () => {
   await render("confirmations", true)
   const page = await openPage("confirmations", "editor")
@@ -198,6 +246,58 @@ it("cancels hidden confirmations but lets an accepted original operation finish 
   expect(calls.invokeTool).toHaveBeenCalledExactlyOnceWith({ mountId: page.id, requestId: "save" })
   expect(calls.cancelTool).not.toHaveBeenCalled()
   expect(calls.release).not.toHaveBeenCalled(); expect(calls.close).not.toHaveBeenCalled()
+})
+
+function prepareCreation(sessionId: string) {
+  const mounted: PluginAppMount = { ...mount, mountId: `${sessionId}:drawing`, url: "about:blank", state: {
+    ...mount.state, source: { sessionId, appId: "drawing" },
+    app: { ...mount.state.app, pluginId: "dev.vykor.excalidraw", id: "drawing", sessionId },
+  } }
+  calls.mounts.set(mounted.mountId, mounted)
+  const result = { mounted, initial: { sourcePartId: "create", arguments: {}, result: { content: [] } } }
+  return result
+}
+
+it.each(["before-result", "during-mount"])("honours a manual collapse %s for the first canvas", async timing => {
+  await render("late-canvas", true)
+  if (timing === "before-result") await render("late-canvas", false)
+  const result = prepareCreation("late-canvas")
+  let finish!: (value: typeof result) => void
+  Object.assign(calls, { openToolResult: () => new Promise(resolve => { finish = resolve }) })
+  let pending!: ReturnType<typeof manager.presentToolResult>
+  await act(async () => { pending = manager.presentToolResult("late-canvas", "create", true, true) })
+  if (timing === "during-mount") await render("late-canvas", false)
+  await act(async () => { finish(result); await pending })
+  expect(manager.panelRequest).toBeUndefined()
+  expect(manager.snapshot()).toHaveLength(1)
+})
+
+it.each([true, false])("defers canvas reveal until the current permission decision (%s), preserving the original operation", async accepted => {
+  await render("permission-canvas", true)
+  const editor = await openPage("permission-canvas", "editor")
+  const request = manager.panelRequest
+  let save!: ReturnType<typeof editor.controller.callTool>
+  await act(async () => { save = editor.controller.callTool("save", {}, new AbortController().signal) })
+  void save.catch(() => {})
+  expect(document.querySelector('[role="alertdialog"]')).not.toBeNull()
+  const result = prepareCreation("permission-canvas")
+  Object.assign(calls, { openToolResult: async () => result })
+  await act(async () => { await manager.presentToolResult("permission-canvas", "create", true, true) })
+  await act(async () => bridges.at(-1)!.oninitialized!())
+  await paint()
+  expect(manager.panelRequest).toBe(request)
+  assertVisible(editor.id, true)
+  expect(calls.cancelTool).not.toHaveBeenCalled()
+  expect(calls.invokeTool).not.toHaveBeenCalled()
+  await act(async () => { [...document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')].find(button => button.textContent === (accepted ? "执行" : "取消"))!.click() })
+  if (accepted) await expect(save).resolves.toMatchObject({ content: [] })
+  else await expect(save).rejects.toThrow("取消")
+  await paint()
+  if (accepted) expect(calls.invokeTool).toHaveBeenCalledExactlyOnceWith({ mountId: editor.id, requestId: "save" })
+  else expect(calls.invokeTool).not.toHaveBeenCalled()
+  expect(manager.panelRequest?.pageId).toBe(result.mounted.mountId)
+  assertVisible(result.mounted.mountId, true)
+  if (accepted) expect(calls.cancelTool).not.toHaveBeenCalled()
 })
 
 it("does not reveal a background app when the last ordinary tool tab closes", async () => {

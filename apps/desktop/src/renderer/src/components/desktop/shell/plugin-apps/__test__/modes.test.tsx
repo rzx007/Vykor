@@ -152,6 +152,101 @@ it("updates live results once without taking focus from an existing application"
   expect(queueToolResult).toHaveBeenCalledTimes(1)
 })
 
+it("reveals a live creation only once per resident page, preserving a collapsed page and its queued updates", async () => {
+  const { manager } = fixture()
+  manager.setActiveSession("original")
+  const page = (await manager.presentToolResult("original", "read-first", true))!
+  expect(manager.panelRequest).toBeUndefined()
+  await manager.presentToolResult("original", "created", true, true)
+  expect(manager.panelRequest).toMatchObject({ pageId: page.id, sessionId: "original" })
+  const request = manager.panelRequest
+  page.onModes!(["inline"])
+  const anchor = Symbol()
+  manager.place(page.id, new DOMRect(400, 20, 300, 600), anchor)
+  const visibleSnapshot = manager.snapshot()
+  expect(page.visible).toBe(true)
+  manager.place(page.id, null, anchor)
+  expect(page.visible).toBe(false)
+  expect(manager.snapshot()).not.toBe(visibleSnapshot)
+  const queueToolResult = vi.fn()
+  page.transport = { queueToolResult } as never
+  await manager.presentToolResult("original", "update", true)
+  await manager.presentToolResult("original", "another-create", true, true)
+  await manager.presentToolResult("original", "created", true, true)
+  expect(manager.panelRequest).toBe(request)
+  expect(queueToolResult).toHaveBeenCalledTimes(2)
+  expect(manager.snapshot()[0]).toBe(page)
+  manager.focus(page)
+  expect(manager.panelRequest?.sequence).toBe(request!.sequence + 1)
+})
+
+it("consumes a delayed creation without reopening it after switching back to its session", async () => {
+  const { api, manager } = fixture()
+  let finish!: (value: Awaited<ReturnType<typeof api.openToolResult>>) => void
+  const open = api.openToolResult
+  api.openToolResult = () => new Promise(resolve => { finish = resolve })
+  manager.setActiveSession("original")
+  const pending = manager.presentToolResult("original", "created", true, true)
+  manager.setActiveSession("other")
+  finish(await open({ sourcePartId: "created" }))
+  await pending
+  expect(manager.panelRequest).toBeUndefined()
+  manager.setActiveSession("original")
+  api.openToolResult = open
+  await manager.presentToolResult("original", "another-create", true, true)
+  expect(manager.panelRequest).toBeUndefined()
+})
+
+it("does not auto-reveal a page explicitly opened and then hidden before its first creation", async () => {
+  const { manager } = fixture()
+  const page = (await manager.presentToolResult("original", "historical-read"))!
+  const request = manager.panelRequest
+  manager.place(page.id, null)
+  await manager.presentToolResult("original", "created", true, true)
+  expect(manager.panelRequest).toBe(request)
+})
+
+it("does not reveal a delayed creation after leaving and returning to the same session", async () => {
+  const { api, manager } = fixture()
+  let finish!: (value: Awaited<ReturnType<typeof api.openToolResult>>) => void
+  const open = api.openToolResult
+  api.openToolResult = () => new Promise(resolve => { finish = resolve })
+  manager.setActiveSession("original")
+  const pending = manager.presentToolResult("original", "created", true, true)
+  manager.setActiveSession("other")
+  manager.setActiveSession("original")
+  finish(await open({ sourcePartId: "created" }))
+  await pending
+  expect(manager.panelRequest).toBeUndefined()
+})
+
+it.each(["collapse", "switch", "selection", "revocation"])("drops a deferred automatic reveal after %s without replaying its result", async change => {
+  const { manager } = fixture()
+  manager.setActiveSession("original")
+  manager.setPanelOpen("original", true)
+  manager.setConfirming(true)
+  const page = (await manager.presentToolResult("original", "created", true, true))!
+  expect(manager.panelRequest).toBeUndefined()
+  if (change === "collapse") manager.setPanelOpen("original", false)
+  if (change === "switch") { manager.setActiveSession("other"); manager.setActiveSession("original") }
+  if (change === "selection") manager.focus(page)
+  if (change === "revocation") page.controller.update({ ...page.controller.state, app: { ...page.controller.state.app, status: "revoked" } })
+  const request = manager.panelRequest
+  manager.setConfirming(false)
+  await Promise.resolve()
+  expect(manager.panelRequest).toBe(request)
+  expect([...page.sourceParts!]).toEqual(["created"])
+  expect(page.results?.size).toBe(1)
+})
+
+it("does not request a panel when the existing trusted opening path rejects the result", async () => {
+  const { api, manager } = fixture()
+  api.openToolResult = async () => { throw new Error("permission revoked") }
+  await expect(manager.presentToolResult("original", "created", true, true)).rejects.toThrow("permission revoked")
+  expect(manager.panelRequest).toBeUndefined()
+  expect(manager.snapshot()).toEqual([])
+})
+
 it("viewing an older result only focuses a surface already opened from the catalog", async () => {
   const { manager } = fixture(), page = await manager.mount(mount.state.source, "笔记")
   const queueToolResult = vi.fn()
@@ -163,7 +258,7 @@ it("viewing an older result only focuses a surface already opened from the catal
   expect(manager.panelRequest).toMatchObject({ pageId: page.id })
   expect(queueToolResult).not.toHaveBeenCalled()
   expect(page.sourceParts?.size).toBe(0)
-  expect(container.textContent).toContain("已在右侧面板打开")
+  expect(container.textContent).toContain("点击在右侧查看")
   expect(container.querySelector("iframe")).toBeNull()
   await act(async () => root.unmount()); container.remove()
 })
@@ -181,7 +276,7 @@ it("lets Main resolve a result when multiple surfaces share the same resource", 
   const part: DesktopSessionPart = { id: "distinct-part", sessionId: "original", messageId: "message", seq: 0, createdAt: 1, updatedAt: 1, type: "tool", status: "completed", metadata: { pluginAppSource: { ...mount.state.app } } }
   const container = document.createElement("div"); document.body.append(container); const root = createRoot(container)
   await act(async () => root.render(<PluginAppToolResultEntry part={part} />))
-  expect(container.textContent).not.toContain("已在右侧面板打开")
+  expect(container.textContent).not.toContain("点击在右侧查看")
   await act(async () => container.querySelector("button")!.click())
   expect(openToolResult).toHaveBeenCalledWith({ sessionId: "original", sourcePartId: part.id })
   expect(manager.panelRequest?.pageId).toBe("distinct-result")

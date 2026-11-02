@@ -9,7 +9,7 @@ export interface ResidentAppPage {
   initial?: { arguments: Record<string, unknown>; result?: unknown }
   /** Pending bodies transfer to the transport; only Part IDs survive delivery. */
   results?: Map<string, InitialResult>; sourceParts?: Set<string>
-  modes?: AppDisplayMode[]; initializationError?: string; menuRejection?: string; expanded?: boolean
+  modes?: AppDisplayMode[]; initializationError?: string; menuRejection?: string; expanded?: boolean; visible?: boolean
   onModes?(modes: AppDisplayMode[]): void; onInitializationError?(error: unknown): void
   requestDisplayMode?(mode: AppDisplayMode): void
 }
@@ -23,18 +23,61 @@ export class PluginAppPageManager {
   private readonly listeners = new Set<() => void>()
   private readonly anchors = new Map<string, Map<symbol, Placement>>()
   private readonly liveResults = new Set<string>()
+  private readonly autoRevealed = new Set<string>()
+  private readonly dismissedSessions = new Set<string>()
   private readonly openingResults = new Map<string, Promise<ResidentAppPage>>()
   private sequence = 0
+  private navigationEpoch = 0
+  private confirming = false
+  private panel?: { sessionId: string; open: boolean }
+  private pendingReveal?: { page: ResidentAppPage; epoch: number }
   private activeSessionId?: string | null
   panelRequest?: AppPanelRequest
   constructor(readonly api: DesktopPluginAppsAPI, private readonly confirm: AppConfirmation) {}
   snapshot = () => this.pages
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
   private emit(): void { this.pages = [...this.pages]; this.listeners.forEach(listener => listener()) }
-  setActiveSession(sessionId: string | null): void { this.activeSessionId = sessionId }
+  setActiveSession(sessionId: string | null): void {
+    if (this.activeSessionId === sessionId) return
+    this.activeSessionId = sessionId
+    this.navigationEpoch++
+    this.panel = undefined
+    this.pendingReveal = undefined
+  }
+  setPanelOpen(sessionId: string | null, open: boolean): void {
+    if (!sessionId || (this.activeSessionId !== undefined && this.activeSessionId !== sessionId)) return
+    if (this.panel?.sessionId === sessionId && this.panel.open && !open) {
+      this.dismissedSessions.add(sessionId)
+      this.navigationEpoch++
+      this.pendingReveal = undefined
+    }
+    this.panel = { sessionId, open }
+  }
+  setConfirming(confirming: boolean): void {
+    this.confirming = confirming
+    if (confirming || !this.pendingReveal) return
+    // 先让确认 promise 的调用方进入已接受或已取消状态，再切换可见页面。
+    queueMicrotask(() => {
+      if (this.confirming || !this.pendingReveal) return
+      const { page, epoch } = this.pendingReveal
+      this.pendingReveal = undefined
+      this.revealAutomatically(page, epoch)
+    })
+  }
+  private revealAutomatically(page: ResidentAppPage, epoch: number): void {
+    const { source, app, availability, online } = page.controller.state
+    if (epoch !== this.navigationEpoch || !this.pages.includes(page) || this.dismissedSessions.has(source.sessionId)
+      || (this.activeSessionId !== undefined && this.activeSessionId !== source.sessionId)
+      || !online || app.status !== "open" || !availability.canReadResource) return
+    if (this.confirming) this.pendingReveal = { page, epoch }
+    else this.focus(page)
+  }
   focus(page: ResidentAppPage): void {
     if (!this.pages.includes(page)) return
     if (this.activeSessionId !== undefined && this.activeSessionId !== page.controller.state.source.sessionId) return
+    this.autoRevealed.add(page.id)
+    this.navigationEpoch++
+    this.pendingReveal = undefined
     this.panelRequest = { sequence: ++this.sequence, pageId: page.id, sessionId: page.controller.state.source.sessionId }
     this.emit()
   }
@@ -124,12 +167,17 @@ export class PluginAppPageManager {
     this.emit()
     return page
   }
-  async presentToolResult(sessionId: string, sourcePartId: string, live = false): Promise<ResidentAppPage | undefined> {
+  async presentToolResult(sessionId: string, sourcePartId: string, live = false, revealNewPage = false): Promise<ResidentAppPage | undefined> {
     const key = `${sessionId}:${sourcePartId}`
     if (live && this.liveResults.has(key)) return
     if (live) this.liveResults.add(key)
+    const epoch = this.navigationEpoch
     const page = await this.openToolResult(sessionId, sourcePartId, !live)
-    // 实时结果交给工作摘要提示；只有用户明确打开时才定位右侧面板。
+    // 每个常驻页面只自动定位一次；收起、切标签和后续结果不会重开。
+    if (live && revealNewPage && !this.autoRevealed.has(page.id)) {
+      this.autoRevealed.add(page.id)
+      this.revealAutomatically(page, epoch)
+    }
     if (!live) this.focus(page)
     return page
   }
@@ -152,16 +200,20 @@ export class PluginAppPageManager {
     let rect = placement?.rect ?? null
     // No visible placement before the official handshake confirms support.
     if (!page.modes?.includes(mode)) rect = null
+    const changed = page.visible !== !!rect
+    page.visible = !!rect
     page.controller.setVisible(!!rect)
     if (rect) page.transport?.setDisplayMode(mode)
     const element = page.element
-    if (!element) return
-    element.dataset.displayMode = mode
-    element.style.visibility = rect ? "visible" : "hidden"
-    element.style.pointerEvents = rect ? "auto" : "none"
-    element.inert = !rect
-    element.setAttribute("aria-hidden", String(!rect))
-    if (rect) Object.assign(element.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` })
+    if (element) {
+      element.dataset.displayMode = mode
+      element.style.visibility = rect ? "visible" : "hidden"
+      element.style.pointerEvents = rect ? "auto" : "none"
+      element.inert = !rect
+      element.setAttribute("aria-hidden", String(!rect))
+      if (rect) Object.assign(element.style, { left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px` })
+    }
+    if (changed) this.emit()
   }
   private requestDisplayMode(page: ResidentAppPage, mode: AppDisplayMode): void {
     const visible = [...(this.anchors.get(page.id)?.values() ?? [])].filter(item => item.rect)

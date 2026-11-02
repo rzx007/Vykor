@@ -47,7 +47,9 @@ function AppRow({ page, onOpen }: { page: ResidentAppPage; onOpen(): void }) {
             ? "正在打开"
             : !state.availability.canInvokeTools
               ? "只读 · 草稿保留"
-              : "已打开"
+              : page.visible
+                ? "正在显示"
+                : "点击打开"
   return (
     <WorkRow
       title={page.title}

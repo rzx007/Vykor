@@ -240,6 +240,22 @@ it("auto-opens for a new app without focus theft or navigating, and dismisses th
   editor.remove()
 })
 
+it("distinguishes a resident hidden application from one actually visible in the panel", async () => {
+  await render()
+  const notes = app("Notes")
+  state.pages = [notes]
+  await render()
+  expect(document.body.textContent).toContain("点击打开")
+  expect(document.body.textContent).not.toContain("已打开")
+  notes.visible = true
+  await render()
+  expect(document.body.textContent).toContain("正在显示")
+  notes.visible = false
+  await render()
+  expect(document.body.textContent).toContain("点击打开")
+  expect(document.body.textContent).not.toContain("正在显示")
+})
+
 it("baselines resident apps, ignores other chats and late old jobs, but opens new work once", async () => {
   state.pages = [app("existing"), app("foreign", "other")]
   await render()

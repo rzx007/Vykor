@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react"
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react"
 import type { PluginAppConfirmation } from "@shared/plugin-app-types"
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@renderer/components/ui/alert-dialog"
 import { PluginAppPageManager } from "./page-manager"
@@ -9,6 +9,15 @@ const Context = createContext<PluginAppPageManager | null>(null)
 const ConfirmingContext = createContext(false)
 export function usePluginAppConfirming(): boolean { return useContext(ConfirmingContext) }
 export function usePluginApps(): PluginAppPageManager | null { return useContext(Context) }
+/** 布局提交时同步会话和收起状态，早于确认结束后排队的自动定位。 */
+export function usePluginAppPanelState(sessionId: string | null, open: boolean): void {
+  const manager = usePluginApps()
+  useLayoutEffect(() => {
+    manager?.setActiveSession(sessionId)
+    return () => manager?.setActiveSession(null)
+  }, [manager, sessionId])
+  useLayoutEffect(() => { manager?.setPanelOpen(sessionId, open) }, [manager, sessionId, open])
+}
 const emptyPages: ReturnType<PluginAppPageManager["snapshot"]> = []
 const emptySubscribe = () => () => {}
 export function usePluginAppPages() {
@@ -23,16 +32,18 @@ export function PluginAppsProvider({ children }: { children: React.ReactNode }) 
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null)
   const current = useRef<Confirmation | null>(null)
   const lifetime = useRef(0)
-  const [manager] = useState(() => window.desktop?.pluginApps ? new PluginAppPageManager(window.desktop.pluginApps, (request, signal, source) => new Promise<boolean>(resolve => {
+  const [manager] = useState<PluginAppPageManager | null>(() => window.desktop?.pluginApps ? new PluginAppPageManager(window.desktop.pluginApps, (request, signal, source) => new Promise<boolean>(resolve => {
     if (signal.aborted || current.current) { resolve(false); return }
     const decide = (accepted: boolean) => {
       signal.removeEventListener("abort", cancelled)
-      if (current.current?.request === request) { current.current = null; setConfirmation(null) }
+      const owned = current.current?.request === request
+      if (owned) { current.current = null; setConfirmation(null) }
       resolve(accepted)
+      if (owned) manager?.setConfirming(false)
     }
     const cancelled = () => decide(false)
     const entry = { request, source, decide }
-    current.current = entry; setConfirmation(entry)
+    current.current = entry; manager?.setConfirming(true); setConfirmation(entry)
     signal.addEventListener("abort", cancelled, { once: true })
   })) : null)
   const pages = useSyncExternalStore(manager?.subscribe ?? emptySubscribe, manager?.snapshot ?? (() => emptyPages))
