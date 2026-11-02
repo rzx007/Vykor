@@ -227,7 +227,6 @@ const WORKER_DISALLOWED_TOOLS = [
   "Agent",
   "JobSend",
   "JobCancel",
-  "JobWait",
   "Workflow",
   "TeamCreate",
   "TeamDelete",

@@ -275,7 +275,7 @@ it("repairs a real Shell terminal save using the existing process payload withou
 
 it.each(["completed", "failed", "max_turns", "timeout", "user_cancelled"] as const)("preserves identical live, terminal-event and recovered %s output", async cause => {
   const label = `partial-${cause}`;
-  const f = await createLifecycleFixture("daemon", { failTerminalSave: true, ...(cause === "failed" || cause === "max_turns" ? { failure: { label, kind: cause } } : {}) });
+  const f = await createLifecycleFixture("daemon", { failTerminalSave: true, ...(cause === "max_turns" ? { maxTurns: 2 } : {}), ...(cause === "failed" || cause === "max_turns" ? { failure: { label, kind: cause } } : {}) });
   try {
     if (cause === "timeout" || cause === "user_cancelled") f.hold(label);
     const a = cause === "timeout" ? await f.admit(label, 1) : await f.spawn(label);
@@ -386,6 +386,7 @@ it("returns a stopped followup permit after its started projection is rejected",
 
 it("keeps budget feedback pinned across followup and archive", async () => {
   const f = await createLifecycleFixture("daemon", {
+    maxTurns: 2,
     failure: { label: "budget-feedback", kind: "max_turns" },
   });
   try {

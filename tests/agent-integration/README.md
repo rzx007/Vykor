@@ -41,6 +41,8 @@
 
 child-run-settlement 的预算反馈贯通用例沿真实默认工厂运行：达到轮次上限、分别保存报告与错误、JobWait 读取、显式新输入接纳、旧轮重放保护、关闭后按旧 target 读取归档。既有保存失败原因表同时核对 Task／Run 错误，调用计数确认恢复没有重放模型或工具。受控网络响应不能证明真实模型一定会说明全部缺项。
 
+`__test__/child-budget-ownership.integration.test.ts` 通过真实 SDK / daemon 工厂和 child handle，验证不限轮数时可以完成 41 轮实际 Read，模型多传的 `maxTurns` 不产生硬上限；宿主和角色显式上限仍在第 2 轮收尾，不自动续额。内置 worker 还实际创建并等待自己的 Shell，同时验证父会话的 Shell 不能通过 JobWait 访问。
+
 `__test__/child-environment-ownership.integration.test.ts` 使用真实 SDK / daemon 加载器、SQLite、两层 child handle 和原生 Shell 核对各会话目录、有效审批设置及独立租约；同一子会话卸载恢复后重新申请租约，关闭时各释放一次。
 
 同文件还通过真实 DaemonApplication、默认 Node 工厂和 child handle 验证宿主目录与环境内执行目录不同时的派发检查：权限校验使用宿主目录，工具实际收到环境内目录。该用例注入目录映射，不要求测试机安装 WSL，也不冒充真实 WSL 进程验收。

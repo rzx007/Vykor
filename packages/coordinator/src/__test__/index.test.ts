@@ -201,7 +201,6 @@ describe("AgentDefinitions", () => {
       "Agent",
       "JobSend",
       "JobCancel",
-      "JobWait",
       "Workflow",
       "TeamCreate",
       "TeamDelete",

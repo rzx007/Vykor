@@ -51,11 +51,6 @@ export function createAgentTool(options: CreateAgentToolOptions): ToolDefinition
             "Deliverable the parent needs back, such as evidence-backed findings, changes with test " +
             "results, or explicit blockers.",
         },
-        maxTurns: {
-          type: "integer",
-          minimum: 1,
-          description: "Optional work-loop turn budget for this child run; it can only tighten the configured budget. The last turn is reserved for a tool-free partial summary, so 5 turns allow at most 4 working turns. This is not a count of network attempts or elapsed seconds.",
-        },
         timeoutSeconds: {
           type: "integer",
           minimum: 1,
@@ -89,10 +84,6 @@ export function createAgentTool(options: CreateAgentToolOptions): ToolDefinition
             isError: true,
           };
         }
-      }
-      const maxTurns = input.maxTurns;
-      if (maxTurns !== undefined && !isPositiveBudget(maxTurns)) {
-        return { content: [{ type: "text", text: "Invalid maxTurns. Use a positive integer." }], isError: true };
       }
       const timeoutSeconds = input.timeoutSeconds;
       if (timeoutSeconds !== undefined && !isPositiveBudget(timeoutSeconds)) {
@@ -132,7 +123,6 @@ export function createAgentTool(options: CreateAgentToolOptions): ToolDefinition
           effort: agentDef?.effort != null ? String(agentDef.effort) : undefined,
           ...(typeof scope === "string" ? { scope } : {}),
           ...(typeof expectedResult === "string" ? { expectedResult } : {}),
-          ...(maxTurns !== undefined ? { requestedMaxTurns: maxTurns } : {}),
           ...(typeof timeoutSeconds === "number" ? { requestedTimeoutSeconds: timeoutSeconds } : {}),
         });
 

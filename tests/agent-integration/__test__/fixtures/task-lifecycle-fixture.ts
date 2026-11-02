@@ -71,7 +71,7 @@ function payload(result: ToolResult): Record<string, any> {
   return JSON.parse(body);
 }
 
-export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { childBudget?: Partial<AgentChildBudget>; failTerminalSave?: boolean; failStartedAck?: boolean | number; failChildCreated?: boolean; failLeaseReleaseOnce?: boolean; failShellSave?: boolean; catalogModels?: string[]; failCleanupOnce?: string; failure?: { label: string; kind: "failed" | "max_turns"; once?: boolean } } = {}): Promise<LifecycleFixture> {
+export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { maxTurns?: number; childBudget?: Partial<AgentChildBudget>; failTerminalSave?: boolean; failStartedAck?: boolean | number; failChildCreated?: boolean; failLeaseReleaseOnce?: boolean; failShellSave?: boolean; catalogModels?: string[]; failCleanupOnce?: string; failure?: { label: string; kind: "failed" | "max_turns"; once?: boolean } } = {}): Promise<LifecycleFixture> {
   const directory = mkdtempSync(join(tmpdir(), `shared-jobs-${mode}-`));
   if (options.failure?.kind === "max_turns") writeFileSync(join(directory, `${options.failure.label}.txt`), "finalization input");
   let environmentAcquires = 0;
@@ -164,7 +164,7 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
       yield { type: "complete", stopReason: "end_turn" };
     }
   } };
-  const settings = { model: "offline", apiFormat: "openai" as const, maxTurns: 8, permission: { mode: "full_access" as const }, plugins: { enabled: false }, memory: { enabled: false }, sandbox: { enabled: false }, ...(options.childBudget ? { childBudget: options.childBudget } : {}), ...(options.catalogModels ? { provider: customProvider.id, customProviders: [customProvider] } : {}) };
+  const settings = { model: "offline", apiFormat: "openai" as const, maxTurns: options.maxTurns ?? 8, permission: { mode: "full_access" as const }, plugins: { enabled: false }, memory: { enabled: false }, sandbox: { enabled: false }, ...(options.childBudget ? { childBudget: options.childBudget } : {}), ...(options.catalogModels ? { provider: customProvider.id, customProviders: [customProvider] } : {}) };
   let node!: DefaultNodeAgent;
   let application: DaemonApplication | undefined;
   let store: SessionStore | undefined;
@@ -316,7 +316,7 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
     cleanupEntered: label => cleanups.get(label)!.entered.promise,
     releaseCleanup: label => cleanups.get(label)!.released.resolve(),
     spawn: async prompt => {
-      const result = await invoke("Agent", { prompt, description: prompt, subagentType: "worker", allowedTools: ["Read"], ...(options.failure?.label === prompt && options.failure.kind === "max_turns" ? { maxTurns: 2 } : {}) });
+      const result = await invoke("Agent", { prompt, description: prompt, subagentType: "worker", allowedTools: ["Read"] });
       const target = decodeJobTarget(result.target);
       if (target.kind !== "agent") throw new Error("Agent receipt must select a run");
       const handle = node.children.get(target.jobId);

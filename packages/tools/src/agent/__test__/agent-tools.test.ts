@@ -80,9 +80,10 @@ describe("agentTool framework child controller", () => {
 
   it("declares the delegation contract fields in inputSchema", () => {
     const props = (agentTool.inputSchema as { properties: Record<string, unknown> }).properties;
-    for (const field of ["scope", "expectedResult", "maxTurns", "timeoutSeconds"]) {
+    for (const field of ["scope", "expectedResult", "timeoutSeconds"]) {
       expect(props[field], field).toBeDefined();
     }
+    expect(props.maxTurns).toBeUndefined();
   });
 
   it("describes the independent scope and expected result in the tool description", () => {
@@ -90,7 +91,7 @@ describe("agentTool framework child controller", () => {
     expect(agentTool.description).toMatch(/expected result/i);
   });
 
-  it("passes scope, expectedResult, maxTurns and timeoutSeconds to the framework child controller", async () => {
+  it("passes delegation context and timeout without accepting a model turn cap", async () => {
     const { agent, calls } = createAgentContext();
 
     await agentTool.execute(
@@ -108,14 +109,14 @@ describe("agentTool framework child controller", () => {
     expect(calls.at(-1)).toMatchObject({
       scope: "docs/plugin-mechanism-report.md",
       expectedResult: "findings with evidence",
-      requestedMaxTurns: 40,
       requestedTimeoutSeconds: 600,
     });
+    expect(calls.at(-1)?.requestedMaxTurns).toBeUndefined();
     expect(calls.at(-1)?.maxTurns).toBeUndefined();
     expect(calls.at(-1)?.timeoutSeconds).toBeUndefined();
   });
 
-  it("passes role budgets separately from caller tightening", async () => {
+  it("preserves role budgets without forwarding a model turn cap", async () => {
     const { agent, calls } = createAgentContext();
     const capabilityView = {
       agents: new Map([["plugin:scoped", { ownerPluginId: "plugin", definition: {
@@ -132,9 +133,9 @@ describe("agentTool framework child controller", () => {
     expect(calls.at(-1)).toMatchObject({
       maxTurns: 30,
       timeoutSeconds: 600,
-      requestedMaxTurns: 40,
       requestedTimeoutSeconds: 900,
     });
+    expect(calls.at(-1)?.requestedMaxTurns).toBeUndefined();
   });
 
   it("leaves the delegation fields undefined for legacy calls", async () => {
@@ -150,20 +151,18 @@ describe("agentTool framework child controller", () => {
     expect(spawn.requestedTimeoutSeconds).toBeUndefined();
   });
 
-  it("rejects non-positive or fractional budgets without spawning", async () => {
-    for (const field of ["maxTurns", "timeoutSeconds"] as const) {
-      for (const value of [0, -3, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
-        const { agent, children } = createAgentContext();
+  it("rejects non-positive or fractional timeouts without spawning", async () => {
+    for (const value of [0, -3, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const { agent, children } = createAgentContext();
 
-        const result = await agentTool.execute(
-          { description: "d", prompt: "do work", [field]: value },
-          { cwd: "/work", agent },
-        );
+      const result = await agentTool.execute(
+        { description: "d", prompt: "do work", timeoutSeconds: value },
+        { cwd: "/work", agent },
+      );
 
-        expect(result.isError, `${field}=${value}`).toBe(true);
-        expect((result.content[0] as { text: string }).text, `${field}=${value}`).toContain(field);
-        expect(children.spawnChildAgent, `${field}=${value}`).not.toHaveBeenCalled();
-      }
+      expect(result.isError, `timeoutSeconds=${value}`).toBe(true);
+      expect((result.content[0] as { text: string }).text).toContain("timeoutSeconds");
+      expect(children.spawnChildAgent, `timeoutSeconds=${value}`).not.toHaveBeenCalled();
     }
   });
 
@@ -243,7 +242,6 @@ describe("agentTool framework child controller", () => {
         "Agent",
         "JobSend",
         "JobCancel",
-        "JobWait",
         "Workflow",
         "TeamCreate",
         "TeamDelete",

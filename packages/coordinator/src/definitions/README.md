@@ -12,3 +12,5 @@
 宿主读取文件后交给 `parseAgentFiles()`，解析失败的单个文件会跳过。`buildAgentDefinition()` 整理合法字段，`mergeAgentDefinitions()` 按内置、用户、插件顺序合并，同名角色由后者覆盖。
 
 本目录接收文件内容并返回定义数组，不扫描磁盘、不启动 Agent，也不保存注册状态。文件来源和有效定义集合由宿主保存。新增角色字段、解析规则和内置角色放在本目录，测试放同层 `__test__/`。返回[源码导航](../README.md)。
+
+内置 worker 可以用 `JobWait` 等待自己有权访问的后台任务，沿用 Jobs 的会话归属检查；创建子 Agent、Workflow、团队及发送和取消任务的限制保持不变。角色文件中的 `maxTurns` 仍是宿主提供的轮数预算，不属于模型侧 Agent 参数。
