@@ -2,12 +2,6 @@ import type { ConversationSearchMatch } from "../../transcript/conversation-find
 import { Box, ChevronDown, ChevronUp } from "lucide-react"
 import { useState } from "react"
 import { cn } from "@renderer/lib/utils"
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@renderer/components/ui/collapsible"
-import type { BrowserAnnotationContextRecord } from "@renderer/components/desktop/tools/browser/browser-annotation-context"
 import { PluginMentionIcon } from "./plugin-mention-icon"
 import type { UserDisplayItem } from "./user-display-items"
 
@@ -17,7 +11,7 @@ const collapsibleUserMessageLines = 14
 export function UserMessageBubble({
   content,
   items,
-  annotations = [],
+  annotated = false,
   searchReveal = null,
   searchSource,
 }: {
@@ -25,7 +19,7 @@ export function UserMessageBubble({
   searchReveal?: ConversationSearchMatch | null
   searchSource?: { messageId: string; partIds: string[] }
   items: UserDisplayItem[]
-  annotations?: BrowserAnnotationContextRecord[]
+  annotated?: boolean
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState(() => Boolean(searchReveal))
   const [previousReveal, setPreviousReveal] = useState(searchReveal)
@@ -39,13 +33,24 @@ export function UserMessageBubble({
   const collapsed = longEnough && !expanded
 
   return (
-    <div className="text-chat max-w-[78%] overflow-hidden rounded-xl bg-user-message-bubble text-sidebar-foreground">
+    <div
+      className={cn(
+        "text-chat max-w-[78%] overflow-hidden",
+        annotated
+          ? "rounded-2xl bg-foreground text-background"
+          : "rounded-xl bg-user-message-bubble text-sidebar-foreground"
+      )}
+    >
       <div className="relative">
         <div
           data-chat-search-text
           data-chat-search-message={searchSource?.messageId}
           data-chat-search-parts={JSON.stringify(searchSource?.partIds ?? [])}
-          className={cn("px-4 py-3 whitespace-pre-wrap", collapsed && "max-h-72 overflow-hidden")}
+          className={cn(
+            "px-4 whitespace-pre-wrap",
+            annotated ? "py-2.5" : "py-3",
+            collapsed && "max-h-72 overflow-hidden"
+          )}
         >
           {items.length > 0
             ? items.map((item, index) =>
@@ -55,7 +60,8 @@ export function UserMessageBubble({
                   <span
                     key={index}
                     className={cn(
-                      "align-baseline !text-primary select-none",
+                      "align-baseline select-none",
+                      annotated ? "!text-background" : "!text-primary",
                       item.kind === "plugin" ? "font-semibold" : "font-medium"
                     )}
                   >
@@ -71,7 +77,14 @@ export function UserMessageBubble({
             : content}
         </div>
         {collapsed ? (
-          <div className="pointer-events-none absolute right-0 bottom-0 left-0 h-16 bg-linear-to-b from-user-message-bubble/0 to-user-message-bubble" />
+          <div
+            className={cn(
+              "pointer-events-none absolute right-0 bottom-0 left-0 h-16 bg-linear-to-b",
+              annotated
+                ? "from-foreground/0 to-foreground"
+                : "from-user-message-bubble/0 to-user-message-bubble"
+            )}
+          />
         ) : null}
       </div>
       {longEnough ? (
@@ -79,31 +92,16 @@ export function UserMessageBubble({
           type="button"
           aria-expanded={!collapsed}
           onClick={() => setExpanded((value) => !value)}
-          className="flex h-9 w-full items-center justify-start gap-1 bg-user-message-bubble/55 px-4 text-xs font-medium text-muted-foreground transition-colors hover:bg-user-message-bubble/75 hover:text-foreground motion-reduce:transition-none"
+          className={cn(
+            "flex h-9 w-full items-center justify-start gap-1 px-4 text-xs font-medium transition-colors motion-reduce:transition-none",
+            annotated
+              ? "bg-foreground text-background/80 hover:text-background"
+              : "bg-user-message-bubble/55 text-muted-foreground hover:bg-user-message-bubble/75 hover:text-foreground"
+          )}
         >
           <span>{!collapsed ? "收起" : "显示更多"}</span>
           {expanded ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
         </button>
-      ) : null}
-      {annotations.length > 0 ? (
-        <Collapsible className="px-4 pb-3">
-          <CollapsibleTrigger className="flex min-h-7 items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground motion-reduce:transition-none [&[data-panel-open]>svg]:rotate-180">
-            <span>{annotations.length} 条批注</span>
-            <ChevronDown className="size-3.5 transition-transform motion-reduce:transition-none" />
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <ol className="mt-2 space-y-3 text-sm">
-              {annotations.map((annotation, index) => (
-                <li key={index}>
-                  <div className="font-medium">{annotation.target}</div>
-                  <div className="whitespace-pre-wrap text-muted-foreground">
-                    {annotation.comment}
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </CollapsibleContent>
-        </Collapsible>
       ) : null}
     </div>
   )

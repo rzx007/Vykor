@@ -165,6 +165,48 @@ it("opens on hover and keeps the list open while the pointer enters it", async (
   expect(trigger.getAttribute("aria-expanded")).toBe("true")
 })
 
+it("replaces the list with the selected annotation editor and restores it on cancel", async () => {
+  await render()
+  await click("2 条批注")
+  await click("编辑批注 1")
+  const popup = document.querySelector('[role="dialog"]')!
+  expect(popup.querySelector("h2")?.textContent).toBe("编辑批注")
+  expect(popup.textContent).toContain("button")
+  expect(popup.textContent).toContain("提交订单")
+  expect(popup.textContent).not.toContain("订单标题")
+  expect(popup.querySelector("li")).toBeNull()
+  expect(popup.querySelector('button[aria-label^="编辑批注"]')).toBeNull()
+  expect(popup.querySelector('button[aria-label^="删除批注"]')).toBeNull()
+  expect(popup.querySelector("textarea")?.value).toBe("增加按钮间距")
+
+  await type("尚未保存")
+  await click("取消")
+  expect(document.querySelector("textarea")).toBeNull()
+  expect(popup.textContent).toContain("增加按钮间距")
+  expect(popup.textContent).toContain("订单标题")
+  await click("编辑批注 1")
+  expect(document.querySelector("textarea")?.value).toBe("增加按钮间距")
+  expect(submits).toBe(0)
+})
+
+it("blocks empty and oversized comments without leaving the editor", async () => {
+  await render()
+  await click("2 条批注")
+  await click("编辑批注 1")
+  for (const value of ["   ", "a".repeat(2001)]) {
+    const textarea = await type(value)
+    expect(button("保存").disabled).toBe(true)
+    await press(textarea, "Enter", { ctrlKey: true })
+    expect(document.querySelector("textarea")).toBe(textarea)
+  }
+  await type("  调整后的意见  ")
+  await click("保存")
+  expect(document.querySelector("textarea")).toBeNull()
+  expect(document.body.textContent).toContain("调整后的意见")
+  expect(document.body.textContent).toContain("订单标题")
+  expect(submits).toBe(0)
+})
+
 it.each([{ ctrlKey: true }, { metaKey: true }])(
   "saves edits with the platform shortcut without submitting the composer: %j",
   async (modifier) => {
@@ -191,6 +233,24 @@ it("cancels an unfinished edit with Escape and keeps the original comment", asyn
   expect(document.body.textContent).toContain("增加按钮间距")
   expect(document.body.textContent).not.toContain("尚未保存")
   expect(button("2 条批注").getAttribute("aria-expanded")).toBe("true")
+  expect(document.activeElement).toBe(button("2 条批注"))
+})
+
+it("discards an unfinished edit when the popover is closed", async () => {
+  await render()
+  await click("2 条批注")
+  await click("编辑批注 1")
+  await type("尚未保存")
+  await act(async () => {
+    document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }))
+    document.body.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }))
+    document.body.click()
+  })
+  expect(button("2 条批注").getAttribute("aria-expanded")).toBe("false")
+  await click("2 条批注")
+  expect(document.querySelector("textarea")).toBeNull()
+  expect(document.body.textContent).toContain("增加按钮间距")
+  expect(document.body.textContent).not.toContain("尚未保存")
 })
 
 it("removes individual annotations and hides the package after the last one", async () => {

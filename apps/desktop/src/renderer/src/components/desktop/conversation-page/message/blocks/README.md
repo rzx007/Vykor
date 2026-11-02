@@ -10,6 +10,7 @@
 | ---------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | [message-block.tsx](message-block.tsx)                                                               | 按角色选择用户、助手或系统消息展示       |
 | [user-message.tsx](user-message.tsx)、[user-message-bubble.tsx](user-message-bubble.tsx)             | 用户正文、附件、编辑表单和长文本折叠     |
+| [user-message-annotations.tsx](user-message-annotations.tsx)                                       | 已发送批注的数量入口和只读详情           |
 | [user-display-items.ts](user-display-items.ts)、[plugin-mention-icon.tsx](plugin-mention-icon.tsx)   | 用户输入项展示和插件目录图标             |
 | [assistant-message.tsx](assistant-message.tsx)                                                       | 助手正文、推理、工具调用和结果的组合     |
 | [message-actions.tsx](message-actions.tsx)、[format-message-time.ts](format-message-time.ts)         | 工具栏、时间、复制、编辑和回复分叉操作   |
@@ -21,7 +22,7 @@
 
 对话记录调用 `MessageBlock`，由它选择 `UserMessage`、`AssistantMessage` 或已有系统通知。用户内容准备与编辑组件保留原有边界，内部草稿更新不会重新创建准备文档。编辑开关和草稿由内部组件保存，编辑期间通过上层 transcript 的 `useRetainTranscriptRow` 保留所在列表行；长文本展开状态归气泡，复制反馈归复制按钮。
 
-用户消息通过浏览器分类的 `readBrowserAnnotationContext` 读取末尾完整、字段有效的批注快照。正文、复制和编辑初值均去掉自动追加的快照，保留插件等输入引用；原消息条目不变，供发送入口编辑重发时使用。气泡在正文下方显示默认收起的“n 条批注”，复用已有 `Collapsible` 保存展开状态，详情只列页面目标和意见。用于页面内搜索高亮的正文节点不含批注原始数据；无效或不在末尾的示例块仍按原文显示。
+用户消息通过浏览器分类的 `readBrowserAnnotationContext` 读取末尾完整、字段有效的批注快照。正文、复制和编辑初值均去掉自动追加的快照，保留插件等输入引用；原消息条目不变，供发送入口编辑重发时使用。`UserMessageAnnotations` 在独立正文气泡上方显示“n 条批注”，悬停或点击后通过已有 `Popover` 查看页面目标和意见。批注详情始终只读；编辑历史消息时沿用同一入口查看原批注，只允许修改正文。仅含批注时不显示空正文气泡。用于页面内搜索高亮的正文节点不含批注原始数据；无效或不在末尾的示例块仍按原文显示。
 
 主会话和侧聊用 `requiresPermissionReply` 筛选请求，再展示权限或提问卡片。自动审查进行中、已经自动决定或请求结束时不显示人工批准卡片。卡片通过原回调返回操作；提交状态、错误、会话记录和实际授权由宿主管理。权限批准仍使用 `once`，仅针对当前请求。
 

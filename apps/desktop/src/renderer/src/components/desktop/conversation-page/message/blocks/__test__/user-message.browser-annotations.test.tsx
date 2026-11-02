@@ -78,12 +78,67 @@ it.each([false, true])(
     expect(container.textContent).not.toContain("增加按钮留白")
     await act(async () => trigger!.click())
     expect(trigger!.getAttribute("aria-expanded")).toBe("true")
-    expect(container.textContent).toContain("提交按钮")
-    expect(container.textContent).toContain("增加按钮留白")
-    expect(container.textContent).not.toContain("#submit")
+    expect(document.body.textContent).toContain("提交按钮")
+    expect(document.body.textContent).toContain("增加按钮留白")
+    expect(document.body.textContent).not.toContain("#submit")
     expect(container.querySelector("[data-chat-search-text]")?.textContent).toBe("按批注修改")
   }
 )
+
+it("places the annotation summary above the separate body and keeps actions below", async () => {
+  await act(async () =>
+    root.render(
+      <UserMessage
+        message={message}
+        parts={parts(`看看批注${context}`)}
+        userActions={{ canEdit: true, onEdit: vi.fn() }}
+      />
+    )
+  )
+  const summary = Array.from(container.querySelectorAll("button")).find((button) =>
+    button.textContent?.includes("1 条批注")
+  )!
+  const body = container.querySelector("[data-chat-search-text]")!
+  const edit = container.querySelector('[aria-label="重新编辑"]')!
+  expect(summary.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+  expect(body.compareDocumentPosition(edit) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+  expect(body.textContent).toBe("看看批注")
+})
+
+it("keeps original annotations visible and read-only while editing message text", async () => {
+  const onEdit = vi.fn()
+  await act(async () =>
+    root.render(
+      <UserMessage
+        message={message}
+        parts={parts(`看看批注${context}`)}
+        userActions={{ canEdit: true, editing: true, onEdit }}
+      />
+    )
+  )
+  const editor = container.querySelector("#latest-message-editor")!
+  const summary = Array.from(container.querySelectorAll("button")).find((button) =>
+    button.textContent?.includes("1 条批注")
+  )
+  expect(summary).toBeDefined()
+  expect(editor.textContent).toBe("看看批注")
+  await act(async () => summary!.click())
+  expect(document.body.textContent).toContain("增加按钮留白")
+  expect(document.querySelector('[aria-label="编辑批注 1"]')).toBeNull()
+  expect(document.querySelector('[aria-label="删除批注 1"]')).toBeNull()
+  expect(document.querySelector('[aria-label="移除全部批注"]')).toBeNull()
+  expect(document.querySelector("textarea")).toBeNull()
+  expect(onEdit).not.toHaveBeenCalled()
+  await act(async () =>
+    container
+      .querySelector("form")!
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+  )
+  expect(onEdit).toHaveBeenCalledExactlyOnceWith({
+    version: 1,
+    items: [{ type: "text", text: "看看批注" }],
+  })
+})
 
 it("keeps mentions while removing a separate automatic text item", async () => {
   const items: SessionUserInputItem[] = [

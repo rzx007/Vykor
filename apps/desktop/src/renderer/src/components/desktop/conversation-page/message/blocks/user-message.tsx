@@ -26,6 +26,7 @@ import { MessageAttachment } from "../attachments/message-attachment"
 import { CopyActionButton, MessageActionButton, MessageToolbar } from "./message-actions"
 import { messageTextContent } from "../models/message-content"
 import { UserMessageBubble } from "./user-message-bubble"
+import { UserMessageAnnotations } from "./user-message-annotations"
 import { renderUserItems, type UserDisplayItem } from "./user-display-items"
 
 export interface UserMessageActions {
@@ -144,6 +145,11 @@ function UserMessageBlock({
             <label className="sr-only" htmlFor="latest-message-editor">
               编辑最新消息
             </label>
+            {annotations.length > 0 ? (
+              <div className="flex justify-end px-4 pt-3">
+                <UserMessageAnnotations annotations={annotations} />
+              </div>
+            ) : null}
             {attachmentParts.length > 0 ? (
               <AttachmentGroup
                 aria-label="原消息附件"
@@ -207,6 +213,7 @@ function UserMessageBlock({
   return (
     <Message align="end" className="group/msg">
       <MessageContent className="items-end">
+        <UserMessageAnnotations annotations={annotations} />
         {attachmentParts.length > 0 ? (
           <AttachmentGroup
             aria-label="消息附件"
@@ -222,11 +229,11 @@ function UserMessageBlock({
             ))}
           </AttachmentGroup>
         ) : null}
-        {content.trim() || items.length > 0 || annotations.length > 0 ? (
+        {content.trim() || items.length > 0 ? (
           <UserMessageBubble
             content={content}
             items={items}
-            annotations={annotations}
+            annotated={annotations.length > 0}
             searchReveal={searchReveal}
             searchSource={searchSource}
           />
