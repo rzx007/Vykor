@@ -12,6 +12,7 @@ import { createDefaultSettingsService } from "../src/application/default-service
 import { createDefaultModelService } from "../src/application/default-services/models/model-service.js"
 import { installAppFixture } from "../../agent-runtime/test-helpers/plugin-app-fixture.js"
 import { installNotesAppFixture } from "../../agent-runtime/test-helpers/notes-app-fixture.js"
+import { hostedAgentFactory } from "./hosted-agent.js"
 const workspace = process.env.VYKOR_UI_TEST_ROOT!
 const setupStarted = Date.now()
 const setupPhase = (setupPhase: string) => {
@@ -47,7 +48,7 @@ const fixture = realExcalidraw ? await (async () => {
   if (installed.status !== "installed") throw new Error(JSON.stringify(installed))
   return { pluginId: "example.text-inspector", toolName: "TextInspectorCheck", effectFile: join(root, "effects") }
 })() : await installAppFixture(root, kind, html)
-const settings = { apiFormat: "openai" as const, provider: "fixture", model: "never", maxTurns: 2,
+const settings = { apiFormat: "openai" as const, provider: "fixture", model: "never", maxTurns: realExcalidraw ? 3 : 2,
   customProviders: [{ id: "fixture", displayName: "Fixture", apiFormat: "openai" as const, baseUrl: "http://127.0.0.1:1/v1", models: [{ id: "never", displayName: "Injected test model" }] }],
   permission: { mode: "full_access" as const }, sandbox: { enabled: false }, memory: { enabled: false } }
 const store = new SessionStore({ path: join(root, "sessions.db") }), token = randomUUID()
@@ -55,11 +56,14 @@ let modelCalls = 0
 const server = new VykorHttpServer({ store, token, settings, logger: () => {},
   services: { plugin: createDefaultPluginService({ current: settings }), settings: createDefaultSettingsService({ current: settings }),
     model: createDefaultModelService({ current: settings }) },
-  createAgent: async ({ options }) => createDefaultNodeAgent({ ...options, approvalMode: "full_access",
+  createAgent: hostedAgentFactory(async ({ options }: { options: Parameters<typeof createDefaultNodeAgent>[0] }) => createDefaultNodeAgent({ ...options, approvalMode: "full_access",
     capabilityOverrides: { ...options.capabilityOverrides, terminal: false, memory: false },
     client: { async *streamMessage(params) {
       modelCalls++;
       if (realExcalidraw && modelCalls === 1) {
+        yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "model-excalidraw-search", name: "ToolSearch", input: { query: "excalidraw create_diagram" } } }
+        yield { type: "complete", stopReason: "tool_use" }
+      } else if (realExcalidraw && modelCalls === 2) {
         yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "model-excalidraw-create", name: "mcp__excalidraw__create_diagram",
           input: { id: "electron-diagram", title: "Electron 中英图", elements: [{ id: "stable-shape", type: "rectangle", x: 80, y: 80, width: 240, height: 120,
             label: { text: "English 与中文" } }] } } }
@@ -71,7 +75,7 @@ const server = new VykorHttpServer({ store, token, settings, logger: () => {},
         yield { type: "complete", stopReason: "tool_use" }
       } else { yield { type: "text_delta", delta: "Done" }; yield { type: "complete", stopReason: "end_turn" } }
     } },
-  }),
+  })),
 })
 setupPhase("before-server-ready")
 await server.application.ready()

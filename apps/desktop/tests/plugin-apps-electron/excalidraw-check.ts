@@ -130,19 +130,20 @@ export async function checkExcalidrawApp(root: string, documents: PluginAppDocum
     await wait(async () => appEvaluate("[...window.__excalidrawFontSources].some(([font,source])=>font.status==='loaded'&&source.includes('data:'))"), "offline data fonts loaded")
     const fonts = await appEvaluate("[...window.__excalidrawFontSources].filter(([font])=>font.status==='loaded').map(([font,source])=>({family:font.family,data:source.includes('data:')}))")
     assert.ok(fonts.length > 0); assert.ok(fonts.every((font: { data: boolean }) => font.data))
+    await wait(async () => appEvaluate("(()=>{const s=window.__excalidrawPanel.state();return !s.dirty&&!s.saving&&!s.waiting&&!s.error})()"), "loaded canvas stays clean")
+    assert.equal((await savedActions()).length, 0, "loading and normalizing a canvas does not create save receipts")
     await edit(140); await waitSaved(140)
     assert.equal(await evaluate("window.excalidrawConfirmations"), 0, "autosave never opens a host confirmation")
     const afterSave = await client.sessions.getState(ready.sessionId)
     const saveRuns = afterSave.runs.filter(run => (run.metadata.pluginAppAction as { toolName?: string } | undefined)?.toolName === "commit_scene")
-    // Excalidraw can normalize restored bound labels before a user edit. Every resulting
-    // scene change must settle its own original receipt, rather than assuming one render.
+    // Only real edits create save receipts; every admitted save must settle its original Run.
     assert.ok(saveRuns.length >= 1)
     for (const run of saveRuns) {
       assert.equal((run.metadata.pluginAppAction as { executionState: string }).executionState, "completed")
       assert.equal(run.status, "completed", "saved indicator follows durable original Run ACK")
       assert.equal(run.sessionId, ready.sessionId)
     }
-    console.log(JSON.stringify({ scenario: "excalidraw-progress", step: "model-create-autosave-fonts", fonts, normalizedSceneSaves: saveRuns.length }))
+    console.log(JSON.stringify({ scenario: "excalidraw-progress", step: "model-create-autosave-fonts", fonts, savesAfterEdit: saveRuns.length }))
     await appEvaluate("document.querySelector('.document-menu summary').click();Array.from(document.querySelectorAll('.document-menu button')).find(button=>/重命名|Rename/.test(button.textContent)).click();void 0")
     await wait(async () => appEvaluate("!!document.querySelector('#rename-input')"), "rename dialog")
     await appEvaluate("(()=>{const input=document.querySelector('#rename-input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'Electron 重命名图');input.dispatchEvent(new Event('input',{bubbles:true}));return new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))})()")
@@ -158,14 +159,14 @@ export async function checkExcalidrawApp(root: string, documents: PluginAppDocum
     await evaluate("window.fixtureVisible(false)")
     await wait(async () => evaluate("document.querySelector('[data-plugin-app-mount]').style.visibility==='hidden'"), "host hidden")
     await edit(220)
-    await wait(async () => appEvaluate("window.__excalidrawPanel.state().dirty && !!window.__excalidrawPanel.state().error"), "hidden draft retained")
+    await wait(async () => appEvaluate("(()=>{const s=window.__excalidrawPanel.state();return s.dirty&&s.waiting&&!s.error})()"), "hidden draft waits quietly")
     assert.equal(await savedX(), 140)
     await evaluate("window.fixtureVisible(true)"); await waitSaved(220)
     selectedSession = "other-session"
     await evaluate("window.fixtureSelect('other-session')")
     await wait(async () => evaluate("document.querySelector('[data-plugin-app-mount]').style.visibility==='hidden'"), "session switch hides original frame")
     await edit(300)
-    await wait(async () => appEvaluate("window.__excalidrawPanel.state().dirty && !!window.__excalidrawPanel.state().error"), "switched session draft retained")
+    await wait(async () => appEvaluate("(()=>{const s=window.__excalidrawPanel.state();return s.dirty&&s.waiting&&!s.error})()"), "switched session draft waits quietly")
     assert.equal(await savedX(), 220)
     selectedSession = ready.sessionId
     await evaluate(`window.fixtureSelect(${JSON.stringify(ready.sessionId)})`); await waitSaved(300)
@@ -179,8 +180,9 @@ export async function checkExcalidrawApp(root: string, documents: PluginAppDocum
     }
     await backendControl("hold-work")
     const runsBeforeBusy = (await client.sessions.getState(ready.sessionId)).runs.length
+    await edit(360)
+    await wait(async () => busyRejections > 0 && await appEvaluate("(()=>{const s=window.__excalidrawPanel.state();return s.dirty&&s.waiting&&!s.error&&!/plugin_app_busy|远端画板/.test(document.querySelector('#operation-status')?.textContent??'')})()"), "real unaccepted busy draft waits without a conflict notice")
     await edit(380)
-    await wait(async () => busyRejections > 0 && await appEvaluate("window.__excalidrawPanel.state().dirty && window.__excalidrawPanel.state().error?.includes('plugin_app_busy')"), "real unaccepted busy draft")
     assert.equal((await client.sessions.getState(ready.sessionId)).runs.length, runsBeforeBusy, "busy rejection creates no operation Run")
     assert.equal(await savedX(), 300)
     await backendControl("release-work"); await waitSaved(380)
@@ -233,6 +235,6 @@ export async function checkExcalidrawApp(root: string, documents: PluginAppDocum
     for (const { channel } of handlers) ipcMain.removeHandler(channel)
     if (child.connected) child.send("close")
     await new Promise<void>(resolve => { const timer = setTimeout(() => { child.kill(); resolve() }, 5000); child.once("exit", () => { clearTimeout(timer); resolve() }) })
-    if (passed) assert.equal(modelCalls, 2, "only original model create tool and final response")
+    if (passed) assert.equal(modelCalls, 3, "only tool discovery, model create tool and final response")
   }
 }

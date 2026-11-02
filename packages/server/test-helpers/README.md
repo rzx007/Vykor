@@ -27,3 +27,5 @@
 本目录是测试支持代码；测试用例放在各被测分类的 `__test__/`，跨包组合测试放在仓库 `tests/`。
 
 官方插件源码由 `vykor-plugins` 仓库维护。Excalidraw 的真实插件兼容性夹具要求显式提供 `VYKOR_OFFICIAL_PLUGINS_DIR`，指向已构建的官方插件目录；普通宿主测试不依赖该仓库。此变量仅用于测试，不影响客户端安装来源或运行数据。
+
+Electron 夹具沿用 `hostedAgentFactory` 绑定真实 Agent 与宿主；Excalidraw 模型步骤先通过 ToolSearch 取得工具，再创建画板，保留生产环境的工具发现和授权流程。

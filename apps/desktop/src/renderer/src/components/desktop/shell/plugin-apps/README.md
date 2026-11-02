@@ -8,6 +8,10 @@
 
 `queueInitial` 按源 Part 保存初始/模型工具结果，初始化后每个不同的成功 Part 发送一次；重复 Part 不再次通知。页面主动工具调用直接响应其 promise，不发送第二份 tool-result。官方 message/model-context/widgetState handler 继续固定原会话和后台；不能给页面增加自定义协议、自由选会话或执行函数。
 
+同一条助手回复中的成功工具结果，只有目录能唯一确定同一应用入口时才合并为一个具名按钮，按钮打开最新成功结果。会话、插件版本或摘要、后台及资源不同的结果不合并；多个入口共用资源时保留各自按钮。合并仅影响展示，原始工具记录、权限检查和操作回执保持完整。
+
+目录查询只负责减少重复，不阻塞打开入口；查询期间保留原入口，各组独立完成归并。切换会话或来源后，旧查询结果不能回写当前显示。
+
 窗口最多保留 8 个页面，同会话最多 4 个；超限拒绝新开。隐藏、切会话或切工具不释放草稿。显式关闭先暂停 Main 准入和确认，固定版本 durable close 成功后再取消原操作、查询回执并有界 teardown；版本冲突保留同 frame/草稿，等待明确重试；关闭某个窗口的 mount 不等同于关闭共享 durable app。断线保留 iframe，仅禁用操作；恢复查询原操作，不重新 invoke。unknown 由服务端持久事实控制，页面显示待核实并拒绝新工具/message。
 
 测试放在 `__test__`；真实 Electron 入口为 `apps/desktop/tests/plugin-apps-electron/plugin-app-check.ts`，使用生产 Provider、Main IPC、官方 App 和独立真实后台。样式由用户查看，不包含截图或视觉预览。

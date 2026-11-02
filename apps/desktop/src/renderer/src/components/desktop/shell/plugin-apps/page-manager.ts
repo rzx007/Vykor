@@ -39,14 +39,17 @@ export class PluginAppPageManager {
     this.emit()
   }
   async resultTitle(sessionId: string, origin: unknown): Promise<string> {
-    if (!origin || typeof origin !== "object") return "插件应用"
+    return (await this.resultSurface(sessionId, origin))?.title ?? "插件应用"
+  }
+  async resultSurface(sessionId: string, origin: unknown): Promise<{ id: string; title: string } | undefined> {
+    if (!origin || typeof origin !== "object") return
     const source = origin as { pluginId?: string; backendId?: string; resourceUri?: string }
     try {
       const catalog = await this.api.catalog({ sessionId })
       const backend = catalog.backends.find(item => item.pluginId === source.pluginId && item.backendId === source.backendId)
       const surfaces = backend?.surfaces.filter(surface => surface.resourceUri === source.resourceUri)
-      return surfaces?.length === 1 ? surfaces[0]!.title : "插件应用"
-    } catch { return "插件应用" }
+      return surfaces?.length === 1 ? surfaces[0] : undefined
+    } catch { return undefined }
   }
   private add(mount: PluginAppMount, title: string): ResidentAppPage {
     const prior = this.pages.find(page => page.id === mount.mountId)
