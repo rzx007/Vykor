@@ -185,6 +185,48 @@ const save = async () => {
     )
   )
 }
+it.each([true, false])(
+  "uses the virtualizer's own scroll viewport to reach the middle and end of a long file (readOnly: %s)",
+  async (readOnly) => {
+    useEditorPreferences.setState({ readOnly })
+    // jsdom 没有行布局；保留真实 CodeView，只提供浏览器测量结果。
+    vi.mocked(HTMLElement.prototype.getBoundingClientRect).mockImplementation(function (
+      this: HTMLElement
+    ) {
+      return new DOMRect(0, 0, 800, this.hasAttribute("data-line-index") ? 20 : 600)
+    })
+    const content = Array.from({ length: 2100 }, (_, index) => `file line ${index + 1}`).join("\n")
+    await act(async () => root.render(<PreviewHarness initial={{ ...preview, content }} />))
+    const viewport = container.querySelector<HTMLElement>(".desktop-code-file")!
+    const styles = getComputedStyle(viewport)
+    // 滑块必须属于监听 scroll 的同一个节点，不能落到内部只渲染几十行的代码块上。
+    expect([styles.overflowY, styles.overflow].some((value) => /^(auto|scroll)$/.test(value))).toBe(
+      true
+    )
+    const renderedLines = () =>
+      Array.from(
+        container
+          .querySelector("diffs-container")
+          ?.shadowRoot?.querySelectorAll("[data-line-index]") ?? [],
+        (line) => line.textContent
+      )
+    await act(async () => {
+      await vi.waitFor(() => expect(renderedLines()).toContain("file line 1"))
+    })
+    expect(renderedLines()).not.toContain("file line 2100")
+    for (const [top, text] of [
+      [21000, "file line 1050"],
+      [41432, "file line 2100"],
+      [0, "file line 1"],
+    ] as const) {
+      await act(async () => {
+        viewport.scrollTop = top
+        viewport.dispatchEvent(new Event("scroll"))
+        await vi.waitFor(() => expect(renderedLines()).toContain(text))
+      })
+    }
+  }
+)
 it.each([
   { path: "NOTES", saveWhileEditing: true, content: "const value = 2\n" },
   { path: "NOTES", saveWhileEditing: false, content: "const value = 2\n" },

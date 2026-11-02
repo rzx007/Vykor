@@ -33,7 +33,10 @@ import type { WorkspaceReadFileResult } from "@shared/workspace-types"
 import { createPreviewFile } from "./virtualized-code-preview-model"
 import { useCodePreviewDrafts } from "./code-preview-drafts"
 import { saveCodePreviewDraft } from "./code-preview-save"
-import { addCodeSelectionToComposer, createCodeSelectionAction } from "../code-context/code-selection-actions"
+import {
+  addCodeSelectionToComposer,
+  createCodeSelectionAction,
+} from "../code-context/code-selection-actions"
 import type { FileSearchMatch } from "../files/file-viewer"
 
 interface VirtualizedCodePreviewProps {
@@ -456,6 +459,8 @@ export function VirtualizedCodePreview({
               onItemEditComplete={complete}
               onSelectedLinesChange={setSelection}
               className="desktop-code-file min-h-0 min-w-0 flex-1"
+              // CodeView 只监听自身滚动，完整文件占位高度也必须由这个节点承载。
+              style={{ overflow: "auto" }}
             />
           </EditProvider>
         </CodeHighlightingProvider>
