@@ -46,7 +46,10 @@ import {
 } from "@vykor/coordinator/teams";
 import { buildRuntimeSystemPrompt } from "@vykor/prompts";
 import type { SandboxRuntimeReporter } from "@vykor/sandbox";
-import { resolveHostShellLauncher, settingsForApprovalMode } from "@vykor/sandbox";
+import {
+  resolveHostShellLauncher,
+  settingsForApprovalMode,
+} from "@vykor/sandbox";
 import { effectivePermissionMode } from "@vykor/permissions";
 import { normalizeApprovalMode } from "@vykor/host-config";
 import type { SkillRegistry } from "@vykor/skills";
@@ -290,14 +293,18 @@ export async function createVykorRuntime(
 
     // The legacy executor uses this same process-lifetime cached launcher.
     // With an execution environment, its descriptor is the actual executor.
-    const hostShellKind = options.executionEnvironment ? undefined : resolveHostShellLauncher().kind;
+    const hostShellKind = options.executionEnvironment
+      ? undefined
+      : resolveHostShellLauncher().kind;
     const permissionChecker = new PermissionChecker({
       mode,
       cwd,
       pathStyle: options.executionEnvironment?.info.pathStyle,
       shellDialect: options.executionEnvironment
         ? options.executionEnvironment.info.shellDescriptor?.family
-        : hostShellKind === "bash" || hostShellKind === "posix-sh" ? "posix" : hostShellKind,
+        : hostShellKind === "bash" || hostShellKind === "posix-sh"
+          ? "posix"
+          : hostShellKind,
       allowedTools:
         effectiveAllowed.kind === "only" ? [...effectiveAllowed.names] : [],
       deniedTools: [...effectiveDenied],
@@ -419,9 +426,15 @@ export async function createVykorRuntime(
             ...snapshot.configuration,
             baseUrl: snapshot.configuration.baseUrl,
           };
-          const selection = await configuration.validateModelSelection?.({ model: requestConfiguration.model, provider: requestConfiguration.provider,
-            effort: requestConfiguration.effort, explicitEffort: false });
-          const effort = selection ? selection.effort : snapshot.configuration.effort;
+          const selection = await configuration.validateModelSelection?.({
+            model: requestConfiguration.model,
+            provider: requestConfiguration.provider,
+            effort: requestConfiguration.effort,
+            explicitEffort: false,
+          });
+          const effort = selection
+            ? selection.effort
+            : snapshot.configuration.effort;
           const sessionPrompt = Object.prototype.hasOwnProperty.call(
             snapshot.configuration,
             "systemPrompt",
@@ -441,7 +454,11 @@ export async function createVykorRuntime(
             {
               systemPrompt: settingsPrompt,
               workStyle: snapshot.configuration.workStyle ?? settings.workStyle,
-              replyStyle: snapshot.configuration.replyStyle ?? configuration.replyStyle ?? settings.replyStyle ?? DEFAULT_REPLY_STYLE,
+              replyStyle:
+                snapshot.configuration.replyStyle ??
+                configuration.replyStyle ??
+                settings.replyStyle ??
+                DEFAULT_REPLY_STYLE,
               fastMode:
                 snapshot.configuration.fastMode ??
                 configuration.fastMode ??
@@ -484,17 +501,22 @@ export async function createVykorRuntime(
             provider: requestConfiguration.provider,
             model: requestConfiguration.model,
           });
-          const supportsImageInput = await configuration.resolveModelImageSupport?.({
-            provider: requestConfiguration.provider ?? settings.provider,
-            model: requestConfiguration.model,
-            apiFormat: requestConfiguration.apiFormat ?? settings.apiFormat,
-          });
+          const supportsImageInput =
+            await configuration.resolveModelImageSupport?.({
+              provider: requestConfiguration.provider ?? settings.provider,
+              model: requestConfiguration.model,
+              apiFormat: requestConfiguration.apiFormat ?? settings.apiFormat,
+            });
           const outputCap = settings.outputTokenMax ?? DEFAULT_OUTPUT_TOKEN_MAX;
           const maxOutputTokens = resolveOutputTokenCap(outputLimit, outputCap);
           return {
             revision: snapshot.revision,
             ...snapshot.configuration,
-            replyStyle: snapshot.configuration.replyStyle ?? configuration.replyStyle ?? settings.replyStyle ?? DEFAULT_REPLY_STYLE,
+            replyStyle:
+              snapshot.configuration.replyStyle ??
+              configuration.replyStyle ??
+              settings.replyStyle ??
+              DEFAULT_REPLY_STYLE,
             effort,
             client: resolvedClient!,
             systemPromptForTools,

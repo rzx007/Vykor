@@ -36,7 +36,8 @@ export class PermissionController {
         input.signal?.removeEventListener("abort", abort);
       };
 
-      const waiters = this.waiters.get(input.requestId) ?? new Set<PermissionWaiter>();
+      const waiters =
+        this.waiters.get(input.requestId) ?? new Set<PermissionWaiter>();
       waiters.add(waiter);
       this.waiters.set(input.requestId, waiters);
       input.signal?.addEventListener("abort", abort, { once: true });
