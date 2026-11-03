@@ -184,13 +184,16 @@ describe("approval reviewer", () => {
 
 
 describe("approval credentials boundary", () => {
-  it("does not dispatch a second model request containing user credentials", async () => {
+  it("does not dispatch a second model request containing credentials in current user instructions", async () => {
     let calls = 0;
     const reviewer = createApprovalReviewer({ model: "offline", client: { async *streamMessage() { calls++; yield { type: "complete" as const, stopReason: "end_turn" }; } } });
     const outcome = await reviewer.review({
       requestId: "request-secret", sessionId: "session", inputId: "input", runtimeRevision: 0,
       tool: { name: "Write", source: "builtin" }, input: { file_path: "config.txt", content: "ordinary" },
-      evidence: { userInstruction: "Use API_KEY=example-private-credential to configure", cwd: "/repo", accessBoundary: "/repo", denyRules: [], reliableIsolation: true },
+      evidence: {
+        userInstruction: "Use API_KEY=example-private-credential to configure",
+        cwd: "/repo", accessBoundary: "/repo", denyRules: [], reliableIsolation: true,
+      },
     });
     expect(outcome.decision).toBe("ask_user");
     expect(calls).toBe(0);

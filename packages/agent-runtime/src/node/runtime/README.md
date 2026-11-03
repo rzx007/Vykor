@@ -13,6 +13,10 @@ agent 组装层调用 `createVykorRuntime()`，构造器收集各项能力，返
 
 组装工具权限时，`default-runtime.ts` 将执行环境的 `shellDescriptor.family` 交给 `PermissionChecker`，与前台和后台 Shell 实际使用的解释器保持一致。没有执行环境的旧调用路径复用默认 Shell 执行器所用的 `resolveHostShellLauncher()` 进程缓存。模型输入中的方言字段不参与判断；环境存在但缺少实际解释器描述时保持未知，不能回退猜测成宿主 Shell。`__test__/shell-permission-context.test.ts` 覆盖这些接线和后段拒绝规则。
 
+受信任的内置 `AskUser` 在权限检查后直接显示问题，等待用户回答，不再先弹出“允许提问”的工具审批。明确禁止、工具范围和计划模式限制仍优先执行；同名的外部替换工具不继承此放行。`__test__/ask-user-permission.test.ts` 覆盖普通审批、自动审查及上述限制。
+
+受信任的内置 `JobList`、`JobRead` 和 `JobWait` 直接观察当前会话已有任务，不再为每次读取和等待调用审批模型；任务来源仍核对会话归属。明确禁止与工具范围检查继续优先，计划模式仍受可信只读工具范围限制；同名外部替换工具不继承批准。`JobSend` 和 `JobCancel` 保留原审批规则。`__test__/job-permission.test.ts` 覆盖审批模式、计划限制、禁止规则及工具替换边界。
+
 状态集中保存在 `NodeRuntimeResources` 和清理栈中。新增资源组装与释放规则放在这里；agent 操作、子管理、模型配置、工具和记忆分别放在相邻分类。测试辅助的运行适配器留在同层 `__test__/`。
 
 每轮读取实际请求配置后，default-runtime 调用宿主可选 validateModelSelection，复查当前模型目录与权限，再准备客户端与派发。目录容量元数据可保持创建快照，授权校验使用现有 settings/catalog reader 读取当前值，不把旧 root 配置当永久许可。

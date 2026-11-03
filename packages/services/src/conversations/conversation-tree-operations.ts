@@ -52,6 +52,10 @@ export function forkSessionWithHistory(input: {
       if (!message.inputId || inputIdMap.has(message.inputId)) continue;
       const sourceInput = context.storage.state.inputs[message.inputId];
       if (!sourceInput) continue;
+      const copiedInputMetadata = withoutHostPluginMetadata(sourceInput.metadata);
+      if (Object.keys(copiedInputMetadata).length !== Object.keys(sourceInput.metadata).length) {
+        copiedInputMetadata.approvalInstructionSource = "external";
+      }
       const copiedInput = context.admitPrompt({
         sessionId: fork.id,
         delivery: sourceInput.delivery,
@@ -61,7 +65,7 @@ export function forkSessionWithHistory(input: {
           intent: attachment.intent,
           displayName: attachment.displayName,
         })),
-        metadata: withoutHostPluginMetadata(sourceInput.metadata),
+        metadata: copiedInputMetadata,
       });
       inputIdMap.set(sourceInput.id, copiedInput.id);
       sourceInput.attachments.forEach((attachment, index) => {

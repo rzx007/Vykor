@@ -106,7 +106,7 @@ export async function buildTaggedPromptSegments(
       segments,
       "stable",
       "system",
-      "# Session Mode\nFast mode is enabled. Prefer a direct execution path and batch independent work. Keep the selected Reply Style and Work Style; do not skip necessary investigation, validation, or permission checks.",
+      "# Session Mode\nFast mode is enabled. Prefer a direct execution path and issue independent tool calls together. Keep the selected Reply Style and Work Style; do not skip necessary investigation, validation, or permission checks.",
     );
   }
 

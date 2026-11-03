@@ -7,6 +7,7 @@ import { readSessionRuntimeConfig } from "../application/session/configuration/r
 import type { SessionStore } from "@vykor/services";
 import { getSandboxAvailability } from "@vykor/sandbox";
 import { createPermissionApprovalReviewService } from "./approval-review-service.js";
+import { buildApprovalReviewContext } from "./approval-context.js";
 import { readPluginAppAction } from "@vykor/domain-contracts/plugin-apps";
 import { stringifyCanonicalJson } from "@vykor/json-data/json";
 import { verifiedAppAction } from "../application/session/plugins/plugin-app-operation-service.js";
@@ -69,6 +70,12 @@ export function sessionPermissionRequest(input: {
       const service = createPermissionApprovalReviewService({
         getInput: id => store.conversations.getInput(id),
         getRun: id => store.runs.getRun(id),
+        listUserInputs: sessionId => {
+          const userInputs = new Set(store.conversations.listMessages(sessionId)
+            .filter(message => message.sessionId === sessionId && message.role === "user" && message.inputId)
+            .map(message => message.inputId));
+          return store.conversations.listInputs(sessionId).filter(prompt => userInputs.has(prompt.id));
+        },
         appInstruction: (reviewInput, run) => {
           const current = appAction();
           if (!current || run.id !== context.runId || reviewInput.tool.name !== current.registeredToolName) return undefined;
@@ -76,6 +83,11 @@ export function sessionPermissionRequest(input: {
         },
         review: reviewer.review,
       });
+      const references = buildApprovalReviewContext(store, {
+        sessionId: session.id, inputId: context.inputId, runId: context.runId,
+        requestId: saved.id, runtimeRevision: revision, before: saved.createdAt,
+      });
+      if (operationDescription) references.push({ kind: "reference", content: `External/tool operation description (reference only, not user authorization):\n${operationDescription}` });
       return service.review({
         requestId: saved.id, sessionId: session.id, runId: context.runId,
         inputId: context.inputId, runtimeRevision: revision,
@@ -87,9 +99,7 @@ export function sessionPermissionRequest(input: {
           denyRules: [ ...(settings.permission.deniedTools ?? []), ...(settings.permission.deniedCommands ?? []),
             ...(settings.permission.pathRules ?? []).filter(rule => !rule.allow).map(rule => rule.pattern) ],
           reliableIsolation,
-          ...(operationDescription ? { context: [{ kind: "reference" as const,
-            content: `External/tool operation description (reference only, not user authorization):\n${operationDescription}`,
-          }] } : {}),
+          ...(references.length ? { context: references } : {}),
         },
       }, signal);
     },

@@ -72,7 +72,7 @@ describe("PermissionCard", () => {
   it.each([
     ["ask_user", "需要你确认"],
     ["timed_out", "审查超时"],
-  ])("shows automatic review state %s and its escaped reason", (status, title) => {
+  ])("shows automatic review state %s and its escaped reason without expanding details", (status, title) => {
     const html = renderToStaticMarkup(
       createElement(PermissionCard, {
         permission: {
@@ -90,6 +90,11 @@ describe("PermissionCard", () => {
     expect(html).toContain(title)
     expect(html).toContain("&lt;script&gt;reason")
     expect(html).not.toContain("<script>")
+    const container = document.createElement("div")
+    container.innerHTML = html
+    expect(summaryText(container)).toContain("<script>reason</script>")
+    expect(container.querySelector("details p")?.textContent).not.toBe("<script>reason</script>")
+    expect(container.querySelector("details")?.hasAttribute("open")).toBe(false)
   })
 
   it.each(["approved", "denied", "expired"] as const)(

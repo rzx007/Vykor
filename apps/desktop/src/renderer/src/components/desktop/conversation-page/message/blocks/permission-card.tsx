@@ -44,6 +44,9 @@ export function PermissionCard({
             {" · "}
             {operation.toolName}
           </p>
+          {review?.reason ? (
+            <p className="mt-1 text-xs leading-snug break-words text-foreground">{review.reason}</p>
+          ) : null}
           <details className="group/permission-details mt-1 text-xs text-ui-muted">
             <summary className="text-ui-caption flex w-fit cursor-pointer list-none items-center gap-1 rounded-md py-1 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&::-webkit-details-marker]:hidden">
               <ChevronRight
@@ -54,9 +57,6 @@ export function PermissionCard({
               查看详情
             </summary>
             <div className="mt-2 space-y-3">
-              {review?.reason ? (
-                <p className="leading-snug break-words text-foreground">{review.reason}</p>
-              ) : null}
               {operation.fields.length ? (
                 <dl className="flex flex-col gap-1">
                   {operation.fields.map((field) => (

@@ -1192,6 +1192,23 @@ describe("ConversationTransactions.admitPrompt", () => {
         }
       });
 
+      it("keeps external input attribution when host metadata is stripped across repeated history forks", () => {
+        const dir = mkdtempSync(join(tmpdir(), "vk-fork-input-attribution-"));
+        const store = new SessionStore({ path: join(dir, "store.db") });
+        try {
+          const source = seedForkSource(store, dir);
+          store.conversations.setInputMetadata(source.input.id, { pluginAppSubmission: { source: "external" } });
+          const tx = createTransactions(store);
+          tx.forkSessionWithHistory({ sourceSessionId: "source", session: { id: "child", cwd: dir, model: "m" } });
+          expect(store.conversations.listInputs("child")[0]!.metadata).toEqual({ approvalInstructionSource: "external" });
+          tx.forkSessionWithHistory({ sourceSessionId: "child", session: { id: "grandchild", cwd: dir, model: "m" } });
+          expect(store.conversations.listInputs("grandchild")[0]!.metadata).toEqual({ approvalInstructionSource: "external" });
+        } finally {
+          store.close();
+          rmSync(dir, { recursive: true, force: true });
+        }
+      });
+
       it("honors before and after boundaries and rejects unknown fork points", () => {
         const dir = mkdtempSync(join(tmpdir(), "vk-fork-boundary-"));
         const store = new SessionStore({ path: join(dir, "store.db") });

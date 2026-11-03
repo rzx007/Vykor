@@ -96,6 +96,8 @@ interface VykorRuntimeOptions {
 /**
  * 合并自动放行工具：settings.permission.autoApproveTools（用户显式配置）
  * + autoApproveReadOnly 注入的非本地 READ_ONLY_TOOLS。
+ * 受信任的内置 AskUser 直接进入问答，不另设“允许提问”审批。
+ * 受信任的内置 Jobs 观察工具只读取当前会话的任务，不重复请求普通审批。
  * 本地只读工具(Read/Glob/Grep/Lsp)不在这里隐式注入，交给 PermissionChecker
  * 的 cwd 守卫处理；settings/overrides 显式 autoApproveTools 仍按用户授权保留。
  * 空合并返回 undefined（checker 走默认行为）。
@@ -109,6 +111,9 @@ export function resolveAutoApproveTools(
     ...(settings.permission.autoApproveTools ?? []),
     ...(overrides.autoApproveTools ?? []),
   ]);
+  for (const tool of ["AskUser", "JobList", "JobRead", "JobWait"]) {
+    if (trustedBuiltinToolNames?.has(tool)) merged.add(tool);
+  }
   if (overrides.autoApproveReadOnly) {
     for (const tool of READ_ONLY_TOOLS) {
       if (

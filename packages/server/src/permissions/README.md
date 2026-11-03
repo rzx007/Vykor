@@ -10,6 +10,12 @@
 
 自动审查从已保存的审批请求读取操作说明，例如浏览器站点、按钮名称和敏感操作提示，并通过 `evidence.context` 的 `reference` 类型提供给审查器。这些说明属于外部或工具参考信息，不能提供用户授权；`userInstruction` 仍由对应运行的原始用户输入或已核实的应用操作产生。
 
+`approval-context.ts` 还提供紧邻用户回复的完整助手提案、当前及紧邻前轮运行已完成的可信内置工具结果，以及本轮同配置下较早的确切批准记录。它们都只是风险与回复指代的参考，不能独立授权或扩展“允许本次”的范围。收集时排除别的会话、不相关运行、委派运行、未来记录和外部工具结果；每条参考最多 4000 字符，结果正文最多 3500 字符，总参考预算 12000 字符，最多各取三条结果和批准记录。不能完整纳入的参考会明确标为缺失，不发送半段资料并假装完整。历史用户要求仍由完整请求的长度限制保护。
+
+多轮对话审查还会通过 `userInstructionHistory` 带上当前输入之前的用户指令，按输入顺序保留授权及后来的限制，避免用户回复“好”后丢掉前文。历史只取当前会话中已经成为用户消息的持久输入，不读取父会话、未来输入、尚未投递的排队输入或代理消息；分叉会话使用自己已复制的历史。自动目标续跑、隐藏系统输入和插件生成输入不能作为新的人类授权。当前指令保留 16000 字符限制；包括历史在内的完整审查请求超过 65536 字符时转为人工确认，不截掉可能影响授权的内容。
+
+分叉复制时留下的 `approvalInstructionSource: "external"` 继续排除外部输入，避免删除插件专属字段后把它误认成人类指令。本轮或历史输入只要带有 `sensitiveInput: true` 或旧 `autoReviewSensitive: true`，整次请求转为人工确认，不向另一个模型发送这些内容，也不删掉该条后使用剩余记录批准。
+
 ## 状态归属
 
 请求和决定通过权限存储保存，等待者与取消监听保存在控制器中，配置由配置服务管理。
@@ -19,6 +25,7 @@
 | 文件 | 主要接口或用途 |
 | --- | --- |
 | [approval-review-service.ts](./approval-review-service.ts) | `ApprovalReviewServiceInput`、`PermissionApprovalReviewServiceOptions`、`createPermissionApprovalReviewService` |
+| [approval-context.ts](./approval-context.ts) | 从宿主记录收集有来源和范围限制的助手提案、工具结果及旧批准参考 |
 | [index.ts](./index.ts) | 汇总本分类的公开接口 |
 | [permission-broker.ts](./permission-broker.ts) | `PermissionReplyStatus`、`PermissionDecisionScope`、`PermissionAskInput`、`PermissionApprovalReviewHook` 等 |
 | [permission-controller.ts](./permission-controller.ts) | `PermissionControllerWaitInput`、`PermissionController` |

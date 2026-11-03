@@ -4302,7 +4302,7 @@
     },
     {
       "path": "packages/services/src/conversations/conversation-tree-operations.ts",
-      "line": 91,
+      "line": 95,
       "text": "      const { pluginUi: _pluginUi, uiAction: _uiAction, pluginUiSubmission: _pluginUiSubmission, pluginAppAction: _pluginAppAction, pluginAppSubmission: _pluginAppSubmission, pluginAppSource: _pluginAppSource, ...copiedMetadata } = part.metadata;",
       "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
     },

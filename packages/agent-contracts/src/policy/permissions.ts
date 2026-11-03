@@ -29,6 +29,8 @@ export interface ApprovalReviewOutcome extends ApprovalReviewResult {
 /** Only the host may construct this evidence from admitted inputs and tool registration. */
 export interface ApprovalReviewEvidence {
   userInstruction: string;
+  /** Earlier admitted human inputs from this conversation, oldest first. */
+  userInstructionHistory?: readonly { inputId: string; content: string }[];
   cwd: string;
   agentId?: string;
   accessBoundary: string;
