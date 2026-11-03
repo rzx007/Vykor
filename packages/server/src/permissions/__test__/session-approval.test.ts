@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,6 +6,7 @@ import { createConfiguredApprovalReviewer } from "@vykor/agent-runtime";
 
 vi.mock("@vykor/agent-runtime", () => ({ createConfiguredApprovalReviewer: vi.fn() }));
 import type { AgentEffectContext } from "@vykor/agent-contracts";
+import { setHostResponseLocale } from "@vykor/agent-contracts";
 import type { Settings } from "@vykor/host-config";
 import type { PermissionRequestRecord, SessionInputRecord, SessionMessageRecord, SessionMessagePartRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 import { SessionStore } from "@vykor/services";
@@ -29,6 +30,24 @@ function fixture(toolName = "Shell", source = "builtin", confirmation?: "once", 
   const request = { id: "q", sessionId: "s", runId: "r", createdAt: 100, status: "pending", toolName, payload: { input: structuredClone(original.input), ...(reason !== undefined ? { reason } : {}) } } as unknown as PermissionRequestRecord;
   return { session, abort, input, request, original, inputs, messages, parts, approvals, results, runs };
 }
+afterEach(() => setHostResponseLocale(undefined));
+
+describe("session approval fallback language", () => {
+  it.each(["en-US", "zh-CN"])("localizes unverifiable source and secret-bearing input fallbacks in %s", async locale => {
+    setHostResponseLocale(locale);
+    for (const kind of ["plugin", "secret"] as const) {
+      const sample = fixture("Publish", kind === "plugin" ? "plugin" : "builtin");
+      const captured = kind === "secret" ? { ...sample.input, input: { apiKey: "private" } } : sample.input;
+      const callsBefore = vi.mocked(createConfiguredApprovalReviewer).mock.calls.length;
+      await expect(sample.input.review!({ request: sample.request, input: captured })).resolves.toEqual({
+        decision: "ask_user", risk: "unknown", authorization: "missing",
+        reason: locale === "zh-CN" ? "无法核实工具来源或模型配置，需要你确认。" : "The tool source or model configuration could not be verified. Please confirm.",
+      });
+      expect(vi.mocked(createConfiguredApprovalReviewer).mock.calls).toHaveLength(callsBefore);
+      expect(sample.inputs[0]?.content).toBe("Edit a.ts");
+    }
+  });
+});
 describe("session authorization host boundary", () => {
   it("provides the proposal answered by a short reply and previous exact operations as references", async () => {
     const sample = fixture("BackgroundShellCreate");

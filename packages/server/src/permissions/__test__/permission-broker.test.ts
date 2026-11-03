@@ -2,7 +2,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { setHostResponseLocale } from "@vykor/agent-contracts";
 
 import { SessionStore } from "@vykor/services";
 
@@ -459,12 +460,41 @@ const automaticInput = {
 };
 const automaticApproval: ApprovalReviewOutcome = { decision: "approve", risk: "low", authorization: "task_implied", reason: "用户要求的项目修改。" };
 
+afterEach(() => setHostResponseLocale(undefined));
+
 function reviewBroker(store: SessionStore, review: PermissionApprovalReviewHook, extra: Partial<StorePermissionBrokerOptions> = {}) {
   return new StorePermissionBroker({ permissions: store.permissions, getSession: id => store.sessions.get(id),
     latestEventSeq: () => store.conversations.latestEventSeq(), review, ...extra });
 }
 
 describe("automatic permission review", () => {
+  it.each(["en-US", "zh-CN"])("persists localized fallback reasons and unchanged request metadata in %s", async locale => {
+    setHostResponseLocale(locale);
+    for (const kind of ["missing", "throwing", "invalid"] as const) {
+      await withBroker(async ({ broker: unconfigured, store }) => {
+        const broker = kind === "missing" ? unconfigured : reviewBroker(store, async () => {
+          if (kind === "throwing") throw new Error("provider unavailable");
+          return { ...automaticApproval, reason: "" };
+        });
+        const waiting = broker.ask(automaticInput);
+        const request = store.permissions.list()[0]!;
+        const reason = kind === "invalid"
+          ? locale === "zh-CN" ? "自动审查结果无效，需要你确认。" : "The automatic review result is invalid. Please confirm."
+          : locale === "zh-CN" ? "自动审查暂时不可用，需要你确认。" : "Automatic review is unavailable. Please confirm this operation.";
+        try {
+          await vi.waitFor(() => expect(store.permissions.get(request.id)).toMatchObject({
+            status: "pending", toolName: "Write", runId: "r1", payload: {
+              input: automaticInput.input, approvalMode: "auto_review", inputId: "i1", runtimeRevision: 1,
+              approvalReview: { status: "ask_user", reason, result: { decision: "ask_user", risk: "unknown", authorization: "missing", reason } },
+            },
+          }));
+        } finally {
+          broker.reply({ requestId: request.id, status: "denied", decision: "once" });
+          await expect(waiting).resolves.toEqual({ status: "denied", decision: "once" });
+        }
+      });
+    }
+  });
   it("persists the exact request and review reason, and never creates reusable approvals", async () => {
     await withBroker(async ({ store, path }) => {
       const review = vi.fn<PermissionApprovalReviewHook>(async ({ request, input }) => {

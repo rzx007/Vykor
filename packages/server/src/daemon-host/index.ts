@@ -33,3 +33,4 @@ export {
 } from "../daemon/default-daemon.js";
 
 export { readOfficeFile, readOfficeBytes, MAX_OFFICE_BYTES } from "@vykor/services";
+export { setHostResponseLocale } from "@vykor/agent-contracts";

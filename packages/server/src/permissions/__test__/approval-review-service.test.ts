@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { setHostResponseLocale } from "@vykor/agent-contracts";
 import type { ApprovalReviewInput, ApprovalReviewResult } from "@vykor/agent-contracts/permissions";
 import type { SessionInputRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 import { createPermissionApprovalReviewService, type ApprovalReviewServiceInput } from "../approval-review-service.js";
@@ -11,6 +12,39 @@ const input: ApprovalReviewServiceInput = {
   tool: { name: "Write", source: "builtin" }, input: { path: "a.ts" },
   evidence: { cwd: "/project", accessBoundary: "project", denyRules: [], reliableIsolation: true },
 };
+
+afterEach(() => setHostResponseLocale(undefined));
+
+describe("approval review fallback language", () => {
+  it.each(["en-US", "zh-CN"])("localizes host fallbacks without changing their decisions in %s", async locale => {
+    setHostResponseLocale(locale);
+    const cases = [
+      { prompt: undefined, chinese: "无法核实本次操作对应的用户指令，需要你确认。", english: "The user instruction for this operation could not be verified. Please confirm." },
+      { prompt: { ...prompt, metadata: { sensitiveInput: true } }, chinese: "审查资料包含敏感用户输入，需要你直接确认。", english: "The review includes sensitive user input. Please confirm directly." },
+      { prompt: { ...prompt, content: "x".repeat(16_001) }, chinese: "审查所需资料超出范围，需要你确认。", english: "The information needed for review exceeds the supported limit. Please confirm." },
+      { prompt, chinese: "自动审查暂时不可用，需要你确认。", english: "Automatic review is unavailable. Please confirm this operation." },
+    ];
+    for (const sample of cases) {
+      const service = createPermissionApprovalReviewService({
+        getInput: () => sample.prompt, getRun: () => run,
+        review: async () => { throw new Error("provider unavailable"); },
+      });
+      await expect(service.review(input)).resolves.toEqual({
+        decision: "ask_user", risk: "unknown", authorization: "missing", failure: "unavailable",
+        reason: locale === "zh-CN" ? sample.chinese : sample.english,
+      });
+    }
+  });
+
+  it.each(["en-US", "zh-CN"])("keeps the reviewer's reason and original human input unchanged in %s", async locale => {
+    setHostResponseLocale(locale);
+    let observed: ApprovalReviewInput | undefined;
+    const service = createPermissionApprovalReviewService({ getInput: () => prompt, getRun: () => run,
+      review: async value => { observed = value; return result; } });
+    await expect(service.review(input)).resolves.toBe(result);
+    expect(observed?.evidence.userInstruction).toBe("用户真实指令");
+  });
+});
 
 describe("permission approval review evidence", () => {
   it("keeps the previous deployment request when the current user reply is only an assent", async () => {

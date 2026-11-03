@@ -1,4 +1,5 @@
 import type { ApprovalReviewEvidence, ApprovalReviewInput, ApprovalReviewOutcome } from "@vykor/agent-contracts/permissions";
+import { responseText } from "@vykor/agent-contracts";
 import type { SessionInputRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 import { withoutHostPluginMetadata } from "@vykor/domain-contracts/inputs";
 
@@ -31,7 +32,7 @@ export function createPermissionApprovalReviewService(options: PermissionApprova
           || (run.status !== "pending" && run.status !== "running")))
         || !input.requestId || !input.tool.name || !input.tool.source
         || !Number.isInteger(input.runtimeRevision) || input.runtimeRevision < 0) {
-        return unavailable("无法核实本次操作对应的用户指令，需要你确认。");
+        return unavailable(responseText("无法核实本次操作对应的用户指令，需要你确认。", "The user instruction for this operation could not be verified. Please confirm."));
       }
       const previousInputs = prompt && options.listUserInputs
         ? options.listUserInputs(input.sessionId)
@@ -39,7 +40,7 @@ export function createPermissionApprovalReviewService(options: PermissionApprova
             && Number.isInteger(previous.seq) && previous.seq > 0 && previous.seq < prompt.seq)
         : [];
       if ((prompt && hasSensitiveInput(prompt)) || previousInputs.some(hasSensitiveInput)) {
-        return unavailable("审查资料包含敏感用户输入，需要你直接确认。");
+        return unavailable(responseText("审查资料包含敏感用户输入，需要你直接确认。", "The review includes sensitive user input. Please confirm directly."));
       }
       const history = previousInputs
         .filter(previous => previous.content.trim() && isDirectHumanInput(previous))
@@ -53,13 +54,13 @@ export function createPermissionApprovalReviewService(options: PermissionApprova
       const reviewInput: ApprovalReviewInput = { ...input, evidence };
       // Do not silently trim away qualifications that could change authorization.
       if (instruction.length > 16_000 || JSON.stringify(reviewInput).length > 65_536) {
-        return unavailable("审查所需资料超出范围，需要你确认。");
+        return unavailable(responseText("审查所需资料超出范围，需要你确认。", "The information needed for review exceeds the supported limit. Please confirm."));
       }
       try {
         return await options.review(reviewInput, signal);
       } catch (error) {
         if (signal?.aborted) throw signal.reason ?? error;
-        return unavailable("自动审查暂时不可用，需要你确认。");
+        return unavailable(responseText("自动审查暂时不可用，需要你确认。", "Automatic review is unavailable. Please confirm this operation."));
       }
     },
   };

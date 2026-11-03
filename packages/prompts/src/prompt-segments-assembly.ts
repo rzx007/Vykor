@@ -1,5 +1,5 @@
 import type { ContextBucketId, ContextLedgerSegment } from "@vykor/agent-contracts";
-import type { ReplyStyle } from "@vykor/agent-contracts";
+import { buildResponseLanguageInstruction, type ReplyStyle } from "@vykor/agent-contracts";
 import { buildReplyStyleSection } from "./reply-styles.js";
 import type { WorkStyle } from "@vykor/host-config";
 import type { EffectiveEnvironmentInfo } from "@vykor/environment";
@@ -134,6 +134,7 @@ export async function buildTaggedPromptSegments(
     pushSegment(segments, "stable", "subagents", buildDelegationSection());
   }
 
+  pushSegment(segments, "stable", "system", buildResponseLanguageInstruction());
   pushSegment(segments, "stable", "system", buildReplyStyleSection(options.replyStyle));
 
   if (options.customPrompt?.trim()) {

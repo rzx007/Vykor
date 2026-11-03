@@ -9,6 +9,7 @@ import {
   stopDaemonProcess,
   writeDaemonRegistry,
   shouldStartManagedDaemon,
+  setHostResponseLocale,
   type DaemonRegistry,
 } from "@vykor/server/daemon-host"
 import { app } from "electron"
@@ -38,6 +39,7 @@ export async function runDesktopDaemonEntry(mode: DesktopDaemonMode): Promise<vo
     return
   }
 
+  setHostResponseLocale(app.getPreferredSystemLanguages()[0])
   while (await registeredDaemonHealthy()) {
     await delay(2_000)
   }

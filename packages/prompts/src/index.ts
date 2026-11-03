@@ -3,7 +3,7 @@ import { join, resolve, dirname } from "node:path";
 import { platform, machine, homedir, hostname } from "node:os";
 import { resolveGitRepository } from "@vykor/host-config";
 import type { WorkStyle } from "@vykor/host-config";
-import type { ReplyStyle } from "@vykor/agent-contracts";
+import { buildResponseLanguageInstruction, type ReplyStyle } from "@vykor/agent-contracts";
 import { buildReplyStyleSection } from "./reply-styles.js";
 export { buildReplyStyleSection } from "./reply-styles.js";
 import type { EffectiveEnvironmentInfo } from "@vykor/environment";
@@ -116,7 +116,7 @@ export interface PromptLayers {
 }
 
 export function getBaseSystemPrompt(): string {
-  return BASE_SYSTEM_PROMPT;
+  return `${BASE_SYSTEM_PROMPT}\n\n${buildResponseLanguageInstruction()}`;
 }
 
 export function getDefaultIdentity(): string {
@@ -355,7 +355,7 @@ export async function buildSystemPrompt(
   const envSection = formatEnvironmentSection(env);
 
   const claudeMd = await loadClaudeMdPrompt(env.cwd);
-  const sections = [BASE_SYSTEM_PROMPT, envSection];
+  const sections = [getBaseSystemPrompt(), envSection];
   if (customPrompt?.trim())
     sections.push(`# Custom Instructions\n\n${customPrompt.trim()}`);
   if (claudeMd) sections.push(claudeMd);

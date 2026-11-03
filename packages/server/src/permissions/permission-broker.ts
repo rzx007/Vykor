@@ -4,6 +4,7 @@ import type { ApprovalReviewRecord } from "@vykor/domain-contracts/approvals";
 import type { PermissionRequestRecord, PermissionStatus } from "@vykor/domain-contracts/sessions";
 import type { SessionStore } from "@vykor/services";
 import type { AgentPermissionDecision } from "@vykor/agent-contracts";
+import { responseText } from "@vykor/agent-contracts";
 import type { StructuredLogger } from "../shared/observability.js";
 import { PermissionController } from "./permission-controller.js";
 
@@ -261,9 +262,9 @@ export class StorePermissionBroker implements PermissionBroker {
       const review = input.review ?? this.review;
       outcome = review
         ? await review({ request: structuredClone(request), input, signal })
-        : { decision: "ask_user", risk: "unknown", authorization: "missing", reason: "自动审查暂时不可用，需要你确认。", failure: "unavailable" };
+        : { decision: "ask_user", risk: "unknown", authorization: "missing", reason: responseText("自动审查暂时不可用，需要你确认。", "Automatic review is unavailable. Please confirm this operation."), failure: "unavailable" };
     } catch {
-      outcome = { decision: "ask_user", risk: "unknown", authorization: "missing", reason: "自动审查暂时不可用，需要你确认。", failure: "unavailable" };
+      outcome = { decision: "ask_user", risk: "unknown", authorization: "missing", reason: responseText("自动审查暂时不可用，需要你确认。", "Automatic review is unavailable. Please confirm this operation."), failure: "unavailable" };
     }
     if (this.permissions.get(request.id)?.status !== "pending") return;
     if (input.signal?.aborted || !this.isCurrent(request.id)) {
@@ -275,7 +276,7 @@ export class StorePermissionBroker implements PermissionBroker {
       || !["low", "medium", "high", "unknown"].includes(outcome.risk)
       || !["explicit", "task_implied", "missing"].includes(outcome.authorization)
       || typeof outcome.reason !== "string" || !outcome.reason.trim() || outcome.reason.length > 1000) {
-      outcome = { decision: "ask_user", risk: "unknown", authorization: "missing", reason: "自动审查结果无效，需要你确认。", failure: "invalid_response" };
+      outcome = { decision: "ask_user", risk: "unknown", authorization: "missing", reason: responseText("自动审查结果无效，需要你确认。", "The automatic review result is invalid. Please confirm."), failure: "invalid_response" };
     }
     if (outcome.decision === "approve" && (outcome.failure || outcome.risk === "unknown"
       || outcome.authorization === "missing" || (outcome.risk === "high" && outcome.authorization !== "explicit"))) {

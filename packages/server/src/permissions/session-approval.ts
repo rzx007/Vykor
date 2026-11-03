@@ -1,4 +1,5 @@
 import type { AgentEffectContext, AgentPermissionRequest } from "@vykor/agent-contracts";
+import { responseText } from "@vykor/agent-contracts";
 import type { Settings } from "@vykor/host-config";
 import { createConfiguredApprovalReviewer } from "@vykor/agent-runtime";
 import { normalizeApprovalMode } from "@vykor/host-config";
@@ -56,7 +57,7 @@ export function sessionPermissionRequest(input: {
       const action = appAction();
       if (!settings || (toolSource !== "builtin" && !action)
         || containsSecret(toolInput)) {
-        return { decision: "ask_user", risk: "unknown", authorization: "missing", reason: "无法核实工具来源或模型配置，需要你确认。" };
+        return { decision: "ask_user", risk: "unknown", authorization: "missing", reason: responseText("无法核实工具来源或模型配置，需要你确认。", "The tool source or model configuration could not be verified. Please confirm.") };
       }
       const reliableIsolation = settings.agentEnvironment?.kind !== "wsl" && getSandboxAvailability(settings.sandbox).active;
       // Isolation is evidence for this exact invocation, not a prerequisite for review.

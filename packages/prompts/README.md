@@ -25,6 +25,12 @@
 
 新增提示词段放入现有组装流程，文件读写集中在个人提示词文件模块，测试放 `src/__test__/`。
 
+## 回复语言
+
+内置提示词默认要求跟随系统语言回复，中文系统默认中文；当轮用户请求、个人资料或自定义指令明确指定回复语言时，优先采用这些要求。语言规则适用于回复、进度消息、澄清问题和总结，代码、路径、标识符及引文可保留原文。
+
+构建函数每次从 `@vykor/agent-contracts` 读取当前默认语言，再生成一份语言段；旧的 `buildSystemPrompt()`、`getBaseSystemPrompt()` 和上下文用量估算也采用同一规则。完整 `systemPrompt` 覆盖仍由运行时原样处理，不追加语言段。
+
 ## 回复风格
 
 `replyStyle` 支持 `collaborative`（协作，默认）、`direct`（直接）、`explanatory`（讲解）。调用 `buildRuntimeSystemPrompt({ replyStyle })` 或 `buildPromptLayers({ replyStyle })` 时选择其中一套，进度通知仍由 `workStyle` 控制。快速模式保留这两项偏好及必要验证，不另行强制简短回答。
