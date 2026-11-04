@@ -39,6 +39,20 @@ describe("buildCodexHeaders", () => {
 
 describe("CodexSubscriptionClient phases", () => {
   afterEach(() => vi.unstubAllGlobals());
+  it("reports incoming stream bytes even when they contain only a heartbeat", async () => {
+    const encoder = new TextEncoder();
+    vi.stubGlobal("fetch", async () => new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(": keepalive\n\n"));
+        controller.enqueue(encoder.encode('data: {"type":"response.completed"}\n\n'));
+        controller.close();
+      },
+    })));
+    const client = new CodexSubscriptionClient({ apiKey: jwt({ "https://api.openai.com/auth": { chatgpt_account_id: "fixture" } }) });
+    let reads = 0;
+    for await (const _event of client.streamMessage({ model: "m", messages: [], onStreamActivity: () => { reads++; } })) { /* consume */ }
+    expect(reads).toBe(2);
+  });
   it("keeps cache-inclusive input and missing output distinct from zero", async () => {
     vi.stubGlobal("fetch", async () => new Response('data: {"type":"response.completed","response":{"usage":{"input_tokens":10,"input_tokens_details":{"cached_tokens":7}}}}\n\n', {
       headers: { "content-type": "text/event-stream" },

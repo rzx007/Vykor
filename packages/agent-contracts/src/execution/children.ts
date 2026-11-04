@@ -110,6 +110,8 @@ export interface ChildActivitySnapshot {
   latestTool?: { name: string; status: "running" | "completed" | "failed"; at: number };
   toolCalls: number;
   modelTurns: number;
+  /** 当前模型请求的连接和可见生成活动；不包含生成内容。 */
+  model?: { generationId: string; attempt: number; startedAt: number; lastStreamAt?: number; lastProgressAt?: number };
   usage?: { inputTokens?: number; outputTokens?: number; incomplete: boolean };
 }
 

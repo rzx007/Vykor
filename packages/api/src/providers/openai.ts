@@ -212,6 +212,7 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
       try {
         for await (const chunk of stream) {
           lifecycle.touch();
+          await params.onStreamActivity?.();
           if (!chunk.choices || chunk.choices.length === 0) {
             if (chunk.usage) {
               yield { type: "usage", usage: {

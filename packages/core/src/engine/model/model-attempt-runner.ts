@@ -79,6 +79,7 @@ export async function* runModelAttempt(
   let gateSettled = false;
   let clientInvoked = false;
   let requestExitedNormally = false;
+  let nextStreamActivityAt = 0;
   const settleGate = async (status: "completed" | "failed" | "interrupted") => {
     if (!admitted || gateSettled) return;
     gateSettled = true;
@@ -116,6 +117,17 @@ export async function* runModelAttempt(
       abortSignal: attemptSignal.signal,
       requestTimeoutMs: options.policy.requestTimeoutMs,
       streamIdleTimeoutMs: options.policy.streamIdleTimeoutMs,
+      onStreamActivity: () => {
+        const now = Date.now();
+        if (now < nextStreamActivityAt) return;
+        nextStreamActivityAt = now + 15_000;
+        // Diagnostic delivery must not delay or fail the model stream.
+        try {
+          options.execution?.observe?.({ type: "domain.event", data: {
+            name: "model.stream.activity", payload: { generationId, attempt },
+          } });
+        } catch { /* Optional diagnostic event. */ }
+      },
     });
 
     for await (const event of stream) {

@@ -536,9 +536,10 @@ describe("DaemonAgentEventProjector", () => {
       return row;
     });
     const activityWrites = () => updateSessionTask.mock.calls.filter(([, patch]) => patch.metadata?.childActivity);
+    let observe: (event: AgentEvent) => void = () => {};
     const projector = new DaemonAgentEventProjector({
       projectorId: "daemon-agent:agent-1", rootSessionId: "parent",
-      rootAgent: {} as any,
+      rootAgent: { subscribeObservations: (listener: typeof observe) => { observe = listener; } } as any,
       store: projectorStore({
         getSession: (id: string) => sessions.get(id),
         createSession: (input: any) => { sessions.set(input.id, input); return input; },
@@ -632,6 +633,29 @@ describe("DaemonAgentEventProjector", () => {
     }));
     expect(activityWrites()).toHaveLength(3);
     expect(tasks.get("child-1").metadata.childActivity).toMatchObject({ runId: "run-2", turns: 3 });
+
+    const current = { sessionId: "child-session", inputId: "input-2", runId: "run-2", childId: "child-1" };
+    await projector.apply(event("model.attempt.started", { generationId: "g", attempt: 1, model: "m", purpose: "generation" }, current));
+    expect(tasks.get("child-1").metadata.childActivity.model).toMatchObject({ generationId: "g", attempt: 1, startedAt: expect.any(Number) });
+    observe(event("domain.event", { name: "model.stream.activity", payload: { generationId: "g", attempt: 1 } }, current));
+    await new Promise(resolve => setTimeout(resolve, 10));
+    expect(tasks.get("child-1").metadata.childActivity.model.lastStreamAt).toEqual(expect.any(Number));
+    expect(tasks.get("child-1").metadata.childActivity.model.lastProgressAt).toBeUndefined();
+    await projector.apply(event("output.text.delta", { delta: "PRIVATE OUTPUT" }, current));
+    expect(tasks.get("child-1").metadata.childActivity.model.lastProgressAt).toEqual(expect.any(Number));
+    expect(JSON.stringify(tasks.get("child-1").metadata)).not.toContain("PRIVATE OUTPUT");
+    updateSessionTask.mockImplementationOnce(() => { throw new Error("diagnostic storage unavailable"); });
+    await expect(projector.apply(event("model.attempt.started", { generationId: "g2", attempt: 1, model: "m", purpose: "generation" }, current))).resolves.toBeUndefined();
+    await expect(projector.apply(event("output.text.delta", { delta: "still running" }, current))).resolves.toBeUndefined();
+    await projector.apply(event("input.accepted", { content: "third", delivery: "queue" }, {
+      sessionId: "child-session", inputId: "input-3", runId: "run-3", childId: "child-1",
+    }));
+    await projector.apply(event("run.started", {}, { sessionId: "child-session", inputId: "input-3", runId: "run-3", childId: "child-1" }));
+    await projector.apply(event("output.turn.completed", { stopReason: "end_turn" }, {
+      sessionId: "child-session", inputId: "input-3", runId: "run-3", childId: "child-1",
+    }));
+    expect(tasks.get("child-1").metadata.childActivity).toMatchObject({ runId: "run-3", turns: 4 });
+    expect(tasks.get("child-1").metadata.childActivity.model).toBeUndefined();
   });
 
   it("keeps a historical goal.assessment event as ordinary history without updating Run metadata", async () => {

@@ -12,6 +12,16 @@ function mockMessages(client: AnthropicClient, create: (...args: any[]) => unkno
 }
 
 describe("AnthropicClient cancellation", () => {
+  it("reports incoming stream events without exposing their contents", async () => {
+    const client = new AnthropicClient({ apiKey: "test" });
+    mockMessages(client, () => ({ async *[Symbol.asyncIterator]() {
+      yield { type: "message_start", message: { usage: { input_tokens: 1, output_tokens: 0 } } };
+      yield { type: "message_stop" };
+    } }));
+    let reads = 0;
+    for await (const _event of client.streamMessage({ model: "m", messages: [], onStreamActivity: () => { reads++; } })) { /* consume */ }
+    expect(reads).toBe(2);
+  });
   it.each([true, false])("keeps final cache accounting complete only with explicit cache components (%s)", async hasCache => {
     const client = new AnthropicClient({ apiKey: "test" });
     mockMessages(client, () => ({ async *[Symbol.asyncIterator]() {

@@ -28,6 +28,8 @@ export class AgentEventBus implements AgentEventSource {
     return () => this.reliableSinks.delete(sink);
   }
   private readonly listeners = new Set<AgentEventListener>();
+  private readonly observationListeners = new Set<AgentEventListener>();
+  private observationSequence = 0;
   private sequence = 0;
   private delivery: Promise<void> = Promise.resolve();
 
@@ -38,6 +40,22 @@ export class AgentEventBus implements AgentEventSource {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  subscribeObservations(listener: AgentEventListener): AgentEventSubscription {
+    this.observationListeners.add(listener);
+    return () => { this.observationListeners.delete(listener); };
+  }
+
+  /** Notify observers without adding diagnostic events to reliable delivery. */
+  observe(input: AgentEventInput, context: AgentEventContext): void {
+    const event = { ...input, id: `agent_event_${randomUUID()}`, sequence: ++this.observationSequence,
+      occurredAt: new Date().toISOString(), context } as AgentEvent;
+    queueMicrotask(() => {
+      for (const listener of [...this.observationListeners]) {
+        try { void Promise.resolve(listener(event)).catch(() => {}); } catch { /* Optional observer. */ }
+      }
+    });
   }
 
   async emit(

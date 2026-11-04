@@ -36,6 +36,28 @@ async function collect(
 }
 
 describe("QueryEngine model network retry", () => {
+  it("reports bounded stream activity without interrupting a successful response", async () => {
+    const emitted: AgentEventInput[] = [];
+    const execution = {
+      observe: (event: AgentEventInput) => {
+        emitted.push(event);
+        throw new Error("diagnostic observer unavailable");
+      },
+      emit: async () => {},
+      takeSteeredInputs: async () => [], closeSteering() {},
+    } as unknown as AgentExecutionContext;
+    const engine = new QueryEngine({ async *streamMessage(params) {
+      await params.onStreamActivity?.();
+      await params.onStreamActivity?.();
+      yield { type: "text_delta" as const, delta: "done" };
+      yield { type: "complete" as const, stopReason: "end_turn" };
+    } }, new ToolRegistry(), allowAll(), noopHooks(), { trajectoryTrackerFactory: false });
+    const output: StreamEvent[] = [];
+    for await (const event of engine.submitMessage("q", { execution })) output.push(event);
+    expect(output).toContainEqual(expect.objectContaining({ type: "text_delta", delta: "done" }));
+    expect(emitted.filter(event => event.type === "domain.event" && event.data.name === "model.stream.activity"))
+      .toEqual([expect.objectContaining({ data: { name: "model.stream.activity", payload: { generationId: expect.any(String), attempt: 1 } } })]);
+  });
   it.each(["limits", "started"])("stops at rejected %s before invoking or settling the client", async boundary => {
     let calls = 0;
     const limit = new AgentExecutionLimitError("closed");

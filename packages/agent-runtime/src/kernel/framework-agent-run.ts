@@ -292,6 +292,10 @@ export class FrameworkAgentRun implements AgentRunHandle {
           tools,
         ),
         emit: (event) => this.emit(event),
+        observe: (event) => this.options.eventBus.observe(event, {
+          agentId: this.options.agentId, sessionId: this.sessionId, inputId: this.inputId,
+          runId: this.id, traceId: this.traceId, ...this.options.identity,
+        }),
         takeSteeredInputs: (options) => this.takeSteeredInputs(options),
         closeSteering: () => {
           this.acceptingInput = false;

@@ -98,6 +98,8 @@ export interface AgentExecutionContext {
   readonly effects: AgentEffects;
   readonly children: AgentChildController;
   emit(event: AgentEventInput): Promise<void>;
+  /** Optional, non-durable diagnostics; never used for execution decisions. */
+  observe?(event: AgentEventInput): void;
   takeSteeredInputs(options?: { closeIfEmpty?: boolean }): Promise<AgentChildInput[]>;
   closeSteering(): void;
   /** Track the actual invocation, even when its timeout/abort race has returned. */

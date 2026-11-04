@@ -139,7 +139,10 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
 
       lifecycle.markStreamStarted();
       try {
-        for await (const event of iterSseEvents(response.body, () => lifecycle.touch())) {
+        for await (const event of iterSseEvents(response.body, async () => {
+          lifecycle.touch();
+          await params.onStreamActivity?.();
+        })) {
           const eventType = event.type;
           const responsePayload = event.response;
           if (isRecord(responsePayload)) {
@@ -387,7 +390,7 @@ function convertToolToCodex(tool: ToolDefinition): Record<string, unknown> {
 
 async function* iterSseEvents(
   body: ReadableStream<Uint8Array>,
-  onRead?: () => void,
+  onRead?: () => void | Promise<void>,
 ): AsyncIterable<Record<string, unknown>> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
@@ -397,7 +400,7 @@ async function* iterSseEvents(
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
-      onRead?.();
+      await onRead?.();
       buffer += decoder.decode(value, { stream: true });
       yield* drainSseBuffer(buffer, (next) => {
         buffer = next;

@@ -51,11 +51,6 @@ export function createAgentTool(options: CreateAgentToolOptions): ToolDefinition
             "Deliverable the parent needs back, such as evidence-backed findings, changes with test " +
             "results, or explicit blockers.",
         },
-        timeoutSeconds: {
-          type: "integer",
-          minimum: 1,
-          description: "Optional wall-clock budget for this child run. Legacy calls without it get no timer.",
-        },
       },
       required: ["description", "prompt"],
     },
@@ -85,11 +80,6 @@ export function createAgentTool(options: CreateAgentToolOptions): ToolDefinition
           };
         }
       }
-      const timeoutSeconds = input.timeoutSeconds;
-      if (timeoutSeconds !== undefined && !isPositiveBudget(timeoutSeconds)) {
-        return { content: [{ type: "text", text: "Invalid timeoutSeconds. Use a positive integer." }], isError: true };
-      }
-
       const children = context.agent?.children;
       if (!children) {
         return { content: [{ type: "text", text: "No framework child manager registered for Agent tool" }], isError: true };
@@ -123,7 +113,6 @@ export function createAgentTool(options: CreateAgentToolOptions): ToolDefinition
           effort: agentDef?.effort != null ? String(agentDef.effort) : undefined,
           ...(typeof scope === "string" ? { scope } : {}),
           ...(typeof expectedResult === "string" ? { expectedResult } : {}),
-          ...(typeof timeoutSeconds === "number" ? { requestedTimeoutSeconds: timeoutSeconds } : {}),
         });
 
         if (input.team) {
@@ -178,8 +167,4 @@ function isDelegationText(value: unknown): value is string {
   return typeof value === "string" &&
     value.trim().length > 0 &&
     value.length <= MAX_DELEGATION_TEXT_LENGTH;
-}
-
-function isPositiveBudget(value: unknown): value is number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
 }

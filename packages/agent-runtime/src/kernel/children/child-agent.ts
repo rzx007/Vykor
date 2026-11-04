@@ -417,9 +417,9 @@ export class AgentChildManager implements AgentChildDirectory {
     try {
       this.directory.register(handle);
       this.records.set(childId, record);
-      record.activityUnsubscribe = this.options.eventBus.subscribe((event) => {
-        applyChildActivityEvent(record, event);
-      });
+      const unsubscribeActivity = this.options.eventBus.subscribe((event) => applyChildActivityEvent(record, event));
+      const unsubscribeObservations = this.options.eventBus.subscribeObservations((event) => applyChildActivityEvent(record, event));
+      record.activityUnsubscribe = () => { unsubscribeActivity(); unsubscribeObservations(); };
       await this.emitChild(record, {
         type: "child.created",
         data: {
@@ -1147,6 +1147,7 @@ class ChildHandle implements AgentChildHandle {
     if (!snapshot) return undefined;
     return {
       ...snapshot,
+        ...(snapshot.model ? { model: { ...snapshot.model } } : {}),
       ...(snapshot.latestTool
         ? { latestTool: { ...snapshot.latestTool } }
         : {}),

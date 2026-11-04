@@ -1,4 +1,5 @@
 import { Bot, ChevronRight } from "lucide-react"
+import { useEffect, useState } from "react"
 import { AgentAvatar } from "@renderer/components/desktop/shared/agent-avatar/agent-avatar"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
@@ -39,7 +40,14 @@ export function AgentActivityMessage({
     )
   )
   const dispatchStatus = toolCallStatus(call, result)
-  const presentation = task ? agentTaskPresentation(task) : undefined
+  const [now, setNow] = useState(() => Date.now())
+  const monitoringModel = task?.status === "running" && Boolean(task.metadata?.childActivity)
+  useEffect(() => {
+    if (!monitoringModel) return
+    const timer = window.setInterval(() => setNow(Date.now()), 15_000)
+    return () => window.clearInterval(timer)
+  }, [monitoringModel])
+  const presentation = task ? agentTaskPresentation(task, now) : undefined
   const failed = task
     ? presentation?.tone === "error"
     : dispatchStatus === "failed" || dispatchStatus === "interrupted"

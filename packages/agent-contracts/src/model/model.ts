@@ -61,6 +61,8 @@ export interface StreamMessageParams {
   requestTimeoutMs?: number;
   /** 流连续没有收到协议事件/心跳的时间上限，毫秒。 */
   streamIdleTimeoutMs?: number;
+  /** 收到流数据时通知宿主；不包含数据内容。 */
+  onStreamActivity?: () => void | Promise<void>;
 }
 
 export interface StreamingMessageClient {

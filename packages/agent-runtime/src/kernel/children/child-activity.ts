@@ -11,6 +11,7 @@ export interface ChildActivityState {
   snapshot: ChildActivitySnapshot;
   stagedText: string;
   toolNames: Map<string, string>;
+  toolProgress: Map<string, number>;
   terminalPartial?: ChildPartialResult;
 }
 
@@ -31,17 +32,42 @@ export function applyChildActivityEvent(record: ChildActivityRecord, event: Agen
       snapshot: { version: 1, runId, updatedAt: Date.now(), toolCalls: 0, modelTurns: 0 },
       stagedText: "",
       toolNames: new Map(),
+      toolProgress: new Map(),
     };
     record.activity = state;
   }
   const snapshot = state.snapshot;
   const at = Date.parse(event.occurredAt) || Date.now();
   switch (event.type) {
+    case "model.attempt.started":
+      if (event.data.purpose !== "generation" && event.data.purpose !== "finalization") return;
+      state.toolProgress.clear();
+      snapshot.model = { generationId: event.data.generationId, attempt: event.data.attempt, startedAt: at };
+      return;
+    case "domain.event":
+      if (event.data.name === "model.stream.activity" && snapshot.model &&
+          event.data.payload?.generationId === snapshot.model.generationId && event.data.payload?.attempt === snapshot.model.attempt)
+        snapshot.model.lastStreamAt = at;
+      else if (event.data.name === "tool.generation.progress" && snapshot.model &&
+          event.data.payload?.generationId === snapshot.model.generationId && event.data.payload?.attempt === snapshot.model.attempt &&
+          event.data.payload?.discarded !== true) {
+        const { toolKey, receivedChars } = event.data.payload;
+        if (typeof toolKey === "string" && typeof receivedChars === "number" && Number.isFinite(receivedChars) &&
+            receivedChars > (state.toolProgress.get(toolKey) ?? 0)) {
+          state.toolProgress.set(toolKey, receivedChars);
+          snapshot.model.lastProgressAt = at;
+        }
+      }
+      return;
     case "output.generation.started":
       state.stagedText = "";
       return;
     case "output.text.delta":
       state.stagedText += event.data.delta;
+      if (snapshot.model && event.data.delta) snapshot.model.lastProgressAt = at;
+      return;
+    case "output.reasoning.delta":
+      if (snapshot.model && event.data.delta) snapshot.model.lastProgressAt = at;
       return;
     case "output.turn.completed":
       if (state.stagedText.length > 0) {
@@ -88,6 +114,8 @@ export function applyChildActivityEvent(record: ChildActivityRecord, event: Agen
       return;
     }
     case "model.attempt.finished":
+      if (snapshot.model?.generationId === event.data.generationId && snapshot.model.attempt === event.data.attempt)
+        delete snapshot.model;
       if (event.data.usageStatus !== "complete") {
         snapshot.usage = { ...(snapshot.usage ?? {}), incomplete: true };
         snapshot.updatedAt = at;

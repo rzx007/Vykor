@@ -91,6 +91,7 @@ export class AnthropicClient implements StreamingMessageClient {
       try {
         for await (const event of stream) {
           lifecycle.touch();
+          await params.onStreamActivity?.();
           if (event.type === "message_stop") {
             sawMessageStop = true;
           } else if (event.type === "message_start") {

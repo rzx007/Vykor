@@ -11,6 +11,16 @@ import {
 } from "../openai.js";
 
 describe("OpenAICompatibleClient configuration", () => {
+  it("reports incoming stream chunks without exposing their contents", async () => {
+    const client = new OpenAICompatibleClient({ apiKey: "test" });
+    client.client = { chat: { completions: { create: async () => ({ async *[Symbol.asyncIterator]() {
+      yield { choices: [{ delta: { content: "hello" }, finish_reason: null }] };
+      yield { choices: [{ delta: {}, finish_reason: "stop" }] };
+    } }) } } } as any;
+    let reads = 0;
+    for await (const _event of client.streamMessage({ model: "m", messages: [], onStreamActivity: () => { reads++; } })) { /* consume */ }
+    expect(reads).toBe(2);
+  });
   it.each([true, false])("requests terminal usage (with tools=%s) and keeps cache-inclusive input", async hasTools => {
     const client = new OpenAICompatibleClient({ apiKey: "test", baseURL: "https://gateway.example/v1" });
     const create = vi.fn(async () => ({ async *[Symbol.asyncIterator]() {

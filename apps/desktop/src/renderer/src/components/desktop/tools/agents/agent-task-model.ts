@@ -18,8 +18,17 @@ export interface AgentTaskPresentation {
   hasPartialReport: boolean
 }
 
-export function agentTaskPresentation(task: DesktopSessionTask): AgentTaskPresentation {
+export function agentTaskPresentation(task: DesktopSessionTask, now = Date.now()): AgentTaskPresentation {
   const label = agentTaskStatusLabel(task.status)
+  const activity = task.metadata?.childActivity
+  const model = isRecord(activity) && activity.runId === task.runId && isRecord(activity.model) ? activity.model : undefined
+  if (task.status === "running" && model && typeof model.startedAt === "number") {
+    const lastProgress = typeof model.lastProgressAt === "number" ? model.lastProgressAt : model.startedAt
+    if (now - Math.max(model.startedAt, lastProgress) >= 120_000) {
+      const receiving = typeof model.lastStreamAt === "number" && now - model.lastStreamAt < 45_000
+      return { label: `等待模型响应 · ${receiving ? "连接有活动" : "暂无流活动记录"}`, tone: "warning", hasPartialReport: false }
+    }
+  }
   if (task.status !== "failed" && task.status !== "interrupted") {
     return { label, tone: "neutral", hasPartialReport: false }
   }

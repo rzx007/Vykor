@@ -19,6 +19,19 @@ it("preserves a host limit rejection and continues terminal event delivery", asy
 });
 
 describe("AgentEventBus", () => {
+  it("delivers diagnostic observations without entering the reliable event queue", async () => {
+    const sink = vi.fn((event) => event.type === "domain.event" ? new Promise<void>(() => {}) : undefined);
+    const bus = new AgentEventBus(sink);
+    const seen = vi.fn();
+    const observations = vi.fn();
+    bus.subscribe(seen);
+    bus.subscribeObservations(observations);
+    bus.observe({ type: "domain.event", data: { name: "model.stream.activity" } }, context);
+    await bus.emit({ type: "output.text.delta", data: { delta: "visible" } }, context);
+    expect(seen.mock.calls.map(([event]) => event.type)).toEqual(["output.text.delta"]);
+    expect(observations.mock.calls.map(([event]) => event.type)).toEqual(["domain.event"]);
+    expect(sink.mock.calls.map(([event]) => event.type)).toEqual(["output.text.delta"]);
+  });
   it("delivers one ordered reliable event stream", async () => {
     const seen: Array<{ type: string; sequence: number }> = [];
     const bus = new AgentEventBus(async (event) => {
