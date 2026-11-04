@@ -17,6 +17,13 @@ async function fixture() {
   return { tool, context, ref };
 }
 describe("ToolResult builtin", () => {
+  it("publishes object parameters without unsupported top-level schema keywords", () => {
+    const schema = createToolResultTool().inputSchema;
+    expect(schema.type).toBe("object");
+    for (const keyword of ["oneOf", "anyOf", "allOf", "enum", "const", "not"]) {
+      expect(schema).not.toHaveProperty(keyword);
+    }
+  });
   it("lists retained references and reads/searches original long output through the bound capability", async () => {
     const { tool, context, ref } = await fixture();
     const list = await tool.execute({ action: "list" }, context);
@@ -31,7 +38,23 @@ describe("ToolResult builtin", () => {
     tool.execute = async () => ({ content: [] });
     expect(isToolResultTool(tool)).toBe(false);
   });
-  it.each([{ action: "other" }, { action: "read" }, { action: "read", id: "x", limit: 16_001 }, { action: "list", limit: 101 }, { action: "search", id: "x", query: "" }, { action: "search", id: "x", query: "x", limit: 101 }, { action: "list", sessionId: "forged" }])("rejects invalid input before lookup: %j", async input => {
+  it.each([
+    { action: "other" },
+    { action: "read" },
+    { action: "read", id: "" },
+    { action: "read", id: "x", limit: 16_001 },
+    { action: "read", id: "x", query: "unused" },
+    { action: "list", id: "unused" },
+    { action: "list", query: "unused" },
+    { action: "list", limit: 101 },
+    { action: "list", offset: -1 },
+    { action: "list", limit: 0 },
+    { action: "search", query: "x" },
+    { action: "search", id: "x" },
+    { action: "search", id: "x", query: "" },
+    { action: "search", id: "x", query: "x", limit: 101 },
+    { action: "list", sessionId: "forged" },
+  ])("rejects invalid input before lookup: %j", async input => {
     const { tool, context } = await fixture();
     expect(await tool.execute(input, context)).toMatchObject({ isError: true, failureKind: "invalid_input", executionState: "not_started" });
   });
