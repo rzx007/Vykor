@@ -12,6 +12,31 @@ import { createDaemonImageToTextTool } from "../daemon-image-to-text-tool.js";
 afterEach(() => vi.unstubAllGlobals());
 
 describe("daemon ImageToText tool", () => {
+  it("publishes object parameters without unsupported top-level schema keywords", () => {
+    const schema = createDaemonImageToTextTool({
+      authorizationSessions: { resolve: () => undefined },
+      attachmentOcr: { recognize: vi.fn() },
+    }).inputSchema;
+    expect(schema.type).toBe("object");
+    for (const keyword of ["oneOf", "anyOf", "allOf", "enum", "const", "not"]) {
+      expect(schema).not.toHaveProperty(keyword);
+    }
+  });
+
+  it.each([
+    {},
+    { attachment_id: "att-1", image_path: "invoice.png" },
+    { attachment_id: "att-1", image_url: "https://images.example/invoice.png" },
+    { image_path: "invoice.png", image_url: "https://images.example/invoice.png" },
+  ])("rejects missing or combined image sources before any lookup: %j", async input => {
+    const tool = createDaemonImageToTextTool({
+      authorizationSessions: { resolve() { throw new Error("Must not resolve authorization"); } },
+      attachmentOcr: { async recognize() { throw new Error("Must not run OCR"); } },
+      getSettings() { throw new Error("Must not load provider settings"); },
+    });
+    expect(await tool.execute(input, { cwd: "/work", sessionId: "session" })).toMatchObject({ isError: true, failureKind: "command" });
+  });
+
   it.each(["images/../../outside/private.png", "absolute", "linked/private.png"])(
     "rejects a path outside the session cwd through the real Native reader: %s",
     async (path) => {

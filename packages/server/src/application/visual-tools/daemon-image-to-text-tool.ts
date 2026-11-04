@@ -36,7 +36,7 @@ export function createDaemonImageToTextTool(options: {
       supportedEnvironments: ["local", "wsl"],
     },
     description:
-      "Describe an image or extract visible text. Accepts an authorized daemon attachment, a local image path, or a public HTTP(S) image URL.",
+      "Describe an image or extract visible text. Provide exactly one of attachment_id, image_path, or image_url: an authorized daemon attachment, a local image path, or a public HTTP(S) image URL.",
     inputSchema: {
       type: "object",
       properties: {
@@ -55,11 +55,7 @@ export function createDaemonImageToTextTool(options: {
         },
       },
       additionalProperties: false,
-      oneOf: [
-        { required: ["attachment_id"] },
-        { required: ["image_path"] },
-        { required: ["image_url"] },
-      ],
+      // Providers reject top-level composition; execution checks that exactly one source is supplied.
     },
     async execute(input, context) {
       if ("attachment_id" in input) {

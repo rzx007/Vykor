@@ -18,28 +18,26 @@ export function createGoalUpdateTool(
     name: GOAL_UPDATE_TOOL_NAME,
     description:
       "Optionally record a goal status change, a question for the user, or a wait for a specific child Run. " +
-      "Choose exactly one request. The host applies it only after this Run completes normally. " +
+      "Choose exactly one request: {status, reason}, {question}, or {wait}. Do not combine them. The host applies it only after this Run completes normally. " +
       "Ordinary work does not require this tool. After a successful submission, finish the normal final reply promptly. " +
       "Use paused only when the user explicitly requests a pause.",
     inputSchema: {
       type: "object",
-      oneOf: [
-        object({
-          status: { type: "string", enum: ["completed", "blocked", "paused"] },
-          reason: textSchema,
+      additionalProperties: false,
+      // Keep the root compatible with providers; isGoalUpdate enforces the exclusive request shapes.
+      properties: {
+        status: { type: "string", enum: ["completed", "blocked", "paused"] },
+        reason: textSchema,
+        question: textSchema,
+        wait: object({
+          targetRunId: { type: "string", minLength: 1, maxLength: 256 },
+          deadlineAt: {
+            type: "integer",
+            minimum: 1,
+            maximum: Number.MAX_SAFE_INTEGER,
+          },
         }),
-        object({ question: textSchema }),
-        object({
-          wait: object({
-            targetRunId: { type: "string", minLength: 1, maxLength: 256 },
-            deadlineAt: {
-              type: "integer",
-              minimum: 1,
-              maximum: Number.MAX_SAFE_INTEGER,
-            },
-          }),
-        }),
-      ],
+      },
     },
     execution: {
       domain: "control_plane",

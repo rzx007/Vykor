@@ -2,6 +2,14 @@ import { describe, expect, it, vi } from "vitest";
 import { createGoalUpdateTool } from "../goal-update-tool.js";
 
 describe("GoalUpdate", () => {
+  it("publishes object parameters without unsupported top-level schema keywords", () => {
+    const schema = createGoalUpdateTool(async () => ({ recorded: true })).inputSchema;
+    expect(schema.type).toBe("object");
+    for (const keyword of ["oneOf", "anyOf", "allOf", "enum", "const", "not"]) {
+      expect(schema).not.toHaveProperty(keyword);
+    }
+  });
+
   it.each([
     { status: "completed", reason: "已检查当前文件，目标完成" },
     { status: "blocked", reason: "同一阻塞已连续三个 Goal 回合，无法继续" },
