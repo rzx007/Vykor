@@ -110,6 +110,7 @@ export function patchSessionRuntimeMetadata(
   metadata: Record<string, unknown>,
   patch: SessionRuntimeConfigPatch,
 ): Record<string, unknown> {
+  if (Object.hasOwn(patch, "replyStyle")) throw new Error("Unknown runtime config field: replyStyle");
   const runtime = {
     ...readRuntimeMetadata(metadata),
     ...stripUndefined(patch),

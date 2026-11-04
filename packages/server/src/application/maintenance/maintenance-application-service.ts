@@ -518,8 +518,6 @@ export function createMaintenanceApplicationService(
         } = { general: {}, model: {}, memory: {} };
         // Only known non-content, non-credential scalars enter the portable snapshot.
         for (const key of [
-          "workStyle",
-          "replyStyle",
           "showReasoning",
           "maxTurns",
           "autoReview",

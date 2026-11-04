@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -18,29 +18,34 @@ describe("reply style settings", () => {
     rmSync(configDir, { recursive: true, force: true });
   });
 
-  it("uses collaborative replies for an existing configuration without a style", async () => {
-    writeFileSync(join(configDir, "settings.json"), JSON.stringify({ workStyle: "efficient" }));
-    const settings = await loadSettings();
-    expect(settings.replyStyle).toBe("collaborative");
-    expect(settings.workStyle).toBe("efficient");
+  it("discards retired styles from existing settings and the next save", async () => {
+    const path = join(configDir, "settings.json");
+    writeFileSync(path, JSON.stringify({ workStyle: "efficient", replyStyle: "explanatory", maxTurns: 25 }));
+    const settings = await loadSettings(undefined, { includeEnvironment: false });
+    expect(settings).toMatchObject({ maxTurns: 25 });
+    expect(settings).not.toHaveProperty("workStyle");
+    expect(settings).not.toHaveProperty("replyStyle");
+    expect(JSON.parse(readFileSync(path, "utf8"))).toHaveProperty("workStyle");
+    await saveSettings(settings);
+    expect(JSON.parse(readFileSync(path, "utf8"))).not.toHaveProperty("workStyle");
+    expect(JSON.parse(readFileSync(path, "utf8"))).not.toHaveProperty("replyStyle");
   });
 
-  it("persists a reply style independently of progress notifications", async () => {
-    await saveSettings({ ...await loadSettings(), replyStyle: "explanatory", workStyle: "efficient" });
-    expect(await loadSettings()).toMatchObject({ replyStyle: "explanatory", workStyle: "efficient" });
-    expect(JSON.parse(readFileSync(join(configDir, "settings.json"), "utf8"))).toMatchObject({ replyStyle: "explanatory" });
+  it("ignores retired fields in old project settings without hiding current settings", async () => {
+    const project = join(configDir, "project");
+    const path = join(project, ".vykor", "settings.json");
+    mkdirSync(join(project, ".vykor"), { recursive: true });
+    writeFileSync(path, JSON.stringify({ workStyle: "old", replyStyle: null, showReasoning: true }));
+    const settings = await loadSettings(undefined, { includeEnvironment: false, includeProject: true, projectRoot: project });
+    expect(settings.showReasoning).toBe(true);
+    expect(settings).not.toHaveProperty("workStyle");
+    expect(settings).not.toHaveProperty("replyStyle");
+    expect(JSON.parse(readFileSync(path, "utf8"))).toHaveProperty("replyStyle");
   });
 
-  it("lets project and explicit settings override the global style", async () => {
-    await saveSettings({ ...await loadSettings(), replyStyle: "direct" });
-    await saveProjectSettings({ replyStyle: "explanatory" }, configDir);
-    expect((await loadSettings(undefined, { projectRoot: configDir, includeProject: true })).replyStyle).toBe("explanatory");
-    expect((await loadSettings({ replyStyle: "collaborative" }, { projectRoot: configDir, includeProject: true })).replyStyle).toBe("collaborative");
-  });
-
-  it.each(["friendly", "inherit", "", null, 1])("rejects invalid saved and explicit reply style %j", async replyStyle => {
-    await expect(loadSettings({ replyStyle } as never)).rejects.toThrow(/replyStyle/);
-    writeFileSync(join(configDir, "settings.json"), JSON.stringify({ replyStyle }));
-    await expect(loadSettings()).rejects.toThrow(/replyStyle/);
+  it.each(["workStyle", "replyStyle"])("rejects new writes for %s", async (field) => {
+    await expect(loadSettings({ [field]: "old" } as never)).rejects.toThrow(/Unknown config key/);
+    await expect(saveSettings({ ...await loadSettings(), [field]: "old" } as never)).rejects.toThrow(/Unknown config key/);
+    await expect(saveProjectSettings({ [field]: "old" } as never, configDir)).rejects.toThrow(/Unknown config key/);
   });
 });

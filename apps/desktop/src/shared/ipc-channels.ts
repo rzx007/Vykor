@@ -167,8 +167,6 @@ import type {
   UpdateDesktopNotificationSoundsInput,
   UpdateDesktopMemorySettingsInput,
   UpdateDesktopReasoningVisibilityInput,
-  UpdateDesktopReplyStyleInput,
-  UpdateDesktopWorkStyleInput,
 } from "./settings-types"
 import type {
   CancelDesktopAttachmentUploadInput,
@@ -451,8 +449,6 @@ export const IpcChannels = {
   permissionSettingsRevoke: "settings:permissions:revoke",
   settingsUpdateCustomInstructions: "settings:update-custom-instructions",
   settingsUpdateMemorySettings: "settings:update-memory-settings",
-  settingsUpdateWorkStyle: "settings:update-work-style",
-  settingsUpdateReplyStyle: "settings:update-reply-style",
   settingsUpdateNotificationMode: "settings:update-notification-mode",
   settingsUpdateNotificationSounds: "settings:update-notification-sounds",
   settingsUpdateAgentEnvironment: "settings:update-agent-environment",
@@ -654,14 +650,6 @@ export interface IpcInvokeMap
   }
   [IpcChannels.settingsUpdateMemorySettings]: {
     args: [input: UpdateDesktopMemorySettingsInput]
-    result: DesktopSettingsSnapshot
-  }
-  [IpcChannels.settingsUpdateWorkStyle]: {
-    args: [input: UpdateDesktopWorkStyleInput]
-    result: DesktopSettingsSnapshot
-  }
-  [IpcChannels.settingsUpdateReplyStyle]: {
-    args: [input: UpdateDesktopReplyStyleInput]
     result: DesktopSettingsSnapshot
   }
   [IpcChannels.settingsUpdateNotificationMode]: {

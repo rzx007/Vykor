@@ -10,17 +10,9 @@ describe("real settings search", () => {
     }
   })
 
-  it("finds reply style choices separately from progress notifications", () => {
-    for (const query of ["回复风格", "协作", "直接", "讲解"]) {
-      expect(searchSettings(query)).toContainEqual(
-        expect.objectContaining({ section: "general", title: "回复风格" })
-      )
-    }
-    for (const query of ["进度通知", "关键节点", "必要时", "工作风格"]) {
-      expect(searchSettings(query)).toContainEqual(
-        expect.objectContaining({ section: "general", title: "进度通知" })
-      )
-    }
+  it("does not offer removed communication settings", () => {
+    expect(searchSettings("回复风格")).not.toContainEqual(expect.objectContaining({ title: "回复风格" }))
+    expect(searchSettings("进度通知")).not.toContainEqual(expect.objectContaining({ title: "进度通知" }))
   })
   it("finds implemented fields and passes a field target for direct navigation", () => {
     expect(searchSettings("文件 网络 保护")).toContainEqual(

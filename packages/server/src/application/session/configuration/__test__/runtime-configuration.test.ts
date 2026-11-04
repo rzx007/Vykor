@@ -27,35 +27,24 @@ function session(metadata: Record<string, unknown>): SessionRecord {
 }
 
 describe("session runtime metadata", () => {
-  it("persists a reply style override and an explicit reset that resolves current defaults", () => {
-    const original = { runtime: { model: "m" } };
-    const override = patchSessionRuntimeMetadata(original, { replyStyle: "direct" });
-    expect(readSessionRuntimeConfig(session(override), { replyStyle: "explanatory" }).replyStyle).toBe("direct");
-    const reset = patchSessionRuntimeMetadata(override, { replyStyle: "inherit" });
-    expect(reset).toMatchObject({ runtime: { replyStyle: "inherit" } });
-    expect(readSessionRuntimeConfig(session(reset)).replyStyle).toBe("inherit");
-    expect(readSessionRuntimeConfig(session(reset), { replyStyle: "explanatory" }).replyStyle).toBe("explanatory");
-    expect(readSessionRuntimeConfig(session(reset), { replyStyle: "collaborative" }).replyStyle).toBe("collaborative");
-    expect(changedSessionRuntimeKeys(readSessionRuntimeConfig(session(override)), readSessionRuntimeConfig(session(reset)))).toEqual(["replyStyle"]);
-    for (const replyStyle of ["chatty", "", null, 1]) {
-      expect(() => patchSessionRuntimeMetadata(original, { replyStyle } as never)).toThrow();
-    }
+  it("reads old session metadata without restoring the retired style and rejects new writes", () => {
+    const original = { runtime: { model: "m", replyStyle: "direct" } };
+    expect(readSessionRuntimeConfig(session(original))).toEqual({ model: "m" });
+    expect(patchSessionRuntimeMetadata(original, { effort: "high" })).toEqual({ runtime: { model: "m", effort: "high" } });
+    expect(() => patchSessionRuntimeMetadata(original, { replyStyle: "direct" } as never)).toThrow(/Unknown/);
+    expect(original.runtime.replyStyle).toBe("direct");
   });
-  it("keeps a reply style choice and reset when the durable session store reopens", () => {
-    const directory = mkdtempSync(join(tmpdir(), "vykor-session-reply-style-"));
+  it("restores a persisted session containing the retired setting", () => {
+    const directory = mkdtempSync(join(tmpdir(), "vykor-retired-style-"));
     const path = join(directory, "sessions.db");
     let store = new SessionStore({ path });
     try {
-      store.sessions.create({ id: "style", cwd: directory, model: "m",
-        metadata: patchSessionRuntimeMetadata({}, { model: "m", replyStyle: "direct" }) });
+      store.sessions.create({ id: "old", cwd: directory, model: "m", metadata: { runtime: { model: "m", replyStyle: "direct" } } });
       store.close();
       store = new SessionStore({ path });
-      expect(readSessionRuntimeConfig(store.sessions.get("style")!, { replyStyle: "explanatory" }).replyStyle).toBe("direct");
-      store.sessions.update("style", { metadata: patchSessionRuntimeMetadata(store.sessions.get("style")!.metadata, { replyStyle: "inherit" }) });
-      store.close();
-      store = new SessionStore({ path });
-      expect(store.sessions.get("style")!.metadata).toMatchObject({ runtime: { replyStyle: "inherit" } });
-      expect(readSessionRuntimeConfig(store.sessions.get("style")!, { replyStyle: "explanatory" }).replyStyle).toBe("explanatory");
+      const oldSession = store.sessions.get("old")!;
+      expect(readSessionRuntimeConfig(oldSession)).toEqual({ model: "m" });
+      expect(oldSession.metadata).toMatchObject({ runtime: { model: "m", replyStyle: "direct" } });
     } finally {
       store.close();
       rmSync(directory, { recursive: true, force: true });

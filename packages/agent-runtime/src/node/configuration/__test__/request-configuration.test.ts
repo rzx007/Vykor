@@ -17,7 +17,8 @@ describe("memory request configuration store", () => {
     );
     await expect(store.update({ maxTurns: -1 })).rejects.toThrow(/maxTurns/);
     await expect(store.update({ fastMode: "yes" } as never)).rejects.toThrow(/fastMode/);
-    await expect(store.update({ workStyle: "turbo" } as never)).rejects.toThrow(/workStyle/);
+    await expect(store.update({ workStyle: "efficient" } as never)).rejects.toThrow(/workStyle/);
+    await expect(store.update({ replyStyle: "direct" } as never)).rejects.toThrow(/replyStyle/);
     await expect(store.update({ systemPrompt: 42 } as never)).rejects.toThrow(/systemPrompt/);
     expect(await store.read()).toEqual({
       revision: 0, configuration: { model: "model-a", maxTurns: 3 },

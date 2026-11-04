@@ -21,7 +21,7 @@ function configurationHash(request: StreamMessageParams, configuration: QueryReq
     apiFormat: configuration.apiFormat, system: request.system,
     tools: request.tools?.map(tool => ({ name: tool.name, description: tool.description, inputSchema: tool.inputSchema })),
     maxTokens: request.maxTokens, temperature: request.temperature, reasoningEffort: request.reasoningEffort,
-    effort: configuration.effort, replyStyle: configuration.replyStyle, supportsImageInput: configuration.supportsImageInput,
+    effort: configuration.effort, supportsImageInput: configuration.supportsImageInput,
   })).digest("hex");
 }
 

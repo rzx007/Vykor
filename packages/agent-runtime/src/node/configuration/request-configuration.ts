@@ -1,5 +1,4 @@
 import type { AgentRequestConfiguration, AgentRequestConfigurationPatch, AgentRequestConfigurationSnapshot, AgentRequestConfigurationStore } from "@vykor/host-config";
-import { isReplyStyle } from "@vykor/agent-contracts";
 
 
 export type ValidateRequestConfiguration = (
@@ -78,8 +77,8 @@ export function createMemoryRequestConfigurationStore(
 }
 
 function assertValidRequestConfiguration(configuration: AgentRequestConfiguration): void {
-  if (configuration.replyStyle !== undefined && !isReplyStyle(configuration.replyStyle)) {
-    throw new Error("replyStyle must be collaborative, direct, or explanatory");
+  for (const field of ["workStyle", "replyStyle"]) {
+    if (Object.hasOwn(configuration, field)) throw new Error(`Unknown config key: ${field}`);
   }
   if (typeof configuration.model !== "string" || !configuration.model.trim()) {
     throw new Error("model is required");
@@ -90,10 +89,6 @@ function assertValidRequestConfiguration(configuration: AgentRequestConfiguratio
   }
   if (configuration.fastMode !== undefined && typeof configuration.fastMode !== "boolean") {
     throw new Error("fastMode must be a boolean");
-  }
-  if (configuration.workStyle !== undefined
-    && configuration.workStyle !== "practical" && configuration.workStyle !== "efficient") {
-    throw new Error("workStyle must be practical or efficient");
   }
   for (const field of ["systemPrompt", "settingsPrompt"] as const) {
     if (configuration[field] !== undefined && typeof configuration[field] !== "string") {

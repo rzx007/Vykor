@@ -13,17 +13,14 @@ beforeEach(async () => {
 afterEach(async () => { vi.unstubAllEnvs(); await rm(directory, { recursive: true, force: true }); });
 
 describe("portable settings boundaries", () => {
-  it("round trips reply styles in the general group and preserves them during other imports", async () => {
-    await updateSettings(current => ({ ...current, replyStyle: "direct" }), { includeEnvironment: false });
+  it("imports old files without restoring retired settings", async () => {
+    const old = { version: 1, groups: { general: { replyStyle: "direct", workStyle: "efficient", showReasoning: true } } };
     const expected = await exportPortableSettings();
-    expect(expected.groups.general?.replyStyle).toBe("direct");
-    await importPortableSettings({ version: 1, groups: { general: { replyStyle: "explanatory" } } }, ["general"], expected);
-    expect((await exportPortableSettings()).groups.general?.replyStyle).toBe("explanatory");
-    await importPortableSettings({ version: 1, groups: { general: { showReasoning: false } } }, ["general"], await exportPortableSettings());
-    expect((await exportPortableSettings()).groups.general?.replyStyle).toBe("explanatory");
-    for (const replyStyle of ["inherit", "chatty", null, 1]) {
-      expect(() => parsePortableSettings({ version: 1, groups: { general: { replyStyle } } })).toThrow();
-    }
+    await importPortableSettings(old, ["general"], expected);
+    expect((await exportPortableSettings()).groups.general).toMatchObject({ showReasoning: true });
+    expect((await exportPortableSettings()).groups.general).not.toHaveProperty("replyStyle");
+    expect((await exportPortableSettings()).groups.general).not.toHaveProperty("workStyle");
+    expect(old.groups.general.workStyle).toBe("efficient");
   });
   it("round trips unlimited task limits", async () => {
     const expected = await exportPortableSettings();
@@ -62,43 +59,43 @@ describe("portable settings boundaries", () => {
   });
 
   it("imports selected ordinary values while preserving environment values and secret references", async () => {
-    await updateSettings((current) => ({ ...current, workStyle: "practical", showReasoning: true,
+    await updateSettings((current) => ({ ...current, showReasoning: true,
       model: "file-model", modelDisabled: true,
       agentEnvironment: { kind: "native", env: { MODE: "keep-value" }, secretEnv: ["TOKEN"] },
     }), { includeEnvironment: false });
     const expected = await exportPortableSettings();
     vi.stubEnv("VYKOR_MODEL", "startup-model");
     await importPortableSettings({ version: 1, groups: {
-      general: { workStyle: "efficient", showReasoning: false },
+      general: { showReasoning: false },
       model: { model: "imported-model" },
       environment: { agentEnvironment: { kind: "native", shell: { executable: "new-shell", args: ["arg one"] } } },
     } }, ["general", "model", "environment"], expected);
     expect(await loadSettings(undefined, { includeEnvironment: false })).toMatchObject({
-      workStyle: "efficient", showReasoning: false, model: "imported-model", modelDisabled: false,
+      showReasoning: false, model: "imported-model", modelDisabled: false,
       agentEnvironment: { kind: "native", shell: { executable: "new-shell", args: ["arg one"] }, env: { MODE: "keep-value" }, secretEnv: ["TOKEN"] },
     });
     expect(await readFile(join(directory, "settings.json"), "utf8")).not.toContain("startup-model");
   });
 
   it("rejects a later-group conflict without saving earlier groups or overwriting the concurrent edit", async () => {
-    await updateSettings((current) => ({ ...current, workStyle: "practical", model: "initial-model" }), { includeEnvironment: false });
+    await updateSettings((current) => ({ ...current, showReasoning: true, model: "initial-model" }), { includeEnvironment: false });
     const expected = await exportPortableSettings();
     await updateSettings((current) => ({ ...current, model: "concurrent-model" }), { includeEnvironment: false });
     const before = await readFile(join(directory, "settings.json"), "utf8");
-    await expect(importPortableSettings({ version: 1, groups: { general: { workStyle: "efficient" }, model: { model: "imported-model" } } }, ["general", "model"], expected)).rejects.toBeInstanceOf(SettingsConflictError);
+    await expect(importPortableSettings({ version: 1, groups: { general: { showReasoning: false }, model: { model: "imported-model" } } }, ["general", "model"], expected)).rejects.toBeInstanceOf(SettingsConflictError);
     expect(await readFile(join(directory, "settings.json"), "utf8")).toBe(before);
   });
 
   it("lets only one concurrent import with the same baseline commit", async () => {
-    await updateSettings((current) => ({ ...current, workStyle: "practical" }), { includeEnvironment: false });
+    await updateSettings((current) => ({ ...current, showReasoning: false }), { includeEnvironment: false });
     const expected = await exportPortableSettings();
-    const portable = { version: 1, groups: { general: { workStyle: "efficient" } } };
+    const portable = { version: 1, groups: { general: { showReasoning: true } } };
     const results = await Promise.allSettled([
       importPortableSettings(portable, ["general"], expected),
       importPortableSettings(portable, ["general"], expected),
     ]);
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
-    expect((await loadSettings(undefined, { includeEnvironment: false })).workStyle).toBe("efficient");
+    expect((await loadSettings(undefined, { includeEnvironment: false })).showReasoning).toBe(true);
   });
 });

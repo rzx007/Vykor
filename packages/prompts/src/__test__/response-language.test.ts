@@ -64,6 +64,6 @@ describe("response language in prompt assembly", () => {
     expect(stable).toContain("Explicit response-language preferences in the current user request, personal profile or custom instructions take precedence.");
     expect(layers.context.join("\n\n")).toContain("Reply in Japanese for this task.");
     expect(layers.volatile.join("\n\n")).toContain("Reply in Korean for this user.");
-    expect(layers.stable.at(-1)).toContain("# Reply Style:");
+    expect(layers.stable.at(-1)).toContain("# Communication");
   });
 });

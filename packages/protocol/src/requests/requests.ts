@@ -173,10 +173,18 @@ function requiredEnum<const T extends readonly string[]>(
   return value;
 }
 
+function rejectRetiredSessionRuntimeFields(metadata: JsonRecord | undefined): void {
+  const runtime = metadata?.runtime;
+  if (runtime && typeof runtime === "object" && !Array.isArray(runtime) && Object.hasOwn(runtime, "replyStyle")) {
+    throw new ProtocolValidationError("replyStyle is no longer supported", "metadata.runtime.replyStyle");
+  }
+}
+
 export function parseCreateSessionRequest(value: unknown): CreateSessionInput {
   const body = record(value);
   const cwd = requiredString(body, "cwd");
   const rawMetadata = optionalRecord(body, "metadata") ?? {};
+  rejectRetiredSessionRuntimeFields(rawMetadata);
   const runtime = readRuntimeMetadata(rawMetadata);
   const bodyModel = optionalString(body, "model");
   const model = typeof runtime.model === "string" ? runtime.model : bodyModel;
@@ -240,6 +248,7 @@ export function parseUpdateSessionRequest(value: unknown): UpdateSessionInput {
   }
   const title = optionalString(body, "title");
   const metadata = optionalRecord(body, "metadata");
+  rejectRetiredSessionRuntimeFields(metadata);
   readRuntimeMetadata(metadata);
   const rawAgent = body.agent;
   if (

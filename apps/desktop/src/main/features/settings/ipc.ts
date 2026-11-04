@@ -10,8 +10,6 @@ import type {
   UpdateDesktopMemorySettingsInput,
   UpdateDesktopAgentEnvironmentInput,
   UpdateDesktopReasoningVisibilityInput,
-  UpdateDesktopReplyStyleInput,
-  UpdateDesktopWorkStyleInput,
 } from "../../../shared/settings-types"
 import type { IpcContribution } from "../../core/ipc/types"
 import { desktopSettingsService } from "./settings-service"
@@ -43,16 +41,6 @@ export const settingsIpcContribution: IpcContribution = {
         channel: IpcChannels.settingsUpdateMemorySettings,
         handler: (_event, input) =>
           desktopSettingsService.updateMemorySettings(input as UpdateDesktopMemorySettingsInput),
-      },
-      {
-        channel: IpcChannels.settingsUpdateWorkStyle,
-        handler: (_event, input) =>
-          desktopSettingsService.updateWorkStyle(input as UpdateDesktopWorkStyleInput),
-      },
-      {
-        channel: IpcChannels.settingsUpdateReplyStyle,
-        handler: (_event, input) =>
-          desktopSettingsService.updateReplyStyle(input as UpdateDesktopReplyStyleInput),
       },
       {
         channel: IpcChannels.settingsUpdateNotificationMode,

@@ -138,7 +138,7 @@ flowchart TD
 
 这三个转换都有源码依据。（R16～R18）应保留 provider 差异；给段添加 authority 元数据有助于正确编译，但 role 名或标签本身不是权限保证。
 
-当前 `/output-style` 是 REPL 输出渲染模式，不是模型人格开关；模型沟通方式主要由 workStyle 与 Markdown 指导控制。优化时不要改错入口。
+`/output-style` 是 REPL 输出渲染模式，不是模型人格开关；默认沟通方式由统一的任务沟通和 Markdown 指导控制。旧 `workStyle` 配置已移除，历史文件加载时忽略。优化时不要改错入口。
 
 ## 5. 具体改进与优先级
 

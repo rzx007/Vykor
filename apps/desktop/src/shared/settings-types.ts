@@ -1,6 +1,3 @@
-import { DEFAULT_REPLY_STYLE, isReplyStyle, type ReplyStyle } from "@vykor/application-client"
-
-export type DesktopWorkStyle = "practical" | "efficient"
 export type DesktopLinkOpeningMode = "ask" | "builtin" | "system"
 export type DesktopNotificationMode = "never" | "when_unfocused" | "always"
 export type DesktopNotificationSound = "completed" | "needs_input" | "failed"
@@ -46,8 +43,6 @@ export interface DesktopDaemonAutoStartSnapshot {
 }
 
 export interface DesktopSettingsSnapshot {
-  replyStyle: ReplyStyle
-  workStyle: DesktopWorkStyle
   notificationMode: DesktopNotificationMode
   notificationSounds: DesktopNotificationSounds
   agentEnvironment: DesktopAgentEnvironment
@@ -60,14 +55,6 @@ export interface DesktopSettingsSnapshot {
   memoryEnabled: boolean
   autoExtractEnabled: boolean
   wslSupported?: boolean
-}
-
-export interface UpdateDesktopWorkStyleInput {
-  workStyle: DesktopWorkStyle
-}
-
-export interface UpdateDesktopReplyStyleInput {
-  replyStyle: ReplyStyle
 }
 
 export interface UpdateDesktopCustomInstructionsInput {
@@ -155,8 +142,6 @@ export function buildDesktopSettingsSnapshot(
 ): DesktopSettingsSnapshot {
   const memory = isRecord(settings.memory) ? settings.memory : {}
   return {
-    replyStyle: isReplyStyle(settings.replyStyle) ? settings.replyStyle : DEFAULT_REPLY_STYLE,
-    workStyle: isDesktopWorkStyle(settings.workStyle) ? settings.workStyle : "practical",
     notificationMode: isDesktopNotificationMode(preferences.notificationMode)
       ? preferences.notificationMode
       : "when_unfocused",
@@ -180,10 +165,6 @@ function resolveDesktopAgentEnvironment(value: unknown): DesktopAgentEnvironment
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
-}
-
-export function isDesktopWorkStyle(value: unknown): value is DesktopWorkStyle {
-  return value === "practical" || value === "efficient"
 }
 
 export function isDesktopNotificationMode(value: unknown): value is DesktopNotificationMode {

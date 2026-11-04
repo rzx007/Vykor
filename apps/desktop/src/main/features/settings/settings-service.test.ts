@@ -8,8 +8,6 @@ import { browserAgentService } from "../browser/browser-agent-service"
 import { DesktopSettingsService } from "./settings-service"
 
 const defaultSnapshot = {
-  replyStyle: "collaborative",
-  workStyle: "practical",
   notificationMode: "when_unfocused",
   notificationSounds: {
     completed: "staplebops-01",
@@ -55,17 +53,6 @@ describe("buildDesktopSettingsSnapshot", () => {
 
   it("defaults safely", () => {
     expect(buildDesktopSettingsSnapshot({})).toEqual(defaultSnapshot)
-  })
-
-  it("preserves an efficient work style", () => {
-    expect(buildDesktopSettingsSnapshot({ workStyle: "efficient" })).toEqual({
-      ...defaultSnapshot,
-      workStyle: "efficient",
-    })
-  })
-
-  it("rejects unknown persisted values by falling back safely", () => {
-    expect(buildDesktopSettingsSnapshot({ workStyle: "chatty" })).toEqual(defaultSnapshot)
   })
 
   it("preserves valid notification and desktop preference values", () => {

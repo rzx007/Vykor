@@ -57,7 +57,7 @@ it("rebuilds the next request prompt from changed file-backed settings", async (
   let configuration = {
     revision: 0,
     configuration: {
-      model: "model-a", workStyle: "practical" as const,
+      model: "model-a",
       fastMode: false, settingsPrompt: "old instructions",
     },
   };
@@ -65,7 +65,6 @@ it("rebuilds the next request prompt from changed file-backed settings", async (
     settings: {
       ...BASE_SETTINGS,
       systemPrompt: "old instructions",
-      workStyle: "practical",
       fastMode: false,
       sandbox: { enabled: false },
     },
@@ -84,14 +83,14 @@ it("rebuilds the next request prompt from changed file-backed settings", async (
     configuration = {
       revision: 1,
       configuration: {
-        model: "model-a", workStyle: "efficient" as const,
+        model: "model-a",
         fastMode: true, settingsPrompt: "new instructions",
       },
     };
     for await (const _ of runtime.queryEngine.submitMessage("second")) { /* consume */ }
-    expect(prompts[0]).toContain("# Work Style: Practical");
+    expect(prompts[0]).toContain("# Communication During Work");
     expect(prompts[0]).toContain("old instructions");
-    expect(prompts[1]).toContain("# Work Style: Efficient");
+    expect(prompts[1]).toContain("# Communication During Work");
     expect(prompts[1]).toContain("Fast mode is enabled");
     expect(prompts[1]).toContain("new instructions");
     expect(prompts[1]).not.toContain("old instructions");

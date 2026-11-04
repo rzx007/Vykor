@@ -1,7 +1,6 @@
 import type { ContextBucketId, ContextLedgerSegment } from "@vykor/agent-contracts";
-import { buildResponseLanguageInstruction, type ReplyStyle } from "@vykor/agent-contracts";
+import { buildResponseLanguageInstruction } from "@vykor/agent-contracts";
 import { buildReplyStyleSection } from "./reply-styles.js";
-import type { WorkStyle } from "@vykor/host-config";
 import type { EffectiveEnvironmentInfo } from "@vykor/environment";
 import { loadLocalRules } from "@vykor/personalization";
 import type { PromptLayers, PromptPermissionMode } from "./index.js";
@@ -33,8 +32,6 @@ export interface PromptSegmentsAssemblyOptions {
   cwd?: string;
   permissionMode?: PromptPermissionMode;
   fastMode?: boolean;
-  workStyle?: WorkStyle;
-  replyStyle?: ReplyStyle;
   effort?: string;
   passes?: number;
   includeDelegation?: boolean;
@@ -98,7 +95,7 @@ export async function buildTaggedPromptSegments(
     segments,
     "stable",
     "system",
-    buildWorkStyleSection(options.workStyle ?? "practical"),
+    buildWorkStyleSection(),
   );
 
   if (options.fastMode) {
@@ -106,7 +103,7 @@ export async function buildTaggedPromptSegments(
       segments,
       "stable",
       "system",
-      "# Session Mode\nFast mode is enabled. Prefer a direct execution path and issue independent tool calls together. Keep the selected Reply Style and Work Style; do not skip necessary investigation, validation, or permission checks.",
+      "# Session Mode\nFast mode is enabled. Prefer a direct execution path and issue independent tool calls together. Follow the communication guidance and do not skip necessary investigation, validation, or permission checks.",
     );
   }
 
@@ -135,7 +132,7 @@ export async function buildTaggedPromptSegments(
   }
 
   pushSegment(segments, "stable", "system", buildResponseLanguageInstruction());
-  pushSegment(segments, "stable", "system", buildReplyStyleSection(options.replyStyle));
+  pushSegment(segments, "stable", "system", buildReplyStyleSection());
 
   if (options.customPrompt?.trim()) {
     pushSegment(

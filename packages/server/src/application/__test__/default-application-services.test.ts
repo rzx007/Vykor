@@ -271,28 +271,6 @@ describe("default daemon application services", () => {
     ).rejects.toThrow("agentEnvironment.kind must be native or wsl");
   });
 
-  it("updates work style and requests idle runtime invalidation", async () => {
-    const ref = {
-      current: {
-        model: "m",
-        apiFormat: "anthropic" as const,
-        maxTurns: 50,
-        permission: { mode: "default" as const },
-        workStyle: "practical" as const,
-      },
-    };
-    const settings = createDefaultSettingsService(ref);
-
-    const result = await settings.patch({ workStyle: "efficient" });
-
-    expect(ref.current.workStyle).toBe("efficient");
-    expect(result.restartRuntimes).toBe(false);
-    expect(result.invalidateRuntimes).toBe(true);
-    await expect(settings.patch({ workStyle: "chatty" })).rejects.toThrow(
-      "Unknown work style",
-    );
-  });
-
   it("resolves a built-in provider model when patching provider without a model", async () => {
     const catalogPath = join(temporaryDirectory, "deepseek-models.json");
     writeFileSync(

@@ -1,5 +1,4 @@
 import type { ApprovalMode, WorkMode } from "@vykor/agent-contracts/permissions";
-import { isReplyStyle, type ReplyStyle } from "@vykor/agent-contracts/reply-style";
 import { DomainValidationError } from "../validation-error.js";
 export type SessionApiFormat = "anthropic" | "openai";
 
@@ -15,7 +14,6 @@ export type SessionRuntimeConfig = {
   effort?: string;
   sessionMode?: "direct" | "coordinator";
   systemPrompt?: string;
-  replyStyle?: ReplyStyle | "inherit";
   allowedTools?: string[];
   disallowedTools?: string[];
   pluginsEnabled?: boolean;
@@ -60,7 +58,8 @@ export function readRuntimeMetadata(metadata: Record<string, unknown> | undefine
   const runtime = metadata?.runtime;
   if (runtime === undefined) return {};
   if (!isRecord(runtime)) throw new DomainValidationError("metadata.runtime must be an object", "metadata.runtime");
-  for (const [field, value] of Object.entries(runtime)) {
+  const { replyStyle: _retiredReplyStyle, ...currentRuntime } = runtime;
+  for (const [field, value] of Object.entries(currentRuntime)) {
     let valid = false;
     switch (field) {
       case "model": case "provider": case "baseUrl": case "systemPrompt":
@@ -70,7 +69,6 @@ export function readRuntimeMetadata(metadata: Record<string, unknown> | undefine
       case "approvalMode": valid = value === "ask" || value === "auto_review" || value === "full_access"; break;
       case "workMode": valid = (value === "execute" || value === "plan"); break;
       case "effort": valid = effortValue(value) !== undefined; break;
-      case "replyStyle": valid = value === "inherit" || isReplyStyle(value); break;
       case "sessionMode": valid = sessionModeValue(value) !== undefined; break;
       case "maxTurns": valid = numberValue(value) !== undefined; break;
       case "pluginsEnabled": case "pluginAutoSelectionEnabled":
@@ -82,7 +80,7 @@ export function readRuntimeMetadata(metadata: Record<string, unknown> | undefine
       throw new DomainValidationError(`Invalid runtime config field metadata.runtime.${field}`, `metadata.runtime.${field}`);
     }
   }
-  return runtime;
+  return currentRuntime;
 }
 
 export function readSessionRuntimeRevision(

@@ -2,8 +2,7 @@ import { readFile, access, readdir } from "node:fs/promises";
 import { join, resolve, dirname } from "node:path";
 import { platform, machine, homedir, hostname } from "node:os";
 import { resolveGitRepository } from "@vykor/host-config";
-import type { WorkStyle } from "@vykor/host-config";
-import { buildResponseLanguageInstruction, type ReplyStyle } from "@vykor/agent-contracts";
+import { buildResponseLanguageInstruction } from "@vykor/agent-contracts";
 import { buildReplyStyleSection } from "./reply-styles.js";
 export { buildReplyStyleSection } from "./reply-styles.js";
 import type { EffectiveEnvironmentInfo } from "@vykor/environment";
@@ -107,7 +106,7 @@ export function resolveInvariantGuidance(
   return invariantGuidance(includeBackgroundShell);
 }
 
-const BASE_SYSTEM_PROMPT = `${DEFAULT_IDENTITY}\n\n${INVARIANT_GUIDANCE}\n\n${buildReplyStyleSection()}`;
+const BASE_SYSTEM_PROMPT = `${DEFAULT_IDENTITY}\n\n${INVARIANT_GUIDANCE}\n\n${buildWorkStyleSection()}\n\n${buildReplyStyleSection()}`;
 
 export interface PromptLayers {
   stable: string[];
@@ -127,32 +126,19 @@ export function getInvariantGuidance(): string {
   return INVARIANT_GUIDANCE;
 }
 
-export function buildWorkStyleSection(style: WorkStyle = "practical"): string {
-  if (style === "efficient") {
-    return `# Work Style: Efficient
+export function buildWorkStyleSection(): string {
+  return `# Communication During Work
 
-- Prefer immediate execution over conversational progress updates.
-- Do not send a preamble before routine tool use.
-- Do not narrate file reads, searches, commands, edits, or validation steps.
-- Send an intermediate user-visible message only when user input or approval is required, a blocker prevents progress, or an important risk must be communicated.
-- When the task is complete, send a concise final answer with the outcome, validation performed, and any remaining issue.
-- This communication style does not reduce investigation, implementation, validation, safety, or permission requirements.`;
-  }
-
-  return `# Work Style: Practical
-
-- For a multi-step task that requires tools, send one short user-visible update before the first tool call of the current user request. Acknowledge the request and state the first meaningful step in one or two sentences.
-- This is a task-level preamble, not tool-by-tool narration. Send it at most once before the first tool call for the current request.
-- Do not send another update merely because you are about to call another tool. Group related investigation, implementation, and validation tools without narrating each call.
-- Send another brief progress update only when the approach materially changes, a meaningful milestone finishes, a blocker or risk changes what happens next, user input is required, or a long-running task has had no visible update for a substantial period.
-- Keep updates concrete and continue working after sending them. Send a separate final answer when the task is complete.
-- This communication style does not reduce investigation, implementation, validation, safety, or permission requirements.`;
+- If the request requires tools, send a brief user-visible message before the first tool call. State your understanding and the next meaningful step, then continue working.
+- Group related actions into one update. Do not narrate each tool call, file, or command.
+- During longer work, give a concise update when you find meaningful information, change direction, encounter a blocker, or have had no visible update for a substantial period. Explain what is known, what remains uncertain, and what comes next when useful.
+- When finished, give a self-contained final answer with the outcome, relevant evidence or validation, and any remaining limitations. Follow the user's explicit communication preferences.`;
 }
 
 export function buildMarkdownPresentationSection(): string {
   return `# Markdown Presentation
 
-- Use readable paragraphs and active voice, with one idea per paragraph; response depth and tone follow the selected Reply Style.
+- Use readable paragraphs and active voice, with one idea per paragraph; adapt response depth and tone to the task and user preferences.
 - Do not indent text with leading spaces.
 - Prefer short paragraphs for simple answers. Do not add headings or lists by default.
 - Use flat lists only for genuinely parallel items, steps, options, or comparisons.
@@ -471,8 +457,6 @@ export async function buildRuntimeSystemPrompt(
     /** Current permission mode; drives the permission-mode guidance section. */
     permissionMode?: PromptPermissionMode;
     fastMode?: boolean;
-    workStyle?: WorkStyle;
-    replyStyle?: ReplyStyle;
     effort?: string;
     passes?: number;
     /**
@@ -510,8 +494,6 @@ export async function buildPromptLayers(
     cwd?: string;
     permissionMode?: PromptPermissionMode;
     fastMode?: boolean;
-    workStyle?: WorkStyle;
-    replyStyle?: ReplyStyle;
     effort?: string;
     passes?: number;
     memoryContent?: string;

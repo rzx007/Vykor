@@ -41,7 +41,6 @@ describe("daemon settings", () => {
   it("keeps automatic daemon startup off by default", async () => {
     expect((await loadSettings()).daemon).toEqual({ autoStart: false });
     expect((await loadSettings()).plugins).toEqual({ enabled: true, uiEnabled: true });
-    expect((await loadSettings()).workStyle).toBe("practical");
   });
 
   it.each([true, false, "false", 1, null])("discards only the retired setting when loading: %j", async value => {
@@ -145,14 +144,6 @@ describe("daemon settings", () => {
     writeFileSync(join(projectRoot, ".vykor", "settings.json"), JSON.stringify({ mcpServers }));
     expect((await loadSettings(undefined, { includeProject: true, projectRoot })).mcpServers?.remote).toBeUndefined();
     expect(await loadMcpServerConfigSnapshot("remote", { projectRoot })).toEqual({ scope: "project", config: undefined });
-  });
-
-  it("loads an explicit efficient work style", async () => {
-    writeFileSync(join(configDir, "settings.json"), JSON.stringify({
-      workStyle: "efficient",
-    }));
-
-    expect((await loadSettings()).workStyle).toBe("efficient");
   });
 
   it("accepts and preserves the showReasoning setting", async () => {
@@ -354,14 +345,14 @@ describe("daemon settings", () => {
     mkdirSync(projectConfigDir, { recursive: true });
     writeFileSync(
       join(projectConfigDir, "settings.json"),
-      JSON.stringify({ workStyle: "practical" }),
+      JSON.stringify({ showReasoning: false }),
     );
 
-    await saveProjectSettings({ workStyle: "efficient" }, projectRoot);
+    await saveProjectSettings({ showReasoning: true }, projectRoot);
 
     expect(
       JSON.parse(readFileSync(join(projectConfigDir, "settings.json"), "utf8")),
-    ).toEqual({ workStyle: "efficient" });
+    ).toEqual({ showReasoning: true });
     expect(readdirSync(projectConfigDir).filter((name) => name.endsWith(".tmp"))).toEqual([]);
   });
 

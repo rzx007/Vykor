@@ -1,5 +1,4 @@
 import type { HostedAgent } from "@vykor/agent-runtime";
-import { DEFAULT_REPLY_STYLE, isReplyStyle } from "@vykor/agent-contracts";
 import type { ExecutionRuntimeOwner } from "@vykor/execution-node";
 import { settingsForApprovalMode } from "@vykor/sandbox";
 import { normalizeApprovalMode } from "@vykor/host-config";
@@ -464,16 +463,6 @@ function createDaemonRequestConfigurationStore(input: {
           );
         }
         if (
-          loaded.workStyle !== undefined &&
-          loaded.workStyle !== "practical" &&
-          loaded.workStyle !== "efficient"
-        ) {
-          throw new Error("settings.workStyle must be practical or efficient");
-        }
-        if (loaded.replyStyle !== undefined && !isReplyStyle(loaded.replyStyle)) {
-          throw new Error("settings.replyStyle must be collaborative, direct or explanatory");
-        }
-        if (
           loaded.fastMode !== undefined &&
           typeof loaded.fastMode !== "boolean"
         ) {
@@ -496,7 +485,6 @@ function createDaemonRequestConfigurationStore(input: {
       }
     }
     const runtime = readSessionRuntimeConfig(session, {
-      replyStyle: lastValidSettings?.replyStyle ?? DEFAULT_REPLY_STYLE,
       provider: input.settings?.provider,
       baseUrl: defaultBaseUrlForSession(session, input.settings),
       apiFormat: input.settings?.apiFormat,
@@ -527,7 +515,6 @@ function createDaemonRequestConfigurationStore(input: {
       revision: readSessionRuntimeRevision(session.metadata),
       configuration: {
         model: runtime.model,
-        replyStyle: isReplyStyle(runtime.replyStyle) ? runtime.replyStyle : DEFAULT_REPLY_STYLE,
         ...(runtime.provider ? { provider: runtime.provider } : {}),
         ...(baseUrlCleared
           ? { baseUrl: "" }
@@ -555,9 +542,6 @@ function createDaemonRequestConfigurationStore(input: {
               ? { systemPrompt: runtime.systemPrompt }
               : {}),
         settingsPrompt: lastValidSettings?.systemPrompt,
-        ...(lastValidSettings?.workStyle
-          ? { workStyle: lastValidSettings.workStyle }
-          : {}),
         ...(lastValidSettings?.fastMode !== undefined
           ? { fastMode: lastValidSettings.fastMode }
           : {}),
@@ -598,7 +582,6 @@ function agentConfigurationFromSession(
   settings: Settings | undefined,
 ): Partial<VykorAgentOptions> {
   const runtime = readSessionRuntimeConfig(session, {
-    replyStyle: settings?.replyStyle ?? DEFAULT_REPLY_STYLE,
     provider: settings?.provider,
     baseUrl: defaultBaseUrlForSession(session, settings),
     apiFormat: settings?.apiFormat,
@@ -609,7 +592,6 @@ function agentConfigurationFromSession(
   });
   const configuration: Partial<VykorAgentOptions> = {
     model: runtime.model,
-    replyStyle: isReplyStyle(runtime.replyStyle) ? runtime.replyStyle : DEFAULT_REPLY_STYLE,
     provider: runtime.provider,
     baseUrl: runtime.baseUrl,
     apiFormat: runtime.apiFormat,

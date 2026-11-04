@@ -12,8 +12,6 @@ import { emptySessionView } from "./store-test-fixtures"
 describe("notifyForSessionViewChange", () => {
   const notify = vi.fn<(...args: unknown[]) => Promise<void>>(async () => undefined)
   const snapshot = vi.fn<() => Promise<DesktopSettingsSnapshot>>(async () => ({
-    replyStyle: "collaborative",
-    workStyle: "practical" as const,
     notificationMode: "when_unfocused" as const,
     notificationSounds: {
       completed: "staplebops-01",
@@ -91,9 +89,7 @@ describe("notifyForSessionViewChange", () => {
 
   it("does not notify when notification mode is never", async () => {
     snapshot.mockResolvedValueOnce({
-      replyStyle: "collaborative",
-      workStyle: "practical",
-      notificationMode: "never",
+              notificationMode: "never",
       notificationSounds: {
         completed: "staplebops-01",
         needs_input: "staplebops-02",
@@ -120,9 +116,7 @@ describe("notifyForSessionViewChange", () => {
 
   it("uses showWhenFocused only for always mode", async () => {
     snapshot.mockResolvedValueOnce({
-      replyStyle: "collaborative",
-      workStyle: "practical",
-      notificationMode: "always",
+              notificationMode: "always",
       notificationSounds: {
         completed: "staplebops-01",
         needs_input: "staplebops-02",

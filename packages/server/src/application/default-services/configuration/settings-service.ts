@@ -8,7 +8,6 @@ import {
 } from "@vykor/api";
 
 import type { SettingsService } from "../../settings-api.js";
-import { isReplyStyle } from "@vykor/agent-contracts";
 import type { AgentEnvironmentCapabilities } from "../query-models.js";
 import {
   loadSettings,
@@ -52,8 +51,6 @@ const SOFT_RUNTIME_INVALIDATE_KEYS = new Set([
   "outputTokenMax",
   "effort",
   "fastMode",
-  "workStyle",
-  "replyStyle",
   "systemPrompt",
   "memory",
   "permission",
@@ -154,18 +151,10 @@ export function createDefaultSettingsService(
         ref.current = ref.reload ? await ref.reload() : await loadSettings();
         return { settings: sanitizeSettings(ref.current), restartRuntimes: true };
       }
-      if (Object.hasOwn(patch, "blockOnUnknownToolOutcome") || patch.path === "blockOnUnknownToolOutcome") throw new Error("Unknown config key: blockOnUnknownToolOutcome");
+      for (const key of ["blockOnUnknownToolOutcome", "workStyle", "replyStyle"]) {
+        if (Object.hasOwn(patch, key) || patch.path === key) throw new Error(`Unknown config key: ${key}`);
+      }
       assertCurrentEnvironmentPatch(patch);
-      if (Object.hasOwn(patch, "replyStyle") && !isReplyStyle(patch.replyStyle)) {
-        throw new Error("Unknown reply style. Use collaborative, direct or explanatory.");
-      }
-      if (
-        "workStyle" in patch &&
-        patch.workStyle !== "practical" &&
-        patch.workStyle !== "efficient"
-      ) {
-        throw new Error("Unknown work style. Use practical or efficient.");
-      }
       let effectivePatch = patch;
       if (typeof patch.path === "string" && "value" in patch) {
         const coerced = coerceConfigValue(patch.path, String(patch.value));
@@ -356,7 +345,6 @@ function customProviderModelIds(
 }
 
 function coerceConfigValue(key: string, value: string): unknown {
-  if (key === "replyStyle") return isReplyStyle(value) ? value : undefined;
   if (
     [
       "model",

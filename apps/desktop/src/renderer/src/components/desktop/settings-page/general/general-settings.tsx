@@ -15,8 +15,6 @@ import { SettingsGroup, SettingsRow } from "../shared/settings-group"
 import { EditorSettings } from "./editor-settings"
 import { ProviderDefaultsControl } from "../providers/provider-defaults-control"
 import {
-  ReplyStyleControl,
-  WorkStyleControl,
   ReasoningVisibilityControl,
   ThemePreferenceControl,
   BrowserDeveloperControl,
@@ -63,16 +61,6 @@ export function GeneralSettings() {
         }
       >
         <div key={`tasks-${revision}`} className="divide-y divide-border">
-          <SettingsRow
-            title="回复风格"
-            help="协作（默认）：说明发现、影响与取舍；直接：简洁给出结果和必要信息；讲解：多解释原理、步骤与原因。"
-            control={<ReplyStyleControl />}
-          />
-          <SettingsRow
-            title="进度通知"
-            help="关键节点：开始、重要进展和完成时同步；必要时：需要处理或完成时回复。只影响进度更新频率。"
-            control={<WorkStyleControl />}
-          />
           <SettingsRow
             title="思考过程"
             help="在对话中显示思考过程，可按需展开。"

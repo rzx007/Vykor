@@ -73,7 +73,7 @@ export interface BehaviorRunOptions {
 }
 
 export const behaviorSystemPrompt = [
-  getDefaultIdentity(), getInvariantGuidance(), buildWorkStyleSection("practical"),
+  getDefaultIdentity(), getInvariantGuidance(), buildWorkStyleSection(),
   "Only use the supplied scenario tools. Respect permissions and report uncertainty.",
 ].join("\n\n");
 
@@ -165,7 +165,7 @@ export async function runBehaviorCase(scenario: BehaviorCase, options: BehaviorR
     permission: { mode: "full_auto", allowedTools: tools.map((tool) => tool.name), deniedTools: fixture.deniedTools },
     hooks: [], memory: { enabled: false, sessionMemoryEnabled: false, autoExtractEnabled: false },
     sandbox: { enabled: false }, mcpServers: {}, plugins: { enabled: false },
-    workStyle: "practical", effort: "", fastMode: false,
+    effort: "", fastMode: false,
   };
   let agent: VykorAgent | undefined;
   let runResult: AgentRunResult | undefined;

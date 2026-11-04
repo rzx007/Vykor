@@ -69,6 +69,11 @@ describe("HTTP request parsers", () => {
     });
   });
 
+  it("rejects retired reply style when creating or updating a session", () => {
+    expectInvalid(() => parseCreateSessionRequest({ cwd: "/repo", model: "gpt-test", metadata: { runtime: { replyStyle: "direct" } } }), "metadata.runtime.replyStyle");
+    expectInvalid(() => parseUpdateSessionRequest({ metadata: { runtime: { replyStyle: "direct" } } }), "metadata.runtime.replyStyle");
+  });
+
   it("preserves creation storage and rejects unsupported or updated storage", () => {
     expect(parseCreateSessionRequest({ cwd: "/repo", model: "gpt-test", storage: "memory" }))
       .toMatchObject({ storage: "memory" });

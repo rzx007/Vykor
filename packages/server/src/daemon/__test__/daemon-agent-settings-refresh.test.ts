@@ -9,38 +9,6 @@ import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 import { createDaemonAgentLoader } from "../daemon-agent.js";
 
 describe("daemon request settings refresh", () => {
-  it("resolves durable reply style overrides before refreshed global file settings and restores inheritance", async () => {
-    const project = mkdtempSync(join(tmpdir(), "vykor-reply-style-"));
-    const previousConfigDir = process.env.VYKOR_CONFIG_DIR;
-    process.env.VYKOR_CONFIG_DIR = join(project, "config");
-    const session = { id: "reply-style", cwd: project, model: "m", metadata: { runtime: { model: "m" } } } as any;
-    const createAgent = vi.fn(async () => ({ loadHistory: () => undefined, close: async () => undefined }) as any);
-    try {
-      await updateSettings(current => ({ ...current, replyStyle: "direct" }), { includeEnvironment: false });
-      const loader = createDaemonAgentLoader({
-        getSettingsForCwd: cwd => loadSettings(undefined, { includeProject: true, projectRoot: cwd }),
-        getSession: () => session,
-        createAgent: hostedAgentFactory(createAgent),
-      })!;
-      await loader({ session, history: [], parts: [] });
-      const options = createAgent.mock.calls[0]![0].options;
-      expect(options.replyStyle).toBe("direct");
-      const reader = options.requestConfigurationStore;
-      expect((await reader.read()).configuration.replyStyle).toBe("direct");
-      await updateSettings(current => ({ ...current, replyStyle: "explanatory" }), { includeEnvironment: false });
-      expect((await reader.read()).configuration.replyStyle).toBe("explanatory");
-      session.metadata.runtime.replyStyle = "direct";
-      expect((await reader.read()).configuration.replyStyle).toBe("direct");
-      session.metadata.runtime.replyStyle = "inherit";
-      expect((await reader.read()).configuration.replyStyle).toBe("explanatory");
-      await updateSettings(current => ({ ...current, replyStyle: "collaborative" }), { includeEnvironment: false });
-      expect((await reader.read()).configuration.replyStyle).toBe("collaborative");
-    } finally {
-      if (previousConfigDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
-      else process.env.VYKOR_CONFIG_DIR = previousConfigDir;
-      rmSync(project, { recursive: true, force: true });
-    }
-  });
   it("keeps an explicitly cleared session prompt cleared on a warm agent", async () => {
     const session = {
       id: "cleared-prompt", cwd: "/repo", model: "model-a",
@@ -67,7 +35,7 @@ describe("daemon request settings refresh", () => {
   it("reads changed prompt settings without replacing a session model", async () => {
     let settings = {
       model: "settings-model", systemPrompt: "old instructions",
-      workStyle: "practical", fastMode: false,
+      fastMode: false,
     };
     const createAgent = vi.fn(async () => ({
       loadHistory: () => undefined, close: async () => undefined,
@@ -90,11 +58,11 @@ describe("daemon request settings refresh", () => {
     const reader = createAgent.mock.calls[0]![0].options.requestConfigurationStore;
     settings = {
       model: "different-default", systemPrompt: "new instructions",
-      workStyle: "efficient", fastMode: true,
+      fastMode: true,
     };
     expect((await reader.read()).configuration).toMatchObject({
       model: "session-model", settingsPrompt: "new instructions",
-      workStyle: "efficient", fastMode: true,
+      fastMode: true,
     });
     expect((await reader.read()).configuration.systemPrompt).toBeUndefined();
   });
@@ -154,7 +122,7 @@ describe("daemon request settings refresh", () => {
     let agent: Awaited<ReturnType<typeof createDefaultNodeAgent>> | undefined;
     try {
       await saveProjectSettings({
-        effort: "low", workStyle: "practical", fastMode: false,
+        effort: "low", fastMode: false,
         systemPrompt: "old project instructions",
       }, project);
       const loader = createDaemonAgentLoader({
@@ -181,7 +149,7 @@ describe("daemon request settings refresh", () => {
       const running = agent!.runMessage("use Echo");
       await firstStarted;
       await saveProjectSettings({
-        effort: "high", workStyle: "efficient", fastMode: true,
+        effort: "high", fastMode: true,
         systemPrompt: "new project instructions",
       }, project);
       release();
@@ -191,7 +159,7 @@ describe("daemon request settings refresh", () => {
       expect(requests[1]!.system).toContain("Effort: high");
       expect(requests[0]!.system).toContain("old project instructions");
       expect(requests[1]!.system).toContain("new project instructions");
-      expect(requests[1]!.system).toContain("# Work Style: Efficient");
+      expect(requests[1]!.system).toContain("# Communication During Work");
       expect(requests[1]!.system).toContain("Fast mode is enabled");
     } finally {
       release?.();

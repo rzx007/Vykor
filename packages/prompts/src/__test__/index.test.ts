@@ -310,19 +310,11 @@ describe("CLAUDE.md upward traversal", () => {
 });
 
 describe("buildWorkStyleSection", () => {
-  it("keeps practical updates task-scoped instead of narrating every tool", () => {
-    const section = buildWorkStyleSection("practical");
-    expect(section).toContain("# Work Style: Practical");
-    expect(section).toContain("at most once before the first tool call");
-    expect(section).toContain("not tool-by-tool narration");
-    expect(section).toContain("Do not send another update merely because");
-  });
-
-  it("makes efficient mode execute without routine progress narration", () => {
-    const section = buildWorkStyleSection("efficient");
-    expect(section).toContain("# Work Style: Efficient");
-    expect(section).toContain("Do not send a preamble before routine tool use");
-    expect(section).toContain("does not reduce investigation");
+  it("asks for a task-level update before tools and a self-contained outcome", () => {
+    const section = buildWorkStyleSection();
+    expect(section).toContain("before the first tool call");
+    expect(section).toContain("Do not narrate each tool call");
+    expect(section).toContain("self-contained final answer");
   });
 });
 
@@ -341,16 +333,7 @@ describe("buildRuntimeSystemPrompt", () => {
     const result = await buildRuntimeSystemPrompt({ cwd: emptyDir });
     expect(result).toContain("# Current Permission Mode");
     expect(result).toContain("Default permission mode is enabled");
-    expect(result).toContain("# Work Style: Practical");
-  });
-
-  it("uses the selected work style", async () => {
-    const result = await buildRuntimeSystemPrompt({
-      cwd: emptyDir,
-      workStyle: "efficient",
-    });
-    expect(result).toContain("# Work Style: Efficient");
-    expect(result).not.toContain("# Work Style: Practical");
+    expect(result).toContain("# Communication During Work");
   });
 
   it("includes the Markdown presentation policy by default", async () => {
@@ -684,6 +667,9 @@ describe("prompt layers with SOUL.md and USER.md", () => {
       expect(await readFile(join(cfgDir, "USER.md"), "utf-8")).toContain(
         "# User Profile",
       );
+      expect(await readFile(join(cfgDir, "SOUL.md"), "utf-8")).not.toMatch(/selected reply style/i);
+      expect(await readFile(join(cfgDir, "USER.md"), "utf-8")).not.toMatch(/selected reply style/i);
+      expect(await buildRuntimeSystemPrompt({ cwd: cfgDir })).not.toMatch(/selected reply style/i);
       expect((await loadUserProfile())?.match(/# User Profile/g)).toHaveLength(
         1,
       );

@@ -1,11 +1,11 @@
 /** Shared config value coercion for `/config set` and daemon settings patches. */
 import { normalizeApprovalMode } from "@vykor/application-client";
-import { isReplyStyle } from "@vykor/agent-contracts";
 
 export function coerceConfigValue(key: string, value: string): unknown {
   switch (key) {
+    case "workStyle":
     case "replyStyle":
-      return isReplyStyle(value) ? value : undefined;
+      return undefined;
     case "agentEnvironment.kind":
       return value === "native" || value === "wsl" ? value : undefined;
     case "model":

@@ -158,8 +158,6 @@ import type {
   UpdateDesktopNotificationSoundsInput,
   UpdateDesktopMemorySettingsInput,
   UpdateDesktopReasoningVisibilityInput,
-  UpdateDesktopReplyStyleInput,
-  UpdateDesktopWorkStyleInput,
 } from "./settings-types"
 import type {
   CancelDesktopAttachmentUploadInput,
@@ -407,8 +405,6 @@ export type DesktopAPI = {
     updateMemorySettings: (
       input: UpdateDesktopMemorySettingsInput
     ) => Promise<DesktopSettingsSnapshot>
-    updateWorkStyle: (input: UpdateDesktopWorkStyleInput) => Promise<DesktopSettingsSnapshot>
-    updateReplyStyle: (input: UpdateDesktopReplyStyleInput) => Promise<DesktopSettingsSnapshot>
     updateNotificationMode: (
       input: UpdateDesktopNotificationModeInput
     ) => Promise<DesktopSettingsSnapshot>

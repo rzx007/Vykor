@@ -3,9 +3,9 @@ import { describe, expect, it } from "vitest";
 import { buildSettingsPatch, coerceConfigValue } from "./config-coerce.js";
 
 describe("config coerce helpers", () => {
-  it("accepts concrete reply styles and rejects unknown or inheritance values", () => {
-    for (const style of ["collaborative", "direct", "explanatory"]) expect(coerceConfigValue("replyStyle", style)).toBe(style);
-    for (const style of ["inherit", "chatty", "", "Direct"]) expect(coerceConfigValue("replyStyle", style)).toBeUndefined();
+  it("rejects retired communication settings", () => {
+    expect(coerceConfigValue("replyStyle", "direct")).toBeUndefined();
+    expect(coerceConfigValue("workStyle", "efficient")).toBeUndefined();
   });
   it("accepts only supported agent execution environments", () => {
     expect(coerceConfigValue("agentEnvironment.kind", "native")).toBe("native");

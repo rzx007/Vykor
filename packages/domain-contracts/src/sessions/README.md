@@ -14,4 +14,4 @@
 
 本目录不运行 Agent，也不打开 SQLite。会话状态、运行记录和配置版本由消费方管理，函数只返回读取或整理后的数据。新增会话契约放本目录，测试建议放同层 `__test__/`。
 
-`SessionRuntimeConfig.replyStyle` 接受 `collaborative`、`direct`、`explanatory` 或 `inherit`。前三项保存会话自己的回复偏好，`inherit` 明确恢复跟随当前全局设置；`readRuntimeMetadata` 在保存前拒绝其他值。
+历史会话中的 `replyStyle` 在读取时忽略；它不再是可写的会话配置字段。

@@ -7,6 +7,12 @@ function session(runtime: Record<string, unknown>): SessionRecord {
 }
 
 describe("client runtime configuration projection", () => {
+  it("restores legacy metadata without exposing or allowing the retired setting", () => {
+    const original = { runtime: { model: "m", replyStyle: "direct" } };
+    expect(readSessionRuntimeConfig({ ...session({}), metadata: original })).toEqual({ model: "m" });
+    expect(patchSessionRuntimeMetadata(original, { effort: "high" })).toEqual({ runtime: { model: "m", effort: "high" } });
+    expect(() => patchSessionRuntimeMetadata(original, { replyStyle: "direct" } as never)).toThrow(/Unknown/);
+  });
   it.each([
     [{ permissionMode: "default" }, { approvalMode: "ask", workMode: "execute", permissionMode: "default" }],
     [{ permissionMode: "full_auto" }, { approvalMode: "auto_review", workMode: "execute", permissionMode: "default" }],

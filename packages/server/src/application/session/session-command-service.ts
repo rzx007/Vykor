@@ -107,7 +107,6 @@ const LIVE_REQUEST_CONFIGURATION_KEYS = new Set([
   "model", "provider", "baseUrl", "apiFormat", "effort",
   "maxTurns",
   "systemPrompt",
-  "replyStyle",
 ]);
 const MODEL_REQUEST_CONFIGURATION_KEYS = new Set([
   "model",
@@ -214,6 +213,9 @@ export class SessionCommandService {
 
   createSession(input: CreateSessionCommand): SessionRecord {
     this.assertReady();
+    if (Object.hasOwn(readRuntimeMetadata(input.metadata ?? {}), "replyStyle")) {
+      throw new SessionApplicationError(400, "Unknown runtime config field: replyStyle");
+    }
     const before = this.options.events.checkpoint();
     const runtime = readRuntimeMetadata(input.metadata ?? {});
     const model = typeof runtime.model === "string" ? runtime.model : input.model;
@@ -366,6 +368,9 @@ export class SessionCommandService {
     this.assertReady();
     const existing = this.options.sessions.getSession(sessionId);
     if (!existing) throw new SessionApplicationError(404, "Session not found");
+    if (Object.hasOwn(readRuntimeMetadata(input.metadata ?? {}), "replyStyle")) {
+      throw new SessionApplicationError(400, "Unknown runtime config field: replyStyle");
+    }
     if (existing.status === "closing" || existing.status === "archived") {
       throw new SessionApplicationError(409, "Session is not accepting updates");
     }

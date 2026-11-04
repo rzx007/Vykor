@@ -302,13 +302,13 @@ describe("system routes", () => {
 
   it("allows soft settings updates while session runs are active", async () => {
     const patch = vi.fn(async () => ({
-      settings: { workStyle: "efficient" },
+      settings: { showReasoning: true },
       invalidateRuntimes: true,
     }));
     const invalidateRuntimes = vi.fn(async () => {});
     const app = createSystemRoutes({
       settingsService: {
-        get: async () => ({ workStyle: "practical" }),
+        get: async () => ({ showReasoning: false }),
         patch,
       },
       control: daemonControl({
@@ -320,14 +320,14 @@ describe("system routes", () => {
     const response = await app.request("/settings", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ workStyle: "efficient" }),
+      body: JSON.stringify({ showReasoning: true }),
     });
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      settings: { workStyle: "efficient" },
+      settings: { showReasoning: true },
     });
-    expect(patch).toHaveBeenCalledWith({ workStyle: "efficient" });
+    expect(patch).toHaveBeenCalledWith({ showReasoning: true });
     expect(invalidateRuntimes).toHaveBeenCalledOnce();
   });
 
@@ -341,7 +341,7 @@ describe("system routes", () => {
       control: daemonControl({ acquireGlobalMutation: () => acquired ? { release } : undefined, closeAllRuntimes, invalidateRuntimes }),
     });
     const response = await app.request("/settings", {
-      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ workStyle: "efficient" }),
+      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ showReasoning: true }),
     });
     expect(response.status).toBe(acquired ? 200 : 409);
     expect(patch).toHaveBeenCalledOnce();
@@ -360,7 +360,7 @@ describe("system routes", () => {
       control: daemonControl({ acquireGlobalMutation: () => acquired ? { release } : undefined }),
     });
     const response = await app.request("/settings", {
-      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ workStyle: "efficient" }),
+      method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ showReasoning: true }),
     });
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toEqual({ error: "权限或访问边界已被其他入口修改。请重新读取后保存。" });
@@ -614,6 +614,14 @@ describe("session routes", () => {
     expect(createSession).toHaveBeenCalledWith(
       expect.objectContaining({ id: "s1", cwd: "/repo" }),
     );
+
+    const retired = await app.request("/", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ cwd: "/repo", model: "gpt-test", metadata: { runtime: { replyStyle: "direct" } } }),
+    });
+    expect(retired.status).toBe(400);
+    expect(createSession).toHaveBeenCalledTimes(1);
   });
 
   it("forks a session after a selected message", async () => {

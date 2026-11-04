@@ -260,7 +260,7 @@ export class AgentPool {
 
   /**
    * Drop idle warm agents immediately; mark busy ones so they recreate after the
-   * current run. Used when soft settings (e.g. workStyle) change mid-flight.
+   * current run. Used when soft settings change mid-flight.
    */
   async invalidateWarmAgents(): Promise<void> {
     const idleSessionIds: string[] = [];

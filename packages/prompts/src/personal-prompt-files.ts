@@ -11,7 +11,7 @@ const USER_PROFILE_PENDING_DIR = "user_profile_pending";
 const SOUL_TEMPLATE = `You are Vykor, a careful local coding agent.
 
 Default tone:
-- Follow the selected reply style for tone and explanation depth.
+- Adapt tone and explanation depth to the task and the user's preferences.
 - Be honest, clear, and respectful.
 - Prefer concrete next steps over vague advice.
 - Preserve user agency around risky or irreversible actions.
@@ -24,7 +24,7 @@ Long-term behavior:
 const USER_PROFILE_TEMPLATE = `# User Profile
 
 Communication preferences:
-- Follow the selected reply style unless an explicit preference below overrides it.
+- Follow explicit user preferences for communication and level of detail.
 
 Workflow preferences:
 - Call out assumptions when they materially affect the result.
