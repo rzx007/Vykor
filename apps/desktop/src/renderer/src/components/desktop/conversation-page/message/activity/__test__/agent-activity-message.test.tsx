@@ -118,6 +118,59 @@ it("follows the linked task rather than the completed spawn call", () => {
   expect(row?.textContent).toContain("执行出错")
 })
 
+it("shows the live JobRead activity and clears it when the model has finished", async () => {
+  vi.spyOn(Date, "now").mockReturnValue(140_000)
+  const readAgentActivity = vi.fn()
+    .mockResolvedValueOnce({ runId: "run-1", model: { startedAt: 1_000, lastStreamAt: 130_000 } })
+    .mockResolvedValue({ runId: "run-1" })
+  vi.stubGlobal("desktop", { sessions: { readAgentActivity } })
+  vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] })
+  const running = { ...task, runId: "run-1" }
+  await act(async () => { render([call], [running]) })
+  expect(readAgentActivity).toHaveBeenCalledWith({ sessionId: "main", jobId: "task-1", runId: "run-1" })
+  expect(container.querySelector("[data-agent-activity]")?.textContent).toContain("等待模型响应 · 连接有活动")
+  await act(async () => { await vi.advanceTimersByTimeAsync(15_000) })
+  expect(container.querySelector("[data-agent-activity]")?.textContent).toContain("运行中")
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
+
+it("ignores a late activity response from a previous run", async () => {
+  vi.spyOn(Date, "now").mockReturnValue(140_000)
+  let finishOld!: (value: unknown) => void
+  const old = new Promise(resolve => { finishOld = resolve })
+  const readAgentActivity = vi.fn()
+    .mockReturnValueOnce(old)
+    .mockResolvedValue({ runId: "run-2", model: { startedAt: 1_000, lastStreamAt: 130_000 } })
+  vi.stubGlobal("desktop", { sessions: { readAgentActivity } })
+  await act(async () => { render([call], [{ ...task, runId: "run-1" }]) })
+  await act(async () => { render([call], [{ ...task, runId: "run-2" }]) })
+  expect(container.querySelector("[data-agent-activity]")?.textContent).toContain("连接有活动")
+  await act(async () => { finishOld({ runId: "run-1", model: { startedAt: 1_000 } }); await old })
+  expect(container.querySelector("[data-agent-activity]")?.textContent).toContain("连接有活动")
+  vi.restoreAllMocks()
+})
+
+it("ignores an activity response delayed past its freshness window and retries", async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(140_000)
+  let finishOld!: (value: unknown) => void
+  const old = new Promise(resolve => { finishOld = resolve })
+  const readAgentActivity = vi.fn()
+    .mockReturnValueOnce(old)
+    .mockResolvedValue({ runId: "run-1", model: { startedAt: 1_000, lastStreamAt: 190_000 } })
+  vi.stubGlobal("desktop", { sessions: { readAgentActivity } })
+  await act(async () => { render([call], [{ ...task, runId: "run-1" }]) })
+  await act(async () => { await vi.advanceTimersByTimeAsync(45_000) })
+  expect(readAgentActivity).toHaveBeenCalledTimes(1)
+  await act(async () => { finishOld({ runId: "run-1", model: { startedAt: 1_000 } }); await old })
+  expect(container.querySelector("[data-agent-activity]")?.textContent).toContain("运行中")
+  await act(async () => { await vi.advanceTimersByTimeAsync(15_000) })
+  expect(readAgentActivity).toHaveBeenCalledTimes(2)
+  expect(container.querySelector("[data-agent-activity]")?.textContent).toContain("连接有活动")
+  vi.useRealTimers()
+})
+
 it("does not claim completion when the task has not arrived", () => {
   render([call])
   expect(container.textContent).toContain("已派出")

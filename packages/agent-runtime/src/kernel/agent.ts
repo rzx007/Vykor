@@ -94,7 +94,6 @@ export interface VykorAgent {
   readonly state: VykorAgentState;
   readonly children: AgentChildDirectory;
   subscribe(listener: AgentEventListener): AgentEventSubscription;
-  subscribeObservations?(listener: AgentEventListener): AgentEventSubscription;
   submitMessage(
     content: string | ContentBlock[],
     options?: VykorAgentSubmitOptions,
@@ -172,9 +171,6 @@ export class KernelAgent implements VykorAgent {
   }
   subscribe(listener: AgentEventListener): AgentEventSubscription {
     return this.options.eventBus.subscribe(listener);
-  }
-  subscribeObservations(listener: AgentEventListener): AgentEventSubscription {
-    return this.options.eventBus.subscribeObservations(listener);
   }
   submitMessage(
     content: string | ContentBlock[],

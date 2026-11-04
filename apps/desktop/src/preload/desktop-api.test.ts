@@ -20,6 +20,11 @@ vi.mock("electron", () => ({
 
 import { IpcChannels, IpcEvents } from "../shared/ipc-channels"
 import { desktopAPI } from "./desktop-api"
+it("forwards a read-only child activity request to the session bridge", async () => {
+  const input = { sessionId: "parent", jobId: "child", runId: "run" }
+  await desktopAPI.sessions.readAgentActivity(input)
+  expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.sessionAgentActivity, input)
+})
 it("does not expose retired UI IPC", () => {
   expect(desktopAPI).not.toHaveProperty("pluginUi")
   expect(Object.values(IpcChannels).some((channel) => channel.startsWith("plugin-ui:"))).toBe(false)

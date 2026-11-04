@@ -559,6 +559,8 @@ export const desktopAPI = {
       invoke(IpcChannels.skillRemove, input),
   },
   sessions: {
+    readAgentActivity: (input: IpcInvokeMap[typeof IpcChannels.sessionAgentActivity]["args"][0]) =>
+      invoke(IpcChannels.sessionAgentActivity, input),
     bootstrap: () => invoke(IpcChannels.sessionBootstrap),
     list: () => invoke(IpcChannels.sessionList),
     search: (input: IpcInvokeMap[typeof IpcChannels.sessionSearch]["args"][0]) =>

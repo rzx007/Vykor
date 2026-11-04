@@ -15,6 +15,15 @@ export type { PluginCatalogEntry as DesktopPluginCatalogEntry } from "@vykor/app
 export interface GetDesktopSessionGoalInput {
   sessionId: string
 }
+export interface DesktopAgentActivity {
+  runId: string
+  model?: { startedAt: number; lastStreamAt?: number; lastProgressAt?: number }
+}
+export interface ReadDesktopAgentActivityInput {
+  sessionId: string
+  jobId: string
+  runId: string
+}
 export interface GetDesktopMessagePartInput {
   sessionId: string
   messageId: string

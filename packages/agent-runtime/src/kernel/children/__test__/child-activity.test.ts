@@ -43,6 +43,23 @@ it("does not count empty or repeated tool arguments as new model progress", asyn
   expect(record.activity!.snapshot.model!.lastProgressAt).toBe(observed);
 });
 
+it("counts progress when a discarded tool key is reused within the same attempt", async () => {
+  const record: { id: string; sessionId: string; activityRunId: string; activity?: ChildActivityState } = { id: "child", sessionId: "session", activityRunId: "run" };
+  const bus = new AgentEventBus();
+  bus.subscribe(event => applyChildActivityEvent(record, event));
+  const context = { agentId: "agent", sessionId: "session", childId: "child", runId: "run" };
+  await bus.emit({ type: "model.attempt.started", data: { generationId: "g", attempt: 1, model: "m", purpose: "generation" } }, context);
+  const progress = async (receivedChars: number, discarded = false) => bus.emit({ type: "domain.event", data: {
+    name: "tool.generation.progress", payload: { generationId: "g", attempt: 1, toolKey: "dsml_0", receivedChars, discarded },
+  } }, context);
+  await progress(500);
+  const before = record.activity!.snapshot.model!.lastProgressAt;
+  await progress(500, true);
+  await new Promise(resolve => setTimeout(resolve, 5));
+  await progress(12);
+  expect(record.activity!.snapshot.model!.lastProgressAt).toBeGreaterThan(before!);
+});
+
 it.each([false, true])("releases completed tool tracking while preserving its activity summary (error=%s)", async (isError) => {
   const record: { id: string; sessionId: string; activityRunId: string; activity?: ChildActivityState } = {
     id: "child", sessionId: "session", activityRunId: "run",

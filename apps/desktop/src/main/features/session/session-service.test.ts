@@ -326,6 +326,59 @@ describe("DesktopSessionService.deleteSession", () => {
   })
 })
 
+describe("DesktopSessionService.readAgentActivity", () => {
+  const input = { sessionId: "parent", jobId: "child", runId: "run" }
+  const owner = { id: 77 } as Electron.WebContents
+  const response = {
+    snapshot: { id: "child", kind: "agent", ownerSession: "parent", status: "running", target: { kind: "agent", jobId: "child", runId: "run" } },
+    details: { activity: { runId: "run", model: { startedAt: 1000, lastStreamAt: 2000, lastProgressAt: 1500 }, latestAssistantText: "private" } },
+    text: "private output",
+  }
+  it("reads only the live model activity for the open session and matching run", async () => {
+    const read = vi.fn(async () => response)
+    const service = serviceWithClient({ jobs: { read } })
+    vi.spyOn(service.subscriptions, "getOwnerSessionToken").mockReturnValue({})
+    await expect(service.readAgentActivity(owner, input)).resolves.toEqual({ runId: "run", model: { startedAt: 1000, lastStreamAt: 2000, lastProgressAt: 1500 } })
+    expect(read).toHaveBeenCalledWith({ kind: "agent", jobId: "child", runId: "run" }, { sessionId: "parent", maxChars: 1, signal: expect.any(AbortSignal) })
+  })
+  it("cancels a stalled activity request so it can be retried", async () => {
+    const controller = new AbortController()
+    vi.spyOn(AbortSignal, "timeout").mockReturnValueOnce(controller.signal)
+    const read = vi.fn((_target, options: { signal: AbortSignal }) => new Promise((_resolve, reject) => {
+      options.signal.addEventListener("abort", () => reject(new Error("timed out")))
+    }))
+    const service = serviceWithClient({ jobs: { read } })
+    vi.spyOn(service.subscriptions, "getOwnerSessionToken").mockReturnValue({})
+    const request = service.readAgentActivity(owner, input)
+    await vi.waitFor(() => expect(read).toHaveBeenCalled())
+    controller.abort()
+    await expect(request).rejects.toThrow("timed out")
+    vi.restoreAllMocks()
+  })
+  it("does not expose activity for another session, run or completed job", async () => {
+    for (const snapshot of [
+      { ...response.snapshot, ownerSession: "other" },
+      { ...response.snapshot, target: { kind: "agent", jobId: "child", runId: "old" } },
+      { ...response.snapshot, status: "completed" },
+    ]) {
+      const service = serviceWithClient({ jobs: { read: async () => ({ ...response, snapshot }) } })
+      vi.spyOn(service.subscriptions, "getOwnerSessionToken").mockReturnValue({})
+      await expect(service.readAgentActivity(owner, input)).resolves.toBeNull()
+    }
+  })
+  it("rejects an unopened session and a session switched during the read", async () => {
+    const service = serviceWithClient({ jobs: { read: async () => response } })
+    const token = vi.spyOn(service.subscriptions, "getOwnerSessionToken")
+    token.mockReturnValueOnce(undefined)
+    await expect(service.readAgentActivity(owner, input)).rejects.toThrow()
+    token.mockReturnValueOnce({}).mockReturnValueOnce(undefined)
+    await expect(service.readAgentActivity(owner, input)).rejects.toThrow()
+    const original = {}
+    token.mockReturnValueOnce(original).mockReturnValueOnce(original).mockReturnValueOnce(undefined)
+    await expect(service.readAgentActivity(owner, input)).rejects.toThrow()
+  })
+})
+
 function serviceWithClient(client: Record<string, unknown>): DesktopSessionService {
   const connection = new DaemonConnectionService()
   vi.spyOn(connection, "getClient").mockResolvedValue(client as never)

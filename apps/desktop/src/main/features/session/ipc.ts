@@ -39,6 +39,12 @@ export const sessionIpcContribution: IpcContribution = {
     const promptSubmissions = new Map<string, Set<Promise<void>>>()
     return [
       {
+        channel: IpcChannels.sessionAgentActivity,
+        handler: (event, input) => desktopSessionService.readAgentActivity(
+          event.sender, input as import("../../../shared/session-types").ReadDesktopAgentActivityInput
+        ),
+      },
+      {
         channel: IpcChannels.workflowRead,
         handler: (event, input) =>
           desktopSessionService.readWorkflows(

@@ -1,4 +1,4 @@
-import type { DesktopAuxSessionUpdate, DesktopSessionTask } from "@shared/session-types"
+import type { DesktopAgentActivity, DesktopAuxSessionUpdate, DesktopSessionTask } from "@shared/session-types"
 
 export function agentTaskStatusLabel(status: DesktopSessionTask["status"]): string {
   return {
@@ -18,10 +18,9 @@ export interface AgentTaskPresentation {
   hasPartialReport: boolean
 }
 
-export function agentTaskPresentation(task: DesktopSessionTask, now = Date.now()): AgentTaskPresentation {
+export function agentTaskPresentation(task: DesktopSessionTask, now = Date.now(), activity?: DesktopAgentActivity | null): AgentTaskPresentation {
   const label = agentTaskStatusLabel(task.status)
-  const activity = task.metadata?.childActivity
-  const model = isRecord(activity) && activity.runId === task.runId && isRecord(activity.model) ? activity.model : undefined
+  const model = activity && activity.runId === task.runId ? activity.model : undefined
   if (task.status === "running" && model && typeof model.startedAt === "number") {
     const lastProgress = typeof model.lastProgressAt === "number" ? model.lastProgressAt : model.startedAt
     if (now - Math.max(model.startedAt, lastProgress) >= 120_000) {

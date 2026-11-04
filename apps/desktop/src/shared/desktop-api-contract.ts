@@ -484,6 +484,7 @@ export type DesktopAPI = {
     remove: (input: DesktopSkillRemoveInput) => Promise<DesktopSkillSnapshot>
   }
   sessions: {
+    readAgentActivity: (input: import("./session-types").ReadDesktopAgentActivityInput) => Promise<import("./session-types").DesktopAgentActivity | null>
     bootstrap: () => Promise<DesktopBootstrapData>
     list: () => Promise<DesktopSessionLists>
     search: (input: SearchSessionsOptions) => Promise<DesktopSessionSearchResult[]>

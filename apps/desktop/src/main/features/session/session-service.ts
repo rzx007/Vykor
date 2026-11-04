@@ -29,6 +29,8 @@ import type {
   DesktopSessionSearchResult,
   SearchSessionsOptions,
   DesktopSessionView,
+  DesktopAgentActivity,
+  ReadDesktopAgentActivityInput,
   DesktopSessionUpdateAck,
   DesktopSessionUpdateAckResult,
   DesktopSessionResyncRequest,
@@ -103,6 +105,30 @@ export type DesktopSessionConnection = Pick<
 >
 
 export class DesktopSessionService {
+  async readAgentActivity(owner: WebContents, input: ReadDesktopAgentActivityInput): Promise<DesktopAgentActivity | null> {
+    const sessionId = requireString(input?.sessionId, "会话 ID")
+    const jobId = requireString(input?.jobId, "任务 ID")
+    const runId = requireString(input?.runId, "运行 ID")
+    const token = this.subscriptions.getOwnerSessionToken(owner.id, sessionId)
+    if (!token) throw new Error("请先打开所属会话。")
+    const client = await this.getClient()
+    if (this.subscriptions.getOwnerSessionToken(owner.id, sessionId) !== token) throw new Error("会话已切换。")
+    const read = await client.jobs.read({ kind: "agent", jobId, runId }, { sessionId, maxChars: 1, signal: AbortSignal.timeout(10_000) })
+    if (this.subscriptions.getOwnerSessionToken(owner.id, sessionId) !== token) throw new Error("会话已切换。")
+    const job = read.snapshot
+    if (job.id !== jobId || job.kind !== "agent" || job.ownerSession !== sessionId || job.status !== "running" ||
+        job.target.kind !== "agent" || job.target.jobId !== jobId || job.target.runId !== runId) return null
+    const activity = asRecord(read.details?.activity)
+    if (activity?.runId !== runId) return null
+    const model = asRecord(activity.model)
+    if (!model || typeof model.startedAt !== "number" || !Number.isFinite(model.startedAt)) return { runId }
+    return { runId, model: {
+      startedAt: model.startedAt,
+      ...(typeof model.lastStreamAt === "number" && Number.isFinite(model.lastStreamAt) ? { lastStreamAt: model.lastStreamAt } : {}),
+      ...(typeof model.lastProgressAt === "number" && Number.isFinite(model.lastProgressAt) ? { lastProgressAt: model.lastProgressAt } : {}),
+    } }
+  }
+
   async readWorkflows(
     owner: WebContents,
     input: DesktopWorkflowInput
@@ -642,6 +668,10 @@ export class DesktopSessionService {
   private getClient(): Promise<VykorClient> {
     return this.connection.getClient()
   }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined
 }
 
 function sortSessions(sessions: DesktopSessionRecord[]): DesktopSessionRecord[] {

@@ -49,9 +49,12 @@ export function applyChildActivityEvent(record: ChildActivityRecord, event: Agen
           event.data.payload?.generationId === snapshot.model.generationId && event.data.payload?.attempt === snapshot.model.attempt)
         snapshot.model.lastStreamAt = at;
       else if (event.data.name === "tool.generation.progress" && snapshot.model &&
-          event.data.payload?.generationId === snapshot.model.generationId && event.data.payload?.attempt === snapshot.model.attempt &&
-          event.data.payload?.discarded !== true) {
+          event.data.payload?.generationId === snapshot.model.generationId && event.data.payload?.attempt === snapshot.model.attempt) {
         const { toolKey, receivedChars } = event.data.payload;
+        if (event.data.payload.discarded === true) {
+          if (typeof toolKey === "string") state.toolProgress.delete(toolKey);
+          return;
+        }
         if (typeof toolKey === "string" && typeof receivedChars === "number" && Number.isFinite(receivedChars) &&
             receivedChars > (state.toolProgress.get(toolKey) ?? 0)) {
           state.toolProgress.set(toolKey, receivedChars);

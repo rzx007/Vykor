@@ -120,12 +120,15 @@ describe("matchesAgentSessionUpdate", () => {
 
 describe("agentTaskPresentation", () => {
   it("reports a stalled model request while distinguishing a live stream from no data", () => {
-    const make = (lastStreamAt?: number) => task("A", "running", { runId: "run-A", metadata: {
-      childActivity: { runId: "run-A", model: { startedAt: 1_000, lastStreamAt } },
-    } });
-    expect(agentTaskPresentation(make(130_000), 140_000).label).toBe("等待模型响应 · 连接有活动")
-    expect(agentTaskPresentation(make(), 140_000).label).toBe("等待模型响应 · 暂无流活动记录")
-    expect(agentTaskPresentation(make(), 10_000).label).toBe("运行中")
+    const entry = task("A", "running", { runId: "run-A", metadata: {
+      childActivity: { runId: "run-A", model: { startedAt: 1_000 } },
+    } })
+    const activity = (lastStreamAt?: number) => ({ runId: "run-A", model: { startedAt: 1_000, lastStreamAt } })
+    expect(agentTaskPresentation(entry, 140_000, activity(130_000)).label).toBe("等待模型响应 · 连接有活动")
+    expect(agentTaskPresentation(entry, 140_000, activity()).label).toBe("等待模型响应 · 暂无流活动记录")
+    expect(agentTaskPresentation(entry, 10_000, activity()).label).toBe("运行中")
+    expect(agentTaskPresentation(entry, 140_000).label).toBe("运行中")
+    expect(agentTaskPresentation(entry, 140_000, { ...activity(), runId: "old" }).label).toBe("运行中")
   })
   const report = { version: 1, childSessionId: "session-A", runId: "run-A", source: "limit_finalization", text: "build passed; runtime pending", truncated: false }
   const failed = (failureKind: string, partialResult: unknown = report) => task("A", "failed", { runId: "run-A", metadata: { childFailure: { failureKind, partialResult } } })

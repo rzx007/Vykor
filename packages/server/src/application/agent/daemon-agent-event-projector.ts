@@ -37,7 +37,6 @@ interface ChildProjectionState {
   prompt: string;
   runId?: string;
   taskId: string;
-  toolProgress?: Map<string, number>;
 }
 
 interface PendingEventSettlement {
@@ -75,13 +74,7 @@ export class DaemonAgentEventProjector {
   private readonly children = new Map<string, ChildProjectionState>();
   private lastAppliedSequence = 0;
 
-  constructor(private readonly context: DaemonAgentEventProjectorContext) {
-    context.rootAgent.subscribeObservations?.((event) => {
-      if (event.type === "domain.event" && event.data.name === "model.stream.activity") {
-        setTimeout(() => this.noteChildModelActivity(event, "stream"), 0).unref?.();
-      }
-    });
-  }
+  constructor(private readonly context: DaemonAgentEventProjectorContext) { }
 
   async apply(event: AgentEvent): Promise<void> {
     await this.reconcileDurableSettlements(event);
@@ -108,7 +101,6 @@ export class DaemonAgentEventProjector {
   private async project(event: AgentEvent): Promise<void> {
     switch (event.type) {
       case "model.attempt.started":
-        this.noteChildModelActivity(event, "started");
         if (event.data.purpose === "plugin_selection" && event.context.runId) this.projectAtomicEvent(() => {
           const run = this.context.store.runs.getRun(event.context.runId!);
           if (!run || !["pending", "running"].includes(run.status)) return;
@@ -138,7 +130,6 @@ export class DaemonAgentEventProjector {
         await this.startRun(event);
         return;
       case "output.text.delta":
-        if (event.data.delta) this.noteChildModelActivity(event, "progress");
         this.projectStream(event, {
           type: "text_delta",
           delta: event.data.delta,
@@ -146,7 +137,6 @@ export class DaemonAgentEventProjector {
         });
         return;
       case "output.reasoning.delta":
-        if (event.data.delta) this.noteChildModelActivity(event, "progress");
         this.projectStream(event, {
           type: "reasoning_delta",
           delta: event.data.delta,
@@ -164,7 +154,6 @@ export class DaemonAgentEventProjector {
         this.projectModelRetry(event);
         return;
       case "model.attempt.finished":
-        this.noteChildModelActivity(event, "finished");
         this.projectModelAttemptFinished(event);
         return;
       case "tool.started":
@@ -183,7 +172,6 @@ export class DaemonAgentEventProjector {
         return;
       case "domain.event": {
         if (event.data.name === "tool.generation.progress") {
-          this.noteChildModelActivity(event, "progress");
           this.projectToolGeneration(event);
           return;
         }
@@ -333,61 +321,12 @@ export class DaemonAgentEventProjector {
     this.context.store.runs.updateSessionTask(child.taskId, {
       metadata: {
         childActivity: {
-          ...(previous?.runId === runId ? previous : {}),
           runId,
           turns: turns + 1,
           lastEventId: event.id,
         },
       },
     });
-    this.context.events.publishSince(before);
-  }
-
-  private noteChildModelActivity(event: AgentEvent, kind: "started" | "stream" | "progress" | "finished"): void {
-    try {
-      this.writeChildModelActivity(event, kind);
-    } catch {
-      // Diagnostic metadata must not trigger child-run compensation.
-    }
-  }
-
-  private writeChildModelActivity(event: AgentEvent, kind: "started" | "stream" | "progress" | "finished"): void {
-    const child = event.context.childId ? this.children.get(event.context.childId) : undefined;
-    const runId = event.context.runId;
-    if (!child || !runId || child.runId !== runId) return;
-    const task = this.context.store.runs.getSessionTask(child.taskId);
-    if (!task) return;
-    const previous = isRecord(task.metadata.childActivity) ? task.metadata.childActivity : {};
-    const existing = previous.runId === runId && isRecord(previous.model) ? previous.model : undefined;
-    const at = Date.parse(event.occurredAt) || Date.now();
-    let model: Record<string, unknown> | null;
-    if (kind === "started" && event.type === "model.attempt.started") {
-      if (event.data.purpose !== "generation" && event.data.purpose !== "finalization") return;
-      child.toolProgress = new Map();
-      model = { generationId: event.data.generationId, attempt: event.data.attempt, startedAt: at };
-    } else {
-      if (!existing) return;
-      if (kind === "finished" && event.type === "model.attempt.finished") {
-        if (existing.generationId !== event.data.generationId || existing.attempt !== event.data.attempt) return;
-        model = null;
-      } else if (kind === "stream" && event.type === "domain.event") {
-        if (existing.generationId !== event.data.payload?.generationId || existing.attempt !== event.data.payload?.attempt) return;
-        model = { ...existing, lastStreamAt: at };
-      } else if (kind === "progress") {
-        if (event.type === "domain.event" && (event.data.payload?.generationId !== existing.generationId ||
-            event.data.payload?.attempt !== existing.attempt || event.data.payload?.discarded === true)) return;
-        if (event.type === "domain.event") {
-          const { toolKey, receivedChars } = event.data.payload ?? {};
-          if (typeof toolKey !== "string" || typeof receivedChars !== "number" || !Number.isFinite(receivedChars) ||
-              receivedChars <= (child.toolProgress?.get(toolKey) ?? 0)) return;
-          child.toolProgress?.set(toolKey, receivedChars);
-        }
-        if (typeof existing.lastProgressAt === "number" && at - existing.lastProgressAt < 15_000) return;
-        model = { ...existing, lastProgressAt: at };
-      } else return;
-    }
-    const before = this.context.events.checkpoint();
-    this.context.store.runs.updateSessionTask(child.taskId, { metadata: { childActivity: { ...previous, runId, model } } });
     this.context.events.publishSince(before);
   }
 

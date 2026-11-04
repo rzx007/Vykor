@@ -37,10 +37,10 @@ import { applySessionPartDeltas } from "@renderer/stores/desktop-session/session
 import { createSessionUpdateDeliveryAcknowledger } from "@renderer/stores/desktop-session/session-update-delivery"
 import type { DesktopSessionTask, DesktopSessionView } from "@shared/session-types"
 import {
-  agentTaskPresentation,
   groupAgentTasks,
   matchesAgentSessionUpdate,
 } from "./agent-task-model"
+import { useAgentTaskPresentation } from "./use-agent-task-presentation"
 
 const detailsSubscriptionId = "agents:details"
 const emptyTasks: DesktopSessionTask[] = []
@@ -186,7 +186,7 @@ function AgentTaskItem({
   onOpen: (task: DesktopSessionTask) => void
 }): React.JSX.Element {
   const running = task.status === "pending" || task.status === "running"
-  const presentation = agentTaskPresentation(task)
+  const presentation = useAgentTaskPresentation(task)!
   const failed = presentation.tone === "error"
   return (
     <Item
@@ -314,7 +314,7 @@ function AgentDetails({
   const running = Boolean(
     view?.runs.some((run) => run.status === "pending" || run.status === "running")
   )
-  const presentation = task ? agentTaskPresentation(task) : undefined
+  const presentation = useAgentTaskPresentation(task)
   const failed = presentation?.tone === "error"
   return (
     <>

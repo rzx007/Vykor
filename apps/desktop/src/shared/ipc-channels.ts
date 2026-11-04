@@ -288,6 +288,7 @@ export const IpcChannels = {
   sessionGoalGet: "session:goal:get",
   sessionMessagePartGet: "session:message-part:get",
   sessionToolImagePreview: "session:tool-image:preview",
+  sessionAgentActivity: "session:agent-activity",
   sessionGoalCreate: "session:goal:create",
   sessionGoalUpdate: "session:goal:update",
   sessionGoalAction: "session:goal:action",
@@ -806,6 +807,10 @@ export interface IpcInvokeMap
   [IpcChannels.sessionToolImagePreview]: {
     args: [input: import("./session-types").GetDesktopMessagePartInput]
     result: import("./attachment-types").DesktopAttachmentPreview
+  }
+  [IpcChannels.sessionAgentActivity]: {
+    args: [input: import("./session-types").ReadDesktopAgentActivityInput]
+    result: import("./session-types").DesktopAgentActivity | null
   }
   [IpcChannels.sessionGoalCreate]: {
     args: [input: CreateDesktopSessionGoalInput]
