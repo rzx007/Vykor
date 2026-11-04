@@ -52,6 +52,24 @@ it("only enables browser selection for actual messages, leaving workflow results
 })
 
 it.each([
+  {
+    href: "file:///C:/Users/example/pages/Web-%E5%83%8F%E7%B4%A0%E5%85%BB%E6%88%90.html",
+    path: "C:/Users/example/pages/Web-像素养成.html",
+  },
+  { href: "file:///tmp/report%20%231%2520.html", path: "/tmp/report #1%20.html" },
+])(
+  "opens a local HTML file URL through the existing file handler: $href",
+  async ({ href, path }) => {
+    await render(`[打开文档](${href})`)
+    const button = container.querySelector<HTMLButtonElement>(".assistant-file-link")
+    expect(button).not.toBeNull()
+    expect(container.textContent).not.toContain("[blocked]")
+    act(() => button!.click())
+    expect(opened).toEqual([[path, undefined]])
+  }
+)
+
+it.each([
   { href: "文档/说明.md", path: "文档/说明.md", line: undefined },
   { href: "README.md", path: "README.md", line: undefined },
   { href: "src/main.ts:42:3", path: "src/main.ts", line: 42 },
@@ -76,6 +94,12 @@ it.each([
   "data:text/html,evil/note.md",
   "vbscript:evil/note.md",
   "file:///C:/Windows/system.ini",
+  "file://server/share/report.html",
+  "file:////server/share/report.html",
+  "file:///C:/docs/%2e%2e/private.html",
+  "file:///C:/docs/%2Fprivate.html",
+  "file:///C:/docs/report.html?query=1",
+  "file:///C:/docs/report.html#section",
   "%2f%2fserver/share/note.md",
   "docs/../../private.md",
   "docs/%2e%2e/%2e%2e/private.md",
@@ -99,6 +123,13 @@ it("keeps relative file references noninteractive in read-only text mode", async
   expect(container.querySelector(".assistant-file-link")).toBeNull()
   expect(container.querySelector('[title="文档/说明.md"]')?.textContent).toBe("项目文件")
   expect(container.textContent).not.toContain("[blocked]")
+})
+
+it("keeps local HTML file URLs noninteractive in read-only text mode", async () => {
+  await render("[本地文档](file:///C:/reports/example.html)", "text")
+  expect(container.querySelector(".assistant-file-link")).toBeNull()
+  expect(container.querySelector('[title="C:/reports/example.html"]')?.textContent).toBe("本地文档")
+  expect(opened).toEqual([])
 })
 
 it("keeps link and inline-code markup without exposing parser nodes as DOM attributes", async () => {

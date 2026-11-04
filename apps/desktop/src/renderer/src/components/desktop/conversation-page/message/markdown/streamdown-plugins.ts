@@ -24,6 +24,31 @@ function visitLinks(
   for (const child of node.children ?? []) visitLinks(child, visit)
 }
 
+function normalizeLocalHtmlFileUrls() {
+  return (tree: LinkNode) =>
+    visitLinks(tree, (node, href) => {
+      // 只把本机 HTML 文件 URL 转成现有文件链接，其他 URL 仍由安全插件处理。
+      if (!/^file:\/\/\/(?!\/)/i.test(href)) return
+      const path = href.slice("file://".length)
+      if (/[\\?#]/.test(path) || /%(?:2f|5c)/i.test(path)) return
+      let decoded: string
+      try {
+        decoded = decodeURIComponent(path)
+      } catch {
+        return
+      }
+      if (
+        // eslint-disable-next-line no-control-regex -- 文件路径不能包含控制字符。
+        /[\u0000-\u001f\u007f]/.test(decoded) ||
+        decoded.split("/").some((segment) => segment === "." || segment === "..") ||
+        !/\.html?$/i.test(decoded) ||
+        !parseFileReference(path)
+      )
+        return
+      node.properties!.href = path
+    })
+}
+
 function prepareRelativeFileLinks() {
   return (tree: LinkNode) =>
     visitLinks(tree, (node, href) => {
@@ -60,7 +85,11 @@ function restoreRelativeFileLinks() {
 
 export const streamdownRehypePlugins = [
   ...Object.entries(defaultRehypePlugins).flatMap(([name, plugin]) =>
-    name === "harden" ? [prepareRelativeFileLinks, plugin, restoreRelativeFileLinks] : [plugin]
+    name === "sanitize"
+      ? [normalizeLocalHtmlFileUrls, plugin]
+      : name === "harden"
+        ? [prepareRelativeFileLinks, plugin, restoreRelativeFileLinks]
+        : [plugin]
   ),
   rehypeCjkEmphasis,
 ]

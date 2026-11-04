@@ -339,6 +339,8 @@ describe("buildRuntimeSystemPrompt", () => {
   it("includes the Markdown presentation policy by default", async () => {
     const result = await buildRuntimeSystemPrompt({ cwd: emptyDir });
     expect(result).toContain("# Markdown Presentation");
+    expect(result).toContain("never use file:// or other URI schemes");
+    expect(result).toContain("even when a skill suggests a different local-file URL format");
     expect(result).toContain(
       "Use tables only when repeated fields benefit from comparison",
     );
