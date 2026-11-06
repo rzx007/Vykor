@@ -44,15 +44,21 @@ describe("resident daemon safe restart preparation", () => {
   it("keeps the HTTP host healthy with an explicit non-accepting prepared state after the store closes", async () => {
     const directory = mkdtempSync(join(tmpdir(), "maintenance-restart-health-"));
     vi.stubEnv("VYKOR_CONFIG_DIR", join(directory, "config")); vi.stubEnv("VYKOR_DATA_DIR", join(directory, "data"));
-    const server = new VykorHttpServer({ storePath: join(directory, "sessions.db"), logger: () => {} });
+    const server = new VykorHttpServer({ storePath: join(directory, "sessions.db"), token: "daemon-token", logger: () => {} });
     try {
       await server.application.ready();
-      const response = await server.app.request("/maintenance/prepare-restart", { method: "POST", headers: { "x-vykor-protocol-version": String(CURRENT_PROTOCOL_VERSION) } });
+      const protocol = { "x-vykor-protocol-version": String(CURRENT_PROTOCOL_VERSION) };
+      const authorized = { ...protocol, authorization: "Bearer daemon-token" };
+      expect((await server.app.request("/debug/process", { headers: protocol })).status).toBe(401);
+      const response = await server.app.request("/maintenance/prepare-restart", { method: "POST", headers: authorized });
       expect(response.status).toBe(200);
       const health = await server.app.request("/health");
       expect(health.status).toBe(200);
       expect(await health.json()).toMatchObject({ ok: true, ready: false, accepting: false, restartPrepared: true, activeRunCount: 0, queuedRunCount: 0 });
       expect(server.application.diagnosticState).toMatchObject({ phase: "closed", accepting: false });
+      const identity = await server.app.request("/debug/process", { headers: authorized });
+      expect(identity.status).toBe(200);
+      expect(await identity.json()).toEqual({ pid: process.pid });
     } finally { await server.close(); vi.unstubAllEnvs(); rmSync(directory, { recursive: true, force: true }); }
   });
 });

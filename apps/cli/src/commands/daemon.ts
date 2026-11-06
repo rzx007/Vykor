@@ -3,13 +3,19 @@ import { dirname, join } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { statSync } from "node:fs";
 import { Command, Option } from "commander";
-import type { DaemonRegistry } from "@vykor/server";
 
+import { isLoopbackHost, probeDaemonRegistry, verifyDaemonProcess } from "../daemon-lifecycle.js";
 import {
+  acquireRegistryLease,
+  clearMatchingDaemonRegistry,
   daemonPidAlive,
-  probeDaemonRegistry,
-} from "../daemon-lifecycle.js";
-import { acquireRegistryLease, clearMatchingDaemonRegistry, getDaemonRegistryPath, runRegisteredDaemon, stopDaemonProcess, withDaemonControlLock } from "@vykor/server/daemon-host";
+  getDaemonRegistryPath,
+  isWindowsDaemonServiceEnabled,
+  runRegisteredDaemon,
+  stopRegisteredDaemon,
+  withDaemonControlLock,
+  type DaemonRegistry,
+} from "@vykor/server/daemon-host";
 import {
   loadDaemonAutoStart,
   reconcileDaemonAutoStart,
@@ -22,6 +28,8 @@ import {
 import { ensureLocalDaemon } from "../ensure-daemon.js";
 import { VERSION } from "../version.js";
 
+export { isLoopbackHost } from "../daemon-lifecycle.js";
+
 interface ServeOptions {
   host?: string;
   port?: number;
@@ -30,15 +38,6 @@ interface ServeOptions {
   storePath?: string;
   register?: boolean;
   supervised?: boolean;
-}
-
-export function isLoopbackHost(host: string | undefined): boolean {
-  const normalized = (host ?? "127.0.0.1").trim().toLowerCase();
-  return (
-    normalized === "localhost" ||
-    normalized === "127.0.0.1" ||
-    normalized === "::1"
-  );
 }
 
 export function assertSafeDaemonBinding(
@@ -68,12 +67,15 @@ async function runServe(options: ServeOptions): Promise<void> {
     await import("@vykor/server");
 
   assertSafeDaemonBinding(options);
+  const shouldStart = options.register && options.supervised && process.platform === "win32"
+    ? isWindowsDaemonServiceEnabled : undefined;
   if (options.register && isLoopbackHost(options.host) && !options.storePath) {
     await runRegisteredDaemon({
       launcher: "cli", version: VERSION, supervised: options.supervised,
       host: options.host, port: options.port, allowedOrigins: options.allowOrigin,
       legacyDataLocationPath: legacyDesktopDataLocation(),
       initialToken: options.token,
+      shouldStart,
     });
     return;
   }
@@ -87,6 +89,7 @@ async function runServe(options: ServeOptions): Promise<void> {
     const existing = options.register ? readDaemonRegistry(registryPath) : undefined;
     if (existing && daemonPidAlive(existing.pid))
       throw new Error("A live daemon already owns the local registry.");
+    if (shouldStart && !await shouldStart()) return;
     const token = options.token ?? createBearerToken();
     const { server, listen } = await startVykorDaemon({
       host: options.host, port: options.port, token,
@@ -98,6 +101,7 @@ async function runServe(options: ServeOptions): Promise<void> {
     process.once("SIGTERM", stop);
     try {
       shutdown.signal.throwIfAborted();
+      if (shouldStart && !await shouldStart()) return;
       console.log(`[daemon] listening ${listen.url}`);
       if (options.register) {
         const registry = createDaemonRegistryEntry({
@@ -149,14 +153,13 @@ export function createServeCommand(): Command {
     });
 }
 
-async function stopRegisteredProcess(registry: DaemonRegistry | undefined): Promise<void> {
-  if (!registry) return;
-  const { readDaemonRegistry } = await import("@vykor/server");
-  const current = readDaemonRegistry();
-  if (!current || current.pid !== registry.pid || current.token !== registry.token ||
-    current.startedAt !== registry.startedAt || current.url !== registry.url) return;
-  if (daemonPidAlive(registry.pid)) await stopDaemonProcess(registry.pid);
-  if (!registry.launcher) clearMatchingDaemonRegistry(registry, getDaemonRegistryPath());
+function registeredServeArgs(options: ServeOptions): string[] {
+  const args = ["serve", "--register", "--host", options.host ?? "127.0.0.1"];
+  if (options.port !== undefined) args.push("--port", String(options.port));
+  if (options.token) args.push("--token", options.token);
+  for (const origin of options.allowOrigin ?? []) args.push("--allow-origin", origin);
+  if (options.storePath) args.push("--store-path", options.storePath);
+  return args;
 }
 
 export function createDaemonCommand(): Command {
@@ -189,66 +192,27 @@ export function createDaemonCommand(): Command {
         console.error("Cannot locate CLI entrypoint.");
         process.exit(1);
       }
-      if (isLoopbackHost(options.host) && (!options.host || options.host === "127.0.0.1") &&
-        !options.token && !options.storePath && !options.allowOrigin?.length && !options.port) {
-        const endpoint = await ensureLocalDaemon({ cliPath: entry });
+      const args = registeredServeArgs(options);
+      if (isLoopbackHost(options.host)) {
+        const endpoint = await ensureLocalDaemon({ cliPath: entry, serveArgs: args });
         console.log(`Daemon running at ${endpoint.url} (PID: ${endpoint.pid})`);
         return;
       }
-      const probeOptions = {
-        expectedVersion: VERSION,
-        minimumStartedAt: statSync(entry).mtimeMs,
-      };
+
+      const { autoStart } = await reconcileDaemonAutoStart(entry, undefined, args);
+      const probeOptions = { expectedVersion: VERSION, minimumStartedAt: statSync(entry).mtimeMs };
       const existing = readDaemonRegistry();
-      let existingStatus = existing
-        ? await probeDaemonRegistry(existing, probeOptions)
-        : "unreachable";
-      const args = [
-        "serve",
-        "--register",
-        "--host",
-        options.host ?? "127.0.0.1",
-      ];
-      if (options.port !== undefined) args.push("--port", String(options.port));
-      if (options.token) args.push("--token", options.token);
-      for (const origin of options.allowOrigin ?? [])
-        args.push("--allow-origin", origin);
-      if (options.storePath) args.push("--store-path", options.storePath);
-      const autoStart = await loadDaemonAutoStart();
-      const reconciliation = await reconcileDaemonAutoStart(entry, autoStart, args);
-      if (
-        existing &&
-        existingStatus === "ready" &&
-        reconciliation.action === "uninstalled"
-      ) {
-        existingStatus = await probeDaemonRegistry(existing, probeOptions);
-      }
-      if (existing && existingStatus === "ready") {
-        console.log(
-          `Daemon already running at ${existing.url} (PID: ${existing.pid})`,
-        );
+      if (existing && await probeDaemonRegistry(existing, probeOptions) === "ready") {
+        console.log(`Daemon already running at ${existing.url} (PID: ${existing.pid})`);
         return;
       }
-
       if (existing && daemonPidAlive(existing.pid))
         throw new Error("Registered daemon is unavailable. Stop it explicitly before starting another.");
-
       if (autoStart) {
-        if (reconciliation.action === "none") {
-          if (existingStatus === "stale") reconciliation.service.install();
-          else reconciliation.service.restart();
-        }
-        const registry = await waitForReadyDaemon(
-          probeOptions,
-          readDaemonRegistry,
-        );
-        console.log(
-          `Daemon started by the system service at ${registry.url} (PID: ${registry.pid})`,
-        );
+        const registry = await waitForReadyDaemon(probeOptions, readDaemonRegistry);
+        console.log(`Daemon started by the system service at ${registry.url} (PID: ${registry.pid})`);
         return;
       }
-
-      if (existing) clearMatchingDaemonRegistry(existing, getDaemonRegistryPath());
 
       const spawned = spawnDaemonProcess(entry, args);
       const registry = await waitForReadyDaemon(
@@ -290,17 +254,7 @@ export function createDaemonCommand(): Command {
       if (!entry) throw new Error("Cannot locate CLI entrypoint.");
       const { readDaemonRegistry } =
         await import("@vykor/server");
-      const args = [
-        "serve",
-        "--register",
-        "--host",
-        options.host ?? "127.0.0.1",
-      ];
-      if (options.port !== undefined) args.push("--port", String(options.port));
-      if (options.token) args.push("--token", options.token);
-      for (const origin of options.allowOrigin ?? [])
-        args.push("--allow-origin", origin);
-      if (options.storePath) args.push("--store-path", options.storePath);
+      const args = registeredServeArgs(options);
 
       await withDaemonControlLock(async () => {
         await createCliDaemonAutoStartController(entry, args).enable();
@@ -319,12 +273,9 @@ export function createDaemonCommand(): Command {
     .action(async () => {
       const entry = process.argv[1];
       if (!entry) throw new Error("Cannot locate CLI entrypoint.");
-      const { readDaemonRegistry } =
-        await import("@vykor/server");
       await withDaemonControlLock(async () => {
-        const registry = readDaemonRegistry();
         await createCliDaemonAutoStartController(entry).disable();
-        await stopRegisteredProcess(registry);
+        await stopRegisteredDaemon(verifyDaemonProcess);
       });
       console.log("Daemon system service uninstalled.");
     });
@@ -348,12 +299,7 @@ export function createDaemonCommand(): Command {
         expectedVersion: VERSION,
         minimumStartedAt: statSync(entry).mtimeMs,
       };
-      const status = registry
-        ? await probeDaemonRegistry(registry, probeOptions)
-        : "unreachable";
-      if (status === "ready") return;
       if (registry && daemonPidAlive(registry.pid)) return;
-      if (registry) clearMatchingDaemonRegistry(registry, getDaemonRegistryPath());
       const spawned = spawnDaemonProcess(entry, [serveCommand, ...serveArgs, "--supervised"]);
       await waitForReadyDaemon(probeOptions, readDaemonRegistry, () => {
         if (spawned.failure()) throw daemonStartupError(spawned);
@@ -393,14 +339,11 @@ export function createDaemonCommand(): Command {
     .command("stop")
     .description("Stop the daemon")
     .action(async () => {
-      const { readDaemonRegistry } =
-        await import("@vykor/server");
       const entry = process.argv[1];
       const service = entry ? createDaemonSystemService(entry) : undefined;
       await withDaemonControlLock(async () => {
-        const registry = readDaemonRegistry();
         if (service?.isInstalled()) service.stop();
-        await stopRegisteredProcess(registry);
+        const registry = await stopRegisteredDaemon(verifyDaemonProcess);
         if (registry) console.log(`Daemon stopped (PID: ${registry.pid})`);
         else console.log("Daemon is not running.");
       });

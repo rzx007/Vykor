@@ -135,6 +135,7 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
         queuedRunCount: snapshot.coordinator.queuedRunCount,
       } satisfies VykorServerHealth);
     })
+    .get("/debug/process", () => jsonResponse({ pid: process.pid }))
     .get("/debug/runtime", () =>
       jsonResponse(context.control.runtimeSnapshot()),
     )

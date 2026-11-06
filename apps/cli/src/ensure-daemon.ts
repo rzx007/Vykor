@@ -6,9 +6,8 @@ import {
   daemonPidAlive,
   getDaemonRegistryPath,
   readDaemonRegistry,
-  withDaemonControlLock,
 } from "@vykor/server/daemon-host";
-import { loadDaemonAutoStart, reconcileDaemonAutoStart } from "./daemon-auto-start.js";
+import { reconcileDaemonAutoStart } from "./daemon-auto-start.js";
 import { resolveDaemonInvocation } from "./daemon-process.js";
 import { probeDaemonRegistry } from "./daemon-lifecycle.js";
 
@@ -25,6 +24,7 @@ export interface EnsureLocalDaemonOptions {
   cliPath?: string;
   /** Optional version constraint for a manually configured legacy backend. */
   expectedVersion?: string;
+  serveArgs?: string[];
   autoStart?: boolean;
 }
 
@@ -35,8 +35,8 @@ export async function ensureLocalDaemon(
 ): Promise<LocalDaemonHandle> {
   const cliPath = options.cliPath ?? process.argv[1];
   if (!cliPath) throw new Error("Cannot locate CLI entrypoint.");
-  const autoStart = options.autoStart ?? (await loadDaemonAutoStart());
-  const reconciliation = await reconcileDaemonAutoStart(cliPath, autoStart);
+  const serveArgs = options.serveArgs ?? ["serve", "--register", "--host", "127.0.0.1", "--port", "0"];
+  const { autoStart } = await reconcileDaemonAutoStart(cliPath, options.autoStart, serveArgs);
   const file = getDaemonRegistryPath();
   const beforeProbe = readDaemonRegistry();
   const existing = await Service.discover({ file });
@@ -56,10 +56,6 @@ export async function ensureLocalDaemon(
   }
 
   if (autoStart) {
-    if (reconciliation.action === "none") await withDaemonControlLock(() => {
-      const current = readDaemonRegistry();
-      if (!current || !daemonPidAlive(current.pid)) reconciliation.service.restart();
-    });
     const deadline = AbortSignal.timeout(startupTimeoutMs);
     try {
       while (!deadline.aborted) {
@@ -76,9 +72,7 @@ export async function ensureLocalDaemon(
     throw new Error("The Vykor system service did not become ready.");
   }
 
-  const { command, args } = resolveDaemonInvocation(cliPath, [
-    "serve", "--register", "--host", "127.0.0.1", "--port", "0",
-  ]);
+  const { command, args } = resolveDaemonInvocation(cliPath, serveArgs);
   const logPath = join(getLogsDir(), "daemon.log");
   try {
     return await Service.ensure({ file, command: [command, ...args], timeoutMs: startupTimeoutMs, logPath });

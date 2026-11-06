@@ -1,7 +1,7 @@
 import { request } from "node:http"
 import { Readable } from "node:stream"
 import { setTimeout as delay } from "node:timers/promises"
-import { HttpTransport, SseTransport } from "@vykor/application-client"
+import { HttpTransport, SseTransport, VykorApiError } from "@vykor/application-client"
 import { parseBrowserBridgeEvent, type BrowserBridgeEvent } from "@vykor/server/daemon-host"
 import { isLoopbackDaemonUrl } from "../daemon-autostart/daemon-surface"
 import {
@@ -124,7 +124,12 @@ export function startBrowserBridge(options: BrowserBridgeOptions): () => void {
       body = { error: message.slice(0, 4_096) || "Browser operation failed." }
     }
     signal.throwIfAborted()
-    await http.request(path + "/result", { method: "POST", body, signal })
+    try {
+      await http.request(path + "/result", { method: "POST", body, signal })
+    } catch (error) {
+      // The daemon can retire the request before its cancel event reaches this stream.
+      if (!(error instanceof VykorApiError && error.status === 404)) throw error
+    }
   }
 
   async function connect(): Promise<void> {

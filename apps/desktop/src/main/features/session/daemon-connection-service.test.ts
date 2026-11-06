@@ -12,7 +12,13 @@ const host = vi.hoisted(() => ({
   shouldStartManagedDaemon: vi.fn(),
   daemonPidAlive: vi.fn(),
   stopDaemonProcess: vi.fn(),
+  reconcileDaemonSystemServiceForConnection: vi.fn(),
+  withDaemonControlLock: (action: (signal: AbortSignal) => unknown) => action(new AbortController().signal),
   getDaemonRegistryPath: () => "registry.json",
+}))
+const systemService = vi.hoisted(() => ({
+  status: () => ({ platform: "win32", state: "running", detail: "ready" }),
+  start: vi.fn(),
 }))
 const state = vi.hoisted(() => ({ browserBridge: 1 }))
 vi.mock("electron", () => ({
@@ -21,7 +27,7 @@ vi.mock("electron", () => ({
 }))
 vi.mock("@vykor/application-client/service", () => ({ Service: sdk }))
 vi.mock("@vykor/server/daemon-host", () => host)
-vi.mock("../daemon-autostart/daemon-autostart-service", () => ({ createDesktopDaemonSystemService: vi.fn() }))
+vi.mock("../daemon-autostart/daemon-autostart-service", () => ({ createDesktopDaemonSystemService: () => systemService }))
 vi.mock("@vykor/application-client", () => ({
   VykorClient: class {
     constructor(readonly options: { baseUrl: string; token: string }) {}
@@ -60,6 +66,31 @@ describe("desktop daemon connection", () => {
     expect(sdk.ensure).toHaveBeenCalledWith(expect.objectContaining({
       command: [process.execPath, "--daemon-on-demand"],
     }))
+  })
+
+  it("asks the shared startup policy to kick the idle Windows task before waiting", async () => {
+    host.shouldStartManagedDaemon.mockResolvedValue(true)
+    host.reconcileDaemonSystemServiceForConnection.mockImplementation(async () => {
+      systemService.start()
+      return { autoStart: true, state: "running", action: "started" }
+    })
+    sdk.discover.mockResolvedValueOnce(undefined).mockResolvedValueOnce(endpoint)
+
+    await expect(new DaemonConnectionService().getClient()).resolves.toBeDefined()
+    expect(systemService.start).toHaveBeenCalledOnce()
+    expect(host.reconcileDaemonSystemServiceForConnection).toHaveBeenCalledWith(systemService)
+    expect(sdk.ensure).not.toHaveBeenCalled()
+  })
+
+  it("uses on-demand startup if the setting changed before managed startup", async () => {
+    host.shouldStartManagedDaemon.mockResolvedValue(true)
+    host.reconcileDaemonSystemServiceForConnection.mockResolvedValue({
+      autoStart: false, state: "not-installed", action: "none",
+    })
+
+    await expect(new DaemonConnectionService().getClient()).resolves.toBeDefined()
+    expect(systemService.start).not.toHaveBeenCalled()
+    expect(sdk.ensure).toHaveBeenCalledOnce()
   })
 
   it("keeps a live unreachable registration and allows a later retry", async () => {

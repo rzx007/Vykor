@@ -1,3 +1,5 @@
+import { networkInterfaces } from "node:os";
+import { CURRENT_PROTOCOL_VERSION } from "@vykor/application-client";
 import { Service } from "@vykor/application-client/service";
 import {
   daemonPidAlive,
@@ -6,6 +8,41 @@ import {
 import type { DaemonRegistry } from "@vykor/server";
 
 export { daemonPidAlive, terminateDaemonProcess };
+
+export function isLoopbackHost(host: string | undefined): boolean {
+  const normalized = (host ?? "127.0.0.1").trim().toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1"
+  );
+}
+
+export async function verifyDaemonProcess(registry: DaemonRegistry): Promise<boolean> {
+  try {
+    if (!registry.token?.trim()) return false;
+    const url = new URL(registry.url);
+    if (url.hostname === "0.0.0.0") url.hostname = "127.0.0.1";
+    if (url.hostname === "[::]") url.hostname = "[::1]";
+    const host = url.hostname.replace(/^\[|\]$/g, "");
+    if (!isLoopbackHost(host) && !Object.values(networkInterfaces()).flat()
+      .some(address => address?.address === host)) return false;
+
+    const response = await fetch(new URL("/debug/process", url), {
+      headers: {
+        authorization: `Bearer ${registry.token}`,
+        "x-vykor-protocol-version": String(CURRENT_PROTOCOL_VERSION),
+      },
+      redirect: "error",
+      signal: AbortSignal.timeout(3_000),
+    });
+    if (!response.ok) return false;
+    const identity = await response.json() as { pid?: number };
+    return identity.pid === registry.pid;
+  } catch {
+    return false;
+  }
+}
 
 export type DaemonProbeStatus = "ready" | "stale" | "unreachable";
 export type DaemonProbeFetch = (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>;

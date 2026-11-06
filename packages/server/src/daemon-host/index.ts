@@ -1,6 +1,7 @@
 export {
   createDaemonAutoStartController,
   reconcileDaemonSystemService,
+  reconcileDaemonSystemServiceForConnection,
   saveDaemonAutoStartPreference,
   shouldStartManagedDaemon,
   type DaemonAutoStartController,
@@ -13,6 +14,7 @@ export {
   daemonPidAlive,
   forceKillDaemonProcess,
   stopDaemonProcess,
+  stopRegisteredDaemon,
   terminateDaemonProcess,
   waitForProcessExit,
 } from "./lifecycle.js";
@@ -41,6 +43,6 @@ export {
   type BrowserBridgeEvent,
 } from "../application/browser-tools/browser-bridge-protocol.js";
 
-export { runRegisteredDaemon, type RegisteredDaemonControl } from "./registered-daemon.js";
-export { dataLocationFile, readDataLocationState, readRegisteredDataLocation } from "./data-location.js";
+export { isWindowsDaemonServiceEnabled, runRegisteredDaemon, type RegisteredDaemonControl } from "./registered-daemon.js";
+export { readRegisteredDataLocation, readRegisteredDataSwitchResult } from "./data-location.js";
 export { acquireRegistryLease, withDaemonControlLock } from "./registry-lease.js";

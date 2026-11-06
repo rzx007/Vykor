@@ -10,6 +10,7 @@ export interface DefaultNodeApplicationOptions
   extends Omit<DaemonApplicationOptions, "store" | "ownsStore"> {
   store?: SessionStore;
   storePath?: string;
+  storeFileMustExist?: boolean;
   /** 外部传入 Store 时默认由外部关闭；需要 Application 关闭它时明确设为 true。 */
   ownsStore?: boolean;
 }
@@ -25,6 +26,7 @@ export function createDefaultNodeApplication(
     options.store ??
     new SessionStore({
       path: options.storePath ?? getDefaultSessionStorePath(),
+      fileMustExist: options.storeFileMustExist,
       attachmentLimits: options.attachmentLimits,
     });
   const ownsStore = options.ownsStore ?? !options.store;

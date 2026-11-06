@@ -51,6 +51,11 @@ export async function readRegisteredDataLocation(
   return saved?.location ?? await readLegacyDataLocation(legacyDataLocationPath);
 }
 
+export async function readRegisteredDataSwitchResult(id: string): Promise<DataSwitchResult | undefined> {
+  const saved = await readDataLocationState(dataLocationFile(getDataDir()));
+  return saved?.result?.id === id ? saved.result : undefined;
+}
+
 export async function saveDataLocationState(path: string, state: DataLocationState): Promise<void> {
   await writeJsonFileAtomically(path, state);
 }

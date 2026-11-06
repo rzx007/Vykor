@@ -10,7 +10,6 @@ const serviceMock = vi.hoisted(() => ({
 }));
 
 vi.mock("@vykor/server/daemon-host", () => ({
-  withDaemonControlLock: (action: () => unknown) => action(),
   shouldStartManagedDaemon: async () =>
     (await loadSettingsMock()).daemon?.autoStart ?? false,
   saveDaemonAutoStartPreference: async (autoStart: boolean) => {
@@ -20,24 +19,24 @@ vi.mock("@vykor/server/daemon-host", () => ({
       daemon: { ...settings.daemon, autoStart },
     });
   },
-  reconcileDaemonSystemService: (
+  reconcileDaemonSystemServiceForConnection: async (
     service: typeof serviceMock,
     autoStart: boolean,
   ) => {
     const state = service.status().state;
     if (!autoStart && state !== "not-installed") {
       service.uninstall();
-      return { state: "not-installed", action: "uninstalled" };
+      return { autoStart, state: "not-installed", action: "uninstalled" };
     }
     if (autoStart && state === "not-installed") {
       service.install();
-      return { state: "running", action: "installed" };
+      return { autoStart, state: "running", action: "installed" };
     }
     if (autoStart && state === "stopped") {
       service.start();
-      return { state: "running", action: "started" };
+      return { autoStart, state: "running", action: "started" };
     }
-    return { state, action: "none" };
+    return { autoStart, state, action: "none" };
   },
 }));
 

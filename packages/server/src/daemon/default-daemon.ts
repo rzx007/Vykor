@@ -22,6 +22,7 @@ export type VykorDaemonOptions = Pick<
   | "port"
   | "store"
   | "storePath"
+  | "storeFileMustExist"
   | "token"
   | "version"
   | "executionSurface"

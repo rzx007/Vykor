@@ -75,13 +75,17 @@ export function readDaemonRegistry(path = getDaemonRegistryPath()): DaemonRegist
   }
 }
 
+export function sameDaemonRegistration(
+  current: DaemonRegistry | undefined,
+  expected: DaemonRegistry,
+): boolean {
+  return !!current && current.pid === expected.pid && current.url === expected.url &&
+    current.token === expected.token && current.startedAt === expected.startedAt &&
+    current.version === expected.version && current.storePath === expected.storePath;
+}
+
 export function clearMatchingDaemonRegistry(registry: DaemonRegistry, path: string): void {
-  const current = readDaemonRegistry(path);
-  if (current && current.pid === registry.pid && current.url === registry.url &&
-    current.token === registry.token && current.startedAt === registry.startedAt &&
-    current.version === registry.version && current.storePath === registry.storePath) {
-    clearDaemonRegistry(path);
-  }
+  if (sameDaemonRegistration(readDaemonRegistry(path), registry)) clearDaemonRegistry(path);
 }
 
 export function clearDaemonRegistry(path = getDaemonRegistryPath()): void {

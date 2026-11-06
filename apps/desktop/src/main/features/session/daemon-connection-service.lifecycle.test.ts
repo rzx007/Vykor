@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   supervised: false,
   prepare: vi.fn(async () => ({ prepared: true })),
   requestSwitch: vi.fn(),
+  readSwitchResult: vi.fn(),
   result: vi.fn(),
   stop: vi.fn(),
 }))
@@ -23,6 +24,7 @@ vi.mock("@vykor/application-client/service", () => ({ Service: {
 vi.mock("@vykor/server/daemon-host", () => ({
   readDaemonRegistry: () => ({ ...state.endpoint, supervised: state.supervised }),
   readRegisteredDataLocation: async () => undefined,
+  readRegisteredDataSwitchResult: state.readSwitchResult,
   getDaemonRegistryPath: () => "registry.json",
   stopDaemonProcess: state.stop,
   withDaemonControlLock: (action: (signal: AbortSignal) => Promise<unknown>) => action(new AbortController().signal),
@@ -100,5 +102,22 @@ describe("independent daemon maintenance", () => {
     else await expect(result).rejects.toThrow(/恢复原数据/)
     expect(await service.getClient()).not.toBe(oldClient)
     expect(state.stop).not.toHaveBeenCalled()
+  })
+
+  it("reconnects when the daemon accepted the switch but the response was lost", async () => {
+    const service = new DaemonConnectionService()
+    const oldClient = await service.getClient()
+    const storePath = join(folder, "new.db")
+    writeFileSync(storePath, "")
+    state.requestSwitch.mockImplementationOnce(async ({ id }) => {
+      state.readSwitchResult.mockResolvedValueOnce({ id, status: "pending" })
+      state.endpoint = { ...original, token: "new", startedAt: 2, storePath }
+      throw new Error("connection closed")
+    })
+    state.result.mockResolvedValueOnce({ status: "succeeded" })
+
+    await expect(service.switchDataDirectory(folder, { storePath })).resolves.toBeDefined()
+    expect(state.readSwitchResult).toHaveBeenCalledWith(state.requestSwitch.mock.calls[0]?.[0].id)
+    expect(await service.getClient()).not.toBe(oldClient)
   })
 })

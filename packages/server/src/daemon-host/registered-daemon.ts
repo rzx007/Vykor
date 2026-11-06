@@ -70,6 +70,7 @@ export interface RegisteredDaemonOptions extends Pick<
   baseDataDirectory?: string;
   legacyDataLocationPath?: string;
   signal?: AbortSignal;
+  shouldStart?: () => Promise<boolean>;
   canSwitchData?: () => Promise<boolean>;
   start?: (options: RegisteredRuntimeOptions) => Promise<RegisteredRuntime>;
 }
@@ -120,6 +121,7 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
     await mkdir(dirname(registryPath), { recursive: true });
     releaseOwner = await waitForOwnership();
     if (!releaseOwner || stopping) return;
+    if (options.shouldStart && !await options.shouldStart()) return;
 
     const saved = await readDataLocationState(statePath);
     const legacy = !saved ? await readLegacyDataLocation(options.legacyDataLocationPath) : undefined;
@@ -127,12 +129,19 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
     if (state.result?.status === "pending") {
       state = { ...state, result: { id: state.result.id, status: "interrupted" } };
       await saveDataLocationState(statePath, state);
-    } else if (legacy) {
-      await saveDataLocationState(statePath, state);
     }
 
-    if (!stopping) current = await open(state.location, options.initialToken);
-    if (current && !stopping) publish(current);
+    if (!stopping) {
+      current = await open(state.location, {
+        token: options.initialToken,
+        fileMustExist: Boolean(saved || legacy),
+      });
+    }
+    if (current && !stopping && legacy) await saveDataLocationState(statePath, state);
+    if (current && !stopping) {
+      if (options.shouldStart && !await options.shouldStart()) return;
+      if (!stopping) publish(current);
+    }
     const error = await stopped;
     if (error) throw error;
   } finally {
@@ -192,7 +201,10 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
     return daemonPidAlive(existing.pid) ? existing.pid : undefined;
   }
 
-  async function open(location: RegisteredDataLocation, token = createBearerToken()): Promise<OpenedRuntime> {
+  async function open(
+    location: RegisteredDataLocation,
+    { token = createBearerToken(), fileMustExist = true }: { token?: string; fileMustExist?: boolean } = {},
+  ): Promise<OpenedRuntime> {
     if (ownerError) throw ownerError;
     if (!dataDirectoryChanged) initialDataDirectory = process.env.VYKOR_DATA_DIR;
     dataDirectoryChanged = true;
@@ -202,6 +214,7 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
       port: options.port ?? 0,
       token,
       storePath: location.storePath,
+      storeFileMustExist: fileMustExist,
       version: options.version,
       executionSurface: "desktop_managed",
       enableDesktopBrowser: true,
@@ -338,10 +351,19 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
 
 async function canSwitchData(): Promise<boolean> {
   if (await shouldStartManagedDaemon()) return false;
-  const systemService = new DaemonSystemService({
+  return (await readSystemServiceStatus()).state === "not-installed";
+}
+
+export async function isWindowsDaemonServiceEnabled(): Promise<boolean> {
+  if (process.platform !== "win32" || !await shouldStartManagedDaemon()) return false;
+  const state = (await readSystemServiceStatus()).detail;
+  return state === "ready" || state === "running" || state === "queued";
+}
+
+function readSystemServiceStatus() {
+  return new DaemonSystemService({
     invocation: { command: process.execPath, args: [], cwd: process.cwd() },
-  });
-  return (await systemService.statusAsync()).state === "not-installed";
+  }).statusAsync();
 }
 
 function asError(error: unknown): Error {

@@ -7,11 +7,11 @@ import { VykorClient } from "@vykor/application-client"
 import { Service, type ServiceEndpoint } from "@vykor/application-client/service"
 import {
   daemonPidAlive,
-  dataLocationFile,
   getDaemonRegistryPath,
   readDaemonRegistry,
-  readDataLocationState,
   readRegisteredDataLocation,
+  readRegisteredDataSwitchResult,
+  reconcileDaemonSystemServiceForConnection,
   shouldStartManagedDaemon,
   stopDaemonProcess,
   withDaemonControlLock,
@@ -132,14 +132,14 @@ export class DaemonConnectionService {
         await client.system.requestDataSwitch({ id, directory: target, storePath }, { signal: AbortSignal.timeout(60_000) })
       } catch (error) {
         // The response can be lost after the daemon has durably accepted the switch.
-        if (!await this.readSwitchResult(id)) throw error
+        if (!await readRegisteredDataSwitchResult(id).catch(() => undefined)) throw error
       }
       this.invalidateClient()
       let endpoint: ServiceEndpoint
       try {
         endpoint = await this.waitForReplacement(registry)
       } catch (error) {
-        const result = await this.readSwitchResult(id)
+        const result = await readRegisteredDataSwitchResult(id).catch(() => undefined)
         if (result?.status === "rollback_failed")
           throw new Error([result.error, result.rollbackError].filter(Boolean).join("；"))
         throw error
@@ -179,12 +179,6 @@ export class DaemonConnectionService {
     return registry
   }
 
-  private async readSwitchResult(id: string) {
-    const base = dirname(dirname(getDaemonRegistryPath()))
-    const state = await readDataLocationState(dataLocationFile(base)).catch(() => undefined)
-    return state?.result?.id === id ? state.result : undefined
-  }
-
   private async stopActiveWork(client: VykorClient): Promise<void> {
     const preview = await client.system.getRestartPreview()
     const sessions = new Set([...preview.runs, ...preview.tasks].map((item) => item.sessionId))
@@ -221,14 +215,10 @@ export class DaemonConnectionService {
     }
     this.setDaemonStatus("starting", "正在启动独立 daemon")
     if (await shouldStartManagedDaemon()) {
-      await withDaemonControlLock(() => {
-        signal.throwIfAborted()
-        const systemService = createDesktopDaemonSystemService()
-        const state = systemService.status().state
-        if (state === "not-installed" || state === "unknown") systemService.install()
-        else if (state === "stopped") systemService.start()
-      })
-      return this.useEndpoint(await this.waitForReplacement(undefined, signal), signal)
+      signal.throwIfAborted()
+      const { autoStart } = await reconcileDaemonSystemServiceForConnection(createDesktopDaemonSystemService())
+      if (autoStart)
+        return this.useEndpoint(await this.waitForReplacement(undefined, signal), signal)
     }
     const command = app.isPackaged
       ? [process.execPath, "--daemon-on-demand"]

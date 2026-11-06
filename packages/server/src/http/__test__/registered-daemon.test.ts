@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +9,7 @@ import { CURRENT_PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER } from "@vykor/protoc
 import { SessionStore } from "@vykor/services";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readDaemonRegistry } from "../../daemon/paths.js";
+import { startVykorDaemon } from "../../daemon/default-daemon.js";
 import {
   runRegisteredDaemon,
   type RegisteredDaemonControl,
@@ -350,7 +351,45 @@ describe("registered daemon", () => {
     expect(entry.activated).toEqual([]);
   });
 
-  it("acknowledges a real HTTP switch and serves the restored database after reconnect", async () => {
+  it("skips startup when the watchdog worker no longer has permission to open", async () => {
+    const entry = launch({
+      shouldStart: async () => false,
+      async start(options) {
+        stop.abort();
+        return await entry.start(options);
+      },
+    });
+    await run;
+    expect(entry.opened).toEqual([]);
+    expect(readDaemonRegistry(registry)).toBeUndefined();
+  });
+
+  it("closes the opened runtime if the watchdog is disabled before registration", async () => {
+    let enabled = true;
+    const entry = launch({
+      shouldStart: async () => enabled,
+      async start(options) {
+        const runtime = await entry.start(options);
+        enabled = false;
+        return runtime;
+      },
+    });
+    const timeout = setTimeout(() => stop.abort(), 1_000);
+    try {
+      await run;
+    } finally {
+      clearTimeout(timeout);
+    }
+    expect(entry.opened).toHaveLength(1);
+    expect(entry.closed).toEqual(entry.opened);
+    expect(entry.activated).toEqual([]);
+    expect(readDaemonRegistry(registry)).toBeUndefined();
+  });
+
+  it.each([
+    { scenario: "the restored database", removeBeforeOpen: false, status: "succeeded" },
+    { scenario: "a missing target", removeBeforeOpen: true, status: "failed" },
+  ])("reconnects after a real HTTP switch with $scenario", async ({ removeBeforeOpen, status }) => {
     await rm(targetStore);
     const restored = new SessionStore({ path: targetStore });
     restored.close();
@@ -360,6 +399,10 @@ describe("registered daemon", () => {
       baseDataDirectory: base,
       canSwitchData: async () => true,
       signal: stop.signal,
+      async start(options) {
+        if (removeBeforeOpen && options.storePath === targetStore) await rm(targetStore);
+        return await startVykorDaemon(options);
+      },
     });
     void run.catch(() => {});
     await vi.waitFor(() => expect(readDaemonRegistry(registry)).toBeDefined(), { timeout: 10_000 });
@@ -376,7 +419,11 @@ describe("registered daemon", () => {
     });
     expect(response.status).toBe(202);
     expect(await response.json()).toEqual({ id: "actual-switch" });
-    await vi.waitFor(() => expect(readDaemonRegistry(registry)?.storePath).toBe(targetStore), { timeout: 10_000 });
+    await vi.waitFor(() => {
+      const current = readDaemonRegistry(registry);
+      expect(current).toBeDefined();
+      expect(current?.token).not.toBe(first.token);
+    }, { timeout: 10_000 });
     const next = readDaemonRegistry(registry)!;
     const result = await fetch(`${next.url}/maintenance/data-switch/actual-switch`, {
       headers: {
@@ -387,7 +434,39 @@ describe("registered daemon", () => {
     });
     expect(next.pid).toBe(first.pid);
     expect(next.token).not.toBe(first.token);
+    expect(next.storePath).toBe(removeBeforeOpen ? first.storePath : targetStore);
     expect(result.status).toBe(200);
-    expect(await result.json()).toEqual({ id: "actual-switch", status: "succeeded" });
+    expect(await result.json()).toMatchObject({ id: "actual-switch", status });
+    if (removeBeforeOpen) await expect(stat(targetStore)).rejects.toMatchObject({ code: "ENOENT" });
   }, 25_000);
+
+  it.each(["saved", "legacy"])("refuses to create an empty database at a missing %s location", async (kind) => {
+    await rm(targetStore);
+    await mkdir(join(base, "daemon"), { recursive: true });
+    const locationFile = kind === "saved" ? state : join(root, "runtime-data-location.json");
+    await writeFile(locationFile, JSON.stringify({
+      version: 1,
+      location: { directory: target, storePath: targetStore },
+    }));
+    const attempt = runRegisteredDaemon({
+      launcher: "desktop",
+      version: "0.1.0",
+      baseDataDirectory: base,
+      ...(kind === "legacy" ? { legacyDataLocationPath: locationFile } : {}),
+      signal: stop.signal,
+    });
+    const completed = attempt.then(() => undefined, (error: unknown) => error);
+    try {
+      const error = await Promise.race([
+        completed,
+        vi.waitFor(() => expect(readDaemonRegistry(registry)).toBeDefined()).then(() => undefined),
+      ]);
+      expect(error).toBeInstanceOf(Error);
+      expect(readDaemonRegistry(registry)).toBeUndefined();
+      await expect(stat(targetStore)).rejects.toMatchObject({ code: "ENOENT" });
+    } finally {
+      stop.abort();
+      await completed;
+    }
+  });
 });

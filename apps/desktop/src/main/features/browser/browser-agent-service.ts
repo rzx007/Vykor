@@ -485,12 +485,15 @@ export class BrowserAgentService implements BrowserHost {
       guard?.refreshPage()
     }
     guard?.assertCurrent()
-    const page = (await contents.executeJavaScript(ELEMENT_INSPECT_SCRIPT)) as InspectedPage
+    const page = (await waitForBrowserRead(
+      contents.executeJavaScript(ELEMENT_INSPECT_SCRIPT),
+      guard?.signal
+    )) as InspectedPage
     guard?.assertCurrent()
     this.assertActiveTab(tabId, contents)
     const screenshotBytes =
       input.action.action === "inspect" && input.includeScreenshot
-        ? await this.capture(contents)
+        ? await waitForBrowserRead(this.capture(contents), guard?.signal)
         : undefined
     guard?.assertCurrent()
     this.assertActiveTab(tabId, contents)
@@ -1037,6 +1040,23 @@ export class BrowserAgentService implements BrowserHost {
         "The active browser tab changed while the tool was waiting. Inspect the page again."
       )
     }
+  }
+}
+
+// Electron can hold a read until the page finishes loading. A cancelled read
+// can release the operation queue because its eventual result is discarded.
+async function waitForBrowserRead<T>(read: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return read
+  let abort!: () => void
+  const cancelled = new Promise<never>((_, reject) => {
+    abort = () => reject(signal.reason)
+    if (signal.aborted) abort()
+    else signal.addEventListener("abort", abort, { once: true })
+  })
+  try {
+    return await Promise.race([read, cancelled])
+  } finally {
+    signal.removeEventListener("abort", abort)
   }
 }
 

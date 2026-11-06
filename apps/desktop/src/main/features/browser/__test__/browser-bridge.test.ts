@@ -44,7 +44,7 @@ function createBrowser() {
     isDestroyed: () => false,
     loadURL: vi.fn(async (_url: string) => {}),
     stop: vi.fn(),
-    executeJavaScript: async () => browserObservation,
+    executeJavaScript: vi.fn(async () => browserObservation),
     capturePage: vi.fn(async () => ({ toPNG: () => Buffer.from("PNG") })),
   })
   electron.fromId.mockReturnValue(page)
@@ -61,7 +61,7 @@ afterEach(async () => {
   cleanups.length = 0
 })
 
-async function createDaemon(holdApproval = false) {
+async function createDaemon(holdApproval = false, cancelledResultId?: string) {
   const requests: Array<{ path: string; body: unknown }> = []
   const closedApprovals: string[] = []
   const streams: ServerResponse[] = []
@@ -94,6 +94,11 @@ async function createDaemon(holdApproval = false) {
     const chunks: Buffer[] = []
     for await (const chunk of request) chunks.push(chunk)
     requests.push({ path: request.url!, body: JSON.parse(Buffer.concat(chunks).toString()) })
+    if (cancelledResultId && request.url?.endsWith(`/${cancelledResultId}/result`)) {
+      response.writeHead(404, { "content-type": "application/json" })
+      response.end(JSON.stringify({ error: "Browser request is no longer pending." }))
+      return
+    }
     if (holdApproval && request.url?.endsWith("/approval")) {
       response.once("close", () => closedApprovals.push(request.url!))
       return
@@ -204,6 +209,65 @@ it("receives cancellation while the approval POST is still pending", async () =>
   })
   expect(daemon.streams).toHaveLength(1)
   expect(page.capturePage).not.toHaveBeenCalled()
+})
+
+it("keeps the stream open when a result arrives after the daemon cancelled its request", async () => {
+  const { browser } = createBrowser()
+  const daemon = await createDaemon(false, "cancelled")
+  const token = {}
+  cleanups.push(startBrowserBridge({
+    browser,
+    baseUrl: daemon.baseUrl,
+    token: "registry-token",
+    getOwnerSessionToken: () => token,
+  }))
+  await vi.waitFor(() => expect(daemon.streams).toHaveLength(1))
+  const stream = daemon.streams[0]!
+  const deadlineAt = Date.now() + 5_000
+  send(stream, { ...command, requestId: "cancelled", deadlineAt })
+  await vi.waitFor(() => expect(daemon.requests.map(({ path }) => path)).toContain(
+    "/browser-host/connection-1/cancelled/result"
+  ))
+
+  send(stream, { ...command, requestId: "next", deadlineAt })
+  await vi.waitFor(() => expect(daemon.requests.map(({ path }) => path)).toContain(
+    "/browser-host/connection-1/next/result"
+  ))
+  expect(stream.destroyed).toBe(false)
+})
+
+it("lets the next command run after cancelling an inspection waiting on Electron", async () => {
+  const { browser, page } = createBrowser()
+  const daemon = await createDaemon()
+  const token = {}
+  const inspection = Promise.withResolvers<typeof browserObservation>()
+  const started = Promise.withResolvers<void>()
+  page.executeJavaScript.mockImplementationOnce(() => {
+    started.resolve()
+    return inspection.promise
+  })
+  cleanups.push(startBrowserBridge({
+    browser,
+    baseUrl: daemon.baseUrl,
+    token: "registry-token",
+    getOwnerSessionToken: () => token,
+  }))
+  await vi.waitFor(() => expect(daemon.streams).toHaveLength(1))
+  const stream = daemon.streams[0]!
+  const deadlineAt = Date.now() + 5_000
+  send(stream, { ...command, requestId: "cancelled", deadlineAt })
+  await started.promise
+
+  try {
+    send(stream, { type: "cancel", requestId: "cancelled" })
+    send(stream, { ...command, requestId: "next", deadlineAt })
+    await vi.waitFor(() => expect(daemon.requests.map(({ path }) => path)).toEqual([
+      "/browser-host/connection-1/cancelled/approval",
+      "/browser-host/connection-1/next/result",
+    ]))
+  } finally {
+    inspection.resolve(browserObservation)
+  }
 })
 
 it("stops an in-flight navigation on disconnect so new browser commands can run", async () => {

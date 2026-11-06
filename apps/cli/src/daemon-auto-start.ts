@@ -1,8 +1,7 @@
 import {
-  reconcileDaemonSystemService,
+  reconcileDaemonSystemServiceForConnection,
   saveDaemonAutoStartPreference,
   shouldStartManagedDaemon,
-  withDaemonControlLock,
   type DaemonAutoStartAction,
 } from "@vykor/server/daemon-host";
 
@@ -16,6 +15,7 @@ export type { DaemonAutoStartAction } from "@vykor/server/daemon-host";
 
 export interface DaemonAutoStartReconciliation {
   service: DaemonSystemService;
+  autoStart: boolean;
   state: DaemonSystemServiceState;
   action: DaemonAutoStartAction;
 }
@@ -30,12 +30,9 @@ export async function saveDaemonAutoStart(autoStart: boolean): Promise<void> {
 
 export async function reconcileDaemonAutoStart(
   entry: string,
-  autoStart: boolean,
+  autoStart?: boolean,
   serveArgs?: string[],
 ): Promise<DaemonAutoStartReconciliation> {
   const service = createDaemonSystemService(entry, serveArgs);
-  const state = service.status().state;
-  if ((!autoStart && state === "not-installed") || (autoStart && state === "running"))
-    return { service, state, action: "none" };
-  return withDaemonControlLock(() => ({ service, ...reconcileDaemonSystemService(service, autoStart) }));
+  return { service, ...await reconcileDaemonSystemServiceForConnection(service, autoStart) };
 }

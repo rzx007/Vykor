@@ -110,6 +110,7 @@ export interface VykorServerOptions {
   allowedOrigins?: string[];
   store?: SessionStore;
   storePath?: string;
+  storeFileMustExist?: boolean;
   attachmentRoot?: string;
   attachmentLimits?: Partial<AttachmentLimits>;
   attachments?: AttachmentService;
@@ -189,6 +190,7 @@ export class VykorHttpServer {
         executionOwner: options.executionOwner,
         store: options.store,
         storePath: options.storePath,
+        storeFileMustExist: options.storeFileMustExist,
         attachmentRoot: options.attachmentRoot,
         attachmentLimits: options.attachmentLimits,
         attachments: options.attachments,

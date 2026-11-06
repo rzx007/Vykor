@@ -1,9 +1,13 @@
 import { loadSettings, updateSettings, type Settings } from "@vykor/host-config";
 
+import { readDaemonRegistry } from "../daemon/paths.js";
+import { daemonPidAlive } from "./lifecycle.js";
+import { withDaemonControlLock } from "./registry-lease.js";
 import {
   DaemonSystemService,
   type DaemonServiceInvocation,
   type DaemonSystemServiceState,
+  type DaemonSystemServiceStatus,
 } from "./system-service.js";
 
 export interface DaemonAutoStartSnapshot {
@@ -14,6 +18,8 @@ export interface DaemonAutoStartSnapshot {
 
 export type DaemonAutoStartAction =
   "none" | "installed" | "started" | "uninstalled";
+
+type ReconciledService = Pick<DaemonSystemService, "status" | "install" | "start" | "uninstall">;
 
 export interface DaemonAutoStartController {
   snapshot(): Promise<DaemonAutoStartSnapshot>;
@@ -118,31 +124,72 @@ export async function saveDaemonAutoStartPreference(
 }
 
 export function reconcileDaemonSystemService(
-  service: Pick<
-    DaemonSystemService,
-    "status" | "install" | "start" | "uninstall"
-  >,
+  service: ReconciledService,
   autoStart: boolean,
 ): { state: DaemonSystemServiceState; action: DaemonAutoStartAction } {
-  const state = service.status().state;
+  const status = service.status();
+  return applyServiceAction(service, status, serviceAction(status, autoStart));
+}
+
+/** Recheck the setting and service state under the startup lock before making changes. */
+export async function reconcileDaemonSystemServiceForConnection(
+  service: ReconciledService,
+  autoStartOverride?: boolean,
+): Promise<{ autoStart: boolean; state: DaemonSystemServiceState; action: DaemonAutoStartAction }> {
+  const readAutoStart = async () => autoStartOverride ?? await shouldStartManagedDaemon();
+  const autoStart = await readAutoStart();
+  const status = service.status();
+  if (serviceAction(status, autoStart, true) === "none") {
+    return { autoStart, state: status.state, action: "none" };
+  }
+  return withDaemonControlLock(async () => {
+    const currentAutoStart = await readAutoStart();
+    const currentStatus = service.status();
+    const action = serviceAction(currentStatus, currentAutoStart, true);
+    return { autoStart: currentAutoStart, ...applyServiceAction(service, currentStatus, action) };
+  });
+}
+
+function serviceAction(
+  status: DaemonSystemServiceStatus,
+  autoStart: boolean,
+  forConnection = false,
+): DaemonAutoStartAction {
+  const { state } = status;
   if (!autoStart) {
-    if (state === "not-installed") return { state, action: "none" };
-    service.uninstall();
-    return { state: "not-installed", action: "uninstalled" };
+    return state === "not-installed" ? "none" : "uninstalled";
   }
-  if (state === "not-installed") {
-    service.install();
-    return { state: "running", action: "installed" };
+  if (forConnection && status.platform === "linux" && status.detail === "activating") {
+    return "none";
   }
-  if (state === "stopped") {
-    service.start();
-    return { state: "running", action: "started" };
+  if (state === "not-installed" || state === "unknown") return "installed";
+  if (state === "stopped") return "started";
+  // An enabled Windows task reports Ready even when its detached daemon is absent.
+  if (forConnection && status.platform === "win32" && status.detail === "ready" &&
+    !daemonPidAlive(readDaemonRegistry()?.pid ?? 0)) {
+    return "started";
   }
-  if (state === "unknown") {
-    service.install();
-    return { state: "running", action: "installed" };
+  return "none";
+}
+
+function applyServiceAction(
+  service: ReconciledService,
+  status: DaemonSystemServiceStatus,
+  action: DaemonAutoStartAction,
+): { state: DaemonSystemServiceState; action: DaemonAutoStartAction } {
+  switch (action) {
+    case "uninstalled":
+      service.uninstall();
+      return { state: "not-installed", action };
+    case "installed":
+      service.install();
+      return { state: "running", action };
+    case "started":
+      service.start();
+      return { state: "running", action };
+    case "none":
+      return { state: status.state, action };
   }
-  return { state, action: "none" };
 }
 
 function withAutoStart(settings: Settings, autoStart: boolean): Settings {
@@ -155,10 +202,7 @@ function withAutoStart(settings: Settings, autoStart: boolean): Settings {
 async function recoverAutoStartFailure(input: {
   cause: unknown;
   restoreConfigured: boolean;
-  service: Pick<
-    DaemonSystemService,
-    "status" | "install" | "start" | "uninstall"
-  >;
+  service: ReconciledService;
   restoreSettings(): Promise<void>;
 }): Promise<unknown> {
   const recoveryErrors: unknown[] = [];

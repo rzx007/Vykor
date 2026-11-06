@@ -293,7 +293,7 @@ export class DaemonSystemService {
   }
 
   private windowsStatusArguments(): string[] {
-    const script = `$task = Get-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' -ErrorAction SilentlyContinue; if ($null -eq $task) { 'not-installed' } else { $task.State.ToString().ToLowerInvariant() }`;
+    const script = `$task = Get-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' -ErrorAction SilentlyContinue; if ($null -eq $task) { 'not-installed' } elseif ($task.Settings.Enabled -eq $false) { 'disabled' } else { $task.State.ToString().ToLowerInvariant() }`;
     return [
       "-NoProfile",
       "-NonInteractive",

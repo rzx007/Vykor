@@ -6,6 +6,7 @@ const host = vi.hoisted(() => ({
   readDaemonRegistry: vi.fn(),
   daemonPidAlive: vi.fn(),
   shouldStartManagedDaemon: vi.fn(async () => false),
+  isWindowsDaemonServiceEnabled: vi.fn(async () => false),
 }))
 
 vi.mock("electron", () => ({
@@ -28,6 +29,9 @@ describe("desktop daemon entry", () => {
       expect(host.setHostResponseLocale).toHaveBeenCalledWith("zh-Hans-CN")
       expect(host.runRegisteredDaemon).toHaveBeenCalledWith(expect.objectContaining({
         launcher: "desktop", version: "1.0.0", supervised,
+        ...(mode === "service" && process.platform === "win32"
+          ? { shouldStart: host.isWindowsDaemonServiceEnabled }
+          : {}),
       }))
       expect(host.setHostResponseLocale.mock.invocationCallOrder[0])
         .toBeLessThan(host.runRegisteredDaemon.mock.invocationCallOrder[0]!)

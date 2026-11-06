@@ -3,6 +3,7 @@ import { join } from "node:path"
 import { app } from "electron"
 import {
   daemonPidAlive,
+  isWindowsDaemonServiceEnabled,
   readDaemonRegistry,
   runRegisteredDaemon,
   setHostResponseLocale,
@@ -35,6 +36,9 @@ export async function runDesktopDaemonEntry(mode: DesktopDaemonMode): Promise<vo
     version: app.getVersion(),
     launcher: "desktop",
     supervised: mode === "service",
+    ...(mode === "service" && process.platform === "win32"
+      ? { shouldStart: isWindowsDaemonServiceEnabled }
+      : {}),
     legacyDataLocationPath: join(app.getPath("userData"), "runtime-data-location.json"),
     outsideProjectWorkspaceRoot: buildOutsideProjectRoot(app.getPath("documents")),
   })
