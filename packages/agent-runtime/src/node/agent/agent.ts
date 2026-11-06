@@ -9,6 +9,7 @@ import type {
   AgentEventListener,
   ContentBlock,
   ToolDescriptor,
+  ToolDefinition,
   ToolRegistrationSource,
   ToolExecutionResult,
   ToolUseBlock,
@@ -72,7 +73,7 @@ import type {
 import { createMemoryRequestConfigurationStore } from "../configuration/request-configuration.js";
 import { createRunCapabilityView } from "../plugins/run-capability-view.js";
 import { readonlyMap } from "@vykor/agent-contracts";
-import { constrainRunCapabilityTools } from "../tools/default-runtime-tools.js";
+import { constrainRunCapabilityTools, isRuntimeToolPermitted } from "../tools/default-runtime-tools.js";
 import { renderPluginDiscoveryContext } from "../plugins/plugin-discovery-context.js";
 import type {
   PluginSelectionCandidate,
@@ -114,6 +115,8 @@ export interface VykorAgentSubmitOptions extends KernelSubmitOptions {
 }
 export interface NodeAgentHost {
   readonly jobs: import("@vykor/jobs").AgentJobHost;
+  /** Check the policy ceiling for a host tool with its own per-Run authorization. */
+  permitsHostRunTool?(definition: ToolDefinition): Promise<boolean>;
   /** Existing session host in this root's child registry; lookup never resumes an instance. */
   resolveSessionHost(sessionId: string): NodeAgentHost | undefined;
   plugins: {
@@ -279,6 +282,9 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
       );
     this.appRuntime = new PluginAppRuntime(this.id, assembled.pluginApps);
     this.host = Object.freeze({
+      permitsHostRunTool: async (definition: ToolDefinition) =>
+        isRuntimeToolPermitted(this.runtime.toolRegistry, definition) &&
+        (await this.runtime.permissionChecker.checkTool(definition.name, {}, definition.inputSchema)).action !== "deny",
       resolveSessionHost: (sessionId: string): NodeAgentHost | undefined => {
         if (this.state === "closed") return undefined;
         if (sessionId === this.id) return this.host;

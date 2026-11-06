@@ -5,6 +5,7 @@ import { createNoteApplicationService, type NoteApplicationService } from "./not
 import { createProjectFactsService, type ProjectFactsService } from "./personalization/project-facts-service.js";
 import { createMaintenanceApplicationService, type MaintenanceApplicationContext } from "./maintenance/maintenance-application-service.js";
 import { ToolResultService } from "./session/execution/tool-result-service.js";
+import { createSessionObservationTool } from "./session/execution/session-observation-tool.js";
 import { createNodeJobBindings } from "@vykor/agent-runtime";
 import { GoalModelAttemptService } from "./goals/goal-model-attempt-service.js";
 import {hostedContextUsageAgent} from "./context-usage/assemble-session-context-usage.js";
@@ -692,6 +693,7 @@ export class DaemonApplication implements DurableAgentApplication {
         },
       });
       // 一个会话一个热着的 Agent。子 Agent 自己占会话，不要被这个池子抢去。
+      const assertApplicationOwner = () => store.assertApplicationOwner(this.ownerLease);
       this.agentPool = new AgentPool({
         sessionQueries: {
           getSession: (id) => store.sessions.get(id),
@@ -725,7 +727,7 @@ export class DaemonApplication implements DurableAgentApplication {
           store.permissions.list({ sessionId, status: "pending" }).length > 0 ||
           store.runs.listSessionTasks(sessionId).some(task => task.status === "pending" || task.status === "running"),
         enterIdleEviction: (sessionId, isIdle) => {
-          store.assertApplicationOwner(this.ownerLease);
+          assertApplicationOwner();
           const session = store.sessions.get(sessionId);
           return session ? this.operationGate.tryEnterBarrier(
             { kind: "session", sessionId, cwd: session.cwd }, isIdle,
@@ -842,6 +844,10 @@ export class DaemonApplication implements DurableAgentApplication {
 
       const runExecution = assembleSessionRunExecutor({
         store, attachmentService: this.attachments, goals: store.goals,
+        createSessionObservationTool: (input, grant) => createSessionObservationTool({
+          store, events: this.events, assertApplicationOwner,
+          accepting: () => this.readyState === "ready" && this.operationGate.accepting,
+        }, input, grant),
         checkGoalExecution: (goalId, version) => this.goals.checkExecution(goalId, version),
         checkGoalRunExecution: (goalId, version, runId, boundary, tool) => this.goals.checkRunExecution(goalId, version, runId, boundary, tool),
         readGoalSnapshot: (goalId, version, runId) => this.goals.readSnapshot(goalId, version, runId),

@@ -12,6 +12,7 @@ import {
 } from "../support.js";
 import type { RequestTraceRegistry } from "../control/index.js";
 import type { SessionInteractionService } from "../../application/session/interactions/session-interaction-service.js";
+import { parseSessionObservationTarget } from "../../application/session/execution/session-observation-grant.js";
 
 export interface RunExecutionRoutesContext {
   application: Pick<
@@ -34,8 +35,13 @@ export function createRunExecutionRoutes(
       const sessionId = c.req.param("sessionId");
       if (!sessionId) return errorResponse(400, "sessionId is required");
       let input;
+      let observationTargetSessionId;
       try {
-        input = parseAdmitPromptRequest(await readJson(c));
+        const body = await readJson(c);
+        input = parseAdmitPromptRequest(body);
+        // The protocol joins adjacent text items. Only the original first item can authorize observation.
+        const firstItem = Array.isArray(body.items) ? body.items[0] : input.items[0];
+        observationTargetSessionId = parseSessionObservationTarget(firstItem, input.items[0]);
       } catch (error) {
         return protocolValidationErrorResponse(error);
       }
@@ -43,6 +49,7 @@ export function createRunExecutionRoutes(
       try {
         const admitted = await context.application.admitPrompt(sessionId, {
           ...input,
+          ...(observationTargetSessionId === undefined ? {} : { observationTargetSessionId }),
           traceId: context.traces.get(c.req.raw),
         });
         return jsonResponse(admitted, 202);

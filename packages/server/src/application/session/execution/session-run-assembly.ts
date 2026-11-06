@@ -5,6 +5,7 @@ import type { AgentPool } from "../../agent/agent-pool.js";
 import type { SessionEventPublisher } from "../transcript/session-event-publisher.js";
 import { RunAdmissionService, type RunAdmissionRuntimeQueue } from "./run-admission-service.js";
 import { RunControlService, type RunControlRuntime } from "./run-control-service.js";
+import { createSessionObservationGrant } from "./session-observation-grant.js";
 import { SessionRunEngine } from "./session-run-engine.js";
 import type { SessionRunExecutor } from "./session-run-executor.js";
 
@@ -13,7 +14,7 @@ export interface SessionRunAssemblyOptions {
   children?: { interruptRun(sessionId: string, runId: string, reason?: string): Promise<boolean>; waitRun?(sessionId: string, runId: string): Promise<void> };
   pendingPermissionId?: (sessionId: string) => string | undefined;
   preemptAutoReview?: (sessionId: string) => void;
-  store: Pick<SessionStore, "conversations" | "conversationTransactions" | "runs" | "sessions" | "transaction">;
+  store: Pick<SessionStore, "channels" | "conversations" | "conversationTransactions" | "runs" | "sessions" | "transaction">;
   goals: GoalOperations;
   agentPool: AgentPool;
   runExecutor: Pick<SessionRunExecutor, "execute">;
@@ -77,6 +78,8 @@ export function assembleSessionRunServices(options: SessionRunAssemblyOptions): 
     materializeSteerInput: options.materializeSteerInput,
   });
   admission = new RunAdmissionService({
+    createObservationGrant: (source, target, afterSeq) =>
+      createSessionObservationGrant(options.store, source, target, afterSeq, runtime.activeRunId(target)),
     materializePluginAppContexts: options.materializePluginAppContexts,
     sessionQueries: { getSession: (sessionId) => options.store.sessions.get(sessionId) },
     conversationTransactions: {

@@ -28,6 +28,7 @@
 - [子 Agent 流程](./agent-child-session-flow.md)：创建、等待、继续输入、预算、关闭和持久记录；预算反馈的[设计](./superpowers/specs/2026-10-28-child-budget-feedback-design.md)与[实施验收](./superpowers/plans/2026-10-28-child-budget-feedback.md)已落地，真实模型与实际样式仍待验证。
 - [Workflow 调度流程](./coordinator-hard-scheduler-flow.md)、[Coordinator Agent 定义](./coordinator-agents-design.md)：步骤依赖、并发、重试、预算与实际执行。
 - [Jobs 协议](./jobs-protocol.md)：统一读取、等待、输入和取消后台工作。
+- [跨会话进度观察](./product-surface-integration.md#在当前对话观察另一条会话)说明如何授权当前 Agent 查看另一条会话的一轮运行。
 - [Workflow CLI](./workflow-cli.md)：项目文件命令与 daemon SQLite 运行的区别。
 - [权限流程](./permission-flow.md)：审批请求、决定、取消、三档授权与独立计划模式。
 - [Native/WSL 执行流程](./sandbox-runtime-flow.md)、[运行环境与 SRT 配置](./sandbox-runtime-design.md)：文件与命令在哪里执行，以及本机可选限制。

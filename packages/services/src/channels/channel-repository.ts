@@ -60,6 +60,11 @@ export class ChannelRepository {
     return row ? externalConversationFromRow(row) : undefined;
   }
 
+  hasConversationSession(sessionId: string): boolean {
+    return this.storage.database.orm.select({ id: externalConversations.id }).from(externalConversations)
+      .where(eq(externalConversations.sessionId, sessionId)).get() !== undefined;
+  }
+
   upsertConversation(input: UpsertExternalConversationInput): ExternalConversationRecord {
     this.storage.assertWritable();
     if (!this.storage.state.sessions[input.sessionId]) {
