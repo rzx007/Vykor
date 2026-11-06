@@ -13,6 +13,8 @@ import { jsonEqual, normalizeTraceId, withoutTraceId } from "../../support.js";
 import { admitPromptWork, inputItems, validateOutputSchemaRequest, outputSchemaMetadata, readStoredOutputSchema } from "./run-admission-work.js";
 import { SessionApplicationError } from "../session-application-error.js";
 
+import type { SessionObservationGrant } from "./session-observation-grant.js";
+
 function hasPluginCapability(items: readonly SessionUserInputItem[]): boolean {
   return items.some(
     (item) =>
@@ -24,6 +26,7 @@ export interface AdmitPromptInput {
   pluginAppContexts?: import("../plugins/plugin-app-inputs.js").PluginAppConversationRequest[];
   id?: string;
   delivery?: "queue" | "steer";
+  observationTargetSessionId?: string;
   outputSchema?: Record<string, unknown>;
   items: SessionUserInputItem[];
   content?: string;
@@ -177,6 +180,7 @@ export interface RunAdmissionMaterializer {
 }
 
 export interface RunAdmissionServiceOptions {
+  createObservationGrant?(sourceSessionId: string, targetSessionId: string, afterSeq: number): SessionObservationGrant;
   materializePluginAppContexts?(sessionId: string, value: unknown): Promise<{ items: SessionUserInputItem[]; assertCurrent(): void }>;
   sessionQueries?: RunAdmissionSessionQueries;
   conversationTransactions: RunAdmissionConversationTransactions;
@@ -202,6 +206,7 @@ export class RunAdmissionService {
       delivery: "queue" | "steer";
       items: SessionUserInputItem[];
       attachmentFingerprint: string;
+      observationTargetSessionId?: string;
       pluginAppContexts?: import("../plugins/plugin-app-inputs.js").PluginAppConversationRequest[];
       metadata: Record<string, unknown>;
       promise: Promise<AdmitPromptResult>;
@@ -545,13 +550,18 @@ export class RunAdmissionService {
     if (!this.accepting) {
       return Promise.reject(new Error("Session run engine is stopping"));
     }
+    if (input.delivery === "steer" && input.observationTargetSessionId !== undefined) {
+      throw new SessionApplicationError(409, "observe-session requires a queued Run");
+    }
     if (input.delivery === "steer" && hasPluginCapability(inputItems(input))) {
       return Promise.reject(new Error("session_capability_requires_queued_run"));
     }
-    if (!input.runMetadata?.goalId) {
-      this.prioritizeUserInput(sessionId);
-    }
-    if (!input.id) return admitPromptWork(this.options, sessionId, input);
+    const prioritize = () => {
+      if (!input.runMetadata?.goalId) this.prioritizeUserInput(sessionId);
+    };
+    if (input.observationTargetSessionId === undefined) prioritize();
+    const admit = () => admitPromptWork(this.options, sessionId, input, prioritize);
+    if (!input.id) return admit();
 
     const attachments = normalizePromptAttachments(input.attachments);
     const delivery =
@@ -565,6 +575,7 @@ export class RunAdmissionService {
       if (
         pending.sessionId !== sessionId ||
         pending.delivery !== delivery ||
+        pending.observationTargetSessionId !== input.observationTargetSessionId ||
         !jsonEqual(pending.items, inputItems(input)) ||
         pending.attachmentFingerprint !== attachmentFingerprint ||
         !jsonEqual(pending.pluginAppContexts, input.pluginAppContexts) ||
@@ -578,7 +589,7 @@ export class RunAdmissionService {
       return pending.promise;
     }
     let failed = false;
-    const promise = admitPromptWork(this.options, sessionId, input).catch(error => {
+    const promise = admit().catch(error => {
       failed = true;
       throw error;
     }).finally(() => {
@@ -593,6 +604,7 @@ export class RunAdmissionService {
       delivery,
       items: inputItems(input),
       attachmentFingerprint,
+      observationTargetSessionId: input.observationTargetSessionId,
       pluginAppContexts: input.pluginAppContexts,
       metadata,
       promise,

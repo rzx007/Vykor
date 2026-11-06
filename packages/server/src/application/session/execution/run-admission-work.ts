@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { assertSupportedOutputSchema } from "@vykor/agent-runtime";
 import { SessionApplicationError } from "../session-application-error.js";
+import { readSessionObservationGrant } from "./session-observation-grant.js";
 import { normalizeSessionUserInputItems, sessionUserInputText } from "@vykor/domain-contracts/inputs";
 import type { SessionUserInputItem } from "@vykor/domain-contracts/inputs";
 import { AttachmentError, normalizePromptAttachments, promptAttachmentFingerprint } from "@vykor/services";
@@ -55,6 +56,7 @@ export async function admitPromptWork(
   options: RunAdmissionServiceOptions,
   sessionId: string,
   input: AdmitPromptInput,
+  prioritizeObservation: () => void,
 ): Promise<AdmitPromptResult> {
   if (input.pluginAppContexts?.length) {
     if (!options.materializePluginAppContexts || input.delivery === "steer") throw new Error("plugin_app_context_unavailable");
@@ -75,14 +77,19 @@ export async function admitPromptWork(
     normalizeTraceId(input.metadata?.traceId) ??
     randomUUID();
   const metadata = { ...outputSchemaMetadata(input.metadata, input.outputSchema), traceId };
-  const runMetadata = { ...outputSchemaMetadata(input.runMetadata, input.outputSchema), traceId };
+  const runMetadata: Record<string, unknown> = { ...outputSchemaMetadata(input.runMetadata, input.outputSchema), traceId };
   const existingInput = input.id
     ? options.conversationTransactions.getInput(input.id)
     : undefined;
 
   if (existingInput) {
+    const existingRun = options.runOperations.findRunByInput(existingInput.id);
+    const observationTarget = existingRun?.inputId === existingInput.id
+      ? readSessionObservationGrant(existingRun)?.targetSessionId
+      : undefined;
     if (
       existingInput.sessionId !== sessionId ||
+      observationTarget !== input.observationTargetSessionId ||
       !jsonEqual(existingInput.items, inputItems(input)) ||
       existingInput.delivery !== delivery ||
       promptAttachmentFingerprint(
@@ -104,7 +111,6 @@ export async function admitPromptWork(
         `Prompt id is already used: ${input.id}`,
       );
     }
-    const existingRun = options.runOperations.findRunByInput(existingInput.id);
     if (!existingRun && options.runtimeQueue.hasRuntime) {
       const before = options.events.checkpoint();
       const recovered = options.runOperations.createRun({
@@ -127,7 +133,15 @@ export async function admitPromptWork(
     };
   }
 
-  const before = options.events.checkpoint();
+  let before = options.events.checkpoint();
+  if (input.observationTargetSessionId !== undefined) {
+    if (!options.runtimeQueue.hasRuntime || !options.createObservationGrant) {
+      throw new SessionApplicationError(409, "observe-session requires an available session runtime");
+    }
+    runMetadata.sessionObservationGrant = options.createObservationGrant(sessionId, input.observationTargetSessionId, before);
+    prioritizeObservation();
+    before = options.events.checkpoint();
+  }
   if (delivery === "queue" && options.runtimeQueue.hasRuntime) {
     const admission = {
       prompt: {

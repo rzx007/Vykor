@@ -1,3 +1,4 @@
+import { readSessionObservationGrant } from "./session-observation-grant.js";
 import type { AppendEventInput } from "@vykor/services";
 import type { SessionEventRecord, SessionInputRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRunRecord } from "@vykor/domain-contracts/sessions";
 import type { SessionGoal } from "@vykor/domain-contracts/goals";
@@ -292,6 +293,9 @@ export class RunControlService {
     }
     if (!queuedRun || queuedRun.sessionId !== sessionId) {
       throw new SessionApplicationError(404, `Session run not found: ${queuedRunId}`);
+    }
+    if (readSessionObservationGrant(queuedRun)) {
+      throw new SessionApplicationError(409, "observe-session requires a queued Run and cannot be promoted");
     }
     const promotion = queuedRun.metadata?.promotion;
     if (

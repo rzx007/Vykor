@@ -13,6 +13,7 @@ import type { GoalReadSnapshot } from "../../goals/goal-read-tool.js";
 import {
   isAgentExecutionLimitError,
   type AgentExecutionLimits,
+  type ToolDefinition,
 } from "@vykor/agent-contracts";
 import { type ContentBlock } from "@vykor/agent-contracts";
 import { type ModelInputCapabilities } from "@vykor/host-config";
@@ -27,6 +28,7 @@ import type { AgentPool } from "../../agent/agent-pool.js";
 import type { SessionAutoReviewService } from "../../auto-review/session-auto-review-service.js";
 import { RunStallWatchdog } from "./run-stall-watchdog.js";
 import { readStoredOutputSchema } from "./run-admission-work.js";
+import { readSessionObservationGrant, type SessionObservationGrant } from "./session-observation-grant.js";
 import type { SessionPostRunMaintenance } from "../maintenance/session-post-run-maintenance.js";
 import type { SessionEventPublisher } from "../transcript/session-event-publisher.js";
 import type { SessionTranscriptProjection } from "../transcript/transcript-projection.js";
@@ -74,6 +76,7 @@ export interface SessionRunExecutorContext {
     | "releaseAttachmentLeases"
   >;
   goals: Pick<GoalOperations, "getGoal">;
+  createSessionObservationTool?(input: ExecuteSessionRunInput, grant: SessionObservationGrant): ToolDefinition;
   checkGoalExecution?(goalId: string, objectiveVersion: number): void;
   checkGoalRunExecution?(
     goalId: string,
@@ -454,16 +457,47 @@ export class SessionRunExecutor {
         workContext.signal,
       );
 
+      let contribution = goalBinding ? await createGoalRunContribution(goalBinding) : undefined;
+      let preparedCapabilities = capabilityView;
+      const observationGrant = readSessionObservationGrant(storedRun);
+      const observationTool = observationGrant && this.context.createSessionObservationTool?.(input, observationGrant);
+      if (observationTool) {
+        if (preparedCapabilities?.tools.has(observationTool.name)) {
+          // The explicit observation request owns this name for the current Run.
+          const tools = new Map(preparedCapabilities.tools);
+          tools.delete(observationTool.name);
+          preparedCapabilities = { ...preparedCapabilities, tools };
+        }
+        const permitted = () => host?.permitsHostRunTool?.(observationTool);
+        if (await permitted()) {
+          const definition: ToolDefinition = {
+            ...observationTool,
+            async execute(toolInput, toolContext) {
+              if (await permitted()) {
+                const result = await observationTool.execute(toolInput, toolContext);
+                if (await permitted()) return result;
+              }
+              return {
+                isError: true,
+                content: [{ type: "text", text: "SessionObserve is unavailable under the current tool policy." }],
+              };
+            },
+          };
+          contribution = {
+            ...contribution,
+            tools: [...(contribution?.tools ?? []), { definition, permission: "host-internal" }],
+          };
+        }
+      }
+
       // 把 store 里已有的 inputId/runId/traceId 传进去，投影层才能把流式事件对上这条 durable run。
       // 不要让 agent 自己再生成一套 id，否则 SSE 里的 run 和 HTTP 回的 run 会对不上。
       const run = agent.submitMessage(submittedContent, {
         ...(outputSchema ? { outputContract: { schema: outputSchema } } : {}),
-        ...(capabilityView
-          ? { preparation: host!.plugins.prepareRun(capabilityView) }
+        ...(preparedCapabilities
+          ? { preparation: host!.plugins.prepareRun(preparedCapabilities) }
           : {}),
-        ...(goalBinding
-          ? { contribution: await createGoalRunContribution(goalBinding) }
-          : {}),
+        ...(contribution ? { contribution } : {}),
         ...(limits ? { limits } : {}),
         inputItems: admitted.items,
         signal: workContext.signal,

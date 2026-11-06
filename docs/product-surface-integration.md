@@ -39,6 +39,19 @@ TUI、Web、Desktop 和 IDE 共用 `@rzx/client` 的会话同步；CLI、TUI、D
 
 界面可以先显示“正在提交”，但服务端返回 Input/Run 后必须用服务端 ID 和状态替换临时 UI 状态。
 
+## 在当前对话观察另一条会话
+
+在 Desktop 目标会话的「更多 → 复制」菜单复制会话 ID。回到当前会话，把下面两行作为一条普通排队消息发送。TUI、CLI 和 HTTP Client SDK（`@rzx/client`）也可以提交同样的文本。
+
+```text
+observe-session <目标会话 ID>
+等这轮测试结束，再检查当前项目的调用。
+```
+
+后台服务在接纳消息时固定目标当时的一轮运行。当前 Agent 可立即查看状态，或短时等待其结束、请求审批或提出问题。等待超时会返回当时的状态。目标若需要处理，请回到目标会话操作。观察工具仍受当前会话的工具权限限制。
+
+这项授权只属于当前消息创建的运行，适用于同一后台服务上的两个独立持久会话。子会话、分叉、临时会话与渠道会话由各自入口管理。设计与验收见[跨会话观察设计](./superpowers/specs/2026-11-06-session-observation-design.md)和[实施计划](./superpowers/plans/2026-11-06-session-observation.md)。
+
 ## CLI
 
 CLI 的 headless prompt 和 TUI 都走 daemon。CLI 可以负责启动本机 daemon、选择输出格式和把最终结果映射为退出码，但不再读取旧项目 Session snapshot 来恢复对话。

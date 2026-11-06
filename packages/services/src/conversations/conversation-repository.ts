@@ -365,6 +365,21 @@ export class ConversationRepository {
     return clone(events);
   }
 
+  wasObservationTargetCreatedAfter(sessionId: string, runId: string | null, afterSeq: number): boolean {
+    const events = this.storage.state.events;
+    for (let index = events.length - 1; index >= 0; index--) {
+      const event = events[index]!;
+      if (event.seq <= afterSeq) break;
+      if (event.sessionId !== sessionId) continue;
+      if (event.type === "session.created") return true;
+      if (runId !== null && event.type === "session.run.created") {
+        const run = event.payload.run;
+        if (run && typeof run === "object" && "id" in run && run.id === runId) return true;
+      }
+    }
+    return false;
+  }
+
   latestEventSeq(): number {
     return this.storage.state.nextEventSeq - 1;
   }

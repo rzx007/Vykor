@@ -19,6 +19,7 @@ import {
 import { isRecord, jsonEqual, withoutTraceId } from "../../support.js";
 import { SessionApplicationError } from "../session-application-error.js";
 import { inputItems, validateOutputSchemaRequest, readStoredOutputSchema } from "../execution/run-admission-work.js";
+import { isObservableSession } from "../execution/session-observation-grant.js";
 import { materializeSessionInput } from "./session-input-materializer.js";
 import { conversationContextCatalog } from "../transcript/session-conversation-context.js";
 import { capturePluginSelectionPolicy, emptyPluginScope } from "../plugins/session-plugin-selection.js";
@@ -226,6 +227,10 @@ export class SessionInteractionService {
     originalInput: AdmitPromptInput,
   ): Promise<AdmitPromptResult> {
     const sessionId = session.id;
+    if (originalInput.observationTargetSessionId !== undefined &&
+        (!isObservableSession(session) || this.context.liveChildren.has(sessionId))) {
+      throw new SessionApplicationError(409, "observe-session requires an available, durable root source session");
+    }
     const items = inputItems(originalInput);
     const hasPluginCandidates = items.some(
       (item) => item.type === "capability" || item.type === "skill",

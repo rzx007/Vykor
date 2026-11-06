@@ -177,6 +177,11 @@ class RuntimeToolRegistry implements IToolRegistry {
   }
 }
 
+/** Check a host contribution against the current runtime's tool and environment limits. */
+export function isRuntimeToolPermitted(registry: IToolRegistry, tool: ToolDefinition): boolean {
+  return registry instanceof RuntimeToolRegistry && registry.isVisible(tool);
+}
+
 /** Host-only registration catalogue: presentation-independent, with the original execution policy. */
 export function getTrustedToolCatalogue(registry: IToolRegistry): IToolRegistry {
   return registry instanceof RuntimeToolRegistry ? registry.trustedCatalogue() : registry;

@@ -3079,7 +3079,7 @@
     {
       "path": "packages/domain-contracts/src/inputs/metadata.ts",
       "line": 20,
-      "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\", \"pluginAppAction\", \"pluginAppSubmission\", \"pluginAppSource\"]) {",
+      "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\", \"pluginAppAction\", \"pluginAppSubmission\", \"pluginAppSource\", \"sessionObservationGrant\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
@@ -3570,37 +3570,37 @@
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 14,
+      "line": 15,
       "text": "import { PluginUiHistoryService } from \"./session/plugins/plugin-ui-history-service.js\";",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 15,
+      "line": 16,
       "text": "import { retirePluginUiActions } from \"./recovery/retire-plugin-ui-actions.js\";",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 186,
+      "line": 187,
       "text": "  readonly pluginUiHistory?: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 239,
+      "line": 240,
       "text": "  readonly pluginUiHistory: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 424,
+      "line": 425,
       "text": "      this.pluginUiHistory = new PluginUiHistoryService({ store });",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 1111,
+      "line": 1117,
       "text": "        recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
@@ -3732,13 +3732,13 @@
     },
     {
       "path": "packages/server/src/application/session/interactions/session-interaction-service.ts",
-      "line": 462,
+      "line": 467,
       "text": "      if (Object.hasOwn(sourceRun.metadata, \"uiAction\") || Object.hasOwn(sourceRun.metadata, \"pluginAppAction\")) {",
       "reason": "Explicit generic-resume refusal for historical actions; no replay."
     },
     {
       "path": "packages/server/src/application/session/interactions/session-interaction-service.ts",
-      "line": 466,
+      "line": 471,
       "text": "          \"plugin_ui_action_not_resumable\",",
       "reason": "Explicit generic-resume refusal for historical actions; no replay."
     },

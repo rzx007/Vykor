@@ -10,6 +10,8 @@
 
 插件界面操作通过引擎的 `enqueueHostWork` 加入同一个队列，共用排序、取消和等待；它不接收补充输入，也不执行模型或结算 Goal。`SessionOperationRunner` 仍单独串行处理准入时的状态操作，不持有长任务队列。两者的职责不合并。
 
+普通提示显式选择另一会话时，接纳服务把目标和当时选中的 Run 写入新运行。执行器为该运行注入 `SessionObserve`。工具从现有运行和审批记录构造状态，并使用事件流等待变化。用户入口见[跨会话进度观察](../../../../../../docs/product-surface-integration.md#在当前对话观察另一条会话)。
+
 ## 状态归属
 
 输入和运行结果通过存储保存；活跃 Agent、取消信号与计时器由注入的运行资源及本目录服务持有。
@@ -26,6 +28,8 @@
 | [run-auto-review.ts](./run-auto-review.ts) | `captureAutoReviewBaseline`、`reviewAutoReview`、`settleUnreviewedAutoReview` |
 | [run-control-service.ts](./run-control-service.ts) | `RunControlDurableSessions`、`RunControlDurableRuns`、`RunControlDurableInputs`、`RunControlRuntime` 等 |
 | [run-stall-watchdog.ts](./run-stall-watchdog.ts) | `RunStallWatchdogOptions`、`RunStallWatchdog` |
+| [session-observation-grant.ts](./session-observation-grant.ts) | 首行指令、目标选择和每轮授权 |
+| [session-observation-tool.ts](./session-observation-tool.ts) | 只读状态、人工待办和短时等待 |
 | [session-run-assembly.ts](./session-run-assembly.ts) | `SessionRunAssemblyOptions`、`assembleSessionRunServices` |
 | [session-run-engine.ts](./session-run-engine.ts) | `SessionRunEngineContext`、`SessionRunEngine` |
 | [session-run-executor-assembly.ts](./session-run-executor-assembly.ts) | `SessionRunExecutorAssemblyOptions`、`assembleSessionRunExecutor` |
