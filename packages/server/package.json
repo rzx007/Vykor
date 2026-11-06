@@ -46,6 +46,7 @@
     "@vykor/terminal-node": "workspace:*",
     "@vykor/tools": "workspace:*",
     "hono": "catalog:",
+    "proper-lockfile": "4.1.2",
     "@vykor/agent-contracts": "workspace:*",
     "@vykor/host-config": "workspace:*",
     "@vykor/execution-node": "workspace:*",
@@ -55,6 +56,7 @@
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@types/proper-lockfile": "4.1.4",
     "typescript": "^5.7.3",
     "vitest": "catalog:"
   }

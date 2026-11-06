@@ -18,6 +18,8 @@ export interface VykorClientOptions {
 }
 
 export interface VykorServerHealth {
+  ready?: boolean;
+  restartPrepared?: boolean;
   ok: true;
   version?: string;
   startedAt: number;

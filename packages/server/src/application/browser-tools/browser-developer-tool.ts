@@ -1,5 +1,6 @@
 import type { ToolDefinition, ToolResult } from "@vykor/agent-contracts";
 import type { BrowserDeveloperAction, BrowserHost } from "./browser-host.js";
+import { browserBridgeFailure } from "./browser-bridge.js";
 
 /** Final server-side ceiling on one developer tool response. */
 export const BROWSER_DEVELOPER_MAX_RESULT_BYTES = 48 * 1024;
@@ -13,7 +14,7 @@ export function createBrowserDeveloperTool(host: BrowserHost | undefined): ToolD
   return {
     name: DEVELOPER_TOOL_NAME,
     description: available
-      ? "Inspect the active desktop browser tab for troubleshooting: DOM structure, computed styles, and bounded console/network diagnostics. Each inspection requests operation permission under the current session approval policy; this tool cannot run arbitrary JavaScript or raw CDP commands."
+      ? "Inspect the active desktop browser tab for troubleshooting when Desktop is connected and this session is open there: DOM structure, computed styles, and bounded console/network diagnostics. Each inspection requests operation permission under the current session approval policy; this tool cannot run arbitrary JavaScript or raw CDP commands."
       : "Browser developer inspection is unavailable in this runtime because the desktop browser host does not support it. Do not call this tool.",
     inputSchema: {
       type: "object",
@@ -50,20 +51,27 @@ export function createBrowserDeveloperTool(host: BrowserHost | undefined): ToolD
         return failed("This host cannot request browser developer permissions.");
       }
 
-      const ask = async (toolName: "Browser" | "BrowserDeveloper", reason: string) =>
-        (await context.requestPermission!({
+      const ask = async (toolName: "Browser" | "BrowserDeveloper", reason: string, signal?: AbortSignal) => {
+        const request = {
           toolName,
           reason,
           input: { action: action.action },
-        }))?.status === "approved";
+        };
+        const decision = signal
+          ? await context.requestPermission!(request, { signal })
+          : await context.requestPermission!(request);
+        return decision?.status === "approved";
+      };
 
       try {
         const result = await host.executeDeveloper({
           action,
           sessionId: context.sessionId,
           cwd: context.cwd,
-          approveOrigin: (reason) => ask("Browser", reason),
-          approveDeveloper: (reason) => ask(DEVELOPER_TOOL_NAME, reason),
+          signal: context.abortSignal,
+          deadlineAt: context.deadlineAt,
+          approveOrigin: (reason, signal) => ask("Browser", reason, signal),
+          approveDeveloper: (reason, signal) => ask(DEVELOPER_TOOL_NAME, reason, signal),
         });
         const serialized = JSON.stringify(result);
         if (Buffer.byteLength(serialized, "utf8") > BROWSER_DEVELOPER_MAX_RESULT_BYTES) {
@@ -73,7 +81,7 @@ export function createBrowserDeveloperTool(host: BrowserHost | undefined): ToolD
         }
         return { content: [{ type: "text", text: serialized }] };
       } catch (error) {
-        return failed(error instanceof Error ? error.message : String(error));
+        return { ...failed(error instanceof Error ? error.message : String(error)), ...browserBridgeFailure(error) };
       }
     },
   };

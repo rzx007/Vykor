@@ -31,6 +31,7 @@ export interface SystemRoutesContext {
   memoryManagementReady?: boolean;
   pluginAppsReady?: boolean;
   sessionFilesReady?: boolean;
+  browserBridgeReady?: () => boolean;
   pluginLifecycle?: PluginLifecycle;
   version?: string;
   commandCatalog?: CommandCatalogProvider;
@@ -98,6 +99,7 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
               attachments: 1,
               pluginCapabilities: 1,
               ...(context.pluginAppsReady ? { pluginApps: 1 } : {}),
+              ...(context.browserBridgeReady?.() ? { browserBridge: 1 } : {}),
               mcpOAuth: 1,
               executionObservability: 1,
               structuredDelivery: 1,

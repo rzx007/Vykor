@@ -1,141 +1,104 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { DaemonOperationGate } from "../../../../../../packages/server/src/application/control/daemon-operation-gate"
+import type { ServiceEndpoint } from "@vykor/application-client/service"
 
-const state = vi.hoisted(() => ({ registry: undefined as unknown, preview: { runs: [] as unknown[], tasks: [] as unknown[], terminals: [] as unknown[] }, terminals: [] as Array<{ id: string; status: string }>, safeRestart: 0, prepareError: "", prepared: false, onPrepare: undefined as (() => void) | undefined }))
-const host = vi.hoisted(() => ({
-  readDaemonRegistry: vi.fn(() => state.registry), clearDaemonRegistry: vi.fn(() => { state.registry = undefined }),
-  writeDaemonRegistry: vi.fn(value => { state.registry = value }), createBearerToken: () => "test-token",
-  createDaemonRegistryEntry: (value: unknown) => value, startVykorDaemon: vi.fn(), shouldStartManagedDaemon: async () => false,
+const state = vi.hoisted(() => ({
+  endpoint: undefined as ServiceEndpoint | undefined,
+  supervised: false,
+  prepare: vi.fn(async () => ({ prepared: true })),
+  requestSwitch: vi.fn(),
+  result: vi.fn(),
+  stop: vi.fn(),
 }))
-vi.mock("electron", () => ({ app: { getVersion: () => "1", getPath: () => "D:/test" }, BrowserWindow: { getAllWindows: () => [] } }))
-vi.mock("@vykor/server/daemon-host", () => host)
-vi.mock("../daemon-autostart/daemon-surface", () => ({ isDesktopManagedRegistry: (value: { executionSurface: string }) => value.executionSurface === "desktop_managed", isLoopbackDaemonUrl: (url: string) => new URL(url).hostname === "127.0.0.1" }))
-vi.mock("../daemon-autostart/daemon-takeover", () => ({ stopNonDesktopDaemon: vi.fn(), reconcileDesktopManagedService: vi.fn() }))
-vi.mock("@vykor/application-client", () => ({ VykorClient: class {
-  protocol = { health: async () => ({ activeRunCount: 0, queuedRunCount: 0 }), capabilities: async () => ({ features: { safeRestart: state.safeRestart } }) }
-  projects = { list: async () => [] }
-  system = { getRestartPreview: async () => state.preview, prepareRestart: async () => { if (state.prepareError) throw new Error(state.prepareError); state.prepared = true; state.onPrepare?.(); return { prepared: true } } }
-  terminals = { list: async () => state.terminals, close: async () => {} }
-  sessions = { list: async () => [], interrupt: async () => {} }
+vi.mock("electron", () => ({
+  app: { getPath: () => "D:/test" },
+  BrowserWindow: { getAllWindows: () => [] },
+}))
+vi.mock("@vykor/application-client/service", () => ({ Service: {
+  discover: async () => state.endpoint,
+  clientOptions: (endpoint: ServiceEndpoint) => ({ baseUrl: endpoint.url, token: endpoint.token }),
 } }))
+vi.mock("@vykor/server/daemon-host", () => ({
+  readDaemonRegistry: () => ({ ...state.endpoint, supervised: state.supervised }),
+  readRegisteredDataLocation: async () => undefined,
+  getDaemonRegistryPath: () => "registry.json",
+  stopDaemonProcess: state.stop,
+  withDaemonControlLock: (action: (signal: AbortSignal) => Promise<unknown>) => action(new AbortController().signal),
+  shouldStartManagedDaemon: async () => false,
+}))
+vi.mock("../daemon-autostart/daemon-autostart-service", () => ({ createDesktopDaemonSystemService: vi.fn() }))
+vi.mock("@vykor/application-client", () => ({ VykorClient: class {
+  protocol = { capabilities: async () => ({ features: { browserBridge: 1 } }) }
+  system = { prepareRestart: state.prepare, requestDataSwitch: state.requestSwitch, getDataSwitchResult: state.result }
+} }))
+
 import { DaemonConnectionService } from "./daemon-connection-service"
 
-let directory: string
-let previousDataDir: string | undefined
-function fakeServer(path: string, gate = new DaemonOperationGate(), closeWait = Promise.resolve()) {
-  return { store: { path }, application: { control: { acquireGlobalMutation: () => gate.tryEnterBarrier({ kind: "global" }, () => true) } },
-    close: vi.fn(async () => { const drained = gate.beginShutdown(); await closeWait; await drained; gate.markClosed() }) }
-}
+let folder: string
+let original: ServiceEndpoint
 beforeEach(() => {
-  vi.clearAllMocks(); state.registry = undefined; state.preview = { runs: [], tasks: [], terminals: [] }; state.terminals = []
-  state.safeRestart = 0; state.prepareError = ""; state.prepared = false; state.onPrepare = undefined
-  previousDataDir = process.env.VYKOR_DATA_DIR
-  directory = mkdtempSync(join(tmpdir(), "vykor-lifecycle-test-"))
+  vi.clearAllMocks()
+  folder = mkdtempSync(join(tmpdir(), "vykor-desktop-switch-"))
+  original = {
+    file: "registry.json", pid: 42, url: "http://127.0.0.1:4000", token: "original",
+    version: "1.0.0", startedAt: 1, storePath: join(folder, "original.db"),
+  }
+  state.endpoint = original
+  state.supervised = false
 })
-afterEach(() => {
-  if (previousDataDir === undefined) delete process.env.VYKOR_DATA_DIR; else process.env.VYKOR_DATA_DIR = previousDataDir
-  rmSync(directory, { recursive: true, force: true })
-})
-async function embeddedService(server = fakeServer(join(directory, "original.db"))) {
-  host.startVykorDaemon.mockResolvedValue({ server, listen: { url: "http://127.0.0.1:7777" } })
-  const service = new DaemonConnectionService({ dataLocationPath: join(directory, "location.json") })
-  await service.getClient()
-  return { service, server }
-}
-describe("daemon lifecycle settings", () => {
-  it("allows a restart after all terminal processes have exited", async () => {
-    const { service } = await embeddedService()
-    state.terminals = [{ id: "old", status: "completed" }, { id: "closed", status: "killed" }]
+afterEach(() => rmSync(folder, { force: true, recursive: true }))
+
+describe("independent daemon maintenance", () => {
+  it("waits for daemon approval before stopping and reattaches to a new endpoint", async () => {
+    const service = new DaemonConnectionService()
+    await service.getClient()
+    state.stop.mockImplementationOnce(async () => {
+      state.endpoint = { ...original, pid: 43, token: "replacement", startedAt: 2 }
+    })
     await expect(service.restart()).resolves.toBeDefined()
+    expect(state.prepare.mock.invocationCallOrder[0]).toBeLessThan(state.stop.mock.invocationCallOrder[0]!)
+    expect(state.stop).toHaveBeenCalledWith(original.pid)
   })
-  it.each(["runs", "tasks", "terminals"] as const)("rejects restart while the real preview still contains active %s", async kind => {
-    const { service, server } = await embeddedService()
-    state.preview[kind] = [{ id: "active", status: "running" }]
-    await expect(service.restart()).rejects.toThrow(/任务|终端/)
-    expect(server.close).not.toHaveBeenCalled()
-    state.preview[kind] = []
-    await expect(service.restart()).resolves.toBeDefined()
+
+  it("keeps the running daemon if safe preparation is rejected", async () => {
+    const service = new DaemonConnectionService()
+    const client = await service.getClient()
+    state.prepare.mockRejectedValueOnce(new Error("仍有活动任务"))
+    await expect(service.restart()).rejects.toThrow(/活动任务/)
+    expect(state.stop).not.toHaveBeenCalled()
+    await expect(service.getClient()).resolves.toBe(client)
   })
-  it("refuses shutdown if a task starts after the remote idle check", async () => {
-    const gate = new DaemonOperationGate()
-    const { service, server } = await embeddedService(fakeServer(join(directory, "original.db"), gate))
-    const work = gate.enter({ sessionId: "new-run", cwd: "D:/project" })
-    await expect(service.restart()).rejects.toThrow(/任务|收尾/)
-    expect(server.close).not.toHaveBeenCalled()
-    work.release()
-  })
-  it("seals admission before releasing maintenance protection without deadlocking shutdown", async () => {
-    const gate = new DaemonOperationGate()
-    let releaseClose!: () => void
-    const wait = new Promise<void>(resolve => { releaseClose = resolve })
-    const { service, server } = await embeddedService(fakeServer(join(directory, "original.db"), gate, wait))
-    const restart = service.restart()
-    await vi.waitFor(() => expect(server.close).toHaveBeenCalledOnce())
-    expect(() => gate.enter({ sessionId: "late", cwd: "D:/project" })).toThrow(/closing/)
-    await expect(service.getClient()).rejects.toThrow(/重启|切换/)
-    releaseClose()
-    await expect(restart).resolves.toBeDefined()
-  })
-  it("serializes data switches with restart and leaves one persisted target", async () => {
-    const first = join(directory, "a.db"), second = join(directory, "b.db")
-    writeFileSync(first, ""); writeFileSync(second, "")
-    let releaseClose!: () => void
-    const wait = new Promise<void>(resolve => { releaseClose = resolve })
-    const { service, server } = await embeddedService(fakeServer(join(directory, "original.db"), new DaemonOperationGate(), wait))
-    const switchData = service.switchDataDirectory(directory, { storePath: first })
-    await vi.waitFor(() => expect(server.close).toHaveBeenCalledOnce())
-    await expect(service.switchDataDirectory(directory, { storePath: second })).rejects.toThrow(/重启|切换/)
-    await expect(service.restart()).rejects.toThrow(/重启|切换/)
-    releaseClose()
-    await expect(switchData).resolves.toBeDefined()
-    expect(JSON.parse(readFileSync(join(directory, "location.json"), "utf8")).location.storePath).toBe(first)
-  })
-  it("refuses to kill an external resident service that has no atomic shutdown guard", async () => {
-    state.registry = { pid: 42, url: "http://127.0.0.1:8888", executionSurface: "desktop_managed" }
-    const reconcile = vi.fn(async () => {})
-    const service = new DaemonConnectionService({ reconcileDesktopService: reconcile, dataLocationPath: join(directory, "location.json") })
+
+  it("refuses to stop a registration that changed during preparation", async () => {
+    const service = new DaemonConnectionService()
     await service.getClient()
-    await expect(service.restart()).rejects.toThrow(/常驻|安全/)
-    expect(reconcile).not.toHaveBeenCalled()
-  })
-  it("restarts a supported local resident service only after safe preparation finishes", async () => {
-    state.registry = { pid: 42, url: "http://127.0.0.1:8888", token: "external", executionSurface: "desktop_managed" }
-    state.safeRestart = 1
-    const reconcile = vi.fn(async () => { expect(state.prepared).toBe(true); state.registry = { pid: 43, url: "http://127.0.0.1:9999", token: "next", executionSurface: "desktop_managed" } })
-    const service = new DaemonConnectionService({ reconcileDesktopService: reconcile, dataLocationPath: join(directory, "location.json") })
-    await service.getClient()
-    await expect(service.restart()).resolves.toBeDefined()
-    expect(reconcile).toHaveBeenCalledOnce()
-  })
-  it("never reconciles a resident service if safe preparation rejects active work", async () => {
-    state.registry = { pid: 42, url: "http://127.0.0.1:8888", token: "external", executionSurface: "desktop_managed" }
-    state.safeRestart = 1; state.prepareError = "后台任务尚未结束"
-    const reconcile = vi.fn(async () => {})
-    const service = new DaemonConnectionService({ reconcileDesktopService: reconcile, dataLocationPath: join(directory, "location.json") })
-    await service.getClient()
-    await expect(service.restart()).rejects.toThrow(/任务/)
-    expect(reconcile).not.toHaveBeenCalled()
-  })
-  it("refuses resident replacement if the registry changes during preparation", async () => {
-    state.registry = { pid: 42, url: "http://127.0.0.1:8888", token: "external", executionSurface: "desktop_managed" }
-    state.safeRestart = 1
-    state.onPrepare = () => { state.registry = { pid: 43, url: "http://127.0.0.1:9999", token: "other", executionSurface: "desktop_managed" } }
-    const reconcile = vi.fn(async () => {})
-    const service = new DaemonConnectionService({ reconcileDesktopService: reconcile, dataLocationPath: join(directory, "location.json") })
-    await service.getClient()
+    state.prepare.mockImplementationOnce(async () => {
+      state.endpoint = { ...original, pid: 43, startedAt: 2 }
+      return { prepared: true }
+    })
     await expect(service.restart()).rejects.toThrow(/变化/)
-    expect(reconcile).not.toHaveBeenCalled()
+    expect(state.stop).not.toHaveBeenCalled()
   })
-  it("refuses a remote registry target even when it advertises safe restart", async () => {
-    state.registry = { pid: 42, url: "https://remote.example", token: "external", executionSurface: "desktop_managed" }
-    state.safeRestart = 1
-    const reconcile = vi.fn(async () => {})
-    const service = new DaemonConnectionService({ reconcileDesktopService: reconcile, dataLocationPath: join(directory, "location.json") })
-    await service.getClient()
-    await expect(service.restart()).rejects.toThrow(/本机/)
-    expect(state.prepared).toBe(false); expect(reconcile).not.toHaveBeenCalled()
+
+  it.each(["succeeded", "failed"])("reconnects after a data switch finishes with %s", async status => {
+    const service = new DaemonConnectionService()
+    const oldClient = await service.getClient()
+    const storePath = join(folder, "new.db")
+    writeFileSync(storePath, "")
+    state.requestSwitch.mockImplementationOnce(async ({ id }) => {
+      state.endpoint = {
+        ...original, token: "new", startedAt: 2,
+        storePath: status === "succeeded" ? storePath : original.storePath,
+      }
+      return { id }
+    })
+    state.result.mockResolvedValueOnce({ status, error: "已恢复原数据位置" })
+    const result = service.switchDataDirectory(folder, { storePath })
+    if (status === "succeeded") await expect(result).resolves.toBeDefined()
+    else await expect(result).rejects.toThrow(/恢复原数据/)
+    expect(await service.getClient()).not.toBe(oldClient)
+    expect(state.stop).not.toHaveBeenCalled()
   })
 })

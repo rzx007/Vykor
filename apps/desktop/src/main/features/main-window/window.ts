@@ -193,7 +193,7 @@ function attachMainWindowBehavior(ctx: AppContext, win: BrowserWindow): void {
   browserAgentService.setOpenTabRequestHandler(() => {
     showMainWindow(win)
     win.webContents.send(IpcEvents.browserOpenRequest)
-  })
+  }, win.webContents.id)
   win.once("closed", () => browserAgentService.setOpenTabRequestHandler(undefined))
   const clearUnreadAttention = (): void => clearAttention(() => win)
 

@@ -1,176 +1,87 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { DaemonRegistry } from "@vykor/server/daemon-host"
+import type { ServiceEndpoint } from "@vykor/application-client/service"
 
-const clientState = vi.hoisted(() => ({ fail: false, hang: false }))
-
-const daemonHost = vi.hoisted(() => ({
-  readDaemonRegistry: vi.fn(),
-  writeDaemonRegistry: vi.fn(),
-  clearDaemonRegistry: vi.fn(),
-  createBearerToken: vi.fn(() => "token"),
-  createDaemonRegistryEntry: vi.fn((input: unknown) => input),
-  startVykorDaemon: vi.fn(),
-  shouldStartManagedDaemon: vi.fn(async () => false),
+const sdk = vi.hoisted(() => ({
+  discover: vi.fn(),
+  ensure: vi.fn(),
+  clientOptions: (endpoint: { url: string; token: string }) => ({ baseUrl: endpoint.url, token: endpoint.token }),
 }))
-
+const host = vi.hoisted(() => ({
+  readDaemonRegistry: vi.fn(),
+  readRegisteredDataLocation: vi.fn(),
+  shouldStartManagedDaemon: vi.fn(),
+  daemonPidAlive: vi.fn(),
+  stopDaemonProcess: vi.fn(),
+  getDaemonRegistryPath: () => "registry.json",
+}))
+const state = vi.hoisted(() => ({ browserBridge: 1 }))
 vi.mock("electron", () => ({
-  app: { getVersion: () => "1.0.0", getPath: () => "D:/documents" },
+  app: { isPackaged: true, getPath: () => "D:/test" },
   BrowserWindow: { getAllWindows: () => [] },
 }))
-
-vi.mock("@vykor/server/daemon-host", () => daemonHost)
-
-vi.mock("../daemon-autostart/daemon-surface", () => ({
-  isDesktopManagedRegistry: (r: { executionSurface?: string }) =>
-    r.executionSurface === "desktop_managed",
-}))
-vi.mock("../daemon-autostart/daemon-takeover", () => ({
-  stopNonDesktopDaemon: vi.fn(async () => undefined),
-  reconcileDesktopManagedService: vi.fn(async () => undefined),
-}))
-
+vi.mock("@vykor/application-client/service", () => ({ Service: sdk }))
+vi.mock("@vykor/server/daemon-host", () => host)
+vi.mock("../daemon-autostart/daemon-autostart-service", () => ({ createDesktopDaemonSystemService: vi.fn() }))
 vi.mock("@vykor/application-client", () => ({
   VykorClient: class {
-    protocol = {
-      health: async () => {
-        if (clientState.hang) return await new Promise(() => {})
-        if (clientState.fail) throw new Error("boom")
-      },
-    }
-    projects = {
-      list: async () => {
-        if (clientState.hang) return await new Promise(() => {})
-        if (clientState.fail) throw new Error("boom")
-      },
-    }
+    constructor(readonly options: { baseUrl: string; token: string }) {}
+    protocol = { capabilities: async () => ({ features: { browserBridge: state.browserBridge } }) }
   },
 }))
 
 import { DaemonConnectionService } from "./daemon-connection-service"
 
-function registry(overrides: Partial<DaemonRegistry> = {}): DaemonRegistry {
-  return {
-    url: "http://127.0.0.1:5555",
-    pid: 4242,
-    token: "tok",
-    storePath: "D:/db",
-    startedAt: 1,
-    version: "1.0.0",
-    executionSurface: "desktop_managed",
-    ...overrides,
-  }
-}
-
-const embedded = {
-  server: { store: { path: "D:/db" }, close: vi.fn() },
-  listen: { url: "http://127.0.0.1:6666" },
+const endpoint: ServiceEndpoint = {
+  file: "registry.json", url: "http://127.0.0.1:5555", pid: 4242,
+  token: "token", storePath: "D:/db", version: "1.0.0", startedAt: 1,
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
-  clientState.fail = false
-  clientState.hang = false
+  vi.resetAllMocks()
+  sdk.ensure.mockResolvedValue(endpoint)
+  host.shouldStartManagedDaemon.mockResolvedValue(false)
+  state.browserBridge = 1
 })
 
-describe("DaemonConnectionService ownership safety", () => {
-  it("keeps the registry and does NOT start an embedded daemon when the registered daemon process is still alive", async () => {
-    daemonHost.readDaemonRegistry.mockReturnValue(registry())
-    clientState.fail = true
-
-    const service = new DaemonConnectionService({ pidAlive: () => true })
-
-    await expect(service.getClient()).rejects.toThrow(/pid 4242.*unreachable/i)
-    expect(daemonHost.clearDaemonRegistry).not.toHaveBeenCalled()
-    expect(daemonHost.startVykorDaemon).not.toHaveBeenCalled()
-  })
-
-  it("reclaims the registry and starts an embedded daemon when the registered daemon process is dead", async () => {
-    daemonHost.readDaemonRegistry.mockReturnValue(registry())
-    daemonHost.startVykorDaemon.mockResolvedValue(embedded)
-    clientState.fail = true
-
-    const service = new DaemonConnectionService({ pidAlive: () => false })
-
-    await expect(service.getClient()).resolves.toBeDefined()
-    expect(daemonHost.clearDaemonRegistry).toHaveBeenCalledTimes(1)
-    expect(daemonHost.startVykorDaemon).toHaveBeenCalledTimes(1)
-    expect(daemonHost.writeDaemonRegistry).toHaveBeenCalledTimes(1)
-  })
-
-  it("connects to a healthy desktop-managed daemon without starting an embedded one", async () => {
-    daemonHost.readDaemonRegistry.mockReturnValue(registry())
-
-    const service = new DaemonConnectionService({ pidAlive: () => true })
-
-    await expect(service.getClient()).resolves.toBeDefined()
-    expect(daemonHost.startVykorDaemon).not.toHaveBeenCalled()
-  })
-
-  it("starts an embedded daemon when no registry exists", async () => {
-    daemonHost.readDaemonRegistry.mockReturnValue(undefined)
-    daemonHost.startVykorDaemon.mockResolvedValue(embedded)
-
+describe("desktop daemon connection", () => {
+  it("reuses a compatible CLI daemon and leaves it running on desktop exit", async () => {
+    sdk.discover.mockResolvedValue(endpoint)
+    host.readDaemonRegistry.mockReturnValue({ ...endpoint, launcher: "cli" })
     const service = new DaemonConnectionService()
-
     await expect(service.getClient()).resolves.toBeDefined()
-    expect(daemonHost.startVykorDaemon).toHaveBeenCalledTimes(1)
+    await service.dispose()
+    expect(sdk.ensure).not.toHaveBeenCalled()
+    expect(host.stopDaemonProcess).not.toHaveBeenCalled()
   })
 
-  it("allows a later retry after a transient connect failure instead of caching the rejection", async () => {
-    daemonHost.readDaemonRegistry.mockReturnValue(registry())
-    clientState.fail = true
+  it("uses the Electron headless entry when no daemon is registered", async () => {
+    const service = new DaemonConnectionService()
+    await expect(service.getClient()).resolves.toBeDefined()
+    expect(sdk.ensure).toHaveBeenCalledWith(expect.objectContaining({
+      command: [process.execPath, "--daemon-on-demand"],
+    }))
+  })
 
-    const service = new DaemonConnectionService({ pidAlive: () => true })
-    await expect(service.getClient()).rejects.toThrow()
-    expect(daemonHost.startVykorDaemon).not.toHaveBeenCalled()
-
-    clientState.fail = false
+  it("keeps a live unreachable registration and allows a later retry", async () => {
+    host.readDaemonRegistry.mockReturnValue(endpoint)
+    host.daemonPidAlive.mockReturnValue(true)
+    const service = new DaemonConnectionService()
+    await expect(service.getClient()).rejects.toThrow(/暂时不可达/)
+    expect(sdk.ensure).not.toHaveBeenCalled()
+    sdk.discover.mockResolvedValue(endpoint)
     await expect(service.getClient()).resolves.toBeDefined()
   })
 
-  it("honors the configured verification timeout instead of hanging", async () => {
-    daemonHost.readDaemonRegistry.mockReturnValue(registry())
-    clientState.hang = true
-
-    const service = new DaemonConnectionService({ pidAlive: () => true, verifyTimeoutMs: 20 })
-
-    await expect(service.getClient()).rejects.toThrow(/timed out/i)
-    expect(daemonHost.startVykorDaemon).not.toHaveBeenCalled()
+  it("reports a missing desktop capability without replacing an existing daemon", async () => {
+    sdk.discover.mockResolvedValue(endpoint)
+    state.browserBridge = 0
+    await expect(new DaemonConnectionService().getClient()).rejects.toThrow(/能力/)
+    expect(host.stopDaemonProcess).not.toHaveBeenCalled()
   })
 
-  it("restarts an ephemeral CLI daemon when autoStart is off", async () => {
-    daemonHost.readDaemonRegistry.mockReturnValue(registry({ executionSurface: "cli_advanced" }))
-    daemonHost.startVykorDaemon.mockResolvedValue(embedded)
-    const stop = vi.fn(async () => undefined)
-
-    const service = new DaemonConnectionService({
-      pidAlive: () => true,
-      shouldAutoStart: async () => false,
-      stopNonDesktopDaemon: stop,
-    })
-
-    await expect(service.getClient()).resolves.toBeDefined()
-    expect(stop).toHaveBeenCalledOnce()
-    expect(daemonHost.startVykorDaemon).toHaveBeenCalledOnce()
-    expect(daemonHost.writeDaemonRegistry).toHaveBeenCalledWith(
-      expect.objectContaining({ executionSurface: "desktop_managed" })
-    )
-  })
-
-  it("reconciles the OS service when autoStart is on", async () => {
-    const reconcile = vi.fn(async () => undefined)
-    daemonHost.readDaemonRegistry
-      .mockReturnValueOnce(registry({ executionSurface: "cli_advanced" }))
-      .mockReturnValue(registry())
-
-    const service = new DaemonConnectionService({
-      pidAlive: () => true,
-      shouldAutoStart: async () => true,
-      reconcileDesktopService: reconcile,
-    })
-
-    await expect(service.getClient()).resolves.toBeDefined()
-    expect(reconcile).toHaveBeenCalledOnce()
-    expect(daemonHost.startVykorDaemon).not.toHaveBeenCalled()
+  it("reports a legacy data location mismatch instead of opening the wrong database", async () => {
+    sdk.discover.mockResolvedValue(endpoint)
+    host.readRegisteredDataLocation.mockResolvedValue({ directory: "D:/new", storePath: "D:/new/sessions.db" })
+    await expect(new DaemonConnectionService().getClient()).rejects.toThrow(/数据/)
   })
 })

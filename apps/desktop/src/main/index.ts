@@ -37,6 +37,7 @@ if (daemonMode) {
   void app
     .whenReady()
     .then(() => runDesktopDaemonEntry(daemonMode))
+    .then(() => app.quit())
     .catch((error: unknown) => {
       console.error("[daemon] Desktop service failed", error)
       app.exit(1)

@@ -22,6 +22,8 @@ export interface EnsureServiceOptions extends DiscoverServiceOptions {
   /** CLI resolution and child working directory. Defaults to process.cwd(). */
   cwd?: string;
   env?: Record<string, string | undefined>;
+  /** Append the detached process output to this file when starting a service. */
+  logPath?: string;
 }
 
 export function clientOptions(endpoint: ServiceEndpoint): { baseUrl: string; token: string } {
@@ -53,7 +55,7 @@ async function probe(endpoint: ServiceEndpoint, options: DiscoverServiceOptions)
       }),
     });
     const health = await client.protocol.health({ signal });
-    if (!health.ok || health.version !== endpoint.version) return false;
+    if (!health.ok || health.ready === false || health.restartPrepared || health.version !== endpoint.version) return false;
     // This also verifies the protocol and the credential against an authenticated route.
     const sessions = await client.sessions.list({ limit: 1, signal });
     return Array.isArray(sessions);
@@ -128,7 +130,7 @@ async function startRegisteredService(options: EnsureServiceOptions & { file: st
   const command = options.command ?? await defaultCommand(cwd);
   options.signal?.throwIfAborted();
   if (Date.now() >= end) throw new Error("Vykor service startup timed out before process creation.");
-  const started = startProcess(command, cwd, env);
+  const started = startProcess(command, cwd, env, options.logPath);
   try {
     while (Date.now() < end) {
       options.signal?.throwIfAborted();

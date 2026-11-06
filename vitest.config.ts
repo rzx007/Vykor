@@ -22,6 +22,7 @@ for (const name of readdirSync(packagesDir)) {
     }
   } catch {}
 }
+aliases["@rzx/client/service"] = resolve(packagesDir, "client", "src", "service", "index.ts");
 aliases["@vykor/agent-runtime/kernel"] = resolve(packagesDir, "agent-runtime", "src", "kernel-entry.ts");
 aliases["@vykor/agent-runtime/node/workflow"] = resolve(packagesDir, "agent-runtime", "src", "workflow-entry.ts");
 

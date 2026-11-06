@@ -44,7 +44,7 @@ export function createDaemonSystemService(
 ): DaemonSystemService {
   const platform = options.platform ?? process.platform;
   const invocationArgs =
-    platform === "win32" ? ["daemon", "watchdog", ...serveArgs] : serveArgs;
+    platform === "win32" ? ["daemon", "watchdog", ...serveArgs] : [...serveArgs, "--supervised"];
   const invocation = resolveDaemonInvocation(entry, invocationArgs, options);
   return new DaemonSystemService({
     invocation: { ...invocation, cwd: options.cwd ?? process.cwd() },

@@ -18,6 +18,7 @@ export {
 } from "./lifecycle.js";
 export {
   clearDaemonRegistry,
+  clearMatchingDaemonRegistry,
   createBearerToken,
   createDaemonRegistryEntry,
   getDaemonRegistryPath,
@@ -34,3 +35,12 @@ export {
 
 export { readOfficeFile, readOfficeBytes, MAX_OFFICE_BYTES } from "@vykor/services";
 export { setHostResponseLocale } from "@vykor/agent-contracts";
+
+export {
+  parseBrowserBridgeEvent,
+  type BrowserBridgeEvent,
+} from "../application/browser-tools/browser-bridge-protocol.js";
+
+export { runRegisteredDaemon, type RegisteredDaemonControl } from "./registered-daemon.js";
+export { dataLocationFile, readDataLocationState, readRegisteredDataLocation } from "./data-location.js";
+export { acquireRegistryLease, withDaemonControlLock } from "./registry-lease.js";

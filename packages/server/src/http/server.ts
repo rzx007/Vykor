@@ -11,7 +11,9 @@ import type { AttachmentLimits } from "@vykor/protocol";
 import type { CommandCatalogProvider } from "../commands/commands.js";
 import type { DurableAgentApplication } from "../application/daemon-application.js";
 import type { AttachmentService } from "../application/attachments/attachment-service.js";
+import type { RegisteredDaemonControl } from "../daemon-host/registered-daemon.js";
 import type { BrowserHost } from "../application/browser-tools/browser-host.js";
+import { DesktopBrowserBridge } from "../application/browser-tools/browser-bridge.js";
 import { createDefaultNodeApplication } from "../application/default-node-application.js";
 import type { CreateDaemonAgent } from "../daemon/daemon-agent.js";
 import type {
@@ -50,6 +52,7 @@ import {
 import { createAuthRoutes } from "./routes/auth.js";
 import { createAttachmentRoutes } from "./routes/attachment.js";
 import { createBackgroundShellRoutes } from "./routes/background-shell.js";
+import { createBrowserHostRoutes } from "./routes/browser-host.js";
 import { createChannelRoutes } from "./routes/channel.js";
 import { createChannelControlRoutes } from "./routes/channel-control.js";
 import { createScheduleRoutes } from "./routes/schedules.js";
@@ -125,6 +128,10 @@ export interface VykorServerOptions {
   createAgent?: CreateDaemonAgent;
   /** Optional browser capability supplied by an embedding desktop application. */
   browserHost?: BrowserHost;
+  /** Enable the private browser-host route for a registered, token-protected local daemon. */
+  enableDesktopBrowser?: boolean;
+  registeredDaemonControl?: RegisteredDaemonControl;
+  deferBackgroundActivation?: boolean;
   services?: VykorServerServices;
   version?: string;
   logger?: StructuredLogger;
@@ -159,6 +166,8 @@ export class VykorHttpServer {
   private readonly jobs: DaemonJobService;
   private readonly terminalEvents: TerminalHttpEventHub;
   private readonly requestTraces = new RequestTraceRegistry();
+  private readonly browserBridge?: DesktopBrowserBridge;
+  private browserBridgeListening = false;
   private listener?: Listener;
   private listenResult?: ListenResult;
   private closePromise?: Promise<void>;
@@ -167,6 +176,9 @@ export class VykorHttpServer {
   constructor(options: VykorServerOptions = {}) {
     this.app = new Hono();
     this.token = options.token;
+    if (options.enableDesktopBrowser && this.token && !options.application && !options.browserHost) {
+      this.browserBridge = new DesktopBrowserBridge();
+    }
     this.allowedOrigins = normalizeAllowedOrigins(options.allowedOrigins ?? []);
     this.services = options.services ?? {};
     this.version = options.version;
@@ -186,8 +198,9 @@ export class VykorHttpServer {
         getSettingsForCwd: options.getSettingsForCwd,
         executionSurface: options.executionSurface,
         outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot,
+        deferBackgroundActivation: options.deferBackgroundActivation,
         createAgent: options.createAgent,
-        browserHost: options.browserHost,
+        browserHost: options.browserHost ?? this.browserBridge,
         ...(options.channelConfigStore
           ? { channelConfigStore: options.channelConfigStore }
           : {}),
@@ -201,7 +214,7 @@ export class VykorHttpServer {
     this.jobs = this.application.jobs;
     this.eventHub = new HttpEventHub(this.application.events);
     this.terminalEvents = new TerminalHttpEventHub(this.terminals);
-    this.mountRoutes();
+    this.mountRoutes(options.registeredDaemonControl);
   }
 
   get url(): string | undefined {
@@ -223,10 +236,12 @@ export class VykorHttpServer {
         },
         (info) => {
           this.listener = listener;
+          this.browserBridgeListening = Boolean(this.browserBridge)
+            && (info.address === "127.0.0.1" || info.address === "::1");
           this.listenResult = {
             host,
             port: info.port,
-            url: `http://${host}:${info.port}`,
+            url: `http://${host.includes(":") ? `[${host}]` : host}:${info.port}`,
           };
           resolve(this.listenResult);
         },
@@ -243,6 +258,7 @@ export class VykorHttpServer {
   }
 
   private async closeWork(): Promise<void> {
+    this.closeBrowserBridge();
     const shutdown = this.ownsApplication
       ? this.application.close()
       : Promise.resolve();
@@ -274,7 +290,7 @@ export class VykorHttpServer {
     throwFailures(failures, "Vykor server shutdown failed");
   }
 
-  private mountRoutes(): void {
+  private mountRoutes(registeredDaemon?: RegisteredDaemonControl): void {
     this.app.onError((error) =>
       errorResponse(
         500,
@@ -306,7 +322,7 @@ export class VykorHttpServer {
 
     this.app.use("*", async (c, next) => {
       const origin = c.req.header("origin");
-      if (!origin) {
+      if (!origin || c.req.path.startsWith("/browser-host/")) {
         await next();
         return;
       }
@@ -357,11 +373,13 @@ export class VykorHttpServer {
         mcpOAuthInstanceId: this.application.mcpOAuthOperations?.oauthInstanceId,
         pluginAppsReady: !!this.application.pluginApps && !!this.application.pluginAppConversation,
         sessionFilesReady: !!this.application.files,
+        browserBridgeReady: () => this.browserBridgeListening,
         pluginLifecycle: this.application.pluginLifecycle,
       }),
     );
-    this.app.route("/", createMaintenanceRoutes({ maintenance: this.application.createMaintenanceService?.({ settings: this.services.settings, logs: () => this.maintenanceLogs,
+    this.app.route("/", createMaintenanceRoutes({ registeredDaemon, maintenance: this.application.createMaintenanceService?.({ settings: this.services.settings, logs: () => this.maintenanceLogs,
       beforeClose: () => {
+        this.closeBrowserBridge();
         const snapshot = this.application.control.runtimeSnapshot();
         this.restartPreparedHealth = { ok: true, ...(this.version ? { version: this.version } : {}),
           startedAt: snapshot.startedAt, uptimeMs: snapshot.uptimeMs, sessionCount: snapshot.sessions.total,
@@ -369,6 +387,9 @@ export class VykorHttpServer {
           ready: false, accepting: false, restartPrepared: true };
       },
     }) }));
+    if (this.browserBridge) {
+      this.app.route("/browser-host", createBrowserHostRoutes(this.browserBridge, () => this.browserBridgeListening));
+    }
     this.app.route(
       "/attachments",
       createAttachmentRoutes(this.application.attachments),
@@ -490,6 +511,11 @@ export class VykorHttpServer {
   private authorized(c: Context): boolean {
     if (!this.token) return true;
     return c.req.header("authorization") === `Bearer ${this.token}`;
+  }
+
+  private closeBrowserBridge(): void {
+    this.browserBridgeListening = false;
+    this.browserBridge?.close();
   }
 
   private log(event: ObservabilityEvent): void {

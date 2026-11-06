@@ -1,13 +1,15 @@
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
+import { mkdir } from "node:fs/promises";
 import { statSync } from "node:fs";
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import type { DaemonRegistry } from "@vykor/server";
 
 import {
   daemonPidAlive,
   probeDaemonRegistry,
-  terminateDaemonProcess,
 } from "../daemon-lifecycle.js";
-import { stopDaemonProcess } from "@vykor/server/daemon-host";
+import { acquireRegistryLease, clearMatchingDaemonRegistry, getDaemonRegistryPath, runRegisteredDaemon, stopDaemonProcess, withDaemonControlLock } from "@vykor/server/daemon-host";
 import {
   loadDaemonAutoStart,
   reconcileDaemonAutoStart,
@@ -17,6 +19,7 @@ import {
   createCliDaemonAutoStartController,
   createDaemonSystemService,
 } from "../daemon-system-service.js";
+import { ensureLocalDaemon } from "../ensure-daemon.js";
 import { VERSION } from "../version.js";
 
 interface ServeOptions {
@@ -26,6 +29,7 @@ interface ServeOptions {
   allowOrigin?: string[];
   storePath?: string;
   register?: boolean;
+  supervised?: boolean;
 }
 
 export function isLoopbackHost(host: string | undefined): boolean {
@@ -45,62 +49,79 @@ export function assertSafeDaemonBinding(
   }
 }
 
+function legacyDesktopDataLocation(): string | undefined {
+  if (process.env.VYKOR_CONFIG_DIR || process.env.VYKOR_DATA_DIR) return undefined;
+  const root = process.platform === "win32"
+    ? process.env.APPDATA ?? join(homedir(), "AppData", "Roaming")
+    : process.platform === "darwin"
+      ? join(homedir(), "Library", "Application Support")
+      : process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config");
+  return join(root, "Vykor", "runtime-data-location.json");
+}
+
 export function daemonHealthUrl(baseUrl: string): string {
   return `${baseUrl.replace(/\/+$/, "")}/health`;
 }
 
 async function runServe(options: ServeOptions): Promise<void> {
-  const {
-    clearDaemonRegistry,
-    createBearerToken,
-    createDaemonRegistryEntry,
-    readDaemonRegistry,
-    startVykorDaemon,
-    writeDaemonRegistry,
-  } = await import("@vykor/server");
+  const { createBearerToken, createDaemonRegistryEntry, readDaemonRegistry, startVykorDaemon, writeDaemonRegistry } =
+    await import("@vykor/server");
 
   assertSafeDaemonBinding(options);
-  const token = options.token ?? createBearerToken();
-  const { server, listen } = await startVykorDaemon({
-    host: options.host,
-    port: options.port,
-    token,
-    allowedOrigins: options.allowOrigin,
-    storePath: options.storePath,
-    version: VERSION,
-  });
-
-  if (options.register) {
-    writeDaemonRegistry(
-      createDaemonRegistryEntry({
-        url: listen.url,
-        pid: process.pid,
-        token,
-        storePath: server.store.path,
-        version: VERSION,
-        executionSurface: "cli_advanced",
-      }),
-    );
+  if (options.register && isLoopbackHost(options.host) && !options.storePath) {
+    await runRegisteredDaemon({
+      launcher: "cli", version: VERSION, supervised: options.supervised,
+      host: options.host, port: options.port, allowedOrigins: options.allowOrigin,
+      legacyDataLocationPath: legacyDesktopDataLocation(),
+      initialToken: options.token,
+    });
+    return;
   }
-
-  console.log(`[daemon] listening ${listen.url}`);
-  if (options.register) console.log("[daemon] registry written");
-
-  await new Promise<void>((resolve) => {
-    let stopping = false;
-    const shutdown = () => {
-      if (stopping) return;
-      stopping = true;
-      void (async () => {
-        await server.close();
-        const registry = readDaemonRegistry();
-        if (registry?.pid === process.pid) clearDaemonRegistry();
-        resolve();
-      })();
-    };
-    process.on("SIGINT", shutdown);
-    process.on("SIGTERM", shutdown);
-  });
+  const registryPath = getDaemonRegistryPath();
+  const shutdown = new AbortController();
+  if (options.register) await mkdir(dirname(registryPath), { recursive: true });
+  const release = options.register
+    ? await acquireRegistryLease(registryPath, "owner", error => shutdown.abort(error))
+    : undefined;
+  try {
+    const existing = options.register ? readDaemonRegistry(registryPath) : undefined;
+    if (existing && daemonPidAlive(existing.pid))
+      throw new Error("A live daemon already owns the local registry.");
+    const token = options.token ?? createBearerToken();
+    const { server, listen } = await startVykorDaemon({
+      host: options.host, port: options.port, token,
+      allowedOrigins: options.allowOrigin, storePath: options.storePath, version: VERSION,
+    });
+    let published: DaemonRegistry | undefined;
+    const stop = () => shutdown.abort();
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+    try {
+      shutdown.signal.throwIfAborted();
+      console.log(`[daemon] listening ${listen.url}`);
+      if (options.register) {
+        const registry = createDaemonRegistryEntry({
+          url: listen.url, pid: process.pid, token, storePath: server.store.path,
+          version: VERSION, executionSurface: "cli_advanced",
+        });
+        writeDaemonRegistry(registry, registryPath);
+        published = registry;
+        console.log("[daemon] registry written");
+      }
+      await new Promise<void>(resolve => {
+        if (shutdown.signal.aborted) resolve();
+        else shutdown.signal.addEventListener("abort", () => resolve(), { once: true });
+      });
+    } finally {
+      process.removeListener("SIGINT", stop);
+      process.removeListener("SIGTERM", stop);
+      try { await server.close(); }
+      finally { if (published) clearMatchingDaemonRegistry(published, registryPath); }
+    }
+  } finally {
+    if (!(shutdown.signal.reason instanceof Error) || shutdown.signal.reason.name === "AbortError")
+      await release?.();
+  }
 }
 
 export function createServeCommand(): Command {
@@ -122,9 +143,20 @@ export function createServeCommand(): Command {
     )
     .option("--store-path <path>", "Session store path")
     .option("--register", "Write daemon registry for clients to attach")
+    .addOption(new Option("--supervised").hideHelp())
     .action(async (options: ServeOptions) => {
       await runServe(options);
     });
+}
+
+async function stopRegisteredProcess(registry: DaemonRegistry | undefined): Promise<void> {
+  if (!registry) return;
+  const { readDaemonRegistry } = await import("@vykor/server");
+  const current = readDaemonRegistry();
+  if (!current || current.pid !== registry.pid || current.token !== registry.token ||
+    current.startedAt !== registry.startedAt || current.url !== registry.url) return;
+  if (daemonPidAlive(registry.pid)) await stopDaemonProcess(registry.pid);
+  if (!registry.launcher) clearMatchingDaemonRegistry(registry, getDaemonRegistryPath());
 }
 
 export function createDaemonCommand(): Command {
@@ -150,12 +182,18 @@ export function createDaemonCommand(): Command {
     .option("--store-path <path>", "Session store path")
     .action(async (options: ServeOptions) => {
       assertSafeDaemonBinding(options);
-      const { clearDaemonRegistry, readDaemonRegistry } =
+      const { readDaemonRegistry } =
         await import("@vykor/server");
       const entry = process.argv[1];
       if (!entry) {
         console.error("Cannot locate CLI entrypoint.");
         process.exit(1);
+      }
+      if (isLoopbackHost(options.host) && (!options.host || options.host === "127.0.0.1") &&
+        !options.token && !options.storePath && !options.allowOrigin?.length && !options.port) {
+        const endpoint = await ensureLocalDaemon({ cliPath: entry });
+        console.log(`Daemon running at ${endpoint.url} (PID: ${endpoint.pid})`);
+        return;
       }
       const probeOptions = {
         expectedVersion: VERSION,
@@ -177,7 +215,7 @@ export function createDaemonCommand(): Command {
         args.push("--allow-origin", origin);
       if (options.storePath) args.push("--store-path", options.storePath);
       const autoStart = await loadDaemonAutoStart();
-      const reconciliation = reconcileDaemonAutoStart(entry, autoStart, args);
+      const reconciliation = await reconcileDaemonAutoStart(entry, autoStart, args);
       if (
         existing &&
         existingStatus === "ready" &&
@@ -191,6 +229,9 @@ export function createDaemonCommand(): Command {
         );
         return;
       }
+
+      if (existing && daemonPidAlive(existing.pid))
+        throw new Error("Registered daemon is unavailable. Stop it explicitly before starting another.");
 
       if (autoStart) {
         if (reconciliation.action === "none") {
@@ -207,11 +248,7 @@ export function createDaemonCommand(): Command {
         return;
       }
 
-      if (existing && existingStatus === "stale") {
-        terminateDaemonProcess(existing.pid);
-        await stopDaemonProcess(existing.pid);
-      }
-      clearDaemonRegistry();
+      if (existing) clearMatchingDaemonRegistry(existing, getDaemonRegistryPath());
 
       const spawned = spawnDaemonProcess(entry, args);
       const registry = await waitForReadyDaemon(
@@ -251,7 +288,7 @@ export function createDaemonCommand(): Command {
       assertSafeDaemonBinding(options);
       const entry = process.argv[1];
       if (!entry) throw new Error("Cannot locate CLI entrypoint.");
-      const { clearDaemonRegistry, readDaemonRegistry } =
+      const { readDaemonRegistry } =
         await import("@vykor/server");
       const args = [
         "serve",
@@ -265,22 +302,9 @@ export function createDaemonCommand(): Command {
         args.push("--allow-origin", origin);
       if (options.storePath) args.push("--store-path", options.storePath);
 
-      const existing = readDaemonRegistry();
-      if (existing) {
-        const probe = await probeDaemonRegistry(existing, {
-          expectedVersion: VERSION,
-        });
-        if (
-          (probe === "ready" || probe === "stale") &&
-          daemonPidAlive(existing.pid)
-        ) {
-          terminateDaemonProcess(existing.pid);
-          await stopDaemonProcess(existing.pid);
-        }
-      }
-      clearDaemonRegistry();
-
-      await createCliDaemonAutoStartController(entry, args).enable();
+      await withDaemonControlLock(async () => {
+        await createCliDaemonAutoStartController(entry, args).enable();
+      });
       const registry = await waitForReadyDaemon(
         { expectedVersion: VERSION, minimumStartedAt: statSync(entry).mtimeMs },
         readDaemonRegistry,
@@ -295,15 +319,13 @@ export function createDaemonCommand(): Command {
     .action(async () => {
       const entry = process.argv[1];
       if (!entry) throw new Error("Cannot locate CLI entrypoint.");
-      const { clearDaemonRegistry, readDaemonRegistry } =
+      const { readDaemonRegistry } =
         await import("@vykor/server");
-      const registry = readDaemonRegistry();
-      await createCliDaemonAutoStartController(entry).disable();
-      if (registry && daemonPidAlive(registry.pid)) {
-        terminateDaemonProcess(registry.pid);
-        await stopDaemonProcess(registry.pid);
-      }
-      clearDaemonRegistry();
+      await withDaemonControlLock(async () => {
+        const registry = readDaemonRegistry();
+        await createCliDaemonAutoStartController(entry).disable();
+        await stopRegisteredProcess(registry);
+      });
       console.log("Daemon system service uninstalled.");
     });
 
@@ -319,7 +341,7 @@ export function createDaemonCommand(): Command {
       if (!(await loadDaemonAutoStart())) return;
       const entry = process.argv[1];
       if (!entry) throw new Error("Cannot locate CLI entrypoint.");
-      const { clearDaemonRegistry, readDaemonRegistry } =
+      const { readDaemonRegistry } =
         await import("@vykor/server");
       const registry = readDaemonRegistry();
       const probeOptions = {
@@ -330,12 +352,9 @@ export function createDaemonCommand(): Command {
         ? await probeDaemonRegistry(registry, probeOptions)
         : "unreachable";
       if (status === "ready") return;
-      if (registry && status === "stale") {
-        terminateDaemonProcess(registry.pid);
-        await stopDaemonProcess(registry.pid);
-      }
-      clearDaemonRegistry();
-      const spawned = spawnDaemonProcess(entry, [serveCommand, ...serveArgs]);
+      if (registry && daemonPidAlive(registry.pid)) return;
+      if (registry) clearMatchingDaemonRegistry(registry, getDaemonRegistryPath());
+      const spawned = spawnDaemonProcess(entry, [serveCommand, ...serveArgs, "--supervised"]);
       await waitForReadyDaemon(probeOptions, readDaemonRegistry, () => {
         if (spawned.failure()) throw daemonStartupError(spawned);
       });
@@ -374,36 +393,17 @@ export function createDaemonCommand(): Command {
     .command("stop")
     .description("Stop the daemon")
     .action(async () => {
-      const { clearDaemonRegistry, readDaemonRegistry } =
+      const { readDaemonRegistry } =
         await import("@vykor/server");
       const entry = process.argv[1];
       const service = entry ? createDaemonSystemService(entry) : undefined;
-      const registry = readDaemonRegistry();
-      if (service?.isInstalled()) {
-        service.stop();
-        if (registry && daemonPidAlive(registry.pid)) {
-          terminateDaemonProcess(registry.pid);
-          await stopDaemonProcess(registry.pid);
-        }
-        if (registry)
-          console.log(
-            `Daemon system service stopped (last PID: ${registry.pid})`,
-          );
-        else console.log("Daemon system service stopped.");
-        clearDaemonRegistry();
-        return;
-      }
-      if (!registry) {
-        console.log("Daemon is not running.");
-        return;
-      }
-      if (daemonPidAlive(registry.pid)) {
-        terminateDaemonProcess(registry.pid);
-        console.log(`Daemon stopped (PID: ${registry.pid})`);
-      } else {
-        console.log(`Daemon registry was stale (PID: ${registry.pid})`);
-      }
-      clearDaemonRegistry();
+      await withDaemonControlLock(async () => {
+        const registry = readDaemonRegistry();
+        if (service?.isInstalled()) service.stop();
+        await stopRegisteredProcess(registry);
+        if (registry) console.log(`Daemon stopped (PID: ${registry.pid})`);
+        else console.log("Daemon is not running.");
+      });
     });
 
   return cmd;

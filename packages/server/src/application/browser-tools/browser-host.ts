@@ -41,10 +41,14 @@ export interface BrowserDeveloperExecuteInput {
   sessionId: string;
   cwd: string;
   /** Ordinary, reusable-or-not site approval under the existing Browser tool name. */
-  approveOrigin: (reason: string) => Promise<boolean>;
+  approveOrigin: BrowserApproval;
   /** Permission for this inspection; ordinary approval modes require a separate, once-only decision. */
-  approveDeveloper: (reason: string) => Promise<boolean>;
+  approveDeveloper: BrowserApproval;
+  signal?: AbortSignal;
+  deadlineAt?: number;
 }
+
+export type BrowserApproval = (reason: string, signal?: AbortSignal) => Promise<boolean>;
 
 export interface BrowserHost {
   execute(input: {
@@ -52,7 +56,9 @@ export interface BrowserHost {
     sessionId: string;
     cwd: string;
     includeScreenshot: boolean;
-    approve: (question: string) => Promise<boolean>;
+    approve: BrowserApproval;
+    signal?: AbortSignal;
+    deadlineAt?: number;
   }): Promise<BrowserObservation>;
   /**
    * Optional so CLI/standalone hosts without a Desktop browser remain valid.

@@ -26,6 +26,9 @@ export type VykorDaemonOptions = Pick<
   | "version"
   | "executionSurface"
   | "browserHost"
+  | "enableDesktopBrowser"
+  | "registeredDaemonControl"
+  | "deferBackgroundActivation"
 >;
 
 /** Starts the opinionated daemon application with all standard resource services installed. */

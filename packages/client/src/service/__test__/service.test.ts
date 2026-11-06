@@ -55,6 +55,17 @@ describe("local service management", () => {
     expect(await Service.discover({ file })).toBeUndefined();
   });
 
+  it("does not return a daemon that is draining before a restart", async () => {
+    const child = spawn(process.execPath, [fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION)], {
+      env: { ...process.env, FIXTURE_DRAINING: "1" }, stdio: "ignore", windowsHide: true,
+    });
+    children.push(child);
+    for (let attempt = 0; attempt < 100; attempt++) {
+      try { await readFile(file, "utf8"); break; } catch { await sleep(20); }
+    }
+    await expect(Service.discover({ file })).resolves.toBeUndefined();
+    await expect(Service.ensure({ file })).rejects.toThrow(/incompatible|unhealthy/i);
+  });
   it("rejects incompatible protocols and malformed or non-local registries", async () => {
     const registry = await start("1.2.3", "999");
     expect(await Service.discover({ file })).toBeUndefined();
@@ -78,6 +89,16 @@ describe("local service management", () => {
     expect(await Service.stop(left)).toBe(true);
     expect(await Service.discover({ file })).toBeUndefined();
     expect(await Service.stop(left)).toBe(false);
+  });
+
+  it("captures child startup diagnostics when a log path is provided", async () => {
+    const logPath = join(directory, "logs", "daemon.log");
+    const endpoint = await Service.ensure({
+      file, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION)],
+      env: { FIXTURE_LOG: "1" }, logPath, timeoutMs: 5_000,
+    });
+    endpoints.push(endpoint);
+    expect(await readFile(logPath, "utf8")).toContain("startup diagnostic");
   });
 
   it("does not replace or terminate an incompatible registered process", async () => {

@@ -1,77 +1,52 @@
-import { afterEach, describe, expect, it, vi } from "vitest"
-import type { DaemonRegistry } from "@vykor/server/daemon-host"
-import { setHostResponseLocale } from "@vykor/server/daemon-host"
-const hostLanguage = vi.hoisted(() => ({ value: undefined as string | undefined }))
+import { describe, expect, it, vi } from "vitest"
+
+const host = vi.hoisted(() => ({
+  runRegisteredDaemon: vi.fn(async () => {}),
+  setHostResponseLocale: vi.fn(),
+  readDaemonRegistry: vi.fn(),
+  daemonPidAlive: vi.fn(),
+  shouldStartManagedDaemon: vi.fn(async () => false),
+}))
 
 vi.mock("electron", () => ({
   app: {
-    isPackaged: true,
-    getAppPath: () => "D:/app",
-    getVersion: () => "1.0.0",
-    getPath: () => "D:/documents",
+    isPackaged: true, getVersion: () => "1.0.0", getPath: () => "D:/documents",
     getPreferredSystemLanguages: () => ["zh-Hans-CN", "en-US"],
   },
 }))
-vi.mock("@vykor/server/daemon-host", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@vykor/server/daemon-host")>()
-  return {
-    ...original,
-    readDaemonRegistry: () => undefined,
-    clearDaemonRegistry: () => {},
-    setHostResponseLocale: (locale: string | undefined) => {
-      hostLanguage.value = locale
-      original.setHostResponseLocale(locale)
-    },
-    startVykorDaemon: async () => {
-      throw new Error(`test-stop:${hostLanguage.value}`)
-    },
-  }
-})
-import { registeredDaemonHealthy, resolveDesktopDaemonMode, runDesktopDaemonEntry } from "./daemon-entry"
+vi.mock("@vykor/server/daemon-host", () => host)
 
-afterEach(() => setHostResponseLocale(undefined))
+import { resolveDesktopDaemonMode, runDesktopDaemonEntry } from "./daemon-entry"
 
 describe("desktop daemon entry", () => {
-  it("binds the preferred display language before starting the daemon", async () => {
-    await expect(runDesktopDaemonEntry("service")).rejects.toThrow("test-stop:zh-Hans-CN")
-  })
+  it.each([["service", true], ["on-demand", false]] as const)(
+    "uses the same registered runtime for %s with the correct supervision",
+    async (mode, supervised) => {
+      host.runRegisteredDaemon.mockClear()
+      host.setHostResponseLocale.mockClear()
+      await runDesktopDaemonEntry(mode)
+      expect(host.setHostResponseLocale).toHaveBeenCalledWith("zh-Hans-CN")
+      expect(host.runRegisteredDaemon).toHaveBeenCalledWith(expect.objectContaining({
+        launcher: "desktop", version: "1.0.0", supervised,
+      }))
+      expect(host.setHostResponseLocale.mock.invocationCallOrder[0])
+        .toBeLessThan(host.runRegisteredDaemon.mock.invocationCallOrder[0]!)
+    },
+  )
+
   it("recognizes only fixed headless flags", () => {
     expect(resolveDesktopDaemonMode(["Vykor", "--daemon-service"])).toBe("service")
     expect(resolveDesktopDaemonMode(["Vykor", "--daemon-watchdog"])).toBe("watchdog")
+    expect(resolveDesktopDaemonMode(["Vykor", "--daemon-on-demand"])).toBe("on-demand")
     expect(resolveDesktopDaemonMode(["Vykor"])).toBeNull()
   })
 
-  it("treats a cli_advanced registry as not adoptable", async () => {
-    const registry: DaemonRegistry = {
-      url: "http://127.0.0.1:1",
-      pid: 1,
-      token: "t",
-      storePath: "db",
-      startedAt: 1,
-      version: "1.0.0",
-      executionSurface: "cli_advanced",
-    }
-    const healthy = await registeredDaemonHealthy(
-      () => registry,
-      async () => new Response("{}", { status: 200 })
-    )
-    expect(healthy).toBe(false)
-  })
-
-  it("treats a healthy desktop-managed registry as adoptable", async () => {
-    const registry: DaemonRegistry = {
-      url: "http://127.0.0.1:1",
-      pid: 1,
-      token: "t",
-      storePath: "db",
-      startedAt: 1,
-      version: "1.0.0",
-      executionSurface: "desktop_managed",
-    }
-    const healthy = await registeredDaemonHealthy(
-      () => registry,
-      async () => new Response("{}", { status: 200 })
-    )
-    expect(healthy).toBe(true)
+  it("does not launch a replacement for a live registration", async () => {
+    host.readDaemonRegistry.mockReturnValue({ pid: 42 })
+    host.daemonPidAlive.mockReturnValue(true)
+    host.shouldStartManagedDaemon.mockClear()
+    await runDesktopDaemonEntry("watchdog")
+    expect(host.daemonPidAlive).toHaveBeenCalledWith(42)
+    expect(host.shouldStartManagedDaemon).not.toHaveBeenCalled()
   })
 })

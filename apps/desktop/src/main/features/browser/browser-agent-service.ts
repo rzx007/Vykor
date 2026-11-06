@@ -38,8 +38,23 @@ import type {
   BrowserAnnotationSnapshot,
 } from "../../../shared/browser-annotation"
 
+export interface BrowserRequestScope {
+  signal: AbortSignal
+  getOwnerSessionToken: (ownerId: number, sessionId: string) => object | undefined
+}
+
+type BrowserRequestGuard = {
+  signal: AbortSignal
+  assertCurrent: (checkPage?: boolean) => void
+  attachOpenedTab: (tabId: string) => void
+  refreshPage: () => void
+}
+
 type ElementTarget = {
   webContentsId: number
+  sessionId: string
+  pageRevision: number
+  pageUrl: string
   selector: string
   role: string
   name: string
@@ -62,7 +77,8 @@ export class BrowserAgentService implements BrowserHost {
   private readonly queuedDeveloperRequests = new Set<{ sessionId: string; cancelled: boolean }>()
   private activeTabId: string | null = null
   private targetSequence = 0
-  private openTabRequestHandler?: () => void
+  private activeTabRevision = 0
+  private openTabRequestHandler?: { request: () => void; ownerId?: number }
 
   listOriginApprovals(): Array<{ sessionId: string; origin: string }> {
     return [...this.approvedOrigins].flatMap(([sessionId, origins]) =>
@@ -123,7 +139,7 @@ export class BrowserAgentService implements BrowserHost {
       for (const [tabId, tab] of this.tabs) {
         if (tab.webContentsId === guest.id) {
           this.tabs.delete(tabId)
-          if (this.activeTabId === tabId) this.activeTabId = null
+          if (this.activeTabId === tabId) this.updateActiveTab(null)
         }
       }
       this.annotations.release(guest.id)
@@ -135,8 +151,13 @@ export class BrowserAgentService implements BrowserHost {
     })
   }
 
-  setOpenTabRequestHandler(handler?: () => void): void {
-    this.openTabRequestHandler = handler
+  setOpenTabRequestHandler(handler?: () => void, ownerId?: number): void {
+    this.openTabRequestHandler = handler ? { request: handler, ownerId } : undefined
+  }
+
+  private updateActiveTab(tabId: string | null): void {
+    if (this.activeTabId !== tabId) this.activeTabRevision += 1
+    this.activeTabId = tabId
   }
 
   bindTab(ownerId: number, tabId: string, webContentsId: number): void {
@@ -145,7 +166,8 @@ export class BrowserAgentService implements BrowserHost {
     }
     if (!/^[\w-]{1,100}$/.test(tabId)) throw new Error("Invalid browser tab ID.")
     const previous = this.tabs.get(tabId)
-    if (previous && previous.webContentsId !== webContentsId) {
+    if (previous?.ownerId === ownerId && previous.webContentsId === webContentsId) return
+    if (previous) {
       this.annotations.release(previous.webContentsId)
       this.developerGeneration += 1
       if (this.developerInspector.summary()?.tabId === tabId) {
@@ -161,7 +183,7 @@ export class BrowserAgentService implements BrowserHost {
         const previous = this.tabs.get(this.activeTabId)!
         this.annotations.suspend(previous.webContentsId)
         this.stopDeveloperDiagnostics()
-        this.activeTabId = null
+        this.updateActiveTab(null)
       }
       return
     }
@@ -172,9 +194,8 @@ export class BrowserAgentService implements BrowserHost {
       if (previous) this.annotations.suspend(previous.webContentsId)
     }
     if (this.activeTabId !== tabId) this.stopDeveloperDiagnostics()
-    this.activeTabId = tabId
+    this.updateActiveTab(tabId)
     for (const resolve of this.activeTabWaiters) resolve(tabId)
-    this.activeTabWaiters.clear()
   }
 
   unbindTab(ownerId: number, tabId: string): void {
@@ -184,7 +205,7 @@ export class BrowserAgentService implements BrowserHost {
       this.stopDeveloperDiagnostics()
     }
     this.tabs.delete(tabId)
-    if (this.activeTabId === tabId) this.activeTabId = null
+    if (this.activeTabId === tabId) this.updateActiveTab(null)
   }
 
   /** Immediately stop any active developer capture. Safe to call synchronously. */
@@ -254,19 +275,101 @@ export class BrowserAgentService implements BrowserHost {
     return this.annotations.remove(this.annotationPage(ownerId, input.tabId), input)
   }
 
-  execute(input: {
-    action: BrowserAction
-    sessionId: string
-    cwd: string
-    includeScreenshot: boolean
-    approve: (question: string) => Promise<boolean>
-  }): Promise<BrowserObservation> {
-    const requestedTabId = this.activeTabId
-    return this.enqueue(() => this.executeOnTab(input, requestedTabId))
+  private requestGuard(
+    sessionId: string,
+    scope: BrowserRequestScope
+  ): BrowserRequestGuard {
+    let tabId = this.activeTabId
+    let tab = tabId ? this.tabs.get(tabId) : undefined
+    const opener = this.openTabRequestHandler
+    const ownerId = tab?.ownerId ?? opener?.ownerId
+    const token = ownerId === undefined ? undefined : scope.getOwnerSessionToken(ownerId, sessionId)
+    if (ownerId === undefined || !token) {
+      throw new Error("Open this session in the desktop window to use its browser.")
+    }
+
+    let tabRevision = this.activeTabRevision
+    let pageRevision = 0
+    let pageUrl: string | undefined
+    const refreshPage = (): void => {
+      pageRevision = this.annotationPageRevisions.get(tab?.webContentsId ?? -1) ?? 0
+      pageUrl = tab ? webContents.fromId(tab.webContentsId)?.getURL() : undefined
+    }
+    const assertOwner = (): void => {
+      scope.signal.throwIfAborted()
+      if (scope.getOwnerSessionToken(ownerId, sessionId) !== token) {
+        throw new Error("The window session changed while the Browser tool was waiting.")
+      }
+    }
+    const assertCurrent = (checkPage = true): void => {
+      assertOwner()
+      if (this.activeTabRevision !== tabRevision || this.activeTabId !== tabId ||
+          (tabId ? this.tabs.get(tabId) !== tab : this.openTabRequestHandler !== opener)) {
+        throw new Error("The active browser tab changed while the tool was waiting. Inspect the page again.")
+      }
+      if (!tab) return
+      const contents = webContents.fromId(tab.webContentsId)
+      if (!contents || contents.isDestroyed()) throw new Error("The browser tab is no longer available.")
+      if (checkPage && ((this.annotationPageRevisions.get(contents.id) ?? 0) !== pageRevision ||
+          contents.getURL() !== pageUrl)) {
+        throw new Error("The browser page changed while the tool was waiting. Inspect the page again.")
+      }
+    }
+    refreshPage()
+    assertCurrent()
+    return {
+      signal: scope.signal,
+      assertCurrent,
+      refreshPage,
+      attachOpenedTab: (openedTabId) => {
+        assertOwner()
+        tab = this.tabs.get(openedTabId)
+        if (tab?.ownerId !== ownerId) throw new Error("The browser opened in a different window.")
+        tabId = openedTabId
+        tabRevision = this.activeTabRevision
+        refreshPage()
+        assertCurrent()
+      },
+    }
   }
 
-  executeDeveloper(input: BrowserDeveloperExecuteInput): Promise<BrowserDeveloperResult> {
-    if (input.action.action === "stop_diagnostics") return this.executeDeveloperOnTab(input)
+  private guardApproval(
+    approve: (question: string) => Promise<boolean>,
+    guard?: BrowserRequestGuard
+  ): (question: string) => Promise<boolean> {
+    if (!guard) return approve
+    return async (question) => {
+      guard.assertCurrent()
+      const allowed = await approve(question)
+      guard.assertCurrent()
+      return allowed
+    }
+  }
+
+  async execute(
+    input: Parameters<BrowserHost["execute"]>[0],
+    scope?: BrowserRequestScope
+  ): Promise<BrowserObservation> {
+    const requestedTabId = this.activeTabId
+    const guard = scope && this.requestGuard(input.sessionId, scope)
+    return this.enqueue(() => this.executeOnTab(
+      { ...input, approve: this.guardApproval(input.approve, guard) },
+      requestedTabId,
+      guard
+    ))
+  }
+
+  async executeDeveloper(
+    input: BrowserDeveloperExecuteInput,
+    scope?: BrowserRequestScope
+  ): Promise<BrowserDeveloperResult> {
+    const guard = scope && this.requestGuard(input.sessionId, scope)
+    if (input.action.action === "stop_diagnostics") return this.executeDeveloperOnTab(input, guard)
+    input = {
+      ...input,
+      approveOrigin: this.guardApproval(input.approveOrigin, guard),
+      approveDeveloper: this.guardApproval(input.approveDeveloper, guard),
+    }
     const request = { sessionId: input.sessionId, cancelled: false }
     this.queuedDeveloperRequests.add(request)
     return this.enqueue(async () => {
@@ -274,7 +377,7 @@ export class BrowserAgentService implements BrowserHost {
       if (request.cancelled) throw new Error("Browser developer request was cancelled.")
       this.activeDeveloperRequestSessionId = input.sessionId
       try {
-        return await this.executeDeveloperOnTab(input)
+        return await this.executeDeveloperOnTab(input, guard)
       } finally {
         this.activeDeveloperRequestSessionId = null
       }
@@ -291,15 +394,11 @@ export class BrowserAgentService implements BrowserHost {
   }
 
   private async executeOnTab(
-    input: {
-      action: BrowserAction
-      sessionId: string
-      cwd: string
-      includeScreenshot: boolean
-      approve: (question: string) => Promise<boolean>
-    },
-    requestedTabId: string | null
+    input: Parameters<BrowserHost["execute"]>[0],
+    requestedTabId: string | null,
+    guard?: BrowserRequestGuard
   ): Promise<BrowserObservation> {
+    guard?.assertCurrent()
     const openingTab = !requestedTabId
     if (openingTab && input.action.action !== "navigate") {
       throw new Error("Use Browser navigate with a URL to open a page.")
@@ -307,8 +406,9 @@ export class BrowserAgentService implements BrowserHost {
     if (openingTab && input.action.action === "navigate") {
       await this.requireOrigin(input.action.url, input.sessionId, input.cwd, input.approve)
     }
-    const tabId = requestedTabId ?? (await this.openBrowserTab())
-    if (!tabId) throw new Error("Open a page in the desktop browser first.")
+    guard?.assertCurrent()
+    const tabId = requestedTabId ?? (await this.openBrowserTab(guard?.signal))
+    if (openingTab) guard?.attachOpenedTab(tabId)
     const tab = this.tabs.get(tabId)
     const contents = tab ? webContents.fromId(tab.webContentsId) : undefined
     if (!contents || contents.isDestroyed())
@@ -319,14 +419,16 @@ export class BrowserAgentService implements BrowserHost {
     if (!openingTab) {
       await this.requireOrigin(destination, input.sessionId, input.cwd, input.approve)
     }
+    guard?.assertCurrent()
     this.assertActiveTab(tabId, contents)
 
     if (input.action.action === "click") {
-      const target = this.targets.get(input.action.elementId)
-      if (target?.href) {
+      const target = this.getElementTarget(contents, input.sessionId, input.action.elementId)
+      if (target.href) {
         const link = new URL(target.href, contents.getURL())
         if (link.protocol === "http:" || link.protocol === "https:" || link.protocol === "file:") {
           await this.requireOrigin(link.href, input.sessionId, input.cwd, input.approve)
+          guard?.assertCurrent()
           this.assertActiveTab(tabId, contents)
         }
       }
@@ -334,6 +436,7 @@ export class BrowserAgentService implements BrowserHost {
 
     if (input.action.action === "navigate" || input.action.action === "scroll") {
       await this.annotations.pauseForBrowserAction(contents)
+      guard?.assertCurrent()
       this.assertActiveTab(tabId, contents)
     }
     if (input.action.action === "navigate") {
@@ -341,7 +444,20 @@ export class BrowserAgentService implements BrowserHost {
         contents,
         input.sessionId,
         input.cwd,
-        async () => await contents.loadURL(destination)
+        async () => {
+          const signal = guard?.signal
+          signal?.throwIfAborted()
+          const stopLoading = (): void => {
+            if (!contents.isDestroyed()) contents.stop()
+          }
+          signal?.addEventListener("abort", stopLoading, { once: true })
+          try {
+            await contents.loadURL(destination)
+          } finally {
+            signal?.removeEventListener("abort", stopLoading)
+          }
+        },
+        guard
       )
     } else if (input.action.action === "click" || input.action.action === "type") {
       const action = input.action
@@ -349,7 +465,8 @@ export class BrowserAgentService implements BrowserHost {
         contents,
         input.sessionId,
         input.cwd,
-        async () => await this.applyElementAction(contents, action, input.approve, tabId)
+        async () => await this.applyElementAction(contents, action, input, tabId, guard),
+        guard
       )
     } else if (input.action.action === "scroll") {
       const amount = Math.max(100, Math.min(input.action.amount ?? 600, 1_200))
@@ -358,15 +475,27 @@ export class BrowserAgentService implements BrowserHost {
       )
     }
 
+    if (input.action.action === "navigate" || input.action.action === "click") {
+      // These operations may intentionally replace the page. Read the new page only
+      // while the originating window, session and tab still match.
+      guard?.assertCurrent(false)
+      if (guard && !this.isApprovedDestination(contents.getURL(), input.sessionId, input.cwd)) {
+        throw new Error("The browser left the approved site. Inspect the page again.")
+      }
+      guard?.refreshPage()
+    }
+    guard?.assertCurrent()
     const page = (await contents.executeJavaScript(ELEMENT_INSPECT_SCRIPT)) as InspectedPage
+    guard?.assertCurrent()
     this.assertActiveTab(tabId, contents)
-    const elements = this.rememberTargets(contents.id, page.elements)
-    this.pageFingerprints.set(contents.id, fingerprintPage(page))
     const screenshotBytes =
       input.action.action === "inspect" && input.includeScreenshot
         ? await this.capture(contents)
         : undefined
+    guard?.assertCurrent()
     this.assertActiveTab(tabId, contents)
+    const elements = this.rememberTargets(contents, input.sessionId, page.elements)
+    this.pageFingerprints.set(contents.id, fingerprintPage(page))
     return {
       url: page.url,
       title: page.title,
@@ -413,8 +542,10 @@ export class BrowserAgentService implements BrowserHost {
   }
 
   private async executeDeveloperOnTab(
-    input: BrowserDeveloperExecuteInput
+    input: BrowserDeveloperExecuteInput,
+    guard?: BrowserRequestGuard
   ): Promise<BrowserDeveloperResult> {
+    guard?.assertCurrent()
     const action = input.action
 
     // Stopping is always allowed so a stuck capture can be cleaned up.
@@ -491,8 +622,10 @@ export class BrowserAgentService implements BrowserHost {
       generation,
     }
     await this.requireOrigin(scope.url, input.sessionId, input.cwd, input.approveOrigin)
+    guard?.assertCurrent()
     this.assertDeveloperSnapshot(snapshot, input.cwd)
     const approved = await input.approveDeveloper(this.developerReason(scope, action.action))
+    guard?.assertCurrent()
     this.assertDeveloperSnapshot(snapshot, input.cwd)
     if (!approved) {
       throw new Error(
@@ -510,6 +643,7 @@ export class BrowserAgentService implements BrowserHost {
         navigationEpoch: epoch,
       })
       try {
+        guard?.assertCurrent()
         this.assertDeveloperIdentity(
           input.sessionId,
           tabId,
@@ -535,6 +669,7 @@ export class BrowserAgentService implements BrowserHost {
 
     if (action.action === "inspect_dom") {
       const data = await this.developerInspector.inspectDom(guest, action.selector)
+      guard?.assertCurrent()
       this.assertDeveloperIdentity(
         input.sessionId,
         tabId,
@@ -549,6 +684,7 @@ export class BrowserAgentService implements BrowserHost {
 
     if (action.action === "inspect_styles") {
       const data = await this.developerInspector.inspectStyles(guest, action.selector)
+      guard?.assertCurrent()
       this.assertDeveloperIdentity(
         input.sessionId,
         tabId,
@@ -659,26 +795,40 @@ export class BrowserAgentService implements BrowserHost {
     }
   }
 
-  private async openBrowserTab(): Promise<string> {
-    if (!this.openTabRequestHandler) throw new Error("Open a page in the desktop browser first.")
+  private async openBrowserTab(signal?: AbortSignal): Promise<string> {
+    signal?.throwIfAborted()
+    const opener = this.openTabRequestHandler
+    if (!opener) throw new Error("Open a page in the desktop browser first.")
     const activeTab = this.activeTabId && this.tabs.has(this.activeTabId) ? this.activeTabId : null
     if (activeTab) return activeTab
 
     return await new Promise<string>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.activeTabWaiters.delete(onReady)
-        reject(new Error("Timed out while opening the desktop browser tab."))
-      }, 15_000)
-      const onReady = (tabId: string): void => {
+      const cleanup = (): void => {
         clearTimeout(timer)
+        signal?.removeEventListener("abort", onAbort)
+        this.activeTabWaiters.delete(onReady)
+      }
+      const onAbort = (): void => {
+        cleanup()
+        reject(signal?.reason)
+      }
+      const onReady = (tabId: string): void => {
+        if (opener.ownerId !== undefined && this.tabs.get(tabId)?.ownerId !== opener.ownerId) {
+          return
+        }
+        cleanup()
         resolve(tabId)
       }
+      const timer = setTimeout(() => {
+        cleanup()
+        reject(new Error("Timed out while opening the desktop browser tab."))
+      }, 15_000)
       this.activeTabWaiters.add(onReady)
+      signal?.addEventListener("abort", onAbort, { once: true })
       try {
-        this.openTabRequestHandler!()
+        opener.request()
       } catch (error) {
-        clearTimeout(timer)
-        this.activeTabWaiters.delete(onReady)
+        cleanup()
         reject(error)
       }
     })
@@ -724,10 +874,17 @@ export class BrowserAgentService implements BrowserHost {
     contents: WebContents,
     sessionId: string,
     cwd: string,
-    operation: () => Promise<T>
+    operation: () => Promise<T>,
+    requestGuard?: BrowserRequestGuard
   ): Promise<T> {
     let blockedOrigin: string | null = null
     const guard = (event: Electron.Event, destination: string): void => {
+      try {
+        requestGuard?.assertCurrent(false)
+      } catch {
+        event.preventDefault()
+        return
+      }
       if (this.isApprovedDestination(destination, sessionId, cwd)) return
       event.preventDefault()
       try {
@@ -774,7 +931,8 @@ export class BrowserAgentService implements BrowserHost {
   }
 
   private rememberTargets(
-    webContentsId: number,
+    contents: WebContents,
+    sessionId: string,
     elements: Array<{
       selector: string
       role: string
@@ -785,14 +943,19 @@ export class BrowserAgentService implements BrowserHost {
     }>
   ): NonNullable<BrowserObservation["elements"]> {
     for (const [id, target] of this.targets) {
-      if (target.webContentsId === webContentsId) this.targets.delete(id)
+      if (target.webContentsId === contents.id) this.targets.delete(id)
     }
+    const pageRevision = this.annotationPageRevisions.get(contents.id) ?? 0
+    const pageUrl = contents.getURL()
     const snapshotId = ++this.targetSequence
     const result: NonNullable<BrowserObservation["elements"]> = []
     for (const [index, element] of elements.entries()) {
       const id = `e${snapshotId}-${index}`
       this.targets.set(id, {
-        webContentsId,
+        webContentsId: contents.id,
+        sessionId,
+        pageRevision,
+        pageUrl,
         selector: element.selector,
         role: element.role,
         name: element.name,
@@ -811,17 +974,26 @@ export class BrowserAgentService implements BrowserHost {
     return result
   }
 
+  private getElementTarget(contents: WebContents, sessionId: string, elementId: string): ElementTarget {
+    const target = this.targets.get(elementId)
+    if (!target || target.webContentsId !== contents.id || target.sessionId !== sessionId ||
+        target.pageRevision !== (this.annotationPageRevisions.get(contents.id) ?? 0) ||
+        target.pageUrl !== contents.getURL()) {
+      throw new Error("That element ID is stale. Inspect the page again.")
+    }
+    return target
+  }
+
   private async applyElementAction(
     contents: WebContents,
     action: Extract<BrowserAction, { action: "click" | "type" }>,
-    approve: (question: string) => Promise<boolean>,
-    tabId: string
+    input: Pick<Parameters<BrowserHost["execute"]>[0], "sessionId" | "approve">,
+    tabId: string,
+    guard?: BrowserRequestGuard
   ): Promise<void> {
-    const target = this.targets.get(action.elementId)
-    if (!target || target.webContentsId !== contents.id)
-      throw new Error("That element ID is stale. Inspect the page again.")
+    const target = this.getElementTarget(contents, input.sessionId, action.elementId)
     if (target.requiresConfirmation) {
-      const allowed = await approve(
+      const allowed = await input.approve(
         action.action === "click"
           ? `Confirm clicking “${target.name || target.role}” on ${contents.getURL()}? This action may submit or change data.`
           : `Confirm entering sensitive information in “${target.name || target.role}” on ${contents.getURL()}?`
@@ -831,7 +1003,9 @@ export class BrowserAgentService implements BrowserHost {
     this.assertActiveTab(tabId, contents)
     const selector = JSON.stringify(target.selector)
     await this.annotations.pauseForBrowserAction(contents)
+    guard?.assertCurrent()
     this.assertActiveTab(tabId, contents)
+    this.getElementTarget(contents, input.sessionId, action.elementId)
     const role = JSON.stringify(target.role)
     const name = JSON.stringify(target.name)
     const text = action.action === "type" ? JSON.stringify(action.text.slice(0, 4_000)) : '""'
@@ -845,7 +1019,7 @@ export class BrowserAgentService implements BrowserHost {
     )
     if (typeof result !== "string") throw new Error("The browser action did not complete.")
     if (action.action === "click") {
-      await waitForPageUpdate(contents, this.pageFingerprints.get(contents.id) ?? "")
+      await waitForPageUpdate(contents, this.pageFingerprints.get(contents.id) ?? "", guard?.signal)
     }
   }
 

@@ -6,9 +6,9 @@
 
 `~/.vykor/settings.json` 中的 `daemon.autoStart` 决定主 daemon 是否交给操作系统常驻。开启后，Vykor 会在当前用户登录时启动主 daemon；daemon 意外退出时，Windows 计划任务、macOS LaunchAgent 或 Linux systemd user service 会重新启动它。
 
-TUI、Web、Desktop、Scheduled Tasks 和 Agent 仍然连接同一个主 daemon。
+TUI、Web 和 Desktop 可以连接同一个本机 daemon。已安排任务和 Agent 在该进程内执行。
 
-Desktop 的「设置 → 常规 → 后台持续运行」使用同一配置和系统服务。CLI 与 Desktop 都通过 `@vykor/server/daemon-host` 的 controller 协调配置期望、系统服务真实状态、失败恢复和最终复核。打包后的 Desktop 自身提供无界面的 `--daemon-service` 入口；Windows 计划任务通过 `--daemon-watchdog` 做单次健康检查，macOS 和 Linux 的用户服务直接托管 `--daemon-service`。这些入口不会创建窗口、托盘、桌面宠物或更新器。
+Desktop 的「设置 → 常规 → 后台持续运行」使用同一配置和系统服务。CLI 与 Desktop 都通过 `@vykor/server/daemon-host` 的 controller 协调配置期望、系统服务真实状态、失败恢复和最终复核。打包后的 Desktop 自身提供无界面的 `--daemon-service` 入口；Windows 计划任务通过 `--daemon-watchdog` 做单次健康检查，macOS 和 Linux 的用户服务直接托管 `--daemon-service`。按需启动使用 `--daemon-on-demand`。这些入口不会创建窗口、托盘、桌面宠物或更新器。
 
 ## 配置
 
@@ -21,7 +21,7 @@ Desktop 的「设置 → 常规 → 后台持续运行」使用同一配置和�
 ```
 
 - `true`：登录后自动启动，异常退出后自动恢复。
-- `false`：不注册系统启动项。TUI、print 或 Desktop 需要本地 daemon 时仍会按需启动，但操作系统不会在登录或崩溃后恢复它；无人打开应用时，已安排任务也不会执行。
+- `false`：不注册系统启动项。TUI、print 或 Desktop 需要本地 daemon 时仍会按需启动，但操作系统不会在登录或崩溃后恢复它。已经启动的按需后台可以继续运行，直到被明确停止或用户退出登录。
 - 默认值是 `false`。
 - 这是机器级设置，只读取用户目录的 `settings.json`；项目目录里的 `.vykor/settings.json` 不能覆盖它。
 
@@ -86,25 +86,15 @@ ensureLocalDaemon
   -> 不正常且关闭：按需启动后台 daemon
 ```
 
-如果当前 CLI 比正在运行的 daemon 更新，已安装系统服务会先刷新自己的启动命令，再启动新 daemon。这样不会出现“系统服务一份、TUI 又偷偷启动一份”的情况。
+CLI 先检查已运行后台的协议和鉴权。后台版本与 CLI 版本可以不同。遇到旧版且协议不兼容的后台时，先安全停掉旧实例再连接。
 
-## 启动模式与桌面接管
+## 登记、复用和数据切换
 
-daemon 写入的 `registry.json` 会记录它是被谁、以什么模式启动的：
+Desktop 和 CLI 的默认本机后台共用登记位置。登记记录包含实际地址、进程 ID、数据库路径、访问 token 和启动归属。后台在打开会话库前取得该位置的独占权，停机后清理自己的记录。桌面用实际协议与浏览器能力判断是否复用。CLI 也会验证已登记后台的协议与 token。
 
-- `executionSurface: "desktop_managed"`：Desktop 内置 daemon 和 Desktop 系统服务 daemon。支持沙箱执行环境与「环境终端」。
-- `executionSurface: "cli_advanced"`：CLI 的 `vk serve`（以及 `vk`、`vk daemon start`、`vk channels serve` 按需拉起的 daemon）。只支持本机终端。
+同一后台运行时可以由系统服务或客户端按需启动。桌面无需在发现兼容 CLI 后台时重启它。若登记进程仍存活但后台暂时不可达，连接报告可重试状态。显式远程监听和自定义 CLI 数据库沿用各自的启动参数。
 
-连接规则：
-
-- CLI 各入口继续「有 ready daemon 就复用」，不因启动模式不同而重启。
-- Desktop 只复用 `desktop_managed` 的 daemon。若注册的是 CLI daemon：
-  - `daemon.autoStart` 关闭：停掉该 daemon（SIGTERM → 5 秒 → 强制结束），清空 registry，启动内置桌面 daemon。
-  - `daemon.autoStart` 开启：卸载当前系统服务，停掉残留进程，安装桌面入口的系统服务（Windows `--daemon-watchdog`，macOS/Linux `--daemon-service`），等桌面托管 daemon 就绪后连接。
-
-Desktop 服务/watchdog 的健康检查同样要求 registry 是 `desktop_managed`，否则视为不可复用；接管前会先停掉存活的 CLI daemon，避免两个 daemon 争抢同一会话库。
-
-只在 registry 指向本机（loopback）地址时才执行停止操作；远程或无法确认的地址直接报错。
+切换恢复后的数据目录前先停用系统常驻。按需后台确认任务和终端已经安全收尾后，在同一进程内打开目标数据目录，再登记新地址和 token。目标启动失败时尝试恢复旧数据位置。界面在后台重新就绪后重建订阅。
 
 ## 崩溃和正常停止
 

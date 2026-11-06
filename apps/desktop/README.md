@@ -6,7 +6,7 @@
 
 真正首次安装且尚未开启常驻时，侧边栏底部会显示一次「保持后台运行」引导。开启成功或选择「暂不开启」后该区域永久消失；升级安装不会补发引导。安装身份和引导状态保存在 Desktop 的 `desktop-preferences.json`，与 `daemon.autoStart` 分开管理。
 
-Desktop 的 Vykor workspace 边界只有两个：所有 HTTP/SSE 操作和协议类型走 `@vykor/application-client`；内嵌 daemon、registry 和系统启动项等本机能力走 `@vykor/server/daemon-host`。WSL 可用性由 daemon 宿主校验，Desktop 不直接依赖 core、sandbox、terminal 或 terminal-node。
+Desktop 和 CLI 可以共用独立 daemon。桌面主进程用 `@vykor/application-client/service` 查找或按需拉起无窗口后台，业务请求和事件走 `@vykor/application-client`。无窗口入口、登记和系统启动项使用 `@vykor/server/daemon-host`。应用安装包自带后台，窗口关闭后按需进程可继续处理任务。常驻开关控制登录启动与异常恢复。
 
 私有应用客户端复用公开 SDK `@rzx/client` 的生命周期资源和同步流程，同时提供笔记、插件及设置等产品操作。Electron 将两层客户端打入安装包。
 
@@ -20,7 +20,7 @@ Electron + React desktop shell for Vykor.
 - [src/main/features/clipboard](src/main/features/clipboard/README.md)：剪贴板读写和原生文本菜单。
 - `src/main/features/pet`: transparent desktop Pet window, visibility, click-through, and position persistence.
 - [src/main/features/session](src/main/features/session/README.md)：会话与项目操作、后台连接、订阅和恢复流程。
-- [src/main/features/daemon-autostart](src/main/features/daemon-autostart/README.md)：后台服务启动、接管与系统默认回复语言初始化。
+- [src/main/features/daemon-autostart](src/main/features/daemon-autostart/README.md)：无窗口后台启动、系统常驻设置与默认回复语言初始化。
 - [src/main/features/settings](src/main/features/settings/README.md)：桌面设置读写、输入校验和快照。
 - [src/main/features/plugin](src/main/features/plugin/README.md): 插件列表、归档和市场安装、权限确认及操作结果。
 - `src/preload`: safe renderer-facing desktop API exposed as `window.desktop`.

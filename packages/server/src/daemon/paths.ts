@@ -1,5 +1,5 @@
-import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { randomBytes, randomUUID } from "node:crypto";
+import { mkdirSync, readFileSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
 import { getDataDir } from "@vykor/host-config";
@@ -14,6 +14,8 @@ export interface DaemonRegistry {
   startedAt: number;
   version: string;
   executionSurface?: DaemonExecutionSurface;
+  launcher?: "desktop" | "cli";
+  supervised?: boolean;
 }
 
 export function createDaemonRegistryEntry(input: {
@@ -24,6 +26,8 @@ export function createDaemonRegistryEntry(input: {
   version: string;
   executionSurface: DaemonExecutionSurface;
   startedAt?: number;
+  launcher?: DaemonRegistry["launcher"];
+  supervised?: boolean;
 }): DaemonRegistry {
   return {
     url: input.url,
@@ -33,6 +37,8 @@ export function createDaemonRegistryEntry(input: {
     startedAt: input.startedAt ?? Date.now(),
     version: input.version,
     executionSurface: input.executionSurface,
+    ...(input.launcher !== undefined ? { launcher: input.launcher } : {}),
+    ...(input.supervised !== undefined ? { supervised: input.supervised } : {}),
   };
 }
 
@@ -50,12 +56,32 @@ export function createBearerToken(): string {
 
 export function writeDaemonRegistry(registry: DaemonRegistry, path = getDaemonRegistryPath()): void {
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, JSON.stringify(registry, null, 2) + "\n", "utf-8");
+  const temporary = `${path}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporary, JSON.stringify(registry, null, 2) + "\n", { encoding: "utf8", mode: 0o600, flag: "wx" });
+    renameSync(temporary, path);
+  } catch (error) {
+    try { rmSync(temporary, { force: true }); } catch { /* preserve publication error */ }
+    throw error;
+  }
 }
 
 export function readDaemonRegistry(path = getDaemonRegistryPath()): DaemonRegistry | undefined {
-  if (!existsSync(path)) return undefined;
-  return JSON.parse(readFileSync(path, "utf-8")) as DaemonRegistry;
+  try {
+    return JSON.parse(readFileSync(path, "utf-8")) as DaemonRegistry;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+export function clearMatchingDaemonRegistry(registry: DaemonRegistry, path: string): void {
+  const current = readDaemonRegistry(path);
+  if (current && current.pid === registry.pid && current.url === registry.url &&
+    current.token === registry.token && current.startedAt === registry.startedAt &&
+    current.version === registry.version && current.storePath === registry.storePath) {
+    clearDaemonRegistry(path);
+  }
 }
 
 export function clearDaemonRegistry(path = getDaemonRegistryPath()): void {

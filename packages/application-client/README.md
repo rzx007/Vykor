@@ -4,6 +4,8 @@
 
 调用方创建 `new VykorClient({ baseUrl, token, fetch })`。构造只组装资源，首次请求通过公开 SDK 的 HTTP 连接检查协议并发送请求；服务端保存业务数据。会话事件同步和恢复直接使用 `@rzx/client`，本包不维护第二套状态。
 
+`@vykor/application-client/service` 是供桌面和 CLI 主进程使用的入口。它复用 SDK 的登记探测和按需启动；拿到地址和 token 后仍用应用 client 发业务请求。
+
 ## 目录导航
 
 - [src/](./src/README.md)：产品客户端及统一导出。

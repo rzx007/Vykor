@@ -11,7 +11,8 @@ import { createWorkflowCommand } from "./commands/workflow";
 import { createDebugCommand } from "./commands/debug";
 import { createDaemonCommand, createServeCommand } from "./commands/daemon";
 import { buildSettingsPatch, coerceConfigValue } from "./config-coerce";
-import { reconcileDaemonAutoStart } from "./daemon-auto-start";
+import { createCliDaemonAutoStartController } from "./daemon-system-service";
+import { withDaemonControlLock } from "@vykor/server/daemon-host";
 import { VERSION } from "./version";
 
 const program = new Command();
@@ -107,18 +108,20 @@ program
         process.exit(1);
         return;
       }
-      await updateSettings((current) => {
-        const patch = buildSettingsPatch(
-          current as unknown as Record<string, unknown>,
-          key,
-          coerced,
-        );
-        return { ...current, ...patch } as typeof current;
-      });
       if (key === "daemon.autoStart") {
         const entry = process.argv[1];
         if (!entry) throw new Error("Cannot locate CLI entrypoint.");
-        reconcileDaemonAutoStart(entry, coerced as boolean);
+        const controller = createCliDaemonAutoStartController(entry);
+        await withDaemonControlLock(() => coerced ? controller.enable() : controller.disable());
+      } else {
+        await updateSettings((current) => {
+          const patch = buildSettingsPatch(
+            current as unknown as Record<string, unknown>,
+            key,
+            coerced,
+          );
+          return { ...current, ...patch } as typeof current;
+        });
       }
       console.log(`Updated ${key}`);
     } else {

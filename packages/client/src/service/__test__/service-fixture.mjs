@@ -5,12 +5,13 @@ import { dirname } from "node:path";
 const [file, version = "1.2.3", protocol, delay = "0"] = process.argv.slice(2);
 if (!protocol) throw new Error("Fixture protocol argument is required");
 const token = "fixture-secret";
+if (process.env.FIXTURE_LOG) console.error("startup diagnostic");
 if (process.env.START_RECORD) await appendFile(process.env.START_RECORD, "start\n");
 if (process.env.START_PIDS) await appendFile(process.env.START_PIDS, `${process.pid}\n`);
 await new Promise(resolve => setTimeout(resolve, Number(delay)));
 const server = createServer((req, res) => {
   res.setHeader("content-type", "application/json");
-  if (req.url === "/health") return res.end(JSON.stringify({ ok: true, version }));
+  if (req.url === "/health") return res.end(JSON.stringify({ ok: true, version, ...(process.env.FIXTURE_DRAINING ? { ready: false, restartPrepared: true } : {}) }));
   if (req.url === "/capabilities") return res.end(JSON.stringify({ serverVersion: version, protocol: { version: Number(protocol) }, features: {} }));
   if (req.headers.authorization !== `Bearer ${token}`) {
     res.statusCode = 401;

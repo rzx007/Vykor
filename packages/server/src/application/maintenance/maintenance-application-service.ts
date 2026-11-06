@@ -111,6 +111,37 @@ export function createMaintenanceApplicationService(
     return { runs, tasks, terminals };
   }
 
+  async function holdRestart() {
+    assertAvailable(true);
+    const closeApplication = context.closeApplication;
+    if (!closeApplication)
+      throw new ApplicationError(501, "后台未提供安全重启接口");
+    const lease = context.control.acquireGlobalMutation();
+    if (!lease)
+      throw new ApplicationError(409, "仍有运行或尚未收尾的任务，不能准备重启");
+    try {
+      const preview = await restartPreview();
+      if (preview.runs.length || preview.tasks.length || preview.terminals.length)
+        throw new ApplicationError(409, "任务、后台任务或终端尚未结束，请收尾后重试");
+      return {
+        release: () => lease.release(),
+        async close() {
+          // Seal admission before releasing the barrier that shutdown drains.
+          try {
+            const closing = closeApplication();
+            lease.release();
+            await closing;
+          } finally {
+            lease.release();
+          }
+        },
+      };
+    } catch (error) {
+      lease.release();
+      throw maintenanceError(error);
+    }
+  }
+
   return {
     requireWriteReady: assertReady,
     async getReadiness(request: unknown = {}, signal?: AbortSignal) {
@@ -140,36 +171,13 @@ export function createMaintenanceApplicationService(
       assertAvailable();
       return await restartPreview();
     },
+    holdRestart,
     async prepareRestart(request: unknown = {}, signal?: AbortSignal) {
-      assertAvailable(true);
-      if (!context.closeApplication)
-        throw new ApplicationError(501, "后台未提供安全重启接口");
-      const lease = context.control.acquireGlobalMutation();
-      if (!lease)
-        throw new ApplicationError(
-          409,
-          "仍有运行或尚未收尾的任务，不能准备重启",
-        );
       try {
-        const preview = await restartPreview();
-        if (
-          preview.runs.length ||
-          preview.tasks.length ||
-          preview.terminals.length
-        )
-          throw new ApplicationError(
-            409,
-            "任务、后台任务或终端尚未结束，请收尾后重试",
-          );
-        // closeApplication closes admission synchronously; its drain waits for this lease.
-        const closing = context.closeApplication();
-        lease.release();
-        await closing;
+        await (await holdRestart()).close();
         return { prepared: true };
       } catch (error) {
         throw maintenanceError(error);
-      } finally {
-        lease.release();
       }
     },
     async readPolicy(request: unknown = {}, signal?: AbortSignal) {

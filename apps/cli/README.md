@@ -138,3 +138,5 @@ vk config set daemon.autoStart true
 - 问题反馈：[https://github.com/rzx007/Vykor/issues](https://github.com/rzx007/Vykor/issues)
 
 本地从源码开发请看仓库根目录 `README.md`。
+
+已登记的本机后台可由 CLI 或 Desktop 启动。CLI 会验证协议和 token 后复用兼容实例。默认按需启动和常驻服务使用同一个后台实现，详细流程见 [daemon 系统常驻](../../docs/daemon-system-service.md)。

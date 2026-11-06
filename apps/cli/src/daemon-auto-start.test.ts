@@ -10,6 +10,7 @@ const serviceMock = vi.hoisted(() => ({
 }));
 
 vi.mock("@vykor/server/daemon-host", () => ({
+  withDaemonControlLock: (action: () => unknown) => action(),
   shouldStartManagedDaemon: async () =>
     (await loadSettingsMock()).daemon?.autoStart ?? false,
   saveDaemonAutoStartPreference: async (autoStart: boolean) => {
@@ -74,27 +75,27 @@ describe("daemon auto-start settings", () => {
     });
   });
 
-  it("installs the system service when automatic startup is enabled", () => {
-    const result = reconcileDaemonAutoStart("cli.js", true);
+  it("installs the system service when automatic startup is enabled", async () => {
+    const result = await reconcileDaemonAutoStart("cli.js", true);
 
     expect(serviceMock.install).toHaveBeenCalledOnce();
     expect(result.action).toBe("installed");
     expect(result.state).toBe("running");
   });
 
-  it("starts a disabled system service when automatic startup is enabled", () => {
+  it("starts a disabled system service when automatic startup is enabled", async () => {
     serviceMock.status.mockReturnValue({ platform: "win32", state: "stopped" });
 
-    const result = reconcileDaemonAutoStart("cli.js", true);
+    const result = await reconcileDaemonAutoStart("cli.js", true);
 
     expect(serviceMock.start).toHaveBeenCalledOnce();
     expect(result.action).toBe("started");
   });
 
-  it("uninstalls the system service when automatic startup is disabled", () => {
+  it("uninstalls the system service when automatic startup is disabled", async () => {
     serviceMock.status.mockReturnValue({ platform: "win32", state: "running" });
 
-    const result = reconcileDaemonAutoStart("cli.js", false);
+    const result = await reconcileDaemonAutoStart("cli.js", false);
 
     expect(serviceMock.uninstall).toHaveBeenCalledOnce();
     expect(result.action).toBe("uninstalled");

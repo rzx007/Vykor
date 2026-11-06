@@ -3,6 +3,7 @@ import { dirname } from "node:path"
 import {
   createDaemonAutoStartController,
   DaemonSystemService,
+  withDaemonControlLock,
   type DaemonAutoStartController,
 } from "@vykor/server/daemon-host"
 import { app } from "electron"
@@ -79,9 +80,14 @@ export function createDesktopDaemonSystemService(): DaemonSystemService {
 }
 
 export function createDesktopDaemonAutoStartController(): DaemonAutoStartController {
-  return createDaemonAutoStartController({
+  const controller = createDaemonAutoStartController({
     invocation: createDesktopDaemonSystemService().invocation(),
   })
+  return {
+    snapshot: controller.snapshot,
+    enable: () => withDaemonControlLock(controller.enable),
+    disable: () => withDaemonControlLock(controller.disable),
+  }
 }
 
 export const daemonAutoStartService = new DaemonAutoStartService()

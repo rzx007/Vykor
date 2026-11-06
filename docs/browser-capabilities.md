@@ -1,6 +1,8 @@
 # Desktop 浏览器能力
 
-> 状态：当前实现。以下 Agent 浏览器能力需要 Desktop 内嵌浏览器；没有 Desktop Browser 宿主的 CLI 或独立 daemon 会返回不可用。
+> 状态：当前实现。
+
+Agent 浏览器工具由 Desktop 的内嵌浏览器执行。CLI 和 Desktop 共用同一个本机后台时，CLI 发起的会话也可以使用这些工具，前提是 Desktop 正连接该后台，并且会话在持有浏览器标签页的窗口中打开。没有可用的浏览器连接时，其它工具仍可运行。
 
 ## 普通 Browser
 
@@ -29,7 +31,7 @@ Agent 首次访问一个站点时会请求当前会话的站点授权。点击�
 | `read_diagnostics` | 读取本次采集的有限结果，不再弹出新的批准请求。 |
 | `stop_diagnostics` | 由采集所属会话立即停止采集，不再弹出新的批准请求。 |
 
-排查页面加载问题时，可以先 `start_diagnostics`，再用普通 `Browser` 导航或点击以复现问题，随后 `read_diagnostics`，最后 `stop_diagnostics`。采集只记录批准之后的控制台消息和已完成或失败的网络请求，不回溯之前的事件。采集最多持续 60 秒；切换活动标签页、关闭开关、通过 Desktop 删除会话或跨站导航也会结束采集。同站重载会清空旧页面事件，再采集新页面事件。同一时间只允许一个会话采集。
+排查页面加载问题时，可以先 `start_diagnostics`，再用普通 `Browser` 导航或点击以复现问题，随后 `read_diagnostics`，最后 `stop_diagnostics`。采集只记录批准之后的控制台消息和已完成或失败的网络请求，不回溯之前的事件。采集最多持续 60 秒；切换活动标签页、关闭开关、通过 Desktop 删除会话或跨站导航也会结束采集。关闭桌面或断开后台连接也会停止采集。同站重载会清空旧页面事件，再采集新页面事件。同一时间只允许一个会话采集。
 
 控制台只包含主框架的有限消息；网络只包含主框架发起的请求，也可能列出它请求的第三方资源 URL。网络结果只保留处理后的 URL、方法、资源类型、状态、失败原因和耗时；URL 的查询参数及 `data:` 内嵌内容会被遮蔽。不会读取或返回请求/响应头、Cookie、请求/响应正文及 WebSocket 帧。事件数量和工具结果大小都有上限，超出的结果会标记为截断。
 
@@ -38,6 +40,8 @@ Developer mode 是四类受控检查能力，不提供任意 CDP 方法或脚本
 ## 实现入口
 
 普通动作由 `packages/server/src/application/browser-tools/browser-tool.ts` 定义，Desktop 的 `apps/desktop/src/main/features/browser/browser-agent-service.ts` 负责选择标签页并执行。开发者动作由同目录的 `browser-developer-tool.ts` 定义；Desktop 的 `browser-developer-inspector.ts` 负责固定 CDP 检查、有限采集和清理。授权请求由 `packages/server/src/permissions/permission-broker.ts` 管理，Developer mode 的开关保存在 Desktop 本地偏好中。
+
+本机后台通过一条仅供 Desktop 主进程使用的事件流发送浏览器请求，Desktop 用登记文件里的 token 连接。站点授权和开发检查授权仍由发起工具的会话处理。Desktop 在操作排队时记录窗口会话订阅和页面版本，在审批返回和执行前再次核对。操作结果通过 HTTP 回到后台。截图最多 8 MiB，由后台存入原有的截图目录。断开连接会取消仍在等待的操作。若后台已经发出操作但收不到结果，会把该次执行标为结果未知，重连只接收新操作。
 
 ## 用户批注
 

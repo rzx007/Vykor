@@ -1,11 +1,13 @@
 import { Hono, type Context } from "hono";
 import { cleanupPreviewDto, cleanupResultDto, storageReportDto, usageReportDto } from "../mappers/maintenance.js";
 import type { MaintenanceApplicationService } from "../../application/maintenance/maintenance-application-service.js";
+import type { RegisteredDaemonControl } from "../../daemon-host/registered-daemon.js";
 import { ApplicationError } from "../../shared/application-error.js";
 import { errorResponse, jsonResponse, readJson } from "../support.js";
 
 export function createMaintenanceRoutes(context: {
   maintenance?: MaintenanceApplicationService;
+  registeredDaemon?: RegisteredDaemonControl;
 }) {
   const service = context.maintenance;
   if (!service)
@@ -47,6 +49,26 @@ export function createMaintenanceRoutes(context: {
       "/maintenance/prepare-restart",
       reply((c) => service.prepareRestart(undefined, c.req.raw.signal)),
     )
+    .post("/maintenance/data-switch", async (c) => {
+      if (!context.registeredDaemon || c.req.header("origin"))
+        return errorResponse(404, "当前后台未提供本机数据切换。");
+      try {
+        const { id, directory, storePath } = await readJson(c);
+        if ((id !== undefined && typeof id !== "string") || typeof directory !== "string" || typeof storePath !== "string")
+          return errorResponse(400, "数据切换需要完整的目录和数据库路径。");
+        return jsonResponse(await context.registeredDaemon.requestSwitch(
+          { id, directory, storePath }, service.holdRestart,
+        ), 202);
+      } catch (error) {
+        return failure(error);
+      }
+    })
+    .get("/maintenance/data-switch/:id", (c) => {
+      if (!context.registeredDaemon || c.req.header("origin"))
+        return errorResponse(404, "当前后台未提供本机数据切换。");
+      const result = context.registeredDaemon.getSwitchResult(c.req.param("id"));
+      return result ? jsonResponse(result) : errorResponse(404, "未找到这次数据切换。");
+    })
     .get(
       "/maintenance/cleanup/policy",
       reply((c) => service.readPolicy(undefined, c.req.raw.signal)),

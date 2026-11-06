@@ -1,3 +1,4 @@
+import { Service } from "@vykor/application-client/service";
 import {
   daemonPidAlive,
   terminateDaemonProcess,
@@ -23,6 +24,13 @@ export async function probeDaemonRegistry(
 ): Promise<DaemonProbeStatus> {
   const pidAlive = options.pidAlive ?? daemonPidAlive;
   if (!pidAlive(registry.pid)) return "unreachable";
+  if (registry.launcher) {
+    const endpoint = await Service.discover({ timeoutMs: options.timeoutMs ?? 1_000 });
+    return endpoint && endpoint.pid === registry.pid && endpoint.url === registry.url &&
+      endpoint.token === registry.token && endpoint.startedAt === registry.startedAt
+      ? "ready" : "unreachable";
+  }
+
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 1_000);
@@ -32,8 +40,8 @@ export async function probeDaemonRegistry(
       signal: controller.signal,
     });
     if (!response.ok) return "unreachable";
-    const health = await response.json() as { ok?: unknown; version?: unknown };
-    if (health.ok !== true) return "unreachable";
+    const health = await response.json() as { ok?: unknown; version?: unknown; ready?: unknown; restartPrepared?: unknown };
+    if (health.ok !== true || health.ready === false || health.restartPrepared === true) return "unreachable";
 
     if (options.expectedVersion && (
       registry.version !== options.expectedVersion || health.version !== options.expectedVersion

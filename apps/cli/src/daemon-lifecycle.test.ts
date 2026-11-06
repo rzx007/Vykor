@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { DaemonRegistry } from "@vykor/server";
 
+const discover = vi.hoisted(() => vi.fn());
+vi.mock("@vykor/application-client/service", () => ({ Service: { discover } }));
+
 import { probeDaemonRegistry } from "./daemon-lifecycle.js";
 
 function registry(overrides: Partial<DaemonRegistry> = {}): DaemonRegistry {
@@ -24,6 +27,15 @@ function response(body: unknown, status = 200): Response {
 }
 
 describe("probeDaemonRegistry", () => {
+  it("reuses a compatible independent Desktop daemon across release versions", async () => {
+    const desktop = registry({ launcher: "desktop", version: "1.2.28" });
+    discover.mockResolvedValue(desktop);
+    await expect(probeDaemonRegistry(desktop, {
+      pidAlive: () => true, expectedVersion: "1.0.0", minimumStartedAt: 1000,
+    })).resolves.toBe("ready");
+    expect(discover).toHaveBeenCalled();
+  });
+
   it("accepts a healthy daemon from the current build", async () => {
     const calls: RequestInit[] = [];
     const status = await probeDaemonRegistry(registry(), {

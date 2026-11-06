@@ -1,19 +1,16 @@
-import { stat } from "node:fs/promises";
-
+import { join } from "node:path";
+import { getLogsDir } from "@vykor/host-config";
+import { setTimeout as delay } from "node:timers/promises";
+import { Service } from "@vykor/application-client/service";
 import {
-  loadDaemonAutoStart,
-  reconcileDaemonAutoStart,
-} from "./daemon-auto-start.js";
-import { VERSION } from "./version.js";
-import {
-  probeDaemonRegistry,
-  terminateDaemonProcess,
-} from "./daemon-lifecycle.js";
-import {
-  daemonStartupError,
-  spawnDaemonProcess,
-  type SpawnedDaemonProcess,
-} from "./daemon-process.js";
+  daemonPidAlive,
+  getDaemonRegistryPath,
+  readDaemonRegistry,
+  withDaemonControlLock,
+} from "@vykor/server/daemon-host";
+import { loadDaemonAutoStart, reconcileDaemonAutoStart } from "./daemon-auto-start.js";
+import { resolveDaemonInvocation } from "./daemon-process.js";
+import { probeDaemonRegistry } from "./daemon-lifecycle.js";
 
 export interface LocalDaemonHandle {
   url: string;
@@ -24,110 +21,69 @@ export interface LocalDaemonHandle {
 }
 
 export interface EnsureLocalDaemonOptions {
-  /** Absolute or relative CLI entry used to spawn `serve`. Defaults to `process.argv[1]`. */
+  /** CLI entry used to spawn serve. Defaults to process.argv[1]. */
   cliPath?: string;
+  /** Optional version constraint for a manually configured legacy backend. */
   expectedVersion?: string;
-  /** Override the global daemon.autoStart setting. Intended for tests and embedded hosts. */
   autoStart?: boolean;
 }
 
-/**
- * Ensure a local Vykor daemon is ready (registry + health).
- * Shared by TUI launcher and print/headless Session API client.
- */
+const startupTimeoutMs = 45_000;
+
 export async function ensureLocalDaemon(
   options: EnsureLocalDaemonOptions = {},
 ): Promise<LocalDaemonHandle> {
   const cliPath = options.cliPath ?? process.argv[1];
   if (!cliPath) throw new Error("Cannot locate CLI entrypoint.");
-
-  const expectedVersion = options.expectedVersion ?? VERSION;
-  const daemonProbeOptions = {
-    expectedVersion,
-    minimumStartedAt: (await stat(cliPath)).mtimeMs,
-  };
-
-  const { clearDaemonRegistry, readDaemonRegistry } =
-    await import("@vykor/server");
-
-  const waitForDaemonRegistry = async (
-    spawned: SpawnedDaemonProcess,
-  ): Promise<NonNullable<ReturnType<typeof readDaemonRegistry>>> => {
-    for (let i = 0; i < 40; i += 1) {
-      const registry = readDaemonRegistry();
-      if (
-        registry &&
-        (await probeDaemonRegistry(registry, daemonProbeOptions)) === "ready"
-      ) {
-        return registry;
-      }
-      if (spawned.failure()) throw daemonStartupError(spawned);
-      await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    throw daemonStartupError(spawned);
-  };
-
-  let daemon = readDaemonRegistry();
-  let daemonStatus = daemon
-    ? await probeDaemonRegistry(daemon, daemonProbeOptions)
-    : "unreachable";
   const autoStart = options.autoStart ?? (await loadDaemonAutoStart());
-  const reconciliation = reconcileDaemonAutoStart(cliPath, autoStart);
-  if (
-    daemon &&
-    daemonStatus === "ready" &&
-    reconciliation.action === "uninstalled"
-  ) {
-    daemonStatus = await probeDaemonRegistry(daemon, daemonProbeOptions);
-  }
+  const reconciliation = await reconcileDaemonAutoStart(cliPath, autoStart);
+  const file = getDaemonRegistryPath();
+  const beforeProbe = readDaemonRegistry();
+  const existing = await Service.discover({ file });
+  if (existing) return existing;
 
-  if (!daemon || daemonStatus !== "ready") {
-    if (autoStart) {
-      if (reconciliation.action === "none") {
-        if (daemonStatus === "stale") reconciliation.service.install();
-        else reconciliation.service.restart();
-      }
-      for (let i = 0; i < 100; i += 1) {
-        daemon = readDaemonRegistry();
-        if (
-          daemon &&
-          (await probeDaemonRegistry(daemon, daemonProbeOptions)) === "ready"
-        )
-          break;
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-      if (
-        !daemon ||
-        (await probeDaemonRegistry(daemon, daemonProbeOptions)) !== "ready"
-      ) {
-        const status = reconciliation.service.status();
-        throw new Error(
-          `The Vykor daemon system service did not become ready (state: ${status.state})`,
-        );
-      }
-    } else {
-      if (daemon && daemonStatus === "stale")
-        terminateDaemonProcess(daemon.pid);
-      clearDaemonRegistry();
-      const serveArgs = [
-        cliPath,
-        "serve",
-        "--register",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        "0",
-      ];
-      const spawned = spawnDaemonProcess(serveArgs[0]!, serveArgs.slice(1));
-      daemon = await waitForDaemonRegistry(spawned);
+  const registry = readDaemonRegistry();
+  if (registry && daemonPidAlive(registry.pid)) {
+    if (beforeProbe?.token !== registry.token || beforeProbe?.url !== registry.url ||
+      beforeProbe?.pid !== registry.pid || beforeProbe?.startedAt !== registry.startedAt) {
+      const published = await Service.discover({ file });
+      if (published) return published;
     }
+    // Preserve explicitly registered remote and custom legacy backends.
+    if (!registry.launcher && await probeDaemonRegistry(registry, { expectedVersion: options.expectedVersion }) === "ready")
+      return registry;
+    throw new Error("The registered daemon is temporarily unavailable. Retry or stop the existing daemon explicitly.");
   }
 
-  return {
-    url: daemon.url,
-    token: daemon.token,
-    pid: daemon.pid,
-    ...(daemon.storePath ? { storePath: daemon.storePath } : {}),
-    ...(daemon.version ? { version: daemon.version } : {}),
-  };
+  if (autoStart) {
+    if (reconciliation.action === "none") await withDaemonControlLock(() => {
+      const current = readDaemonRegistry();
+      if (!current || !daemonPidAlive(current.pid)) reconciliation.service.restart();
+    });
+    const deadline = AbortSignal.timeout(startupTimeoutMs);
+    try {
+      while (!deadline.aborted) {
+        const endpoint = await Service.discover({ file, signal: deadline });
+        if (endpoint) return endpoint;
+        const current = readDaemonRegistry();
+        if (current && !current.launcher && await probeDaemonRegistry(current, { expectedVersion: options.expectedVersion }) === "ready")
+          return current;
+        await delay(100, undefined, { signal: deadline });
+      }
+    } catch (error) {
+      if (!deadline.aborted) throw error;
+    }
+    throw new Error("The Vykor system service did not become ready.");
+  }
+
+  const { command, args } = resolveDaemonInvocation(cliPath, [
+    "serve", "--register", "--host", "127.0.0.1", "--port", "0",
+  ]);
+  const logPath = join(getLogsDir(), "daemon.log");
+  try {
+    return await Service.ensure({ file, command: [command, ...args], timeoutMs: startupTimeoutMs, logPath });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`${detail} See daemon log at ${logPath}.`, { cause: error });
+  }
 }
