@@ -1,6 +1,7 @@
 import { EventEmitter, once } from "node:events"
 import { createServer, type ServerResponse } from "node:http"
 import { CURRENT_PROTOCOL_VERSION } from "@vykor/application-client"
+import { BROWSER_BRIDGE_MAX_RESULT_BODY_BYTES } from "@vykor/server/daemon-host"
 import { afterEach, expect, it, vi } from "vitest"
 
 const electron = vi.hoisted(() => ({ fromId: vi.fn() }))
@@ -61,7 +62,11 @@ afterEach(async () => {
   cleanups.length = 0
 })
 
-async function createDaemon(holdApproval = false, cancelledResultId?: string) {
+async function createDaemon({ holdApproval = false, cancelledResultId, maxResultBytes = Infinity }: {
+  holdApproval?: boolean
+  cancelledResultId?: string
+  maxResultBytes?: number
+} = {}) {
   const requests: Array<{ path: string; body: unknown }> = []
   const closedApprovals: string[] = []
   const streams: ServerResponse[] = []
@@ -93,7 +98,13 @@ async function createDaemon(holdApproval = false, cancelledResultId?: string) {
     }
     const chunks: Buffer[] = []
     for await (const chunk of request) chunks.push(chunk)
-    requests.push({ path: request.url!, body: JSON.parse(Buffer.concat(chunks).toString()) })
+    const body = Buffer.concat(chunks)
+    requests.push({ path: request.url!, body: JSON.parse(body.toString()) })
+    if (request.url?.endsWith("/result") && body.byteLength > maxResultBytes) {
+      response.writeHead(413, { "content-type": "application/json" })
+      response.end(JSON.stringify({ error: "Browser host request is too large." }))
+      return
+    }
     if (cancelledResultId && request.url?.endsWith(`/${cancelledResultId}/result`)) {
       response.writeHead(404, { "content-type": "application/json" })
       response.end(JSON.stringify({ error: "Browser request is no longer pending." }))
@@ -157,7 +168,7 @@ it("posts approval and the screenshot result under the stream connection and com
 
 it("aborts an approval when the stream closes and does not replay the command on reconnect", async () => {
   const { browser, page } = createBrowser()
-  const daemon = await createDaemon(true)
+  const daemon = await createDaemon({ holdApproval: true })
   const token = {}
   cleanups.push(
     startBrowserBridge({
@@ -183,7 +194,7 @@ it("aborts an approval when the stream closes and does not replay the command on
 
 it("receives cancellation while the approval POST is still pending", async () => {
   const { browser, page } = createBrowser()
-  const daemon = await createDaemon(true)
+  const daemon = await createDaemon({ holdApproval: true })
   const token = {}
   cleanups.push(
     startBrowserBridge({
@@ -213,7 +224,7 @@ it("receives cancellation while the approval POST is still pending", async () =>
 
 it("keeps the stream open when a result arrives after the daemon cancelled its request", async () => {
   const { browser } = createBrowser()
-  const daemon = await createDaemon(false, "cancelled")
+  const daemon = await createDaemon({ cancelledResultId: "cancelled" })
   const token = {}
   cleanups.push(startBrowserBridge({
     browser,
@@ -234,6 +245,59 @@ it("keeps the stream open when a result arrives after the daemon cancelled its r
     "/browser-host/connection-1/next/result"
   ))
   expect(stream.destroyed).toBe(false)
+})
+
+it("keeps the stream open after the daemon rejects an oversized result", async () => {
+  const { browser, page } = createBrowser()
+  const daemon = await createDaemon({ maxResultBytes: 1_024 })
+  const token = {}
+  const title = "x".repeat(2_048)
+  page.executeJavaScript.mockResolvedValueOnce({ ...browserObservation, title })
+  cleanups.push(startBrowserBridge({
+    browser,
+    baseUrl: daemon.baseUrl,
+    token: "registry-token",
+    getOwnerSessionToken: () => token,
+  }))
+  await vi.waitFor(() => expect(daemon.streams).toHaveLength(1))
+  const stream = daemon.streams[0]!
+  const deadlineAt = Date.now() + 5_000
+  send(stream, { ...command, requestId: "oversized", deadlineAt })
+
+  await vi.waitFor(() => expect(daemon.requests).toContainEqual({
+    path: "/browser-host/connection-1/oversized/result",
+    body: { result: { ...browserObservation, title, annotations: [] }, screenshotBase64: "UE5H" },
+  }))
+
+  send(stream, { ...command, requestId: "next", deadlineAt })
+  await vi.waitFor(() => expect(daemon.requests).toContainEqual({
+    path: "/browser-host/connection-1/next/result",
+    body: { result: { ...browserObservation, annotations: [] }, screenshotBase64: "UE5H" },
+  }))
+  expect(stream.destroyed).toBe(false)
+})
+
+it("sends a short error when the serialized result exceeds the limit in bytes", async () => {
+  const { browser, page } = createBrowser()
+  const daemon = await createDaemon()
+  const token = {}
+  // Each character takes three UTF-8 bytes. The rest of the JSON pushes it past the limit.
+  const title = "界".repeat(BROWSER_BRIDGE_MAX_RESULT_BODY_BYTES / 3)
+  page.executeJavaScript.mockResolvedValueOnce({ ...browserObservation, title })
+  cleanups.push(startBrowserBridge({
+    browser,
+    baseUrl: daemon.baseUrl,
+    token: "registry-token",
+    getOwnerSessionToken: () => token,
+  }))
+  await vi.waitFor(() => expect(daemon.streams).toHaveLength(1))
+  send(daemon.streams[0]!, { ...command, requestId: "oversized", deadlineAt: Date.now() + 5_000 })
+
+  const path = "/browser-host/connection-1/oversized/result"
+  await vi.waitFor(() => expect(daemon.requests.some((request) => request.path === path)).toBe(true))
+  expect(daemon.requests.find((request) => request.path === path)?.body).toEqual({
+    error: "The browser result was too large to return. The operation may already have run.",
+  })
 })
 
 it("lets the next command run after cancelling an inspection waiting on Electron", async () => {

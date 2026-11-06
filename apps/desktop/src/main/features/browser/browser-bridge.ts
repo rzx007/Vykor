@@ -2,7 +2,12 @@ import { request } from "node:http"
 import { Readable } from "node:stream"
 import { setTimeout as delay } from "node:timers/promises"
 import { HttpTransport, SseTransport, VykorApiError } from "@vykor/application-client"
-import { parseBrowserBridgeEvent, type BrowserBridgeEvent } from "@vykor/server/daemon-host"
+import {
+  BROWSER_BRIDGE_MAX_RESULT_BODY_BYTES,
+  BROWSER_BRIDGE_RESULT_TOO_LARGE,
+  parseBrowserBridgeEvent,
+  type BrowserBridgeEvent,
+} from "@vykor/server/daemon-host"
 import { isLoopbackDaemonUrl } from "../daemon-autostart/daemon-surface"
 import {
   browserAgentService,
@@ -124,11 +129,23 @@ export function startBrowserBridge(options: BrowserBridgeOptions): () => void {
       body = { error: message.slice(0, 4_096) || "Browser operation failed." }
     }
     signal.throwIfAborted()
+    let payload = JSON.stringify(body)
+    // The server can close the upload before an oversized POST receives its 413.
+    if (Buffer.byteLength(payload) > BROWSER_BRIDGE_MAX_RESULT_BODY_BYTES) {
+      payload = JSON.stringify({ error: BROWSER_BRIDGE_RESULT_TOO_LARGE })
+    }
     try {
-      await http.request(path + "/result", { method: "POST", body, signal })
+      const response = await http.requestResponse(path + "/result", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: payload,
+        signal,
+      })
+      await response.json()
     } catch (error) {
-      // The daemon can retire the request before its cancel event reaches this stream.
-      if (!(error instanceof VykorApiError && error.status === 404)) throw error
+      // A retired request (404) or an oversized result (413) is already settled by the daemon.
+      if (!(error instanceof VykorApiError && (error.status === 404 || error.status === 413)))
+        throw error
     }
   }
 

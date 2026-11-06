@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CURRENT_PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER } from "@vykor/protocol";
 import { expect, it, vi } from "vitest";
-import { DesktopBrowserBridge } from "../../application/browser-tools/browser-bridge.js";
+import { BROWSER_BRIDGE_MAX_RESULT_BODY_BYTES, DesktopBrowserBridge } from "../../application/browser-tools/browser-bridge.js";
 import { parseBrowserBridgeEvent } from "../../application/browser-tools/browser-bridge-protocol.js";
 import { createBrowserTool } from "../../application/browser-tools/browser-tool.js";
 import { createBrowserDeveloperTool } from "../../application/browser-tools/browser-developer-tool.js";
@@ -155,6 +155,44 @@ it("rejects a streamed approval body as soon as it exceeds its limit", async () 
   const request = { method: "POST", body, duplex: "half" };
   expect((await app.request("/connection/request/approval", request)).status).toBe(413);
   expect(cancel).toHaveBeenCalled();
+});
+
+it("fails only the pending command whose result exceeds the body limit", async () => {
+  const bridge = new DesktopBrowserBridge();
+  const app = createBrowserHostRoutes(bridge, () => true);
+  const reader = (await app.request("/stream")).body!.getReader();
+  try {
+    const hello = await nextEvent(reader);
+    if (hello.type !== "hello") throw new Error("Expected browser hello");
+    const input = { action: { action: "inspect" as const }, includeScreenshot: false,
+      sessionId: "session", cwd: ".", approve: async () => true };
+    const outcomes = Promise.allSettled([bridge.execute(input), bridge.execute(input)]);
+    const first = await nextEvent(reader);
+    const second = await nextEvent(reader);
+    if (first.type !== "command" || second.type !== "command") throw new Error("Expected browser commands");
+    const resultPath = (requestId: string) => `/${hello.connectionId}/${requestId}/result`;
+    const oversized = new ReadableStream<Uint8Array>({
+      start(controller) { controller.enqueue(new Uint8Array(BROWSER_BRIDGE_MAX_RESULT_BODY_BYTES + 1)); },
+    });
+    const request = { method: "POST", body: oversized, duplex: "half" };
+    const response = await app.request(resultPath(first.requestId), request);
+    expect(response.status).toBe(413);
+    expect(response.headers.get("connection")).toBe("close");
+
+    const result = { url: "https://example.test", title: "Fixture", pageText: "" };
+    const postResult = (requestId: string) => app.request(resultPath(requestId), {
+      method: "POST", body: JSON.stringify({ result }),
+    });
+    expect((await postResult(first.requestId)).status).toBe(404);
+    expect((await postResult(second.requestId)).status).toBe(200);
+    expect(await outcomes).toEqual([
+      { status: "rejected", reason: new Error("The browser result was too large to return. The operation may already have run.") },
+      { status: "fulfilled", value: result },
+    ]);
+    expect(bridge.connected).toBe(true);
+  } finally {
+    await reader.cancel();
+  }
 });
 
 it("decodes screenshot bytes only for an authorized screenshot request", async () => {

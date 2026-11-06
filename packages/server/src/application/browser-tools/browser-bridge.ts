@@ -7,6 +7,7 @@ const maxPending = 16;
 const maxExecutionMs = 5 * 60_000;
 export const BROWSER_BRIDGE_MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024;
 export const BROWSER_BRIDGE_MAX_RESULT_BODY_BYTES = 12 * 1024 * 1024;
+export const BROWSER_BRIDGE_RESULT_TOO_LARGE = "The browser result was too large to return. The operation may already have run.";
 
 type BrowserResult = BrowserObservation | BrowserDeveloperResult;
 type ApprovalKind = "origin" | "developer";

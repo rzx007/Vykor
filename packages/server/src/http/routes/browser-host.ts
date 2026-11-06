@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { BROWSER_BRIDGE_MAX_RESULT_BODY_BYTES, type DesktopBrowserBridge } from "../../application/browser-tools/browser-bridge.js";
+import { BROWSER_BRIDGE_MAX_RESULT_BODY_BYTES, BROWSER_BRIDGE_RESULT_TOO_LARGE, type DesktopBrowserBridge } from "../../application/browser-tools/browser-bridge.js";
 import { errorResponse, jsonResponse, SSE_HEADERS } from "../support.js";
 
 export function createBrowserHostRoutes(bridge: DesktopBrowserBridge, available: () => boolean): Hono {
@@ -68,10 +68,20 @@ export function createBrowserHostRoutes(bridge: DesktopBrowserBridge, available:
       return approved === undefined ? errorResponse(404, "Browser approval request is no longer pending.") : jsonResponse({ approved });
     })
     .post("/:connectionId/:requestId/result", async (c) => {
+      const { connectionId, requestId } = c.req.param();
       const body = await readBridgeJson(c.req.raw, BROWSER_BRIDGE_MAX_RESULT_BODY_BYTES);
-      if (body instanceof Response) return body;
+      if (body instanceof Response) {
+        if (body.status === 413) {
+          bridge.complete(connectionId, requestId, {
+            error: BROWSER_BRIDGE_RESULT_TOO_LARGE,
+          });
+          // The oversized upload may still have unread bytes on this HTTP socket.
+          body.headers.set("connection", "close");
+        }
+        return body;
+      }
       try {
-        const completed = bridge.complete(c.req.param("connectionId"), c.req.param("requestId"), body);
+        const completed = bridge.complete(connectionId, requestId, body);
         return completed ? jsonResponse({ ok: true }) : errorResponse(404, "Browser request is no longer pending.");
       } catch {
         return errorResponse(400, "Invalid browser result.");

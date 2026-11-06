@@ -41,7 +41,7 @@ Developer mode 是四类受控检查能力，不提供任意 CDP 方法或脚本
 
 普通动作由 `packages/server/src/application/browser-tools/browser-tool.ts` 定义，Desktop 的 `apps/desktop/src/main/features/browser/browser-agent-service.ts` 负责选择标签页并执行。开发者动作由同目录的 `browser-developer-tool.ts` 定义；Desktop 的 `browser-developer-inspector.ts` 负责固定 CDP 检查、有限采集和清理。授权请求由 `packages/server/src/permissions/permission-broker.ts` 管理，Developer mode 的开关保存在 Desktop 本地偏好中。
 
-本机后台通过一条仅供 Desktop 主进程使用的事件流发送浏览器请求，Desktop 用登记文件里的 token 连接。站点授权和开发检查授权仍由发起工具的会话处理。Desktop 在操作排队时记录窗口会话订阅和页面版本，在审批返回和执行前再次核对。操作结果通过 HTTP 回到后台。截图最多 8 MiB，由后台存入原有的截图目录。断开连接会取消仍在等待的操作。若后台已经发出操作但收不到结果，会把该次执行标为结果未知，重连只接收新操作。
+本机后台通过一条仅供 Desktop 主进程使用的事件流发送浏览器请求，Desktop 用登记文件里的 token 连接。站点授权和开发检查授权仍由发起工具的会话处理。Desktop 在操作排队时记录窗口会话订阅和页面版本，在审批返回和执行前再次核对。操作结果通过 HTTP 回到后台。截图最多 8 MiB，由后台存入原有的截图目录。整个回包最多 12 MiB，超限时只给当前工具调用返回错误，其他请求继续处理。断开连接会取消仍在等待的操作。若后台已经发出操作但收不到结果，会把该次执行标为结果未知，重连只接收新操作。
 
 ## 用户批注
 
