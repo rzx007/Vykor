@@ -23,3 +23,5 @@
 AgentChildInvocation 的 inputId/runId 是成功接纳后的必填身份。AgentChildRunSnapshot 与 readRun/waitRun 只观察固定轮次；JobInputReceipt 与 AgentInputReceipt 结构一致。
 
 阶段 B 的 `AgentRunSettlement` 固定实际结果与停止时间；`AgentRunHandle.settled` 等待真实调用和清理，`result` 继续承接可靠保存错误。`observeInvocation` 把工具真实完成 Promise 交给当前 run。`cleanupUnconfirmed` 表示清理未确认，`projectionError` 表示已停止但结果尚未保存，二者均不创建新的执行状态或身份。
+
+`AgentExecutionContext.childResults` 是可选的本轮子结果收集入口。`hasPending()` 检查是否还有需要交给模型的结果或未退出的工具调用；`collect({wait:false})` 只在已有工作都结束时取回结果，`wait:true` 等齐后取回。收集不创建子运行，也不扩大工具权限。普通子失败、取消和部分报告都作为任务数据返回；父运行取消或追加输入可打断本次等待。

@@ -2,6 +2,10 @@
 
 这里验证 Core 模型/工具循环与 API、权限、提示词、真实文件工具组合后的行为：流中断重试、参数纠错、文件保护、内容复用、Shell 分页、Job 等待时限及 ToolSearch 注册表接入。
 
+`__test__/delegation-guidance.integration.test.ts` 执行提示词里的 Job 工具调用示例，将生成参数交给真实工具输入校验器，检查完整目标包含子代理 runId。子结果等待和最终输出的运行流程在 `packages/agent-runtime/src/kernel/__test__/child-result-collection.test.ts` 覆盖。
+
+`__test__/child-model-error.integration.test.ts` 在 SDK 和 daemon 两种入口注入模型请求故障，核对任务查询与父运行收到的子结果都保留 `model_error` 和错误说明。
+
 `__test__/context-compaction.integration.test.ts` 连接真实 Codex / OpenAI 客户端与 Core，只替换网络响应，覆盖流内超长恢复、工具定义限制不压缩历史及摘要输出上限。它还连接真实 SQLite 目标用量账本，验证无限预算时恢复后逐次记账、显式预算下未知用量仍暂停。
 
 `__test__/scoped-instructions.integration.test.ts` 将真实 Read/Write 工厂接入 QueryEngine 受检模型循环，覆盖小规则交付后相同 Write 重试成功、90 KB 规则跨多轮完整交付且默认轨迹不误报连续失败、同批 Read 交付与 Write 等待、无规则进展时继续拦截及真实轮数上限。另一负例让独立 Read 每轮提供新规则，但 Write 的规则超过硬上限，验证它仍累计文件条件失败并保留原文件。临时目录中的实际文件内容与返回的规则片段同时核对，不只依赖工具层夹具。

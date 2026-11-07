@@ -6,7 +6,7 @@ import { AgentEventBus } from "../../../kernel/event-source.js";
 
 function gate() { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; }
 
-it.each(["completed", "failed", "failed_then_timeout", "max_turns", "timeout", "user_cancelled", "parent_interrupted"] as const)("freezes one %s outcome for settlement and terminal saving", async cause => {
+it.each(["completed", "failed", "failed_then_timeout", "host_failure", "max_turns", "timeout", "user_cancelled", "parent_interrupted"] as const)("freezes one %s outcome for settlement and terminal saving", async cause => {
   const controller = new AbortController();
   const events: AgentEvent[] = [];
   const cleanup = gate(), release = gate();
@@ -27,7 +27,7 @@ it.each(["completed", "failed", "failed_then_timeout", "max_turns", "timeout", "
   const run = new FrameworkAgentRun({ agentId: "child", identity: { childId: "child-1" }, ids: { inputId: "i", runId: "r", traceId: "t" }, content: "work", delivery: "queue",
     externalSignal: controller.signal, engine,
     ...(cause === "max_turns" ? { hardMaxTurns: 2 } : {}),
-    session: { id: "s", getHistory: () => engine.getHistory(), submitMessage: engine.submitMessage.bind(engine) },
+    session: { id: "s", getHistory: () => engine.getHistory(), submitMessage: cause === "host_failure" ? async function* () { throw new Error("host failure"); } : engine.submitMessage.bind(engine) },
     eventBus: new AgentEventBus(event => { events.push(event); }),
     preparation: { prepare: async () => ({ run: { tools: new Map(registry.getAll().map(definition => [definition.name, { definition, invoke: definition.execute }])) }, release: async () => { cleanup.resolve(); await release.promise; } }) },
     effects: {}, children: { cwd: process.cwd(), createController: () => ({}) }, onSettled: () => { settledCalls++; },
@@ -47,9 +47,10 @@ it.each(["completed", "failed", "failed_then_timeout", "max_turns", "timeout", "
     expect((terminal.data as any).partialResult).toEqual((actual.result as any).partialResult);
   }
   if (cause === "max_turns") expect(actual.result.output).toHaveLength(12_000);
-  if (cause === "failed_then_timeout") expect(actual.result).toMatchObject({ status: "failed", output: "original failure output", failureKind: "unknown" });
-  expect(actual.result.status).toBe(cause === "completed" ? "completed" : ["failed", "failed_then_timeout", "max_turns", "timeout"].includes(cause) ? "failed" : "interrupted");
-  expect(calls).toBe(cause === "max_turns" ? 2 : 1); expect(settledCalls).toBe(1);
+  if (cause === "failed" || cause === "failed_then_timeout") expect(actual.result).toMatchObject({ status: "failed", output: "original failure output", failureKind: "model_error" });
+  if (cause === "host_failure") expect(actual.result).toMatchObject({ status: "failed", output: "host failure", failureKind: "unknown" });
+  expect(actual.result.status).toBe(cause === "completed" ? "completed" : ["failed", "failed_then_timeout", "host_failure", "max_turns", "timeout"].includes(cause) ? "failed" : "interrupted");
+  expect(calls).toBe(cause === "max_turns" ? 2 : cause === "host_failure" ? 0 : 1); expect(settledCalls).toBe(1);
   await run.interrupt("late duplicate");
   expect(await run.settled).toBe(actual);
   expect(settledCalls).toBe(1);

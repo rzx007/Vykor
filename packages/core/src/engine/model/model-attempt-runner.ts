@@ -22,6 +22,8 @@ import {
 } from "./query-model-attempt";
 
 export interface ModelAttemptOptions {
+  /** Hold candidate answer text while delegated results may still change it. */
+  deferText?: boolean;
   client: StreamingMessageClient;
   request: StreamMessageParams;
   generationId: string;
@@ -134,7 +136,7 @@ export async function* runModelAttempt(
       if (event.type === "text_delta") {
         assistantText += event.delta;
         assistantPhase = event.phase ?? assistantPhase;
-        yield event;
+        if (!options.deferText) yield event;
       } else if (event.type === "reasoning_delta") {
         assistantReasoning += event.delta;
         const lastSegment = assistantReasoningSegments.at(-1);

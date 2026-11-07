@@ -261,12 +261,13 @@ describe.each(["sdk", "daemon"] as const)("real Workflow child lifecycle: %s", m
       });
       await f.entered("descendant-held");
       const parent = f.agent.children.get(parentId)!;
-      await parent.waitRun(parent.runId!);
       expect(await parent.requestSuspend!(parent.runId!)).toBe(false);
-      expect(parent.state).toBe("idle");
+      expect(parent.state).toBe("running");
       const descendant = f.agent.children.list().find(child => child.id !== parent.id)!;
       expect(descendant.state).toBe("running");
       f.release("descendant-held"); await descendant.waitRun(descendant.runId!);
+      await parent.waitRun(parent.runId!);
+      expect(parent.state).toBe("idle");
       expect(await parent.requestSuspend!(parent.runId!)).toBe(false);
       expect(f.agent.children.get(descendant.id)).toBe(descendant);
     } finally { await f.close(); }
@@ -312,6 +313,7 @@ it.each(["warm", "suspended"] as const)("daemon rechecks current model availabil
     await first.handle.waitRun(first.target.runId);
     let tools!: import("@vykor/agent-contracts").AgentExecutionContext["tools"];
     await f.inRootRun(async execution => { tools = execution.tools; });
+    await f.waitForRoot();
     if (residency === "suspended") expect(await first.handle.requestSuspend!(first.target.runId)).toBe(true);
     f.setCatalogModels([]);
     if (residency === "suspended") await expect(first.handle.send({ content: "revoked-followup" }, tools)).rejects.toThrow(/not available/);

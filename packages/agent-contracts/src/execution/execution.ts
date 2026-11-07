@@ -81,6 +81,11 @@ export interface RunToolBinding {
 
 /** Framework-internal execution capabilities shared with tool packages. */
 export interface AgentExecutionContext {
+  /** Run-owned child reports; collecting never submits a new child run. */
+  readonly childResults?: {
+    hasPending(): boolean;
+    collect(options: { wait: boolean }): Promise<AgentChildInput[]>;
+  };
   readonly toolResults?: import("../tools/result-data.js").RunToolResultStore;
   readonly checkToolDispatch?: ToolDispatchCheck;
   readonly bindToolDispatch?: ToolDispatchCheckFactory;

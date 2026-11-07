@@ -17,6 +17,7 @@ import type {
 import {
   AgentRunNotAcceptingInputError,
   ChildRunTerminationError,
+  ModelRequestFailure,
 } from "@vykor/agent-contracts";
 const randomUUID = () => globalThis.crypto.randomUUID();
 
@@ -165,6 +166,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
   private externalAbort?: () => void;
   private cleanupRecovery?: () => Promise<void>;
   private cleanupRetry?: Promise<void>;
+  private childResultWait?: AbortController;
 
   constructor(private readonly options: FrameworkAgentRunOptions) {
     this.delivery = options.outputContract ? createStructuredDelivery(options.outputContract) : undefined;
@@ -205,6 +207,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
     const pending = { input: accepted, receipt };
     this.steered.push(pending);
     this.pendingSteers.add(pending);
+    this.childResultWait?.abort("New parent input");
     return await receipt.promise;
   }
 
@@ -241,6 +244,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
       traceId: this.traceId,
       signal: this.controller.signal,
     };
+    const childResults = this.options.children.createResultCollector?.(scope);
     const createExecution = (
       run: import("@vykor/agent-contracts").PreparedAgentRun,
     ): AgentExecutionContext => {
@@ -291,6 +295,36 @@ export class FrameworkAgentRun implements AgentRunHandle {
           { ...scope, limits: this.options.limits ?? run.limits, bindToolDispatch: this.options.bindToolDispatch ?? run.bindToolDispatch },
           tools,
         ),
+        ...(childResults ? { childResults: {
+          hasPending: () => childResults.hasPending() || this.invocations.size > 0,
+          collect: async ({ wait }: { wait: boolean }) => {
+            if (wait && this.steered.length) return [];
+            if (!wait && this.invocations.size) return [];
+            const controller = new AbortController();
+            this.childResultWait = controller;
+            const signal = AbortSignal.any([scope.signal, controller.signal]);
+            let abort!: () => void;
+            try {
+              signal.throwIfAborted();
+              if (this.invocations.size) await Promise.race([
+                // A timed-out invocation can still be admitting a child.
+                (async () => { while (this.invocations.size) await Promise.allSettled([...this.invocations]); })(),
+                new Promise<never>((_, reject) => {
+                  abort = () => reject(signal.reason);
+                  signal.addEventListener("abort", abort, { once: true });
+                }),
+              ]);
+              return await childResults.collect({ wait, signal });
+            } catch (error) {
+              if (scope.signal.aborted) throw abortError(scope.signal);
+              if (controller.signal.aborted) return [];
+              throw error;
+            } finally {
+              signal.removeEventListener("abort", abort);
+              if (this.childResultWait === controller) this.childResultWait = undefined;
+            }
+          },
+        } } : {}),
         emit: (event) => this.emit(event),
         observe: (event) => this.options.eventBus.observe(event, {
           agentId: this.options.agentId, sessionId: this.sessionId, inputId: this.inputId,
@@ -415,6 +449,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
       // The query's abort/timeout race can finish before the invocation does.
       // Cleanup is part of the same barrier; a rejected cleanup never confirms stop.
       while (this.invocations.size) await Promise.allSettled([...this.invocations]);
+      childResults?.release();
     }
     const finish = async (): Promise<AgentRunResult> => {
       // A prior execution failure remains primary. A provisional success can
@@ -591,7 +626,9 @@ function childFailureData(
       ? "max_turns"
       : termination instanceof ChildRunTerminationError
         ? termination.failureKind
-        : "unknown";
+        : error instanceof ModelRequestFailure
+          ? "model_error"
+          : "unknown";
   const finalizationText =
     error instanceof MaxTurnsExceeded ? error.finalizationText : undefined;
   const text =

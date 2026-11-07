@@ -44,7 +44,8 @@ it("checks the current Run's plugin through real JobSend, routed source and an i
   };
   const client = (child: boolean): StreamingMessageClient => ({
     async *streamMessage(request) {
-      const latest = request.messages.at(-1)!;
+      const latest = [...request.messages].reverse().find(message => message.type !== "user" ||
+        typeof message.content !== "string" || !message.content.startsWith("<subagent_results>"))!;
       if (latest.type === "user") {
         const name = child ? "PluginWork" : latest.content === "spawn" ? "Spawn" : "JobSend";
         yield { type: "tool_use_start", toolUse: {

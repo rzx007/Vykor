@@ -19,6 +19,8 @@
 
 后台工作指导要求独立外部检查各自设置请求时限并保存结果：短检查用独立 Shell 调用，较长检查才分别创建后台任务。等待到期只停止观察，代理应只处理受影响的任务并复用已完成结果；已有逐项超时、错误隔离和结果保存的批处理可以保留。快速模式要求一起发起独立工具调用，不把独立服务拼成共用时限的一条脚本。这些是模型执行指导，不增加任务超时字段或运行状态。
 
+子代理指导使用 Agent 返回的完整 `target`：JobRead、JobSend、JobCancel 传 `{target}`，JobWait 传 `{targets:[{target}]}`；子目标保留 jobId 和 runId，继续输入后根据接纳回执更新 runId。主代理应等齐每个委派运行的终态后汇总，并说明失败、取消和缺失证据。运行时另外在最终输出前收集子结果，最终是否能结束由运行时检查。
+
 新增提示词段接入 `prompt-segments-assembly.ts`，文件相关行为放 `personal-prompt-files.ts`，对外 API 经 `index.ts` 导出。测试放同层 `__test__/`。返回[包说明](../README.md)。
 
 `buildReplyStyleSection()` 生成统一表达规则，`buildWorkStyleSection()` 生成任务开场和进度规则。项目规则和用户明确偏好仍可调整表达。完整系统提示词覆盖由运行时处理。

@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createDefaultNodeAgent, type DefaultNodeAgent } from "@vykor/agent-runtime";
-import type { AgentChildBudget, AgentChildHandle, AgentEvent, AgentEventListener, AgentExecutionContext, Message, StreamingMessageClient, ToolDefinition, ToolResult } from "@vykor/agent-contracts";
+import type { AgentChildBudget, AgentChildHandle, AgentEvent, AgentEventListener, AgentExecutionContext, AgentRunHandle, Message, StreamingMessageClient, ToolDefinition, ToolResult } from "@vykor/agent-contracts";
+import { AgentRunNotAcceptingInputError } from "@vykor/agent-contracts";
 import type { JobTarget, JobInputReceipt, JobReadResult, JobWaitResult, JobSnapshot, JobListResult } from "@vykor/jobs";
 import { decodeJobTarget, decodeJobInputReceipt, decodeJobReadResult, decodeJobWaitResult, decodeJobSnapshot, decodeJobListResult } from "@vykor/protocol";
 import { SessionStore } from "@vykor/services";
@@ -32,6 +33,7 @@ export interface LifecycleFixture {
   observedCwd(label: string): string | undefined;
   environmentAcquires(): number;
   setCatalogModels(models: string[]): void;
+  waitForRoot(): Promise<void>;
   holdApproval(): void;
   approvalEntered(): Promise<void>;
   releaseApproval(): void;
@@ -84,7 +86,7 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
   const calls = new Map<string, number>();
   const histories = new Map<string, string[]>();
   const cwds = new Map<string, string>();
-  const scripts = new Map<string, { name: string; input: Record<string, unknown>; result?: ToolResult; probe?: (execution: AgentExecutionContext) => Promise<void>; probeError?: unknown }>();
+  const scripts = new Map<string, { name: string; input: Record<string, unknown>; result?: ToolResult; finished: ReturnType<typeof gate>; probe?: (execution: AgentExecutionContext) => Promise<void>; probeError?: unknown }>();
   const childScripts = new Map<string, { steps: Array<{ name: string; input: Record<string, unknown> | ((results: ToolResult[]) => Record<string, unknown>) }>; results: ToolResult[] }>();
   const names = ["Agent", "JobRead", "JobWait", "JobSend", "JobCancel", "JobList", "BackgroundShellCreate", "TerminalOpen", "Workflow"];
   const decorators = names.map(name => ({ name, decorate: (base: ToolDefinition): ToolDefinition => ({ ...base, execute: async (input, context) => {
@@ -107,14 +109,14 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
   } }) });
   const client: StreamingMessageClient = { async *streamMessage(params) {
     const last = params.messages.at(-1);
-    const prompt = text(last);
+    const latestUser = [...params.messages].reverse().find(message => message.type === "user" && !text(message).startsWith("<subagent_results>"));
+    const prompt = text(text(last).startsWith("<subagent_results>") ? latestUser : last);
     const script = prompt.startsWith("fixture-call:") ? scripts.get(prompt.slice("fixture-call:".length)) : undefined;
-    if (script) {
+    if (script && !script.result) {
       yield { type: "tool_use_start", toolUse: { type: "tool_use", id: prompt.slice("fixture-call:".length), name: script.name, input: script.input } };
       yield { type: "complete", stopReason: "tool_use" };
       return;
     }
-    const latestUser = [...params.messages].reverse().find(message => message.type === "user");
     const label = text(latestUser).split("\n")[0]!.trim();
     const childScript = childScripts.get(label);
     if (childScript) {
@@ -134,7 +136,7 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
     if (!label.startsWith("fixture-call:")) calls.set(label, (calls.get(label) ?? 0) + 1);
     const modelHold = modelHolds.get(label);
     if (modelHold && last?.type !== "tool_result") { modelHold.entered.resolve(); await modelHold.released.promise; }
-    if (label === "parent-retained" && last?.type !== "tool_result") {
+    if (label === "parent-retained" && text(last) === "parent-retained") {
       yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "real-descendant", name: "Agent", input: { prompt: "descendant-held", description: "retained descendant", subagentType: "worker", allowedTools: ["Read"] } } };
       yield { type: "complete", stopReason: "tool_use" }; return;
     }
@@ -174,6 +176,10 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
   const terminalEvents = new Map<string, AgentEvent>();
   let sdkStarts = 0;
   const observeEvent: AgentEventListener = async event => {
+    if (event.type === "tool.completed") {
+      const script = scripts.get(event.data.toolUseId);
+      if (script) { script.result = event.data.result; script.finished.resolve(); }
+    }
     if (["run.completed", "run.failed", "run.interrupted"].includes(event.type) && event.context.runId) terminalEvents.set(event.context.runId, event);
     if (mode === "sdk" && options.failStartedAck && event.type === "run.started" && event.context.childId && ++sdkStarts === (typeof options.failStartedAck === "number" ? options.failStartedAck : 1)) throw new Error("injected started projection failure");
   };
@@ -256,16 +262,32 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
   });
 
   function rootNode(created: DefaultNodeAgent, sessionId?: string) { if (sessionId === rootSessionId) node = created; }
+  let activeRoot: AgentRunHandle | undefined;
   const invoke = async (name: string, input: Record<string, unknown>, probe?: (execution: AgentExecutionContext) => Promise<void>) => {
     const id = `fixture-${randomUUID()}`;
-    const script = { name, input, result: undefined as ToolResult | undefined, probe, probeError: undefined as unknown };
+    const script = { name, input, result: undefined as ToolResult | undefined, finished: gate(), probe, probeError: undefined as unknown };
     scripts.set(id, script);
     try {
+      let completion: Promise<unknown>;
       if (application) {
-        const admitted = await application.interactions.admitPrompt(rootSessionId, { items: [{ type: "text", text: `fixture-call:${id}` }] });
-        const run = await application.runControl.awaitRun(rootSessionId, admitted.run!.id);
-        if (run.status !== "completed") throw new Error(`Root run ${run.status}: ${run.error ?? ""}; ${JSON.stringify(script.result)}`);
-      } else await node.runMessage(`fixture-call:${id}`);
+        const admitted = await application.interactions.admitPrompt(rootSessionId, { items: [{ type: "text", text: `fixture-call:${id}` }], delivery: "steer" });
+        completion = application.runControl.awaitRun(rootSessionId, admitted.run!.id).then(run => {
+          if (run.status !== "completed") throw new Error(`Root run ${run.status}: ${run.error ?? ""}; ${JSON.stringify(script.result)}`);
+        });
+      } else {
+        if (activeRoot?.active) {
+          try { await activeRoot.steer({ content: `fixture-call:${id}` }); }
+          catch (error) {
+            if (!(error instanceof AgentRunNotAcceptingInputError)) throw error;
+            await activeRoot.result.catch(() => {});
+          }
+        }
+        if (!activeRoot?.active) activeRoot = node.submitMessage(`fixture-call:${id}`);
+        completion = activeRoot.result;
+      }
+      // Task controls must remain usable while the root waits for its delegates.
+      // Observe the real tool result, rather than requiring the root's final answer first.
+      await Promise.race([script.finished.promise, completion]);
       if (!script.result) throw new Error(`Real ${name} tool did not execute: ${JSON.stringify(node.getHistory().slice(-4))}`);
       if (script.probeError) throw script.probeError;
       return payload(script.result);
@@ -308,6 +330,12 @@ export async function createLifecycleFixture(mode: "sdk" | "daemon", options: { 
     observedCwd: label => cwds.get(label),
     environmentAcquires: () => environmentAcquires,
     setCatalogModels: models => { customProvider.models = models.map(id => ({ id, displayName: id })); },
+    waitForRoot: async () => {
+      if (application) {
+        const id = application.runControl.activeRunId(rootSessionId);
+        if (id) await application.runControl.awaitRun(rootSessionId, id);
+      } else await activeRoot?.result;
+    },
     holdApproval: () => { approval = { entered: gate(), released: gate() }; },
     approvalEntered: () => approval!.entered.promise,
     releaseApproval: () => approval?.released.resolve(),

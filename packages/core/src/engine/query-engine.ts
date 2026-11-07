@@ -355,13 +355,14 @@ export class QueryEngine implements IQueryEngine {
     let outputContinuations = 0;
     let continuingOutput = false;
     let preparedNextRequestConfiguration: QueryRequestConfiguration | undefined;
+    let acceptedChildFollowUpTurnFloor = 0;
 
     // The host may freeze a Run-scoped ceiling. It is applied locally to every
     // comparison so request configuration, setMaxTurns and accepted follow-ups
     // can only move the reusable engine's baseline, never this Run's ceiling.
     const hardMaxTurns = options.execution?.hardMaxTurns;
     const maxTurnsLimit = (): number => {
-      const configuredLimit = this.maxTurns === 0 ? Infinity : this.maxTurns;
+      const configuredLimit = this.maxTurns === 0 ? Infinity : Math.max(this.maxTurns, acceptedChildFollowUpTurnFloor);
       return hardMaxTurns === undefined
         ? configuredLimit
         : Math.min(configuredLimit, hardMaxTurns);
@@ -372,9 +373,10 @@ export class QueryEngine implements IQueryEngine {
       await this.hookExecutor.execute("session_start", {});
     }
 
-    while (turnCount < maxTurnsLimit() || forceFinalResponse) {
+    turns: while (turnCount < maxTurnsLimit() || forceFinalResponse) {
       // The first request must use the same client that prepared its attachments.
-      const requestConfiguration =
+      let followingInput = turnCount > 0 && preparedNextRequestConfiguration !== undefined;
+      let requestConfiguration =
         turnCount === 0
           ? initialRequestConfiguration
           : (preparedNextRequestConfiguration ??
@@ -383,6 +385,26 @@ export class QueryEngine implements IQueryEngine {
       this.applyRequestMaxTurns(requestConfiguration.maxTurns);
       if (turnCount >= maxTurnsLimit() && !forceFinalResponse) {
         throw new MaxTurnsExceeded(maxTurnsLimit());
+      }
+      const childResults = options.execution?.childResults;
+      if (childResults) {
+        const wait = !followingInput && (forceFinalResponse || turnCount + 1 >= maxTurnsLimit());
+        const reports = await childResults.collect({ wait });
+        this.messages.push(...reports.map(input => ({ type: "user" as const, content: input.content })));
+        if (wait && childResults.hasPending()) {
+          const followUp = await this.consumeFollowUps(options);
+          if (followUp.accepted) {
+            followingInput = true;
+            requestConfiguration = followUp.requestConfiguration ?? requestConfiguration;
+          }
+        }
+        if (followingInput && childResults.hasPending()) {
+          // An accepted instruction needs its request and a report-based finish.
+          // Keep that allowance when the host repeats its ordinary configuration.
+          acceptedChildFollowUpTurnFloor = Math.max(acceptedChildFollowUpTurnFloor, turnCount + 2);
+          requestConfiguration = this.preserveAcceptedFollowUp(requestConfiguration, turnCount + 1)!;
+          this.applyRequestMaxTurns(requestConfiguration.maxTurns);
+        }
       }
       if (requestConfiguration.contextWindow !== undefined) {
         this.compactService.setContextWindow(
@@ -400,6 +422,7 @@ export class QueryEngine implements IQueryEngine {
         childFinalizing = true;
       }
       const forcedFinalTurn = forceFinalResponse || childFinalizing;
+      const deferText = childResults?.hasPending() ?? false;
       const requestToolRegistry =
         toolDiscovery?.requestRegistry(
           trajectoryControl.hiddenTools,
@@ -523,6 +546,7 @@ export class QueryEngine implements IQueryEngine {
         yield { type: "generation_started", generationId, attempt };
 
         const modelAttempt = yield* runModelAttempt({
+          deferText,
           client: requestConfiguration.client,
           request,
           generationId, attempt, policy, recoveryDeadlineAt,
@@ -626,6 +650,20 @@ export class QueryEngine implements IQueryEngine {
           "completed",
           attemptUsage,
         );
+
+        if (childResults?.hasPending() && (toolUses.length === 0 || toolUses.some(call =>
+          [...endRunDefinitions].some(definition => definition.name === call.name)))) {
+          const reports = await childResults!.collect({ wait: true });
+          this.messages.push(...reports.map(input => ({ type: "user" as const, content: input.content })));
+          const followUp = await this.consumeFollowUps(options);
+          if (reports.length || followUp.accepted) {
+            turnCount++;
+            preparedNextRequestConfiguration = this.preserveAcceptedFollowUp(followUp.requestConfiguration, turnCount);
+            this.applyRequestMaxTurns(preparedNextRequestConfiguration?.maxTurns);
+            continue turns;
+          }
+        }
+        if (deferText && assistantText) yield { type: "text_delta", delta: assistantText, ...(assistantPhase ? { phase: assistantPhase } : {}) };
 
         for (const progress of modelAttempt.progress) yield progress;
         for (const toolUse of toolUses) {
