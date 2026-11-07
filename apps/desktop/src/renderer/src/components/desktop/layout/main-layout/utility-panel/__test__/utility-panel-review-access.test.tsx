@@ -259,6 +259,51 @@ function mountPanel(
 }
 
 describe("UtilityPanel review tool access", () => {
+  it.each(["文件不存在。", "Error invoking remote method 'workspace:read': Error: ENOENT: no such file or directory"])("opens a missing HTML message link in the builtin browser after %s", async (reason) => {
+    installProbe(async () => ({ isRepository: false, rootPath: null }))
+    const path = "C:/Users/ruanz/.answer-me-with-html/pages/missing.html"
+    Object.assign(window.desktop, {
+      browser: { updateTab: vi.fn().mockResolvedValue(undefined) },
+      workspace: {
+        listFiles: vi.fn(async () => ({ rootPath: "D:/plain-dir", entries: [] })),
+        readFile: vi.fn().mockRejectedValue(new Error(reason)),
+      },
+    })
+    vi.stubGlobal("ResizeObserver", class { observe = vi.fn(); unobserve = vi.fn(); disconnect = vi.fn() })
+    useOutsideProjectSession("D:/plain-dir")
+    const scopeId = reason.includes("ENOENT") ? "session:missing-html-race" : "session:missing-html"
+    mountPanel(scopeId, { fileOpenRequest: { id: 1, path } })
+    await settle()
+    await settle()
+    const state = readUtilityPanelRuntimeState(scopeId)!
+    expect(state.tabs.find(tab => tab.id === state.activeTabId)?.tool).toBe("browser")
+    const webview = mountedContainer!.querySelector("webview")!
+    expect(webview.getAttribute("src")).toBe(`file:///${path}`)
+    Object.assign(webview, { getURL: () => `file:///${path}`, getTitle: () => "", canGoBack: () => false, canGoForward: () => false })
+    const event = Object.assign(new Event("did-fail-load"), { isMainFrame: true, errorCode: -6, errorDescription: "ERR_FILE_NOT_FOUND", validatedURL: `file:///${path}` })
+    await act(async () => webview.dispatchEvent(event))
+    expect(mountedContainer?.textContent).toContain("找不到本地文件")
+  })
+
+  it.each(["不支持预览该路径。", "不支持预览该路径 C:/ENOENT/report.html"])("does not bypass a denied file read: %s", async (reason) => {
+    installProbe(async () => ({ isRepository: false, rootPath: null }))
+    Object.assign(window.desktop, {
+      browser: { updateTab: vi.fn().mockResolvedValue(undefined) },
+      workspace: {
+        listFiles: vi.fn(async () => ({ rootPath: "D:/plain-dir", entries: [] })),
+        readFile: vi.fn().mockRejectedValue(new Error(reason)),
+      },
+    })
+    vi.stubGlobal("ResizeObserver", class { observe = vi.fn(); unobserve = vi.fn(); disconnect = vi.fn() })
+    useOutsideProjectSession("D:/plain-dir")
+    const scopeId = reason.includes("ENOENT") ? "session:denied-html-enoent-name" : "session:denied-html"
+    mountPanel(scopeId, { fileOpenRequest: { id: 1, path: "C:/protected/report.html" } })
+    await settle()
+    await settle()
+    expect(readUtilityPanelRuntimeState(scopeId)!.browserTabs).toEqual([])
+    expect(mountedContainer?.textContent).toContain("不支持预览该路径")
+  })
+
   it("opens a message web URL in a browser tab in the current scope", async () => {
     installProbe(async () => ({ isRepository: false, rootPath: null }))
     Object.assign(window.desktop, { browser: { updateTab: vi.fn().mockResolvedValue(undefined) } })
@@ -325,7 +370,7 @@ describe("UtilityPanel review tool access", () => {
     await act(async () => mountedContainer?.querySelector<HTMLButtonElement>(`[aria-label="查看 ${format} 源码"]`)!.click())
     await settle()
     expect(mountedContainer?.querySelector("webview")).toBeNull()
-    expect(mountedContainer?.querySelector(`[aria-label="查看 ${format} 源码"]`)?.getAttribute("aria-pressed")).toBe("true")
+    expect(mountedContainer?.querySelector(`[aria-label="渲染 ${format}"]`)?.getAttribute("aria-pressed")).toBe("true")
     await act(async () => mountedContainer?.querySelector<HTMLButtonElement>(`[aria-label="渲染 ${format}"]`)!.click())
     await settle()
     expect(mountedContainer?.querySelector("webview")?.getAttribute("src")).toBe(`file:///${absolutePath}`)

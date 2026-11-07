@@ -342,7 +342,10 @@ class WorkspaceService {
     ) {
       if (/^(?:\\\\|\/\/)/.test(cleaned) || isPathInside(cleaned, roots.configDir, pathApi))
         throw new Error("不支持预览该路径。")
-      const absolutePath = await realpath(cleaned).catch(() => undefined)
+      const absolutePath = await realpath(cleaned).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") throw new Error("文件不存在。")
+        return undefined
+      })
       if (absolutePath) {
         const configPath = await realpath(roots.configDir).catch(() => resolve(roots.configDir))
         if (isPathInside(absolutePath, configPath, pathApi)) throw new Error("不支持预览该路径。")
@@ -368,7 +371,8 @@ class WorkspaceService {
     let absolutePath: string
     try {
       absolutePath = await realpath(candidate)
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new Error("文件不存在。")
       throw new Error("无法预览。")
     }
 

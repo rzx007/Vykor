@@ -13,7 +13,7 @@ import {
   type FileViewMode,
   type FileViewerTab,
 } from "@renderer/components/desktop/tools/files/file-viewer"
-import { fileViewerTypeForPreview } from "@renderer/components/desktop/tools/files/file-viewer-model"
+import { fileViewerTypeForPreview, isWebDocumentPath } from "@renderer/components/desktop/tools/files/file-viewer-model"
 import { useCodePreviewDrafts } from "../editor/code-preview-drafts"
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
 import { Spinner } from "@renderer/components/ui/spinner"
@@ -56,6 +56,7 @@ type FilesToolProps = {
   restoreActivePath: string | null
   restorePaths: string[]
   openRequest: { id: number; path: string; line?: number } | null
+  onOpenMissingWebDocument: (rootPath: string, path: string) => void
 }
 
 export function FilesTool({
@@ -72,6 +73,7 @@ export function FilesTool({
   restoreActivePath,
   restorePaths,
   openRequest,
+  onOpenMissingWebDocument,
 }: FilesToolProps): React.JSX.Element {
   const selectedProject = useDesktopSessionStore(selectActiveWorkspaceProject)
   const [loadState, setLoadState] = useState<LoadState>("idle")
@@ -227,7 +229,12 @@ export function FilesTool({
           setViewModeByPath((current) => ({ ...current, [result.path]: "preview" }))
       }
     } catch (readError) {
-      setError(errorMessage(readError))
+      const message = errorMessage(readError)
+      if (options.fromOpenRequest && isWebDocumentPath(normalizedPath) && (message.endsWith("文件不存在。") || /(?:^|[\s:])ENOENT(?=[:,\s]|$)/.test(message))) {
+        onOpenMissingWebDocument(selectedProject.path, normalizedPath)
+      } else {
+        setError(message)
+      }
     } finally {
       onLoadingPathChange((current) =>
         current === normalizedPath || current === resultPath ? null : current
@@ -387,6 +394,12 @@ export function FilesTool({
         onToggleTree={toggleTree}
         onRefresh={() => void loadFiles()}
       />
+
+      {loadState === "ready" && error && (
+        <p role="alert" className="border-b border-border/45 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      )}
 
       {loadState === "loading" && (
         <div className="text-ui-small flex flex-1 items-center justify-center gap-2 text-ui-muted">

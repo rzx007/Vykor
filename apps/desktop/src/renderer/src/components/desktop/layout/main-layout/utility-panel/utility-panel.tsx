@@ -15,6 +15,7 @@ import {
 } from "@renderer/components/desktop/tools/browser/browser-tool"
 import type { UtilityToolRequest } from "./utility-panel-tabs"
 import { FilesTool } from "@renderer/components/desktop/tools/files/files-tool"
+import { toLocalFileUrl } from "@renderer/components/desktop/tools/browser/browser-navigation"
 import { getFileIcon } from "@renderer/components/desktop/tools/files/file-icons"
 import {
   mergeFileViewerTabs,
@@ -811,6 +812,9 @@ export function UtilityPanel({
               restoreActivePath={persistedFileState?.activePath ?? null}
               restorePaths={persistedFileState?.paths ?? []}
               openRequest={resolvedFileOpenRequest}
+              onOpenMissingWebDocument={(rootPath, path) =>
+                openBrowserTab(toLocalFileUrl(rootPath, path), path.replace(/\\/g, "/").split("/").pop())
+              }
             />
           )}
           {terminalMounted && (
