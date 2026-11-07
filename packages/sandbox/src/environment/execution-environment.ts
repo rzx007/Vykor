@@ -18,6 +18,8 @@ import { createProcess, createShellProcess, resolveHostShellLauncher, resolveShe
 import type { ShellDescriptor } from "@vykor/environment";
 import { createWslPathResolver, preflightWsl, spawnWslProcess, type WslEnvironmentFacts } from "./wsl-environment.js";
 
+const PROCESS_OUTPUT_DRAIN_TIMEOUT_MS = 3_000;
+
 export interface CreateExecutionEnvironmentInput {
   config: ResolvedExecutionEnvironmentConfig;
   settings: Settings;
@@ -173,9 +175,29 @@ function adaptChildProcess(child: ChildProcess): EnvironmentProcess {
   };
   child.stdout?.on("data", emit); child.stderr?.on("data", emitError);
   const result = new Promise<{ exitCode: number | null; signal?: string }>((resolveResult, reject) => {
-    child.once("error", reject);
-    child.once("close", (exitCode, signal) => resolveResult({ exitCode, ...(signal ? { signal } : {}) }));
+    let drainTimer: ReturnType<typeof setTimeout> | undefined;
+    // Descendants can retain inherited pipes after the command itself exits.
+    // Still wait for normal trailing output, but never let that hold a Run forever.
+    child.once("exit", () => {
+      drainTimer = setTimeout(() => {
+        reject(new Error("Process exited but its output did not close within 3000 ms; output may be incomplete and descendant processes may still be running."));
+        child.stdin?.destroy();
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+      }, PROCESS_OUTPUT_DRAIN_TIMEOUT_MS);
+      drainTimer.unref?.();
+    });
+    child.once("error", error => {
+      clearTimeout(drainTimer);
+      reject(error);
+    });
+    child.once("close", (exitCode, signal) => {
+      clearTimeout(drainTimer);
+      resolveResult({ exitCode, ...(signal ? { signal } : {}) });
+    });
   });
+  // Consumers may subscribe to output before starting to wait for completion.
+  void result.catch(() => {});
   return {
     ...(child.pid ? { pid: child.pid } : {}), write: (data) => { child.stdin?.write(data); },
     end: () => { child.stdin?.end(); }, onOutput(listener) {
