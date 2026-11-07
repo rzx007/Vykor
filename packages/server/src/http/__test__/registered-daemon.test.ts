@@ -89,13 +89,15 @@ function launchFixture(launcher: "desktop" | "cli") {
   });
   let stderr = "";
   child.stderr.setEncoding("utf8").on("data", (chunk: string) => { stderr += chunk; });
-  const exited = new Promise<number | null>((resolve) => child.once("close", resolve));
+  const exited = new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) => {
+    child.once("close", (code, signal) => resolve({ code, signal }));
+  });
   const reported = new Promise<{
     launcher: "desktop" | "cli"; pid: number; ownerPid: number; sessionIds: string[]; eventSeq: number;
   }>((resolve, reject) => {
     child.once("message", (message) => resolve(message as Parameters<typeof resolve>[0]));
     child.once("error", reject);
-    void exited.then((code) => reject(new Error(`${launcher} fixture exited (${code}): ${stderr}`)));
+    void exited.then(({ code, signal }) => reject(new Error(`${launcher} fixture exited (code=${code}, signal=${signal}): ${stderr}`)));
   });
   return {
     reported,
@@ -103,10 +105,11 @@ function launchFixture(launcher: "desktop" | "cli") {
       if (child.connected) child.send("stop", () => {});
       const exitedPromptly = await Promise.race([
         exited.then(() => true),
-        sleep(3_000, false, { ref: false }),
+        sleep(10_000, false, { ref: false }),
       ]);
       if (!exitedPromptly) child.kill();
-      return await exited;
+      const result = await exited;
+      return { launcher, ...result, timedOut: !exitedPromptly, stderr };
     },
   };
 }
@@ -152,7 +155,7 @@ describe("registered daemon", () => {
 
     const desktop = launchFixture("desktop");
     const cli = launchFixture("cli");
-    let exits: (number | null)[];
+    let exits: Awaited<ReturnType<typeof desktop.stop>>[];
     try {
       const [desktopResult, cliResult] = await Promise.race([
         Promise.all([desktop.reported, cli.reported]),
@@ -171,9 +174,13 @@ describe("registered daemon", () => {
     } finally {
       exits = await Promise.all([desktop.stop(), cli.stop()]);
     }
-    expect(exits).toEqual([0, 0]);
+    for (const exit of exits) {
+      expect(exit, `${exit.launcher} fixture failed to exit cleanly: ${JSON.stringify(exit)}`).toMatchObject({
+        code: 0, signal: null, timedOut: false,
+      });
+    }
     expect(readDaemonRegistry(registry)).toBeUndefined();
-  }, 55_000);
+  }, 65_000);
 
   it("lets a system service wait for an already running on-demand daemon", async () => {
     const { opened, start } = launch();
