@@ -52,6 +52,7 @@ describe("resolveExternalBrowserUrl", () => {
     expect(resolveExternalBrowserUrl(null)).toBeNull()
     expect(resolveExternalBrowserUrl("")).toBeNull()
     expect(resolveExternalBrowserUrl("javascript:alert(1)")).toBeNull()
+    expect(resolveExternalBrowserUrl("file://%")).toBeNull()
   })
 })
 

@@ -12,7 +12,13 @@ import {
   SlidersHorizontal,
   Trash2,
 } from "lucide-react"
-import type { NativeImage } from "electron"
+import type {
+  DidFailLoadEvent,
+  DidFrameNavigateEvent,
+  DidStartNavigationEvent,
+  NativeImage,
+  RenderProcessGoneEvent,
+} from "electron"
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { useAppearance } from "@renderer/components/appearance/appearance-provider"
@@ -38,6 +44,13 @@ import { insertWebviewCssWhenReady } from "./browser-webview-css"
 import { buildBrowserScrollbarCss } from "./browser-webview-style"
 import { useBrowserAnnotations } from "./use-browser-annotations"
 import { BrowserAnnotationPanel } from "./browser-annotation-panel"
+import { BrowserErrorPage } from "./browser-error-page"
+import {
+  browserCrashFailure,
+  browserHttpFailure,
+  browserLoadFailure,
+  type BrowserLoadFailure,
+} from "./browser-load-failure"
 
 export type BrowserToolTab = {
   id: string
@@ -63,12 +76,21 @@ type BrowserWebviewElement = HTMLElement & {
   goBack?: () => void
   goForward?: () => void
   reload?: () => void
+  loadURL?: (url: string) => Promise<void>
   stop?: () => void
   getURL?: () => string
   getTitle?: () => string
   insertCSS?: (css: string) => Promise<string>
   getWebContentsId?: () => number
   capturePage?: () => Promise<NativeImage>
+}
+
+function readWebviewValue<T>(read: () => T, fallback: T): T {
+  try {
+    return read()
+  } catch {
+    return fallback
+  }
 }
 
 export function BrowserTool({
@@ -105,6 +127,12 @@ export function BrowserTool({
   }, [composerOwner, composerScope])
   const webviewRef = useRef<BrowserWebviewElement | null>(null)
   const webviewReadyRef = useRef(false)
+  const webviewCleanupRef = useRef<(() => void) | null>(null)
+  const requestedUrlRef = useRef(tab.url)
+  const navigationUrlRef = useRef<string | null>(null)
+  const previousFailureRef = useRef<BrowserLoadFailure | null>(null)
+  const failureRef = useRef<BrowserLoadFailure | null>(null)
+  const [loadFailure, setLoadFailure] = useState<BrowserLoadFailure | null>(null)
   const activeRef = useRef(active)
   const onUpdateRef = useRef(onUpdate)
   const [browserError, setBrowserError] = useState<string | null>(null)
@@ -121,7 +149,7 @@ export function BrowserTool({
   const annotation = useBrowserAnnotations({
     tabId: tab.id,
     visible,
-    ready: pageReady && !tab.loading && Boolean(tab.url),
+    ready: pageReady && !loadFailure && !tab.loading && Boolean(tab.url),
     onSaved: (record) => {
       // 已离开或迁移的新聊天，不能把晚到的保存填回下一份草稿。
       const state = useDesktopSessionStore.getState()
@@ -155,7 +183,12 @@ export function BrowserTool({
   }, [screenshot])
 
   const canCapture =
-    active && visible && pageReady && !tab.loading && Boolean(tab.url && tab.url !== "about:blank")
+    active &&
+    visible &&
+    pageReady &&
+    !loadFailure &&
+    !tab.loading &&
+    Boolean(tab.url && tab.url !== "about:blank")
   const captureScreenshot = async (): Promise<void> => {
     const webview = webviewRef.current
     if (!canCapture || captureBusy.current || !webview?.capturePage) return
@@ -213,6 +246,9 @@ export function BrowserTool({
   useEffect(() => {
     onUpdateRef.current = onUpdate
   }, [onUpdate])
+  useLayoutEffect(() => {
+    requestedUrlRef.current = tab.url
+  }, [tab.url])
 
   const applyScrollbarStyle = useCallback(
     (webview: BrowserWebviewElement): void => {
@@ -235,7 +271,14 @@ export function BrowserTool({
   }, [applyScrollbarStyle])
 
   const navigate = (): void => {
-    const url = normalizeBrowserUrl(tab.input)
+    let url: string | null
+    try {
+      url = normalizeBrowserUrl(tab.input)
+      if (url) new URL(url)
+    } catch {
+      setPageFailure(browserLoadFailure(tab.input, -300, "ERR_INVALID_URL"))
+      return
+    }
     if (!url) return
     onUpdate({
       url,
@@ -245,29 +288,56 @@ export function BrowserTool({
     })
   }
 
-  const updateNavigationState = (): void => {
+  const updateNavigationState = useCallback((): void => {
     const webview = webviewRef.current
     if (!webview) return
-    const url = webview.getURL?.() ?? null
-    if (url === "about:blank" && !tab.url) {
+    const failure = failureRef.current
+    const currentUrl = readWebviewValue(() => webview.getURL?.() ?? null, requestedUrlRef.current)
+    // 无效的输入只显示错误，不能把非法 URL 写回 webview.src。
+    const url =
+      (failure?.code === "ERR_INVALID_URL" ? null : failure?.url) ?? currentUrl
+    if (url === "about:blank" && !requestedUrlRef.current) {
       onUpdateRef.current({ loading: false })
       return
     }
-    const title = webview.getTitle?.() || (url ? browserTitleFromUrl(url) : "新标签页")
-    onUpdate({
+    const title =
+      failure?.title ?? (readWebviewValue(() => webview.getTitle?.(), undefined) || (url ? browserTitleFromUrl(url) : "新标签页"))
+    onUpdateRef.current({
       title,
       url,
-      input: url ? displayBrowserUrl(url) : "",
+      input:
+        failure?.code === "ERR_INVALID_URL"
+          ? failure.url
+          : failure
+            ? displayBrowserUrl(failure.url)
+            : url
+              ? displayBrowserUrl(url)
+              : "",
       loading: false,
-      canGoBack: webview.canGoBack?.() ?? false,
-      canGoForward: webview.canGoForward?.() ?? false,
+      canGoBack: readWebviewValue(() => webview.canGoBack?.() ?? false, false),
+      canGoForward: readWebviewValue(() => webview.canGoForward?.() ?? false, false),
     })
-  }
+  }, [])
+
+  const setPageFailure = useCallback(
+    (failure: BrowserLoadFailure | null): void => {
+      failureRef.current = failure
+      setLoadFailure(failure)
+      if (failure) {
+        captureVersion.current += 1
+        setPageReady(false)
+        updateNavigationState()
+      }
+    },
+    [updateNavigationState]
+  )
 
   const bindWebview = useCallback(
     (element: Element | null): void => {
       const webview = element as BrowserWebviewElement | null
       if (!webview) {
+        webviewCleanupRef.current?.()
+        webviewCleanupRef.current = null
         const previous = webviewRef.current
         // React calls the ref with null after detaching the <webview>; Electron methods can throw at that point.
         if (previous) {
@@ -282,8 +352,16 @@ export function BrowserTool({
       if (webviewRef.current === webview) return
       webviewRef.current = webview
       webviewReadyRef.current = false
+      navigationUrlRef.current = null
+      previousFailureRef.current = null
+      const cleanups: Array<() => void> = []
+      const listen = (name: string, listener: EventListener): void => {
+        webview.addEventListener(name, listener)
+        cleanups.push(() => webview.removeEventListener(name, listener))
+      }
+      webviewCleanupRef.current = () => cleanups.forEach((cleanup) => cleanup())
 
-      webview.addEventListener("dom-ready", () => {
+      listen("dom-ready", () => {
         webviewReadyRef.current = true
         scrollbarStyleRef.current(webview)
         const webContentsId = webview.getWebContentsId?.()
@@ -300,24 +378,72 @@ export function BrowserTool({
             )
         }
       })
-      webview.addEventListener("did-start-loading", () => {
+      listen("did-start-loading", () => {
         captureVersion.current += 1
         setPageReady(false)
         onUpdateRef.current({ loading: true })
       })
-      webview.addEventListener("did-stop-loading", () => {
-        setPageReady(webviewReadyRef.current)
+      listen("did-stop-loading", () => {
+        setPageReady(webviewReadyRef.current && !failureRef.current)
         scrollbarStyleRef.current(webview)
         updateNavigationState()
       })
-      webview.addEventListener("did-navigate", updateNavigationState)
-      webview.addEventListener("did-navigate-in-page", updateNavigationState)
-      webview.addEventListener("page-title-updated", (event) => {
+      listen("did-start-navigation", (event) => {
+        const navigation = event as unknown as DidStartNavigationEvent
+        if (!navigation.isMainFrame || navigation.isInPlace) return
+        navigationUrlRef.current = navigation.url
+        previousFailureRef.current = failureRef.current ?? previousFailureRef.current
+        setPageFailure(null)
+        setBrowserError(null)
+        setPageReady(false)
+        captureVersion.current += 1
+      })
+      listen("did-redirect-navigation", (event) => {
+        const navigation = event as unknown as DidStartNavigationEvent
+        if (navigation.isMainFrame && !navigation.isInPlace) navigationUrlRef.current = navigation.url
+      })
+      listen("did-fail-load", (event) => {
+        const failure = event as unknown as DidFailLoadEvent
+        if (!failure.isMainFrame) return
+        const url = failure.validatedURL || navigationUrlRef.current || requestedUrlRef.current || ""
+        if (navigationUrlRef.current && url !== navigationUrlRef.current) return
+        const next = browserLoadFailure(url, failure.errorCode, failure.errorDescription)
+        if (next) {
+          previousFailureRef.current = null
+          setPageFailure(next)
+        } else if (previousFailureRef.current) {
+          // 同一地址的重试可能交错；快照保留到新文档真正提交。
+          setPageFailure(previousFailureRef.current)
+        }
+      })
+      listen("did-frame-navigate", (event) => {
+        const navigation = event as unknown as DidFrameNavigateEvent
+        if (!navigation.isMainFrame) return
+        if (navigationUrlRef.current && navigation.url !== navigationUrlRef.current) return
+        const previousFailure = previousFailureRef.current
+        previousFailureRef.current = null
+        webviewReadyRef.current = false
+        const next = browserHttpFailure(navigation.url, navigation.httpResponseCode)
+        if (next) setPageFailure(next)
+        else if (previousFailure && failureRef.current === previousFailure) setPageFailure(null)
+      })
+      listen("render-process-gone", (event) => {
+        const { details } = event as unknown as RenderProcessGoneEvent
+        if (details.reason === "clean-exit") return
+        previousFailureRef.current = null
+        setPageFailure(
+          browserCrashFailure(navigationUrlRef.current || requestedUrlRef.current || "", details.reason)
+        )
+        webviewReadyRef.current = false
+      })
+      listen("did-navigate", updateNavigationState)
+      listen("did-navigate-in-page", updateNavigationState)
+      listen("page-title-updated", (event) => {
         const title = (event as Event & { title?: string }).title
-        if (title) onUpdateRef.current({ title })
+        if (title && !failureRef.current) onUpdateRef.current({ title })
       })
     },
-    [tab.id]
+    [tab.id, setPageFailure, updateNavigationState]
   )
 
   useEffect(() => {
@@ -329,7 +455,28 @@ export function BrowserTool({
   }, [active, tab.id])
 
   const getWebview = (): BrowserWebviewElement | null => webviewRef.current
-  const externalUrl = resolveExternalBrowserUrl(tab.url ?? tab.input)
+  const reloadPage = (): void => {
+    const webview = getWebview()
+    const failure = failureRef.current
+    if (failure?.code === "ERR_INVALID_URL") {
+      navigate()
+      return
+    }
+    if (failure && webview?.loadURL) {
+      // 失败后 getURL 可能仍是上一页；明确重试用户尝试打开的地址。
+      // 原生 did-fail-load 负责展示重试失败，Promise 拒绝不能泄漏到宿主。
+      try {
+        void webview.loadURL(failure.url).catch(() => undefined)
+      } catch {
+        // Webview 尚未就绪时，用 src 发起同一地址的导航。
+        webview.setAttribute("src", failure.url)
+      }
+    } else {
+      webview?.reload?.()
+    }
+  }
+  const externalUrl =
+    loadFailure?.code === "ERR_INVALID_URL" ? null : resolveExternalBrowserUrl(tab.url ?? tab.input)
 
   const openInSystemBrowser = (): void => {
     if (!externalUrl) return
@@ -378,7 +525,7 @@ export function BrowserTool({
             shape="circle"
             title={tab.loading ? "停止加载" : "刷新"}
             aria-label={tab.loading ? "停止加载" : "刷新"}
-            onClick={() => (tab.loading ? getWebview()?.stop?.() : getWebview()?.reload?.())}
+            onClick={() => (tab.loading ? getWebview()?.stop?.() : reloadPage())}
           >
             <RefreshCw className={cn(tab.loading && "animate-spin")} />
           </Button>
@@ -392,7 +539,7 @@ export function BrowserTool({
           title="选择页面元素添加批注"
           aria-label="选择页面元素添加批注"
           aria-pressed={Boolean(annotation.snapshot?.mode && annotation.snapshot.mode !== "off")}
-          disabled={!tab.url || tab.loading || annotation.pending}
+          disabled={!tab.url || Boolean(loadFailure) || tab.loading || annotation.pending}
           onClick={() =>
             void (annotation.snapshot?.mode === "pick"
               ? annotation.showSaved()
@@ -473,7 +620,9 @@ export function BrowserTool({
             ref: bindWebview,
             src: tab.url ?? "about:blank",
             partition: "persist:vykor-browser",
-            className: "h-full w-full bg-background",
+            className: cn("h-full w-full bg-background", loadFailure && "invisible pointer-events-none"),
+            "aria-hidden": Boolean(loadFailure),
+            tabIndex: loadFailure ? -1 : undefined,
           }}
         />
         {!tab.url && (
@@ -481,10 +630,24 @@ export function BrowserTool({
             <DesktopEmptyState icon={Globe2} title="开始浏览" description="输入 URL 以打开页面" />
           </div>
         )}
-        {tab.url && visible && (
+        {loadFailure && (
+          <BrowserErrorPage
+            failure={loadFailure}
+            canGoBack={tab.canGoBack}
+            onRetry={reloadPage}
+            onBack={() => getWebview()?.goBack?.()}
+            onShowOriginal={() => {
+              previousFailureRef.current = null
+              setPageFailure(null)
+              setPageReady(webviewReadyRef.current)
+              updateNavigationState()
+            }}
+          />
+        )}
+        {tab.url && visible && !loadFailure && (
           <BrowserAnnotationPanel ui={annotation} containerRef={pageContainer} />
         )}
-        {screenshot && active && visible && (
+        {screenshot && active && visible && !loadFailure && (
           <aside
             aria-label="页面截图预览"
             className="absolute top-3 right-3 z-20 flex w-44 flex-col gap-2 rounded-2xl bg-popover p-2 text-popover-foreground shadow-md"

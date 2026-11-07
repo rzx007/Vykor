@@ -18,6 +18,14 @@
 - [use-browser-annotations.ts](use-browser-annotations.ts)
 - [browser-annotation-context.ts](browser-annotation-context.ts)：将待发送批注转换为 agent 可读的上下文，并解析历史批注供聊天摘要和编辑使用。
 - [browser-navigation.ts](browser-navigation.ts)
+- [browser-load-failure.ts](browser-load-failure.ts)：把本地文件、网络、证书、HTTP 状态与页面进程退出原因转成对应说明；显示地址时解码本地路径并移除网址中的账号密码。
+- [browser-error-page.tsx](browser-error-page.tsx)：复用 Empty 和胶囊按钮，显示错误说明、失败地址、错误码，以及重新加载、返回和 HTTP 原网页入口；长地址换行，低高度时滚动，颜色跟随主题。
+
+## 页面加载失败
+
+`BrowserTool` 按 [Electron webview 导航事件](https://www.electronjs.org/docs/latest/api/webview-tag#dom-events) 处理当前主页面：`did-frame-navigate` 提供 HTTP 状态，`did-fail-load` 提供文件与连接错误，`render-process-gone` 提供页面进程退出原因。iframe 等子资源失败和主动取消不会覆盖整页。错误保存在当前浏览器实例中，最终的 loading/title 事件不会清掉错误或把失败地址改成内部空白页。
+
+重新加载明确重试失败地址；HTTP 错误可以查看仍保留的原网页，不额外导航，也不绕过证书校验。开始下一次主导航时清理错误，新页面提交前若取消则恢复旧文档或旧错误；旧导航的迟到结果和卸载后的事件不能覆盖新页面。失败页暂停截图和批注，正常页面恢复后重新可用。非法地址会显示输入提示，不写入 webview 的地址属性。截图与浏览器绑定等操作错误继续使用原有的局部提示。
 
 ## 批注随消息发送
 
