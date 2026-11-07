@@ -22,10 +22,14 @@ export type VykorDaemonOptions = Pick<
   | "port"
   | "store"
   | "storePath"
+  | "storeFileMustExist"
   | "token"
   | "version"
   | "executionSurface"
   | "browserHost"
+  | "enableDesktopBrowser"
+  | "registeredDaemonControl"
+  | "deferBackgroundActivation"
 >;
 
 /** Starts the opinionated daemon application with all standard resource services installed. */

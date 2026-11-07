@@ -54,12 +54,17 @@ export const ELEMENT_INSPECT_SCRIPT = `(() => {
   };
 })()`
 
-export async function waitForPageUpdate(contents: WebContents, before: string): Promise<void> {
+export async function waitForPageUpdate(
+  contents: WebContents,
+  before: string,
+  signal?: AbortSignal
+): Promise<void> {
   const startedAt = Date.now()
   let lastFingerprint = before
   let changedAt: number | null = null
   while (Date.now() - startedAt < 2_500) {
     await new Promise((resolve) => setTimeout(resolve, 80))
+    signal?.throwIfAborted()
     if (contents.isDestroyed()) return
     if (contents.isLoading()) continue
 

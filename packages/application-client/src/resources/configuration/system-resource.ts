@@ -75,6 +75,17 @@ export class SystemResource {
     return this.transport.request<{ prepared: true }>("/maintenance/prepare-restart", { method: "POST", signal: options.signal });
   }
 
+  async requestDataSwitch(
+    target: { id: string; directory: string; storePath: string },
+    options: { signal?: AbortSignal } = {},
+  ): Promise<{ id: string }> {
+    return this.transport.request("/maintenance/data-switch", { method: "POST", body: target, signal: options.signal });
+  }
+
+  async getDataSwitchResult(id: string): Promise<{ status: "pending" | "succeeded" | "failed" | "interrupted" | "rollback_failed"; error?: string; rollbackError?: string }> {
+    return this.transport.request(`/maintenance/data-switch/${encodeURIComponent(id)}`);
+  }
+
   /** `PATCH /settings` */
   async patchSettings(
     patch: Record<string, unknown>,

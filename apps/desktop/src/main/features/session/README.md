@@ -5,8 +5,8 @@
 ## 主要文件与调用流程
 
 - `ipc.ts` 注册界面可调用的入口，沿用共享请求和返回类型。
-- `session-service.ts` 的 `DesktopSessionService` 获取本次调用使用的 client（向后台发请求的连接对象），然后把它和输入交给具体操作。构造时可以传入连接依赖；不传时仍创建带浏览器宿主的 `DaemonConnectionService`。
-- `daemon-connection-service.ts` 查找或启动后台，保存当前连接的 Promise，并负责刷新、重启、切换数据目录和关闭。连接失效时通知订阅方；连接失败后允许重试。
+- `session-service.ts` 的 `DesktopSessionService` 获取本次调用使用的 client（向后台发请求的连接对象），然后把它和输入交给具体操作。构造时可以传入连接依赖；不传时创建 `DaemonConnectionService`，连接后从主进程接上浏览器桥。
+- `daemon-connection-service.ts` 复用 SDK 查找或启动独立后台，保存当前 client，并在后台重启、数据目录切换时重连。连接失效时通知订阅方；连接失败后允许重试。
 - `session-operations.ts` 执行会话和项目操作。分支切换、创建分支与其他方法一样显式接收 client；Git 等待结束后仍用本次调用持有的 client 检查项目并返回详情，交错调用不会覆盖彼此的连接。
 - `project-operations-support.ts` 执行 Git 命令、读取分支并补充项目目录是否可用。
 - `session-subscription-service.ts` 保存窗口对应的会话订阅和推送状态。服务入口接到连接失效通知后清除订阅；活动订阅的连接替换由 `activitySubscriptions` 处理。

@@ -81,6 +81,7 @@ import type {
 import { resolveDesktopRuntimeSnapshot } from "./runtime-selection"
 import { DaemonConnectionService } from "./daemon-connection-service"
 import { browserAgentService } from "../browser/browser-agent-service"
+import { startBrowserBridge } from "../browser/browser-bridge"
 import { SessionSubscriptionService, toDesktopSessionRecord } from "./session-subscription-service"
 import { GlobalActivitySubscriptionService } from "../activity/global-activity-subscription-service"
 import type { DesktopActivityUpdate } from "../../../shared/activity-types"
@@ -170,12 +171,15 @@ export class DesktopSessionService {
   )
   readonly operations = new SessionOperations()
 
-  constructor(
-    connection: DesktopSessionConnection = new DaemonConnectionService({
-      browserHost: browserAgentService,
+  constructor(connection?: DesktopSessionConnection) {
+    this.connection = connection ?? new DaemonConnectionService({
+      onConnected: ({ url, token }) => startBrowserBridge({
+        baseUrl: url,
+        token,
+        getOwnerSessionToken: (ownerId, sessionId) =>
+          this.subscriptions.getOwnerSessionToken(ownerId, sessionId),
+      }),
     })
-  ) {
-    this.connection = connection
     this.connection.onInvalidated(() => this.subscriptions.clearAll())
   }
 

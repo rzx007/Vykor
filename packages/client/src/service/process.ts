@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createRequire } from "node:module";
+import { closeSync, mkdirSync, openSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
@@ -16,14 +17,25 @@ export async function defaultCommand(cwd: string): Promise<string[]> {
   }
 }
 
-export function startProcess(command: readonly string[], cwd: string, env: Record<string, string | undefined>): {
+export function startProcess(command: readonly string[], cwd: string, env: Record<string, string | undefined>, logPath?: string): {
   child: ChildProcess;
   failure: () => Error | undefined;
 } {
   if (!command[0]?.trim()) throw new Error("Service command must include an executable.");
-  const child = spawn(command[0], command.slice(1), {
-    cwd, env, stdio: "ignore", detached: true, windowsHide: true, shell: false,
-  });
+  let log: number | undefined;
+  if (logPath) {
+    mkdirSync(dirname(logPath), { recursive: true });
+    log = openSync(logPath, "a", 0o600);
+  }
+  let child: ChildProcess;
+  try {
+    child = spawn(command[0], command.slice(1), {
+      cwd, env, stdio: log === undefined ? "ignore" : ["ignore", log, log],
+      detached: true, windowsHide: true, shell: false,
+    });
+  } finally {
+    if (log !== undefined) closeSync(log);
+  }
   let failure: Error | undefined;
   child.once("error", () => { failure = new Error("Cannot spawn Vykor service executable."); });
   child.once("exit", (code, signal) => {

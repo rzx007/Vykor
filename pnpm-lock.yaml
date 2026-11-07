@@ -1389,10 +1389,16 @@ importers:
       hono:
         specifier: 'catalog:'
         version: 4.12.12
+      proper-lockfile:
+        specifier: 4.1.2
+        version: 4.1.2
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.17
+      '@types/proper-lockfile':
+        specifier: 4.1.4
+        version: 4.1.4
       typescript:
         specifier: ^5.7.3
         version: 5.9.3

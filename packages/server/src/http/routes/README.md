@@ -19,6 +19,7 @@
 | [attachment.ts](./attachment.ts) | `AttachmentRouteService`、`createAttachmentRoutes`、`contentDisposition` |
 | [auth.ts](./auth.ts) | `AuthRoutesContext`、`createAuthRoutes` |
 | [background-shell.ts](./background-shell.ts) | `BackgroundShellRoutesContext`、`createBackgroundShellRoutes` |
+| [browser-host.ts](./browser-host.ts) | 注册本机桌面浏览器流，转交操作审批与结果 |
 | [channel-control.ts](./channel-control.ts) | `ChannelControlRoutesContext`、`createChannelControlRoutes` |
 | [channel.ts](./channel.ts) | `createChannelRoutes` |
 | [events.ts](./events.ts) | `HttpEventHub` |

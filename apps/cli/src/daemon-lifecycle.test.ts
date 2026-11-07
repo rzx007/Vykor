@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
+import { CURRENT_PROTOCOL_VERSION } from "@vykor/application-client";
 
 import type { DaemonRegistry } from "@vykor/server";
 
-import { probeDaemonRegistry } from "./daemon-lifecycle.js";
+const discover = vi.hoisted(() => vi.fn());
+vi.mock("@vykor/application-client/service", () => ({ Service: { discover } }));
+
+import { probeDaemonRegistry, verifyDaemonProcess } from "./daemon-lifecycle.js";
 
 function registry(overrides: Partial<DaemonRegistry> = {}): DaemonRegistry {
   return {
@@ -24,6 +28,15 @@ function response(body: unknown, status = 200): Response {
 }
 
 describe("probeDaemonRegistry", () => {
+  it("reuses a compatible independent Desktop daemon across release versions", async () => {
+    const desktop = registry({ launcher: "desktop", version: "1.2.28" });
+    discover.mockResolvedValue(desktop);
+    await expect(probeDaemonRegistry(desktop, {
+      pidAlive: () => true, expectedVersion: "1.0.0", minimumStartedAt: 1000,
+    })).resolves.toBe("ready");
+    expect(discover).toHaveBeenCalled();
+  });
+
   it("accepts a healthy daemon from the current build", async () => {
     const calls: RequestInit[] = [];
     const status = await probeDaemonRegistry(registry(), {
@@ -78,5 +91,30 @@ describe("probeDaemonRegistry", () => {
     });
     expect(status).toBe("ready");
     spy.mockRestore();
+  });
+});
+
+describe("verifyDaemonProcess", () => {
+  it("accepts only the PID returned by an authenticated local daemon", async () => {
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const path = new URL(String(input)).pathname;
+      expect(path).toBe("/debug/process");
+      const headers = new Headers(init?.headers);
+      expect(headers.get("authorization")).toBe("Bearer token");
+      expect(headers.get("x-vykor-protocol-version")).toBe(String(CURRENT_PROTOCOL_VERSION));
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+      expect(init?.redirect).toBe("error");
+      return response({ pid: 42 });
+    });
+    try {
+      const local = registry({ url: "http://127.0.0.1:4321" });
+      await expect(verifyDaemonProcess(local)).resolves.toBe(true);
+      await expect(verifyDaemonProcess({ ...local, pid: 43 })).resolves.toBe(false);
+      const callCount = fetch.mock.calls.length;
+      await expect(verifyDaemonProcess(registry())).resolves.toBe(false);
+      expect(fetch).toHaveBeenCalledTimes(callCount);
+    } finally {
+      fetch.mockRestore();
+    }
   });
 });

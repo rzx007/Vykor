@@ -161,6 +161,7 @@ export interface DaemonApplicationOptions {
   getSettings?: () => Settings;
   getSettingsForCwd?: (cwd: string) => Promise<Settings>;
   executionSurface?: "desktop_managed" | "cli_advanced";
+  deferBackgroundActivation?: boolean;
   /** Root used for scheduled conversations that intentionally run outside a project. */
   outsideProjectWorkspaceRoot?: string;
   createAgent?: CreateDaemonAgent;
@@ -219,6 +220,7 @@ export interface DurableAgentApplication {
   /** Bounded, in-memory OAuth login operations owned by this daemon instance. */
   readonly mcpOAuthOperations: McpOAuthOperationService;
   ready(): Promise<void>;
+  activateBackgroundWork?(): void;
   close(): Promise<void>;
 }
 
@@ -283,6 +285,7 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly runControl: RunControlService;
   private readonly localOcr: LocalOcrService;
   private readonly startupRecovery: Promise<void>;
+  private backgroundActivated = false;
   createMaintenanceService(host: Pick<MaintenanceApplicationContext, "logs" | "settings"> & { beforeClose?(): void } = {}) {
     return createMaintenanceApplicationService({ store: this.store, control: this.control, commands: this.commands, terminals: this.terminals, ...host, readiness: () => this.diagnosticState, closeApplication: () => { host.beforeClose?.(); return this.close(); } });
   }
@@ -1101,6 +1104,7 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       this.schedules = new ScheduledTaskService({
         schedules: store.schedules,
+        deferStart: options.deferBackgroundActivation ?? false,
         latestEventSeq: () => store.conversations.latestEventSeq(),
         onDurableEvent: (previousEventSeq) => this.eventPublisher.publishSince(previousEventSeq),
         execute: (task, run, onSessionReady) => scheduledExecutor.execute(task, run, onSessionReady),
@@ -1157,6 +1161,13 @@ export class DaemonApplication implements DurableAgentApplication {
 
   async ready(): Promise<void> {
     await this.startupRecovery;
+    if (!this.options.deferBackgroundActivation) this.activateBackgroundWork();
+  }
+
+  activateBackgroundWork(): void {
+    if (this.backgroundActivated || this.readyState !== "ready") return;
+    this.backgroundActivated = true;
+    this.schedules.start();
     // 后台自动连接 enabled 渠道：不阻塞 listen，也不 reject。
     void this.channelRuntime?.startEnabled();
   }

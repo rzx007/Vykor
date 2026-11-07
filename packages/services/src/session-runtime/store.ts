@@ -195,7 +195,7 @@ export class SessionStore {
   }
 
   constructor(options: SessionStoreOptions) {
-    const database = SessionDatabase.open({ path: options.path });
+    const database = SessionDatabase.open({ path: options.path, fileMustExist: options.fileMustExist });
     this.path = database.path;
     const deltaFlushIntervalMs = Math.max(
       1,

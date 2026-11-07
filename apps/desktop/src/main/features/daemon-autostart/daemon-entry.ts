@@ -1,102 +1,45 @@
 import { spawn } from "node:child_process"
-
-import {
-  clearDaemonRegistry,
-  createBearerToken,
-  createDaemonRegistryEntry,
-  readDaemonRegistry,
-  startVykorDaemon,
-  stopDaemonProcess,
-  writeDaemonRegistry,
-  shouldStartManagedDaemon,
-  setHostResponseLocale,
-  type DaemonRegistry,
-} from "@vykor/server/daemon-host"
+import { join } from "node:path"
 import { app } from "electron"
-
+import {
+  daemonPidAlive,
+  isWindowsDaemonServiceEnabled,
+  readDaemonRegistry,
+  runRegisteredDaemon,
+  setHostResponseLocale,
+  shouldStartManagedDaemon,
+} from "@vykor/server/daemon-host"
 import { buildOutsideProjectRoot } from "../session/outside-project-workspace"
-import { isDesktopManagedRegistry, isLoopbackDaemonUrl } from "./daemon-surface"
 
-export type DesktopDaemonMode = "service" | "watchdog"
+export type DesktopDaemonMode = "service" | "watchdog" | "on-demand"
 
 export function resolveDesktopDaemonMode(argv: readonly string[]): DesktopDaemonMode | null {
   if (argv.includes("--daemon-service")) return "service"
   if (argv.includes("--daemon-watchdog")) return "watchdog"
+  if (argv.includes("--daemon-on-demand")) return "on-demand"
   return null
 }
 
 export async function runDesktopDaemonEntry(mode: DesktopDaemonMode): Promise<void> {
   if (mode === "watchdog") {
-    if (await registeredDaemonHealthy()) return
+    const registry = readDaemonRegistry()
+    if (registry && daemonPidAlive(registry.pid)) return
     if (!(await shouldStartManagedDaemon())) return
     const args = app.isPackaged ? ["--daemon-service"] : [app.getAppPath(), "--daemon-service"]
-    const child = spawn(process.execPath, args, {
-      detached: true,
-      stdio: "ignore",
-      windowsHide: true,
-    })
+    const child = spawn(process.execPath, args, { detached: true, stdio: "ignore", windowsHide: true })
     child.unref()
     return
   }
 
   setHostResponseLocale(app.getPreferredSystemLanguages()[0])
-  while (await registeredDaemonHealthy()) {
-    await delay(2_000)
-  }
-  const stale = readDaemonRegistry()
-  if (stale && !isDesktopManagedRegistry(stale) && isLoopbackDaemonUrl(stale.url)) {
-    await stopDaemonProcess(stale.pid).catch((error) => {
-      console.warn("[daemon] failed to stop non-desktop daemon", error)
-    })
-  }
-  clearDaemonRegistry()
-  const token = createBearerToken()
-  const { server, listen } = await startVykorDaemon({
-    host: "127.0.0.1",
-    port: 0,
-    token,
+  await runRegisteredDaemon({
     version: app.getVersion(),
-    executionSurface: "desktop_managed",
+    launcher: "desktop",
+    supervised: mode === "service",
+    ...(mode === "service" && process.platform === "win32"
+      ? { shouldStart: isWindowsDaemonServiceEnabled }
+      : {}),
+    legacyDataLocationPath: join(app.getPath("userData"), "runtime-data-location.json"),
     outsideProjectWorkspaceRoot: buildOutsideProjectRoot(app.getPath("documents")),
   })
-  writeDaemonRegistry(
-    createDaemonRegistryEntry({
-      url: listen.url,
-      pid: process.pid,
-      token,
-      storePath: server.store.path,
-      version: app.getVersion(),
-      executionSurface: "desktop_managed",
-    })
-  )
-
-  await new Promise<void>((resolve) => {
-    const close = (): void => {
-      clearDaemonRegistry()
-      void server.close().finally(resolve)
-    }
-    process.once("SIGINT", close)
-    process.once("SIGTERM", close)
-  })
-}
-
-export async function registeredDaemonHealthy(
-  readRegistry: () => DaemonRegistry | undefined = readDaemonRegistry,
-  fetchImpl: typeof fetch = fetch
-): Promise<boolean> {
-  const registry = readRegistry()
-  if (!registry || !isDesktopManagedRegistry(registry)) return false
-  try {
-    const response = await fetchImpl(`${registry.url}/health`, {
-      headers: { authorization: `Bearer ${registry.token}` },
-      signal: AbortSignal.timeout(1_500),
-    })
-    return response.ok
-  } catch {
-    return false
-  }
-}
-
-function delay(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }

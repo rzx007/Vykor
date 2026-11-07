@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Settings } from "@vykor/host-config";
 
-import { createDaemonAutoStartController } from "../auto-start-controller.js";
+import { createDaemonAutoStartController, reconcileDaemonSystemServiceForConnection } from "../auto-start-controller.js";
+import { clearDaemonRegistry, writeDaemonRegistry } from "../../daemon/paths.js";
+import type { DaemonSystemServiceStatus } from "../system-service.js";
 
 function settings(autoStart: boolean): Settings {
   return {
@@ -172,5 +174,48 @@ describe("daemon auto-start controller", () => {
       enabled: false,
     });
     expect(synchronousStatus).not.toHaveBeenCalled();
+  });
+});
+
+describe("system daemon connection startup", () => {
+  function serviceWithStatus(status: DaemonSystemServiceStatus) {
+    return { status: () => status, start: vi.fn(), install: vi.fn(), uninstall: vi.fn() };
+  }
+
+  it("starts the idle Windows watchdog when the worker is absent", async () => {
+    const service = serviceWithStatus({ platform: "win32", state: "running", detail: "ready" });
+    await expect(reconcileDaemonSystemServiceForConnection(service, true))
+      .resolves.toMatchObject({ autoStart: true, action: "started" });
+    expect(service.start).toHaveBeenCalledOnce();
+  });
+
+  it("does not kick an idle Windows watchdog when its worker is still alive", async () => {
+    writeDaemonRegistry({
+      pid: process.pid, url: "http://127.0.0.1:4321", token: "test-token",
+      startedAt: Date.now(), version: "1", storePath: "sessions.db",
+    });
+    const service = serviceWithStatus({ platform: "win32", state: "running", detail: "ready" });
+    try {
+      await expect(reconcileDaemonSystemServiceForConnection(service, true))
+        .resolves.toMatchObject({ action: "none" });
+      expect(service.start).not.toHaveBeenCalled();
+    } finally {
+      clearDaemonRegistry();
+    }
+  });
+
+  it.each(["darwin", "linux"] as const)("waits for the running %s service to register", async platform => {
+    const service = serviceWithStatus({ platform, state: "running" });
+    await expect(reconcileDaemonSystemServiceForConnection(service, true))
+      .resolves.toMatchObject({ autoStart: true, action: "none" });
+    expect(service.start).not.toHaveBeenCalled();
+    expect(service.install).not.toHaveBeenCalled();
+  });
+
+  it("waits while systemd reports that an installed service is activating", async () => {
+    const service = serviceWithStatus({ platform: "linux", state: "unknown", detail: "activating" });
+    await expect(reconcileDaemonSystemServiceForConnection(service, true))
+      .resolves.toMatchObject({ autoStart: true, action: "none" });
+    expect(service.install).not.toHaveBeenCalled();
   });
 });

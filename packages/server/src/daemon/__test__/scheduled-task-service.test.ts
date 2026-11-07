@@ -55,6 +55,36 @@ function createHarness(
 }
 
 describe("ScheduledTaskService", () => {
+  it("waits for activation before starting a missed occurrence", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-18T09:00:00Z"));
+    const { store } = createHarness();
+    const task = store.schedules.createTask({
+      id: "pending-activation",
+      name: "pending-activation",
+      prompt: "Run after the data location is committed.",
+      recurrence: "2026-08-18T08:00:00Z",
+      recurrenceFormat: "once",
+      timezone: "UTC",
+      destination: "chat",
+      sessionId: "scheduled-session",
+      missedRunPolicy: "run_once",
+      nextRunAt: Date.parse("2026-08-18T08:00:00Z"),
+    });
+    const service = new ScheduledTaskService({
+      schedules: store.schedules,
+      deferStart: true,
+      execute: async () => ({ runId: "agent-run", summary: "done" }),
+    });
+    cleanups.push(() => service.shutdown());
+
+    await vi.advanceTimersByTimeAsync(100);
+    expect(store.schedules.listRuns({ taskId: task.id })).toEqual([]);
+    service.start();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(store.schedules.listRuns({ taskId: task.id })).toHaveLength(1);
+  });
+
   it.each([
     {
       name: "archived chat",

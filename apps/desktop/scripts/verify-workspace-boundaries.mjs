@@ -6,6 +6,7 @@ const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourceRoot = join(desktopRoot, "src")
 const allowedImports = new Set([
   "@vykor/application-client",
+  "@vykor/application-client/service",
   "@vykor/server",
   "@vykor/server/daemon-host",
 ])
@@ -18,8 +19,8 @@ export function validateDesktopWorkspaceImport(file, specifier) {
     return `Desktop workspace import is not allowed: ${specifier} (${file})`
   }
   const normalized = file.replaceAll("\\", "/")
-  if (specifier.startsWith("@vykor/server") && !normalized.startsWith("src/main/")) {
-    return `Desktop server import is only allowed in main: ${specifier} (${file})`
+  if ((specifier.startsWith("@vykor/server") || specifier === "@vykor/application-client/service") && !normalized.startsWith("src/main/")) {
+    return `Desktop local service import is only allowed in main: ${specifier} (${file})`
   }
   return null
 }

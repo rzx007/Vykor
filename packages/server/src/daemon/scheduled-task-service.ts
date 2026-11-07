@@ -30,6 +30,7 @@ export interface ScheduleOperations {
 
 export interface ScheduledTaskServiceOptions {
   schedules: ScheduleOperations;
+  deferStart?: boolean;
   latestEventSeq?: () => number;
   onDurableEvent?: (previousEventSeq: number) => void;
   execute(
@@ -43,8 +44,10 @@ export class ScheduledTaskService {
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly active = new Map<string, Promise<ScheduledRunRecord>>();
   private shuttingDown = false;
+  private started: boolean;
 
   constructor(private readonly options: ScheduledTaskServiceOptions) {
+    this.started = !options.deferStart;
     this.commitScheduleChange(() => options.schedules.interruptActiveRuns(DAEMON_RESTART_REASON));
     for (const task of options.schedules.listTasks()) {
       const missedRun =
@@ -59,6 +62,12 @@ export class ScheduledTaskService {
           : task;
       this.install(restored);
     }
+  }
+
+  start(): void {
+    if (this.started || this.shuttingDown) return;
+    this.started = true;
+    for (const task of this.options.schedules.listTasks()) this.install(task);
   }
 
   status(): {
@@ -197,6 +206,7 @@ export class ScheduledTaskService {
   private install(task: ScheduledTaskRecord): void {
     this.clearTimer(task.id);
     if (
+      !this.started ||
       task.status !== "active" ||
       task.nextRunAt === undefined ||
       this.shuttingDown ||

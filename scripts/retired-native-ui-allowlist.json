@@ -3582,25 +3582,25 @@
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 187,
+      "line": 188,
       "text": "  readonly pluginUiHistory?: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 240,
+      "line": 242,
       "text": "  readonly pluginUiHistory: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 425,
+      "line": 428,
       "text": "      this.pluginUiHistory = new PluginUiHistoryService({ store });",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 1117,
+      "line": 1121,
       "text": "        recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
@@ -4206,7 +4206,7 @@
     },
     {
       "path": "packages/server/src/http/server.ts",
-      "line": 476,
+      "line": 499,
       "text": "    this.app.route(\"/sessions\", createSessionPluginUiHistoryRoutes(this.application.pluginUiHistory));",
       "reason": "Registers read-only history/410 routes only."
     },

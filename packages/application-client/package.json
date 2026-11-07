@@ -9,6 +9,10 @@
     ".": {
       "types": "./src/index.ts",
       "import": "./src/index.ts"
+    },
+    "./service": {
+      "types": "./src/local-service/index.ts",
+      "import": "./src/local-service/index.ts"
     }
   },
   "scripts": {
