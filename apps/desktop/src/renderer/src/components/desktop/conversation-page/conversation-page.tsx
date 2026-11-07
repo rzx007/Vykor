@@ -207,7 +207,7 @@ function ConversationPane({
   const setComposerDraftDocument = useDesktopSessionStore((state) => state.setComposerDraftDocument)
   const pickAttachmentFiles = useDesktopSessionStore((state) => state.pickAttachmentFiles)
   const addDroppedAttachments = useDesktopSessionStore((state) => state.addDroppedAttachments)
-  const addClipboardAttachment = useDesktopSessionStore((state) => state.addClipboardAttachment)
+  const addPastedTextAttachment = useDesktopSessionStore((state) => state.addPastedTextAttachment)
   const cancelAttachment = useDesktopSessionStore((state) => state.cancelAttachment)
   const retryAttachment = useDesktopSessionStore((state) => state.retryAttachment)
   const removeAttachment = useDesktopSessionStore((state) => state.removeAttachment)
@@ -399,11 +399,7 @@ function ConversationPane({
   }
 
   const pasteTextAttachment = (text: string): Promise<void> => {
-    return addClipboardAttachment(composerScope, {
-      bytes: new TextEncoder().encode(text).buffer as ArrayBuffer,
-      displayName: "pasted-text.txt",
-      mediaType: "text/plain",
-    })
+    return addPastedTextAttachment(composerScope, text)
   }
 
   const copyAssistantMessage = useCallback(async (content: string): Promise<void> => {

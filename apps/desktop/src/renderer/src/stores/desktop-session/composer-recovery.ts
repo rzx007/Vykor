@@ -62,6 +62,7 @@ const attachment = z.object({
   status: z.enum(["uploading", "ready", "failed", "cancelled"]),
   assetId: string.optional(),
   mediaType: string.optional(),
+  pastedText: string.optional(),
   error: z.object({ code: string, message: string, retryable: z.boolean() }).optional(),
 })
 const draft = z.object({

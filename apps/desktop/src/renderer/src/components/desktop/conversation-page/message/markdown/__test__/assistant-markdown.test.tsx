@@ -6,6 +6,7 @@ import { AssistantMessage } from "../../blocks/assistant-message"
 import { AppearanceProvider } from "@renderer/components/appearance/appearance-provider"
 import type { DesktopSessionPart } from "@shared/session-types"
 import { prepareFileOpenRequest } from "@renderer/components/desktop/layout/main-layout/utility-panel/file-open-request"
+import { toLocalFileUrl } from "@renderer/components/desktop/tools/browser/browser-navigation"
 
 let root: Root
 let container: HTMLDivElement
@@ -132,7 +133,9 @@ it.each([
   expect(file).not.toBeNull()
   act(() => file.click())
   expect(opened).toEqual([path])
-  expect(prepareFileOpenRequest(opened[0]!, "D:/repo").browserUrl).toBe(url)
+  const request = prepareFileOpenRequest(opened[0]!, "D:/repo")
+  expect(request.openPath).toBe(path)
+  expect(new URL(toLocalFileUrl("D:/repo", request.openPath)).href).toBe(url)
 })
 
 it("keeps Chinese project file links decoded once in the file viewer", async () => {

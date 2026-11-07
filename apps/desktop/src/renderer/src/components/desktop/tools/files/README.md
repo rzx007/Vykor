@@ -13,6 +13,10 @@
 - [files-tool.tsx](files-tool.tsx)
 - [file-viewer.tsx](file-viewer.tsx)
 - [project-file-tree.tsx](project-file-tree.tsx)
+- [file-viewer-toolbar.tsx](file-viewer-toolbar.tsx)：面包屑、渲染/源码切换、文件树及刷新操作，复用胶囊控件并允许窄面板换行。
+- [web-file-preview.tsx](web-file-preview.tsx)：复用现有内置浏览器渲染本地 HTML/SVG，保留页面相对资源的文件位置。
+
+HTML、SVG 与 Markdown 都默认进入渲染模式，并在同一文件标签中切换源码。HTML/SVG 不按项目内外、绝对或相对路径、5000 行阈值分流；正文文件请求先解析实际路径，由工作区文件服务读取并保存到文件标签状态，再由浏览器加载磁盘上的文件。长 HTML 原来的单独浏览器提示已并入顶部模式切换；超过源码读取大小的文件仍可渲染，源码模式说明无法加载。项目外文件沿用只读限制。HTML/SVG 切回渲染时重新加载已保存文件，不执行未保存的源码草稿。
 
 ## 维护约定
 

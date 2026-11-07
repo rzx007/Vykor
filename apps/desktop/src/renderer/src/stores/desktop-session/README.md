@@ -76,6 +76,8 @@
 
 附件和文字共用一个 composer scope。新会话固定使用 `new-conversation`，已有会话使用 `session:<sessionId>`，因此来回切换页面时不会把 A 会话的文字或卡片带到 B 会话。
 
+`addPastedTextAttachment` 为自动折叠的长文本保留 `pastedText` 原文，随附件卡片迁移和本机恢复；原文不作为额外字段传给上传接口。`showPastedTextAttachment` 在一次状态写入中把原文追加到结构化正文并移除卡片，随后复用附件取消或清理流程。重复点击和迟到上传事件不会恢复卡片，手动上传的文本文件没有此入口。
+
 1. **入口。** 文件选择、图片选择和拖放先由 preload 把文件交给 Electron Main；剪贴板图片以二进制交给 Main。Renderer 只收到安全展示名、大小、媒体类型、`draftId` 和一次性的 `sourceToken`，拿不到真实路径。文件夹入口保留在菜单里，但当前禁用。
 2. **状态位置。** `attachment-actions.ts` 把候选项写入 `composerDraftsByScope[scope].attachments`，随后生成 `taskId` 并开始上传。卡片顺序就是用户加入顺序；即使 daemon 对相同内容复用了同一个 asset，多个 UI 卡片也不会自动合并。
 3. **上传事件返回。** Main 持有文件流、并发队列和取消控制，通过 `attachments.onUploadEvent` 返回 progress/success/failed/cancelled。`store.ts` 只注册一份引用计数监听；事件必须同时匹配 `scope + draftId + 当前 taskId` 才能改状态，所以重试后的旧事件会被忽略。

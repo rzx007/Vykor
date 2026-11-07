@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { ExternalLink, FileCode2, FileText } from "lucide-react"
+import { FileCode2, FileText } from "lucide-react"
 import { useMemo } from "react"
 import { Streamdown } from "streamdown"
 
@@ -7,7 +7,6 @@ import { useAppearance } from "@renderer/components/appearance/appearance-provid
 import { streamdownComponents } from "@renderer/components/desktop/conversation-page/message/markdown/streamdown-components"
 import { streamdownPlugins } from "@renderer/components/desktop/conversation-page/message/markdown/streamdown-plugins"
 import { DesktopEmptyState } from "@renderer/components/desktop/shared/desktop-empty-state"
-import { Button } from "@renderer/components/ui/button"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
 import { Spinner } from "@renderer/components/ui/spinner"
 import type { WorkspaceReadFileResult } from "@shared/workspace-types"
@@ -16,15 +15,12 @@ import { VirtualizedCodePreview } from "../editor/virtualized-code-preview"
 import { useCodePreviewDrafts } from "../editor/code-preview-drafts"
 import { ImageViewerPanel } from "@renderer/components/desktop/image-viewer/image-viewer-panel"
 import { LocalDocumentPreview } from "./local-document-preview"
+import { WebFilePreview } from "./web-file-preview"
 import {
   imageSourceKey,
   type ImageSource,
 } from "@renderer/components/desktop/image-viewer/image-source"
-import {
-  canOpenHtmlInBrowser,
-  shouldOfferHtmlBrowserOpen,
-  type FileViewerType,
-} from "./file-viewer-model"
+import type { FileViewerType } from "./file-viewer-model"
 
 export type FileViewMode = "preview" | "source"
 
@@ -61,11 +57,11 @@ interface FileViewerProps {
   activePath: string | null
   loadingPath: string | null
   viewMode: FileViewMode
+  visible?: boolean
   searchQuery: string
   searchMatchIndex: number
   searchMatches: FileSearchMatch[]
   targetLine?: number
-  onOpenHtmlInBrowser: (projectPath: string, relativePath: string, name: string) => void
   onFileUpdated?: (preview: WorkspaceReadFileResult) => void
 }
 
@@ -75,11 +71,11 @@ export function FileViewer({
   activePath,
   loadingPath,
   viewMode,
+  visible = true,
   searchQuery,
   searchMatchIndex,
   searchMatches,
   targetLine,
-  onOpenHtmlInBrowser,
   onFileUpdated,
 }: FileViewerProps): React.JSX.Element {
   const { resolvedTheme: themeType } = useAppearance()
@@ -116,10 +112,6 @@ export function FileViewer({
         }
       : null
   }, [activeTab])
-  const showLargeHtmlAction = activeTab
-    ? shouldOfferHtmlBrowserOpen(activeTab.preview.path, activeTab.preview.content ?? "") &&
-      canOpenHtmlInBrowser(activeTab.preview.scope)
-    : false
 
   if (tabs.length === 0 && !loadingPath) {
     return (
@@ -155,29 +147,23 @@ export function FileViewer({
           <DocumentPlaceholder preview={activeTab.preview} />
         ) : activeTab?.type === "markdown" && viewMode === "preview" ? (
           <MarkdownPreview preview={markdownPreview ?? activeTab.preview} />
+        ) : (activeTab?.type === "html" || activeTab?.type === "svg") && viewMode === "preview" ? (
+          <WebFilePreview
+            key={JSON.stringify([scopeId, activeTab.projectPath, activeTab.preview.path])}
+            scopeId={scopeId}
+            preview={activeTab.preview}
+            projectPath={activeTab.projectPath}
+            visible={visible}
+          />
+        ) : (activeTab?.type === "html" || activeTab?.type === "svg") &&
+          (activeTab.preview.binary || activeTab.preview.content === null) ? (
+          <DesktopEmptyState
+            icon={FileCode2}
+            title="无法显示源码"
+            description="文件过大或不是可读取的文本，仍可切回渲染模式查看。"
+          />
         ) : activeTab ? (
           <div className="flex h-full min-h-0 flex-col">
-            {showLargeHtmlAction && activeTab.projectPath ? (
-              <div className="flex h-10 shrink-0 items-center justify-between gap-3 border-b px-3 text-xs text-muted-foreground">
-                <span>HTML 文件较大，当前展示源码</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    if (!activeTab.projectPath) return
-                    onOpenHtmlInBrowser(
-                      activeTab.projectPath,
-                      activeTab.preview.path,
-                      activeTab.preview.name
-                    )
-                  }}
-                >
-                  <ExternalLink />
-                  在浏览器中打开
-                </Button>
-              </div>
-            ) : null}
             <VirtualizedCodePreview
               key={activeTab.preview.path}
               preview={activeTab.preview}

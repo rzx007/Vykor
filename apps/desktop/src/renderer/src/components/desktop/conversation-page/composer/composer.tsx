@@ -323,6 +323,14 @@ export function Composer({
         onCancel={(draftId) => void attachmentAction(() => onCancelAttachment?.(draftId), "取消上传")}
         onRetry={(draftId) => void attachmentAction(() => onRetryAttachment?.(draftId), "重试附件")}
         onRemove={(draftId) => void attachmentAction(() => onRemoveAttachment?.(draftId), "移除附件")}
+        onShowText={composerScope ? (draftId) => {
+          // 恢复正文在 store 中同步完成，上传清理由后台继续处理。
+          void attachmentAction(
+            () => useDesktopSessionStore.getState().showPastedTextAttachment(composerScope, draftId),
+            "显示粘贴文本"
+          )
+          document.getElementById(id)?.focus()
+        } : undefined}
       />
       <RichPromptInput
         key={id}

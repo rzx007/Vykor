@@ -5,7 +5,7 @@ import { createPortal } from "react-dom"
 import { prepareFileTreeInput, type ContextMenuAnchorRect, type ContextMenuItem } from "@pierre/trees"
 import { FileTree, useFileTree, useFileTreeSearch } from "@pierre/trees/react"
 import { OpenWithSubmenu } from "@renderer/components/desktop/open-with"
-import { isHtmlPath } from "@renderer/components/desktop/tools/files/file-viewer-model"
+import { isWebDocumentPath } from "@renderer/components/desktop/tools/files/file-viewer-model"
 import { documentTreeIcons } from "@renderer/components/desktop/tools/files/document-file-icons"
 import { Button } from "@renderer/components/ui/button"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@renderer/components/ui/input-group"
@@ -17,14 +17,14 @@ export function ProjectFileTree({
   paths,
   selectedPath,
   onSelect,
-  onOpenHtmlInBrowser,
+  onRenderFile,
   onActionError,
 }: {
   rootPath: string
   paths: string[]
   selectedPath: string | null
   onSelect: (path: string) => void
-  onOpenHtmlInBrowser: (projectPath: string, relativePath: string, name: string) => void
+  onRenderFile: (path: string) => void
   onActionError: (error: unknown) => void
 }): React.JSX.Element {
   const preparedInput = useMemo(
@@ -100,8 +100,8 @@ export function ProjectFileTree({
       }
 
       if (action === "open-html-in-browser") {
-        if (item.kind === "file" && isHtmlPath(item.path)) {
-          onOpenHtmlInBrowser(rootPath, item.path, item.name)
+        if (item.kind === "file" && isWebDocumentPath(item.path)) {
+          onRenderFile(item.path)
         }
         return
       }
@@ -221,7 +221,7 @@ function FileTreeContextMenu({
         在 File Explorer 中打开
       </FileTreeMenuButton>
 
-      {item.kind === "file" && isHtmlPath(item.path) ? (
+      {item.kind === "file" && isWebDocumentPath(item.path) ? (
         <FileTreeMenuButton icon={Globe2} onClick={() => onAction("open-html-in-browser")}>
           在内置浏览器打开
         </FileTreeMenuButton>

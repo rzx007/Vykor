@@ -119,7 +119,7 @@ export function clearBrowserAnnotations(state: ComposerDraftState, scope: string
 export function addCandidates(
   state: ComposerDraftState,
   scope: string,
-  candidates: readonly DesktopAttachmentCandidate[]
+  candidates: readonly (DesktopAttachmentCandidate & Pick<DesktopAttachmentDraft, "pastedText">)[]
 ): ComposerDraftState {
   if (candidates.length === 0) return state
   const current = draftForScope(state, scope)
@@ -132,10 +132,29 @@ export function addCandidates(
     status: "uploading",
     bytesUploaded: 0,
     progress: candidate.sizeBytes > 0 ? 0 : null,
+    ...(candidate.pastedText !== undefined ? { pastedText: candidate.pastedText } : {}),
   }))
   return replaceScope(state, scope, {
     ...current,
     attachments: [...current.attachments, ...additions],
+  })
+}
+
+export function expandPastedTextAttachment(
+  state: ComposerDraftState,
+  scope: string,
+  draftId: string
+): ComposerDraftState {
+  const current = state.composerDraftsByScope[scope]
+  const attachment = current?.attachments.find((item) => item.draftId === draftId)
+  if (!current || attachment?.pastedText === undefined) return state
+  return replaceScope(state, scope, {
+    ...current,
+    document: composerDocument([
+      ...current.document.items,
+      { type: "text", text: (current.document.items.length ? "\n\n" : "") + attachment.pastedText },
+    ]),
+    attachments: current.attachments.filter((item) => item.draftId !== draftId),
   })
 }
 

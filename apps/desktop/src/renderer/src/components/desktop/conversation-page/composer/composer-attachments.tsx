@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, RotateCcw, X } from "lucide-react"
+import { ChevronRight, CircleAlert, CircleCheck, RotateCcw, X } from "lucide-react"
 import { createElement, useEffect, useState } from "react"
 import { getFileIcon } from "@renderer/components/desktop/tools/files/file-icons"
 
@@ -14,6 +14,7 @@ import {
   AttachmentTitle,
 } from "@renderer/components/ui/attachment"
 import { Spinner } from "@renderer/components/ui/spinner"
+import { Button } from "@renderer/components/ui/button"
 import {
   resolveDesktopAttachmentCompatibility,
   type DesktopAttachmentDraft,
@@ -33,6 +34,7 @@ export function ComposerAttachments({
   onCancel,
   onRetry,
   onRemove,
+  onShowText,
 }: {
   attachments: readonly DesktopAttachmentDraft[]
   composerScope?: string
@@ -41,6 +43,7 @@ export function ComposerAttachments({
   onCancel: (draftId: string) => void
   onRetry: (draftId: string) => void
   onRemove: (draftId: string) => void
+  onShowText?: (draftId: string) => void
 }): React.JSX.Element | null {
   if (attachments.length === 0) return null
 
@@ -65,6 +68,7 @@ export function ComposerAttachments({
               onCancel={onCancel}
               onRetry={onRetry}
               onRemove={onRemove}
+              onShowText={onShowText}
               alignMixedAttachmentHeights={alignMixedAttachmentHeights}
             />
           ))}
@@ -80,6 +84,7 @@ function ComposerAttachmentCard({
   onCancel,
   onRetry,
   onRemove,
+  onShowText,
   alignMixedAttachmentHeights,
 }: {
   attachment: DesktopAttachmentDraft
@@ -87,6 +92,7 @@ function ComposerAttachmentCard({
   onCancel: (draftId: string) => void
   onRetry: (draftId: string) => void
   onRemove: (draftId: string) => void
+  onShowText?: (draftId: string) => void
   alignMixedAttachmentHeights: boolean
 }): React.JSX.Element {
   const viewer = useImageViewer()
@@ -198,6 +204,19 @@ function ComposerAttachmentCard({
         >
           {errorMessage ?? previewMessage ?? attachmentDescription(attachment, mediaType)}
         </AttachmentDescription>
+        {!readOnly && attachment.pastedText !== undefined && onShowText ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            shape="pill"
+            className="max-w-full self-start text-muted-foreground"
+            onClick={() => onShowText(attachment.draftId)}
+          >
+            <span className="min-w-0 truncate">在文本框中显示</span>
+            <ChevronRight aria-hidden="true" data-icon="inline-end" />
+          </Button>
+        ) : null}
         {attachment.status === "uploading" && attachment.progress !== null ? (
           <AttachmentProgress
             value={attachment.progress}

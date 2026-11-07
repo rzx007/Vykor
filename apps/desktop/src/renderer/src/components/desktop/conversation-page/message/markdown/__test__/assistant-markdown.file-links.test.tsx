@@ -57,8 +57,10 @@ it.each([
     path: "C:/Users/example/pages/Web-像素养成.html",
   },
   { href: "file:///tmp/report%20%231%2520.html", path: "/tmp/report #1%20.html" },
+  { href: "file:///C:/reports/diagram%20%231.svg", path: "C:/reports/diagram #1.svg" },
+  { href: "file:///tmp/diagram.SVG", path: "/tmp/diagram.SVG" },
 ])(
-  "opens a local HTML file URL through the existing file handler: $href",
+  "opens a local HTML/SVG file URL through the existing file handler: $href",
   async ({ href, path }) => {
     await render(`[打开文档](${href})`)
     const button = container.querySelector<HTMLButtonElement>(".assistant-file-link")
@@ -72,6 +74,9 @@ it.each([
 it.each([
   { href: "文档/说明.md", path: "文档/说明.md", line: undefined },
   { href: "README.md", path: "README.md", line: undefined },
+  { href: "./reports/page.html", path: "./reports/page.html", line: undefined },
+  { href: "../report.html", path: "../report.html", line: undefined },
+  { href: "images/diagram.svg", path: "images/diagram.svg", line: undefined },
   { href: "src/main.ts:42:3", path: "src/main.ts", line: 42 },
   { href: "文档/更新%20%231%2520.md", path: "文档/更新 #1%20.md", line: undefined },
 ])(

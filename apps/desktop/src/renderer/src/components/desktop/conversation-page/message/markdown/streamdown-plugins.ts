@@ -24,10 +24,10 @@ function visitLinks(
   for (const child of node.children ?? []) visitLinks(child, visit)
 }
 
-function normalizeLocalHtmlFileUrls() {
+function normalizeLocalWebDocumentFileUrls() {
   return (tree: LinkNode) =>
     visitLinks(tree, (node, href) => {
-      // 只把本机 HTML 文件 URL 转成现有文件链接，其他 URL 仍由安全插件处理。
+      // 只把本机 HTML/SVG 文件 URL 转成现有文件链接，其他 URL 仍由安全插件处理。
       if (!/^file:\/\/\/(?!\/)/i.test(href)) return
       const path = href.slice("file://".length)
       if (/[\\?#]/.test(path) || /%(?:2f|5c)/i.test(path)) return
@@ -41,7 +41,7 @@ function normalizeLocalHtmlFileUrls() {
         // eslint-disable-next-line no-control-regex -- 文件路径不能包含控制字符。
         /[\u0000-\u001f\u007f]/.test(decoded) ||
         decoded.split("/").some((segment) => segment === "." || segment === "..") ||
-        !/\.html?$/i.test(decoded) ||
+        !/\.(?:html?|svg)$/i.test(decoded) ||
         !parseFileReference(path)
       )
         return
@@ -58,12 +58,13 @@ function prepareRelativeFileLinks() {
       } catch {
         return
       }
+      const webDocument = /\.(?:html?|svg)(?::\d+(?::\d+)?)?$/i.test(decoded)
       if (
         !parseFileReference(href) ||
-        /^(?:[a-z][a-z0-9+.-]*:|[\\/]|\.{1,2}[\\/]|[#?])/i.test(decoded.trim()) ||
+        /^(?:[a-z][a-z0-9+.-]*:|[\\/]|[#?])/i.test(decoded.trim()) ||
         // eslint-disable-next-line no-control-regex -- 文件链接需要显式拒绝控制字符。
         /[\u0000-\u001f\u007f]/.test(decoded) ||
-        decoded.split(/[\\/]/).includes("..")
+        (!webDocument && (/^\.{1,2}[\\/]/.test(decoded) || decoded.split(/[\\/]/).includes("..")))
       )
         return
       // 保留前面 sanitizer 的清理结果，补足相对文件语法后仍交给 harden 检查。
@@ -86,7 +87,7 @@ function restoreRelativeFileLinks() {
 export const streamdownRehypePlugins = [
   ...Object.entries(defaultRehypePlugins).flatMap(([name, plugin]) =>
     name === "sanitize"
-      ? [normalizeLocalHtmlFileUrls, plugin]
+      ? [normalizeLocalWebDocumentFileUrls, plugin]
       : name === "harden"
         ? [prepareRelativeFileLinks, plugin, restoreRelativeFileLinks]
         : [plugin]

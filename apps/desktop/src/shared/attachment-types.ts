@@ -50,6 +50,8 @@ export interface DesktopAttachmentDraft {
   assetId?: string
   mediaType?: string
   error?: DesktopAttachmentError
+  /** 自动折叠的粘贴原文，仅用于恢复输入框草稿。 */
+  pastedText?: string
 }
 
 export interface DesktopAttachmentCompatibility {

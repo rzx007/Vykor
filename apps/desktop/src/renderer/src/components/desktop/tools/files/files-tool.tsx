@@ -1,18 +1,10 @@
-import {
-  BookOpenText,
-  Code2,
-  FileCode2,
-  FolderOpen,
-  PanelRight,
-  PanelRightClose,
-  RefreshCw,
-} from "lucide-react"
+import { FileCode2, FolderOpen } from "lucide-react"
 import type * as React from "react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { Group, Panel, usePanelRef } from "react-resizable-panels"
 
 import { DesktopEmptyState } from "@renderer/components/desktop/shared/desktop-empty-state"
-import { FileBreadcrumb } from "@renderer/components/desktop/tools/files/file-breadcrumb"
+import { FileViewerToolbar } from "./file-viewer-toolbar"
 import { FileSearchControls } from "@renderer/components/desktop/tools/files/file-search-controls"
 import { ProjectFileTree } from "@renderer/components/desktop/tools/files/project-file-tree"
 import {
@@ -23,7 +15,6 @@ import {
 } from "@renderer/components/desktop/tools/files/file-viewer"
 import { fileViewerTypeForPreview } from "@renderer/components/desktop/tools/files/file-viewer-model"
 import { useCodePreviewDrafts } from "../editor/code-preview-drafts"
-import { Button } from "@renderer/components/ui/button"
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { beginPanelToggleTransition } from "@renderer/components/desktop/layout/main-layout/panel-toggle-transition"
@@ -53,6 +44,7 @@ const fileTreeWidthStore = createPanelWidthStore({
 
 type FilesToolProps = {
   scopeId: string
+  visible: boolean
   tabs: FileViewerTab[]
   activePath: string | null
   loadingPath: string | null
@@ -64,11 +56,11 @@ type FilesToolProps = {
   restoreActivePath: string | null
   restorePaths: string[]
   openRequest: { id: number; path: string; line?: number } | null
-  onOpenHtmlInBrowser: (projectPath: string, relativePath: string, name: string) => void
 }
 
 export function FilesTool({
   scopeId,
+  visible,
   tabs,
   activePath,
   loadingPath,
@@ -80,7 +72,6 @@ export function FilesTool({
   restoreActivePath,
   restorePaths,
   openRequest,
-  onOpenHtmlInBrowser,
 }: FilesToolProps): React.JSX.Element {
   const selectedProject = useDesktopSessionStore(selectActiveWorkspaceProject)
   const [loadState, setLoadState] = useState<LoadState>("idle")
@@ -119,7 +110,15 @@ export function FilesTool({
     () => tabs.find((tab) => tab.preview.path === activePath) ?? null,
     [activePath, tabs]
   )
-  const activeIsMarkdown = activeTab?.type === "markdown"
+  const activePreviewFormat =
+    activeTab?.type === "html"
+      ? "HTML"
+      : activeTab?.type === "svg"
+        ? "SVG"
+        : activeTab?.type === "markdown"
+          ? "Markdown"
+          : undefined
+  const activeCanPreview = activePreviewFormat !== undefined
   const codeEditing = useCodePreviewDrafts(
     (state) =>
       state.drafts[JSON.stringify([scopeId, activeTab?.projectPath, activeTab?.preview.path])]
@@ -131,7 +130,7 @@ export function FilesTool({
     return draft && !draft.editing ? draft.content : (activeTab?.preview.content ?? "")
   })
   const activeViewMode: FileViewMode =
-    activeIsMarkdown && activePath ? (viewModeByPath[activePath] ?? "preview") : "source"
+    activeCanPreview && activePath ? (viewModeByPath[activePath] ?? "preview") : "source"
   const searchMatches = useMemo(
     () => findSearchMatches(searchableContent, searchQuery),
     [searchableContent, searchQuery]
@@ -173,7 +172,7 @@ export function FilesTool({
         event.preventDefault()
         if (typeof activeTab?.preview.content === "string") {
           setSearchOpen(true)
-          if (activeIsMarkdown && activePath)
+          if (activeCanPreview && activePath)
             setViewModeByPath((current) => ({ ...current, [activePath]: "source" }))
         }
         return
@@ -192,7 +191,7 @@ export function FilesTool({
     searchOpen,
     codeEditing,
     activeViewMode,
-    activeIsMarkdown,
+    activeCanPreview,
     activePath,
   ])
 
@@ -220,8 +219,13 @@ export function FilesTool({
       resultPath = result.path
       onActivePathChange(result.path)
       onOpenFileStart(result.path)
-      onFileOpened(toFileViewerTab(result))
-      if (options.fromOpenRequest) setResolvedOpenRequestPath(result.path)
+      const fileTab = toFileViewerTab(result)
+      onFileOpened(fileTab)
+      if (options.fromOpenRequest) {
+        setResolvedOpenRequestPath(result.path)
+        if (fileTab.type === "html" || fileTab.type === "svg")
+          setViewModeByPath((current) => ({ ...current, [result.path]: "preview" }))
+      }
     } catch (readError) {
       setError(errorMessage(readError))
     } finally {
@@ -249,9 +253,9 @@ export function FilesTool({
   useEffect(() => {
     if (!openRequest || loadState !== "ready" || handledOpenRequestRef.current === openRequest.id)
       return
-    handledOpenRequestRef.current = openRequest.id
     const requestedPath = openRequest.path.trim()
     const timer = window.setTimeout(() => {
+      handledOpenRequestRef.current = openRequest.id
       setResolvedOpenRequestPath(null)
       if (requestedPath)
         void openFile(requestedPath, { requireListedFile: false, fromOpenRequest: true })
@@ -344,7 +348,7 @@ export function FilesTool({
 
   const moveSearchMatch = (direction: -1 | 1): void => {
     if (searchMatches.length === 0) return
-    if (activeIsMarkdown && activeViewMode === "preview") setActiveViewMode("source")
+    if (activeCanPreview && activeViewMode === "preview") setActiveViewMode("source")
     setSearchIndex((current) => {
       const safeCurrent = Math.max(0, Math.min(current, searchMatches.length - 1))
       return (safeCurrent + direction + searchMatches.length) % searchMatches.length
@@ -372,50 +376,17 @@ export function FilesTool({
         } as React.CSSProperties
       }
     >
-      <div className="flex h-10 shrink-0 items-center gap-1 border-b border-border/45 px-2.5">
-        <FileBreadcrumb
-          projectName={selectedProject.name}
-          path={activeTab?.preview.relativePath ?? activePath ?? "/"}
-          scope={activeTab?.preview.scope}
-          rootLabel={activeTab?.preview.rootLabel}
-        />
-        {activeIsMarkdown && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label={activeViewMode === "preview" ? "查看 Markdown 源码" : "预览 Markdown"}
-            title={activeViewMode === "preview" ? "查看 Markdown 源码" : "预览 Markdown"}
-            onClick={() => setActiveViewMode(activeViewMode === "preview" ? "source" : "preview")}
-            aria-pressed={activeViewMode === "preview"}
-            className="text-muted-foreground aria-pressed:bg-muted aria-pressed:text-foreground"
-          >
-            {activeViewMode === "preview" ? <Code2 /> : <BookOpenText />}
-          </Button>
-        )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label={treeOpen ? "收起文件树" : "展开文件树"}
-          title={treeOpen ? "收起文件树" : "展开文件树"}
-          onClick={toggleTree}
-          className="text-muted-foreground"
-        >
-          {treeOpen ? <PanelRightClose /> : <PanelRight />}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          aria-label="刷新文件树"
-          title="刷新文件树"
-          onClick={() => void loadFiles()}
-          className="text-muted-foreground"
-        >
-          <RefreshCw />
-        </Button>
-      </div>
+      <FileViewerToolbar
+        projectName={selectedProject.name}
+        path={activePath ?? "/"}
+        preview={activeTab?.preview}
+        format={activePreviewFormat}
+        viewMode={activeViewMode}
+        treeOpen={treeOpen}
+        onViewModeChange={setActiveViewMode}
+        onToggleTree={toggleTree}
+        onRefresh={() => void loadFiles()}
+      />
 
       {loadState === "loading" && (
         <div className="text-ui-small flex flex-1 items-center justify-center gap-2 text-ui-muted">
@@ -470,13 +441,13 @@ export function FilesTool({
               activePath={activePath}
               loadingPath={loadingPath}
               viewMode={activeViewMode}
+              visible={visible}
               searchQuery={searchQuery}
               searchMatchIndex={visibleSearchIndex}
               searchMatches={searchMatches}
               targetLine={
                 openRequest && resolvedOpenRequestPath === activePath ? openRequest.line : undefined
               }
-              onOpenHtmlInBrowser={onOpenHtmlInBrowser}
               onFileUpdated={onFileUpdated}
             />
           </Panel>
@@ -517,7 +488,10 @@ export function FilesTool({
                 paths={treePaths}
                 selectedPath={activeTab?.preview.scope === "extra-root" ? null : activePath}
                 onSelect={(path) => void openFile(path)}
-                onOpenHtmlInBrowser={onOpenHtmlInBrowser}
+                onRenderFile={(path) => {
+                  setViewModeByPath((current) => ({ ...current, [path]: "preview" }))
+                  void openFile(path)
+                }}
                 onActionError={(actionError) => setError(errorMessage(actionError))}
               />
             </div>

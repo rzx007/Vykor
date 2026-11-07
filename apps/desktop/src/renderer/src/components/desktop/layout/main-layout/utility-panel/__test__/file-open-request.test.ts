@@ -3,31 +3,19 @@ import { describe, expect, it } from "vitest"
 import { prepareFileOpenRequest } from "../file-open-request"
 
 describe("prepareFileOpenRequest", () => {
-  it("routes outside HTML to a browser while leaving project HTML in the file viewer", () => {
-    expect(
-      prepareFileOpenRequest("C:/Users/ruanz/.answer-me-with-html/pages/更新 #1.html:42", "D:/repo")
-    ).toMatchObject({
-      browserUrl:
-        "file:///C:/Users/ruanz/.answer-me-with-html/pages/%E6%9B%B4%E6%96%B0%20%231.html",
-    })
-    expect(prepareFileOpenRequest("/tmp/report.htm", "/repo")).toMatchObject({
-      browserUrl: "file:///tmp/report.htm",
-    })
-    expect(prepareFileOpenRequest("D:/repo/index.html", "D:/repo")).not.toHaveProperty("browserUrl")
-    expect(prepareFileOpenRequest("D:/repository/index.html", "D:/repo")).toHaveProperty(
-      "browserUrl"
-    )
-    expect(prepareFileOpenRequest("D:/repo/../report.html", "D:/repo")).toMatchObject({
-      browserUrl: "file:///D:/report.html",
-    })
-    expect(prepareFileOpenRequest("/C:/reports/更新.html", "D:/repo")).toMatchObject({
-      browserUrl: "file:///C:/reports/%E6%9B%B4%E6%96%B0.html",
-    })
-    expect(prepareFileOpenRequest("//server/share/report.html", "D:/repo")).not.toHaveProperty(
-      "browserUrl"
-    )
-    expect(prepareFileOpenRequest("index.html", "D:/repo")).not.toHaveProperty("browserUrl")
-    expect(prepareFileOpenRequest("C:/other/readme.md", "D:/repo")).not.toHaveProperty("browserUrl")
+  it.each([
+    ["C:/reports/更新 #1%20.html:42", "D:/repo", "C:/reports/更新 #1%20.html"],
+    ["D:/repo/index.html", "D:/repo", "D:/repo/index.html"],
+    ["index.html", "D:/repo", "D:/repo/index.html"],
+    ["./reports/page.htm", "D:/repo", "D:/repo/reports/page.htm"],
+    ["../report.html", "D:/repo", "D:/report.html"],
+    ["/tmp/report.htm", "/repo", "/tmp/report.htm"],
+    ["pages/report.html", "/repo", "/repo/pages/report.html"],
+    ["/C:/reports/更新.html", "D:/repo", "C:/reports/更新.html"],
+    ["images/diagram.svg", "D:/repo", "D:/repo/images/diagram.svg"],
+    ["../diagram.SVG", "/repo", "/diagram.SVG"],
+  ])("resolves %s for the same HTML file preview and source tab", (path, root, openPath) => {
+    expect(prepareFileOpenRequest(path, root)).toEqual({ openPath, placeholderPath: null })
   })
   it("keeps the raw path and does not invent a placeholder for extra-root files", () => {
     const skillPath = "C:\\Users\\ruanz\\.vykor\\skills\\show-me\\SKILL.md"

@@ -7,13 +7,12 @@ import {
   PluginAppCatalog,
 } from "@renderer/components/desktop/shell/plugin-apps/panel"
 import type * as React from "react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import {
   BrowserTool,
   type BrowserToolTab,
 } from "@renderer/components/desktop/tools/browser/browser-tool"
-import { toLocalFileUrl } from "@renderer/components/desktop/tools/browser/browser-navigation"
 import type { UtilityToolRequest } from "./utility-panel-tabs"
 import { FilesTool } from "@renderer/components/desktop/tools/files/files-tool"
 import { getFileIcon } from "@renderer/components/desktop/tools/files/file-icons"
@@ -185,6 +184,13 @@ export function UtilityPanel({
   )
   const workspaceProject = useDesktopSessionStore(selectActiveWorkspaceProject)
   const selectedProjectPath = workspaceProject?.path
+  const resolvedFileOpenRequest = useMemo(
+    () => fileOpenRequest && {
+      ...fileOpenRequest,
+      path: prepareFileOpenRequest(fileOpenRequest.path, selectedProjectPath).openPath,
+    },
+    [fileOpenRequest, selectedProjectPath]
+  )
   const activeSessionId = useDesktopSessionStore((state) => state.activeSessionId)
   const activeWorkspaceIsGit = useActiveWorkspaceIsGit()
   const selectedProjectAvailable = workspaceProject?.available ?? false
@@ -247,7 +253,7 @@ export function UtilityPanel({
   useEffect(() => {
     if (!fileOpenRequest || handledFileRequestId === fileOpenRequest.id) return
     const prepared = prepareFileOpenRequest(fileOpenRequest.path, selectedProjectPath)
-    if (prepared.placeholderPath || prepared.browserUrl) return
+    if (prepared.placeholderPath) return
     const timer = window.setTimeout(() => {
       setHandledFileRequestId(fileOpenRequest.id)
       setTabs((current) => {
@@ -318,30 +324,6 @@ export function UtilityPanel({
     },
     [setActiveTabId, setBrowserTabs, setTabs]
   )
-
-  useEffect(() => {
-    if (!fileOpenRequest || handledFileRequestId === fileOpenRequest.id) return
-    const prepared = prepareFileOpenRequest(fileOpenRequest.path, selectedProjectPath)
-    if (!prepared.browserUrl) return
-    const timer = window.setTimeout(() => {
-      setHandledFileRequestId(fileOpenRequest.id)
-      openBrowserTab(
-        prepared.browserUrl!,
-        fileOpenRequest.path
-          .replace(/\\/g, "/")
-          .split("/")
-          .pop()
-          ?.replace(/:\d+(?::\d+)?$/, "")
-      )
-    }, 0)
-    return () => window.clearTimeout(timer)
-  }, [
-    fileOpenRequest,
-    handledFileRequestId,
-    selectedProjectPath,
-    openBrowserTab,
-    setHandledFileRequestId,
-  ])
 
   const addTab = useCallback(
     (tool: UtilityTool): void => {
@@ -808,6 +790,7 @@ export function UtilityPanel({
           {activeTab?.tool === "files" && (
             <FilesTool
               scopeId={scopeId}
+              visible={open}
               tabs={visibleFileTabs}
               activePath={visibleActiveFilePath}
               loadingPath={visibleLoadingFilePath}
@@ -827,15 +810,7 @@ export function UtilityPanel({
               }}
               restoreActivePath={persistedFileState?.activePath ?? null}
               restorePaths={persistedFileState?.paths ?? []}
-              openRequest={
-                fileOpenRequest &&
-                prepareFileOpenRequest(fileOpenRequest.path, selectedProjectPath).browserUrl
-                  ? null
-                  : fileOpenRequest
-              }
-              onOpenHtmlInBrowser={(projectPath, relativePath, name) =>
-                openBrowserTab(toLocalFileUrl(projectPath, relativePath), name)
-              }
+              openRequest={resolvedFileOpenRequest}
             />
           )}
           {terminalMounted && (

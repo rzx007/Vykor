@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest"
 
 import type { WorkspaceReadFileResult } from "@shared/workspace-types"
 import {
-  canOpenHtmlInBrowser,
   fileViewerTypeForPreview,
   isHtmlPath,
-  shouldOfferHtmlBrowserOpen,
 } from "../file-viewer-model"
 
 describe("isHtmlPath", () => {
@@ -19,26 +17,21 @@ describe("isHtmlPath", () => {
   })
 })
 
-describe("shouldOfferHtmlBrowserOpen", () => {
-  it("offers browser rendering only when HTML exceeds 5000 lines", () => {
-    expect(shouldOfferHtmlBrowserOpen("report.html", lines(5_000))).toBe(false)
-    expect(shouldOfferHtmlBrowserOpen("report.HTML", lines(5_001))).toBe(true)
-  })
-
-  it("does not offer browser rendering for a non-HTML file", () => {
-    expect(shouldOfferHtmlBrowserOpen("report.ts", lines(5_001))).toBe(false)
-  })
-})
-
-describe("canOpenHtmlInBrowser", () => {
-  it("hides the browser action for extra-root previews", () => {
-    expect(canOpenHtmlInBrowser("extra-root")).toBe(false)
-    expect(canOpenHtmlInBrowser("project")).toBe(true)
-    expect(canOpenHtmlInBrowser(undefined)).toBe(true)
-  })
-})
-
 describe("fileViewerTypeForPreview", () => {
+  it.each(["project", "extra-root"] as const)("renders %s SVG using an isolated browser rather than inline markup", scope => {
+    expect(fileViewerTypeForPreview(preview({
+      path: "artwork/diagram.SVG", name: "diagram.SVG", scope,
+      content: '<svg xmlns="http://www.w3.org/2000/svg"><circle r="20" /></svg>',
+    }))).toBe("svg")
+  })
+  it.each(["project", "extra-root"] as const)("renders HTML of every size in the browser for %s files", scope => {
+    for (const content of ["<p>small</p>", "<p>line</p>\n".repeat(5_001), null]) {
+      expect(fileViewerTypeForPreview(preview({
+        path: "reports/report.HTML", name: "report.HTML", scope,
+        content, binary: content === null,
+      }))).toBe("html")
+    }
+  })
   it.each(["pdf", "epub", "docx", "xlsx", "pptx"] as const)(
     "routes %s bytes into the local viewer",
     (format) => {
@@ -128,10 +121,6 @@ describe("fileViewerTypeForPreview", () => {
     ).toBe(type)
   })
 })
-
-function lines(count: number): string {
-  return Array.from({ length: count }, (_, index) => `line ${index + 1}`).join("\n")
-}
 
 function preview(overrides: Partial<WorkspaceReadFileResult> = {}): WorkspaceReadFileResult {
   return {

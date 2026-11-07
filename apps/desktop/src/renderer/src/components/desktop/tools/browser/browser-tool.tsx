@@ -13,7 +13,7 @@ import {
   Trash2,
 } from "lucide-react"
 import type { NativeImage } from "electron"
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { useAppearance } from "@renderer/components/appearance/appearance-provider"
 import { DesktopEmptyState } from "@renderer/components/desktop/shared/desktop-empty-state"
@@ -78,16 +78,31 @@ export function BrowserTool({
   visible,
   onUpdate,
 }: BrowserToolProps): React.JSX.Element {
-  const composerOwnerRef = useRef({ scope: composerScope, active: true })
-  if (composerOwnerRef.current.scope !== composerScope) {
-    composerOwnerRef.current.active = false
-    composerOwnerRef.current = { scope: composerScope, active: true }
-  }
-  const composerOwner = composerOwnerRef.current
-  useEffect(() => {
-    composerOwner.active = true
-    return () => { composerOwner.active = false }
-  }, [composerOwner])
+  const [composerGeneration, setComposerGeneration] = useState(0)
+  const composerOwner = useMemo(
+    () => Symbol(`${composerScope}:${composerGeneration}`),
+    [composerScope, composerGeneration]
+  )
+  const composerOwnerRef = useRef<symbol | null>(null)
+  useLayoutEffect(() => {
+    composerOwnerRef.current = composerOwner
+    const unsubscribe = useDesktopSessionStore.subscribe((state, previous) => {
+      if (composerScope !== NEW_CONVERSATION_SCOPE) return
+      // 状态可能在 React 提交下一次界面前，已经离开并返回同名的新聊天。
+      const leftNewConversation =
+        previous.activeSessionId === null && state.activeSessionId !== null
+      const removedDraft =
+        previous.composerDraftsByScope[composerScope] && !state.composerDraftsByScope[composerScope]
+      if (leftNewConversation || removedDraft) {
+        composerOwnerRef.current = null
+        setComposerGeneration((generation) => generation + 1)
+      }
+    })
+    return () => {
+      unsubscribe()
+      composerOwnerRef.current = null
+    }
+  }, [composerOwner, composerScope])
   const webviewRef = useRef<BrowserWebviewElement | null>(null)
   const webviewReadyRef = useRef(false)
   const activeRef = useRef(active)
@@ -108,14 +123,20 @@ export function BrowserTool({
     visible,
     ready: pageReady && !tab.loading && Boolean(tab.url),
     onSaved: (record) => {
-      // An old new-conversation owner must not refill the next new conversation after migration.
+      // 已离开或迁移的新聊天，不能把晚到的保存填回下一份草稿。
       const state = useDesktopSessionStore.getState()
-      if (composerScope !== NEW_CONVERSATION_SCOPE || (composerOwner.active && state.activeSessionId === null))
+      if (
+        composerScope !== NEW_CONVERSATION_SCOPE ||
+        (composerOwnerRef.current === composerOwner && state.activeSessionId === null)
+      )
         state.putBrowserAnnotation(composerScope, record)
     },
     onRemoved: (id) => {
       const state = useDesktopSessionStore.getState()
-      if (composerScope !== NEW_CONVERSATION_SCOPE || (composerOwner.active && state.activeSessionId === null))
+      if (
+        composerScope !== NEW_CONVERSATION_SCOPE ||
+        (composerOwnerRef.current === composerOwner && state.activeSessionId === null)
+      )
         state.removeBrowserAnnotation(composerScope, id)
     },
   })
@@ -319,11 +340,11 @@ export function BrowserTool({
     <section
       aria-hidden={!active}
       className={cn(
-        "absolute inset-0 flex h-full min-h-0 flex-col bg-conversation transition-opacity duration-100",
+        "@container/browser absolute inset-0 flex h-full min-h-0 min-w-0 flex-col bg-conversation transition-opacity duration-100",
         !active && "pointer-events-none opacity-0"
       )}
     >
-      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border/60 px-3">
+      <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-2 border-b border-border/60 px-3 py-2">
         <ButtonGroup variant="toolbar" aria-label="浏览器导航">
           <Button
             type="button"
@@ -383,7 +404,7 @@ export function BrowserTool({
         </Button>
 
         <form
-          className="min-w-0 flex-1"
+          className="order-first min-w-0 basis-full @[36rem]/browser:order-none @[36rem]/browser:basis-48 @[36rem]/browser:flex-1"
           onSubmit={(event) => {
             event.preventDefault()
             navigate()

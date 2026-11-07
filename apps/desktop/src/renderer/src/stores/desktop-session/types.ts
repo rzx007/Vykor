@@ -275,6 +275,8 @@ export interface AttachmentActions {
     scope: string,
     input: Omit<UploadDesktopAttachmentMemoryInput, "draftId" | "taskId">
   ) => Promise<void>
+  addPastedTextAttachment: (scope: string, text: string) => Promise<void>
+  showPastedTextAttachment: (scope: string, draftId: string) => Promise<void>
   cancelAttachment: (scope: string, draftId: string) => Promise<void>
   retryAttachment: (scope: string, draftId: string) => Promise<void>
   removeAttachment: (scope: string, draftId: string) => Promise<void>
