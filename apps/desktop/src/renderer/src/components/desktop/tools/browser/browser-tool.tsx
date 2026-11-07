@@ -536,6 +536,7 @@ export function BrowserTool({
           variant="annotation"
           size="lg"
           shape="pill"
+          className="hidden size-9 px-0! @[28rem]/browser:inline-flex @[44rem]/browser:w-auto @[44rem]/browser:px-4!"
           title="选择页面元素添加批注"
           aria-label="选择页面元素添加批注"
           aria-pressed={Boolean(annotation.snapshot?.mode && annotation.snapshot.mode !== "off")}
@@ -546,8 +547,8 @@ export function BrowserTool({
               : annotation.startPicking())
           }
         >
-          <MousePointer2 data-icon="inline-start" />
-          批注
+          <MousePointer2 />
+          <span className="hidden @[44rem]/browser:inline">批注</span>
         </Button>
 
         <form

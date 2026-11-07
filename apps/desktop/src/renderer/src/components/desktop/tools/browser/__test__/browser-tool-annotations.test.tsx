@@ -38,6 +38,16 @@ afterEach(async () => {
   host.remove(); vi.unstubAllGlobals(); Reflect.deleteProperty(window, "desktop")
 })
 
+it("uses browser container breakpoints for the annotation toolbar action", async () => {
+  await act(async () => render("session:first"))
+  const button = host.querySelector<HTMLButtonElement>('[aria-label="选择页面元素添加批注"]')!
+  expect(button.className).toContain("@[28rem]/browser:inline-flex")
+  expect(button.className).toContain("hidden")
+  const label = button.querySelector("span")!
+  expect(label.textContent).toBe("批注")
+  expect(label.className).toContain("@[44rem]/browser:inline")
+})
+
 const blockedRender = new Promise<void>(() => {})
 function SuspendRender({ blocked }: { blocked: boolean }) {
   if (blocked) throw blockedRender
