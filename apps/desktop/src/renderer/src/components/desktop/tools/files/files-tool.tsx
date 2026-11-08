@@ -13,7 +13,10 @@ import {
   type FileViewMode,
   type FileViewerTab,
 } from "@renderer/components/desktop/tools/files/file-viewer"
-import { fileViewerTypeForPreview, isWebDocumentPath } from "@renderer/components/desktop/tools/files/file-viewer-model"
+import {
+  fileViewerTypeForPreview,
+  isWebDocumentPath,
+} from "@renderer/components/desktop/tools/files/file-viewer-model"
 import { useCodePreviewDrafts } from "../editor/code-preview-drafts"
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
 import { Spinner } from "@renderer/components/ui/spinner"
@@ -44,7 +47,6 @@ const fileTreeWidthStore = createPanelWidthStore({
 
 type FilesToolProps = {
   scopeId: string
-  visible: boolean
   tabs: FileViewerTab[]
   activePath: string | null
   loadingPath: string | null
@@ -56,12 +58,11 @@ type FilesToolProps = {
   restoreActivePath: string | null
   restorePaths: string[]
   openRequest: { id: number; path: string; line?: number } | null
-  onOpenMissingWebDocument: (rootPath: string, path: string) => void
+  onOpenWebDocument: (rootPath: string, path: string) => void
 }
 
 export function FilesTool({
   scopeId,
-  visible,
   tabs,
   activePath,
   loadingPath,
@@ -73,7 +74,7 @@ export function FilesTool({
   restoreActivePath,
   restorePaths,
   openRequest,
-  onOpenMissingWebDocument,
+  onOpenWebDocument,
 }: FilesToolProps): React.JSX.Element {
   const selectedProject = useDesktopSessionStore(selectActiveWorkspaceProject)
   const [loadState, setLoadState] = useState<LoadState>("idle")
@@ -112,14 +113,7 @@ export function FilesTool({
     () => tabs.find((tab) => tab.preview.path === activePath) ?? null,
     [activePath, tabs]
   )
-  const activePreviewFormat =
-    activeTab?.type === "html"
-      ? "HTML"
-      : activeTab?.type === "svg"
-        ? "SVG"
-        : activeTab?.type === "markdown"
-          ? "Markdown"
-          : undefined
+  const activePreviewFormat = activeTab?.type === "markdown" ? "Markdown" : undefined
   const activeCanPreview = activePreviewFormat !== undefined
   const codeEditing = useCodePreviewDrafts(
     (state) =>
@@ -206,6 +200,10 @@ export function FilesTool({
     const normalizedPath = path.replace(/\/$/, "")
     const entry = fileEntries.get(normalizedPath)
     if (requireListedFile && (!entry || entry.type !== "file")) return
+    if (isWebDocumentPath(normalizedPath)) {
+      onOpenWebDocument(selectedProject.path, normalizedPath)
+      return
+    }
 
     const listed = entry?.type === "file"
     onActivePathChange(normalizedPath)
@@ -225,16 +223,9 @@ export function FilesTool({
       onFileOpened(fileTab)
       if (options.fromOpenRequest) {
         setResolvedOpenRequestPath(result.path)
-        if (fileTab.type === "html" || fileTab.type === "svg")
-          setViewModeByPath((current) => ({ ...current, [result.path]: "preview" }))
       }
     } catch (readError) {
-      const message = errorMessage(readError)
-      if (options.fromOpenRequest && isWebDocumentPath(normalizedPath) && (message.endsWith("文件不存在。") || /(?:^|[\s:])ENOENT(?=[:,\s]|$)/.test(message))) {
-        onOpenMissingWebDocument(selectedProject.path, normalizedPath)
-      } else {
-        setError(message)
-      }
+      setError(errorMessage(readError))
     } finally {
       onLoadingPathChange((current) =>
         current === normalizedPath || current === resultPath ? null : current
@@ -274,7 +265,7 @@ export function FilesTool({
     if (!selectedProject?.path) return
     const existingPaths = restorePaths
       .map((path) => path.replace(/\/$/, ""))
-      .filter((path) => fileEntries.get(path)?.type === "file")
+      .filter((path) => !isWebDocumentPath(path) && fileEntries.get(path)?.type === "file")
       .slice(0, 12)
     if (existingPaths.length === 0) return
 
@@ -454,7 +445,6 @@ export function FilesTool({
               activePath={activePath}
               loadingPath={loadingPath}
               viewMode={activeViewMode}
-              visible={visible}
               searchQuery={searchQuery}
               searchMatchIndex={visibleSearchIndex}
               searchMatches={searchMatches}

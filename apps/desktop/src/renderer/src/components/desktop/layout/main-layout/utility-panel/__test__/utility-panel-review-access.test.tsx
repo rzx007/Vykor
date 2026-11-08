@@ -259,19 +259,19 @@ function mountPanel(
 }
 
 describe("UtilityPanel review tool access", () => {
-  it.each(["文件不存在。", "Error invoking remote method 'workspace:read': Error: ENOENT: no such file or directory"])("opens a missing HTML message link in the builtin browser after %s", async (reason) => {
+  it.each(["missing.html", "missing.svg"])("shows the browser error page for missing %s", async (name) => {
     installProbe(async () => ({ isRepository: false, rootPath: null }))
-    const path = "C:/Users/ruanz/.answer-me-with-html/pages/missing.html"
+    const path = `C:/Users/ruanz/.answer-me-with-html/pages/${name}`
     Object.assign(window.desktop, {
       browser: { updateTab: vi.fn().mockResolvedValue(undefined) },
       workspace: {
         listFiles: vi.fn(async () => ({ rootPath: "D:/plain-dir", entries: [] })),
-        readFile: vi.fn().mockRejectedValue(new Error(reason)),
+        readFile: vi.fn(),
       },
     })
     vi.stubGlobal("ResizeObserver", class { observe = vi.fn(); unobserve = vi.fn(); disconnect = vi.fn() })
     useOutsideProjectSession("D:/plain-dir")
-    const scopeId = reason.includes("ENOENT") ? "session:missing-html-race" : "session:missing-html"
+    const scopeId = `session:missing-${name}`
     mountPanel(scopeId, { fileOpenRequest: { id: 1, path } })
     await settle()
     await settle()
@@ -285,7 +285,7 @@ describe("UtilityPanel review tool access", () => {
     expect(mountedContainer?.textContent).toContain("找不到本地文件")
   })
 
-  it.each(["不支持预览该路径。", "不支持预览该路径 C:/ENOENT/report.html"])("does not bypass a denied file read: %s", async (reason) => {
+  it.each(["不支持预览该路径。", "不支持预览该路径 C:/ENOENT/report.txt"])("shows denied non-web file reads: %s", async (reason) => {
     installProbe(async () => ({ isRepository: false, rootPath: null }))
     Object.assign(window.desktop, {
       browser: { updateTab: vi.fn().mockResolvedValue(undefined) },
@@ -297,7 +297,7 @@ describe("UtilityPanel review tool access", () => {
     vi.stubGlobal("ResizeObserver", class { observe = vi.fn(); unobserve = vi.fn(); disconnect = vi.fn() })
     useOutsideProjectSession("D:/plain-dir")
     const scopeId = reason.includes("ENOENT") ? "session:denied-html-enoent-name" : "session:denied-html"
-    mountPanel(scopeId, { fileOpenRequest: { id: 1, path: "C:/protected/report.html" } })
+    mountPanel(scopeId, { fileOpenRequest: { id: 1, path: "C:/protected/report.txt" } })
     await settle()
     await settle()
     expect(readUtilityPanelRuntimeState(scopeId)!.browserTabs).toEqual([])
@@ -331,7 +331,8 @@ describe("UtilityPanel review tool access", () => {
     ["C:/outside/report.html", "C:/outside/report.html"],
     ["reports/report.html", "D:/plain-dir/reports/report.html"],
     ["images/diagram.svg", "D:/plain-dir/images/diagram.svg"],
-  ])("opens %s through the same rendered file tab and switches source mode", async (path, absolutePath) => {
+    ["../report.HTM", "D:/report.HTM"],
+  ])("opens %s directly in a browser tab", async (path, absolutePath) => {
     installProbe(async () => ({ isRepository: false, rootPath: null }))
     const name = absolutePath.split("/").pop()!
     const format = name.endsWith("svg") ? "SVG" : "HTML"
@@ -362,18 +363,12 @@ describe("UtilityPanel review tool access", () => {
     await settle()
     const state = readUtilityPanelRuntimeState(scopeId)!
     expect(state.tabs).toHaveLength(1)
-    expect(state.tabs[0]).toMatchObject({ tool: "files", title: name })
+    expect(state.tabs[0]).toMatchObject({ tool: "browser", title: name })
     expect(state.activeTabId).toBe(state.tabs[0].id)
-    expect(state.browserTabs).toHaveLength(0)
-    expect(readFile).toHaveBeenCalledWith({ rootPath: "D:/plain-dir", path: absolutePath })
+    expect(state.browserTabs).toHaveLength(1)
+    expect(readFile).not.toHaveBeenCalled()
     expect(mountedContainer?.querySelector("webview")?.getAttribute("src")).toBe(`file:///${absolutePath}`)
-    await act(async () => mountedContainer?.querySelector<HTMLButtonElement>(`[aria-label="查看 ${format} 源码"]`)!.click())
-    await settle()
-    expect(mountedContainer?.querySelector("webview")).toBeNull()
-    expect(mountedContainer?.querySelector(`[aria-label="渲染 ${format}"]`)?.getAttribute("aria-pressed")).toBe("true")
-    await act(async () => mountedContainer?.querySelector<HTMLButtonElement>(`[aria-label="渲染 ${format}"]`)!.click())
-    await settle()
-    expect(mountedContainer?.querySelector("webview")?.getAttribute("src")).toBe(`file:///${absolutePath}`)
+    expect(mountedContainer?.querySelector(`[aria-label="查看 ${format} 源码"]`)).toBeNull()
   })
 
   it("keeps a file request when the parent rerenders before its open timer runs", async () => {
@@ -419,8 +414,8 @@ describe("UtilityPanel review tool access", () => {
       act(() => mountedRoot!.render(createElement(UtilityPanel, { ...props, maximized: true })))
       await act(async () => vi.runAllTimersAsync())
 
-      expect(readUtilityPanelRuntimeState(scopeId)?.tabs).toEqual([
-        expect.objectContaining({ tool: "files", title: "report.html", filePath: "report.html" }),
+      expect(readUtilityPanelRuntimeState(scopeId)?.tabs.filter(tab => tab.tool === "browser")).toEqual([
+        expect.objectContaining({ tool: "browser", title: "report.html" }),
       ])
       expect(mountedContainer?.querySelector("webview")?.getAttribute("src")).toBe("file:///D:/plain-dir/report.html")
     } finally {

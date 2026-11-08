@@ -19,7 +19,7 @@ export function FileViewerToolbar({
   projectName: string
   path: string
   preview?: WorkspaceReadFileResult
-  format?: "HTML" | "SVG" | "Markdown"
+  format?: "Markdown"
   viewMode: FileViewMode
   treeOpen: boolean
   onViewModeChange: (mode: FileViewMode) => void

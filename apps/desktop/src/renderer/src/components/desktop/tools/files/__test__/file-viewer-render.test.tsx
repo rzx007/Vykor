@@ -18,10 +18,6 @@ vi.mock("../../editor/virtualized-code-preview", () => ({
   VirtualizedCodePreview: () => <div data-display="code-preview" />,
 }))
 
-vi.mock("../../browser/browser-tool", () => ({
-  BrowserTool: ({ tab, visible }: { tab: { url: string; id: string }; visible: boolean }) => <div data-display="html-preview" data-url={tab.url} data-tab-id={tab.id} data-visible={visible} />,
-}))
-
 describe("FileViewer image rendering", () => {
   let container: HTMLDivElement
   let root: Root
@@ -98,23 +94,6 @@ describe("FileViewer image rendering", () => {
     expect(container.querySelector('[aria-label="图片缩放"]')).not.toBeNull()
     expect(container.querySelector('[aria-label="添加批注"]')).not.toBeNull()
     expect(container.querySelector('[data-display="code-preview"]')).toBeNull()
-  })
-
-  it("does not reuse a same-named browser preview across projects", async () => {
-    const first = tab("html", { path: "index.html", name: "index.html", content: "first" })
-    first.projectPath = "D:/first"
-    await render(first, "", "preview")
-    const firstId = container.querySelector('[data-display="html-preview"]')?.getAttribute("data-tab-id")
-    await render({ ...first, projectPath: "D:/second" }, "", "preview")
-    expect(container.querySelector('[data-display="html-preview"]')?.getAttribute("data-url")).toBe("file:///D:/second/index.html")
-    expect(container.querySelector('[data-display="html-preview"]')?.getAttribute("data-tab-id")).not.toBe(firstId)
-  })
-
-  it("suspends browser annotations when the surrounding panel is hidden", async () => {
-    const file = tab("html", { path: "report.html", name: "report.html" })
-    file.projectPath = "D:/repo"
-    await render(file, "", "preview", false)
-    expect(container.querySelector('[data-display="html-preview"]')?.getAttribute("data-visible")).toBe("false")
   })
 
   it("does not reload the image when unrelated file search state changes", async () => {
@@ -202,33 +181,10 @@ describe("FileViewer image rendering", () => {
     expect(container.textContent).not.toContain("old Markdown")
   })
 
-  it.each([
-    ["project", "html"], ["extra-root", "html"],
-    ["project", "svg"], ["extra-root", "svg"],
-  ] as const)("switches %s %s between the builtin browser and source without the old large-file action", async (scope, format) => {
-    const file = tab(format, {
-      path: scope === "project" ? `report #1.${format}` : `C:/outside/report #1.${format}`,
-      name: `report #1.${format}`, scope, content: format === "html" ? "<p>line</p>\n".repeat(5_001) : "<svg />",
-    })
-    file.projectPath = "D:/repo"
-    await render(file, "", "preview")
-    expect(container.querySelector('[data-display="html-preview"]')?.getAttribute("data-tab-id")).toMatch(/^[\w-]{1,100}$/)
-    expect(container.querySelector('[data-display="html-preview"]')?.getAttribute("data-url")).toBe(
-      scope === "project" ? `file:///D:/repo/report%20%231.${format}` : `file:///C:/outside/report%20%231.${format}`
-    )
-    expect(container.querySelector('[data-display="code-preview"]')).toBeNull()
-    await render(file, "", "source")
-    expect(container.querySelector('[data-display="html-preview"]')).toBeNull()
-    expect(container.querySelector('[data-display="code-preview"]')).not.toBeNull()
-    expect(container.textContent).not.toContain("HTML 文件较大")
-    expect(container.textContent).not.toContain("在浏览器中打开")
-  })
-
   async function render(
     fileTab: FileViewerTab,
     searchQuery = "",
-    viewMode: "source" | "preview" = "source",
-    visible = true
+    viewMode: "source" | "preview" = "source"
   ): Promise<void> {
     await act(async () => {
       // 保留真实查看器；提前等待懒加载模块，避免在 act 中等待 DOM 导致提交被挂起。
@@ -240,7 +196,6 @@ describe("FileViewer image rendering", () => {
           activePath={fileTab.preview.path}
           loadingPath={null}
           viewMode={viewMode}
-          visible={visible}
           searchQuery={searchQuery}
           searchMatchIndex={-1}
           searchMatches={[]}

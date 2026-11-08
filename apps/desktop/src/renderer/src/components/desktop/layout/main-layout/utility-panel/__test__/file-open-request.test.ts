@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { prepareFileOpenRequest } from "../file-open-request"
+import { toLocalFileUrl } from "@renderer/components/desktop/tools/browser/browser-navigation"
 
 describe("prepareFileOpenRequest", () => {
   it.each([
@@ -14,8 +15,15 @@ describe("prepareFileOpenRequest", () => {
     ["/C:/reports/更新.html", "D:/repo", "C:/reports/更新.html"],
     ["images/diagram.svg", "D:/repo", "D:/repo/images/diagram.svg"],
     ["../diagram.SVG", "/repo", "/diagram.SVG"],
-  ])("resolves %s for the same HTML file preview and source tab", (path, root, openPath) => {
-    expect(prepareFileOpenRequest(path, root)).toEqual({ openPath, placeholderPath: null })
+  ])("resolves %s for the browser", (path, root, openPath) => {
+    expect(prepareFileOpenRequest(path, root)).toEqual({
+      openPath, placeholderPath: null, browserUrl: new URL(toLocalFileUrl("", openPath)).href,
+    })
+  })
+  it("does not turn unresolved or nonlocal paths into file URLs", () => {
+    for (const path of ["report.html", "https://example.com/a.html", "//server/a.html"]) {
+      expect(prepareFileOpenRequest(path, undefined).browserUrl).toBeUndefined()
+    }
   })
   it("keeps the raw path and does not invent a placeholder for extra-root files", () => {
     const skillPath = "C:\\Users\\ruanz\\.vykor\\skills\\show-me\\SKILL.md"

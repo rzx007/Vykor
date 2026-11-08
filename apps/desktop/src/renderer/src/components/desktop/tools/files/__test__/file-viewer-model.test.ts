@@ -1,37 +1,18 @@
 import { describe, expect, it } from "vitest"
 
 import type { WorkspaceReadFileResult } from "@shared/workspace-types"
-import {
-  fileViewerTypeForPreview,
-  isHtmlPath,
-} from "../file-viewer-model"
+import { fileViewerTypeForPreview, isWebDocumentPath } from "../file-viewer-model"
 
-describe("isHtmlPath", () => {
-  it("recognizes HTML and HTM extensions without case sensitivity", () => {
-    expect(isHtmlPath("site/index.html")).toBe(true)
-    expect(isHtmlPath("site/legacy.HTM")).toBe(true)
+describe("isWebDocumentPath", () => {
+  it.each(["site/index.html", "site/legacy.HTM", "images/diagram.SVG"])("recognizes %s", (path) => {
+    expect(isWebDocumentPath(path)).toBe(true)
   })
-
-  it("rejects non-HTML files", () => {
-    expect(isHtmlPath("site/index.ts")).toBe(false)
+  it("rejects other files", () => {
+    expect(isWebDocumentPath("site/index.ts")).toBe(false)
   })
 })
 
 describe("fileViewerTypeForPreview", () => {
-  it.each(["project", "extra-root"] as const)("renders %s SVG using an isolated browser rather than inline markup", scope => {
-    expect(fileViewerTypeForPreview(preview({
-      path: "artwork/diagram.SVG", name: "diagram.SVG", scope,
-      content: '<svg xmlns="http://www.w3.org/2000/svg"><circle r="20" /></svg>',
-    }))).toBe("svg")
-  })
-  it.each(["project", "extra-root"] as const)("renders HTML of every size in the browser for %s files", scope => {
-    for (const content of ["<p>small</p>", "<p>line</p>\n".repeat(5_001), null]) {
-      expect(fileViewerTypeForPreview(preview({
-        path: "reports/report.HTML", name: "report.HTML", scope,
-        content, binary: content === null,
-      }))).toBe("html")
-    }
-  })
   it.each(["pdf", "epub", "docx", "xlsx", "pptx"] as const)(
     "routes %s bytes into the local viewer",
     (format) => {
