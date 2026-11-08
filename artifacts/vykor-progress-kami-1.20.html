@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="author" content="OpenHarness">
+<meta name="description" content="Vykor 2026 年 11 月近期功能进展与 Kami 1.20.0 更新结果">
+<meta name="keywords" content="Vykor, daemon, 跨会话观察, 浏览器, Kami">
+<meta name="generator" content="Kami">
+<title>Vykor · 2026 年 11 月进展</title>
+<style>
+@page { size:A4; margin:18mm 20mm 18mm; background:#f5f4ed; }
+* { box-sizing:border-box; margin:0; padding:0; }
+:root {
+  --parchment:#f5f4ed; --ivory:#faf9f5; --inline-code-bg:#f0eee6;
+  --near-black:#141413; --dark-warm:#3d3d3a; --olive:#504e49; --stone:#6b6a64;
+  --brand:#1B365D; --border:#e8e6dc; --border-soft:#e5e3d8; --tag-bg:#E4ECF5;
+  --serif:"TsangerJinKai02","Source Han Serif SC","Noto Serif CJK SC","Songti SC","STSong","SimSun",Georgia,serif;
+  --sans:var(--serif);
+  --mono:"JetBrains Mono",Consolas,"TsangerJinKai02","Source Han Serif SC",monospace;
+}
+html,body { background:var(--parchment); }
+body { color:var(--near-black); font-family:var(--serif); font-size:10pt; line-height:1.5; letter-spacing:.15pt; }
+@media screen { body { max-width:210mm; margin:24px auto; padding:18mm 20mm; box-shadow:0 16px 46px rgba(20,20,19,.08); } }
+strong { font-weight:500; }
+.page { min-height:258mm; display:flex; flex-direction:column; }
+.page + .page { break-before:page; }
+.kicker { color:var(--brand); font-size:9pt; letter-spacing:1.4pt; margin-bottom:8pt; }
+.header { display:grid; grid-template-columns:1fr auto; gap:18pt; align-items:end; padding-bottom:13pt; border-bottom:.5pt solid var(--border); }
+h1 { font-size:29pt; font-weight:500; line-height:1.12; max-width:145mm; }
+.deck { color:var(--olive); font-size:11pt; line-height:1.52; margin-top:8pt; max-width:145mm; }
+.date { color:var(--stone); font-size:9pt; white-space:nowrap; font-variant-numeric:tabular-nums; }
+h2 { font-size:15pt; font-weight:500; line-height:1.25; margin:19pt 0 10pt; }
+h3 { font-size:11pt; font-weight:500; line-height:1.3; }
+p { color:var(--olive); }
+.system-map { display:grid; grid-template-columns:1fr 26pt 1.35fr 26pt 1fr; align-items:stretch; margin-top:18pt; }
+.node { background:var(--ivory); border-radius:5pt; padding:12pt; min-height:74pt; }
+.node.primary { background:var(--tag-bg); }
+.node .label { color:var(--brand); font-size:8.5pt; letter-spacing:.6pt; margin-bottom:6pt; }
+.node strong { display:block; font-size:13pt; line-height:1.25; margin-bottom:5pt; }
+.node p { font-size:9pt; line-height:1.45; }
+.arrow { display:flex; align-items:center; justify-content:center; color:var(--brand); font-size:17pt; }
+.signal-row { display:grid; grid-template-columns:repeat(3,1fr); gap:9pt; margin-top:12pt; }
+.signal { padding-top:8pt; border-top:.5pt solid var(--border); }
+.signal b { color:var(--brand); display:block; font-size:12pt; font-weight:500; margin-bottom:3pt; }
+.signal span { color:var(--olive); font-size:8.8pt; line-height:1.4; }
+.timeline { position:relative; display:grid; grid-template-columns:repeat(4,1fr); gap:11pt; margin-top:4pt; }
+.timeline::before { content:""; position:absolute; left:9pt; right:9pt; top:7pt; height:.5pt; background:var(--border); }
+.step { position:relative; padding-top:18pt; break-inside:avoid; }
+.step::before { content:""; position:absolute; top:3.5pt; left:0; width:7pt; height:7pt; border-radius:50%; border:1.4pt solid var(--brand); background:var(--parchment); }
+.step .when { color:var(--brand); font-size:8pt; margin-bottom:4pt; }
+.step p { font-size:8.8pt; line-height:1.42; }
+.takeaway { margin-top:auto; padding-top:12pt; border-top:.5pt solid var(--border); display:grid; grid-template-columns:25mm 1fr; gap:10pt; }
+.takeaway .label { color:var(--brand); font-size:8.5pt; letter-spacing:.5pt; }
+.takeaway p { font-size:10pt; color:var(--dark-warm); }
+.list { list-style:none; }
+.list li { display:grid; grid-template-columns:25mm 1fr; gap:8pt; padding:8pt 0; border-bottom:.5pt solid var(--border-soft); break-inside:avoid; }
+.list li:last-child { border-bottom:0; }
+.tag { color:var(--brand); font-size:8.5pt; padding-top:1pt; }
+.list p { color:var(--dark-warm); font-size:9.5pt; line-height:1.48; }
+.two-col { display:grid; grid-template-columns:1.28fr .72fr; gap:18pt; }
+.audit { background:var(--ivory); border-radius:5pt; padding:13pt 14pt; break-inside:avoid; }
+.audit .version { display:grid; grid-template-columns:1fr auto 1fr; gap:7pt; align-items:center; margin:10pt 0 12pt; }
+.audit .version div { color:var(--stone); font-size:8pt; }
+.audit .version strong { display:block; color:var(--brand); font-size:18pt; margin-top:2pt; }
+.audit .to { color:var(--brand); font-size:15pt; }
+.audit p { font-size:9pt; line-height:1.45; margin-top:6pt; }
+.audit code { font-family:var(--mono); font-size:8pt; background:var(--inline-code-bg); padding:1pt 3pt; border-radius:2pt; }
+.limit { margin-top:10pt; padding-top:9pt; border-top:.5pt solid var(--border); }
+.limit strong { color:var(--brand); display:block; margin-bottom:4pt; }
+.footer { margin-top:auto; padding-top:8pt; border-top:.3pt dotted var(--border); display:flex; justify-content:space-between; color:var(--stone); font-size:8pt; }
+@media (max-width:720px) {
+  body { margin:0; padding:28px 22px; box-shadow:none; }
+  .page { min-height:auto; padding-bottom:50px; }
+  .page + .page { padding-top:12px; }
+  .header,.two-col { grid-template-columns:1fr; }
+  .date { white-space:normal; }
+  .system-map { grid-template-columns:1fr; gap:8px; }
+  .arrow { transform:rotate(90deg); min-height:24px; }
+  .signal-row,.timeline { grid-template-columns:1fr; }
+  .timeline::before { top:0; bottom:0; left:4pt; width:.5pt; height:auto; right:auto; }
+  .step { padding:0 0 8px 22px; }
+  .step::before { top:4pt; left:0; }
+  .takeaway,.list li { grid-template-columns:1fr; gap:4px; }
+}
+</style>
+</head>
+<body>
+<section class="page">
+  <header class="header">
+    <div>
+      <div class="kicker">VYKOR · 2026 年 11 月进展</div>
+      <h1>多个入口，终于汇入同一个持续运行的后台</h1>
+      <p class="deck">这一轮不是简单增加按钮，而是重整运行底座：Desktop、CLI 与 TUI 共享会话、任务、Agent 和浏览器能力。</p>
+    </div>
+    <div class="date">2026-10-31 至 2026-11-07</div>
+  </header>
+
+  <h2>新的系统主线</h2>
+  <div class="system-map" role="img" aria-label="Desktop、CLI 和 TUI 经共享后台访问持续状态并返回结果">
+    <div class="node">
+      <div class="label">产品入口</div>
+      <strong>Desktop<br>CLI · TUI</strong>
+      <p>保留各自的窗口、终端与交互方式。</p>
+    </div>
+    <div class="arrow">→</div>
+    <div class="node primary">
+      <div class="label">唯一运行底座</div>
+      <strong>共享 daemon</strong>
+      <p>负责登记、鉴权、健康检查、任务执行与异常恢复。</p>
+    </div>
+    <div class="arrow">→</div>
+    <div class="node">
+      <div class="label">持续状态</div>
+      <strong>Session<br>Run · Job</strong>
+      <p>消息、权限和工作进度不再散落在各入口。</p>
+    </div>
+  </div>
+
+  <div class="signal-row">
+    <div class="signal"><b>一个后台</b><span>兼容实例直接复用，不再因切换入口重复启动。</span></div>
+    <div class="signal"><b>跨会话</b><span>当前 Agent 可在授权范围内观察另一条会话。</span></div>
+    <div class="signal"><b>浏览器桥接</b><span>CLI 会话也能使用已连接的 Desktop 浏览器。</span></div>
+  </div>
+
+  <h2>能力如何逐步闭环</h2>
+  <div class="timeline">
+    <div class="step"><div class="when">入口合流</div><h3>共用 daemon</h3><p>Desktop、CLI 和 TUI 连接同一套后台状态。</p></div>
+    <div class="step"><div class="when">协作扩展</div><h3>观察会话</h3><p>固定目标当时的一轮运行，查看或短时等待进度。</p></div>
+    <div class="step"><div class="when">操作扩展</div><h3>复用浏览器</h3><p>后台把浏览器请求送到持有标签页的 Desktop。</p></div>
+    <div class="step"><div class="when">反馈闭环</div><h3>网页批注</h3><p>元素、意见与页面上下文一起进入当前消息。</p></div>
+  </div>
+
+  <div class="takeaway">
+    <div class="label">核心变化</div>
+    <p>Vykor 正从“每个入口各自运行”转向“多个入口共享一份业务真相”。这让后台任务、跨会话协作和浏览器操作可以在同一条运行链路上衔接。</p>
+  </div>
+  <footer class="footer"><span>依据仓库近期提交与当前文档整理</span><span>01 / 02</span></footer>
+</section>
+
+<section class="page">
+  <header class="header">
+    <div>
+      <div class="kicker">用户能感知的变化</div>
+      <h1>功能更连贯，失败边界也更清楚</h1>
+      <p class="deck">新增能力之外，本轮还集中处理了断线、取消、超时、附件恢复和大结果隔离。</p>
+    </div>
+    <div class="date">Kami 1.20.0 制作</div>
+  </header>
+
+  <div class="two-col">
+    <div>
+      <h2>新功能</h2>
+      <ol class="list">
+        <li><div class="tag">共享后台</div><p>让 Desktop、CLI 和 TUI 复用同一个本机后台，共享会话、任务与 Agent 状态。</p></li>
+        <li><div class="tag">跨会话观察</div><p>允许当前 Agent 在授权后观察另一条持久会话的一轮运行，并短时等待状态变化。</p></li>
+        <li><div class="tag">浏览器复用</div><p>让 CLI 发起的会话在条件满足时使用 Desktop 内嵌浏览器，无连接时不影响其他工具。</p></li>
+        <li><div class="tag">网页批注</div><p>把网页元素批注、有限选择器和页面上下文随消息交给 Agent，减少反馈指向歧义。</p></li>
+        <li><div class="tag">桌面交互</div><p>增加原生系统通知和消息链接打开方式选择，减少桌面应用之间的切换。</p></li>
+      </ol>
+
+      <h2>稳定性修复</h2>
+      <ol class="list">
+        <li><div class="tag">结果隔离</div><p>隔离浏览器超大回包，使单次工具错误不再拖累其他请求或整个后台。</p></li>
+        <li><div class="tag">状态统一</div><p>统一子 Agent 的等待、完成和失败状态，并改善等待超时的判定。</p></li>
+        <li><div class="tag">退出收束</div><p>为进程退出后的输出读取设置时间边界，避免命令结束后会话继续卡住。</p></li>
+      </ol>
+    </div>
+
+    <aside>
+      <h2>Kami 更新结果</h2>
+      <div class="audit">
+        <div class="kicker">已完成</div>
+        <h3>Vykor 加载副本已更新</h3>
+        <div class="version">
+          <div>原版本<strong>1.14.0</strong></div>
+          <span class="to">→</span>
+          <div>当前版本<strong>1.20.0</strong></div>
+        </div>
+        <p>全局 Agent 目录、Claude Code 链接目录和 Vykor 实际加载目录均已核对为 1.20.0。</p>
+        <p>旧副本已保留备份，更新可以回滚。</p>
+        <div class="limit">
+          <strong>剩余环境限制</strong>
+          <p>Windows 原生 WeasyPrint 仍缺少 GTK/Pango 运行库，因此 PDF 渲染需在 WSL 中完成或补齐原生依赖。</p>
+          <p>新版已在 <code>--doctor</code> 中明确提示 Windows 使用 WSL。</p>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="takeaway">
+    <div class="label">一句话结论</div>
+    <p>新增功能围绕“共享后台”展开，修复则围绕“单次失败不扩散”收口；Kami 已升级成功，当前仅 PDF 原生渲染环境仍需补齐。</p>
+  </div>
+  <footer class="footer"><span>OpenHarness · Kami</span><span>02 / 02</span></footer>
+</section>
+</body>
+</html>
