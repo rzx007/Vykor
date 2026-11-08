@@ -118,12 +118,12 @@ describe("resolved-child-mode survives event persistence and cold daemon recover
     const writer = (phase: "live" | "cold"): StreamingMessageClient => {
       return { async *streamMessage({ messages }) {
         const userIndex = messages.map(message => message.type).lastIndexOf("user");
-        const rootRequest = messages[userIndex]?.content === "delegate a file write";
-        const hasResult = messages.slice(userIndex + 1).some(message => message.type === "tool_result");
+        const rootRequest = messages.some(message => message.type === "user" && message.content === "delegate a file write");
+        const hasResult = (rootRequest ? messages : messages.slice(userIndex + 1)).some(message => message.type === "tool_result");
         if (!hasResult && rootRequest) {
           yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "spawn-writer", name: "SpawnWriter", input: {} } };
           yield { type: "complete", stopReason: "tool_use" };
-        } else if (!hasResult) {
+        } else if (!rootRequest && !hasResult) {
           yield { type: "tool_use_start", toolUse: { type: "tool_use", id: `${phase}-write`, name: "Write",
             input: { file_path: join(cwd, `${phase}.txt`), content: phase } } };
           yield { type: "complete", stopReason: "tool_use" };
