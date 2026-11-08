@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="可离线打开的等距像素街区：车辆行驶、树冠遮挡、拖动与缩放。">
+  <title>街角的一棵树 · 像素街区演示</title>
+<style>
+  /* 独立页面的颜色与控件，无需外部样式、字体或脚本。 */
+  :root {
+    color-scheme: light;
+    --font-size-base: 16px;
+    --background: #fafaf8;
+    --foreground: #20241f;
+    --muted-foreground: #60685e;
+    --border: #d6dad2;
+    --control-hover: #edf0e9;
+    --green: #00a240;
+    --yellow: #ffc300;
+    --orange: #e25507;
+    --red: #e02e2a;
+    --blue: #339cff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: clamp(16px, 4vw, 48px);
+    background: var(--background);
+    color: var(--foreground);
+    font: 400 var(--font-size-base)/1.5 system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  }
+  main { max-width: 960px; margin: 0 auto; }
+  h1 { margin: 0; font-size: 24px; font-weight: 500; }
+  p { margin: 6px 0 0; }
+  .text-small { font-size: 14px; }
+  .text-muted { color: var(--muted-foreground); }
+  .tabular-nums { font-variant-numeric: tabular-nums; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+  .viz-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .btn {
+    appearance: none;
+    min-height: 40px;
+    padding: 7px 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .btn:not(:disabled):hover { background: var(--control-hover); }
+  .btn:focus-visible { outline: 2px solid var(--foreground); outline-offset: 3px; }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .btn-ghost { min-width: 40px; border-color: transparent; }
+  @media (pointer: coarse) { .btn { min-width: 44px; min-height: 44px; } }
+  #pixel-street { display: grid; gap: calc(var(--font-size-base) * .75); }
+  #pixel-street .street-stage { width: 100%; aspect-ratio: 1.65; min-height: 260px; max-height: 560px; }
+  #pixel-street canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; image-rendering: pixelated; }
+  #pixel-street .street-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: calc(var(--font-size-base) * .65); }
+  #pixel-street .street-status { color: var(--muted-foreground); }
+  #pixel-street .street-zoom { min-width: 4ch; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+<section id="pixel-street" aria-label="可拖动和缩放的像素街区演示">
+  <div class="street-heading">
+    <h1>街角的一棵树</h1>
+    <p class="text-small text-muted">拖动平移 · 滚轮或双指缩放 · 暂停观察树冠遮挡</p>
+  </div>
+  <div class="street-stage">
+    <canvas width="640" height="390" role="img" aria-label="三间小屋和一条环形道路，一辆小车沿路行驶，经过前景大树时被树冠遮住。" aria-describedby="street-keyboard">像素街区：小车在环路上循环行驶，树冠遮住经过后方的车辆。</canvas>
+  </div>
+  <div class="street-footer">
+    <div class="viz-controls" aria-label="街区操作">
+      <button class="btn" type="button" data-action="play" aria-pressed="false">暂停车辆</button>
+      <button class="btn btn-ghost" type="button" data-action="out" aria-label="缩小街区">−</button>
+      <output class="street-zoom tabular-nums" aria-label="缩放比例">100%</output>
+      <button class="btn btn-ghost" type="button" data-action="in" aria-label="放大街区">＋</button>
+    </div>
+    <span class="street-status text-small" role="status" aria-live="polite">车辆沿路行驶</span>
+  </div>
+  <span id="street-keyboard" class="sr-only">拖动街区平移，滚轮或双指缩放。聚焦任一操作按钮后，可用方向键平移，加号或减号缩放。播放按钮支持空格或回车。</span>
+</section>
+</main>
+
+<!-- 一、坐标、环路与树冠：几何计算不依赖页面，可单独测试。 -->
+<script id="pixel-street-geometry">
+(() => {
+  const radius = 1.5, straight = 4.3, turn = Math.PI * radius / 2;
+  const routeLength = (straight + turn) * 4;
+  const tree = { x: 7.4, y: 11.15 };
+  const clusters = [[-20,-64,31,34],[15,-70,31,37],[-1,-89,25,23],[33,-48,20,26],[-35,-45,19,25],[1,-38,38,28]];
+  const wrap = (value, length) => ((value % length) + length) % length;
+  function project(x, y, z = 0) { return { x: 320 + (x - y) * 21, y: 46 + (x + y) * 10.5 - z * 23 }; }
+  function routeAt(distance) {
+    let d = wrap(distance, routeLength);
+    const lines = [[4.35,2.85,1,0],[10.15,4.35,0,1],[8.65,10.15,-1,0],[2.85,8.65,0,-1]];
+    const centers = [[8.65,4.35],[8.65,8.65],[4.35,8.65],[4.35,4.35]];
+    for (let side = 0; side < 4; side++) {
+      const [x,y,dx,dy] = lines[side];
+      if (d < straight) return { x: x + dx * d, y: y + dy * d, dx, dy };
+      d -= straight;
+      if (d < turn || side === 3) {
+        const angle = -Math.PI / 2 + side * Math.PI / 2 + d / radius;
+        return { x: centers[side][0] + radius * Math.cos(angle), y: centers[side][1] + radius * Math.sin(angle), dx: -Math.sin(angle), dy: Math.cos(angle) };
+      }
+      d -= turn;
+    }
+  }
+  function zoomAt(view, px, py, requestedScale) {
+    const scale = Math.max(0.6, Math.min(3.5, requestedScale));
+    const ratio = scale / view.scale;
+    return { scale, x: px - (px - view.x) * ratio, y: py - (py - view.y) * ratio };
+  }
+  function leafAt(x, y) {
+    x = Math.floor(x / 2) * 2 + 1;
+    y = Math.floor(y / 2) * 2 + 1;
+    return clusters.some(([cx,cy,rx,ry]) => ((x-cx)/rx)**2 + ((y-cy)/ry)**2 <= 1);
+  }
+  function carPoint(car, forward, across, height) {
+    return project(car.x + car.dx * forward - car.dy * across, car.y + car.dy * forward + car.dx * across, height);
+  }
+  function treeCoverage(car) {
+    if (car.x + car.y >= tree.x + tree.y) return 0;
+    const origin = project(tree.x, tree.y);
+    let covered = 0;
+    for (let f = -2; f <= 2; f++) for (let a = -1; a <= 1; a++) {
+      const p = carPoint(car, f * .22, a * .23, .42);
+      if (leafAt(p.x - origin.x, p.y - origin.y)) covered++;
+    }
+    return covered / 15;
+  }
+  globalThis.PixelStreetGeometry = { project, routeAt, routeLength, zoomAt, leafAt, carPoint, treeCoverage, tree };
+})();
+</script>
+
+<!-- 二、画面与交互：素材在内存中绘制，所有图层共用相机。 -->
+<script>
+(() => {
+  const root = document.getElementById('pixel-street');
+  const canvas = root.querySelector('canvas');
+  const ctx = canvas.getContext('2d');
+  const playButton = root.querySelector('[data-action="play"]');
+  const zoomInButton = root.querySelector('[data-action="in"]');
+  const zoomOutButton = root.querySelector('[data-action="out"]');
+  const zoomLabel = root.querySelector('output');
+  const status = root.querySelector('[role="status"]');
+  const { project, routeAt, routeLength, zoomAt, leafAt, carPoint, treeCoverage, tree } = globalThis.PixelStreetGeometry;
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const storageKey = 'pixel-street-demo-state';
+  let camera = { scale: 1, x: 0, y: 0 };
+  let distance = 9.65, playing = !reducedMotion.matches, width = 640, height = 390, fit = 1;
+  let palette, ground, objects = [], lastTime = 0, previousStatus = '', visible = true, saveTimer;
+  const pointers = new Map();
+  function layer() { const el = document.createElement('canvas'); el.width = 640; el.height = 390; return el; }
+  const frame = layer(), scene = frame.getContext('2d');
+  function mix(a, b, t) { return a.map((n, i) => Math.round(n * (1-t) + b[i] * t)); }
+  function color(rgb, alpha = 1) { return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`; }
+  function readTheme() {
+    const probe = document.createElement('span');
+    probe.hidden = true; root.appendChild(probe);
+    const sample = document.createElement('canvas'); sample.width = sample.height = 1;
+    const painter = sample.getContext('2d', { willReadFrequently: true });
+    const values = {};
+    for (const name of ['background','foreground','green','yellow','orange','red','blue']) {
+      probe.style.color = `var(--${name})`;
+      painter.clearRect(0,0,1,1);
+      painter.fillStyle = getComputedStyle(probe).color;
+      painter.fillRect(0,0,1,1);
+      values[name] = Array.from(painter.getImageData(0,0,1,1).data).slice(0,3);
+    }
+    probe.remove();
+    const { background: bg, foreground: ink, green, yellow, orange, red, blue } = values;
+    palette = {
+      ink, bg, grass: mix(green,bg,.35), grassLight: mix(mix(green,yellow,.22),bg,.45),
+      grassDark: mix(green,ink,.22), earth: mix(mix(orange,ink,.45),bg,.2),
+      road: mix(ink,bg,.48), roadLight: mix(ink,bg,.59), roadDark: mix(ink,bg,.37),
+      paving: mix(bg,ink,.14), pavingDark: mix(bg,ink,.26), marking: mix(bg,yellow,.23),
+      cream: mix(bg,yellow,.24), creamSide: mix(mix(bg,yellow,.24),ink,.16),
+      mint: mix(bg,green,.25), mintSide: mix(mix(bg,green,.25),ink,.17),
+      roof: mix(orange,ink,.27), roofLight: mix(orange,bg,.24), roofDark: mix(orange,ink,.5),
+      window: mix(blue,ink,.53), glass: mix(blue,bg,.35), trim: mix(bg,ink,.05),
+      red: mix(red,orange,.25), redDark: mix(red,ink,.32), redLight: mix(red,bg,.3),
+      leaf: mix(green,ink,.09), leafLight: mix(mix(green,yellow,.23),bg,.12),
+      leafDark: mix(green,ink,.37), leafMid: mix(green,yellow,.12), wood: mix(orange,ink,.55),
+      woodLight: mix(orange,ink,.31), flower: mix(red,bg,.15), yellow: mix(yellow,bg,.16)
+    };
+  }
+  function polygon(c, points, fill) {
+    c.beginPath(); points.forEach((p,i) => i ? c.lineTo(Math.round(p.x),Math.round(p.y)) : c.moveTo(Math.round(p.x),Math.round(p.y)));
+    c.closePath(); c.fillStyle = fill; c.fill();
+  }
+  function quad(c, x,y,w,d,z,fill) {
+    polygon(c, [project(x,y,z),project(x+w,y,z),project(x+w,y+d,z),project(x,y+d,z)], color(fill));
+  }
+  function box(c,x,y,w,d,h,top,left,right,bottom = 0) {
+    const a=project(x,y,bottom), b=project(x+w,y,bottom), e=project(x+w,y+d,bottom), f=project(x,y+d,bottom);
+    const A=project(x,y,h), B=project(x+w,y,h), E=project(x+w,y+d,h), F=project(x,y+d,h);
+    polygon(c,[f,e,E,F],color(left)); polygon(c,[e,b,B,E],color(right)); polygon(c,[A,B,E,F],color(top));
+  }
+  function worldLine(c, points, stroke, lineWidth = 1) {
+    c.beginPath(); points.forEach((p,i) => { const q=project(p[0],p[1],p[2] || 0); i ? c.lineTo(Math.round(q.x),Math.round(q.y)) : c.moveTo(Math.round(q.x),Math.round(q.y)); });
+    c.strokeStyle=color(stroke); c.lineWidth=lineWidth; c.stroke();
+  }
+  function rounded(c,x,y,w,d,r,fill,z=0) {
+    const points=[];
+    for (const [cx,cy,start] of [[x+w-r,y+r,-Math.PI/2],[x+w-r,y+d-r,0],[x+r,y+d-r,Math.PI/2],[x+r,y+r,Math.PI]]) {
+      for (let s=0;s<=16;s++) points.push(project(cx+Math.cos(start+s*Math.PI/32)*r,cy+Math.sin(start+s*Math.PI/32)*r,z));
+    }
+    polygon(c,points,color(fill));
+  }
+  function noise(x,y) { return ((Math.imul(x+137,374761393) ^ Math.imul(y+53,668265263)) >>> 0) / 4294967295; }
+  function groundArt() {
+    const el=layer(), c=el.getContext('2d'), p=palette;
+    // The full city is a small hand-built example. No map data or network is needed.
+    polygon(c,[project(0,13),project(13,13),project(13,13,-.48),project(0,13,-.48)],color(p.earth));
+    polygon(c,[project(13,0),project(13,13),project(13,13,-.48),project(13,0,-.48)],color(mix(p.earth,p.ink,.2)));
+    rounded(c,0,0,13,13,.35,p.grassLight);
+    for(let i=0;i<700;i++) {
+      const x=noise(i,4)*12.8+.1,y=noise(i,9)*12.8+.1,q=project(x,y);
+      c.fillStyle=color(i%4 ? p.grass : p.grassDark,.25); c.fillRect(Math.round(q.x),Math.round(q.y),i%3?2:3,1);
+    }
+    rounded(c,1.06,1.06,10.88,10.88,2.1,p.pavingDark);
+    rounded(c,1.18,1.18,10.64,10.64,2,p.paving);
+    rounded(c,1.5,1.5,10,10,1.82,p.roadDark);
+    rounded(c,1.57,1.57,9.86,9.86,1.76,p.road);
+    rounded(c,3.98,3.98,5.04,5.04,.6,p.pavingDark);
+    rounded(c,4.12,4.12,4.76,4.76,.5,p.paving);
+    rounded(c,4.51,4.51,3.98,3.98,.34,p.grass);
+    for(let d=0;d<routeLength;d+=.67) {
+      const a=routeAt(d),b=routeAt(d+.28);
+      const q1=project(a.x-a.dy*.54,a.y+a.dx*.54),q2=project(b.x-b.dy*.54,b.y+b.dx*.54);
+      c.beginPath();c.moveTo(Math.round(q1.x),Math.round(q1.y));c.lineTo(Math.round(q2.x),Math.round(q2.y));c.strokeStyle=color(p.marking,.7);c.lineWidth=1;c.stroke();
+    }
+    for(let i=0;i<6;i++) quad(c,4.65+i*.23,9.12,.13,2.0,.015,p.marking);
+    // Paving joints and the tiny café terrace.
+    for(let n=0;n<12;n++) {
+      const t=4.15+n*.4;
+      worldLine(c,[[t,8.51],[t,8.87]],p.pavingDark);
+      worldLine(c,[[8.51,t],[8.87,t]],p.pavingDark);
+    }
+    rounded(c,4.65,6.28,3.05,.95,.1,p.paving);
+    for(let i=0;i<15;i++) {
+      const x=4.7+(i%5)*.57,y=6.4+Math.floor(i/5)*.25;
+      worldLine(c,[[x,y],[x+.4,y]],p.pavingDark);
+    }
+    // Small beds, flowers and paving details stay on the ground layer.
+    for(const [x,y,w,d] of [[5.0,7.5,2.0,.43],[9.65,.4,1.6,.35],[.35,9.4,.35,2]]) {
+      box(c,x,y,w,d,.14,p.earth,p.wood,p.woodLight);
+      for(let i=0;i<16;i++) {
+        const q=project(x+.1+noise(i,11)*(w-.2),y+.08+noise(i,12)*(d-.16),.2);
+        c.fillStyle=color(p.grassDark);c.fillRect(Math.round(q.x),Math.round(q.y)-2,1,3);
+        c.fillStyle=color(i%3 ? p.yellow:p.flower);c.fillRect(Math.round(q.x)-1,Math.round(q.y)-3,3,2);
+      }
+    }
+    // Tree shadow is fixed to the pavement, separate from the foreground crown.
+    const shade=project(tree.x-.25,tree.y-.6);
+    c.fillStyle=color(p.ink,.13);c.beginPath();c.ellipse(shade.x,shade.y,39,15,-.08,0,Math.PI*2);c.fill();
+    for(const [x,y] of [[.75,2.2],[11.9,8.5],[9.7,11.9]]) {
+      box(c,x,y,.35,.35,.18,p.paving,p.pavingDark,p.pavingDark);
+      const q=project(x+.17,y+.17,.18);c.fillStyle=color(p.roadDark);c.fillRect(Math.round(q.x)-1,Math.round(q.y)-1,3,2);
+    }
+    return el;
+  }
+  function windowOnFront(c,x,y,z,w=.38,h=.54) {
+    const p=palette;
+    polygon(c,[project(x,y,z),project(x+w,y,z),project(x+w,y,z+h),project(x,y,z+h)],color(p.window));
+    const a=project(x+w*.12,y-.005,z+h*.86),b=project(x+w*.75,y-.005,z+h*.86);
+    c.strokeStyle=color(p.glass);c.lineWidth=1;c.beginPath();c.moveTo(a.x,a.y);c.lineTo(b.x,b.y);c.stroke();
+    worldLine(c,[[x+w*.5,y+.01,z],[x+w*.5,y+.01,z+h]],p.trim);
+    worldLine(c,[[x-.05,y+.02,z-.03],[x+w+.05,y+.02,z-.03]],p.trim,2);
+  }
+  function building(x,y,w,d,h,kind) {
+    const el=layer(),c=el.getContext('2d'),p=palette;
+    const top=kind==='mint'?p.mint:p.cream,side=kind==='mint'?p.mintSide:p.creamSide;
+    quad(c,x+.3,y+.35,w+.15,d+.15,0,mix(p.grassDark,p.ink,.2));
+    box(c,x,y,w,d,.15,p.paving,p.pavingDark,p.pavingDark);
+    box(c,x+.06,y+.06,w-.12,d-.12,h,top,side,mix(side,p.ink,.08));
+    // Continuous roof cornice makes the three façades read as a little neighbourhood.
+    box(c,x-.05,y-.05,w+.1,d+.1,h+.13,p.roofLight,p.roofDark,p.roof,h-.03);
+    quad(c,x+.12,y+.12,w-.24,d-.24,h+.14,p.roof);
+    for(let i=0;i<Math.floor(w/.24);i++) worldLine(c,[[x+.15+i*.24,y+.15,h+.15],[x+.15+i*.24,y+d-.15,h+.15]],p.roofDark);
+    for(let row=0;row<Math.floor(h/.92);row++) for(let col=0;col<Math.floor(w/.7);col++) windowOnFront(c,x+.23+col*.7,y+d-.055,.48+row*.88,.39,.48);
+    for(let row=0;row<Math.floor(h/.95);row++) for(let col=0;col<Math.floor(d/.66);col++) {
+      const yy=y+.25+col*.63,z=.52+row*.88;
+      polygon(c,[project(x+w-.05,yy,z),project(x+w-.05,yy+.32,z),project(x+w-.05,yy+.32,z+.46),project(x+w-.05,yy,z+.46)],color(p.window));
+    }
+    // Door and step.
+    const doorX=x+w*.49;
+    polygon(c,[project(doorX,y+d,.16),project(doorX+.4,y+d,.16),project(doorX+.4,y+d,1),project(doorX,y+d,1)],color(p.wood));
+    box(c,doorX-.08,y+d,.56,.23,.17,p.paving,p.pavingDark,p.pavingDark);
+    const handle=project(doorX+.31,y+d+.01,.57);c.fillStyle=color(p.yellow);c.fillRect(Math.round(handle.x),Math.round(handle.y),1,2);
+    if(kind==='cafe') {
+      for(let i=0;i<9;i++) {
+        const xx=x-.06+i*(w+.12)/9;
+        polygon(c,[project(xx,y+d-.06,1.24),project(xx+(w+.12)/9,y+d-.06,1.24),project(xx+(w+.12)/9,y+d+.57,1.05),project(xx,y+d+.57,1.05)],color(i%2?p.trim:p.red));
+        polygon(c,[project(xx,y+d+.57,1.05),project(xx+(w+.12)/9,y+d+.57,1.05),project(xx+(w+.12)/9,y+d+.57,.94),project(xx,y+d+.57,.94)],color(i%2?p.paving:p.redDark));
+      }
+      box(c,x+.16,y+.18,.57,.54,h+.4,p.paving,p.pavingDark,p.pavingDark,h+.14);
+    } else {
+      box(c,x+.2,y+.22,.35,.36,h+.58,p.roofDark,p.wood,p.roofDark,h+.14);
+    }
+    return { depth:x+y+w*.6+d*.7, image:el };
+  }
+  function bench(x,y) {
+    const el=layer(),c=el.getContext('2d'),p=palette;
+    for(const offset of [.1,.95]) box(c,x+offset,y,.08,.4,.35,p.roadDark,p.roadDark,p.roadDark);
+    for(let i=0;i<3;i++) box(c,x,y+i*.13,1.15,.1,.42,p.woodLight,p.wood,p.wood,.34);
+    for(let i=0;i<2;i++) box(c,x,y+.36,1.15,.07,.66+i*.18,p.woodLight,p.wood,p.wood,.56+i*.18);
+    return {depth:x+y+1,image:el};
+  }
+  function treeArt() {
+    const el=layer(),c=el.getContext('2d'),p=palette,q=project(tree.x,tree.y);
+    const px=Math.round(q.x),py=Math.round(q.y);
+    box(c,tree.x-.22,tree.y-.22,.44,.44,.14,p.paving,p.pavingDark,p.pavingDark);
+    c.fillStyle=color(p.wood);c.fillRect(px-4,py-62,8,61);
+    c.fillStyle=color(p.woodLight);c.fillRect(px-3,py-57,3,54);
+    polygon(c,[{x:px,y:py-34},{x:px-16,y:py-55},{x:px-14,y:py-59},{x:px+3,y:py-38}],color(p.wood));
+    polygon(c,[{x:px+2,y:py-44},{x:px+17,y:py-62},{x:px+20,y:py-61},{x:px+5,y:py-38}],color(p.woodLight));
+    for(let yy=-114;yy<=-8;yy+=2) for(let xx=-58;xx<=56;xx+=2) {
+      if(!leafAt(xx,yy)) continue;
+      const rim=!leafAt(xx-2,yy)||!leafAt(xx+2,yy)||!leafAt(xx,yy-2)||!leafAt(xx,yy+2);
+      let shade=yy>-34?p.leafDark:yy<-75?p.leafLight:p.leaf;
+      if(noise(xx>>2,yy>>2)>.72) shade=yy>-52?p.leaf:p.leafMid;
+      if(rim) shade=p.leafDark;
+      c.fillStyle=color(shade);c.fillRect(px+xx,py+yy,2,2);
+    }
+    // Small clusters of highlights, in pixels rather than smooth vector circles.
+    for(let i=0;i<34;i++) {
+      const x=Math.floor((noise(i,31)*88-44)/2)*2,y=Math.floor((-103+noise(i,42)*67)/2)*2;
+      if(leafAt(x,y)&&leafAt(x+4,y)) {c.fillStyle=color(p.leafLight);c.fillRect(px+x,py+y,4,2);}
+    }
+    return {depth:tree.x+tree.y,image:el};
+  }
+  function rebuild() {
+    readTheme(); ground=groundArt();
+    objects=[building(4.65,4.55,2.25,1.65,1.95,'cafe'),building(7.03,4.6,1.31,1.6,2.85,'mint'),building(.22,5.9,1.27,2.02,2.35,'home'),bench(6.8,7.78),treeArt()];
+    render();
+  }
+  function drawCar(c,car) {
+    const p=palette;
+    function prism(front,back,halfWidth,bottom,top,roof,side) {
+      const corners=[[front,-halfWidth],[front,halfWidth],[back,halfWidth],[back,-halfWidth]];
+      const faces=corners.map((v,i)=>{
+        const w=corners[(i+1)%4];
+        const a=carPoint(car,v[0],v[1],bottom),b=carPoint(car,w[0],w[1],bottom),B=carPoint(car,w[0],w[1],top),A=carPoint(car,v[0],v[1],top);
+        return {depth:(a.y+b.y)/2,points:[a,b,B,A],tone:i%2?mix(side,p.ink,.14):side};
+      }).sort((a,b)=>a.depth-b.depth);
+      for(const face of faces) polygon(c,face.points,color(face.tone));
+      polygon(c,corners.map(v=>carPoint(car,v[0],v[1],top)),color(roof));
+    }
+    const q=project(car.x,car.y);
+    c.fillStyle=color(p.ink,.2);c.beginPath();c.ellipse(q.x,q.y+1,17,6,0,0,Math.PI*2);c.fill();
+    for(const f of [-.36,.36]) for(const a of [-.3,.3]) {
+      const w=carPoint(car,f,a,.08);c.fillStyle=color(p.roadDark);c.fillRect(Math.round(w.x)-2,Math.round(w.y)-2,4,4);
+    }
+    prism(.59,-.59,.29,.13,.38,p.redLight,p.red);
+    prism(.2,-.26,.245,.38,.69,p.cream,p.window);
+    const wind=[carPoint(car,.205,-.23,.4),carPoint(car,.205,.23,.4),carPoint(car,.205,.23,.63),carPoint(car,.205,-.23,.63)];
+    polygon(c,wind,color(p.glass));
+    for(const side of [-.2,.2]) {const h=carPoint(car,.6,side,.28);c.fillStyle=color(p.marking);c.fillRect(Math.round(h.x)-1,Math.round(h.y)-1,2,2);}
+    for(const side of [-.21,.21]) {const t=carPoint(car,-.6,side,.25);c.fillStyle=color(p.redDark);c.fillRect(Math.round(t.x)-1,Math.round(t.y)-1,2,2);}
+  }
+  function render() {
+    if(!ground || !ctx) return;
+    const car=routeAt(distance);
+    scene.clearRect(0,0,640,390);scene.drawImage(ground,0,0);
+    const ordered=[...objects,{depth:car.x+car.y,car}].sort((a,b)=>a.depth-b.depth);
+    for(const item of ordered) item.car?drawCar(scene,item.car):scene.drawImage(item.image,0,0);
+    const dpr=Math.min(devicePixelRatio||1,2);
+    ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,width,height);ctx.imageSmoothingEnabled=false;
+    ctx.translate(width/2,height/2);ctx.scale(fit,fit);ctx.translate(camera.x,camera.y);ctx.scale(camera.scale,camera.scale);ctx.translate(-320,-190);
+    ctx.drawImage(frame,0,0);
+    const zoomText=`${Math.round(camera.scale*100)}%`;
+    if(zoomLabel.value!==zoomText) zoomLabel.value=zoomText;
+    zoomOutButton.disabled=camera.scale<=.60001;
+    zoomInButton.disabled=camera.scale>=3.49999;
+    const playText=playing?'暂停车辆':'播放车辆';
+    if(playButton.textContent!==playText) {playButton.textContent=playText;playButton.setAttribute('aria-pressed',String(!playing));}
+    const coverage=treeCoverage(car);
+    const next=coverage>.65?'车辆被树冠遮住':coverage>.05?'车辆正经过树后':'车辆沿路行驶';
+    if(next!==previousStatus) { status.textContent=next;previousStatus=next; }
+  }
+  function clampPan() {
+    camera.x=Math.max(-width/(2*fit)-camera.scale*260+65,Math.min(width/(2*fit)+camera.scale*260-65,camera.x));
+    camera.y=Math.max(-height/(2*fit)-camera.scale*155+55,Math.min(height/(2*fit)+camera.scale*155-55,camera.y));
+  }
+  function resize() {
+    const rect=canvas.getBoundingClientRect();width=rect.width||640;height=rect.height||390;
+    const dpr=Math.min(devicePixelRatio||1,2);
+    canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);
+    fit=Math.min(width/590,height/340);clampPan();render();
+  }
+  function readSaved(saved) {
+    if(!saved||typeof saved!=='object') return;
+    const p=saved.privateContent,m=saved.modelContent;
+    if(p&&Number.isFinite(p.scale)&&p.scale>=.6&&p.scale<=3.5&&Number.isFinite(p.x)&&Number.isFinite(p.y)) camera={scale:p.scale,x:p.x,y:p.y};
+    if(p&&Number.isFinite(p.distance)) distance=((p.distance%routeLength)+routeLength)%routeLength;
+    if(m&&typeof m.playing==='boolean') playing=m.playing&&!reducedMotion.matches;
+  }
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer=setTimeout(()=>{
+      const snapshot={modelContent:{playing,zoom:Math.round(camera.scale*100)},privateContent:{...camera,distance}};
+      // file:// 下浏览器可能禁用本地存储；保存失败不影响交互。
+      try { localStorage.setItem(storageKey, JSON.stringify(snapshot)); } catch {}
+    },180);
+  }
+  function local(e) {const r=canvas.getBoundingClientRect();return {x:(e.clientX-r.left-width/2)/fit,y:(e.clientY-r.top-height/2)/fit};}
+  function changeZoom(factor,point={x:0,y:0}) {camera=zoomAt(camera,point.x,point.y,camera.scale*factor);clampPan();render();save();}
+  canvas.addEventListener('wheel',e=>{
+    e.preventDefault();const delta=e.deltaY*(e.deltaMode===1?16:e.deltaMode===2?height:1);
+    changeZoom(Math.exp(-Math.max(-200,Math.min(200,delta))*(e.ctrlKey ? .008 : .002)),local(e));
+  },{passive:false});
+  canvas.addEventListener('pointerdown',e=>{
+    if(e.pointerType==='mouse'&&e.button!==0) return;
+    e.preventDefault();pointers.set(e.pointerId,local(e));canvas.setPointerCapture(e.pointerId);canvas.style.cursor='grabbing';
+  });
+  canvas.addEventListener('pointermove',e=>{
+    if(!pointers.has(e.pointerId)) return;
+    e.preventDefault();const before=[...pointers.values()],old=pointers.get(e.pointerId),point=local(e);
+    pointers.set(e.pointerId,point);const after=[...pointers.values()];
+    if(before.length===1) {camera.x+=point.x-old.x;camera.y+=point.y-old.y;}
+    else {
+      const mid=a=>({x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2});
+      const length=a=>Math.hypot(a[1].x-a[0].x,a[1].y-a[0].y);
+      const a=mid(before),b=mid(after),oldLength=length(before);
+      if(oldLength>1) camera=zoomAt(camera,a.x,a.y,camera.scale*length(after)/oldLength);
+      camera.x+=b.x-a.x;camera.y+=b.y-a.y;
+    }
+    clampPan();render();
+  });
+  function endPointer(e) {pointers.delete(e.pointerId);canvas.style.cursor=pointers.size?'grabbing':'grab';save();}
+  canvas.addEventListener('pointerup',endPointer);canvas.addEventListener('pointercancel',endPointer);canvas.addEventListener('lostpointercapture',endPointer);
+  playButton.addEventListener('click',()=>{playing=!playing;render();save();});
+  zoomInButton.addEventListener('click',()=>changeZoom(1.25));
+  zoomOutButton.addEventListener('click',()=>changeZoom(1/1.25));
+  root.addEventListener('keydown',e=>{
+    const pan={ArrowLeft:[32,0],ArrowRight:[-32,0],ArrowUp:[0,32],ArrowDown:[0,-32]}[e.key];
+    if(pan) {e.preventDefault();camera.x+=pan[0]/fit;camera.y+=pan[1]/fit;clampPan();render();save();}
+    else if(e.key==='+'||e.key==='=') {e.preventDefault();changeZoom(1.15);}
+    else if(e.key==='-') {e.preventDefault();changeZoom(1/1.15);}
+  });
+  const handleReduced=()=>{if(reducedMotion.matches){playing=false;render();}};
+  reducedMotion.addEventListener('change',handleReduced);
+  const resizeObserver=new ResizeObserver(resize);resizeObserver.observe(canvas);
+  const visibilityObserver=new IntersectionObserver(entries=>{visible=entries[0]?.isIntersecting??true;});visibilityObserver.observe(root);
+  let themeTimer;
+  const themeObserver=new MutationObserver(()=>{clearTimeout(themeTimer);themeTimer=setTimeout(rebuild,50);});
+  themeObserver.observe(document.documentElement,{attributes:true,attributeFilter:['class','style','data-theme']});
+  if(document.body) themeObserver.observe(document.body,{attributes:true,attributeFilter:['class','style','data-theme']});
+  function tick(now) {
+    if(!root.isConnected) {resizeObserver.disconnect();visibilityObserver.disconnect();themeObserver.disconnect();reducedMotion.removeEventListener('change',handleReduced);clearTimeout(saveTimer);clearTimeout(themeTimer);return;}
+    requestAnimationFrame(tick);
+    const elapsed=lastTime?Math.min((now-lastTime)/1000,.06):0;lastTime=now;
+    if(playing&&visible&&!document.hidden) {distance=(distance+elapsed*1.65)%routeLength;render();}
+  }
+  try { readSaved(JSON.parse(localStorage.getItem(storageKey))); } catch {}
+  rebuild();resize();requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
