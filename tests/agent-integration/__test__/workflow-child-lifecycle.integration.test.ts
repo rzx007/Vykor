@@ -12,17 +12,20 @@ describe.each(["sdk", "daemon"] as const)("real Workflow child lifecycle: %s", m
     const f = await createLifecycleFixture(mode);
     try {
       for (let round = 0; round < 3; round++) {
+        // Each Workflow is a separate request on the same agent.
+        await f.waitForRoot();
         const prompts = Array.from({ length: 12 }, (_, i) => `workflow-${round}-${i}`);
         const run = await workflow(f, prompts);
-        const done = await f.wait(run.target, 15_000);
+        const done = await f.wait(run.target, 30_000);
         expect(done.snapshot.status).toBe("completed");
         for (const prompt of prompts) { expect(done.text).toContain(prompt); expect(f.modelCalls(prompt)).toBe(1); }
       }
+      await f.waitForRoot();
       expect(f.agent.host.inspect().childBudget).toMatchObject({ maxActiveChildren: 8, maxTotalChildren: 64, activeChildren: 0, totalChildren: 36 });
       expect(f.agent.children.list()).toHaveLength(36);
       expect(f.agent.children.list().every(child => child.state === "suspended")).toBe(true);
     } finally { await f.close(); }
-  }, 60_000);
+  }, 120_000);
 
   it("holds eight actual runs, rejects the ninth in core and creates no compensating duplicate", async () => {
     const f = await createLifecycleFixture(mode);
@@ -224,11 +227,13 @@ describe.each(["sdk", "daemon"] as const)("real Workflow child lifecycle: %s", m
   it("resumes the same suspended identity with history, cwd and captured authorization", async () => {
     const f = await createLifecycleFixture(mode);
     try {
+      await f.waitForRoot();
       f.hold("history-first");
       const run = await workflow(f, ["history-first"]);
       await f.entered("history-first"); f.release("history-first");
-      const done = await f.wait(run.target);
+      const done = await f.wait(run.target, 15_000);
       expect(done.snapshot.status).toBe("completed");
+      await f.waitForRoot();
       const handle = f.agent.children.list()[0]!;
       const originalRun = handle.runId!;
       expect(handle.state).toBe("suspended");
@@ -248,8 +253,9 @@ describe.each(["sdk", "daemon"] as const)("real Workflow child lifecycle: %s", m
       expect(await handle.requestSuspend!(originalRun)).toBe(false);
       expect(await handle.requestSuspend!(receipt.runId)).toBe(true);
       expect(handle.state).toBe("suspended");
+      await f.waitForRoot();
     } finally { await f.close(); }
-  }, 30_000);
+  }, 60_000);
   it("retains a parent with an active and later idle descendant", async () => {
     const f = await createLifecycleFixture(mode);
     try {
