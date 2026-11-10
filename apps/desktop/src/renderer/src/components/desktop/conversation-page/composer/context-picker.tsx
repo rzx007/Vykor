@@ -51,10 +51,9 @@ export function ContextPicker({
   const pickerRef = useRef<HTMLDivElement | null>(null)
   const activeIndex = Math.min(highlightedIndex, Math.max(options.length - 1, 0))
 
-  useEffect(
-    () => optionRefs.current[activeIndex]?.scrollIntoView?.({ block: "nearest" }),
-    [activeIndex]
-  )
+  useEffect(() => {
+    optionRefs.current[activeIndex]?.scrollIntoView?.({ block: "nearest" })
+  }, [activeIndex])
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.isComposing || event.keyCode === 229) return
