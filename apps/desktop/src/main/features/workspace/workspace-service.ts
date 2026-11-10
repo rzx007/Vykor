@@ -251,7 +251,7 @@ class WorkspaceService {
   }
 
   async revealPath(input: WorkspaceRevealPathInput): Promise<void> {
-    const resolved = await this.resolveAllowedFile(input.rootPath, input.path)
+    const resolved = await this.resolveAllowedFile(input.rootPath, input.path, false, true)
     const info = await stat(resolved.absolutePath)
 
     if (info.isDirectory()) {
@@ -326,16 +326,17 @@ class WorkspaceService {
   private async resolveAllowedFile(
     projectRoot: string,
     rawPath: string,
-    allowExternalRead = false
+    allowExternalRead = false,
+    allowExternalDirectory = false
   ): Promise<{ absolutePath: string; classification: WorkspacePathClassification }> {
     const rootPath = await resolveDirectory(projectRoot)
     const roots = this.rootsFor(rootPath)
     const cleaned = stripLocationSuffix(rawPath).replace(/^\/(?=[a-z]:[\\/])/i, "")
     const pathApi = process.platform === "win32" ? win32 : posix
     const classification = classifyWorkspacePath(cleaned, roots, { win32, posix })
-    // 只扩大显式绝对文件路径的查看范围；写入、目录扫描和项目内链接仍走原边界。
+    // 只允许显式打开项目外文件或在文件管理器中打开目录；写入和目录扫描仍走原边界。
     if (
-      allowExternalRead &&
+      (allowExternalRead || allowExternalDirectory) &&
       isAbsolute(cleaned) &&
       classification?.kind !== "extra-root" &&
       !isPathInside(cleaned, rootPath, pathApi)
@@ -349,7 +350,12 @@ class WorkspaceService {
       if (absolutePath) {
         const configPath = await realpath(roots.configDir).catch(() => resolve(roots.configDir))
         if (isPathInside(absolutePath, configPath, pathApi)) throw new Error("不支持预览该路径。")
-        if (!(await stat(absolutePath)).isFile()) throw new Error("只能预览文件。")
+        const info = await stat(absolutePath)
+        if (
+          !(allowExternalRead && info.isFile()) &&
+          !(allowExternalDirectory && info.isDirectory())
+        )
+          throw new Error(allowExternalRead ? "只能预览文件。" : "不支持打开该路径。")
         return {
           absolutePath,
           classification: {

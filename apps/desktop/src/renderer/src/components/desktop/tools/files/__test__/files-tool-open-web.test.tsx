@@ -31,6 +31,56 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+it("opens a requested directory in the file manager instead of reading it as a file", async () => {
+  ;(
+    globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+  ).IS_REACT_ACT_ENVIRONMENT = true
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe = vi.fn()
+      unobserve = vi.fn()
+      disconnect = vi.fn()
+    }
+  )
+  const readFile = vi.fn()
+  const revealPath = vi.fn(async () => undefined)
+  Object.defineProperty(window, "desktop", {
+    configurable: true,
+    value: { workspace: { listFiles: vi.fn(async () => ({ entries: [] })), readFile, revealPath } },
+  })
+  const host = document.createElement("div")
+  document.body.append(host)
+  const root = createRoot(host)
+  await act(async () =>
+    root.render(
+      <FilesTool
+        scopeId="test"
+        tabs={[]}
+        activePath={null}
+        loadingPath={null}
+        onActivePathChange={vi.fn()}
+        onLoadingPathChange={vi.fn()}
+        onOpenFileStart={vi.fn()}
+        onFileOpened={vi.fn()}
+        restoreActivePath={null}
+        restorePaths={[]}
+        openRequest={{ id: 1, path: "C:/outside/report/" }}
+        onOpenWebDocument={vi.fn()}
+      />
+    )
+  )
+  for (let i = 0; i < 4; i++)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+  expect(revealPath).toHaveBeenCalledWith({ rootPath: "D:/repo", path: "C:/outside/report/" })
+  expect(readFile).not.toHaveBeenCalled()
+  act(() => root.unmount())
+  host.remove()
+  Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT")
+})
+
 it("opens web files selected in the tree directly in the browser", async () => {
   ;(
     globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }

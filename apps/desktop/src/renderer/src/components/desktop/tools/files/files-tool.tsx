@@ -196,6 +196,15 @@ export function FilesTool({
     options: { requireListedFile?: boolean; fromOpenRequest?: boolean } = {}
   ): Promise<void> => {
     if (!selectedProject?.path) return
+    if (options.fromOpenRequest && /[\\/]$/.test(path)) {
+      setError(null)
+      try {
+        await window.desktop.workspace.revealPath({ rootPath: selectedProject.path, path })
+      } catch (revealError) {
+        setError(errorMessage(revealError))
+      }
+      return
+    }
     const requireListedFile = options.requireListedFile ?? true
     const normalizedPath = path.replace(/\/$/, "")
     const entry = fileEntries.get(normalizedPath)

@@ -48,8 +48,32 @@ it("only enables browser selection for actual messages, leaving workflow results
   await render("[网页](https://example.com/docs)")
   expect(container.querySelector('[data-message-web-links="true"] a')).toBeNull()
   await render("[网页](https://example.com/docs)", "open", true)
-  expect(container.querySelector('[data-message-web-links="true"] a')?.getAttribute("href")).toBe("https://example.com/docs")
+  expect(container.querySelector('[data-message-web-links="true"] a')?.getAttribute("href")).toBe(
+    "https://example.com/docs"
+  )
 })
+
+it.each([
+  {
+    href: "C:/Users/ruanz/Documents/Vykor/2026-11-07/x4/zine-2026-11-10-v2/out/page-01.png",
+    path: "C:/Users/ruanz/Documents/Vykor/2026-11-07/x4/zine-2026-11-10-v2/out/page-01.png",
+  },
+  {
+    href: "C:/Users/ruanz/Documents/Vykor/2026-11-07/x4/zine-2026-11-10-v2/",
+    path: "C:/Users/ruanz/Documents/Vykor/2026-11-07/x4/zine-2026-11-10-v2/",
+  },
+  { href: "D:/reports/%E6%8A%A5%E5%91%8A%20%231%2520.html", path: "D:/reports/报告 #1%20.html" },
+])(
+  "recognizes Windows absolute file links without a leading slash: $href",
+  async ({ href, path }) => {
+    await render(`[打开文件](${href})`)
+    const button = container.querySelector<HTMLButtonElement>(".assistant-file-link")
+    expect(button, container.textContent).not.toBeNull()
+    expect(container.textContent).not.toContain("[blocked]")
+    act(() => button!.click())
+    expect(opened).toEqual([[path, undefined]])
+  }
+)
 
 it.each([
   {

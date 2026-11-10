@@ -27,6 +27,11 @@ function visitLinks(
 function normalizeLocalWebDocumentFileUrls() {
   return (tree: LinkNode) =>
     visitLinks(tree, (node, href) => {
+      // 盘符不是 URL 协议；转换成现有的 /C:/ 路径后继续经过安全检查。
+      if (/^[a-z]:\/(?!\/)/i.test(href)) {
+        node.properties!.href = `/${href}`
+        return
+      }
       // 只把本机 HTML/SVG 文件 URL 转成现有文件链接，其他 URL 仍由安全插件处理。
       if (!/^file:\/\/\/(?!\/)/i.test(href)) return
       const path = href.slice("file://".length)

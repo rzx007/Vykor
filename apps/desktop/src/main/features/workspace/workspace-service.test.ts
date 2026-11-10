@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { shell } from "electron"
 
 vi.mock("electron", () => ({
   clipboard: { writeText: vi.fn() },
@@ -24,6 +25,23 @@ import { maxImagePreviewBytes, workspaceService } from "./workspace-service"
 import { MAX_DOCUMENT_PREVIEW_BYTES } from "../../../shared/document-preview"
 
 const temporaryDirectories: string[] = []
+
+it("opens an explicitly linked external directory while protecting the configuration directory", async () => {
+  const rootPath = await createTemporaryDirectory()
+  const outside = await createTemporaryDirectory()
+  const configDir = await createTemporaryDirectory()
+  workspaceService.configureAllowedRoots({ configDir, documentsPath: outside })
+  vi.mocked(shell.openPath).mockResolvedValue("")
+  await workspaceService.revealPath({ rootPath, path: outside })
+  expect(shell.openPath).toHaveBeenCalledWith(outside)
+  await expect(workspaceService.revealPath({ rootPath, path: configDir })).rejects.toThrow()
+  const configLink = join(outside, "config-link")
+  await symlink(configDir, configLink, "junction")
+  await expect(workspaceService.revealPath({ rootPath, path: configLink })).rejects.toThrow()
+  const outsideFile = join(outside, "outside.txt")
+  await writeFile(outsideFile, "outside")
+  await expect(workspaceService.revealPath({ rootPath, path: outsideFile })).rejects.toThrow()
+})
 
 afterEach(async () => {
   await Promise.all(
