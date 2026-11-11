@@ -12,7 +12,6 @@ import { DaemonApplication } from "../../daemon-application.js";
 import { SessionEventPublisher } from "../../session/transcript/session-event-publisher.js";
 import { SessionOperationRunner } from "../../session/session-operation-runner.js";
 import { assembleSessionRunServices } from "../../session/execution/session-run-assembly.js";
-import { createSystemRoutes } from "../../../http/routes/system.js";
 
 function createControl() {
   const sessions = [
@@ -90,19 +89,15 @@ describe("DaemonControlService", () => {
     store.permissions.list.mockImplementation(rejectHistoryRead);
     store.listProjectionSettlements.mockImplementation(rejectHistoryRead);
     store.conversations.listMessageParts.mockImplementation(rejectHistoryRead);
-    const app = createSystemRoutes({ version: "1.2.3", control });
-
-    const response = await app.request("/health");
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
-      ok: true, version: "1.2.3", sessionCount: 2, activeRunCount: 1, queuedRunCount: 1,
+    expect(control.healthSnapshot()).toMatchObject({
+      sessionCount: 2, activeRunCount: 1, queuedRunCount: 1,
     });
 
     runEngine.activeRunId.mockReturnValue(undefined);
     runEngine.queuedRunIds.mockReturnValue([]);
     store.sessions.list.mockReturnValue([]);
-    expect(await (await app.request("/health")).json()).toMatchObject({
-      ok: true, sessionCount: 0, activeRunCount: 0, queuedRunCount: 0,
+    expect(control.healthSnapshot()).toMatchObject({
+      sessionCount: 0, activeRunCount: 0, queuedRunCount: 0,
     });
   });
 
