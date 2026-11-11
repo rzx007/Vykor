@@ -49,7 +49,7 @@ export function startProcess(command: readonly string[], cwd: string, env: Recor
 export async function abandonProcess(child: ChildProcess): Promise<void> {
   if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
   await new Promise<void>(resolve => {
-    const timer = setTimeout(() => { child.kill("SIGKILL"); resolve(); }, 500);
+    const timer = setTimeout(() => { child.kill("SIGKILL"); }, 500);
     child.once("exit", () => { clearTimeout(timer); resolve(); });
     child.kill("SIGTERM");
   });
