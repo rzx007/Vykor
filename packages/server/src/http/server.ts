@@ -382,10 +382,8 @@ export class VykorHttpServer {
     this.app.route("/", createMaintenanceRoutes({ registeredDaemon, maintenance: this.application.createMaintenanceService?.({ settings: this.services.settings, logs: () => this.maintenanceLogs,
       beforeClose: () => {
         this.closeBrowserBridge();
-        const snapshot = this.application.control.runtimeSnapshot();
         this.restartPreparedHealth = { ok: true, ...(this.version ? { version: this.version } : {}),
-          startedAt: snapshot.startedAt, uptimeMs: snapshot.uptimeMs, sessionCount: snapshot.sessions.total,
-          activeRunCount: snapshot.coordinator.activeRunCount, queuedRunCount: snapshot.coordinator.queuedRunCount,
+          ...this.application.control.healthSnapshot(),
           ready: false, accepting: false, restartPrepared: true };
       },
     }) }));

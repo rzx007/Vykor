@@ -254,7 +254,7 @@ export class DaemonConnectionService {
     const deadline = signal ? AbortSignal.any([signal, timeout]) : timeout
     try {
       while (!deadline.aborted) {
-        const endpoint = await Service.discover({ file, timeoutMs: 1_000, signal: deadline })
+        const endpoint = await Service.discover({ file, timeoutMs: startupTimeoutMs, signal: deadline })
         if (endpoint && (!previous || !sameRegistration(previous, endpoint))) return endpoint
         await delay(100, undefined, { signal: deadline })
       }

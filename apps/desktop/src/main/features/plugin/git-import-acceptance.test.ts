@@ -109,6 +109,7 @@ function createDesktopService(): DesktopPluginService {
         acquireGlobalMutation: () => undefined,
         closeAllRuntimes: async () => {},
         invalidateRuntimes: async () => {},
+        healthSnapshot: () => { throw new Error("Health is outside this Git acceptance test") },
         runtimeSnapshot: () => {
           throw new Error("Runtime snapshot is outside this Git acceptance test")
         },

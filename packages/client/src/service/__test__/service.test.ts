@@ -101,6 +101,29 @@ describe("local service management", () => {
     expect(await readFile(logPath, "utf8")).toContain("startup diagnostic");
   });
 
+  it.each(["/health", "/capabilities"])("starts a compatible service when %s needs more than one second", async path => {
+    const endpoint = await Service.ensure({
+      file, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION)],
+      env: { FIXTURE_PROBE_DELAY_PATH: path, FIXTURE_PROBE_DELAY_MS: "1200" }, timeoutMs: 4_000,
+    });
+    endpoints.push(endpoint);
+    expect((await Service.discover({ file, timeoutMs: 3_000 }))?.pid).toBe(endpoint.pid);
+  });
+
+  it("bounds a stalled registered probe by the overall startup deadline and cleans up its child", async () => {
+    const pids = join(directory, "stalled-pids.txt");
+    const started = Date.now();
+    await expect(Service.ensure({
+      file, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION)],
+      env: { FIXTURE_PROBE_DELAY_PATH: "/capabilities", FIXTURE_PROBE_DELAY_MS: "5000", START_PIDS: pids },
+      timeoutMs: 500,
+    })).rejects.toThrow(/timed out/i);
+    expect(Date.now() - started).toBeLessThan(3_000);
+    const pid = Number((await readFile(pids, "utf8")).trim());
+    expect(() => process.kill(pid, 0)).toThrow();
+    expect(await Service.discover({ file })).toBeUndefined();
+  });
+
   it("does not replace or terminate an incompatible registered process", async () => {
     const registry = await start("1.2.3", "999");
     await expect(Service.ensure({ file, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION)] })).rejects.toThrow(/incompatible|unhealthy/i);

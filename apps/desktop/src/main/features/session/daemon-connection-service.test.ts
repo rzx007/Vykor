@@ -93,6 +93,35 @@ describe("desktop daemon connection", () => {
     expect(sdk.ensure).toHaveBeenCalledOnce()
   })
 
+  it("connects to a managed daemon whose first capability probe takes more than one second", async () => {
+    vi.useFakeTimers()
+    const service = new DaemonConnectionService()
+    let connection: Promise<string> | undefined
+    try {
+      host.shouldStartManagedDaemon.mockResolvedValue(true)
+      host.reconcileDaemonSystemServiceForConnection.mockResolvedValue({ autoStart: true })
+      sdk.discover.mockResolvedValueOnce(undefined).mockImplementation(({ timeoutMs, signal }) =>
+        new Promise((resolve) => {
+          const finish = (value: ServiceEndpoint | undefined) => {
+            clearTimeout(timer)
+            signal.removeEventListener("abort", abort)
+            resolve(value)
+          }
+          const abort = () => finish(undefined)
+          const timer = setTimeout(() => finish(timeoutMs >= 1_200 ? endpoint : undefined), Math.min(timeoutMs, 1_200))
+          signal.addEventListener("abort", abort, { once: true })
+        })
+      )
+      connection = service.getClient().then(() => "ready", () => "failed")
+      await vi.advanceTimersByTimeAsync(1_500)
+      expect(await Promise.race([connection, Promise.resolve("pending")])).toBe("ready")
+    } finally {
+      await service.dispose()
+      await connection
+      vi.useRealTimers()
+    }
+  })
+
   it("keeps a live unreachable registration and allows a later retry", async () => {
     host.readDaemonRegistry.mockReturnValue(endpoint)
     host.daemonPidAlive.mockReturnValue(true)

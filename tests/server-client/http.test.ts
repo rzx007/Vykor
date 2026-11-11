@@ -684,13 +684,13 @@ describe("VykorHttpServer", () => {
       },
       maintenance: {},
       schedules: {},
-      control: { runtimeSnapshot },
+      control: { runtimeSnapshot, healthSnapshot: () => ({ startedAt: 1, uptimeMs: 1, sessionCount: 0, activeRunCount: 0, queuedRunCount: 0 }) },
     } as any;
     const server = new VykorHttpServer({ application, logger: () => {} });
 
     const response = await server.app.request("/health");
     expect(response.status).toBe(200);
-    expect(runtimeSnapshot).toHaveBeenCalledOnce();
+    expect(runtimeSnapshot).not.toHaveBeenCalled();
     await server.close();
     expect(close).not.toHaveBeenCalled();
   });
@@ -3253,6 +3253,7 @@ describe("VykorHttpServer", () => {
         acquireGlobalMutation: vi.fn(() => ({ release })),
         closeAllRuntimes,
         invalidateRuntimes,
+        healthSnapshot: () => ({ startedAt: 0, uptimeMs: 0, sessionCount: 0, activeRunCount: 0, queuedRunCount: 0 }),
         runtimeSnapshot: () => ({
           startedAt: 0,
           uptimeMs: 0,

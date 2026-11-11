@@ -12,6 +12,7 @@ import { DaemonApplication } from "../../daemon-application.js";
 import { SessionEventPublisher } from "../../session/transcript/session-event-publisher.js";
 import { SessionOperationRunner } from "../../session/session-operation-runner.js";
 import { assembleSessionRunServices } from "../../session/execution/session-run-assembly.js";
+import { createSystemRoutes } from "../../../http/routes/system.js";
 
 function createControl() {
   const sessions = [
@@ -80,6 +81,31 @@ acquireSession: vi.fn(async () => agent),
 }
 
 describe("DaemonControlService", () => {
+  it("serves current health without reading historical runs or message contents", async () => {
+    const { control, store, runEngine } = createControl();
+    const rejectHistoryRead = () => { throw new Error("Health must not scan history"); };
+    store.runs.listRuns.mockImplementation(rejectHistoryRead);
+    store.runs.listRunAttempts.mockImplementation(rejectHistoryRead);
+    store.listSessionTasks.mockImplementation(rejectHistoryRead);
+    store.permissions.list.mockImplementation(rejectHistoryRead);
+    store.listProjectionSettlements.mockImplementation(rejectHistoryRead);
+    store.conversations.listMessageParts.mockImplementation(rejectHistoryRead);
+    const app = createSystemRoutes({ version: "1.2.3", control });
+
+    const response = await app.request("/health");
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      ok: true, version: "1.2.3", sessionCount: 2, activeRunCount: 1, queuedRunCount: 1,
+    });
+
+    runEngine.activeRunId.mockReturnValue(undefined);
+    runEngine.queuedRunIds.mockReturnValue([]);
+    store.sessions.list.mockReturnValue([]);
+    expect(await (await app.request("/health")).json()).toMatchObject({
+      ok: true, sessionCount: 0, activeRunCount: 0, queuedRunCount: 0,
+    });
+  });
+
   it("cancels a normal run admitted after the initial shutdown cancellation scan", async () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-shutdown-late-admission-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });

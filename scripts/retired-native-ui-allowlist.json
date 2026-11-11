@@ -108,13 +108,13 @@
     },
     {
       "path": "apps/desktop/src/main/features/plugin/archive-import-acceptance.test.ts",
-      "line": 152,
+      "line": 153,
       "text": "    expect(preview).not.toHaveProperty(\"uiInventory\")",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "apps/desktop/src/main/features/plugin/git-import-acceptance.test.ts",
-      "line": 147,
+      "line": 148,
       "text": "    expect(preview).not.toHaveProperty(\"uiInventory\")",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
@@ -4206,7 +4206,7 @@
     },
     {
       "path": "packages/server/src/http/server.ts",
-      "line": 499,
+      "line": 497,
       "text": "    this.app.route(\"/sessions\", createSessionPluginUiHistoryRoutes(this.application.pluginUiHistory));",
       "reason": "Registers read-only history/410 routes only."
     },

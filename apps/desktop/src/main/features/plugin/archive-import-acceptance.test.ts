@@ -122,6 +122,7 @@ function createDesktopService(archivePath: string): DesktopPluginService {
       acquireGlobalMutation: () => undefined,
       closeAllRuntimes: async () => {},
       invalidateRuntimes: async () => {},
+      healthSnapshot: () => { throw new Error("Health is outside this archive test") },
       runtimeSnapshot: () => { throw new Error("Runtime snapshot is outside this archive test") },
       inspectRun: () => undefined,
       listProjectionDiagnostics: () => { throw new Error("Projection diagnostics are outside this archive test") },

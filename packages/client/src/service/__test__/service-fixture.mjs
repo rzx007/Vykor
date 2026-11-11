@@ -9,7 +9,9 @@ if (process.env.FIXTURE_LOG) console.error("startup diagnostic");
 if (process.env.START_RECORD) await appendFile(process.env.START_RECORD, "start\n");
 if (process.env.START_PIDS) await appendFile(process.env.START_PIDS, `${process.pid}\n`);
 await new Promise(resolve => setTimeout(resolve, Number(delay)));
-const server = createServer((req, res) => {
+const server = createServer(async (req, res) => {
+  if (req.url === process.env.FIXTURE_PROBE_DELAY_PATH)
+    await new Promise(resolve => setTimeout(resolve, Number(process.env.FIXTURE_PROBE_DELAY_MS)));
   res.setHeader("content-type", "application/json");
   if (req.url === "/health") return res.end(JSON.stringify({ ok: true, version, ...(process.env.FIXTURE_DRAINING ? { ready: false, restartPrepared: true } : {}) }));
   if (req.url === "/capabilities") return res.end(JSON.stringify({ serverVersion: version, protocol: { version: Number(protocol) }, features: {} }));

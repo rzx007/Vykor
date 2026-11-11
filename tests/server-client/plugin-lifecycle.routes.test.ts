@@ -45,6 +45,7 @@ function lifecycleRoutes(fixture: NativePluginFixture) {
       acquireGlobalMutation: () => undefined,
       closeAllRuntimes: async () => {},
       invalidateRuntimes: async () => {},
+      healthSnapshot: () => { throw new Error("Health is outside this lifecycle test"); },
       runtimeSnapshot: () => { throw new Error("Runtime snapshot is outside this lifecycle test"); },
       queryExecutionObservations: () => { throw new Error("Execution observations are outside this lifecycle test"); },
       inspectRun: () => undefined,

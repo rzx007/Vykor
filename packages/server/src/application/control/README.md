@@ -6,6 +6,8 @@
 
 `DaemonOperationGate` 为普通操作和维护屏障分配使用许可；`DaemonControlService` 汇总状态和控制流程；运行检查器读取已保存的运行与投影信息。
 
+启动时的 `/health` 调用 `healthSnapshot()`，只读取会话列表和当前运行、排队数量，不遍历历史消息、运行尝试或生成诊断指标。完整历史统计仍由 `/debug/runtime` 调用 `runtimeSnapshot()` 返回，避免历史数据增加后阻塞后台连接。
+
 ## 状态归属
 
 进行中的许可和屏障保存在进程内，诊断事实从存储和活跃运行接口读取。

@@ -112,7 +112,7 @@ async function startService(options: EnsureServiceOptions & { file: string }, en
   const lease = await acquireStartupLock(options.file, end, options.signal);
   try {
     const locked = { ...options, signal: lease.signal };
-    const existing = await discover({ ...locked, timeoutMs: Math.max(1, Math.min(1_000, end - Date.now())) });
+    const existing = await discover({ ...locked, timeoutMs: Math.max(1, end - Date.now()) });
     if (existing) return existing;
     return await startRegisteredService(locked, env, end);
   } finally { await lease.release(); }
@@ -134,7 +134,9 @@ async function startRegisteredService(options: EnsureServiceOptions & { file: st
   try {
     while (Date.now() < end) {
       options.signal?.throwIfAborted();
-      const endpoint = await discover({ ...options, timeoutMs: Math.max(1, Math.min(1_000, end - Date.now())) });
+      // Health, protocol negotiation and authentication share the remaining startup
+      // budget. A cold capability probe can take longer than the normal 1s discovery.
+      const endpoint = await discover({ ...options, timeoutMs: Math.max(1, end - Date.now()) });
       if (endpoint && !sameInstance(endpoint, previous)) return endpoint;
       const failure = started.failure();
       if (failure) throw failure;

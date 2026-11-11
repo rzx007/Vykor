@@ -43,6 +43,7 @@ export interface SystemRoutesContext {
     | "acquireGlobalMutation"
     | "closeAllRuntimes"
     | "invalidateRuntimes"
+    | "healthSnapshot"
     | "runtimeSnapshot"
     | "inspectRun"
     | "listProjectionDiagnostics"
@@ -124,15 +125,10 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
     .get("/health", () => {
       const prepared = context.restartPreparedHealth?.();
       if (prepared) return jsonResponse(prepared);
-      const snapshot = context.control.runtimeSnapshot();
       return jsonResponse({
         ok: true,
         ...(context.version ? { version: context.version } : {}),
-        startedAt: snapshot.startedAt,
-        uptimeMs: snapshot.uptimeMs,
-        sessionCount: snapshot.sessions.total,
-        activeRunCount: snapshot.coordinator.activeRunCount,
-        queuedRunCount: snapshot.coordinator.queuedRunCount,
+        ...context.control.healthSnapshot(),
       } satisfies VykorServerHealth);
     })
     .get("/debug/process", () => jsonResponse({ pid: process.pid }))

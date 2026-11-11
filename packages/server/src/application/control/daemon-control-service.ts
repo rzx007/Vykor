@@ -51,6 +51,23 @@ export class DaemonControlService {
     return this.context.agentPool.configured;
   }
 
+  /** Startup probes must not load historical runs, messages or diagnostic metrics. */
+  healthSnapshot() {
+    const sessions = this.context.store.sessions.list({ includeArchived: true });
+    return {
+      startedAt: this.context.startedAt,
+      uptimeMs: Date.now() - this.context.startedAt,
+      sessionCount: sessions.length,
+      activeRunCount: sessions.filter(
+        (session) => this.runControl.activeRunId(session.id) !== undefined,
+      ).length,
+      queuedRunCount: sessions.reduce(
+        (count, session) => count + this.runControl.queuedRunIds(session.id).length,
+        0,
+      ),
+    };
+  }
+
   runtimeSnapshot(): VykorRuntimeSnapshot {
     const sessions = this.context.store.sessions.list({ includeArchived: true });
     const runs = sessions.flatMap((session) => this.context.store.runs.listRuns(session.id));
