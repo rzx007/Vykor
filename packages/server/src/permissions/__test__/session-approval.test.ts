@@ -30,7 +30,10 @@ function fixture(toolName = "Shell", source = "builtin", confirmation?: "once", 
   const request = { id: "q", sessionId: "s", runId: "r", createdAt: 100, status: "pending", toolName, payload: { input: structuredClone(original.input), ...(reason !== undefined ? { reason } : {}) } } as unknown as PermissionRequestRecord;
   return { session, abort, input, request, original, inputs, messages, parts, approvals, results, runs };
 }
-afterEach(() => setHostResponseLocale(undefined));
+afterEach(() => {
+  setHostResponseLocale(undefined);
+  vi.mocked(createConfiguredApprovalReviewer).mockReset();
+});
 
 describe("session approval fallback language", () => {
   it.each(["en-US", "zh-CN"])("localizes unverifiable source and secret-bearing input fallbacks in %s", async locale => {
@@ -49,6 +52,41 @@ describe("session approval fallback language", () => {
   });
 });
 describe("session authorization host boundary", () => {
+  it.each([
+    { action: "navigate", url: "http://localhost:3001/login" },
+    { action: "inspect" },
+    { action: "scroll", direction: "down" },
+  ])("reviews a host-registered Browser $action instead of requiring a manual reply", async args => {
+    const sample = fixture("Browser", "agent");
+    sample.inputs[0]!.content = "内置浏览器打开本地项目";
+    const review = vi.fn(async () => ({ decision: "approve" as const, risk: "low" as const, authorization: "task_implied" as const, reason: "用户要求的页面检查" }));
+    vi.mocked(createConfiguredApprovalReviewer).mockResolvedValueOnce({ review });
+
+    await expect(sample.input.review!({ request: sample.request, input: { ...sample.input, input: args } })).resolves.toMatchObject({ decision: "approve" });
+    expect(review).toHaveBeenCalledWith(expect.objectContaining({
+      tool: { name: "Browser", source: "agent", description: "Registered tool" }, input: args,
+      evidence: expect.objectContaining({ userInstruction: "内置浏览器打开本地项目" }),
+    }), undefined);
+  });
+
+  it("preserves the reviewer's request to confirm a sensitive host Browser operation", async () => {
+    const sample = fixture("Browser", "agent", "once", "Confirm clicking Delete all records?");
+    const outcome = { decision: "ask_user" as const, risk: "high" as const, authorization: "missing" as const, reason: "用户没有授权删除数据" };
+    const review = vi.fn(async () => outcome);
+    vi.mocked(createConfiguredApprovalReviewer).mockResolvedValueOnce({ review });
+
+    await expect(sample.input.review!({ request: sample.request, input: sample.input })).resolves.toEqual(outcome);
+    expect(review).toHaveBeenCalledOnce();
+    expect(sample.input.confirmation).toBe("once");
+  });
+
+  it.each(["plugin", "mcp", "extension", "runtime", "unknown"])("does not trust a Browser name from %s registration", async source => {
+    const sample = fixture("Browser", source);
+    const callsBefore = vi.mocked(createConfiguredApprovalReviewer).mock.calls.length;
+    await expect(sample.input.review!({ request: sample.request, input: sample.input })).resolves.toMatchObject({ decision: "ask_user" });
+    expect(vi.mocked(createConfiguredApprovalReviewer).mock.calls).toHaveLength(callsBefore);
+  });
+
   it("provides the proposal answered by a short reply and previous exact operations as references", async () => {
     const sample = fixture("BackgroundShellCreate");
     Object.assign(sample.inputs[0]!, { seq: 2, content: "好" });

@@ -86,9 +86,12 @@ export function sessionPermissionRequest(input: {
           ? saved.payload.reason
           : undefined;
       const action = appAction();
+      // Node registers tools supplied by the host (including Browser) as agent,
+      // not builtin. This admits them to review; it never approves an operation.
+      const hostRegistered = toolSource === "builtin" || toolSource === "agent";
       if (
         !settings ||
-        (toolSource !== "builtin" && !action) ||
+        (!hostRegistered && !action) ||
         containsSecret(toolInput)
       ) {
         return {
