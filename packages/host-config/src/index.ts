@@ -1,5 +1,6 @@
 export * from "./settings/agent-environment-settings.js";
 export * from "./storage/atomic-json-write.js";
+export { securePrivateDirectory, securePrivateFile } from "./storage/private-file-permissions.js";
 export * from "./storage/git.js";
 export * from "./extensions/hooks.js";
 export * from "./extensions/mcp-config-validation.js";

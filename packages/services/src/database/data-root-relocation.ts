@@ -1,5 +1,6 @@
-import { lstatSync } from "node:fs";
-import { isAbsolute, relative } from "node:path";
+import { createHash } from "node:crypto";
+import { existsSync, lstatSync } from "node:fs";
+import { dirname, isAbsolute, join, relative } from "node:path";
 import Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -8,6 +9,9 @@ import { isCompleteAbsolutePath, isWithinManagedPath, relocateManagedPath, type 
 import { relocateWorkflowSnapshotPaths } from "@vykor/coordinator/workflow-relocation";
 import * as schema from "../session-runtime/schema.js";
 import { normalizeProjectPath } from "../projects/project-records.js";
+import { AttachmentBlobStore } from "../attachments/storage/attachment-blob-store.js";
+import { noteFilePath, readNoteFile, scanNoteIds } from "../notes/markdown-note-files.js";
+import { validateNoteOrganizationFiles } from "../notes/note-organization-repository.js";
 
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 const report = (): PathRelocationReport => ({ changed: 0, unchangedExternal: 0, unsupported: [] });
@@ -186,5 +190,36 @@ export function relocateDatabasePaths(databasePath: string, moves: readonly Mana
       if ((connection.pragma("foreign_key_check") as unknown[]).length) throw new Error("Relocated database foreign-key check failed");
     });
     return result;
+  } finally { connection.close(); }
+}
+
+/** Reopens only the stopped owned copy; validates resources without initializing SessionStore. */
+export async function verifyDataRootCopy(databasePath: string): Promise<void> {
+  const connection = openCopy(databasePath, false), result = report();
+  try {
+    if (!validateCopy(connection, result)) throw new Error("Unsupported database copy schema");
+    const db = drizzle(connection, { schema }), blobs = new AttachmentBlobStore({ root: join(dirname(databasePath), "attachments") });
+    const resources = db.select().from(schema.attachmentAssets).all();
+    for (const item of resources) {
+      if (!item.sha256 || item.sizeBytes === null) continue;
+      await blobs.resolveReadOnlyPath(item.sha256, item.sizeBytes);
+      const reader = (await blobs.open(item.sha256, item.sizeBytes)).getReader(), hash = createHash("sha256");
+      try { for (;;) { const part = await reader.read(); if (part.done) break; hash.update(part.value); } }
+      finally { reader.releaseLock(); }
+      if (hash.digest("hex") !== item.sha256) throw new Error("Attachment copy digest mismatch");
+    }
+    const notes = join(dirname(databasePath), "notes"), indexed = db.select().from(schema.noteFileIndex).all();
+    if (existsSync(notes)) {
+      const ids = scanNoteIds(notes);
+      for (const id of ids) readNoteFile(noteFilePath(notes, id));
+      validateNoteOrganizationFiles(notes, ids);
+    }
+    for (const entry of indexed) if (entry.deletedAt === null) {
+      const note = readNoteFile(noteFilePath(notes, entry.id));
+      if (!note || createHash("sha256").update(note.content).digest("hex") !== entry.sha256) throw new Error("Note copy digest mismatch");
+    }
+    // Runtime leases refer to stopped owners. Durable asset/source identities stay intact.
+    db.delete(schema.attachmentLeases).run();
+    connection.pragma("wal_checkpoint(TRUNCATE)");
   } finally { connection.close(); }
 }

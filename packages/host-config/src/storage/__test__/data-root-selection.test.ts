@@ -79,7 +79,8 @@ it("serializes two starters and never steals an old lock from a live operation",
     await expect(withDataRootLock(home, async () => { throw new Error("stolen"); }, { timeoutMs: 30, pollIntervalMs: 5 })).rejects.toThrow(/lock.*recover/i);
   } finally { release(); await first; }
   await withDataRootLock(home, async () => undefined);
-  expect(readdirSync(home)).toEqual([]);
+  expect(readdirSync(home)).toEqual([".vykor-root.json.lock"]);
+  expect(readDataRootLockState(home)).toBeUndefined();
 });
 
 it("writes atomically under the stable lock and reads only validated fields", async () => {
@@ -87,7 +88,7 @@ it("writes atomically under the stable lock and reads only validated fields", as
   await writeDataRootSelector(home, selector);
   expect(readDataRootSelector(home)).toEqual(selector);
   expect(JSON.parse(readFileSync(join(home, ".vykor-root.json"), "utf8"))).toEqual(selector);
-  expect(readdirSync(home)).toEqual([".vykor-root.json"]);
+  expect(readdirSync(home)).toEqual([".vykor-root.json", ".vykor-root.json.lock"]);
 });
 
 it("initializes a process without creating a default root or selector", async () => {
@@ -95,7 +96,7 @@ it("initializes a process without creating a default root or selector", async ()
   const selected = await initializeDataRoot({ homeDir: home, env });
   expect(selected).toEqual({ dataRoot: join(home, ".vykor"), source: "default" });
   expect(env.VYKOR_CONFIG_DIR).toBe(selected.dataRoot);
-  expect(readdirSync(home)).toEqual([]);
+  expect(readdirSync(home)).toEqual([".vykor-root.json.lock"]);
   const target = join(home, "new-root");
   mkdirSync(join(target, "data", "session-runtime"), { recursive: true });
   writeFileSync(join(target, "data", "session-runtime", "sessions.db"), "existing database");

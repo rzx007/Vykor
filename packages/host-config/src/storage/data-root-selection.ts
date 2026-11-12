@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, readFileSync, readlinkSync, realpathSync, statSync } from "node:fs";
-import { open, rename, rm } from "node:fs/promises";
+import { mkdir, open, rename, rm } from "node:fs/promises";
 import { userInfo } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { securePrivateFile } from "./private-file-permissions.js";
+import { securePrivateDirectory, securePrivateFile } from "./private-file-permissions.js";
 import { isCompleteAbsolutePath, requireCompleteAbsolutePath } from "./managed-path-relocation.js";
 
 export type RootEnvironment = Record<string, string | undefined>;
@@ -94,7 +94,7 @@ export class DataRootLockBusyError extends Error {
 
 export function resolveDataRootSelection(input: DataRootSelectionInput = {}): DataRootSelection {
   const homeDir = input.homeDir ?? dataRootHome(input.env ?? process.env);
-  if (existsSync(`${dataRootSelectorPath(homeDir)}.lock`)) throw new DataRootLockBusyError(`${dataRootSelectorPath(homeDir)}.lock`);
+  if (rootLockHeld(homeDir)) throw new DataRootLockBusyError(`${dataRootSelectorPath(homeDir)}.lock`);
   return resolveUnlockedDataRootSelection(input);
 }
 
@@ -177,14 +177,18 @@ export interface DataRootLockState {
 
 /** Recovery must verify the owner has exited; neither timestamps nor PID age prove that. */
 export function readDataRootLockState(homeDir: string): DataRootLockState | undefined {
-  const file = `${dataRootSelectorPath(homeDir)}.lock`;
+  const base = `${dataRootSelectorPath(homeDir)}.lock`;
+  if (!directoryIfPresent(base)) return undefined;
+  const active = join(base, "active");
+  if (!directoryIfPresent(active)) return undefined;
+  const file = join(active, "owner.json");
   let text: string;
-  try { text = readFileSync(file, "utf8"); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined; throw error; }
+  try { const metadata = lstatSync(file); if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error("owner type"); text = readFileSync(file, "utf8"); }
+  catch { throw new Error(`Cannot verify data root lock owner: ${file}`); }
   let value: { pid?: unknown; ownerToken?: unknown };
   try { value = JSON.parse(text); }
   catch { throw new Error(`Cannot verify data root lock owner: ${file}. Do not remove it while a startup or migration may be active.`); }
-  if (!value || !Number.isSafeInteger(value.pid) || (value.pid as number) <= 0 || typeof value.ownerToken !== "string" || !value.ownerToken)
+  if (!value || !Number.isSafeInteger(value.pid) || (value.pid as number) <= 0 || typeof value.ownerToken !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value.ownerToken))
     throw new Error(`Cannot verify data root lock owner: ${file}`);
   let alive = true;
   try { process.kill(value.pid as number, 0); }
@@ -195,28 +199,70 @@ export function readDataRootLockState(homeDir: string): DataRootLockState | unde
 export interface DataRootLock {
   /** Atomically save while holding the stable home lock; safe for migration commit. */
   writeSelector(selector: DataRootSelector): Promise<void>;
+  restoreSelector(selector: DataRootSelector | undefined): Promise<void>;
 }
 
-/** Same exclusive-create pattern as the settings lock, without settings imports or age-based stealing. */
+function directoryIfPresent(path: string): boolean {
+  try { const metadata = lstatSync(path); if (!metadata.isDirectory() || metadata.isSymbolicLink()) throw new Error(`Invalid data root lock directory: ${path}; recover requires a regular directory`); return true; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
+}
+function rootLockHeld(homeDir: string): boolean {
+  const base = `${dataRootSelectorPath(homeDir)}.lock`;
+  return directoryIfPresent(base) && directoryIfPresent(join(base, "active"));
+}
+
+/** Exclusive active directory; all dead claims remain nonempty to prevent delayed recovery ABA races. */
 export async function withDataRootLock<T>(homeDir: string, operation: (lock: DataRootLock) => Promise<T>, options: {
   timeoutMs?: number; pollIntervalMs?: number;
 } = {}): Promise<T> {
+  return withRootLease(homeDir, operation, options, false);
+}
+/** Explicit maintenance only: live or unverifiable owners are never stolen. */
+export async function withDataRootRecoveryLock<T>(homeDir: string, operation: (lock: DataRootLock) => Promise<T>, options: {
+  timeoutMs?: number; pollIntervalMs?: number;
+} = {}): Promise<T> {
+  return withRootLease(homeDir, operation, options, true);
+}
+async function withRootLease<T>(homeDir: string, operation: (lock: DataRootLock) => Promise<T>, options: { timeoutMs?: number; pollIntervalMs?: number }, recover: boolean): Promise<T> {
   const file = dataRootSelectorPath(homeDir);
   const lockPath = `${file}.lock`;
+  if (!directoryIfPresent(lockPath)) {
+    try { await mkdir(lockPath, { mode: 0o700 }); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
+  }
+  directoryIfPresent(lockPath);
+  // Also retry protection after an earlier process stopped between mkdir and securing this owned container.
+  await securePrivateDirectory(lockPath);
+  const active = join(lockPath, "active"), claims = join(lockPath, "claims"), ownerToken = randomUUID();
   const deadline = Date.now() + (options.timeoutMs ?? 10_000);
-  let handle;
   for (;;) {
-    try { handle = await open(lockPath, "wx", 0o600); break; }
+    if (Date.now() > deadline) throw new Error(`Data root lock is busy: ${lockPath}; run data-root recover only after its owner stops.`);
+    try { await mkdir(active, { mode: 0o700 }); break; }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      directoryIfPresent(active);
+      if (recover) {
+        const owner = readDataRootLockState(homeDir);
+        if (!owner) continue;
+        if (!owner.alive) {
+          if (!directoryIfPresent(claims)) { try { await mkdir(claims, { mode: 0o700 }); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; } }
+          directoryIfPresent(claims);
+          const claim = join(claims, owner.ownerToken);
+          // Never overwrite/remove a retained claim. rename cannot replace a nonempty directory.
+          if (directoryIfPresent(claim)) throw new Error("Data root lock owner claim already exists; preserve the recovery scene");
+          try { await rename(active, claim); }
+          catch (error) { if (!["ENOENT", "EEXIST", "ENOTEMPTY", "EPERM"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error; }
+          continue;
+        }
+      }
       if (Date.now() >= deadline) throw new Error(`Data root lock is busy: ${lockPath}; wait for the owner, or verify it has stopped and run data-root recover. Never remove an active migration lock.`);
       await sleep(options.pollIntervalMs ?? 25);
     }
   }
+  const ownerFile = join(active, "owner.json"), handle = await open(ownerFile, "wx", 0o600);
   try {
-    await securePrivateFile(lockPath);
-    await handle.writeFile(JSON.stringify({ pid: process.pid, ownerToken: randomUUID() }), "utf8");
-    return await operation({ writeSelector: async selector => {
+    await handle.writeFile(JSON.stringify({ pid: process.pid, ownerToken }), "utf8"); await handle.sync();
+    const writeSelector = async (selector: DataRootSelector) => {
       const validated = validateSelector(selector, file);
       const temporary = `${file}.${randomUUID()}.tmp`;
       try {
@@ -225,8 +271,15 @@ export async function withDataRootLock<T>(homeDir: string, operation: (lock: Dat
         finally { await output.close(); }
         await rename(temporary, file);
       } finally { await rm(temporary, { force: true }); }
-    } });
-  } finally { await handle.close(); await rm(lockPath, { force: true }); }
+    };
+    return await operation({ writeSelector, restoreSelector: async selector => { if (selector) await writeSelector(selector); else await rm(file, { force: true }); } });
+  } finally {
+    await handle.close();
+    const owner = readDataRootLockState(homeDir);
+    if (owner?.pid !== process.pid || owner.ownerToken !== ownerToken) throw new Error("Data root lock ownership changed before release");
+    const released = join(lockPath, `released-${ownerToken}`);
+    await rename(active, released); await rm(released, { recursive: true });
+  }
 }
 
 export async function writeDataRootSelector(homeDir: string, selector: DataRootSelector): Promise<void> {

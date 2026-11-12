@@ -48,7 +48,8 @@ it.runIf(process.platform === "win32")("protects actual Windows locator and lock
 it.runIf(process.platform !== "win32")("keeps an existing POSIX home mode and creates only private files", async () => {
   chmodSync(home, 0o750);
   await withDataRootLock(home, async lock => {
-    expect(statSync(join(home, ".vykor-root.json.lock")).mode & 0o777).toBe(0o600);
+    expect(statSync(join(home, ".vykor-root.json.lock")).mode & 0o777).toBe(0o700);
+    expect(statSync(join(home, ".vykor-root.json.lock/active/owner.json")).mode & 0o777).toBe(0o600);
     await lock.writeSelector({ version: 1, dataRoot: join(home, "selected") });
     expect(statSync(join(home, ".vykor-root.json")).mode & 0o777).toBe(0o600);
     expect(statSync(home).mode & 0o777).toBe(0o750);

@@ -13,14 +13,15 @@ $ErrorActionPreference = 'Stop'
 $path = $env:VYKOR_PRIVATE_FILE_PATH
 $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
 $system = [System.Security.Principal.SecurityIdentifier]::new('S-1-5-18')
-$security = [System.Security.AccessControl.FileSecurity]::new()
+$directory = $env:VYKOR_PRIVATE_DIRECTORY -eq '1'
+$security = if ($directory) { [System.Security.AccessControl.DirectorySecurity]::new() } else { [System.Security.AccessControl.FileSecurity]::new() }
 $security.SetOwner($user)
 $security.SetAccessRuleProtection($true, $false)
 foreach ($sid in @($user, $system)) {
-  $security.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($sid, 'FullControl', 'Allow'))
+  $rule = if ($directory) { [System.Security.AccessControl.FileSystemAccessRule]::new($sid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow') } else { [System.Security.AccessControl.FileSystemAccessRule]::new($sid, 'FullControl', 'Allow') }
+  $security.AddAccessRule($rule)
 }
-[System.IO.File]::SetAccessControl($path, $security)
-$actual = [System.IO.File]::GetAccessControl($path)
+if ($directory) { [System.IO.Directory]::SetAccessControl($path, $security); $actual = [System.IO.Directory]::GetAccessControl($path) } else { [System.IO.File]::SetAccessControl($path, $security); $actual = [System.IO.File]::GetAccessControl($path) }
 if (!$actual.AreAccessRulesProtected -or $actual.GetOwner([System.Security.Principal.SecurityIdentifier]).Value -ne $user.Value) { throw 'File owner or ACL protection was not applied' }
 $hasUser = $false
 foreach ($rule in $actual.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
@@ -32,7 +33,16 @@ if (!$hasUser) { throw 'Current user access was not applied' }
 
 /** Only call for newly created application files; never alter a parent/home ACL. */
 export async function securePrivateFile(file: string): Promise<void> {
-  if (process.platform !== "win32") { await chmod(file, 0o600); return; }
+  return securePrivatePath(file, false);
+}
+
+/** Owned migration directories only; their new children inherit the private Windows ACL. */
+export async function securePrivateDirectory(directory: string): Promise<void> {
+  return securePrivatePath(directory, true);
+}
+
+async function securePrivatePath(file: string, directory: boolean): Promise<void> {
+  if (process.platform !== "win32") { await chmod(file, directory ? 0o700 : 0o600); return; }
   const executable = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
   // Even -NoProfile PowerShell creates profile cache directories on startup.
   // Isolate those in disposable temp space, not the selected or real home.
@@ -40,7 +50,7 @@ export async function securePrivateFile(file: string): Promise<void> {
   try {
     await runFile(executable, ["-NoProfile", "-NonInteractive", "-Command", restrictWindowsFile], {
       env: {
-        ...process.env, VYKOR_PRIVATE_FILE_PATH: file, HOME: profile, USERPROFILE: profile,
+        ...process.env, VYKOR_PRIVATE_FILE_PATH: file, VYKOR_PRIVATE_DIRECTORY: directory ? "1" : "0", HOME: profile, USERPROFILE: profile,
         APPDATA: join(profile, "AppData", "Roaming"), LOCALAPPDATA: join(profile, "AppData", "Local"),
         PSModuleAnalysisCachePath: join(profile, "module-cache"),
       }, windowsHide: true, timeout: 10_000,

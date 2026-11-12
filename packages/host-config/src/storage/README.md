@@ -57,3 +57,9 @@
 `relocateManagedPath(path,moves)` 复用 `ManagedPathMove`，按最长目录关系匹配，保留相似前缀的兄弟路径和外部路径。Windows 比较大小写和分隔符，POSIX 保留大小写。`assertManagedPathBoundary(path,scope)` 与 `resolveManagedRealPath(path)` 只读检查已存在路径或最近的已存在父目录，不创建缺失目录；映射本身不授予访问权限，也不改写普通文本。
 
 `readManagedPathMap(dataRoot?)` 从规范 `data/migrations/path-map.json` 读取 `{version:1,moves:[{kind,from,to}],excludedRoots?:string[]}`；不存在时返回空映射，损坏时抛错。`ManagedPathMove.kind` 为 `user-root | runtime-data | workspace | channel | worktree`。`getManagedWorkspaceRoots(dataRoot?)`、`isManagedWorkspacePath(path,dataRoot?)` 只识别规范 workspaces/channels 与明确 workspace/channel 映射的 from/to，不把 user-root、runtime-data 或 worktree 当项目外聊天。`isHiddenManagedProjectPath(path,dataRoot?)` 另外识别 excludedRoots，用于隐藏暂存/保留项目。以上识别接口不授予文件访问权限；历史链接须由打开入口重定位到目标，再检查原有访问边界。
+
+## 稳定启动锁的恢复
+
+`.vykor-root.json.lock/active/owner.json` 保存本次 PID 和 UUID token；固定 `.lock` 目录可以长期存在，只有 active 阻止正常发现。所有启动、迁移和恢复都通过同一目录 lease（独占创建的所有权记录）串行执行。普通操作不偷锁，只有明确的 `withDataRootRecoveryLock` 会处理合法死亡 owner；仅进程探测返回 ESRCH 才认为已退出，不根据时间或文件年龄判断。
+
+恢复把死亡 active 原子移动到 `.lock/claims/<旧 token>`，该非空目录永久保留，再尝试创建新 active。两个恢复者即使同时读到旧 token，迟到者也无法用新 active 覆盖已有非空 claim。正常 release 核对本 PID/token，将自己的 active 移到唯一 released 目录后才删除。恢复在 claim 后再次退出不会留下第二把无法恢复的 guard。旧文件格式、未写完 owner、坏 token、链接或未知文件类型都保留并报错。锁容器与迁移目录使用真实 Windows 私有 ACL，POSIX 使用 0700；不修改已有 home 的权限。

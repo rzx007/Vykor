@@ -49,3 +49,4 @@ export { readRegisteredDataLocation, readRegisteredDataSwitchResult } from "./da
 export { acquireRegistryLease, withDaemonControlLock } from "./registry-lease.js";
 export { inspectDataRootMigration, type DataRootMigrationRequest, type DataRootMigrationPreview, type MigrationBlocker, type MigrationSourceEntry } from "./data-root-sources.js";
 export { relocateDataRootFiles, relocateProjectStorageKeys, type DataRootFileRelocationInput } from "./data-root-file-relocation.js";
+export { migrateDataRoot, recoverDataRootMigration, commitDataRootMigration, markDataRootMigrationWritersReleased, type DataRootMigrationCoordination, type DataRootMigrationResult, type MigrationPhase } from "./data-root-migration.js";
