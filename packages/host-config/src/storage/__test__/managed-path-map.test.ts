@@ -48,12 +48,12 @@ it.each([
   expect(paths.isHiddenManagedProjectPath(candidate, root)).toBe(expected);
 });
 
-it("hides forward-slash UNC exclusions case-insensitively without treating them as workspaces", () => {
+it.each(["//server/share/retained", "\\\\server\\share\\retained"])("hides UNC exclusion %s case-insensitively without treating it as a workspace", (excludedRoot) => {
   const root = paths.getDataRoot();
   const migrations = join(root, "data", "migrations");
   mkdirSync(migrations, { recursive: true });
   writeFileSync(join(migrations, "path-map.json"), JSON.stringify({
-    version: 1, moves: [], excludedRoots: ["//server/share/retained"],
+    version: 1, moves: [], excludedRoots: [excludedRoot],
   }));
 
   expect(paths.isHiddenManagedProjectPath("//SERVER/SHARE/RETAINED/project", root)).toBe(true);

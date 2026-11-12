@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { isAbsolute, posix, win32 } from "node:path";
+import { posix, win32 } from "node:path";
 import { getDataRoot, resolveUserDataPaths } from "./paths.js";
 
 export interface ManagedPathMove {
@@ -55,7 +55,7 @@ function workspaceRoots(dataRoot: string, map: ManagedPathMap): string[] {
 }
 
 function absolutePath(value: unknown): value is string {
-  return typeof value === "string" && (isAbsolute(value) || /^[A-Za-z]:[\\/]/.test(value));
+  return typeof value === "string" && (posix.isAbsolute(value) || isWindowsPath(value));
 }
 
 function isWithin(path: string, root: string): boolean {
