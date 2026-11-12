@@ -24,16 +24,24 @@ function readWriter(path: string): DataRootWriter {
 
 /** Root-local process ownership. Existing owners drain without reacquiring the home lock. */
 export async function acquireDataRootWriter(input: {
-  homeDir: string; dataRoot: string; kind: DataRootWriterKind; timeoutMs?: number;
+  homeDir: string; dataRoot: string; kind: DataRootWriterKind; timeoutMs?: number; deadline?: number; signal?: AbortSignal;
 }): Promise<DataRootWriterLease> {
+  const deadline = input.deadline ?? (input.timeoutMs === undefined ? undefined : Date.now() + input.timeoutMs);
+  const checkWaiting = () => {
+    input.signal?.throwIfAborted();
+    if (deadline !== undefined && Date.now() >= deadline) throw new Error("Data root writer admission timed out.");
+  };
+  checkWaiting();
   const root = requireCompleteAbsolutePath(input.dataRoot, "writer root");
   if (!kinds.includes(input.kind)) throw new Error("Invalid data root writer kind");
   return withDataRootLock(input.homeDir, async lock => {
+    checkWaiting();
     lock.assertWritableRoot(root);
     if (relative(await resolveManagedRealPath(root), root) !== "") throw new Error("Data root writer directory is an alias");
     const dir = directory(root);
     if (relative(await resolveManagedRealPath(dir), dir) !== "") throw new Error("Data root writer directory is an alias");
     await mkdir(dir, { recursive: true, mode: 0o700 }); await securePrivateDirectory(dir);
+    checkWaiting();
     const token = randomUUID(), path = join(dir, `${token}.json`);
     const handle = await open(path, "wx", 0o600);
     try { await securePrivateFile(path); await handle.writeFile(JSON.stringify({ pid: process.pid, token, kind: input.kind })); await handle.sync(); }
@@ -46,10 +54,11 @@ export async function acquireDataRootWriter(input: {
       if (owner.pid !== process.pid || owner.token !== token || owner.kind !== input.kind) throw new Error("Data root writer ownership changed");
       unlinkSync(path); released = true;
     };
+    try { checkWaiting(); } catch (error) { release(); throw error; }
     // Keep lifetime records through every later synchronous exit handler. Only
     // ESRCH in the reader proves that a process cannot still write during exit.
     return { async release() { release(); } };
-  }, { timeoutMs: input.timeoutMs });
+  }, { deadline, signal: input.signal });
 }
 
 /** Read-only inventory. Malformed or unknown ownership is busy, never presumed dead. */

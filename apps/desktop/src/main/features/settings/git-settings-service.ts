@@ -477,7 +477,7 @@ export class GitSettingsService {
       input = { ...input, preferences: { ...input.preferences, worktreeRoot: root } }
     }
     const result = saveGitPreferences(input.preferences, input.expected)
-    if (result.autoCleanup) void this.autoCleanup().catch(() => {})
+    if (result.autoCleanup) await this.autoCleanup().catch(() => {})
     return result
   }
   updateIdentity(input: UpdateGitIdentityInput): Promise<GitSettingsSnapshot> {

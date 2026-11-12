@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { afterEach, expect, it, vi } from "vitest";
 
 const owned: string[] = [];
-afterEach(async () => { for (const path of owned.splice(0)) await rm(path, { recursive: true, force: true }); });
+afterEach(async () => { vi.restoreAllMocks(); for (const path of owned.splice(0)) await rm(path, { recursive: true, force: true }); });
 async function fixture() {
   vi.resetModules();
   const api = await import("../paths.js");
@@ -56,6 +56,30 @@ it("rejects admission from a root moved after initialization", async () => {
   await mkdir(join(dataRoot, "data/migrations"), { recursive: true });
   await writeFile(join(dataRoot, "data/migrations/moved-root.json"), "{}");
   await expect(api.acquireDataRootWriter({ homeDir, dataRoot, kind: "cli" })).rejects.toThrow(/moved/);
+}, 30000);
+
+it("keeps the absolute home deadline across private directory preparation", async () => {
+  const { api, homeDir } = await fixture(), permissions = await import("../private-file-permissions.js");
+  const secure = permissions.securePrivateDirectory;
+  let now = Date.now(); const deadline = now + 5000;
+  vi.spyOn(Date, "now").mockImplementation(() => now);
+  vi.spyOn(permissions, "securePrivateDirectory").mockImplementation(async path => { await secure(path); now = deadline + 1; });
+  const operation = vi.fn(async () => {});
+  await expect(api.withDataRootLock(homeDir, operation, { deadline })).rejects.toThrow(/busy|timed out/);
+  expect(operation).not.toHaveBeenCalled();
+  expect(api.readDataRootLockState(homeDir)).toBeUndefined();
+}, 30000);
+
+it("rechecks cancellation after acquiring home and before creating the writer file", async () => {
+  const { api, homeDir, dataRoot } = await fixture(), permissions = await import("../private-file-permissions.js");
+  const secure = permissions.securePrivateDirectory, controller = new AbortController(), reason = new Error("cancelled during admission");
+  vi.spyOn(permissions, "securePrivateDirectory").mockImplementation(async path => {
+    await secure(path);
+    if (path === join(dataRoot, "data/daemon/writers")) controller.abort(reason);
+  });
+  await expect(api.acquireDataRootWriter({ homeDir, dataRoot, kind: "sdk-control", signal: controller.signal })).rejects.toBe(reason);
+  expect(await api.listDataRootWriters(dataRoot)).toEqual([]);
+  expect(api.readDataRootLockState(homeDir)).toBeUndefined();
 }, 30000);
 
 it("keeps a process writer visible through later synchronous exit callbacks", async () => {

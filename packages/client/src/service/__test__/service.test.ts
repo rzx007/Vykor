@@ -1,15 +1,17 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:http";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CURRENT_PROTOCOL_VERSION } from "@vykor/protocol";
 import { Service } from "../index.js";
 import { listDataRootWriters, withDataRootLock } from "@vykor/host-config/paths";
 import { acquireStartupLock } from "../startup-lock.js";
+import * as roots from "@vykor/host-config/paths";
+import * as registries from "../registry.js";
 
 const fixture = fileURLToPath(new URL("./service-fixture.mjs", import.meta.url));
 let directory: string;
@@ -25,6 +27,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const endpoint of endpoints) {
     try { process.kill(endpoint.pid, "SIGKILL"); } catch {}
     for (let attempt = 0; attempt < 50; attempt++) {
@@ -46,6 +49,85 @@ async function start(version = "1.2.3", protocol = String(CURRENT_PROTOCOL_VERSI
 }
 
 describe("local service management", () => {
+  it("starts an explicit canonical registry with no root environment or custom command", async () => {
+    const root = join(directory, ".vykor"), registry = join(root, "data/daemon/registry.json");
+    const cli = join(directory, "node_modules/@rzx/ohs"); await mkdir(cli, { recursive: true });
+    await writeFile(join(cli, "package.json"), JSON.stringify({ name: "@rzx/ohs", bin: { vk: "cli.mjs" } }));
+    await writeFile(join(cli, "cli.mjs"), `process.argv = [process.execPath, ${JSON.stringify(fixture)}, ${JSON.stringify(registry)}, '1.2.3', '${CURRENT_PROTOCOL_VERSION}']; await import(${JSON.stringify(pathToFileURL(fixture).href)});`);
+    const env = { HOME: directory, USERPROFILE: directory, VYKOR_CONFIG_DIR: undefined, VYKOR_DATA_DIR: undefined, VYKOR_CHANNELS_DIR: undefined, VYKOR_IMAGE_ATTACHMENT_CACHE_DIR: undefined, ROOT_RECORD: join(directory, "child-root") };
+    const endpoint = await Service.ensure({ file: registry, env, cwd: directory, timeoutMs: 5000 }); endpoints.push(endpoint);
+    expect(endpoint.file).toBe(registry);
+    expect(JSON.parse(await readFile(env.ROOT_RECORD, "utf8"))).toMatchObject({ root, home: directory });
+    await withDataRootLock(directory, lock => lock.writeSelector({ version: 1, dataRoot: root, pendingMigration: { id: "owned", journalPath: join(directory, "journal") } }));
+    await expect(Service.stop(endpoint)).rejects.toThrow(/pending|migration/);
+    expect(await listDataRootWriters(root)).toEqual([]);
+  });
+
+  it("protects explicit canonical default startup from a pending migration", async () => {
+    const root = join(directory, ".vykor"), registry = join(root, "data/daemon/registry.json");
+    await withDataRootLock(directory, lock => lock.writeSelector({ version: 1, dataRoot: root, pendingMigration: { id: "owned", journalPath: join(directory, "journal") } }));
+    await expect(Service.ensure({ file: registry, env: { HOME: directory, USERPROFILE: directory }, cwd: directory })).rejects.toThrow(/pending|migration/);
+    await expect(readFile(registry)).rejects.toThrow();
+    await expect(readdir(`${registry}.sdk-start.lock`)).rejects.toThrow();
+  });
+
+  it("starts a caller-managed registry independently of invalid default root inputs", async () => {
+    const endpoint = await Service.ensure({ file, env: { HOME: "relative-home", USERPROFILE: "relative-home", VYKOR_CONFIG_DIR: "relative-root" }, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION)] }); endpoints.push(endpoint);
+    expect(endpoint.file).toBe(file);
+  });
+
+  it.each(["ensure", "stop"] as const)("cancels %s at home writer admission with the original reason and no leaked control files", async operation => {
+    const root = join(directory, ".vykor"), registry = join(root, "data/daemon/registry.json");
+    const env = { HOME: directory, USERPROFILE: directory, START_RECORD: join(directory, "starts") };
+    const options = { env, command: [process.execPath, fixture, registry, "1.2.3", String(CURRENT_PROTOCOL_VERSION)], timeoutMs: 5000 };
+    let endpoint: Awaited<ReturnType<typeof Service.ensure>> | undefined;
+    if (operation === "stop") { endpoint = await Service.ensure(options); endpoints.push(endpoint); }
+    const before = await readFile(registry, "utf8").catch(() => undefined);
+    let unlock!: () => void, locked!: () => void, admitted!: () => void;
+    const held = new Promise<void>(resolve => { locked = resolve });
+    const entered = new Promise<void>(resolve => { admitted = resolve });
+    const barrier = new Promise<void>(resolve => { unlock = resolve });
+    const hold = () => withDataRootLock(directory, async () => { locked(); await barrier });
+    let holding: Promise<void>;
+    if (operation === "ensure") {
+      const original = registries.readEndpoint;
+      vi.spyOn(registries, "readEndpoint").mockImplementationOnce(async path => { holding = hold(); await held; return original(path); });
+    } else { holding = hold(); await held; }
+    const acquire = roots.acquireDataRootWriter;
+    vi.spyOn(roots, "acquireDataRootWriter").mockImplementation(input => { admitted(); return acquire(input); });
+    const controller = new AbortController(), reason = new Error("owned admission cancelled");
+    let settled = false;
+    const pending = (operation === "ensure" ? Service.ensure({ ...options, signal: controller.signal }) : Service.stop(endpoint!, { timeoutMs: 5000, signal: controller.signal }))
+      .then(value => { settled = true; return value }, error => { settled = true; return error });
+    try {
+      await entered; controller.abort(reason);
+      await vi.waitFor(() => expect(settled).toBe(true), { timeout: 1500 });
+      expect(await pending).toBe(reason);
+      expect(await listDataRootWriters(root)).toEqual([]);
+      await expect(readdir(`${registry}.sdk-start.lock`)).rejects.toThrow();
+    } finally { unlock(); await holding!; await pending; }
+    expect(await readdir(join(root, "data/daemon/writers")).catch(() => [])).toEqual([]);
+    expect(await readFile(registry, "utf8").catch(() => undefined)).toBe(before);
+    expect(await readFile(env.START_RECORD, "utf8").catch(() => "")).toBe(operation === "stop" ? "start\n" : "");
+    if (endpoint) expect(process.kill(endpoint.pid, 0)).toBe(true);
+  }, 15000);
+
+  it("does not renew the stop deadline after home writer admission", async () => {
+    const root = join(directory, ".vykor"), registry = join(root, "data/daemon/registry.json"), env = { HOME: directory, USERPROFILE: directory };
+    const endpoint = await Service.ensure({ env, command: [process.execPath, fixture, registry, "1.2.3", String(CURRENT_PROTOCOL_VERSION)], timeoutMs: 5000 }); endpoints.push(endpoint);
+    const before = await readFile(registry, "utf8"), end = Date.now() + 5000;
+    const acquire = roots.acquireDataRootWriter;
+    vi.spyOn(roots, "acquireDataRootWriter").mockImplementation(async input => {
+      const lease = await acquire(input);
+      vi.spyOn(Date, "now").mockReturnValue(end + 1);
+      return lease;
+    });
+    await expect(Service.stop(endpoint, { timeoutMs: 5000 })).rejects.toThrow(/deadline|timed out/);
+    expect(process.kill(endpoint.pid, 0)).toBe(true);
+    expect(await readFile(registry, "utf8")).toBe(before);
+    expect(await listDataRootWriters(root)).toEqual([]);
+  });
+
   it("registers SDK control writes before waiting for the registry lock and releases ownership after timeout", async () => {
     const root = join(directory, ".vykor"), registry = join(root, "data", "daemon", "registry.json");
     const control = await acquireStartupLock(registry, Date.now() + 5000);

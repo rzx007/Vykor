@@ -23,3 +23,5 @@ Node 服务发现通过 `@vykor/host-config/paths` 的轻量模块共享产品�
 `ensure` 遇到正常根初始化锁时，在调用者的同一个总 deadline 和 AbortSignal 内等待并重新校验；并发加入者有自己的等待期限，不取消原启动者。显式 env 未提供 home 时使用系统账户 home，不读取全局 HOME/USERPROFILE。
 
 默认服务启动先在 home 锁中重验并取得 `sdk-control` 写资格，再等待 registry 控制锁；清理和释放不反向等待 home。默认 discover/ensure 返回的 endpoint 保存本次来源，stop 在停止及清理 registry 前重新登记。显式 file 的调用者管理契约不被全局 root 或无关环境覆盖。迁移遇到现有 SDK 控制者会报告忙；不会持有 home 再等该控制者。
+
+显式 file 与正常选择的 canonical registry 相同时，省略 command 仍可启动调用方安装的默认 CLI，并接受 pending 等根保护；独立 file 加自定义 command 保持调用者管理。ensure 和 stop 的 home 写资格等待传递原 AbortSignal 与同一绝对 deadline；私有目录准备、取锁和资格写入后均检查剩余期限，取消完成前清理本次资格，不留后台等锁任务。stop 的鉴权和退出等待也共用这一期限。

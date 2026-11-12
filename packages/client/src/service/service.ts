@@ -108,8 +108,17 @@ export async function ensure(options: EnsureServiceOptions = {}): Promise<Servic
   }
   const file = resolve(options.file ?? registryFileForRoot(env.VYKOR_CONFIG_DIR!, selectionEnv));
   const existing = await discover({ ...options, file, timeoutMs: Math.max(1, end - Date.now()) });
-  const managed = !options.file ? { homeDir: dataRootHome(selectionEnv), dataRoot: env.VYKOR_CONFIG_DIR! } : undefined;
+  let managed = !options.file ? { homeDir: dataRootHome(selectionEnv), dataRoot: env.VYKOR_CONFIG_DIR! } : undefined;
   if (existing) { if (managed) managedEndpoints.set(existing, managed); return existing; }
+  if (options.file && !options.command) {
+    const selected = await waitForDataRootSelection({ env: selectionEnv }, { deadline: end, signal: options.signal });
+    if (file === registryFileForRoot(selected.dataRoot, selectionEnv)) {
+      env.VYKOR_CONFIG_DIR = selected.dataRoot;
+      env.VYKOR_DATA_DIR = selectionEnv.VYKOR_DATA_DIR;
+      env.HOME = env.USERPROFILE = dataRootHome(selectionEnv);
+      managed = { homeDir: dataRootHome(selectionEnv), dataRoot: selected.dataRoot };
+    }
+  }
   let pending = startups.get(file);
   const joinsExistingStartup = pending !== undefined;
   if (!pending) {
@@ -131,7 +140,7 @@ export async function ensure(options: EnsureServiceOptions = {}): Promise<Servic
 
 async function startService(options: EnsureServiceOptions & { file: string }, env: Record<string, string | undefined>, end: number, writerRoot?: string): Promise<ServiceEndpoint> {
   // Order is home admission, then SDK control. Never wait for home while holding control.
-  const writer = writerRoot ? await acquireDataRootWriter({ homeDir: dataRootHome(options.env ?? process.env), dataRoot: writerRoot, kind: "sdk-control", timeoutMs: Math.max(1, end - Date.now()) }) : undefined;
+  const writer = writerRoot ? await acquireDataRootWriter({ homeDir: dataRootHome(options.env ?? process.env), dataRoot: writerRoot, kind: "sdk-control", deadline: end, signal: options.signal }) : undefined;
   try {
     const lease = await acquireStartupLock(options.file, end, options.signal);
     try {
@@ -181,19 +190,26 @@ async function startRegisteredService(options: EnsureServiceOptions & { file: st
 /** Stops only the exact registered, authenticated instance returned by discover/ensure. */
 export async function stop(endpoint: ServiceEndpoint, options: Pick<DiscoverServiceOptions, "signal" | "timeoutMs"> = {}): Promise<boolean> {
   options.signal?.throwIfAborted();
-  const milliseconds = timeout(options.timeoutMs, 5_000);
+  const end = Date.now() + timeout(options.timeoutMs, 5_000);
   const managed = managedEndpoints.get(endpoint);
-  const writer = managed ? await acquireDataRootWriter({ ...managed, kind: "sdk-control", timeoutMs: milliseconds }) : undefined;
-  try { return await stopInstance(endpoint, options, milliseconds); }
+  const writer = managed ? await acquireDataRootWriter({ ...managed, kind: "sdk-control", deadline: end, signal: options.signal }) : undefined;
+  try { return await stopInstance(endpoint, options, end); }
   finally { await writer?.release(); }
 }
-async function stopInstance(endpoint: ServiceEndpoint, options: Pick<DiscoverServiceOptions, "signal" | "timeoutMs">, milliseconds: number): Promise<boolean> {
+async function stopInstance(endpoint: ServiceEndpoint, options: Pick<DiscoverServiceOptions, "signal" | "timeoutMs">, end: number): Promise<boolean> {
+  const remaining = () => {
+    options.signal?.throwIfAborted();
+    const milliseconds = end - Date.now();
+    if (milliseconds <= 0) throw new Error("Vykor service did not stop before the deadline.");
+    return milliseconds;
+  };
+  remaining();
   if (endpoint.pid === process.pid) throw new Error("Refusing to stop the calling process.");
   if (!sameInstance(endpoint, await readEndpoint(endpoint.file))) return false;
-  if (!(await probe(endpoint, { ...options, timeoutMs: Math.min(1_000, milliseconds) }))) return false;
+  if (!(await probe(endpoint, { ...options, timeoutMs: Math.min(1_000, remaining()) }))) { remaining(); return false; }
   if (!sameInstance(endpoint, await readEndpoint(endpoint.file))) return false;
+  remaining();
   process.kill(endpoint.pid, "SIGTERM");
-  const end = Date.now() + milliseconds;
   while (pidAlive(endpoint.pid) && Date.now() < end) await sleep(25, undefined, { signal: options.signal });
   if (pidAlive(endpoint.pid)) throw new Error("Vykor service did not stop before the deadline.");
   if (sameInstance(endpoint, await readEndpoint(endpoint.file))) await unlink(endpoint.file).catch(() => {});

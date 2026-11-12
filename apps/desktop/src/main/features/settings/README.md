@@ -12,3 +12,5 @@
 `git-settings-service.ts` 的任务 worktree 默认传数据根给共同 manager；manager 自己追加 `worktrees/<仓库标识>`，登记中的 configDir 保留此含义。旧 worktreeRoot 为 null 或与当前数据根等价时允许新建，其他旧根给出具体迁移提示；已有登记仍按原路径保留和清理。Git 设置 JSON 的存放迁入由后续桌面业务存储任务处理，本层不改 Electron 外壳 userData。
 
 `git-settings-storage.ts` 将 Git 偏好和 worktree 登记保存在数据根的 desktop 分类；只迁 JSON 记录，不更改实际 worktree 路径。旧 userData 文件经摘要核对后确认导入，默认保留。
+
+启用自动清理时，保存 Git 偏好的 IPC 会等待本次 worktree 清理和登记更新结束才返回；迁移冻结因此能排空已取得 daemon client 的异步 Git 操作，再 flush 和释放 Desktop 写资格。`__test__/git-cleanup-drain.test.ts` 覆盖这条实际调用链。

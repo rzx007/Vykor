@@ -213,21 +213,24 @@ function rootLockHeld(homeDir: string): boolean {
   return directoryIfPresent(base) && directoryIfPresent(join(base, "active"));
 }
 
+interface DataRootLockOptions { timeoutMs?: number; pollIntervalMs?: number; deadline?: number; signal?: AbortSignal }
 /** Exclusive active directory; all dead claims remain nonempty to prevent delayed recovery ABA races. */
-export async function withDataRootLock<T>(homeDir: string, operation: (lock: DataRootLock) => Promise<T>, options: {
-  timeoutMs?: number; pollIntervalMs?: number;
-} = {}): Promise<T> {
+export async function withDataRootLock<T>(homeDir: string, operation: (lock: DataRootLock) => Promise<T>, options: DataRootLockOptions = {}): Promise<T> {
   return withRootLease(homeDir, operation, options, false);
 }
 /** Explicit maintenance only: live or unverifiable owners are never stolen. */
-export async function withDataRootRecoveryLock<T>(homeDir: string, operation: (lock: DataRootLock) => Promise<T>, options: {
-  timeoutMs?: number; pollIntervalMs?: number;
-} = {}): Promise<T> {
+export async function withDataRootRecoveryLock<T>(homeDir: string, operation: (lock: DataRootLock) => Promise<T>, options: DataRootLockOptions = {}): Promise<T> {
   return withRootLease(homeDir, operation, options, true);
 }
-async function withRootLease<T>(homeDir: string, operation: (lock: DataRootLock) => Promise<T>, options: { timeoutMs?: number; pollIntervalMs?: number }, recover: boolean): Promise<T> {
+async function withRootLease<T>(homeDir: string, operation: (lock: DataRootLock) => Promise<T>, options: DataRootLockOptions, recover: boolean): Promise<T> {
   const file = dataRootSelectorPath(homeDir);
   const lockPath = `${file}.lock`;
+  let deadline = options.deadline ?? Infinity;
+  const checkWaiting = () => {
+    options.signal?.throwIfAborted();
+    if (Date.now() >= deadline) throw new Error(`Data root lock wait timed out (busy): ${lockPath}; run data-root recover only after its owner stops.`);
+  };
+  checkWaiting();
   if (!directoryIfPresent(lockPath)) {
     try { await mkdir(lockPath, { mode: 0o700 }); }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; }
@@ -235,10 +238,11 @@ async function withRootLease<T>(homeDir: string, operation: (lock: DataRootLock)
   directoryIfPresent(lockPath);
   // Also retry protection after an earlier process stopped between mkdir and securing this owned container.
   await securePrivateDirectory(lockPath);
+  // Preserve the existing relative contention budget; SDK callers supply their absolute deadline.
+  if (options.deadline === undefined) deadline = Date.now() + (options.timeoutMs ?? 10_000);
   const active = join(lockPath, "active"), claims = join(lockPath, "claims"), ownerToken = randomUUID();
-  const deadline = Date.now() + (options.timeoutMs ?? 10_000);
   for (;;) {
-    if (Date.now() > deadline) throw new Error(`Data root lock is busy: ${lockPath}; run data-root recover only after its owner stops.`);
+    checkWaiting();
     try { await mkdir(active, { mode: 0o700 }); break; }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
@@ -257,13 +261,15 @@ async function withRootLease<T>(homeDir: string, operation: (lock: DataRootLock)
           continue;
         }
       }
-      if (Date.now() >= deadline) throw new Error(`Data root lock is busy: ${lockPath}; wait for the owner, or verify it has stopped and run data-root recover. Never remove an active migration lock.`);
-      await sleep(options.pollIntervalMs ?? 25);
+      checkWaiting();
+      try { await sleep(Math.min(options.pollIntervalMs ?? 25, Math.max(1, deadline - Date.now())), undefined, { signal: options.signal }); }
+      catch (error) { options.signal?.throwIfAborted(); throw error; }
     }
   }
   const ownerFile = join(active, "owner.json"), handle = await open(ownerFile, "wx", 0o600);
   try {
     await handle.writeFile(JSON.stringify({ pid: process.pid, ownerToken }), "utf8"); await handle.sync();
+    checkWaiting();
     const writeSelector = async (selector: DataRootSelector) => {
       const validated = validateSelector(selector, file);
       const temporary = `${file}.${randomUUID()}.tmp`;

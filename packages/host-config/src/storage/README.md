@@ -69,3 +69,5 @@
 `data-root-writers.ts` 为产品 Desktop、CLI/TUI、daemon 与默认 SDK 控制操作登记写入资格。资格创建与 pending/moved 重验共用稳定 home 锁，覆盖初始化完成到登记之间的窗口；封闭操作完成或 Desktop 封门排空后直接核对并删除自己的 PID/token 文件，不等待迁移持有的 home 锁。CLI/TUI 和 daemon 的进程资格保留至 PID 确实退出，覆盖后注册的同步 exit 写入；只读列表仅在 ESRCH 时忽略死进程记录，迁移不复制这些记录，损坏或不可验证记录保留并拒绝继续。
 
 `dataRootChildEnvironment()` 恢复初始化前的四个目录环境输入，使内部传播的根不会成为下次启动的外部固定配置。内部验证 child 的初始化仅接受持锁父进程和匹配本次 journal/PID 的受信任目标。
+
+home 锁与写资格可接收同一 `deadline`（绝对毫秒时间）和 `signal`；私有权限准备不会重置等待预算。取消会结束实际取锁循环，并在获得锁后、创建资格前及返回资格前重新检查；已创建的本次资格先释放再返回原取消原因。
