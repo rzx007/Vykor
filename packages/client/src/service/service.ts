@@ -1,3 +1,4 @@
+import { dataRootHome, resolveDataRootSelection } from "@vykor/host-config/paths";
 import { access, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -7,7 +8,9 @@ import { pidAlive, readEndpoint, registryFile, sameInstance, type ServiceEndpoin
 import { acquireStartupLock } from "./startup-lock.js";
 
 export interface DiscoverServiceOptions {
-  /** Defaults to VYKOR_DATA_DIR/daemon/registry.json, then ~/.vykor/data/daemon/registry.json. */
+  /** Explicit root-selection environment; omitted values do not fall back to another global env. */
+  env?: Record<string, string | undefined>;
+  /** Uses the selected user root (environment, saved selector, then ~/.vykor). */
   file?: string;
   /** Optional application version constraint, in addition to the mandatory protocol check. */
   version?: string | ((version: string) => boolean);
@@ -69,7 +72,7 @@ async function probe(endpoint: ServiceEndpoint, options: DiscoverServiceOptions)
 export async function discover(options: DiscoverServiceOptions = {}): Promise<ServiceEndpoint | undefined> {
   options.signal?.throwIfAborted();
   timeout(options.timeoutMs, 1_000);
-  const endpoint = await readEndpoint(resolve(options.file ?? registryFile()));
+  const endpoint = await readEndpoint(resolve(options.file ?? registryFile(options.env)));
   if (!endpoint || !(await probe(endpoint, options))) return undefined;
   return sameInstance(endpoint, await readEndpoint(endpoint.file)) ? endpoint : undefined;
 }
@@ -91,7 +94,13 @@ export async function ensure(options: EnsureServiceOptions = {}): Promise<Servic
   options.signal?.throwIfAborted();
   timeout(options.timeoutMs, 10_000);
   const env = { ...process.env, ...options.env };
-  const file = resolve(options.file ?? registryFile(env));
+  const selectionEnv = options.env ?? process.env;
+  if (!options.file) {
+    env.VYKOR_CONFIG_DIR = resolveDataRootSelection({ env: selectionEnv }).dataRoot;
+    env.VYKOR_DATA_DIR = selectionEnv.VYKOR_DATA_DIR;
+    env.HOME = env.USERPROFILE = dataRootHome(selectionEnv);
+  }
+  const file = resolve(options.file ?? registryFile({ ...selectionEnv, VYKOR_CONFIG_DIR: env.VYKOR_CONFIG_DIR }));
   const existing = await discover({ ...options, file });
   if (existing) return existing;
   let pending = startups.get(file);

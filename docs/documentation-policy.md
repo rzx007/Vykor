@@ -16,7 +16,7 @@
 | 运行记录与数据库格式 | [持久运行数据](./durable-execution-data-model.md)、[存储架构](./session-runtime-storage-architecture.md) | `packages/services/src/session-runtime/migrations` |
 | HTTP/SSE 格式和协议版本 | [协议契约](./protocol-contract.md) | `packages/protocol/src/runtime/capabilities.ts` |
 | 客户端安装和调用 | [Client SDK](./client-sdk.md) | `packages/client/package.json` 与 `packages/client/src/index.ts` |
-| CLI 参数与子命令 | [CLI README](../apps/cli/README.md) | `apps/cli/src/index.ts` 和 `apps/cli/src/commands` |
+| CLI 参数与子命令 | [CLI README](../apps/cli/README.md) | `apps/cli/src/program.ts` 和 `apps/cli/src/commands` |
 | 模型、默认轮数与设置 | [认证与模型](./auth-provider-model.md) | `packages/host-config/src/settings/settings.ts` |
 | 基础工具和宿主注入能力 | [Agent SDK](./agent-sdk.md) | `packages/agent-runtime/src/node/tools/default-tool-registry.ts` |
 | 授权与计划模式 | [权限流程](./permission-flow.md) | `packages/host-config/src/permissions/permission-modes.ts`、`packages/permissions/src` |

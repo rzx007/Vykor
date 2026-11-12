@@ -242,7 +242,8 @@
     "@rzx/client": {
       "directory": "packages/client",
       "allowed": [
-        "@vykor/protocol"
+        "@vykor/protocol",
+        "@vykor/host-config"
       ],
       "removeByPhase": "P6",
       "migrationId": "M30",
@@ -944,6 +945,48 @@
       "traceTypes": true,
       "removeByPhase": "P13",
       "migrationId": "M40"
+    },
+    {
+      "id": "client-node-root-paths",
+      "allowSourcePaths": [
+        "packages/client/src/service/"
+      ],
+      "fromPaths": [
+        "packages/client/src/"
+      ],
+      "targetPackages": [
+        "@vykor/host-config"
+      ],
+      "allowTargetPaths": [
+        "packages/host-config/src/storage/paths.ts",
+        "packages/host-config/src/storage/data-root-selection.ts"
+      ],
+      "removeByPhase": "P13",
+      "migrationId": "M30"
+    },
+    {
+      "id": "client-browser-runtime",
+      "fromFiles": [
+        "packages/client/src/index.ts"
+      ],
+      "fromPaths": [
+        "packages/client/src/configuration/",
+        "packages/client/src/protocol/",
+        "packages/client/src/resources/",
+        "packages/client/src/state/",
+        "packages/client/src/transport/",
+        "packages/client/src/types/"
+      ],
+      "forbidBuiltins": true,
+      "forbidPaths": [
+        "packages/host-config/",
+        "packages/client/src/service/"
+      ],
+      "forbidSpecifiers": [
+        "^@vykor/host-config(?:/|$)"
+      ],
+      "removeByPhase": "P13",
+      "migrationId": "M30"
     }
   ],
   "stageExceptions": []

@@ -1,3 +1,4 @@
+import { getDataRoot } from "@vykor/host-config/paths"
 import { dirname } from "node:path"
 
 import {
@@ -75,7 +76,7 @@ export function createDesktopDaemonSystemService(): DaemonSystemService {
   const flag = process.platform === "win32" ? "--daemon-watchdog" : "--daemon-service"
   const args = app.isPackaged ? [flag] : [app.getAppPath(), flag]
   return new DaemonSystemService({
-    invocation: { command: process.execPath, args, cwd: dirname(process.execPath) },
+    invocation: { command: process.execPath, args: [...args, "--data-root", getDataRoot()], cwd: dirname(process.execPath) },
   })
 }
 

@@ -154,7 +154,7 @@
 
 | 符号/字符串 | 定义文件 | 当前调用者 | 当前替代入口 | 结论 | 处理批次 |
 |---|---|---|---|---|---|
-| `--bare` / `options.bare` | `apps/cli/src/index.ts` | CLI 启动参数 | `--no-plugins` / `options.plugins` | 删除 | 8C |
+| `--bare` / `options.bare` | `apps/cli/src/program.ts` | CLI 启动参数 | `--no-plugins` / `options.plugins` | 删除 | 8C |
 | 旧 shell 标量、`legacyShellDescriptor` | environment/tools | 环境与 shell 测试 | `shellDescriptor` | 删除 | 8C |
 | `.claude/skills` 扫描 | skills | skills 发现测试 | `.agents/skills`、`.vykor/skills` | 删除 | 8C |
 | plugin manifest compatibility / environment aliases / project-local scope | plugins/agent-runtime/converters | 插件加载与转换测试 | 当前 Native Plugin schema、user/managed scope | 删除 | 8C |

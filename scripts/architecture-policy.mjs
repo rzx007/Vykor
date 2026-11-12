@@ -96,6 +96,7 @@ export function moduleViolations(input, policy) {
     if (!matchesFrom(rule, fromFile)) continue;
     const testExternal = /\.test\.[cm]?[jt]sx?$/.test(fromFile) && rule.testExternal?.includes(input.specifier);
     if (rule.targetPackages && !rule.targetPackages.includes(targetName)) continue;
+    if (rule.allowSourcePaths && !rule.allowSourcePaths.some((path) => path.endsWith("/") ? fromFile.startsWith(path) : fromFile === path)) add(rule.id, rule, "importer is outside the allowed source entries");
     if (targetName && targetName !== ownerName && rule.allowed && !rule.allowed.includes(targetName)) add(rule.id, rule, `module must not depend on ${targetName}`);
     if (resolvedFile && rule.allowed && !targetName && actualOwner !== owner) add(rule.id, rule, `source is outside the allowed packages: ${resolvedFile}`);
     if (resolvedFile && rule.forbidPaths?.some((path) => resolvedFile.startsWith(path))) add(rule.id, rule, `forbidden source ${resolvedFile}`);

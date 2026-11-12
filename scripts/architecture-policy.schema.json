@@ -37,6 +37,7 @@
         "allowed": { "$ref": "#/$defs/list" },
         "allowSelfPaths": { "$ref": "#/$defs/list" },
         "allowTargetPaths": { "$ref": "#/$defs/list" },
+        "allowSourcePaths": { "$ref": "#/$defs/list" },
         "forbidPaths": { "$ref": "#/$defs/list" },
         "forbidSpecifiers": { "$ref": "#/$defs/list" },
         "forbidBuiltins": { "type": "boolean" },

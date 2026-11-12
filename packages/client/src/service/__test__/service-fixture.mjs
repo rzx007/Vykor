@@ -8,6 +8,7 @@ const token = "fixture-secret";
 if (process.env.FIXTURE_LOG) console.error("startup diagnostic");
 if (process.env.START_RECORD) await appendFile(process.env.START_RECORD, "start\n");
 if (process.env.START_PIDS) await appendFile(process.env.START_PIDS, `${process.pid}\n`);
+if (process.env.ROOT_RECORD) await writeFile(process.env.ROOT_RECORD, JSON.stringify({ root: process.env.VYKOR_CONFIG_DIR, data: process.env.VYKOR_DATA_DIR, home: process.env.HOME, userProfile: process.env.USERPROFILE }));
 await new Promise(resolve => setTimeout(resolve, Number(delay)));
 const server = createServer(async (req, res) => {
   if (req.url === process.env.FIXTURE_PROBE_DELAY_PATH)

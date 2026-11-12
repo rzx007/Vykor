@@ -842,6 +842,9 @@ importers:
       '@types/proper-lockfile':
         specifier: 4.1.4
         version: 4.1.4
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
       '@vykor/protocol':
         specifier: workspace:*
         version: link:../protocol

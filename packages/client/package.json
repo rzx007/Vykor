@@ -45,6 +45,7 @@
     "@types/node": "catalog:",
     "@types/proper-lockfile": "4.1.4",
     "@vykor/protocol": "workspace:*",
+    "@vykor/host-config": "workspace:*",
     "esbuild": "0.27.7",
     "proper-lockfile": "4.1.2",
     "rollup": "4.60.1",

@@ -19,7 +19,7 @@ if (!npmCli) throw new Error("Cannot locate npm beside Node.js; install a Node d
 const tsc = join(packageRoot, "node_modules/typescript/bin/tsc");
 
 try {
-  execFileSync(process.execPath, [pnpmCli, "pack", "--pack-destination", sandbox], { cwd: packageRoot, stdio: "pipe" });
+  execFileSync(pnpmCli.endsWith(".exe") ? pnpmCli : process.execPath, [...(pnpmCli.endsWith(".exe") ? [] : [pnpmCli]), "pack", "--pack-destination", sandbox], { cwd: packageRoot, stdio: "pipe" });
   const tarball = join(sandbox, readdirSync(sandbox).find(name => name.endsWith(".tgz")));
   writeFileSync(join(sandbox, "package.json"), JSON.stringify({ private: true, type: "module" }));
   execFileSync(process.execPath, [npmCli, "install", "--ignore-scripts", "--no-audit", "--no-fund", "--package-lock=false", tarball], { cwd: sandbox, stdio: "pipe" });

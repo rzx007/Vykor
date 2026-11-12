@@ -6,7 +6,8 @@
 
 ```text
 vk
-  -> apps/cli/src/index.ts
+  -> apps/cli/src/index.ts（初始化用户根）
+  -> apps/cli/src/program.ts（注册命令）
   -> commands/main.ts runTuiMode()
   -> attach explicit daemon or ensure local daemon
   -> spawn apps/frontend/dist/index.js with Bun

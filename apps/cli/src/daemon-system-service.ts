@@ -1,3 +1,4 @@
+import { getDataRoot } from "@vykor/host-config/paths";
 import {
   createDaemonAutoStartController,
   DaemonSystemService,
@@ -45,7 +46,7 @@ export function createDaemonSystemService(
   const platform = options.platform ?? process.platform;
   const invocationArgs =
     platform === "win32" ? ["daemon", "watchdog", ...serveArgs] : [...serveArgs, "--supervised"];
-  const invocation = resolveDaemonInvocation(entry, invocationArgs, options);
+  const invocation = resolveDaemonInvocation(entry, ["--data-root", getDataRoot(), ...invocationArgs], options);
   return new DaemonSystemService({
     invocation: { ...invocation, cwd: options.cwd ?? process.cwd() },
     platform,

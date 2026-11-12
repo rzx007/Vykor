@@ -2,7 +2,9 @@
 
 Vykor 终端 CLI：在终端里跑 AI Agent。默认进入交互式 TUI（需 [Bun](https://bun.sh)），也可一次性打印结果后退出。会话由本机 daemon 持久化，可与 Desktop 等客户端共用同一后端。
 
-命令行入口：`vk` 与 `vykor`（等价）。
+命令行入口：`vk` 与 `vykor`（等价）。源码导航见 [src/README.md](./src/README.md)。
+
+`--data-root <绝对路径>` 优先于 `VYKOR_CONFIG_DIR`、用户 home 下的 `.vykor-root.json` 和默认 `~/.vykor`。启动错误会注明来源或需要恢复的记录；默认首次启动不会生成定位记录。
 
 产品操作与类型由私有工作区包 `@vykor/application-client` 提供，会话同步复用公开 SDK `@rzx/client`。构建会把私有包打进 CLI 与 TUI，安装发布包无需单独安装它。
 

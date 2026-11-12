@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { basename, join, resolve } from "node:path";
 import { homedir } from "node:os";
+import { currentDataRoot } from "./data-root-selection.js";
+export * from "./data-root-selection.js";
 
 /** Project-level config directory name, matching the user-level `~/.vykor`. */
 export const PROJECT_CONFIG_DIR_NAME = ".vykor";
@@ -146,7 +148,7 @@ function buildUserDataPaths(dataRoot: string, dataDir: string): UserDataPaths {
 }
 
 export function getDataRoot(): string {
-  return process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor");
+  return currentDataRoot();
 }
 
 export function resolvePaths(projectRoot?: string): ResolvedPaths {

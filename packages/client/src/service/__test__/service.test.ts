@@ -44,6 +44,21 @@ async function start(version = "1.2.3", protocol = String(CURRENT_PROTOCOL_VERSI
 }
 
 describe("local service management", () => {
+  it("starts in the saved root selected by the caller env, without inheriting another global data override", async () => {
+    const root = join(directory, "saved");
+    await mkdir(root);
+    await writeFile(join(directory, ".vykor-root.json"), JSON.stringify({ version: 1, dataRoot: root }));
+    const registry = join(root, "data", "daemon", "registry.json");
+    const endpoint = await Service.ensure({
+      env: { HOME: directory, ROOT_RECORD: join(directory, "child-root.json") },
+      command: [process.execPath, fixture, registry, "1.2.3", String(CURRENT_PROTOCOL_VERSION)],
+      timeoutMs: 5_000,
+    });
+    endpoints.push(endpoint);
+    expect(endpoint.file).toBe(registry);
+    expect(JSON.parse(await readFile(join(directory, "child-root.json"), "utf8"))).toEqual({ root, home: directory, userProfile: directory });
+    expect((await Service.discover({ env: { HOME: directory, USERPROFILE: directory } }))?.pid).toBe(endpoint.pid);
+  });
   it("discovers only an authenticated compatible service without creating registry files", async () => {
     expect(await Service.discover({ file })).toBeUndefined();
     const registry = await start();

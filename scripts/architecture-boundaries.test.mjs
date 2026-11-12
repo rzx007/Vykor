@@ -621,13 +621,13 @@ test("portable code permits Vitest only in test files",()=>{
 });
 
 
-test("P0-P6 exceptions stay retired and Client directly depends only on Protocol", () => {
+test("P0-P6 exceptions stay retired and Client only adds the guarded Node root path entry", () => {
   assert.equal(targetPolicy.currentPhase, "P13");
   assert.deepEqual(targetPolicy.stageExceptions, []);
   assert.ok(targetPolicy.stageExceptions.every(item => Number(item.migrationId.slice(1)) >= 31 && Number(item.removeByPhase.slice(1)) > 7));
   assert.ok(targetPolicy.stageExceptions.every(item => /^package:(?:@vykor\/protocol(?:#|\/)|packages\/protocol\/)/.test(item.target)
     || item.target.startsWith("server-application-protocol:")), "P7 exceptions cannot reopen an unrelated old boundary");
-  assert.deepEqual(targetPolicy.packages["@rzx/client"].allowed, ["@vykor/protocol"]);
+  assert.deepEqual(targetPolicy.packages["@rzx/client"].allowed, ["@vykor/protocol", "@vykor/host-config"]);
   const fromFile = "packages/client/src/resource.ts";
   for (const input of [
     { specifier: "@vykor/agent-contracts", importedNames: ["McpCallResultData"], typeOnly: true },

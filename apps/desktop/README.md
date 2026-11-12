@@ -12,6 +12,8 @@ Desktop 和 CLI 可以共用独立 daemon。桌面主进程用 `@vykor/applicati
 
 Electron + React desktop shell for Vykor.
 
+主进程启动顺序和数据根选择见 [src/main/README.md](src/main/README.md)。
+
 ## Structure
 
 - [src/main/core](src/main/core/README.md)：应用上下文、Linux 输入法启动配置、窗口管理、界面调用注册及退出流程。

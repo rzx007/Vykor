@@ -1,3 +1,4 @@
+import { getDataRoot } from "@vykor/host-config/paths";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { mkdir } from "node:fs/promises";
@@ -49,7 +50,7 @@ export function assertSafeDaemonBinding(
 }
 
 function legacyDesktopDataLocation(): string | undefined {
-  if (process.env.VYKOR_CONFIG_DIR || process.env.VYKOR_DATA_DIR) return undefined;
+  if (getDataRoot() !== join(homedir(), ".vykor") || process.env.VYKOR_DATA_DIR) return undefined;
   const root = process.platform === "win32"
     ? process.env.APPDATA ?? join(homedir(), "AppData", "Roaming")
     : process.platform === "darwin"
