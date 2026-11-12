@@ -109,15 +109,15 @@ describe("resolveChannelWorkspaceRoot", () => {
 });
 
 describe("getChannelWorkspaceRoot", () => {
-  it("defaults under Documents/Vykor and honors VYKOR_CHANNELS_DIR", () => {
+  it("uses the selected root channels directory even when an old override is present", () => {
     const previousChannels = process.env.VYKOR_CHANNELS_DIR;
     delete process.env.VYKOR_CHANNELS_DIR;
     try {
       expect(getChannelWorkspaceRoot()).toBe(
-        join(homedir(), "Documents", "Vykor", "channels"),
+        join(getDataRoot(), "channels"),
       );
       process.env.VYKOR_CHANNELS_DIR = resolve("/tmp/vykor-channels-workspace");
-      expect(getChannelWorkspaceRoot()).toBe(resolve("/tmp/vykor-channels-workspace"));
+      expect(getChannelWorkspaceRoot()).toBe(join(getDataRoot(), "channels"));
     } finally {
       if (previousChannels === undefined) delete process.env.VYKOR_CHANNELS_DIR;
       else process.env.VYKOR_CHANNELS_DIR = previousChannels;

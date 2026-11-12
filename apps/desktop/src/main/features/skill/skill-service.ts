@@ -4,14 +4,13 @@ import type {
   DesktopSkillSnapshot,
   DesktopSkillSnapshotInput,
 } from "../../../shared/skill-types"
-import { app } from "electron"
-import { isOutsideProjectWorkspacePath } from "../session/outside-project-workspace"
+import { getDataRoot, isHiddenManagedProjectPath } from "@vykor/host-config/paths"
 import { desktopSessionService } from "../session/session-service"
 
 type SkillClient = Pick<VykorClient, "runtime" | "development">
 
 export interface DesktopSkillServiceOptions {
-  documentsPath?: string
+  dataRoot?: string
 }
 
 export class DesktopSkillService {
@@ -21,7 +20,7 @@ export class DesktopSkillService {
     void input
     return filterOutsideProjectWorkspaces(
       await withDaemonRetry((client) => client.runtime.listSkills()),
-      this.documentsPath()
+      this.dataRoot()
     )
   }
 
@@ -30,12 +29,12 @@ export class DesktopSkillService {
       await withDaemonRetry((client) =>
         client.development.removeSkill(input.id, { expectedContent: input.expectedContent })
       ),
-      this.documentsPath()
+      this.dataRoot()
     )
   }
 
-  private documentsPath(): string {
-    return this.options.documentsPath ?? app.getPath("documents")
+  private dataRoot(): string {
+    return this.options.dataRoot ?? getDataRoot()
   }
 }
 
@@ -61,10 +60,10 @@ async function withDaemonRetry<T>(
 
 function filterOutsideProjectWorkspaces(
   snapshot: DesktopSkillSnapshot,
-  documentsPath: string
+  dataRoot: string
 ): DesktopSkillSnapshot {
   const projects = snapshot.projects.filter(
-    (project) => !isOutsideProjectWorkspacePath(project.path, documentsPath)
+    (project) => !isHiddenManagedProjectPath(project.path, dataRoot)
   )
   const projectKeys = new Set(projects.map((project) => pathKey(project.path)))
 

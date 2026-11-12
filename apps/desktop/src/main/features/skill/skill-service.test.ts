@@ -40,7 +40,7 @@ const mixedSnapshot = {
   projects: [
     { name: "Vykor", path: "D:/code/Vykor" },
     { name: "Other", path: "D:/code/other" },
-    { name: "x10", path: "D:/Documents/Vykor/2026-09-09/x10" },
+    { name: "x10", path: "D:/managed/workspaces/2026-09-09/x10" },
   ],
   skills: [
     {
@@ -108,10 +108,10 @@ const mixedSnapshot = {
       name: "outside-project",
       description: "outside project workspace",
       content: "outside",
-      path: "D:/Documents/Vykor/2026-09-09/x10/.vykor/skills/outside/SKILL.md",
+      path: "D:/managed/workspaces/2026-09-09/x10/.vykor/skills/outside/SKILL.md",
       source: "project",
       readOnly: false,
-      projectPath: "D:/Documents/Vykor/2026-09-09/x10",
+      projectPath: "D:/managed/workspaces/2026-09-09/x10",
       projectName: "x10",
     },
   ],
@@ -128,7 +128,7 @@ describe("DesktopSkillService", () => {
 
   it("delegates snapshots to the daemon client and hides outside-project workspaces", async () => {
     daemon.runtime.listSkills.mockResolvedValueOnce(mixedSnapshot)
-    const service = new DesktopSkillService({ documentsPath: "D:/Documents" })
+    const service = new DesktopSkillService({ dataRoot: "D:/managed" })
 
     await expect(service.snapshot({ projectPath: "D:/code/Vykor" })).resolves.toEqual({
       warnings: [],
@@ -152,7 +152,7 @@ describe("DesktopSkillService", () => {
 
   it("does not require the current page project to be in the skill catalog", async () => {
     daemon.runtime.listSkills.mockResolvedValueOnce(mixedSnapshot)
-    const service = new DesktopSkillService({ documentsPath: "D:/Documents" })
+    const service = new DesktopSkillService({ dataRoot: "D:/managed" })
 
     await expect(service.snapshot({ projectPath: "D:/code/hidden" })).resolves.toMatchObject({
       projects: [
@@ -163,7 +163,7 @@ describe("DesktopSkillService", () => {
   })
 
   it("delegates removal and returns the daemon response", async () => {
-    const service = new DesktopSkillService({ documentsPath: "D:/Documents" })
+    const service = new DesktopSkillService({ dataRoot: "D:/managed" })
     const input = {
       id: "skill_personal",
       expectedContent: "current skill contents",
@@ -181,7 +181,7 @@ describe("DesktopSkillService", () => {
     "refreshes the daemon client and retries once after %s",
     async (message) => {
       daemon.runtime.listSkills.mockRejectedValueOnce(new Error(message))
-      const service = new DesktopSkillService({ documentsPath: "D:/Documents" })
+      const service = new DesktopSkillService({ dataRoot: "D:/managed" })
 
       await expect(service.snapshot({ projectPath: "D:/code/Vykor" })).resolves.toEqual(
         snapshot
@@ -195,7 +195,7 @@ describe("DesktopSkillService", () => {
   it("does not retry non-connection errors", async () => {
     const error = new Error("skill conflict")
     daemon.development.removeSkill.mockRejectedValueOnce(error)
-    const service = new DesktopSkillService({ documentsPath: "D:/Documents" })
+    const service = new DesktopSkillService({ dataRoot: "D:/managed" })
 
     await expect(
       service.remove({

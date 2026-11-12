@@ -7,7 +7,7 @@
  * 3. SessionOperations：会话生命周期、Prompt、Permission、Goal 与项目操作
  */
 import { app, BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from "electron"
-import { getDataRoot } from "@vykor/host-config/paths"
+import { getDataRoot, getWorkspacesDir, isHiddenManagedProjectPath } from "@vykor/host-config/paths"
 
 import type { VykorClient } from "@vykor/application-client"
 import type {
@@ -64,8 +64,6 @@ import { IpcEvents } from "../../../shared/ipc-channels"
 import { requireDesktopPluginCapabilities } from "../../../shared/plugin-capabilities"
 import type { DesktopContextUsageSnapshot } from "../../../shared/context-usage-types"
 import {
-  buildOutsideProjectRoot,
-  isChannelProjectHidden,
   normalizeWorkspacePath,
 } from "./outside-project-workspace"
 import { isChannelSessionMetadata } from "../../../shared/channel-types"
@@ -210,7 +208,7 @@ export class DesktopSessionService {
   async bootstrap(): Promise<DesktopBootstrapData> {
     workspaceService.configureAllowedRoots({
       configDir: getDataRoot(),
-      documentsPath: app.getPath("documents"),
+      workspacesDir: getWorkspacesDir(),
     })
     const client = await this.getClient()
     const [settings, providers, allSessions, projectRecords, capabilities] = await Promise.all([
@@ -237,7 +235,6 @@ export class DesktopSessionService {
     const defaultProvider = runtimeSnapshot.defaultProvider
     const defaultPermissionMode = readSettingsPermissionMode(settings)
 
-    const documentsPath = app.getPath("documents")
     const channelSessionCwds = new Set(
       allSessions
         .filter((session) => isChannelSessionMetadata(session.metadata ?? {}))
@@ -246,7 +243,7 @@ export class DesktopSessionService {
     const projects = await Promise.all(
       projectRecords
         .filter(
-          (project) => !isChannelProjectHidden(project.path, channelSessionCwds, documentsPath)
+          (project) => !isHiddenManagedProjectPath(project.path) && !channelSessionCwds.has(normalizeWorkspacePath(project.path))
         )
         .map(toDesktopProject)
     )
@@ -264,7 +261,7 @@ export class DesktopSessionService {
         isPackaged: app.isPackaged,
         forceDisable: process.env.VYKOR_DESKTOP_ATTACHMENTS === "0",
       }),
-      outsideProjectWorkspaceRoot: buildOutsideProjectRoot(app.getPath("documents")),
+      outsideProjectWorkspaceRoot: getWorkspacesDir(),
     }
   }
 

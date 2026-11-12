@@ -8,3 +8,5 @@
 消息链接打开方式通过 `getLinkOpeningMode`、`updateLinkOpeningMode` 直接读写本机 `desktop-preferences.json`，取值为询问、内置或系统浏览器；不访问 daemon，也不修改其配置。旧配置和无效值回退为询问，写入时拒绝未知值；其他偏好保存不会清除该选择。
 
 `desktop-preferences-storage.ts` 同时保存最近的原生通知目标，供桌面重启后的通知激活查找原会话和待处理请求。只保留最近 1,000 条，读取时丢弃结构无效的目标；未确认的回复文字仅在本机保存，后台确认后清除。通知动作仍由 `../tray/notification-actions.ts` 处理，设置目录不执行授权。`__test__/notification-targets.test.ts` 使用实际文件验证无关设置保存不会丢失目标，成功后可清除回复文字。
+
+`git-settings-service.ts` 的任务 worktree 默认传数据根给共同 manager；manager 自己追加 `worktrees/<仓库标识>`，登记中的 configDir 保留此含义。旧 worktreeRoot 为 null 或与当前数据根等价时允许新建，其他旧根给出具体迁移提示；已有登记仍按原路径保留和清理。Git 设置 JSON 的存放迁入由后续桌面业务存储任务处理，本层不改 Electron 外壳 userData。

@@ -3,6 +3,7 @@ import { basename, isAbsolute, join, normalize, parse, resolve, sep } from "node
 import { homedir } from "node:os";
 import { currentDataRoot, type RootEnvironment } from "./data-root-selection.js";
 export * from "./data-root-selection.js";
+export * from "./managed-path-map.js";
 
 /** Project-level config directory name, matching the user-level `~/.vykor`. */
 export const PROJECT_CONFIG_DIR_NAME = ".vykor";
@@ -262,9 +263,7 @@ export function resolveChannelWorkspaceRoot(input: {
 }
 
 export function getChannelWorkspaceRoot(): string {
-  return resolveChannelWorkspaceRoot({
-    envDir: process.env.VYKOR_CHANNELS_DIR,
-  });
+  return getChannelsDir();
 }
 
 export function getCacheDir(): string {

@@ -1,3 +1,4 @@
+import { isManagedWorkspacePath } from "@vykor/host-config/paths"
 import type { WebContents } from "electron"
 import {
   syncEvents,
@@ -24,7 +25,6 @@ import type {
   DesktopStandardSessionPart,
   OpenDesktopAuxSessionInput,
 } from "../../../shared/session-types"
-import { isOutsideProjectWorkspacePath } from "./outside-project-workspace"
 import { pumpSubscription } from "./session-subscription-pump"
 import { createSessionUpdateCoalescer } from "./session-update-coalescer"
 import {
@@ -809,7 +809,7 @@ export function toDesktopSessionRecord(session: SessionRecord): DesktopSessionRe
   const desktop = readDesktopMetadata(session.metadata)
   const workspaceMode =
     desktop["workspaceMode"] === "outside_project" ||
-    isOutsideProjectWorkspacePath(session.cwd, app.getPath("documents"))
+    isManagedWorkspacePath(session.cwd)
       ? "outside_project"
       : "project"
   return { ...session, workspaceMode }

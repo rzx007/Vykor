@@ -1,7 +1,6 @@
 import { mkdir, rmdir } from "node:fs/promises"
 import { isAbsolute, join, relative, resolve, sep } from "node:path"
 
-const workspaceDirectoryName = "Vykor"
 const maximumWorkspaceAttempts = 100_000
 
 type JoinPath = (...paths: string[]) => string
@@ -15,17 +14,17 @@ type PathOperations = {
 
 const nativePathOperations: PathOperations = { isAbsolute, join, relative, resolve, sep }
 
-export function buildOutsideProjectRoot(documentsPath: string, joinPath: JoinPath = join): string {
-  if (!documentsPath.trim()) throw new Error("系统文档目录不能为空。")
-  return joinPath(documentsPath, workspaceDirectoryName)
+export function buildOutsideProjectRoot(workspacesDir: string, joinPath: JoinPath = join): string {
+  if (!workspacesDir.trim()) throw new Error("项目外工作区根不能为空。")
+  return joinPath(workspacesDir)
 }
 
 /**
- * 项目外会话使用系统“文档”目录下的专用空间，不把整个用户主目录暴露为 cwd。
+ * 项目外会话使用数据根下的 workspaces，不把整个用户根暴露为 cwd。
  * 日期按用户本地时区计算；joinPath 参数让 Windows、macOS/Linux 路径都可独立验证。
  */
 export function buildOutsideProjectDayRoot(
-  documentsPath: string,
+  workspacesDir: string,
   date: Date,
   joinPath: JoinPath = join
 ): string {
@@ -34,18 +33,18 @@ export function buildOutsideProjectDayRoot(
   const year = String(date.getFullYear()).padStart(4, "0")
   const month = String(date.getMonth() + 1).padStart(2, "0")
   const day = String(date.getDate()).padStart(2, "0")
-  return joinPath(buildOutsideProjectRoot(documentsPath, joinPath), `${year}-${month}-${day}`)
+  return joinPath(buildOutsideProjectRoot(workspacesDir, joinPath), `${year}-${month}-${day}`)
 }
 
 /** 判断已有会话/项目是否位于 Vykor 管理的项目外工作区中。 */
 export function isOutsideProjectWorkspacePath(
   workspacePath: string,
-  documentsPath: string,
+  workspacesDir: string,
   pathOperations: PathOperations = nativePathOperations
 ): boolean {
-  if (!workspacePath.trim() || !documentsPath.trim()) return false
+  if (!workspacePath.trim() || !workspacesDir.trim()) return false
 
-  const root = pathOperations.resolve(pathOperations.join(documentsPath, workspaceDirectoryName))
+  const root = pathOperations.resolve(workspacesDir)
   const candidate = pathOperations.resolve(workspacePath)
   const relativePath = pathOperations.relative(root, candidate)
   return (
@@ -63,15 +62,15 @@ export function normalizeWorkspacePath(value: string): string {
 
 /**
  * 项目是否应从「项目」列表隐藏：位于项目外工作区根下，或它就是某个渠道会话的 cwd。
- * 后者不依赖路径/env，覆盖 `VYKOR_CHANNELS_DIR` 指到文档目录外的情况。
+ * 后者识别历史渠道会话的确切目录。
  */
 export function isChannelProjectHidden(
   projectPath: string,
   channelSessionCwds: ReadonlySet<string>,
-  documentsPath: string
+  workspacesDir: string
 ): boolean {
   return (
-    isOutsideProjectWorkspacePath(projectPath, documentsPath) ||
+    isOutsideProjectWorkspacePath(projectPath, workspacesDir) ||
     channelSessionCwds.has(normalizeWorkspacePath(projectPath))
   )
 }
@@ -80,10 +79,10 @@ export function isChannelProjectHidden(
  * mkdir 本身负责抢占 xN，因此多个窗口同时创建会话也不会拿到同一目录。
  */
 export async function allocateOutsideProjectWorkspace(
-  documentsPath: string,
+  workspacesDir: string,
   date: Date = new Date()
 ): Promise<string> {
-  const dayRoot = buildOutsideProjectDayRoot(documentsPath, date)
+  const dayRoot = buildOutsideProjectDayRoot(workspacesDir, date)
   await mkdir(dayRoot, { recursive: true })
 
   for (let index = 1; index <= maximumWorkspaceAttempts; index += 1) {

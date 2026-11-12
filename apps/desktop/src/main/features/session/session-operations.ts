@@ -1,3 +1,4 @@
+import { getWorkspacesDir } from "@vykor/host-config/paths"
 import { stat } from "node:fs/promises"
 
 import {
@@ -229,7 +230,7 @@ export class SessionOperations {
     if (!projectId && location === "worktree") throw new Error("独立工作目录需要一个 Git 项目。")
     let cwd = projectId
       ? resolveRequiredPath(input.cwd)
-      : await allocateOutsideProjectWorkspace(app.getPath("documents"))
+      : await allocateOutsideProjectWorkspace(getWorkspacesDir())
     const settingsRoot = cwd
     const gitSettingsService = projectId && location === "worktree"
       ? (await import("../settings/git-settings-service")).gitSettingsService : null

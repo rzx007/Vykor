@@ -10,6 +10,7 @@
 | [data-root-selection.ts](./data-root-selection.ts) | 纯根选择、固定定位记录、启动保护、稳定锁与进程内固定选择 |
 | [private-file-permissions.ts](./private-file-permissions.ts) | 新定位文件与锁的私有权限；保留既有 home 权限 |
 | [git.ts](./git.ts) | `GitRepositoryInfo`、`resolveGitRepository` |
+| [managed-path-map.ts](./managed-path-map.ts) | 读取迁移映射，仅识别旧受管工作区与隐藏迁移暂存/保留项目 |
 | [paths.ts](./paths.ts) | `UserDataPaths`、`ResolvedPaths`、`resolveUserDataPaths`、`resolvePaths`、`getDataRoot` 及命名路径 getter |
 
 ## 入口与处理步骤
@@ -20,7 +21,7 @@
 
 `initializeDataRoot()` 必须在导入会创建持久化 store 的业务模块前完成：锁内按显式参数、`VYKOR_CONFIG_DIR`、`~/.vykor-root.json`、默认 `~/.vykor` 的顺序选择，拒绝损坏定位、待恢复迁移、已迁出源根与找不到的已选数据库。它将所选根固定到当前进程，并把同一根传给子进程；普通默认启动不写定位记录、不创建用户根。`getInitializedDataRootSelection()` 返回原始来源，预检不能把内部写入的环境值误判为用户固定覆盖。`getDataRoot()` 在产品初始化后一直返回固定根，切根必须重启；未初始化的嵌入调用按只读选择解析。`getConfigDir()` 只委托它。`resolvePaths(projectRoot?)` 在用户路径之外添加兼容的 `configDir` 和项目 `.vykor/memory` 路径；不缓存带项目路径的结果，因此 cwd 改变后不会串用上一个项目的记忆目录。`getProjectMemoryDir()` 是另一种现有用途：按项目路径生成稳定标识，将长期记忆存到用户 `data/memory/` 下。
 
-为后续迁移保护接入保留兼容行为：`resolvePaths()` 暂时仍接受 `VYKOR_DATA_DIR`，旧 `resolveChannelWorkspaceRoot()` / `getChannelWorkspaceRoot()` 暂时仍使用原渠道规则。新纯函数不接受这些旧覆盖；新 `getChannelsDir()` 使用用户根内的规范位置。`inspectLegacyDirectoryOverrides(dataRoot, env)` 纯检查旧 `VYKOR_DATA_DIR`、`VYKOR_CHANNELS_DIR`、`VYKOR_IMAGE_ATTACHMENT_CACHE_DIR`，返回来源、原值与规范目标；相同目标可接受。普通 CLI/Desktop 在初始化之后、导入业务模块之前调用 `assertNoLegacyDirectoryOverrides` 拒绝冲突，显式嵌入文件路径仍由调用方负责。实际数据搬迁与旧渠道、选库和后台路径替换由后续模块完成，不能据此宣称已完成数据搬迁。
+为后续迁移保护接入保留兼容行为：`resolvePaths()` 暂时仍接受 `VYKOR_DATA_DIR`，`resolveChannelWorkspaceRoot()` 保留显式嵌入兼容规则；`getChannelWorkspaceRoot()` 直接返回规范 `getChannelsDir()`，不读取旧渠道覆盖。新纯函数不接受这些旧覆盖；新 `getChannelsDir()` 使用用户根内的规范位置。`inspectLegacyDirectoryOverrides(dataRoot, env)` 纯检查旧 `VYKOR_DATA_DIR`、`VYKOR_CHANNELS_DIR`、`VYKOR_IMAGE_ATTACHMENT_CACHE_DIR`，返回来源、原值与规范目标；相同目标可接受。普通 CLI/Desktop 在初始化之后、导入业务模块之前调用 `assertNoLegacyDirectoryOverrides` 拒绝冲突，显式嵌入文件路径仍由调用方负责。实际数据搬迁与旧渠道、选库和后台路径替换由后续模块完成，不能据此宣称已完成数据搬迁。
 
 [atomic-json-write.ts](./atomic-json-write.ts) 负责准备临时文件并按现有替换规则保存。
 
@@ -43,3 +44,5 @@
 定位候选文件和锁先收敛权限再写内容：POSIX 新文件为 0600；Windows 设置并核验受保护 ACL，只允许当前用户与 SYSTEM，失败不发布候选文件。既有 home 的模式和 ACL 不修改。Windows 权限工具只在临时隔离 profile 下运行，避免 PowerShell 初始化目录污染调用者 home。
 
 `parseDataRootArgument` 仅识别第一个参数位置的 `--data-root <路径>` 或 `--data-root=<路径>`，后面的参数原样交给宿主选项解析，防止把其他选项的文本值误当作根。
+
+`readManagedPathMap(dataRoot?)` 从规范 `data/migrations/path-map.json` 读取 `{version:1,moves:[{kind,from,to}],excludedRoots?:string[]}`；不存在时返回空映射，损坏时抛错。`ManagedPathMove.kind` 为 `user-root | runtime-data | workspace | channel | worktree`。`getManagedWorkspaceRoots(dataRoot?)`、`isManagedWorkspacePath(path,dataRoot?)` 只识别规范 workspaces/channels 与明确 workspace/channel 映射的 from/to，不把 user-root、runtime-data 或 worktree 当项目外聊天。`isHiddenManagedProjectPath(path,dataRoot?)` 另外识别 excludedRoots，用于隐藏暂存/保留项目。以上识别接口不授予文件访问权限；历史链接须由打开入口重定位到目标，再检查原有访问边界。

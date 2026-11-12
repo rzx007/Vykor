@@ -20,4 +20,6 @@
 
 `session-service.ts` 的 `checkPromptAccepted` 只读取 daemon 的会话输入记录，返回指定输入 ID 是否已被接收；不打开订阅、不创建或重跑任务。renderer 在失败重试前调用对应 IPC，读取失败不能被解释为“未接收”。
 
-`bootstrap()` 把进程已固定的用户根交给工作区文件访问列表；工作区服务没有显式 `allowedRoots` 时也使用同一个根，避免启动后的环境变量变化把受保护配置当成普通外部文件。这里不改变项目外工作区或 worktree 的实际目录分配。
+`bootstrap()` 把进程已固定的用户根交给工作区文件访问列表；工作区服务没有显式 `allowedRoots` 时也使用同一个根，避免启动后的环境变量变化把受保护配置当成普通外部文件。`outside-project-workspace.ts` 直接接收 `workspacesDir`，以用户本地日期和独占 mkdir 分配 `workspaces/YYYY-MM-DD/xN`，失败只清理这次分配且仍为空的目录。bootstrap 返回同一个 workspaces 根，并隐藏规范 workspaces/channels、显式历史受管映射、已知渠道会话 cwd 和映射中的暂存/保留根。会话分类使用同一历史映射，不再永久识别 Documents/Vykor。
+
+`__test__/managed-data-root.test.ts` 在隔离用户根中贯通聊天、渠道 cwd、定时任务和真实 Git worktree 分配，检查五个目录都归属该根、真实外部项目 cwd 未改变、bootstrap 隐藏和文件允许根未扩大。

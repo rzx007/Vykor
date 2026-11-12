@@ -24,3 +24,5 @@ NodeChildManager 保留当前调用轮的工具授权，并在 startChain 真正
 子实例的模型提交和宿主 `jobs.send` 共用同一个继承视图生成过程：从原有创建闭包中的授权范围开始，把内置工具的执行入口换成本会话入口，仍保留原工具定义身份和允许范围。默认宿主跟进因此能继续实际后代；显式传入的授权原样送去核对。宿主检查接口列出的本机完整目录不代表子运行获准使用的全部工具。
 
 每轮模型准备会复查当前宿主目录与授权；冷恢复也重新校验。daemon 沿现有模型元数据接线注入 validateModelSelection，SDK 无目录并提供自有 client 时保留自定义模型能力。配置在 Node 解析，身份、许可与安全卸载仍由 Kernel 原管理器负责。
+
+`createChildAgentWorktreeManager({cwd,configDir?})` 的 configDir 指用户数据根，默认使用进程已选择的 dataRoot；内部追加 `worktrees/<仓库标识>/<slug>`。不要传已经带 worktrees 的根，以免重复嵌套。显式嵌入 configDir 保留原语义；项目内工具管理自己的项目级 worktree 不经过这里。

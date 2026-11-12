@@ -28,3 +28,5 @@
 接入引导、消息归属与会话桥接放在这里；连接建立和关闭放在 daemon。
 
 测试放在本分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移文件时同步导入、公开入口、文档链接与旧引用清单。
+
+普通 `createDaemonChannelRuntime` 直接使用所选数据根的 `channels/`，不从 Documents、outsideProjectWorkspaceRoot 或旧渠道环境变量推导。嵌入调用仍可向 `ChannelRuntimeService` 显式注入独立 workspaceRoot；实际渠道目录按 connector 和聊天标识在该根下创建。

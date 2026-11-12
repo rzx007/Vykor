@@ -18,7 +18,7 @@ it("uses the fixed data root for personal file access and preserves explicitly s
     await expect(workspaceService.readFile({ rootPath: project, path: join(root, "private.txt") })).rejects.toThrow("不支持预览");
     expect((await workspaceService.readFile({ rootPath: project, path: join(root, "USER.md") })).content).toBe("Selected profile");
     const explicit = join(base, "embedded"); await mkdir(explicit); await writeFile(join(explicit, "USER.md"), "Embedded profile");
-    workspaceService.configureAllowedRoots({ configDir: explicit, documentsPath: "" });
+    workspaceService.configureAllowedRoots({ configDir: explicit, workspacesDir: "" });
     expect((await workspaceService.readFile({ rootPath: project, path: join(explicit, "USER.md") })).content).toBe("Embedded profile");
   } finally { vi.unstubAllEnvs(); await rm(base, { recursive: true, force: true }); }
 });

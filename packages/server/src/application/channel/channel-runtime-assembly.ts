@@ -1,7 +1,5 @@
-import { homedir } from "node:os";
-
 import type { ChannelConfigStore } from "@vykor/auth";
-import { resolveChannelWorkspaceRoot, type Settings } from "@vykor/host-config";
+import { getChannelsDir, type Settings } from "@vykor/host-config";
 
 import { ChannelRuntimeService } from "../../daemon/channel-runtime-service.js";
 import type { ObservabilityEvent } from "../../shared/observability.js";
@@ -25,11 +23,7 @@ export function createDaemonChannelRuntime(input: {
     },
     config: { getFeishu: () => channelConfig.getFeishu() },
     getSettings: () => input.getSettings?.() ?? input.settings,
-    workspaceRoot: resolveChannelWorkspaceRoot({
-      envDir: process.env.VYKOR_CHANNELS_DIR,
-      outsideProjectWorkspaceRoot: input.outsideProjectWorkspaceRoot,
-      homedir: homedir(),
-    }),
+    workspaceRoot: getChannelsDir(),
     logger: input.log,
   });
   const onboarding = new ChannelOnboardingService({

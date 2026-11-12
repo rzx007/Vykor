@@ -1,3 +1,4 @@
+import { getDataRoot } from "@vykor/host-config/paths"
 import { execFile } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import {
@@ -14,7 +15,7 @@ import {
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { homedir } from "node:os"
 import { promisify } from "node:util"
-import { app, dialog } from "electron"
+import { dialog } from "electron"
 import { createDesktopGitWorktree } from "@vykor/server"
 import type {
   GitDetection,
@@ -527,7 +528,10 @@ export class GitSettingsService {
     if (!project || (await realpath(project.path)) !== (await realpath(projectPath)))
       throw new Error("独立目录必须对应选定项目。")
     const branch = await this.uniqueBranch(projectPath, slug, environment)
-    const configDir = preferences.worktreeRoot ?? app.getPath("userData")
+    // The manager appends worktrees/<repository-id>; configDir is the data root.
+    const configDir = getDataRoot()
+    if (preferences.worktreeRoot && !(isInsideGitDirectory(configDir, preferences.worktreeRoot) && isInsideGitDirectory(preferences.worktreeRoot, configDir)))
+      throw new Error(`旧独立目录根 ${preferences.worktreeRoot} 不属于当前用户数据根 ${configDir}。请先迁移该目录并清除旧 worktreeRoot 设置。`)
     const baseCommit = (await git(["rev-parse", "HEAD"], projectPath, environment)).trim()
     const created = await createDesktopGitWorktree({
       cwd: projectPath,

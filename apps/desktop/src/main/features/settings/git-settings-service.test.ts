@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process"
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
-import { join } from "node:path"
+import { join, relative } from "node:path"
 import { tmpdir } from "node:os"
 import { promisify } from "node:util"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
@@ -169,7 +169,19 @@ describe("Git settings", () => {
     }
   })
   it("protects dirty worktrees, unmerged commits and active sessions", async () => {
+    const settings = readGitSettingsAt(host.userData)
+    writeGitSettingsAt(host.userData, {
+      ...settings,
+      preferences: {
+        ...settings.preferences,
+        worktreeRoot: join(process.env.VYKOR_CONFIG_DIR!, "."),
+      },
+    })
     const record = await service.createTaskWorktree("project", host.projectPath)
+    expect(record.configDir).toBe(process.env.VYKOR_CONFIG_DIR)
+    expect(relative(process.env.VYKOR_CONFIG_DIR!, record.path).replace(/\\/g, "/")).toMatch(
+      /^worktrees\/[^/]+\/task-/
+    )
     expect(record.branch).toMatch(/^test\/task-/)
     service.bindTaskWorktree(record.id, "session")
     await writeFile(join(record.path, "file.txt"), "changed\n")
@@ -246,6 +258,20 @@ describe("Git settings", () => {
       (await command("git", ["show-ref", `refs/heads/${record.branch}`], { cwd: host.projectPath }))
         .stdout
     ).toBeTruthy()
+  })
+  it("rejects an old external worktreeRoot before allocating another task directory", async () => {
+    const current = readGitSettingsAt(host.userData)
+    writeGitSettingsAt(host.userData, {
+      ...current,
+      preferences: { ...current.preferences, worktreeRoot: join(base, "old-worktrees") },
+    })
+    try {
+      await expect(service.createTaskWorktree("project", host.projectPath)).rejects.toThrow(
+        /old-worktrees.*迁移/
+      )
+    } finally {
+      writeGitSettingsAt(host.userData, current)
+    }
   })
   it("rejects malformed saved formats instead of guessing a migration", () => {
     writeGitSettingsAt(host.userData, {

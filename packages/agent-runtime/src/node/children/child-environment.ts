@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
 
-import { getConfigDir, resolveGitRepository } from "@vykor/host-config";
+import { getDataRoot, resolveGitRepository } from "@vykor/host-config";
 
 import {
   type AgentChildResult,
@@ -116,7 +116,7 @@ export function createChildAgentWorktreeManager(input: {
     repoRoot,
     baseDir: computeChildAgentWorktreeBaseDir(
       repoRoot,
-      input.configDir ?? getConfigDir(),
+      input.configDir ?? getDataRoot(),
     ),
     branchPrefix: input.branchPrefix ?? "worktree-",
   });

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { open, readdir, readFile, realpath, rename, stat, unlink } from "node:fs/promises"
-import { getDataRoot } from "@vykor/host-config/paths"
+import { getDataRoot, resolveUserDataPaths } from "@vykor/host-config/paths"
 import {
   basename,
   dirname,
@@ -34,7 +34,6 @@ import {
 } from "../../../shared/safe-image-preview"
 import { evaluateInspectedImagePreview } from "../image-preview/inspect-safe-image-layout"
 
-import { buildOutsideProjectRoot } from "../session/outside-project-workspace"
 import {
   classifyWorkspacePath,
   isPathInside,
@@ -60,10 +59,10 @@ export const maxImagePreviewBytes = 50 * 1024 * 1024
 const textDecoder = new TextDecoder("utf-8", { fatal: false })
 
 class WorkspaceService {
-  private allowedRoots: { configDir: string; documentsPath: string } | null = null
+  private allowedRoots: { configDir: string; workspacesDir: string } | null = null
   private savingPaths = new Set<string>()
 
-  configureAllowedRoots(input: { configDir: string; documentsPath: string }): void {
+  configureAllowedRoots(input: { configDir: string; workspacesDir: string }): void {
     this.allowedRoots = input
   }
 
@@ -400,13 +399,14 @@ class WorkspaceService {
   private rootsFor(projectRoot: string): WorkspaceAllowedRoots {
     const configDir =
       this.allowedRoots?.configDir ?? getDataRoot()
-    const documentsPath = this.allowedRoots?.documentsPath ?? ""
+    const paths = resolveUserDataPaths(configDir)
     return {
       projectRoot,
       configDir,
       skillsDir: join(configDir, "skills"),
       userProfilePath: join(configDir, "USER.md"),
-      outsideProjectRoot: documentsPath ? buildOutsideProjectRoot(documentsPath) : "",
+      outsideProjectRoot: this.allowedRoots?.workspacesDir ?? paths.workspacesDir,
+      managedWorkspaceRoots: [paths.workspacesDir, paths.channelsDir],
     }
   }
 }

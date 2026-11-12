@@ -1,4 +1,4 @@
-import { getDataRoot } from "@vykor/host-config/paths"
+import { getDataRoot, getWorkspacesDir } from "@vykor/host-config/paths"
 import { spawn } from "node:child_process"
 import { join } from "node:path"
 import { app } from "electron"
@@ -10,7 +10,6 @@ import {
   setHostResponseLocale,
   shouldStartManagedDaemon,
 } from "@vykor/server/daemon-host"
-import { buildOutsideProjectRoot } from "../session/outside-project-workspace"
 
 export type DesktopDaemonMode = "service" | "watchdog" | "on-demand"
 
@@ -41,6 +40,6 @@ export async function runDesktopDaemonEntry(mode: DesktopDaemonMode): Promise<vo
       ? { shouldStart: isWindowsDaemonServiceEnabled }
       : {}),
     legacyDataLocationPath: join(app.getPath("userData"), "runtime-data-location.json"),
-    outsideProjectWorkspaceRoot: buildOutsideProjectRoot(app.getPath("documents")),
+    outsideProjectWorkspaceRoot: getWorkspacesDir(),
   })
 }
