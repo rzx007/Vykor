@@ -11,7 +11,7 @@ import {
 } from "node:path";
 import { getSkillsDir } from "@vykor/host-config";
 import {
-  BUNDLED_SKILLS,
+  createBundledSkills,
   SkillLoader,
   SkillRegistry,
   standardUserSkillDirs,
@@ -57,7 +57,7 @@ export class SkillManagementService implements SkillService {
       ? join(this.configDir, "skills")
       : resolve(defaultSkillsDir);
     this.standardSkillsDirs = options.standardSkillsDirs ?? standardUserSkillDirs();
-    this.bundledSkills = options.bundledSkills ?? BUNDLED_SKILLS;
+    this.bundledSkills = options.bundledSkills ?? createBundledSkills(this.personalSkillsDir);
   }
 
   async list(): Promise<SkillSnapshot> {

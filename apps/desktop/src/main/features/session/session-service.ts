@@ -7,8 +7,7 @@
  * 3. SessionOperations：会话生命周期、Prompt、Permission、Goal 与项目操作
  */
 import { app, BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from "electron"
-import { homedir } from "node:os"
-import { join } from "node:path"
+import { getDataRoot } from "@vykor/host-config/paths"
 
 import type { VykorClient } from "@vykor/application-client"
 import type {
@@ -210,7 +209,7 @@ export class DesktopSessionService {
 
   async bootstrap(): Promise<DesktopBootstrapData> {
     workspaceService.configureAllowedRoots({
-      configDir: process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor"),
+      configDir: getDataRoot(),
       documentsPath: app.getPath("documents"),
     })
     const client = await this.getClient()

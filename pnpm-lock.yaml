@@ -616,6 +616,9 @@ importers:
 
   apps/frontend:
     dependencies:
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../../packages/host-config
       '@opentui/core':
         specifier: 'catalog:'
         version: 0.4.5(typescript@5.9.3)(web-tree-sitter@0.25.10)
@@ -1079,6 +1082,10 @@ importers:
         version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.17)(jiti@2.7.0)(jsdom@30.0.1(@noble/hashes@2.3.0))(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.9.0)
 
   packages/output-styles:
+    dependencies:
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -1111,6 +1118,9 @@ importers:
 
   packages/personalization:
     dependencies:
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
       '@vykor/memory':
         specifier: workspace:*
         version: link:../memory
@@ -1460,6 +1470,9 @@ importers:
 
   packages/skills:
     dependencies:
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../host-config
       yaml:
         specifier: 'catalog:'
         version: 2.9.0

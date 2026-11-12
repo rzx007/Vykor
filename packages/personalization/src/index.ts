@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
-import { homedir } from "node:os";
+import { getLocalRulesDir as getUserLocalRulesDir } from "@vykor/host-config/paths";
 import { isIP } from "node:net";
 import { detectCredentialValue } from "@vykor/memory";
 
@@ -9,7 +9,7 @@ import { detectCredentialValue } from "@vykor/memory";
  * Personalization：从会话历史抽取环境事实（移植自 Python personalization/）。
  *
  * 10 个正则识别 SSH/IP/数据路径/conda/Python 版本/API 端点/env 变量/git 远端/
- * Ray 集群/cron；按项目和 key 去重合并后持久化到 `~/.vykor/local_rules/projects/`
+ * Ray 集群/cron；按项目和 key 去重合并后持久化到 `<dataRoot>/local_rules/projects/`
  * （facts.json + 重新生成的 rules.md）。rules.md 由 prompts 包注入 system prompt。
  */
 
@@ -171,11 +171,10 @@ export function factsToRulesMarkdown(facts: ExtractedFact[]): string {
 // ---------------------------------------------------------------------------
 
 export function getLocalRulesDir(cwd: string): string {
-  // 与 core/paths、auth 同约定：VYKOR_CONFIG_DIR 可重定向（测试隔离/Electron 预留）。
-  const base = process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor");
+  const base = getUserLocalRulesDir();
   const project = resolve(cwd);
   const digest = createHash("sha1").update(project).digest("hex").slice(0, 12);
-  return join(base, "local_rules", "projects", `${basename(project)}-${digest}`);
+  return join(base, `${basename(project)}-${digest}`);
 }
 
 const rulesFile = (cwd: string): string => join(getLocalRulesDir(cwd), "rules.md");

@@ -7,7 +7,7 @@
 - [credentials/](credentials/README.md)：API Key 文件、外部 Codex 文件和解析顺序。
 - [mcp/](mcp/README.md)：MCP 授权记录持久化。
 - [channels/](channels/README.md)：飞书渠道配置持久化。
-- [__test__/](__test__/)：公开内存认证流程测试。
+- [__test__/](__test__/)：公开内存认证流程和跨存储关闭边界测试。
 
 `AuthManager.registerProvider` 注册认证流程，`authenticate` 调用相应流程并把结果保存在实例的 Map，`getCredentials` 取回结果。`ApiKeyFlow` 返回构造时提供的 Key；`DeviceCodeFlow` 申请设备码、提示访问授权网址、轮询令牌，并提供显式的 refresh 方法。
 

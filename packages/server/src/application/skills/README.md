@@ -21,3 +21,5 @@
 技能管理规则与应用接口放在这里；运行时技能发现放在 session/configuration。
 
 测试放在本分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移文件时同步导入、公开入口、文档链接与旧引用清单。
+
+内置 CreateSkill 的个人写入目录通过 `createBundledSkills(this.personalSkillsDir)` 注入；默认使用已选择的数据根，显式 `configDir` 也用于生成说明，不回退到旧 home。用户与插件正文不经过该模板替换。

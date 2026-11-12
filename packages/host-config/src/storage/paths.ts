@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { basename, join, resolve } from "node:path";
+import { basename, isAbsolute, join, normalize, resolve } from "node:path";
 import { homedir } from "node:os";
-import { currentDataRoot } from "./data-root-selection.js";
+import { currentDataRoot, type RootEnvironment } from "./data-root-selection.js";
 export * from "./data-root-selection.js";
 
 /** Project-level config directory name, matching the user-level `~/.vykor`. */
@@ -433,4 +433,31 @@ export function getMigrationsDir(): string {
 
 export function getPathMapFilePath(): string {
   return resolvePaths().pathMapFilePath;
+}
+
+export interface LegacyDirectoryOverride {
+  source: string;
+  value: string;
+  expected: string;
+}
+
+/** Pure migration-source inspection. Explicit embedded store paths are unrelated. */
+export function inspectLegacyDirectoryOverrides(dataRoot: string, env: RootEnvironment): LegacyDirectoryOverride[] {
+  const paths = resolveUserDataPaths(dataRoot);
+  const sources = {
+    VYKOR_DATA_DIR: paths.dataDir,
+    VYKOR_CHANNELS_DIR: paths.channelsDir,
+    VYKOR_IMAGE_ATTACHMENT_CACHE_DIR: paths.imageAttachmentCacheDir,
+  };
+  const key = (path: string) => process.platform === "win32" ? normalize(path).toLowerCase() : normalize(path);
+  return Object.entries(sources).flatMap(([source, expected]) => {
+    const value = env[source];
+    return value !== undefined && (!isAbsolute(value) || key(value) !== key(expected)) ? [{ source, value, expected }] : [];
+  });
+}
+
+/** Product entry points call this before loading any business stores. */
+export function assertNoLegacyDirectoryOverrides(dataRoot: string, env: RootEnvironment = process.env): void {
+  const conflicts = inspectLegacyDirectoryOverrides(dataRoot, env);
+  if (conflicts.length) throw new Error(`User data directory overrides conflict with data root ${dataRoot}:\n${conflicts.map(item => `${item.source}=${JSON.stringify(item.value)}; expected ${item.expected}`).join("\n")}\nInspect these migration sources and consolidate them before starting.`);
 }

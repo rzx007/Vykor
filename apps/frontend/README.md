@@ -20,7 +20,7 @@
 | `src/jobs/` | 后台任务列表及详情 |
 | `src/keymap/` | 键盘映射 |
 | `src/theme/` | 终端主题 |
-| `src/services/`、`src/utils/`、`src/types/` | 界面服务、辅助函数和界面类型 |
+| [src/services/](src/services/README.md)、`src/utils/`、`src/types/` | 界面服务、辅助函数和界面类型 |
 
 新增功能沿用对应页面或交互目录；测试按[仓库约定](../../AGENTS.md)放在被测模块所属的 `__test__/`，不为历史结构增加转发文件。
 

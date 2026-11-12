@@ -1,3 +1,4 @@
+import { StoreLifecycle } from "../credentials/store-lifecycle.js";
 import { randomUUID } from "node:crypto";
 import { chmod, mkdir, open, readFile, rename, rm, stat } from "node:fs/promises";
 import { dirname } from "node:path";
@@ -88,6 +89,10 @@ function normalizeFeishu(value: unknown, filePath: string): FeishuChannelConfig 
 }
 
 export class ChannelConfigStore {
+  private readonly lifecycle = new StoreLifecycle();
+
+  close(): Promise<void> { return this.lifecycle.close(); }
+
   constructor(
     private readonly filePath = getChannelCredentialsFilePath(),
     private readonly clock = () => Date.now(),
@@ -174,7 +179,11 @@ export class ChannelConfigStore {
     }
   }
 
-  private async withLock<T>(operation: () => Promise<T>): Promise<T> {
+  private withLock<T>(operation: () => Promise<T>): Promise<T> {
+    return this.lifecycle.run(() => this.withFileLock(operation));
+  }
+
+  private async withFileLock<T>(operation: () => Promise<T>): Promise<T> {
     const lockPath = `${this.filePath}.lock`;
     await mkdir(dirname(this.filePath), { recursive: true });
     const startedAt = this.clock();

@@ -1,3 +1,4 @@
+import { StoreLifecycle } from "../credentials/store-lifecycle.js";
 import { randomUUID } from "node:crypto";
 import {
   chmod,
@@ -43,17 +44,21 @@ interface NormalizedStore {
  * input record unchanged is a no-op: no write and no revision bump.
  */
 export class McpOAuthCredentialStore {
+  private readonly lifecycle = new StoreLifecycle();
+
+  close(): Promise<void> { return this.lifecycle.close(); }
+
   constructor(
     private readonly filePath = getMcpOAuthFilePath(),
     private readonly clock = () => Date.now(),
   ) {}
 
   async get(name: string): Promise<McpOAuthCredentialRecord | undefined> {
-    return (await this.read()).servers[name];
+    return this.lifecycle.run(async () => (await this.read()).servers[name]);
   }
 
   async list(): Promise<Record<string, McpOAuthCredentialRecord>> {
-    return { ...(await this.read()).servers };
+    return this.lifecycle.run(async () => ({ ...(await this.read()).servers }));
   }
 
   async set(name: string, value: McpOAuthCredentialRecord): Promise<void> {
@@ -169,7 +174,11 @@ export class McpOAuthCredentialStore {
     }
   }
 
-  private async withLock<T>(operation: () => Promise<T>): Promise<T> {
+  private withLock<T>(operation: () => Promise<T>): Promise<T> {
+    return this.lifecycle.run(() => this.withFileLock(operation));
+  }
+
+  private async withFileLock<T>(operation: () => Promise<T>): Promise<T> {
     const lockPath = `${this.filePath}.lock`;
     await storageIo(() => mkdir(dirname(this.filePath), { recursive: true }));
     const startedAt = this.clock();

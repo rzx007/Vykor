@@ -142,3 +142,5 @@ vk config set daemon.autoStart true
 本地从源码开发请看仓库根目录 `README.md`。
 
 已登记的本机后台可由 CLI 或 Desktop 启动。CLI 会验证协议和 token 后复用兼容实例。默认按需启动和常驻服务使用同一个后台实现，详细流程见 [daemon 系统常驻](../../docs/daemon-system-service.md)。
+
+普通启动在导入业务模块前检查旧独立目录覆盖：`VYKOR_DATA_DIR`、`VYKOR_CHANNELS_DIR` 和 `VYKOR_IMAGE_ATTACHMENT_CACHE_DIR` 指向规范目标时可接受，冲突时列出来源、原值与目标后停止。聊天图片写入所选用户根的 `data/attachments/images/`；旧独立图片目录只作为迁移来源，不再静默覆盖目标。

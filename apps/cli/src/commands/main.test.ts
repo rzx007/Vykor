@@ -199,9 +199,9 @@ describe("buildSlashCommandList with skills", () => {
 describe("buildUserContentWithAttachments", () => {
   it("builds multimodal user content from image attachments", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-attachment-"));
-    const previousCacheDir = process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR;
+    const previousCacheDir = process.env.VYKOR_CONFIG_DIR;
     try {
-      process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR = join(dir, "cache");
+      process.env.VYKOR_CONFIG_DIR = join(dir, "root");
       const imagePath = join(dir, "shot.png");
       await writeFile(imagePath, Buffer.from([1, 2, 3, 4]));
 
@@ -220,9 +220,9 @@ describe("buildUserContentWithAttachments", () => {
       expect(await readFile(blocks[1].source.path)).toEqual(Buffer.from([1, 2, 3, 4]));
     } finally {
       if (previousCacheDir === undefined) {
-        delete process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR;
+        delete process.env.VYKOR_CONFIG_DIR;
       } else {
-        process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR = previousCacheDir;
+        process.env.VYKOR_CONFIG_DIR = previousCacheDir;
       }
       await rm(dir, { recursive: true, force: true });
     }
@@ -244,10 +244,10 @@ describe("buildUserContentWithAttachments", () => {
 
   it("accepts source images above 5 MB so the provider can prepare them", async () => {
     const dir = await mkdtemp(join(tmpdir(), "oh-attachment-"));
-    const previousCacheDir = process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR;
+    const previousCacheDir = process.env.VYKOR_CONFIG_DIR;
     const previousLimit = process.env.VYKOR_MAX_IMAGE_BYTES;
     try {
-      process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR = join(dir, "cache");
+      process.env.VYKOR_CONFIG_DIR = join(dir, "root");
       delete process.env.VYKOR_MAX_IMAGE_BYTES;
       const imagePath = join(dir, "large.png");
       await writeFile(imagePath, Buffer.alloc(5_000_001));
@@ -263,8 +263,8 @@ describe("buildUserContentWithAttachments", () => {
       });
       expect(content[1].source.prepared).toBeUndefined();
     } finally {
-      if (previousCacheDir === undefined) delete process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR;
-      else process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR = previousCacheDir;
+      if (previousCacheDir === undefined) delete process.env.VYKOR_CONFIG_DIR;
+      else process.env.VYKOR_CONFIG_DIR = previousCacheDir;
       if (previousLimit === undefined) delete process.env.VYKOR_MAX_IMAGE_BYTES;
       else process.env.VYKOR_MAX_IMAGE_BYTES = previousLimit;
       await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 20 });

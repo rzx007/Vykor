@@ -16,7 +16,8 @@
     "@opentui/core": "catalog:",
     "@opentui/react": "catalog:",
     "diff": "catalog:",
-    "react": "catalog:"
+    "react": "catalog:",
+    "@vykor/host-config": "workspace:*"
   },
   "devDependencies": {
     "@vykor/server": "workspace:*",

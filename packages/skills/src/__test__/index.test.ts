@@ -421,7 +421,7 @@ describe("BUNDLED_SKILLS", () => {
     const skill = BUNDLED_SKILLS.find((s) => s.name === "create-skill");
     expect(skill).toBeDefined();
     expect(skill!.description.toLowerCase()).toMatch(/install|create|write/);
-    expect(skill!.content).toContain("~/.vykor/skills/");
+    expect(skill!.content).toContain("<user-skills-dir>/");
     expect(skill!.content).toContain(".vykor/skills/");
   });
 
@@ -448,7 +448,7 @@ describe("SkillRegistry.registerBundled + source priority", () => {
       expect.arrayContaining([
         expect.objectContaining({
           name: "create-skill",
-          description: expect.stringMatching(/~\/\.vykor\/skills/),
+          description: expect.stringMatching(/[\\/]skills/),
         }),
       ]),
     );

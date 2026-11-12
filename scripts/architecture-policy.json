@@ -301,7 +301,9 @@
     },
     "@vykor/skills": {
       "directory": "packages/skills",
-      "allowed": [],
+      "allowed": [
+        "@vykor/host-config"
+      ],
       "removeByPhase": "P6",
       "migrationId": "M30"
     },
@@ -314,7 +316,8 @@
     "@vykor/personalization": {
       "directory": "packages/personalization",
       "allowed": [
-        "@vykor/memory"
+        "@vykor/memory",
+        "@vykor/host-config"
       ],
       "removeByPhase": "P6",
       "migrationId": "M30"
@@ -333,7 +336,9 @@
     },
     "@vykor/output-styles": {
       "directory": "packages/output-styles",
-      "allowed": [],
+      "allowed": [
+        "@vykor/host-config"
+      ],
       "removeByPhase": "P6",
       "migrationId": "M30"
     },
@@ -986,6 +991,25 @@
         "^@vykor/host-config(?:/|$)"
       ],
       "removeByPhase": "P13",
+      "migrationId": "M30"
+    },
+    {
+      "id": "user-data-path-leaves",
+      "fromPaths": [
+        "packages/skills/src/",
+        "packages/personalization/src/",
+        "packages/output-styles/src/",
+        "apps/frontend/src/services/"
+      ],
+      "targetPackages": [
+        "@vykor/host-config"
+      ],
+      "allowTargetPaths": [
+        "packages/host-config/src/storage/paths.ts",
+        "packages/host-config/src/storage/data-root-selection.ts",
+        "packages/host-config/src/storage/private-file-permissions.ts"
+      ],
+      "removeByPhase": "P6",
       "migrationId": "M30"
     }
   ],

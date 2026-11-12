@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { open, readdir, readFile, realpath, rename, stat, unlink } from "node:fs/promises"
-import { homedir } from "node:os"
+import { getDataRoot } from "@vykor/host-config/paths"
 import {
   basename,
   dirname,
@@ -399,7 +399,7 @@ class WorkspaceService {
 
   private rootsFor(projectRoot: string): WorkspaceAllowedRoots {
     const configDir =
-      this.allowedRoots?.configDir ?? process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor")
+      this.allowedRoots?.configDir ?? getDataRoot()
     const documentsPath = this.allowedRoots?.documentsPath ?? ""
     return {
       projectRoot,

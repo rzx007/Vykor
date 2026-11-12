@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { homedir } from "node:os";
+import { dirname } from "node:path";
+import { getFrecencyFilePath } from "@vykor/host-config/paths";
 
 const HALF_LIFE_MS = 14 * 24 * 60 * 60 * 1000;
 
@@ -13,16 +13,13 @@ let store: FrecencyStore | null = null;
 let dirty = false;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-function configPath(): string {
-  const dir = process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor");
-  mkdirSync(dir, { recursive: true });
-  return join(dir, "frecency.json");
-}
+let storePath: string | null = null;
 
 function load(): FrecencyStore {
   if (store !== null) return store;
+  storePath = getFrecencyFilePath();
   try {
-    const raw = readFileSync(configPath(), "utf-8");
+    const raw = readFileSync(storePath, "utf-8");
     store = JSON.parse(raw) as FrecencyStore;
     if (!store.command) store.command = {};
     if (!store.file) store.file = {};
@@ -34,14 +31,24 @@ function load(): FrecencyStore {
 
 function scheduleSave(): void {
   if (debounceTimer !== null) clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    if (store && dirty) {
-      try {
-        writeFileSync(configPath(), JSON.stringify(store));
-      } catch { /* silent */ }
-      dirty = false;
-    }
-  }, 500);
+  debounceTimer = setTimeout(() => { try { flushFrecency(); } catch { /* Keep dirty data for explicit retry. */ } }, 500);
+}
+
+/** Flush the path captured on load; a changed environment cannot redirect a pending save. */
+export function flushFrecency(): void {
+  if (debounceTimer !== null) clearTimeout(debounceTimer);
+  debounceTimer = null;
+  if (!store || !dirty || !storePath) return;
+  mkdirSync(dirname(storePath), { recursive: true });
+  writeFileSync(storePath, JSON.stringify(store));
+  dirty = false;
+}
+
+/** Call before disposal/root migration; a failed flush keeps the cache available for retry. */
+export function closeFrecency(): void {
+  flushFrecency();
+  store = null;
+  storePath = null;
 }
 
 export function computeScore(timestamps: number[]): number {
