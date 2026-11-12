@@ -59,7 +59,12 @@ function absolutePath(value: unknown): value is string {
 }
 
 function isWithin(path: string, root: string): boolean {
-  const flavor = /^[A-Za-z]:[\\/]|^\\\\/.test(root) ? win32 : posix;
+  if (isWindowsPath(path) !== isWindowsPath(root)) return false;
+  const flavor = isWindowsPath(root) ? win32 : posix;
   const relative = flavor.relative(flavor.resolve(root), flavor.resolve(path));
   return relative === "" || (relative !== ".." && !relative.startsWith(`..${flavor.sep}`) && !flavor.isAbsolute(relative));
+}
+
+function isWindowsPath(path: string): boolean {
+  return /^(?:[A-Za-z]:[\\/]|\\\\|\/\/)/.test(path);
 }

@@ -23,3 +23,40 @@ it("recognizes mapped workspace/channel paths and exclusions, and rejects malfor
     expect(() => paths.getManagedWorkspaceRoots(root)).toThrow(/path-map/);
   }
 });
+
+it.each([
+  ["C:/Users/tester/Documents/Vykor", "/Users/tester/Documents/Vykor/project", false],
+  ["/Users/tester/Documents/Vykor", "C:/Users/tester/Documents/Vykor/project", false],
+  ["C:/Users/tester/Documents/Vykor", "c:\\users\\tester\\documents\\vykor\\project", true],
+  ["C:/Users/tester/Documents/Vykor", "C:/Users/tester/Documents/Vykor-backup/project", false],
+  ["//server/share/workspaces", "//SERVER/SHARE/WORKSPACES/project", true],
+  ["//server/share/workspaces", "\\\\SERVER\\share\\workspaces\\project", true],
+  ["\\\\server\\share\\workspaces", "//SERVER/share/WORKSPACES/project", true],
+  ["//server/share/workspaces", "//server/share/workspaces-backup/project", false],
+  ["/home/tester/workspaces", "/home/tester/workspaces/project", true],
+  ["/home/tester/workspaces", "/home/tester/WORKSPACES/project", false],
+  ["/home/tester/workspaces", "/home/tester/workspaces-backup/project", false],
+] as const)("matches historical root %s against %s as %s without borrowing a drive", (source, candidate, expected) => {
+  const root = paths.getDataRoot();
+  const migrations = join(root, "data", "migrations");
+  mkdirSync(migrations, { recursive: true });
+  writeFileSync(join(migrations, "path-map.json"), JSON.stringify({ version: 1, moves: [
+    { kind: "workspace", from: source, to: join(root, "workspaces") },
+  ] }));
+
+  expect(paths.isManagedWorkspacePath(candidate, root)).toBe(expected);
+  expect(paths.isHiddenManagedProjectPath(candidate, root)).toBe(expected);
+});
+
+it("hides forward-slash UNC exclusions case-insensitively without treating them as workspaces", () => {
+  const root = paths.getDataRoot();
+  const migrations = join(root, "data", "migrations");
+  mkdirSync(migrations, { recursive: true });
+  writeFileSync(join(migrations, "path-map.json"), JSON.stringify({
+    version: 1, moves: [], excludedRoots: ["//server/share/retained"],
+  }));
+
+  expect(paths.isHiddenManagedProjectPath("//SERVER/SHARE/RETAINED/project", root)).toBe(true);
+  expect(paths.isManagedWorkspacePath("//SERVER/SHARE/RETAINED/project", root)).toBe(false);
+  expect(paths.isHiddenManagedProjectPath("//server/share/retained-backup/project", root)).toBe(false);
+});
