@@ -1,10 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
 import {
   PROJECT_CONFIG_DIR_NAME,
   getChannelWorkspaceRoot,
+  getDataRoot,
+  getConfigDir,
   resolveChannelWorkspaceRoot,
   getInstalledPluginStorePath,
   getMcpOAuthFilePath,
@@ -121,4 +123,68 @@ describe("getChannelWorkspaceRoot", () => {
       else process.env.VYKOR_CHANNELS_DIR = previousChannels;
     }
   });
+});
+
+
+afterEach(() => vi.restoreAllMocks());
+
+it("exposes one user root and all default persistent paths beneath it", () => {
+  const previousRoot = process.env.VYKOR_CONFIG_DIR;
+  const previousData = process.env.VYKOR_DATA_DIR;
+  const root = resolve("fixtures", "用户 数据");
+  process.env.VYKOR_CONFIG_DIR = root;
+  delete process.env.VYKOR_DATA_DIR;
+  try {
+    const result = resolvePaths(resolve("project", "外部项目"));
+    expect(result.dataRoot).toBe(root);
+    expect(getDataRoot()).toBe(root);
+    expect(getConfigDir()).toBe(root);
+    expect(result).toMatchObject({
+      cacheDir: join(root, "cache"),
+      channelsDir: join(root, "channels"),
+      workspacesDir: join(root, "workspaces"),
+      worktreesDir: join(root, "worktrees"),
+      desktopDataDir: join(root, "data", "desktop"),
+      agentsDir: join(root, "agents"),
+      localRulesDir: join(root, "local_rules", "projects"),
+      outputStylesDir: join(root, "output_styles"),
+      userProfilePendingDir: join(root, "user_profile_pending"),
+      modelsDevCacheFilePath: join(root, "cache", "models-dev.json"),
+      frecencyFilePath: join(root, "frecency.json"),
+      runtimeEnvironmentSecretsFilePath: join(root, "runtime-environment-secrets.json"),
+      soulFilePath: join(root, "SOUL.md"),
+      userProfileFilePath: join(root, "USER.md"),
+      sessionRuntimeDir: join(root, "data", "session-runtime"),
+      sessionsDatabasePath: join(root, "data", "session-runtime", "sessions.db"),
+      imageAttachmentCacheDir: join(root, "data", "attachments", "images"),
+      daemonDir: join(root, "data", "daemon"),
+      userMemoryDir: join(root, "data", "memory"),
+      sessionMemoryDir: join(root, "data", "session-memory"),
+      memoryBackupsDir: join(root, "data", "memory-backups"),
+      exportsDir: join(root, "data", "exports"),
+      backupAuditsDir: join(root, "data", "backup-audits"),
+      maintenanceAuditsDir: join(root, "data", "maintenance-audits"),
+      migrationsDir: join(root, "data", "migrations"),
+      pathMapFilePath: join(root, "data", "migrations", "path-map.json"),
+    });
+    for (const [key, value] of Object.entries(result)) {
+      if (key !== "memoryDir") expect(value === root || value.startsWith(root + "/") || value.startsWith(root + "\\")).toBe(true);
+    }
+    expect(result.memoryDir).toBe(join(resolve("project", "外部项目"), ".vykor", "memory"));
+  } finally {
+    if (previousRoot === undefined) delete process.env.VYKOR_CONFIG_DIR;
+    else process.env.VYKOR_CONFIG_DIR = previousRoot;
+    if (previousData === undefined) delete process.env.VYKOR_DATA_DIR;
+    else process.env.VYKOR_DATA_DIR = previousData;
+  }
+});
+
+it("recomputes project memory after cwd changes while keeping the user root", () => {
+  const firstProject = resolve("projects", "first");
+  const secondProject = resolve("projects", "second");
+  const cwd = vi.spyOn(process, "cwd").mockReturnValue(firstProject);
+  const first = resolvePaths();
+  cwd.mockReturnValue(secondProject);
+  expect(getMemoryDir()).toBe(join(secondProject, ".vykor", "memory"));
+  expect(resolvePaths().dataRoot).toBe(first.dataRoot);
 });

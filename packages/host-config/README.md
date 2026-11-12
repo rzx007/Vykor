@@ -18,7 +18,11 @@ pnpm --filter @vykor/host-config test
 | [src/settings/](./src/settings/README.md) | 管理设置类型、合并规则、受控修改以及工具和调度配置。 |
 | [src/storage/](./src/storage/README.md) | 确定配置与 Git 路径，并提供配置文件的原子写入。 |
 
-入口与流程：先确定配置目录，读取并合并用户与项目设置，再校验字段；修改时通过现有锁和原子写入流程保存。
+入口与流程：先确定用户根 `dataRoot`，按 [storage 路径规则](./src/storage/README.md) 计算用户文件与项目配置位置，再读取并合并设置并校验字段；修改时通过现有锁和原子写入流程保存。
+
+只需要路径时使用轻量入口 `@vykor/host-config/paths`：`resolveUserDataPaths(dataRoot)` 仅用 Node 标准库计算完整用户路径，不依赖 cwd、环境变量或设置模块，也不会创建目录。`getDataRoot()` 返回当前用户根；兼容入口 `getConfigDir()` 直接委托它。项目 `.vykor/memory` 仍按传入项目计算，和用户 `data/memory` 分开。现有 `src/index.ts` 继续公开这些路径导出。
+
+本阶段保留 `resolvePaths()` 的旧 `VYKOR_DATA_DIR` 覆盖与旧渠道 getter 行为，启动根定位及旧路径归并由后续任务接入。
 
 状态归属：配置文件保存在用户或项目配置目录；读取结果和单次修改上下文由调用方持有。
 
