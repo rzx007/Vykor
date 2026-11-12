@@ -597,6 +597,15 @@ test("P2 execution resources have no storage or engine dependency and retired im
   assert.ok(targetPolicy.stageExceptions.every(item => !["P1", "P2"].includes(item.removeByPhase)));
 });
 
+test("database relocation alone may call the pure workflow relocation leaf", () => {
+  const permitted = { fromFile: "packages/services/src/database/data-root-relocation.ts", specifier: "@vykor/coordinator/workflow-relocation", resolvedFile: "packages/coordinator/src/workflow/path-relocation.ts", importedNames: ["relocateWorkflowSnapshotPaths"] };
+  assert.deepEqual(checkModuleDependency(permitted, strictPolicy()), []);
+  for (const fromFile of ["packages/services/src/database/session-database.ts", "packages/services/src/workflows/workflow-repository.ts", "packages/services/src/memory/session-memory.ts"])
+    assert.ok(checkModuleDependency({ ...permitted, fromFile }, strictPolicy()).length > 0);
+  for (const [specifier, resolvedFile] of [["@vykor/coordinator", "packages/coordinator/src/index.ts"], ["@vykor/coordinator/workflow", "packages/coordinator/src/workflow/index.ts"], ["@vykor/coordinator/unknown", undefined]])
+    assert.ok(checkModuleDependency({ ...permitted, specifier, resolvedFile }, strictPolicy()).length > 0);
+});
+
 test("P3 tools cannot import host implementations and coordinator entries stay pure", () => {
   const policy = strictPolicy();
   for (const specifier of ["@vykor/services", "@vykor/auth", "@vykor/mcp", "@vykor/skills", "@vykor/agent-runtime"]) {

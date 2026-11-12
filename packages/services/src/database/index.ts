@@ -1,5 +1,6 @@
 export { SessionDatabase, type SessionDatabaseOptions } from "./session-database.js";
 export type { StorageContext } from "./storage-context.js";
+export * from "./data-root-relocation.js";
 export {
   TransactionCoordinator,
   type TransactionCoordinatorHooks,

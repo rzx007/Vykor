@@ -48,3 +48,4 @@ export { isWindowsDaemonServiceEnabled, runRegisteredDaemon, type RegisteredDaem
 export { readRegisteredDataLocation, readRegisteredDataSwitchResult } from "./data-location.js";
 export { acquireRegistryLease, withDaemonControlLock } from "./registry-lease.js";
 export { inspectDataRootMigration, type DataRootMigrationRequest, type DataRootMigrationPreview, type MigrationBlocker, type MigrationSourceEntry } from "./data-root-sources.js";
+export { relocateDataRootFiles, relocateProjectStorageKeys, type DataRootFileRelocationInput } from "./data-root-file-relocation.js";

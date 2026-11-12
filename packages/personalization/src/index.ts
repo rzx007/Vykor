@@ -1,6 +1,7 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { getProjectDirectoryKey } from "@vykor/host-config/paths";
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { join } from "node:path";
 import { getLocalRulesDir as getUserLocalRulesDir } from "@vykor/host-config/paths";
 import { isIP } from "node:net";
 import { detectCredentialValue } from "@vykor/memory";
@@ -172,9 +173,7 @@ export function factsToRulesMarkdown(facts: ExtractedFact[]): string {
 
 export function getLocalRulesDir(cwd: string): string {
   const base = getUserLocalRulesDir();
-  const project = resolve(cwd);
-  const digest = createHash("sha1").update(project).digest("hex").slice(0, 12);
-  return join(base, `${basename(project)}-${digest}`);
+  return join(base, getProjectDirectoryKey(cwd));
 }
 
 const rulesFile = (cwd: string): string => join(getLocalRulesDir(cwd), "rules.md");

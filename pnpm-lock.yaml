@@ -1424,6 +1424,9 @@ importers:
 
   packages/services:
     dependencies:
+      '@vykor/coordinator':
+        specifier: workspace:*
+        version: link:../coordinator
       '@arcships/light-ocr':
         specifier: 'catalog:'
         version: 0.5.7

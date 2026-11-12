@@ -170,6 +170,7 @@
     "@vykor/services": {
       "directory": "packages/services",
       "allowed": [
+        "@vykor/coordinator",
         "@vykor/agent-contracts",
         "@vykor/host-config",
         "@vykor/memory",
@@ -413,6 +414,16 @@
   },
   "modules": [
     {
+      "id": "storage-workflow-relocation",
+      "fromPaths": ["packages/services/src/"],
+      "allowSourcePaths": ["packages/services/src/database/data-root-relocation.ts"],
+      "targetPackages": ["@vykor/coordinator"],
+      "allowTargetPaths": ["packages/coordinator/src/workflow/path-relocation.ts"],
+      "forbidSpecifiers": ["^@vykor/coordinator(?:/(?!workflow-relocation$).*)?$"],
+      "removeByPhase": "P13",
+      "migrationId": "M40"
+    },
+    {
       "id": "portable-contracts",
       "fromPaths": [
         "packages/agent-contracts/src/"
@@ -525,6 +536,7 @@
         "packages/services/src/token-estimation/"
       ],
       "allowed": [
+        "@vykor/coordinator",
         "@vykor/agent-contracts",
         "@vykor/host-config",
         "@vykor/domain-contracts",

@@ -18,6 +18,8 @@
 
 只需要路径时从 `@vykor/host-config/paths` 导入；这个入口仅依赖 Node 标准库，不加载设置读取或服务端业务。
 
+`getProjectDirectoryKey(cwd, foldWindowsCase)` 共享规则、长期记忆与会话记忆的既有目录键算法，不读取全局根或创建目录。仅长期记忆传 `true`，继续折叠 Windows 路径大小写；规则与会话记忆保持原来的大小写。副本迁移用同一函数计算新旧键。
+
 `resolveUserDataPaths(dataRoot)` 接收明确的用户根，返回全部用户目录和固定文件路径，不读取环境变量、cwd 或文件系统，不创建目录。迁移可分别调用 `resolveUserDataPaths(sourceRoot)`、`resolveUserDataPaths(targetRoot)`，无需临时修改环境变量。默认布局把 `cache`、`channels`、`workspaces`、`worktrees` 放在根下，运行数据和桌面业务文件分别放在 `data/`、`data/desktop/` 下；插件内部结构、数据库和附件相邻关系保持原样。
 
 `initializeDataRoot()` 必须在导入会创建持久化 store 的业务模块前完成：锁内按显式参数、`VYKOR_CONFIG_DIR`、`~/.vykor-root.json`、默认 `~/.vykor` 的顺序选择，拒绝损坏定位、待恢复迁移、已迁出源根与找不到的已选数据库。它将所选根固定到当前进程，并把同一根传给子进程；普通默认启动不写定位记录、不创建用户根。`getInitializedDataRootSelection()` 返回原始来源，预检不能把内部写入的环境值误判为用户固定覆盖。`getDataRoot()` 在产品初始化后一直返回固定根，切根必须重启；未初始化的嵌入调用按只读选择解析。`getConfigDir()` 只委托它。`resolvePaths(projectRoot?)` 在用户路径之外添加兼容的 `configDir` 和项目 `.vykor/memory` 路径；不缓存带项目路径的结果，因此 cwd 改变后不会串用上一个项目的记忆目录。`getProjectMemoryDir()` 是另一种现有用途：按项目路径生成稳定标识，将长期记忆存到用户 `data/memory/` 下。

@@ -2,6 +2,8 @@
 
 从会话中提取长期记忆，并维护压缩后继续对话所需的会话记忆文件。
 
+会话记忆目录键使用 `@vykor/host-config/paths` 的纯函数 `getProjectDirectoryKey(cwd)`，保持原来的 resolve、basename 和 SHA-1 前 12 位算法。迁移宿主复用同一函数计算副本内新旧目录名，不调用会创建全局目录的 `getSessionMemoryDir()`。
+
 ## 入口与流程
 
 `extractMemoriesFromTurn()` 生成并解析提取结果，再交给记忆能力保存；会话记忆函数生成摘要文件并提供压缩文本；后台整理见 autodream。

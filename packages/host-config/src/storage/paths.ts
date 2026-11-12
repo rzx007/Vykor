@@ -225,10 +225,15 @@ export function getMemoryDir(projectRoot?: string): string {
 }
 
 export function getProjectMemoryDir(projectRoot?: string): string {
+  return join(getUserMemoryDir(), getProjectDirectoryKey(projectRoot ?? process.cwd(), true));
+}
+
+/** Shared persisted project-directory key. Only long-term memory folds Windows case. */
+export function getProjectDirectoryKey(projectRoot: string, foldWindowsCase = false): string {
   const root = resolve(projectRoot ?? process.cwd());
-  const key = process.platform === "win32" ? root.toLowerCase() : root;
+  const key = foldWindowsCase && process.platform === "win32" ? root.toLowerCase() : root;
   const digest = createHash("sha1").update(key).digest("hex").slice(0, 12);
-  return join(getUserMemoryDir(), `${basename(root)}-${digest}`);
+  return `${basename(root)}-${digest}`;
 }
 
 export function getFeedbackDir(): string {

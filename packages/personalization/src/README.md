@@ -2,6 +2,8 @@
 
 [`index.ts`](index.ts) 是 `@vykor/personalization` 的公开入口和当前实现文件，提供事实提取、合并、保存、读取和替换 API。
 
+`getLocalRulesDir(cwd)` 与迁移宿主共享纯函数 `getProjectDirectoryKey(cwd)`，保持原目录键的大小写与 SHA-1 算法。迁移只重命名副本内目录，不重新抽取 facts、不更新来源或整理时间。
+
 | API | 用途 |
 | --- | --- |
 | `extractFactsFromText()`、`mergeFacts()` | 提取候选事实并按 `type:value` 合并 |

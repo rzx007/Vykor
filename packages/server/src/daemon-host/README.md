@@ -31,6 +31,7 @@ Desktop 无窗口入口和 CLI 本机登记入口调用 `runRegisteredDaemon()`�
 | [registry-lease.ts](./registry-lease.ts) | 协调启动、启停和切换的控制锁，以及后台持有的登记所有权 |
 | [data-location.ts](./data-location.ts) | 读写已提交的数据位置和最近的切换结果，校验恢复目标 |
 | [data-root-sources.ts](./data-root-sources.ts) | 只读清点旧来源、文件摘要、具体迁移映射、冲突和后续必验条件 |
+| [data-root-file-relocation.ts](./data-root-file-relocation.ts) | 副本中的桌面、Git、设置、文件工作流字段与项目哈希目录键处理器 |
 | [system-service.ts](./system-service.ts) | `DaemonSystemServiceState`、`DaemonSystemServiceStatus`、`SystemCommandResult`、`DaemonServiceInvocation` 等 |
 
 ## 测试与维护
@@ -40,6 +41,12 @@ Desktop 无窗口入口和 CLI 本机登记入口调用 `runRegisteredDaemon()`�
 测试放在本分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移文件时同步导入、公开入口、文档链接与旧引用清单。
 
 ## 数据根迁移预检
+
+停写及复制后，`relocateDataRootFiles({stagedRoot,targetRoot,moves,workflowDirectories,settingsPaths})` 处理 `data/desktop` 下的 composer 恢复记录和 Git 设置，以及根设置。`workflowDirectories` 和附加 `settingsPaths` 必须是副本内部、由已知受管 cwd 推导的明确物理路径。composer 只处理 mention/skill 路径，保留 revision、inputId、assetId、顺序和文本；当前附件卡片没有 sourcePath。Git 按 `<configDir>/worktrees` 与最终目录的关系同步修改 path/configDir/偏好基目录，保留外部 projectPath、分支和 baseCommit。
+
+设置处理器只访问 MCP stdio.cwd、sandbox 文件系统路径列表、permission.pathRules.pattern 和明确 shell executable。命令、参数、环境变量、密钥、OAuth、供应商配置和正文不改写。当前凭据/OAuth、便签恢复、图片批注格式没有待搬迁的路径字段，原文件保留。文件工作流仅解码活动 v1 快照；终态快照和 NDJSON 事件原文不变。全部已知文件解析通过后才写入；非空 `unsupported` 阻止本轮 JSON 写入，写入故障由协调器丢弃或恢复本次副本，不能继续安装。
+
+`relocateProjectStorageKeys({stagedRoot,cwdPaths,moves})` 使用原写入者共享的目录键算法，重命名副本内 local_rules/projects、data/memory 和 data/session-memory 的旧 cwd 键。先核对全部源/目标及真实路径边界；不同内容冲突抛错且不覆盖，相同内容的已有目标保留，正文、来源、ID 和整理时间不重写。所有写入都显式指向 `stagedRoot`，不读取进程全局根。
 
 `inspectDataRootMigration({homeDir,sourceRoot,targetRoot,...})` 从明确的根、已知位置记录和宿主输入收集来源，返回清单，不修改正在运行的库或创建文件。`legacy.documentsDir` 和 `legacy.userDataDir` 应取宿主真实系统位置；已有 Desktop 扫描收据也可提供这两个位置。没有这些信息时返回待补齐条件，不猜测 `home/Documents`。`legacy.databasePath/dataLocationPath/imageAttachmentCacheDir` 和相关旧目录环境值限定额外来源；`legacy.workspacePaths`、`projectPaths` 是宿主已知登记，缺失与空列表由 `registrationSnapshot` 区分。
 

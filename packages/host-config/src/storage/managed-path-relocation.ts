@@ -2,6 +2,12 @@ import { realpath } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, posix, resolve, win32 } from "node:path";
 import type { ManagedPathMove } from "./managed-path-map.js";
 
+export interface PathRelocationReport {
+  changed: number;
+  unchangedExternal: number;
+  unsupported: Array<{ table: string; id: string; version?: number }>;
+}
+
 const windowsAbsolute = (value: string) => /^(?:[a-z]:[\\/]|[\\/]{2}(?![?.][\\/])[^\\/]+[\\/][^\\/]+(?:[\\/]|$))/i.test(value);
 
 /** Native absolute paths must not depend on the process's current drive. */

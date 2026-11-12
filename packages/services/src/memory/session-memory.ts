@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { join } from "node:path";
 
 import { getDataDir } from "@vykor/host-config";
+import { getProjectDirectoryKey } from "@vykor/host-config/paths";
 import { estimateTokens } from "../token-estimation/index.js";
 
 /**
@@ -28,9 +28,7 @@ export interface SessionMemoryOptions {
 }
 
 export function getSessionMemoryDir(cwd: string): string {
-  const root = resolve(cwd);
-  const digest = createHash("sha1").update(root).digest("hex").slice(0, 12);
-  const dir = join(getDataDir(), "session-memory", `${basename(root)}-${digest}`);
+  const dir = join(getDataDir(), "session-memory", getProjectDirectoryKey(cwd));
   mkdirSync(dir, { recursive: true });
   return dir;
 }
