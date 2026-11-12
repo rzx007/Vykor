@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { SessionDatabase } from "../../../../services/src/database/session-database.js";
-import { readDataRootSelector, resolveDataRootSelection } from "@vykor/host-config/paths";
+import { readDataRootSelector, resolveDataRootSelection, writeDataRootSelector } from "@vykor/host-config/paths";
 import * as services from "@vykor/services/data-root-relocation";
 import * as api from "../data-root-migration.js";
 vi.mock("node:fs/promises", async importOriginal => ({ ...await importOriginal<typeof import("node:fs/promises")>() }));
@@ -87,4 +87,119 @@ it("detects a standalone legacy source link changed after copying but before ins
   const verify = services.verifyDataRootCopy;
   vi.spyOn(services, "verifyDataRootCopy").mockImplementationOnce(async path => { await verify(path); await fs.unlink(legacyLink); await fs.symlink(replacement, legacyLink, "junction"); });
   const migrated = await api.migrateDataRoot(request(), stopped); expect(migrated.phase).toBe("failed"); expect(existsSync(target)).toBe(false);
+});
+it.each(["different-root", "same-root"])("keeps the next %s migration selected when a published journal is retried", async mode => {
+  const old = await api.migrateDataRoot(request(), stopped);
+  await api.commitDataRootMigration(old.journalPath, { homeDir: home });
+  const published = await api.markDataRootMigrationWritersReleased(old.journalPath, { homeDir: home });
+  const publishedSelector = await fs.lstat(join(home, ".vykor-root.json"));
+  expect(await api.markDataRootMigrationWritersReleased(old.journalPath, { homeDir: home })).toEqual(published);
+  expect((await fs.lstat(join(home, ".vykor-root.json"))).ino).toBe(publishedSelector.ino);
+  source = target; target = mode === "same-root" ? source : join(root, "third");
+  const next = await api.migrateDataRoot(request(), stopped); expect(next.phase).toBe("verified");
+  const selector = readDataRootSelector(home);
+  for (const operation of [api.markDataRootMigrationWritersReleased, api.commitDataRootMigration, api.recoverDataRootMigration]) {
+    await expect(operation(old.journalPath, { homeDir: home })).rejects.toThrow(/not selected/);
+    expect(readDataRootSelector(home)).toEqual(selector);
+    expect(() => resolveDataRootSelection({ homeDir: home, env: {} })).toThrow(/pending/);
+  }
+  expect((await api.recoverDataRootMigration(next.journalPath, { homeDir: home })).phase).toBe("failed");
+  expect(resolveDataRootSelection({ homeDir: home, env: {} }).dataRoot).toBe(source);
+});
+it.each(["id", "journalPath"])("requires the pending %s as well as the other journal identifier", async field => {
+  const migrated = await api.migrateDataRoot(request(), stopped);
+  await api.commitDataRootMigration(migrated.journalPath, { homeDir: home });
+  const selector = readDataRootSelector(home)!;
+  selector.pendingMigration = { id: migrated.id, journalPath: migrated.journalPath, [field]: field === "id" ? "00000000-0000-4000-8000-000000000000" : join(root, "other-journal.json") };
+  await writeDataRootSelector(home, selector);
+  for (const operation of [api.markDataRootMigrationWritersReleased, api.commitDataRootMigration, api.recoverDataRootMigration]) {
+    await expect(operation(migrated.journalPath, { homeDir: home })).rejects.toThrow(/not selected/);
+    expect(readDataRootSelector(home)).toEqual(selector);
+  }
+});
+it("finishes its own interrupted release after writersReleased was persisted", async () => {
+  const migrated = await api.migrateDataRoot(request(), stopped);
+  await api.commitDataRootMigration(migrated.journalPath, { homeDir: home });
+  const rename = fs.rename;
+  vi.spyOn(fs, "rename").mockImplementation(async (from, to) => {
+    if (String(to) === join(home, ".vykor-root.json")) throw new Error("release interrupted");
+    return rename(from, to);
+  });
+  await expect(api.markDataRootMigrationWritersReleased(migrated.journalPath, { homeDir: home })).rejects.toThrow("release interrupted");
+  vi.restoreAllMocks();
+  expect(JSON.parse(readFileSync(migrated.journalPath, "utf8")).writersReleased).toBe(true);
+  expect(readDataRootSelector(home)?.pendingMigration?.id).toBe(migrated.id);
+  expect(() => resolveDataRootSelection({ homeDir: home, env: {} })).toThrow(/pending/);
+  expect((await api.markDataRootMigrationWritersReleased(migrated.journalPath, { homeDir: home })).writersReleased).toBe(true);
+  expect(readDataRootSelector(home)?.pendingMigration).toBeUndefined();
+});
+async function useExternalDatabase() {
+  const databasePath = join(root, "custom/activity.sqlite");
+  mkdirSync(join(root, "custom")); await fs.rename(join(source, "data/session-runtime/sessions.db"), databasePath);
+  rmSync(join(source, "data"), { recursive: true });
+  return { ...request(), legacy: { ...request().legacy, databasePath } };
+}
+it.each(["different-root", "same-root"])("restores the original tree without data after %s commit with an external database", async mode => {
+  if (mode === "same-root") target = source;
+  const input = await useExternalDatabase(), database = readFileSync(input.legacy.databasePath);
+  const migrated = await api.migrateDataRoot(input, stopped); expect(migrated.phase).toBe("verified");
+  expect((await api.commitDataRootMigration(migrated.journalPath, { homeDir: home })).phase).toBe("committed");
+  const recovered = await api.recoverDataRootMigration(migrated.journalPath, { homeDir: home });
+  expect(recovered.phase).toBe("failed");
+  expect(await fs.readdir(source)).toEqual(["credentials.json"]);
+  expect(readFileSync(join(source, "credentials.json"), "utf8")).toBe('{"key":"sensitive"}');
+  expect(readFileSync(input.legacy.databasePath)).toEqual(database);
+  expect(readDataRootSelector(home)).toBeUndefined();
+  expect(await api.recoverDataRootMigration(migrated.journalPath, { homeDir: home })).toEqual(recovered);
+});
+it.each([
+  ["different-root", "data"], ["different-root", "data/migrations"],
+  ["same-root", "data"], ["same-root", "data/migrations"],
+])("preserves unknown contents in %s newly created %s during recovery", async (mode, directory) => {
+  if (mode === "same-root") target = source;
+  const migrated = await api.migrateDataRoot(await useExternalDatabase(), stopped);
+  await api.commitDataRootMigration(migrated.journalPath, { homeDir: home });
+  const journal = JSON.parse(readFileSync(migrated.journalPath, "utf8")), oldPath = mode === "same-root" ? journal.backupRoot : source;
+  const unknown = join(oldPath, directory, "unknown.txt"); writeFileSync(unknown, "keep unknown data");
+  const selector = readDataRootSelector(home);
+  expect((await api.recoverDataRootMigration(migrated.journalPath, { homeDir: home })).phase).toBe("rollback_failed");
+  expect(readFileSync(unknown, "utf8")).toBe("keep unknown data");
+  expect(existsSync(join(oldPath, "data/migrations/moved-root.json"))).toBe(true);
+  expect(existsSync(target)).toBe(true); expect(readDataRootSelector(home)).toEqual(selector);
+});
+it.each(["creation", "cleanup"])("recovers the owned marker chain after interrupted %s", async point => {
+  if (point === "cleanup") target = source;
+  const migrated = await api.migrateDataRoot(await useExternalDatabase(), stopped);
+  const journal = JSON.parse(readFileSync(migrated.journalPath, "utf8")), oldPath = point === "cleanup" ? journal.backupRoot : source;
+  const markerDirectory = join(oldPath, "data/migrations");
+  if (point === "creation") {
+    const mkdir = fs.mkdir;
+    vi.spyOn(fs, "mkdir").mockImplementation(async (...args) => {
+      if (String(args[0]) === markerDirectory) { await mkdir(join(oldPath, "data")); throw new Error("marker creation interrupted"); }
+      return mkdir(...args);
+    });
+    await expect(api.commitDataRootMigration(migrated.journalPath, { homeDir: home })).rejects.toThrow("marker creation interrupted");
+  } else {
+    await api.commitDataRootMigration(migrated.journalPath, { homeDir: home });
+    const rmdir = fs.rmdir;
+    vi.spyOn(fs, "rmdir").mockImplementation(async (...args) => {
+      await rmdir(...args);
+      if (String(args[0]) === markerDirectory) throw new Error("marker cleanup interrupted");
+    });
+    expect((await api.recoverDataRootMigration(migrated.journalPath, { homeDir: home })).phase).toBe("rollback_failed");
+  }
+  vi.restoreAllMocks();
+  expect(JSON.parse(readFileSync(migrated.journalPath, "utf8")).oldMarkerCreatedDirectories).toEqual(["data", "data/migrations"]);
+  expect(await fs.readdir(join(oldPath, "data"))).toEqual([]);
+  expect((await api.recoverDataRootMigration(migrated.journalPath, { homeDir: home })).phase).toBe("failed");
+  expect(await fs.readdir(source)).toEqual(["credentials.json"]); expect(readDataRootSelector(home)).toBeUndefined();
+});
+it("refuses marker cleanup directories outside the recorded fixed chain", async () => {
+  const migrated = await api.migrateDataRoot(await useExternalDatabase(), stopped);
+  const journal = JSON.parse(readFileSync(migrated.journalPath, "utf8"));
+  journal.oldMarkerCreatedDirectories = ["../custom"];
+  writeFileSync(migrated.journalPath, JSON.stringify(journal));
+  await expect(api.recoverDataRootMigration(migrated.journalPath, { homeDir: home })).rejects.toThrow(/marker directory chain/);
+  expect(existsSync(join(root, "custom/activity.sqlite"))).toBe(true);
+  expect(readDataRootSelector(home)?.pendingMigration?.id).toBe(migrated.id);
 });

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { chmod, copyFile, lstat, mkdir, readFile, readdir, readlink, rename, rm, rmdir, stat, statfs, symlink, utimes, writeFile } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { securePrivateDirectory } from "@vykor/host-config";
 import { isWithinManagedPath, movedDataRootMarkerPath, readDataRootSelector, readManagedPathMap, relocateManagedPath, resolveManagedRealPath, resolveUserDataPaths, withDataRootLock, withDataRootRecoveryLock, type DataRootLock, type ManagedPathMove } from "@vykor/host-config/paths";
 import { readDatabasePathRegistrations, relocateDatabasePaths, verifyDataRootCopy } from "@vykor/services/data-root-relocation";
@@ -207,8 +207,14 @@ async function migrateStoppedRoot(input: DataRootMigrationRequest, coordination:
 
 async function selectedJournal(path: string, homeDir: string): Promise<MigrationJournal> {
   const j = await readMigrationJournal(path, homeDir), selector = readDataRootSelector(homeDir);
+  const pending = selector?.pendingMigration;
+  if (pending) {
+    if (pending.id !== j.id || !samePath(pending.journalPath, path)) throw new Error("Migration journal is not selected by this home");
+    return j;
+  }
   const restoring = j.operation === "restore-selector" && JSON.stringify(selector) === JSON.stringify(j.previousSelector);
-  if (!j.recovered && !restoring && !(j.phase === "committed" && selector && samePath(selector.dataRoot, j.targetRoot)) && (selector?.pendingMigration?.id !== j.id || !samePath(selector.pendingMigration.journalPath, path))) throw new Error("Migration journal is not selected by this home");
+  const published = j.phase === "committed" && j.writersReleased && selector && samePath(selector.dataRoot, j.targetRoot);
+  if (!j.recovered && !restoring && !published) throw new Error("Migration journal is not selected by this home");
   return j;
 }
 /** T9/T10 call only after Git/service repair and trusted instance verification. */
@@ -227,7 +233,11 @@ async function commitLocked(j: MigrationJournal, lock: DataRootLock): Promise<Da
     j.operation = "commit-selector"; await saveMigrationJournal(j);
     await lock.writeSelector({ version: 1, dataRoot: j.targetRoot, pendingMigration: { id: j.id, journalPath: j.journalPath } });
     const old = j.mode === "same-root" ? j.backupRoot : j.sourceRoot;
-    j.oldMarkerDirectoryCreated = !await info(dirname(movedDataRootMarkerPath(old)));
+    j.oldMarkerCreatedDirectories = [];
+    for (const directory of ["data", "data/migrations"] as const) {
+      if (await info(join(old, directory))) await identity(join(old, directory));
+      else j.oldMarkerCreatedDirectories.push(directory);
+    }
     j.operation = "mark-old-root"; await saveMigrationJournal(j);
     await mkdir(dirname(movedDataRootMarkerPath(old)), { recursive: true });
     await writePrivateJson(movedDataRootMarkerPath(old), { version: 1, id: j.id, targetRoot: j.targetRoot, journalPath: j.journalPath });
@@ -242,6 +252,7 @@ export async function markDataRootMigrationWritersReleased(path: string, options
 }
 async function releaseLocked(j: MigrationJournal, lock: DataRootLock): Promise<DataRootMigrationResult> {
     if (j.phase !== "committed") throw new Error("Migration selection is not committed");
+    if (j.writersReleased && !readDataRootSelector(j.homeDir)?.pendingMigration) return result(j);
     if (!j.writersReleased) { if (!j.stagedTree) throw new Error("Migration target identity missing"); await sameTree(j.targetRoot, j.stagedTree); }
     j.writersReleased = true; await saveMigrationJournal(j);
     await lock.writeSelector({ version: 1, dataRoot: j.targetRoot }); return result(j);
@@ -260,13 +271,21 @@ export async function recoverDataRootMigration(path: string, options: { homeDir:
       if (!sourceTree) throw new Error("Migration source identity was not recorded");
       const oldPath = j.mode === "same-root" && await info(j.backupRoot) ? j.backupRoot : j.sourceRoot;
       const marker = movedDataRootMarkerPath(oldPath);
-      if (await info(marker)) {
+      const createdDirectories = (j.oldMarkerCreatedDirectories ?? []).map(directory => join(oldPath, directory));
+      for (const [index, directory] of createdDirectories.entries()) {
+        if (!await info(directory)) continue; // A prior creation or cleanup attempt may have stopped partway.
+        await identity(directory);
+        const expectedChild = basename(createdDirectories[index + 1] ?? marker);
+        if ((await readdir(directory)).some(name => name !== expectedChild)) throw new Error("Unknown files in old marker directory chain");
+      }
+      if (await info(dirname(marker))) await identity(dirname(marker));
+      const markerInfo = await info(marker);
+      if (markerInfo) {
+        if (!markerInfo.isFile() || markerInfo.isSymbolicLink()) throw new Error("Unknown moved-root marker");
         const value = JSON.parse(await readFile(marker, "utf8"));
         if (value.id !== j.id || value.targetRoot !== j.targetRoot || value.journalPath !== j.journalPath) throw new Error("Unknown moved-root marker");
       }
-      const markerDirectory = dirname(marker);
-      if (j.oldMarkerDirectoryCreated && await info(markerDirectory) && (await readdir(markerDirectory)).some(name => name !== "moved-root.json")) throw new Error("Unknown files in old marker directory");
-      await sameTree(oldPath, sourceTree, j.oldMarkerDirectoryCreated ? markerDirectory : await info(marker) ? marker : undefined);
+      await sameTree(oldPath, sourceTree, createdDirectories[0] ?? (markerInfo ? marker : undefined));
       for (const source of j.sourceTrees) if (!samePath(source.path, j.sourceRoot)) await sameTree(source.path, source.tree);
       await checkStandaloneSources(j);
       const target = await info(j.targetRoot), staged = await info(j.stagingRoot);
@@ -279,7 +298,7 @@ export async function recoverDataRootMigration(path: string, options: { homeDir:
       if (staged && j.stagedTree) await sameTree(j.stagingRoot, j.stagedTree);
       if (installed) { j.operation = "rollback-target"; await saveMigrationJournal(j); await rename(j.targetRoot, j.stagingRoot); }
       if (await info(marker)) await rm(marker);
-      if (j.oldMarkerDirectoryCreated && await info(markerDirectory)) await rmdir(markerDirectory);
+      for (const directory of [...createdDirectories].reverse()) if (await info(directory)) await rmdir(directory);
       if (j.mode === "same-root" && samePath(oldPath, j.backupRoot)) { j.operation = "restore-source"; await saveMigrationJournal(j); await rename(j.backupRoot, j.sourceRoot); }
       j.operation = "restore-selector"; await saveMigrationJournal(j); await restoreSelector(lock, j);
       j.recovered = true; j.phase = "failed"; j.operation = "complete"; await saveMigrationJournal(j); return result(j);

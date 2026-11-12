@@ -23,7 +23,7 @@ export interface MigrationJournal extends DataRootMigrationResult {
   operation: "copy" | "rewrite" | "backup-source" | "install" | "verify" | "commit-selector" | "mark-old-root" | "inspect-recovery" | "rollback-target" | "restore-source" | "restore-selector" | "complete";
   failedOperation?: MigrationJournal["operation"];
   recovered?: boolean;
-  oldMarkerDirectoryCreated?: boolean;
+  oldMarkerCreatedDirectories?: Array<"data" | "data/migrations">;
 }
 export const samePath = (a: string, b: string): boolean => process.platform === "win32" ? resolve(a).toLowerCase() === resolve(b).toLowerCase() : resolve(a) === resolve(b);
 export async function info(path: string) {
@@ -81,6 +81,10 @@ export async function readMigrationJournal(path: string, homeDir: string): Promi
   if (j.version !== 1 || !/^[a-f0-9-]{36}$/.test(j.id) || !phases.includes(j.phase) || typeof j.writersReleased !== "boolean"
     || !["same-root", "different-root"].includes(j.mode) || typeof j.stagingIdentity !== "string"
     || !Array.isArray(j.parents) || !Array.isArray(j.sourceTrees) || !Array.isArray(j.entries) || !Array.isArray(j.moves)) throw new Error("Invalid migration journal");
+  const created = j.oldMarkerCreatedDirectories;
+  if (created !== undefined && !(Array.isArray(created) && (created.length === 0
+    || (created.length === 1 && created[0] === "data/migrations")
+    || (created.length === 2 && created[0] === "data" && created[1] === "data/migrations")))) throw new Error("Invalid migration marker directory chain");
   for (const value of [j.homeDir, j.sourceRoot, j.targetRoot, j.stagingRoot, j.backupRoot, j.journalPath]) requireCompleteAbsolutePath(value, "journal path");
   for (const value of [...j.parents.map(item => item.path), ...j.sourceTrees.map(item => item.path), ...j.entries.flatMap(item => [item.source, item.target]), ...j.moves.flatMap(item => [item.from, item.to])]) requireCompleteAbsolutePath(value, "journal entry");
   const requiredParents = [j.homeDir, dirname(j.sourceRoot), dirname(j.targetRoot)];
