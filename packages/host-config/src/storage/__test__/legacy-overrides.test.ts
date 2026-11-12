@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { resolve } from "node:path";
+import { describe, expect, it, vi } from "vitest";
+import { join, parse, resolve, sep } from "node:path";
 import * as paths from "../paths.js";
 
 describe("legacy directory override preflight", () => {
@@ -13,5 +13,27 @@ describe("legacy directory override preflight", () => {
     expect(() => paths.assertNoLegacyDirectoryOverrides(root, env)).toThrow(/VYKOR_DATA_DIR.*old-data[\s\S]*VYKOR_IMAGE_ATTACHMENT_CACHE_DIR.*old-images/);
     expect(paths.inspectLegacyDirectoryOverrides(root, { VYKOR_DATA_DIR: resolve(root, "data/../data") })).toEqual([]);
     expect(paths.inspectLegacyDirectoryOverrides(root, { VYKOR_DATA_DIR: "temporary-selected-root/data" })).toHaveLength(1);
+  });
+});
+
+describe("equivalent absolute override directories", () => {
+  it.each([
+    ["VYKOR_DATA_DIR", ["data"]],
+    ["VYKOR_CHANNELS_DIR", ["channels"]],
+    ["VYKOR_IMAGE_ATTACHMENT_CACHE_DIR", ["data", "attachments", "images"]],
+  ] as const)("accepts trailing separators for %s without consulting cwd", (source, segments) => {
+    const roots = [resolve("temporary-selected-root"), parse(resolve(".")).root];
+    if (process.platform === "win32") roots.push("\\\\example.invalid\\share\\", "\\\\example.invalid\\share");
+    for (const root of roots) {
+      const expected = join(root, ...segments);
+      const env = { [source]: `${expected}${sep}${sep}` };
+      const cwd = vi.spyOn(process, "cwd").mockImplementation(() => { throw new Error("Override comparison must not read cwd"); });
+      let conflicts: paths.LegacyDirectoryOverride[];
+      try { conflicts = paths.inspectLegacyDirectoryOverrides(root, env); }
+      finally { cwd.mockRestore(); }
+      expect(conflicts).toEqual([]);
+      expect(() => paths.assertNoLegacyDirectoryOverrides(root, env)).not.toThrow();
+      expect(paths.inspectLegacyDirectoryOverrides(root, { [source]: root })).toEqual([{ source, value: root, expected }]);
+    }
   });
 });

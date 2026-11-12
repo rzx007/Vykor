@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { basename, isAbsolute, join, normalize, resolve } from "node:path";
+import { basename, isAbsolute, join, normalize, parse, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { currentDataRoot, type RootEnvironment } from "./data-root-selection.js";
 export * from "./data-root-selection.js";
@@ -449,7 +449,13 @@ export function inspectLegacyDirectoryOverrides(dataRoot: string, env: RootEnvir
     VYKOR_CHANNELS_DIR: paths.channelsDir,
     VYKOR_IMAGE_ATTACHMENT_CACHE_DIR: paths.imageAttachmentCacheDir,
   };
-  const key = (path: string) => process.platform === "win32" ? normalize(path).toLowerCase() : normalize(path);
+  const key = (path: string) => {
+    const normalized = normalize(path);
+    // normalize retains a final separator; only filesystem roots need to keep it.
+    const directory = normalized.length > parse(normalized).root.length && normalized.endsWith(sep)
+      ? normalized.slice(0, -1) : normalized;
+    return process.platform === "win32" ? directory.toLowerCase() : directory;
+  };
   return Object.entries(sources).flatMap(([source, expected]) => {
     const value = env[source];
     return value !== undefined && (!isAbsolute(value) || key(value) !== key(expected)) ? [{ source, value, expected }] : [];
