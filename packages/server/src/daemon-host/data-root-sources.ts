@@ -180,7 +180,9 @@ export async function inspectDataRootMigration(input: DataRootMigrationRequest):
   await addSource("user-root", input.sourceRoot, target, "user-root");
   const dataDirs = [join(source, "data")];
   if (env.VYKOR_DATA_DIR) dataDirs.push(env.VYKOR_DATA_DIR);
-  const dbPaths: Array<{ path: string; required: boolean }> = [];
+  // Only a directly selected custom database grants an independent scope.
+  // Derived paths keep their owner even after resolving directory aliases.
+  const dbPaths: Array<{ path: string; required: boolean; scope?: string }> = [];
   if (input.legacy?.databasePath) dbPaths.push({ path: input.legacy.databasePath, required: true });
   const locationPaths = [dataLocationFile(join(source, "data")), ...(env.VYKOR_DATA_DIR ? [dataLocationFile(env.VYKOR_DATA_DIR)] : []),
     ...(input.legacy?.dataLocationPath ? [input.legacy.dataLocationPath] : []),
@@ -188,16 +190,20 @@ export async function inspectDataRootMigration(input: DataRootMigrationRequest):
   for (const locationPath of new Set(locationPaths)) await check("invalid_data_location", locationPath, async () => {
     requireCompleteAbsolutePath(locationPath, "data location");
     const location = await readLegacyDataLocation(locationPath);
-    if (location) { dataDirs.push(location.directory); dbPaths.push({ path: location.storePath, required: true }); }
+    if (location) { dataDirs.push(location.directory); dbPaths.push({ path: location.storePath, required: true, scope: location.directory }); }
   });
   for (const directory of new Set(dataDirs)) {
     await addSource("runtime-data", directory, paths.dataDir, "runtime-data", same(directory, join(source, "data")) ? source : directory);
-    dbPaths.push({ path: join(directory, "session-runtime", "sessions.db"), required: false });
+    dbPaths.push({ path: join(directory, "session-runtime", "sessions.db"), required: false, scope: directory });
     await addSource("runtime-data", join(directory, "attachments", "images"), paths.imageAttachmentCacheDir, "cli-default-image-cache", directory);
   }
   const seenDbs = new Set<string>();
   for (const selected of dbPaths) await check("invalid_database", selected.path, async () => {
     const path = await resolveManagedRealPath(selected.path);
+    const scope = selected.scope ? await resolveManagedRealPath(selected.scope) : dirname(path);
+    if (!isWithinManagedPath(path, scope)) {
+      block("unsafe_junction", selected.path, "A derived database resolves outside its selected managed scope."); return;
+    }
     const info = await metadata(path);
     if (!info) {
       if (selected.required || await metadata(`${path}-wal`)) block("database_missing", path, "The selected database is missing; sidecars are not an empty database.");
@@ -207,10 +213,13 @@ export async function inspectDataRootMigration(input: DataRootMigrationRequest):
     seenDbs.add(pathKey(path));
     const db: DataRootMigrationPreview["databases"][number] = { path, inspection: "file-only" };
     preview.databases.push(db);
-    await addSource("runtime-data", path, paths.sessionsDatabasePath, "database");
+    await addSource("runtime-data", path, paths.sessionsDatabasePath, "database", scope);
     for (const suffix of ["-wal", "-shm"] as const) if (await metadata(path + suffix)) {
+      if (!isWithinManagedPath(await resolveManagedRealPath(path + suffix), scope)) {
+        block("unsafe_junction", path + suffix, "A database sidecar resolves outside its selected managed scope."); continue;
+      }
       if (suffix === "-wal") db.walPath = path + suffix; else db.shmPath = path + suffix;
-      await addSource("runtime-data", path + suffix, paths.sessionsDatabasePath + suffix, "database-sidecar");
+      await addSource("runtime-data", path + suffix, paths.sessionsDatabasePath + suffix, "database-sidecar", scope);
     }
     for (const name of ["attachments", "attachment-session-resources", "notes", "storage-policy.json", "usage-settings.json"])
       await addSource("runtime-data", join(dirname(path), name), join(paths.sessionRuntimeDir, name), "database-resource", dirname(path));

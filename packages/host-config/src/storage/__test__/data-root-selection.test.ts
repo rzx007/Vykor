@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, it } from "vitest";
@@ -146,6 +146,18 @@ it.runIf(process.platform === "win32").each(["missing", "empty"])("does not bypa
   expect(() => resolveDataRootSelection({ ...input(), explicitRoot: equivalent })).toThrow(/database.*recover/i);
   expect(() => resolveDataRootSelection({ ...input(), env: { VYKOR_CONFIG_DIR: equivalent } })).toThrow(/database.*recover/i);
   expect(resolveDataRootSelection({ ...input(), explicitRoot: join(home, "genuinely-new") }).source).toBe("explicit");
+});
+
+it.each(["missing", "empty"])("rejects explicit and environment junction aliases of a saved root with a %s database", state => {
+  const saved = join(home, "saved"), alias = join(home, "alias");
+  mkdirSync(join(saved, "data", "session-runtime"), { recursive: true });
+  if (state === "empty") writeFileSync(join(saved, "data", "session-runtime", "sessions.db"), "");
+  symlinkSync(saved, alias, "junction");
+  writeFileSync(join(home, ".vykor-root.json"), JSON.stringify({ version: 1, dataRoot: saved }));
+  for (const choice of [{ explicitRoot: alias }, { env: { VYKOR_CONFIG_DIR: alias } }]) {
+    expect(() => resolveDataRootSelection({ ...input(), ...choice })).toThrow(/database.*recover/i);
+  }
+  expect(resolveDataRootSelection({ ...input(), explicitRoot: join(home, "distinct-new-profile") }).source).toBe("explicit");
 });
 
 it("parses host roots without consuming literal prompt arguments", () => {

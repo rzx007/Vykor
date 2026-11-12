@@ -49,6 +49,8 @@ Desktop 无窗口入口和 CLI 本机登记入口调用 `runRegisteredDaemon()`�
 
 根是磁盘根、home 或真实项目祖先，根互相包含、不同数据库、内容/大小写碰撞、非空且未确认归属的目标、越界 junction、可判断的权限或容量失败都会形成 blocker。同根升级单独标记。外部符号链接只保留链接及原指向；受管指向按映射登记修复，不跟随链接复制根外内容。
 
+从 dataDir 或旧 data-location 派生的数据库保留原目录归属；在加入来源、读文件头或摘要之前，必须确认真实路径仍在该范围内。同名 WAL/SHM 也受原目录约束，旁资源不能越出数据库所在目录。仅明确传入的 custom databasePath 可独立授权其数据库及相邻资源，不能将越界的派生路径自动提升为独立来源。
+
 `access(W_OK)` 只报告可只读判定的权限失败；Windows 完整 ACL 不能据此宣称验证成功，因此始终保留 `target-write-permissions` 门槛。T8 在业务复制和根交换前，通过受管相邻暂存目录的实际创建、写入和权限验证解除该门槛；日志父目录无权限时应在写 pending 选择前安全失败，不伪造日志位置。预检不会启动可能创建 profile 缓存的 PowerShell。
 
 `desktopExportPath` 指向既有 `legacy-import.json` 收据；它不是 LevelDB 或业务正文导出目录。只认可绑定真实 userData 的完整支持键扫描（含零键）及对应来源摘要。未 ACK 的 partial 返回 `needs_desktop_export` 和未解决会话数量；旧目标正常编辑不会因历史 targetDigest 变化而失败。CLI 只读该收据，不能检测未知旧进程对 LevelDB 的离线改动。T10 必须保持冻结并调用 Desktop 新扫描准备接口，T11 在用户明确处理 partial 后重试；已有收据只支持预览，不充当本次停写证明。

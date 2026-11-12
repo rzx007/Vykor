@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import * as fs from "node:fs/promises";
+import * as syncFs from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -10,6 +11,7 @@ import { inspectDataRootMigration } from "../data-root-sources.js";
 import { readLegacyDataLocation } from "../data-location.js";
 import { relocateManagedPath } from "@vykor/host-config/paths";
 vi.mock("node:fs/promises", async importOriginal => ({ ...await importOriginal<typeof import("node:fs/promises")>() }));
+vi.mock("node:fs", async importOriginal => ({ ...await importOriginal<typeof import("node:fs")>() }));
 
 let base: string, home: string, sourceRoot: string, targetRoot: string;
 beforeEach(() => {
@@ -168,6 +170,47 @@ it("does not follow generated channel or database-resource junctions outside the
   const preview = await inspectDataRootMigration({ ...request(), legacy: { documentsDir: docs } });
   expect(preview.blockers.map(item => item.code)).toContain("unsafe_junction");
   expect(preview.entries.some(entry => entry.source.endsWith("do-not-copy.txt"))).toBe(false);
+});
+
+it("rejects a split dataDir database junction before opening unselected DB/WAL/SHM or notes", async () => {
+  const data = join(base, "split"), outside = join(base, "unselected"), db = join(outside, "sessions.db");
+  seedDb(db, true); file(join(outside, "notes", "private.txt"), "unselected private content");
+  mkdirSync(data); symlinkSync(outside, join(data, "session-runtime"), "junction");
+  const before = snapshot(outside), opened: string[] = [];
+  const actualOpen = fs.open, actualStream = syncFs.createReadStream;
+  vi.spyOn(fs, "open").mockImplementation(((path: string, ...args: unknown[]) => { opened.push(path); return Reflect.apply(actualOpen, fs, [path, ...args]); }) as typeof fs.open);
+  vi.spyOn(syncFs, "createReadStream").mockImplementation(((path: string, ...args: unknown[]) => { opened.push(path); return Reflect.apply(actualStream, syncFs, [path, ...args]); }) as typeof syncFs.createReadStream);
+  const preview = await inspectDataRootMigration({ ...request(), environment: { VYKOR_DATA_DIR: data } });
+  expect(preview.blockers).toContainEqual(expect.objectContaining({ code: "unsafe_junction", path: join(data, "session-runtime", "sessions.db") }));
+  expect(preview.entries.some(item => item.source.startsWith(outside))).toBe(false);
+  expect(opened.map(path => syncFs.realpathSync(path)).some(path => path.startsWith(outside))).toBe(false);
+  expect(snapshot(outside)).toEqual(before);
+  // A separately, explicitly selected custom database remains an authorized source.
+  const explicit = await inspectDataRootMigration({ ...request(), legacy: { databasePath: db } });
+  expect(explicit.blockers).toEqual([]);
+  expect(explicit.entries.some(item => item.source === join(outside, "notes", "private.txt"))).toBe(true);
+});
+
+it.each(["-wal", "-shm"])("does not promote an escaped split database %s sidecar to an independent source", async suffix => {
+  const data = join(base, "split"), db = join(data, "session-runtime", "sessions.db"), outside = join(base, "unselected");
+  seedDb(db); file(join(outside, `sidecar${suffix}`), "unselected sidecar");
+  symlinkSync(join(outside, `sidecar${suffix}`), db + suffix, "file");
+  const opened: string[] = [], actualOpen = fs.open, actualStream = syncFs.createReadStream;
+  vi.spyOn(fs, "open").mockImplementation(((path: string, ...args: unknown[]) => { opened.push(path); return Reflect.apply(actualOpen, fs, [path, ...args]); }) as typeof fs.open);
+  vi.spyOn(syncFs, "createReadStream").mockImplementation(((path: string, ...args: unknown[]) => { opened.push(path); return Reflect.apply(actualStream, syncFs, [path, ...args]); }) as typeof syncFs.createReadStream);
+  const preview = await inspectDataRootMigration({ ...request(), environment: { VYKOR_DATA_DIR: data } });
+  expect(preview.blockers.map(item => item.code)).toContain("unsafe_junction");
+  expect(opened.map(path => syncFs.realpathSync(path)).some(path => path.startsWith(outside))).toBe(false);
+});
+
+it("accepts a selected split dataDir alias with a database and resources inside its physical owner", async () => {
+  const data = join(base, "split"), alias = join(base, "selected-alias"), db = join(data, "session-runtime", "sessions.db");
+  seedDb(db, true); file(join(dirname(db), "notes", "owned.txt"));
+  symlinkSync(data, alias, "junction");
+  const preview = await inspectDataRootMigration({ ...request(), environment: { VYKOR_DATA_DIR: alias } });
+  expect(preview.blockers).toEqual([]);
+  expect(preview.databases).toMatchObject([{ path: db, walPath: db + "-wal", shmPath: db + "-shm" }]);
+  expect(preview.entries).toContainEqual(expect.objectContaining({ source: join(dirname(db), "notes", "owned.txt"), target: join(targetRoot, "data", "session-runtime", "notes", "owned.txt") }));
 });
 
 it("leaves registered real projects inside the old Documents area in place", async () => {

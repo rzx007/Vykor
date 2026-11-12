@@ -1,8 +1,8 @@
-import { existsSync, mkdtempSync, readdirSync, rmSync, watch, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { initializeDataRoot, readDataRootSelector, selectDataRoot } from "../data-root-selection.js";
+import { initializeDataRoot, readDataRootSelector, resolveDataRootSelection, selectDataRoot } from "../data-root-selection.js";
 
 const homes: string[] = [];
 const temporaryHome = () => { const home = mkdtempSync(join(tmpdir(), "root-inputs-")); homes.push(home); return home; };
@@ -59,4 +59,21 @@ it.runIf(process.platform === "win32")("rejects a volume-relative selector befor
     await new Promise(resolve => setTimeout(resolve, 30));
     expect(names).not.toContain(".vykor-root.json.lock");
   } finally { watcher.close(); }
+});
+
+it.each(["parent-alias", "dangling-root-alias"])("preserves saved-root recovery through a %s even when the root is missing", async kind => {
+  const home = temporaryHome(), parent = join(home, "parent"), alias = join(home, "alias"), saved = join(parent, "missing-root");
+  mkdirSync(parent);
+  symlinkSync(kind === "parent-alias" ? parent : saved, alias, "junction");
+  const selected = kind === "parent-alias" ? join(alias, "missing-root") : alias;
+  writeFileSync(join(home, ".vykor-root.json"), JSON.stringify({ version: 1, dataRoot: saved }));
+  for (const choice of [{ explicitRoot: selected, env: {} }, { env: { VYKOR_CONFIG_DIR: selected } }]) {
+    // Pure selection must still accept a spelling without touching or repairing the filesystem.
+    expect(selectDataRoot({ ...choice, homeDir: home }).dataRoot).toBe(selected);
+    expect(() => resolveDataRootSelection({ ...choice, homeDir: home })).toThrow(/Saved data root.*recover/i);
+    await expect(initializeDataRoot({ ...choice, homeDir: home })).rejects.toThrow(/Saved data root.*recover/i);
+  }
+  expect(existsSync(saved)).toBe(false);
+  expect(readdirSync(parent)).toEqual([]);
+  expect(resolveDataRootSelection({ homeDir: home, env: {}, explicitRoot: join(home, "genuinely-new") }).source).toBe("explicit");
 });

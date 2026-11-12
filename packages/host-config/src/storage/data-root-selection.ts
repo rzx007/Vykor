@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, readlinkSync, realpathSync, statSync } from "node:fs";
 import { open, rename, rm } from "node:fs/promises";
 import { userInfo } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { securePrivateFile } from "./private-file-permissions.js";
 import { isCompleteAbsolutePath, requireCompleteAbsolutePath } from "./managed-path-relocation.js";
@@ -109,6 +109,22 @@ export async function waitForDataRootSelection(input: DataRootSelectionInput, op
   }
 }
 
+/** Keep saved-root identity when a missing child sits below an alias, including a dangling junction. */
+function rootIdentity(path: string, links = new Set<string>()): string {
+  try { return realpathSync(path); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  let target: string | undefined;
+  try { if (lstatSync(path).isSymbolicLink()) target = readlinkSync(path); }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+  if (target !== undefined) {
+    if (links.has(path)) throw new Error(`Cannot resolve saved data root alias ${path}; run data-root recover.`);
+    links.add(path);
+    return rootIdentity(resolve(dirname(path), target), links);
+  }
+  const parent = dirname(path);
+  return parent === path ? path : join(rootIdentity(parent, links), basename(path));
+}
+
 function resolveUnlockedDataRootSelection(input: DataRootSelectionInput): DataRootSelection {
   const env = input.env ?? process.env;
   const homeDir = input.homeDir ?? dataRootHome(env);
@@ -116,7 +132,8 @@ function resolveUnlockedDataRootSelection(input: DataRootSelectionInput): DataRo
   if (selector?.pendingMigration) throw new Error(`Data root migration ${selector.pendingMigration.id} is pending (${selector.pendingMigration.journalPath}); run data-root recover before starting.`);
   const selected = selectDataRoot({ ...input, env, homeDir, selector });
   if (existsSync(movedDataRootMarkerPath(selected.dataRoot))) throw new Error(`Data root ${selected.dataRoot} has moved; inspect ${movedDataRootMarkerPath(selected.dataRoot)} and run data-root recover.`);
-  const restoresSavedRoot = selected.source === "selector" || (selector !== undefined && relative(selector.dataRoot, selected.dataRoot) === "");
+  const restoresSavedRoot = selected.source === "selector" || (selector !== undefined &&
+    (relative(selector.dataRoot, selected.dataRoot) === "" || relative(rootIdentity(selector.dataRoot), rootIdentity(selected.dataRoot)) === ""));
   if (restoresSavedRoot) {
     try { if (!statSync(selected.dataRoot).isDirectory()) throw new Error("not a directory"); }
     catch { throw new Error(`Saved data root is missing or unavailable: ${selected.dataRoot}; reconnect its disk or run data-root recover. No empty root was created.`); }

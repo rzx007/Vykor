@@ -42,6 +42,8 @@
 
 已保存的数据集还会拒绝零字节数据库，防止 SQLite 将损坏或截断的旧文件当作新空库打开；未保存选择的新 profile 仍可首次初始化。此启动保护只检查文件存在、类型和非零长度，完整 SQLite 验证仍属于停写副本步骤。
 
+保护性 resolver 按真实目录身份识别已保存根，显式参数或环境变量改用 junction / 符号链接别名不能跳过恢复检查。根缺失时解析最近存在的父目录及悬空链接的指向；只读身份判断不创建目录。纯 `selectDataRoot` 仍只比较输入优先级，不读取文件系统，真正不同的新 profile 仍可首次初始化。
+
 显式传入 env 缺少 HOME/USERPROFILE 时，`dataRootHome` 使用操作系统账户 home（`userInfo()`），不回读全局环境；默认调用仍可使用 process.env。异步启动用 `waitForDataRootSelection(input, {deadline, signal})` 等待正常根锁竞争并重新校验，迁移中、迁出、损坏和丢失库仍直接报错。
 
 定位候选文件和锁先收敛权限再写内容：POSIX 新文件为 0600；Windows 设置并核验受保护 ACL，只允许当前用户与 SYSTEM，失败不发布候选文件。既有 home 的模式和 ACL 不修改。Windows 权限工具只在临时隔离 profile 下运行，避免 PowerShell 初始化目录污染调用者 home。
