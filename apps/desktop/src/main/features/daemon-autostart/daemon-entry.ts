@@ -26,8 +26,8 @@ export async function runDesktopDaemonEntry(mode: DesktopDaemonMode): Promise<vo
     const registry = readDaemonRegistry()
     if (registry && daemonPidAlive(registry.pid)) return
     if (!(await shouldStartManagedDaemon())) return
-    const args = app.isPackaged ? ["--daemon-service"] : [app.getAppPath(), "--daemon-service"]
-    const child = spawn(process.execPath, [...args, "--data-root", getDataRoot()], { detached: true, stdio: "ignore", windowsHide: true })
+    const args = [...(app.isPackaged ? [] : [app.getAppPath()]), "--data-root", getDataRoot(), "--daemon-service"]
+    const child = spawn(process.execPath, args, { detached: true, stdio: "ignore", windowsHide: true })
     child.unref()
     return
   }

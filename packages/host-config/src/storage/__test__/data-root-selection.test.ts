@@ -44,6 +44,21 @@ it("does not create an empty root when the saved root is missing", async () => {
   expect(existsSync(dataRoot)).toBe(false);
 });
 
+it.each(["empty mount point", "removed database"])("refuses a saved root with %s even though its directory exists", async scenario => {
+  const dataRoot = join(home, "old-root");
+  const database = join(dataRoot, "data", "session-runtime", "sessions.db");
+  if (scenario === "removed database") {
+    mkdirSync(join(dataRoot, "data", "session-runtime"), { recursive: true });
+    writeFileSync(database, "previous database");
+  } else mkdirSync(dataRoot);
+  await writeDataRootSelector(home, { version: 1, dataRoot });
+  rmSync(database, { force: true });
+  expect(() => resolveDataRootSelection(input())).toThrow(/database.*recover/i);
+  expect(() => resolveDataRootSelection({ ...input(), env: { VYKOR_CONFIG_DIR: dataRoot } })).toThrow(/database.*recover/i);
+  expect(existsSync(database)).toBe(false);
+  if (scenario === "empty mount point") expect(readdirSync(dataRoot)).toEqual([]);
+});
+
 it("refuses a source already marked as moved", () => {
   const root = join(home, "source");
   mkdirSync(join(root, "data", "migrations"), { recursive: true });
@@ -82,7 +97,8 @@ it("initializes a process without creating a default root or selector", async ()
   expect(env.VYKOR_CONFIG_DIR).toBe(selected.dataRoot);
   expect(readdirSync(home)).toEqual([]);
   const target = join(home, "new-root");
-  mkdirSync(target);
+  mkdirSync(join(target, "data", "session-runtime"), { recursive: true });
+  writeFileSync(join(target, "data", "session-runtime", "sessions.db"), "existing database");
   await writeDataRootSelector(home, { version: 1, dataRoot: target });
   expect(resolveDataRootSelection(input()).dataRoot).toBe(target);
   expect(currentDataRoot()).toBe(selected.dataRoot);
@@ -109,7 +125,12 @@ it("does not recreate a missing database referenced by the old saved location", 
 
 it("parses host roots without consuming literal prompt arguments", () => {
   const root = join(home, "with space");
-  expect(parseDataRootArgument(["serve", `--data-root=${root}`, "--register"])).toEqual({ explicitRoot: root, argv: ["serve", "--register"] });
+  expect(parseDataRootArgument([`--data-root=${root}`, "serve", "--register"])).toEqual({ explicitRoot: root, argv: ["serve", "--register"] });
   expect(parseDataRootArgument(["--", "--data-root=literal prompt"])).toEqual({ argv: ["--", "--data-root=literal prompt"] });
   expect(() => parseDataRootArgument(["--data-root"])).toThrow(/--data-root/);
+});
+
+it.each(["--data-root", "--data-root=/some/path"])("preserves another CLI option's literal value %s", value => {
+  const argv = ["--system-prompt", value, "-p", "hi"];
+  expect(parseDataRootArgument(argv)).toEqual({ argv });
 });

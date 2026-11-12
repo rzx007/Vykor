@@ -1,10 +1,10 @@
-import { dataRootHome, resolveDataRootSelection } from "@vykor/host-config/paths";
+import { dataRootHome, waitForDataRootSelection } from "@vykor/host-config/paths";
 import { access, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { VykorClient } from "../transport/http-client.js";
 import { defaultCommand, startProcess, abandonProcess } from "./process.js";
-import { pidAlive, readEndpoint, registryFile, sameInstance, type ServiceEndpoint } from "./registry.js";
+import { pidAlive, readEndpoint, registryFile, registryFileForRoot, sameInstance, type ServiceEndpoint } from "./registry.js";
 import { acquireStartupLock } from "./startup-lock.js";
 
 export interface DiscoverServiceOptions {
@@ -79,36 +79,40 @@ export async function discover(options: DiscoverServiceOptions = {}): Promise<Se
 
 const startups = new Map<string, Promise<ServiceEndpoint>>();
 
-function waitForStartup(pending: Promise<ServiceEndpoint>, signal?: AbortSignal): Promise<ServiceEndpoint> {
+function waitForStartup(pending: Promise<ServiceEndpoint>, end: number, signal?: AbortSignal): Promise<ServiceEndpoint> {
   signal?.throwIfAborted();
-  if (!signal) return pending;
   return new Promise((resolve, reject) => {
-    const abort = () => reject(signal.reason);
-    signal.addEventListener("abort", abort, { once: true });
-    pending.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+    const cleanup = () => { clearTimeout(timer); signal?.removeEventListener("abort", abort); };
+    const abort = () => { cleanup(); reject(signal!.reason); };
+    const timer = setTimeout(() => { cleanup(); reject(new Error("Vykor service startup timed out waiting for the shared startup.")); }, Math.max(1, end - Date.now()));
+    signal?.addEventListener("abort", abort, { once: true });
+    pending.then(value => { cleanup(); resolve(value); }, error => { cleanup(); reject(error); });
   });
 }
 
 /** Reuses a compatible service, otherwise starts a CLI; never kills an existing daemon. */
 export async function ensure(options: EnsureServiceOptions = {}): Promise<ServiceEndpoint> {
   options.signal?.throwIfAborted();
-  timeout(options.timeoutMs, 10_000);
+  const end = Date.now() + timeout(options.timeoutMs, 10_000);
   const env = { ...process.env, ...options.env };
   const selectionEnv = options.env ?? process.env;
   if (!options.file) {
-    env.VYKOR_CONFIG_DIR = resolveDataRootSelection({ env: selectionEnv }).dataRoot;
+    env.VYKOR_CONFIG_DIR = (await waitForDataRootSelection({ env: selectionEnv }, { deadline: end, signal: options.signal })).dataRoot;
     env.VYKOR_DATA_DIR = selectionEnv.VYKOR_DATA_DIR;
     env.HOME = env.USERPROFILE = dataRootHome(selectionEnv);
   }
-  const file = resolve(options.file ?? registryFile({ ...selectionEnv, VYKOR_CONFIG_DIR: env.VYKOR_CONFIG_DIR }));
-  const existing = await discover({ ...options, file });
+  const file = resolve(options.file ?? registryFileForRoot(env.VYKOR_CONFIG_DIR!, selectionEnv));
+  const existing = await discover({ ...options, file, timeoutMs: Math.max(1, end - Date.now()) });
   if (existing) return existing;
   let pending = startups.get(file);
+  const joinsExistingStartup = pending !== undefined;
   if (!pending) {
-    pending = startService({ ...options, file }, env).finally(() => { startups.delete(file); });
+    pending = startService({ ...options, file }, env, end).finally(() => { startups.delete(file); });
     startups.set(file, pending);
   }
-  const endpoint = await waitForStartup(pending, options.signal);
+  // The owner must wait for its timed-out child's cleanup. A joining caller has
+  // its own wait budget and must not cancel that shared owner's work.
+  const endpoint = joinsExistingStartup ? await waitForStartup(pending, end, options.signal) : await pending;
   options.signal?.throwIfAborted();
   if (typeof options.version === "string" && endpoint.version !== options.version
     || typeof options.version === "function" && !options.version(endpoint.version))
@@ -116,8 +120,7 @@ export async function ensure(options: EnsureServiceOptions = {}): Promise<Servic
   return endpoint;
 }
 
-async function startService(options: EnsureServiceOptions & { file: string }, env: Record<string, string | undefined>): Promise<ServiceEndpoint> {
-  const end = Date.now() + timeout(options.timeoutMs, 10_000);
+async function startService(options: EnsureServiceOptions & { file: string }, env: Record<string, string | undefined>, end: number): Promise<ServiceEndpoint> {
   const lease = await acquireStartupLock(options.file, end, options.signal);
   try {
     const locked = { ...options, signal: lease.signal };
@@ -134,7 +137,7 @@ async function startRegisteredService(options: EnsureServiceOptions & { file: st
   if (!previous && await access(options.file).then(() => true, () => false))
     throw new Error("Vykor registry is malformed; inspect it before starting a service.");
   const cwd = resolve(options.cwd ?? process.cwd());
-  if (!options.command && options.file !== registryFile(env))
+  if (!options.command && options.file !== registryFileForRoot((await waitForDataRootSelection({ env }, { deadline: end, signal: options.signal })).dataRoot, env))
     throw new Error("A custom registry file requires a command that writes it, or a matching VYKOR_DATA_DIR.");
   const command = options.command ?? await defaultCommand(cwd);
   options.signal?.throwIfAborted();

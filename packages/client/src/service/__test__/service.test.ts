@@ -8,6 +8,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CURRENT_PROTOCOL_VERSION } from "@vykor/protocol";
 import { Service } from "../index.js";
+import { withDataRootLock } from "@vykor/host-config/paths";
 
 const fixture = fileURLToPath(new URL("./service-fixture.mjs", import.meta.url));
 let directory: string;
@@ -44,9 +45,66 @@ async function start(version = "1.2.3", protocol = String(CURRENT_PROTOCOL_VERSI
 }
 
 describe("local service management", () => {
+  it("waits for normal root initialization and shares the resulting default startup", async () => {
+    const registry = join(directory, ".vykor", "data", "daemon", "registry.json");
+    const options = { env: { HOME: directory, USERPROFILE: directory, START_RECORD: join(directory, "starts") }, command: [process.execPath, fixture, registry, "1.2.3", String(CURRENT_PROTOCOL_VERSION)], timeoutMs: 5_000 };
+    const status = ["waiting", "waiting"];
+    const pending: Promise<void>[] = [];
+    const failures: unknown[] = [];
+    await withDataRootLock(directory, async () => {
+      for (let index = 0; index < 2; index++) pending.push(Service.ensure(options).then(endpoint => { endpoints.push(endpoint); status[index] = "started"; }, error => { failures.push(error); status[index] = "failed"; }));
+      await sleep(80);
+      expect(status).toEqual(["waiting", "waiting"]);
+    }).finally(async () => { await Promise.all(pending); });
+    expect(failures).toEqual([]);
+    expect(endpoints[0]?.pid).toBe(endpoints[1]?.pid);
+    expect(await readFile(join(directory, "starts"), "utf8")).toBe("start\n");
+  });
+
+  it("honors cancellation and the total deadline while waiting for the root lock", async () => {
+    const options = { env: { HOME: directory, USERPROFILE: directory }, command: ["must-not-start"], timeoutMs: 50 };
+    await withDataRootLock(directory, async () => {
+      await expect(Service.ensure(options)).rejects.toThrow(/timed out/i);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 20);
+      try { await expect(Service.ensure({ ...options, timeoutMs: 1_000, signal: controller.signal })).rejects.toMatchObject({ name: "AbortError" }); }
+      finally { clearTimeout(timer); }
+    });
+  });
+
+  it("does not reset the startup deadline after the root lock is released", async () => {
+    const registry = join(directory, ".vykor", "data", "daemon", "registry.json");
+    let pending!: Promise<unknown>;
+    await withDataRootLock(directory, async () => {
+      pending = Service.ensure({ env: { HOME: directory, USERPROFILE: directory }, command: [process.execPath, fixture, registry, "1.2.3", String(CURRENT_PROTOCOL_VERSION), "250"], timeoutMs: 300 }).then(endpoint => { endpoints.push(endpoint); return "unexpected success"; }, error => error);
+      await sleep(170);
+    });
+    expect(await pending).toMatchObject({ message: expect.stringMatching(/timed out/i) });
+  });
+
+  it("still refuses a pending migration after normal root-lock contention", async () => {
+    let pending!: Promise<unknown>;
+    await withDataRootLock(directory, async lock => {
+      pending = Service.ensure({ env: { HOME: directory, USERPROFILE: directory }, command: ["must-not-start"] }).catch(error => error);
+      await lock.writeSelector({ version: 1, dataRoot: directory, pendingMigration: { id: "pending-move", journalPath: join(directory, "journal") } });
+    });
+    expect(await pending).toMatchObject({ message: expect.stringMatching(/pending-move.*recover/i) });
+  });
+
+  it("still refuses a moved root after normal root-lock contention", async () => {
+    let pending!: Promise<unknown>;
+    await withDataRootLock(directory, async () => {
+      pending = Service.ensure({ env: { HOME: directory, USERPROFILE: directory }, command: ["must-not-start"] }).catch(error => error);
+      const migrations = join(directory, ".vykor", "data", "migrations");
+      await mkdir(migrations, { recursive: true });
+      await writeFile(join(migrations, "moved-root.json"), "{}");
+    });
+    expect(await pending).toMatchObject({ message: expect.stringMatching(/moved.*recover/i) });
+  });
   it("starts in the saved root selected by the caller env, without inheriting another global data override", async () => {
     const root = join(directory, "saved");
-    await mkdir(root);
+    await mkdir(join(root, "data", "session-runtime"), { recursive: true });
+    await writeFile(join(root, "data", "session-runtime", "sessions.db"), "existing database");
     await writeFile(join(directory, ".vykor-root.json"), JSON.stringify({ version: 1, dataRoot: root }));
     const registry = join(root, "data", "daemon", "registry.json");
     const endpoint = await Service.ensure({
@@ -179,7 +237,7 @@ describe("local service management", () => {
     await writeFile(join(directory, "package.json"), '{"private":true}');
     await writeFile(join(cliDirectory, "package.json"), JSON.stringify({ name: "@rzx/ohs", bin: { vk: "cli.mjs" } }));
     await writeFile(join(cliDirectory, "cli.mjs"), `process.argv.splice(2, process.argv.length - 2, process.env.FIXTURE_REGISTRY, "1.2.3", ${JSON.stringify(String(CURRENT_PROTOCOL_VERSION))}); await import(${JSON.stringify(new URL("./service-fixture.mjs", import.meta.url).href)});`);
-    const endpoint = await Service.ensure({ cwd: directory, env: { VYKOR_DATA_DIR: directory, FIXTURE_REGISTRY: file }, timeoutMs: 5_000 });
+    const endpoint = await Service.ensure({ cwd: directory, env: { HOME: directory, USERPROFILE: directory, VYKOR_DATA_DIR: directory, FIXTURE_REGISTRY: file }, timeoutMs: 5_000 });
     endpoints.push(endpoint);
     expect(endpoint.file).toBe(file);
     expect((await Service.discover({ file }))?.pid).toBe(endpoint.pid);
@@ -230,6 +288,13 @@ describe("local service management", () => {
       clearTimeout(timer);
       endpoints.push(await owner);
     }
+  });
+
+  it("bounds a joining caller by its own deadline without canceling the owner", async () => {
+    const owner = Service.ensure({ file, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION), "400"], timeoutMs: 5_000 });
+    await sleep(30);
+    try { await expect(Service.ensure({ file, timeoutMs: 50 })).rejects.toThrow(/timed out/i); }
+    finally { endpoints.push(await owner); }
   });
 
   it("coordinates independently loaded SDK copies through the registry file", async () => {

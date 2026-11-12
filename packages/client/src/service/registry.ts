@@ -16,9 +16,14 @@ export interface ServiceEndpoint {
 
 export function registryFile(env: Record<string, string | undefined> = process.env): string {
   const selection = resolveDataRootSelection({ env });
+  return registryFileForRoot(selection.dataRoot, env);
+}
+
+/** A previously guarded selection avoids a second selection race during startup. */
+export function registryFileForRoot(dataRoot: string, env: Record<string, string | undefined>): string {
   // Retain the legacy data override until the migration preflight owns it.
   return env.VYKOR_DATA_DIR === undefined
-    ? resolveUserDataPaths(selection.dataRoot).daemonRegistryFilePath
+    ? resolveUserDataPaths(dataRoot).daemonRegistryFilePath
     : resolve(env.VYKOR_DATA_DIR, "daemon", "registry.json");
 }
 

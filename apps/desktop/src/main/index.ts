@@ -14,9 +14,10 @@ if (!process.argv.some(arg => ["--daemon-service", "--daemon-watchdog", "--daemo
 }
 
 async function main(): Promise<void> {
-  const parsed = parseDataRootArgument(process.argv.slice(1))
+  const hostArgOffset = app.isPackaged ? 1 : 2
+  const parsed = parseDataRootArgument(process.argv.slice(hostArgOffset))
   const selected = await initializeDataRoot({ explicitRoot: parsed.explicitRoot })
-  process.argv = [process.argv[0]!, ...parsed.argv]
+  process.argv = [...process.argv.slice(0, hostArgOffset), ...parsed.argv]
   console.info(`[data-root] ${selected.dataRoot} (source: ${selected.source})`)
   await import("./application")
 }

@@ -24,7 +24,7 @@ program
     "Vykor - Open Source AI Agent Framework. Interactive default: TUI/daemon (requires Bun). One-shot: pass a prompt or use -p/--print.",
   )
   .version(VERSION)
-  .option("--data-root <path>", "Absolute user data root (selected before command loading)")
+  .addHelpText("after", "\nHost option: vykor --data-root <absolute-path> [command/options]. --data-root must be first.")
   .argument(
     "[prompt]",
     "Initial prompt to send (print mode; omit for interactive TUI)",

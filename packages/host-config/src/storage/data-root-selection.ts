@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { chmod, mkdir, open, rename, rm } from "node:fs/promises";
-import { homedir } from "node:os";
+import { open, rename, rm } from "node:fs/promises";
+import { userInfo } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
+import { securePrivateFile } from "./private-file-permissions.js";
 
 export type RootEnvironment = Record<string, string | undefined>;
 export interface DataRootSelection {
@@ -43,7 +44,7 @@ export function selectDataRoot(input: {
 
 /** Explicit env callers must not accidentally consult process.env for their home. */
 export function dataRootHome(env: RootEnvironment = process.env): string {
-  return env.USERPROFILE ?? env.HOME ?? homedir();
+  return env.USERPROFILE ?? env.HOME ?? userInfo().homedir;
 }
 
 export function dataRootSelectorPath(homeDir: string): string { return join(homeDir, ".vykor-root.json"); }
@@ -77,10 +78,28 @@ export function readDataRootSelector(homeDir: string): DataRootSelector | undefi
 }
 
 /** Read-only startup/discovery; a recorded but unavailable root is never a fresh install. */
+export class DataRootLockBusyError extends Error {
+  readonly code = "data_root_locked";
+  constructor(readonly lockPath: string) {
+    super(`Data root lock is held at ${lockPath}; wait for the owner or run data-root recover after verifying it has stopped.`);
+  }
+}
+
 export function resolveDataRootSelection(input: DataRootSelectionInput = {}): DataRootSelection {
   const homeDir = input.homeDir ?? dataRootHome(input.env ?? process.env);
-  if (existsSync(`${dataRootSelectorPath(homeDir)}.lock`)) throw new Error(`Data root lock is held at ${dataRootSelectorPath(homeDir)}.lock; wait for the owner or run data-root recover after verifying it has stopped.`);
+  if (existsSync(`${dataRootSelectorPath(homeDir)}.lock`)) throw new DataRootLockBusyError(`${dataRootSelectorPath(homeDir)}.lock`);
   return resolveUnlockedDataRootSelection(input);
+}
+
+/** Async callers wait for ordinary startup contention within their original deadline. */
+export async function waitForDataRootSelection(input: DataRootSelectionInput, options: { deadline: number; signal?: AbortSignal }): Promise<DataRootSelection> {
+  for (;;) {
+    options.signal?.throwIfAborted();
+    if (Date.now() >= options.deadline) throw new Error("Vykor service startup timed out waiting for the data root lock.");
+    try { return resolveDataRootSelection(input); }
+    catch (error) { if (!(error instanceof DataRootLockBusyError)) throw error; }
+    await sleep(Math.max(1, Math.min(25, options.deadline - Date.now())), undefined, { signal: options.signal });
+  }
 }
 
 function resolveUnlockedDataRootSelection(input: DataRootSelectionInput): DataRootSelection {
@@ -90,19 +109,29 @@ function resolveUnlockedDataRootSelection(input: DataRootSelectionInput): DataRo
   if (selector?.pendingMigration) throw new Error(`Data root migration ${selector.pendingMigration.id} is pending (${selector.pendingMigration.journalPath}); run data-root recover before starting.`);
   const selected = selectDataRoot({ ...input, env, homeDir, selector });
   if (existsSync(movedDataRootMarkerPath(selected.dataRoot))) throw new Error(`Data root ${selected.dataRoot} has moved; inspect ${movedDataRootMarkerPath(selected.dataRoot)} and run data-root recover.`);
-  if (selected.source === "selector" || selector?.dataRoot === selected.dataRoot) {
+  const restoresSavedRoot = selected.source === "selector" || selector?.dataRoot === selected.dataRoot;
+  if (restoresSavedRoot) {
     try { if (!statSync(selected.dataRoot).isDirectory()) throw new Error("not a directory"); }
     catch { throw new Error(`Saved data root is missing or unavailable: ${selected.dataRoot}; reconnect its disk or run data-root recover. No empty root was created.`); }
   }
-  assertLegacyDatabaseAvailable(join(env.VYKOR_DATA_DIR ?? join(selected.dataRoot, "data"), "daemon", "data-location.json"));
+  const dataDir = env.VYKOR_DATA_DIR ?? join(selected.dataRoot, "data");
+  const hasLegacyLocation = assertLegacyDatabaseAvailable(join(dataDir, "daemon", "data-location.json"));
+  // A saved selection restores an existing store. Only an unsaved explicit,
+  // environment or default selection may initialize a genuinely new root.
+  if (restoresSavedRoot && !hasLegacyLocation) assertDatabaseAvailable(join(dataDir, "session-runtime", "sessions.db"));
   return selected;
 }
 
 /** Until old selection is migrated, refusing a lost database prevents silent data loss. */
-function assertLegacyDatabaseAvailable(file: string): void {
+function assertDatabaseAvailable(file: string): void {
+  try { if (!statSync(file).isFile()) throw new Error("not a database file"); }
+  catch { throw new Error(`Saved database is missing or unavailable (${file}); reconnect its disk or run data-root recover. No empty database was created.`); }
+}
+
+function assertLegacyDatabaseAvailable(file: string): boolean {
   let text: string;
   try { text = readFileSync(file, "utf8"); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; }
   try {
     const value = JSON.parse(text);
     const location = value?.version === 1 && value.location;
@@ -110,6 +139,7 @@ function assertLegacyDatabaseAvailable(file: string): void {
     const storePath = location.storePath ?? join(location.directory, "session-runtime", "sessions.db");
     if (typeof storePath !== "string" || !isAbsolute(storePath) || !statSync(storePath).isFile()) throw new Error("missing database");
   } catch { throw new Error(`Saved database is missing or its location is invalid (${file}); reconnect its disk or run data-root recover before starting.`); }
+  return true;
 }
 
 export interface DataRootLockState {
@@ -158,15 +188,14 @@ export async function withDataRootLock<T>(homeDir: string, operation: (lock: Dat
     }
   }
   try {
+    await securePrivateFile(lockPath);
     await handle.writeFile(JSON.stringify({ pid: process.pid, ownerToken: randomUUID() }), "utf8");
     return await operation({ writeSelector: async selector => {
       const validated = validateSelector(selector, file);
-      // The fixed locator lives directly in home; never chmod or create a data root.
-      if (process.platform !== "win32") await chmod(homeDir, 0o700);
       const temporary = `${file}.${randomUUID()}.tmp`;
       try {
         const output = await open(temporary, "wx", 0o600);
-        try { await output.writeFile(JSON.stringify(validated, null, 2), "utf8"); await output.sync(); }
+        try { await securePrivateFile(temporary); await output.writeFile(JSON.stringify(validated, null, 2), "utf8"); await output.sync(); }
         finally { await output.close(); }
         await rename(temporary, file);
       } finally { await rm(temporary, { force: true }); }
@@ -175,7 +204,6 @@ export async function withDataRootLock<T>(homeDir: string, operation: (lock: Dat
 }
 
 export async function writeDataRootSelector(homeDir: string, selector: DataRootSelector): Promise<void> {
-  await mkdir(homeDir, { recursive: true, mode: 0o700 });
   await withDataRootLock(homeDir, lock => lock.writeSelector(selector));
 }
 
@@ -200,19 +228,11 @@ export function getInitializedDataRootSelection(): DataRootSelection | undefined
   return initializedSelection && { ...initializedSelection };
 }
 
-/** Consume only the host root option, before loading any command modules. */
+/** Only the leading host option is unambiguous without parsing command-specific values. */
 export function parseDataRootArgument(argv: readonly string[]): { explicitRoot?: string; argv: string[] } {
-  const remaining: string[] = [];
-  let explicitRoot: string | undefined;
-  for (let index = 0; index < argv.length; index++) {
-    const arg = argv[index]!;
-    if (arg === "--") { remaining.push(...argv.slice(index)); break; }
-    if (arg === "--data-root" || arg.startsWith("--data-root=")) {
-      if (explicitRoot !== undefined) throw new Error("--data-root may only be specified once");
-      const value = arg === "--data-root" ? argv[++index] : arg.slice("--data-root=".length);
-      if (value === undefined) throw new Error("--data-root requires an absolute path");
-      explicitRoot = absoluteRoot(value, "--data-root");
-    } else remaining.push(arg);
-  }
-  return { ...(explicitRoot === undefined ? {} : { explicitRoot }), argv: remaining };
+  const first = argv[0];
+  if (first !== "--data-root" && !first?.startsWith("--data-root=")) return { argv: [...argv] };
+  const value = first === "--data-root" ? argv[1] : first.slice("--data-root=".length);
+  if (value === undefined) throw new Error("--data-root requires an absolute path as the first option");
+  return { explicitRoot: absoluteRoot(value, "--data-root"), argv: argv.slice(first === "--data-root" ? 2 : 1) };
 }

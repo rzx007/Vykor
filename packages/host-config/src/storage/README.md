@@ -8,6 +8,7 @@
 | --- | --- |
 | [atomic-json-write.ts](./atomic-json-write.ts) | `AtomicJsonWriteOperations`、`writeJsonFileAtomically` |
 | [data-root-selection.ts](./data-root-selection.ts) | 纯根选择、固定定位记录、启动保护、稳定锁与进程内固定选择 |
+| [private-file-permissions.ts](./private-file-permissions.ts) | 新定位文件与锁的私有权限；保留既有 home 权限 |
 | [git.ts](./git.ts) | `GitRepositoryInfo`、`resolveGitRepository` |
 | [paths.ts](./paths.ts) | `UserDataPaths`、`ResolvedPaths`、`resolveUserDataPaths`、`resolvePaths`、`getDataRoot` 及命名路径 getter |
 
@@ -34,3 +35,11 @@
 与本目录职责一起修改的代码放在这里；跨分类的公共入口由上层目录组织。
 
 测试位于 [`__test__/`](./__test__)；只覆盖下级分类的测试放在对应分类的 `__test__/`。
+
+已保存的 selector 表示恢复既有根：除根目录外，规范 sessions.db 或旧 data-location 指向的数据库也必须存在。首次新建应使用尚未保存选择的显式参数、环境或默认根；不能通过保存一个空目录跳过恢复保护。
+
+显式传入 env 缺少 HOME/USERPROFILE 时，`dataRootHome` 使用操作系统账户 home（`userInfo()`），不回读全局环境；默认调用仍可使用 process.env。异步启动用 `waitForDataRootSelection(input, {deadline, signal})` 等待正常根锁竞争并重新校验，迁移中、迁出、损坏和丢失库仍直接报错。
+
+定位候选文件和锁先收敛权限再写内容：POSIX 新文件为 0600；Windows 设置并核验受保护 ACL，只允许当前用户与 SYSTEM，失败不发布候选文件。既有 home 的模式和 ACL 不修改。Windows 权限工具只在临时隔离 profile 下运行，避免 PowerShell 初始化目录污染调用者 home。
+
+`parseDataRootArgument` 仅识别第一个参数位置的 `--data-root <路径>` 或 `--data-root=<路径>`，后面的参数原样交给宿主选项解析，防止把其他选项的文本值误当作根。
