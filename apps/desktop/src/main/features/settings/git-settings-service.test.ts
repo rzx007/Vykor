@@ -1,3 +1,4 @@
+import { getDesktopDataDir } from "@vykor/host-config/paths"
 import { execFile } from "node:child_process"
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
 import { join, relative } from "node:path"
@@ -65,6 +66,7 @@ const service = new GitSettingsService()
 let base: string
 beforeAll(async () => {
   base = await mkdtemp(join(tmpdir(), "vykor-git-settings-"))
+  vi.stubEnv("VYKOR_CONFIG_DIR", join(base, "root"))
   host.userData = join(base, "settings")
   host.projectPath = join(base, "project")
   await mkdir(host.projectPath)
@@ -77,15 +79,16 @@ beforeAll(async () => {
   await command("git", ["commit", "-m", "initial"], { cwd: host.projectPath })
 })
 afterAll(async () => {
+  vi.unstubAllEnvs()
   await rm(base, { recursive: true, force: true })
 })
 describe("Git settings", () => {
   it("persists a versioned preference file and rejects stale saves", async () => {
-    const initial = readGitSettingsAt(host.userData)
+    const initial = readGitSettingsAt(getDesktopDataDir())
     expect(initial.preferences).toEqual(defaultGitPreferences)
     const preferences = { ...initial.preferences, branchPrefix: "test/", ignoreWhitespace: true }
     await service.updatePreferences({ preferences, expected: initial.preferences })
-    expect(readGitSettingsAt(host.userData).preferences).toEqual(preferences)
+    expect(readGitSettingsAt(getDesktopDataDir()).preferences).toEqual(preferences)
     await expect(
       service.updatePreferences({ preferences: initial.preferences, expected: initial.preferences })
     ).rejects.toThrow("已被修改")
@@ -169,8 +172,8 @@ describe("Git settings", () => {
     }
   })
   it("protects dirty worktrees, unmerged commits and active sessions", async () => {
-    const settings = readGitSettingsAt(host.userData)
-    writeGitSettingsAt(host.userData, {
+    const settings = readGitSettingsAt(getDesktopDataDir())
+    writeGitSettingsAt(getDesktopDataDir(), {
       ...settings,
       preferences: {
         ...settings.preferences,
@@ -230,7 +233,7 @@ describe("Git settings", () => {
       sessionId: "session",
       binding: { id: record.id, path: record.path, branch: record.branch },
     })
-    expect(readGitSettingsAt(host.userData).worktrees).toEqual([])
+    expect(readGitSettingsAt(getDesktopDataDir()).worktrees).toEqual([])
   })
   it("reports removed directories separately and retries failed binding updates without deleting again", async () => {
     const record = await service.createTaskWorktree("project", host.projectPath)
@@ -244,7 +247,7 @@ describe("Git settings", () => {
     host.bindingFailure = true
     try {
       await expect(service.cleanup({ id: record.id })).rejects.toThrow("目录已清理")
-      expect(readGitSettingsAt(host.userData).worktrees).toHaveLength(1)
+      expect(readGitSettingsAt(getDesktopDataDir()).worktrees).toHaveLength(1)
       const pending = (await service.worktrees())[0]!
       expect(pending.cleanupAllowed).toBe(true)
       expect(pending.reason).toContain("绑定")
@@ -252,7 +255,7 @@ describe("Git settings", () => {
       host.bindingFailure = false
     }
     await new GitSettingsService().cleanup({ id: record.id })
-    expect(readGitSettingsAt(host.userData).worktrees).toEqual([])
+    expect(readGitSettingsAt(getDesktopDataDir()).worktrees).toEqual([])
     expect(host.state.session.metadata).toEqual({ desktop: { settingsRoot: host.projectPath } })
     expect(
       (await command("git", ["show-ref", `refs/heads/${record.branch}`], { cwd: host.projectPath }))
@@ -260,8 +263,8 @@ describe("Git settings", () => {
     ).toBeTruthy()
   })
   it("rejects an old external worktreeRoot before allocating another task directory", async () => {
-    const current = readGitSettingsAt(host.userData)
-    writeGitSettingsAt(host.userData, {
+    const current = readGitSettingsAt(getDesktopDataDir())
+    writeGitSettingsAt(getDesktopDataDir(), {
       ...current,
       preferences: { ...current.preferences, worktreeRoot: join(base, "old-worktrees") },
     })
@@ -270,15 +273,15 @@ describe("Git settings", () => {
         /old-worktrees.*迁移/
       )
     } finally {
-      writeGitSettingsAt(host.userData, current)
+      writeGitSettingsAt(getDesktopDataDir(), current)
     }
   })
   it("rejects malformed saved formats instead of guessing a migration", () => {
-    writeGitSettingsAt(host.userData, {
+    writeGitSettingsAt(getDesktopDataDir(), {
       version: 1,
       preferences: { ...defaultGitPreferences, branchPrefix: "../bad" },
       worktrees: [],
     })
-    expect(() => readGitSettingsAt(host.userData)).toThrow("格式无效")
+    expect(() => readGitSettingsAt(getDesktopDataDir())).toThrow("格式无效")
   })
 })

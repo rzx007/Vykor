@@ -481,6 +481,9 @@ importers:
       '@vykor/application-client':
         specifier: workspace:*
         version: link:../../packages/application-client
+      '@vykor/host-config':
+        specifier: workspace:*
+        version: link:../../packages/host-config
       '@vykor/server':
         specifier: workspace:*
         version: link:../../packages/server

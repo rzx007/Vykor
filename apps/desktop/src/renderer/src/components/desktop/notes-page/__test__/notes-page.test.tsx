@@ -1,3 +1,4 @@
+import { businessDataFixture, businessDataSnapshot, resetBusinessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 // @vitest-environment jsdom
 
 import { act } from "react"
@@ -67,6 +68,8 @@ describe("NotesPage", () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     localStorage.clear()
+    resetBusinessDataFixture()
+    Object.defineProperty(window, "desktop", { configurable: true, value: { businessData: businessDataFixture } })
     // jsdom does not provide browser layout observers; keep the real popover.
     vi.stubGlobal(
       "ResizeObserver",
@@ -149,6 +152,7 @@ describe("NotesPage", () => {
     Object.defineProperty(window, "desktop", {
       configurable: true,
       value: {
+        businessData: businessDataFixture,
         clipboard: { writeText: vi.fn(async () => undefined) },
         notes: api,
       },
@@ -480,7 +484,7 @@ describe("NotesPage", () => {
     await waitForDetailClose()
     expect(container.textContent).toContain("保存失败")
     expect(container.textContent).toContain("disk unavailable")
-    expect(localStorage.getItem("vykor.desktop.note-recovery-v1")).toContain("keep this idea")
+    expect(JSON.stringify(businessDataSnapshot({ kind: "notes" }))).toContain("keep this idea")
     await act(async () => {
       ;(
         container.querySelector(

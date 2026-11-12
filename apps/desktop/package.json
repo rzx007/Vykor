@@ -9,7 +9,7 @@
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
-    "test": "vitest run && node --test scripts/verify-migration-artifact.test.mjs && node scripts/verify-update-packaging.mjs && node scripts/verify-workspace-boundaries.mjs",
+    "test": "vitest run && node --test scripts/verify-migration-artifact.test.mjs && node scripts/verify-update-packaging.mjs && node --test scripts/__test__/workspace-boundaries.test.mjs",
     "test:conversation-performance": "electron-vite build --config tests/conversation-performance/electron.vite.config.ts && node scripts/test-conversation-performance.mjs",
     "test:plugin-apps-electron": "node scripts/build-plugin-apps-backend.mjs && electron-vite build --config tests/plugin-apps-electron/electron.vite.config.ts && node scripts/test-plugin-apps-electron.mjs",
     "test:browser-annotations-electron": "electron-vite build --config tests/browser-annotations-electron/electron.vite.config.ts && node scripts/test-browser-annotations-electron.mjs",
@@ -82,6 +82,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
     "@vykor/application-client": "workspace:*",
+    "@vykor/host-config": "workspace:*",
     "@vykor/server": "workspace:*",
     "@xterm/addon-fit": "^0.10.0",
     "@xterm/addon-web-links": "^0.11.0",

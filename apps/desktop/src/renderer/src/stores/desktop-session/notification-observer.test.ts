@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import type {
@@ -33,7 +34,7 @@ describe("notifyForSessionViewChange", () => {
     notify.mockClear()
     snapshot.mockClear()
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         settings: { snapshot },
         tray: { notify },
       },

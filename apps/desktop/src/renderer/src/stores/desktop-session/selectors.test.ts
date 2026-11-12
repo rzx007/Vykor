@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 import { describe, expect, it } from "vitest"
 
 import { createEmptySessionRuntime } from "./operation-state"
@@ -128,7 +129,7 @@ describe("selectImSessionGroups", () => {
           channelSession({
             id: "pinned",
             updatedAt: 2,
-            metadata: { externalConversation: { connector: "feishu" }, desktop: { pinnedAt: 5 } },
+            metadata: { externalConversation: { connector: "feishu" }, desktop: { businessData: businessDataFixture, pinnedAt: 5 } },
           }),
           channelSession({
             id: "slack-new",
@@ -149,7 +150,7 @@ describe("desktop session selectors", () => {
   it("uses a stable task workspace for right-panel tools without changing its owning project", () => {
     const project = { id: "project", name: "Owner", path: "D:\\owner", lastOpenedAt: 1, available: true };
     const session: DesktopSessionRecord = { id: "task", projectId: project.id, cwd: "D:\\tasks\\tree", title: "Task", model: "m", status: "idle", createdAt: 1, updatedAt: 2,
-      metadata: { desktop: { settingsRoot: project.path, worktree: { id: "tree", path: "D:\\tasks\\tree", branch: "task/tree" } } } };
+      metadata: { desktop: { businessData: businessDataFixture, settingsRoot: project.path, worktree: { id: "tree", path: "D:\\tasks\\tree", branch: "task/tree" } } } };
     const state = stateWith({ selectedProject: project, projects: [project], activeSessionId: session.id, sessions: [session] });
     const workspace = selectActiveWorkspaceProject(state);
     expect(workspace).toMatchObject({ id: project.id, path: session.cwd });

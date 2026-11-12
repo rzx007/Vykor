@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 // @vitest-environment jsdom
 import type { MouseEvent as ReactMouseEvent } from "react"
 import { afterEach, beforeEach, expect, it } from "vitest"
@@ -16,7 +17,7 @@ beforeEach(() => {
   viewport.innerHTML = "<p>  中文第一行\nsecond line  </p><p>第二条消息</p>"
   document.body.append(viewport)
   Object.assign(window, {
-    desktop: {
+    desktop: { businessData: businessDataFixture,
       clipboard: {
         writeText: async (text: string) => {
           clipboardText = text

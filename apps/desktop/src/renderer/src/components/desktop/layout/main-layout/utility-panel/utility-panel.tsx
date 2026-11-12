@@ -147,14 +147,17 @@ export function UtilityPanel({
     setHandledAppRequestId,
   } = useUtilityPanelRuntime(scopeId)
   const [terminalCommands, setTerminalCommands] = useState<TerminalPanelCommand[]>([])
-  const imageNavigationGuardRef = useRef<((keyboard?: boolean) => boolean) | null>(null)
+  const imageNavigationGuardRef = useRef<((keyboard?: boolean) => boolean | Promise<boolean>) | null>(null)
 
   useEffect(() => {
     if (!imageOpenRequest || handledImageRequestId === imageOpenRequest.id) return
-    const timer = window.setTimeout(() => {
+    let cancelled = false
+    const timer = window.setTimeout(async () => {
       // Consume a blocked request so it cannot unexpectedly switch images after saving later.
+      const allowed = !imageNavigationGuardRef.current || await imageNavigationGuardRef.current()
+      if (cancelled) return
       setHandledImageRequestId(imageOpenRequest.id)
-      if (imageNavigationGuardRef.current && !imageNavigationGuardRef.current()) return
+      if (!allowed) return
       const source = imageOpenRequest.source
       const gallery = imageOpenRequest.gallery?.sources.some(
         (item) => imageSourceKey(item) === imageSourceKey(source)
@@ -176,7 +179,7 @@ export function UtilityPanel({
       )
       setActiveTabId(id)
     }, 0)
-    return () => window.clearTimeout(timer)
+    return () => { cancelled = true; window.clearTimeout(timer) }
   }, [imageOpenRequest, handledImageRequestId, setTabs, setActiveTabId, setHandledImageRequestId])
   const terminalCommandSequenceRef = useRef(0)
   const handledReviewRequestRef = useRef<number | null>(null)

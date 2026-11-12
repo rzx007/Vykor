@@ -1,3 +1,5 @@
+import { businessDataSnapshot } from "@renderer/lib/__test__/business-data-fixture"
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 // @vitest-environment jsdom
 import { clearSubmittedDraft } from "../composer-draft-state"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -10,13 +12,14 @@ import {
   markComposerSessionTransient,
   readComposerRecovery,
   saveComposerRecovery,
+  decodeComposerRecovery,
 } from "../composer-recovery"
 
 describe("composer recovery", () => {
   it("does not revive a new session deleted while its initial snapshot is pending", async () => {
     let resolveOpen!: (view: ReturnType<typeof emptySessionView>) => void
     const sendPrompt = vi.fn()
-    vi.stubGlobal("window", { desktop: { sessions: {
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: {
       create: vi.fn(async () => emptySessionView("deleted-first").session),
       open: vi.fn(() => new Promise(resolve => { resolveOpen = resolve })), sendPrompt,
     } } })
@@ -35,7 +38,7 @@ describe("composer recovery", () => {
     async (kind) => {
       const sendPrompt = vi.fn()
       vi.stubGlobal("window", {
-        desktop: {
+        desktop: { businessData: businessDataFixture,
           sessions: {
             sendPrompt,
             create: vi.fn(async () => emptySessionView("created").session),
@@ -51,7 +54,7 @@ describe("composer recovery", () => {
       })
       const scope = kind === "first" ? "new-conversation" : "session:s"
       useDesktopSessionStore.getState().setComposerDraftText(scope, "retained")
-      vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      vi.spyOn(businessDataFixture, "write").mockImplementation(async () => {
         throw new DOMException("quota", "QuotaExceededError")
       })
       const action =
@@ -70,11 +73,11 @@ describe("composer recovery", () => {
   it("does not retry an unaccepted input while storage is unavailable", async () => {
     const sendPrompt = vi.fn().mockRejectedValueOnce(new Error("offline"))
     const checkPromptAccepted = vi.fn().mockResolvedValue(false)
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt, checkPromptAccepted } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt, checkPromptAccepted } } })
     useDesktopSessionStore.setState({ activeSessionId: "s", sessionView: emptySessionView("s") })
     await expect(useDesktopSessionStore.getState().sendMessage("hello")).rejects.toThrow("offline")
     const id = sendPrompt.mock.calls[0]![0].id
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    vi.spyOn(businessDataFixture, "write").mockImplementation(async () => {
       throw new Error("quota")
     })
     await expect(useDesktopSessionStore.getState().retryPromptSubmission(id)).rejects.toThrow(
@@ -89,7 +92,7 @@ describe("composer recovery", () => {
       .mockRejectedValueOnce(new Error("offline"))
       .mockResolvedValue(undefined)
     const checkPromptAccepted = vi.fn().mockResolvedValue(false)
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt, checkPromptAccepted } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt, checkPromptAccepted } } })
     useDesktopSessionStore.setState({ activeSessionId: "s", sessionView: emptySessionView("s") })
     pluginAppModelContexts.put({ id: "ctx", source: { sessionId: "s", appId: "app" } } as never)
     await expect(useDesktopSessionStore.getState().sendMessage("hello")).rejects.toThrow()
@@ -104,7 +107,7 @@ describe("composer recovery", () => {
 
   it("restores the actual empty draft without resurrecting dismissed submissions", async () => {
     vi.stubGlobal("window", {
-      desktop: { sessions: { sendPrompt: vi.fn().mockRejectedValue(new Error("offline")) } },
+      desktop: { businessData: businessDataFixture, sessions: { sendPrompt: vi.fn().mockRejectedValue(new Error("offline")) } },
     })
     useDesktopSessionStore.setState({ activeSessionId: "s", sessionView: emptySessionView("s") })
     useDesktopSessionStore.getState().setComposerDraftText("session:s", "obsolete")
@@ -114,8 +117,8 @@ describe("composer recovery", () => {
     )[0]!
     useDesktopSessionStore.getState().dismissPromptSubmission(id)
     useDesktopSessionStore.getState().setComposerDraftText("session:s", "")
-    saveComposerRecovery(useDesktopSessionStore.getState())
-    const recovered = readComposerRecovery()
+    await saveComposerRecovery(useDesktopSessionStore.getState())
+    const recovered = await readComposerRecovery()
     expect(recovered.composerDraftsByScope["session:s"]?.document.items ?? []).toEqual([])
     expect(recovered.sessionRuntimes.s?.pendingPromptSubmissions[id]).toMatchObject({
       id,
@@ -125,21 +128,21 @@ describe("composer recovery", () => {
 
   it("stores submission text once and derives display content when reading", async () => {
     vi.stubGlobal("window", {
-      desktop: { sessions: { sendPrompt: vi.fn().mockRejectedValue(new Error("offline")) } },
+      desktop: { businessData: businessDataFixture, sessions: { sendPrompt: vi.fn().mockRejectedValue(new Error("offline")) } },
     })
     useDesktopSessionStore.setState({ activeSessionId: "s", sessionView: emptySessionView("s") })
     await expect(useDesktopSessionStore.getState().sendMessage("one copy")).rejects.toThrow()
-    saveComposerRecovery(useDesktopSessionStore.getState())
-    const saved = JSON.parse(localStorage.getItem("vykor.desktop.composer-recovery.v1")!)
+    await saveComposerRecovery(useDesktopSessionStore.getState())
+    const saved = businessDataSnapshot({ kind: "composer" })
       .submissions[0]
     expect(saved.content).toBeUndefined()
     expect(saved.draftDocument).toBeUndefined()
     expect(
-      Object.values(readComposerRecovery().sessionRuntimes.s!.pendingPromptSubmissions)[0]?.content
+      Object.values((await readComposerRecovery()).sessionRuntimes.s!.pendingPromptSubmissions)[0]?.content
     ).toBe("one copy")
   })
 
-  it("does not remove a newly added card that happens to reuse the same uploaded asset", () => {
+  it("does not remove a newly added card that happens to reuse the same uploaded asset", async () => {
     const attachment = {
       draftId: "new-card",
       taskId: "t",
@@ -196,7 +199,7 @@ describe("composer recovery", () => {
   it("reports an explicit status-refresh failure without sending a message", async () => {
     const sendPrompt = vi.fn()
     vi.stubGlobal("window", {
-      desktop: { sessions: { sendPrompt, open: vi.fn().mockRejectedValue(new Error("offline")) } },
+      desktop: { businessData: businessDataFixture, sessions: { sendPrompt, open: vi.fn().mockRejectedValue(new Error("offline")) } },
     })
     useDesktopSessionStore.setState({ activeSessionId: "s", sessionView: emptySessionView("s") })
     await expect(
@@ -208,22 +211,22 @@ describe("composer recovery", () => {
   it("writes the original send identity before invoking IPC", async () => {
     const sendPrompt = vi.fn(async (input: { id: string }) => {
       expect(
-        JSON.parse(localStorage.getItem("vykor.desktop.composer-recovery.v1")!).submissions[0].id
+        businessDataSnapshot({ kind: "composer" }).submissions[0].id
       ).toBe(input.id)
     })
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({ activeSessionId: "s", sessionView: emptySessionView("s") })
     await useDesktopSessionStore.getState().sendMessage("hello")
     expect(sendPrompt).toHaveBeenCalledTimes(1)
   })
 
-  it("does not persist temporary side-chat drafts", () => {
+  it("does not persist temporary side-chat drafts", async () => {
     markComposerSessionTransient("ephemeral")
     const value = {
       document: composerDocument([{ type: "text", text: "temporary" }]),
       attachments: [],
     }
-    saveComposerRecovery({
+    await saveComposerRecovery({
       composerDraftsByScope: {
         "session:ephemeral": value,
         "linked-chat:source": value,
@@ -231,7 +234,7 @@ describe("composer recovery", () => {
       },
       ...createInitialRuntimeState(),
     })
-    expect(Object.keys(readComposerRecovery().composerDraftsByScope)).toEqual(["session:durable"])
+    expect(Object.keys((await readComposerRecovery()).composerDraftsByScope)).toEqual(["session:durable"])
   })
 
   it("keeps the same id on concurrent retries and does not submit while acceptance cannot be checked", async () => {
@@ -246,7 +249,7 @@ describe("composer recovery", () => {
           release = resolve
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt, checkPromptAccepted } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt, checkPromptAccepted } } })
     useDesktopSessionStore.setState({ activeSessionId: "s", sessionView: emptySessionView("s") })
     await expect(useDesktopSessionStore.getState().sendMessage("hello")).rejects.toThrow()
     const id = sendPrompt.mock.calls[0]![0].id
@@ -263,7 +266,7 @@ describe("composer recovery", () => {
   it("preserves the identity even after closing the failure notice", async () => {
     const sendPrompt = vi.fn().mockRejectedValue(new Error("offline"))
     const checkPromptAccepted = vi.fn().mockRejectedValue(new Error("still offline"))
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt, checkPromptAccepted } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt, checkPromptAccepted } } })
     useDesktopSessionStore.setState({ activeSessionId: "s", sessionView: emptySessionView("s") })
     await expect(useDesktopSessionStore.getState().sendMessage("hello")).rejects.toThrow()
     const id = sendPrompt.mock.calls[0]![0].id
@@ -279,14 +282,14 @@ describe("composer recovery", () => {
 
   it("clears recovered text when an authoritative snapshot confirms the original input", async () => {
     const sendPrompt = vi.fn().mockRejectedValue(new Error("response lost"))
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({ activeSessionId: "s", sessionView: emptySessionView("s") })
     useDesktopSessionStore.getState().setComposerDraftText("session:s", "hello")
     await expect(useDesktopSessionStore.getState().sendMessage("hello")).rejects.toThrow()
     const id = sendPrompt.mock.calls[0]![0].id
     const state = useDesktopSessionStore.getState()
-    saveComposerRecovery(state)
-    useDesktopSessionStore.setState(readComposerRecovery())
+    await saveComposerRecovery(state)
+    useDesktopSessionStore.setState(await readComposerRecovery())
     const view = emptySessionView("s", 10)
     view.inputs = [
       {
@@ -308,7 +311,7 @@ describe("composer recovery", () => {
     expect(sendPrompt).toHaveBeenCalledTimes(1)
   })
 
-  it("restores structured drafts and ready assets but marks interrupted uploads for reselection", () => {
+  it("restores structured drafts and ready assets but marks interrupted uploads for reselection", async () => {
     const document = composerDocument([
       { type: "text", text: "尚未发送" },
       { type: "mention", name: "file", path: "D:/file" },
@@ -325,7 +328,7 @@ describe("composer recovery", () => {
       assetId: "asset",
       mediaType: "text/plain",
     }
-    saveComposerRecovery({
+    await saveComposerRecovery({
       composerDraftsByScope: {
         "session:s": {
           document,
@@ -334,15 +337,15 @@ describe("composer recovery", () => {
       },
       ...createInitialRuntimeState(),
     })
-    const restored = readComposerRecovery().composerDraftsByScope["session:s"]!
+    const restored = (await readComposerRecovery()).composerDraftsByScope["session:s"]!
     expect(restored.document).toEqual(document)
     expect(restored.attachments[0]).toEqual(asset)
     expect(restored.attachments[1]).toMatchObject({ status: "failed", error: { retryable: false } })
   })
 
-  it("restores an in-flight send as uncertain with its original id and never sends automatically", () => {
+  it("restores an in-flight send as uncertain with its original id and never sends automatically", async () => {
     const sendPrompt = vi.fn()
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     const submission = {
       id: "same-id",
       sessionId: "s",
@@ -354,7 +357,7 @@ describe("composer recovery", () => {
       placement: "transcript" as const,
     }
     const runtime = createInitialRuntimeState()
-    saveComposerRecovery({
+    await saveComposerRecovery({
       composerDraftsByScope: {},
       ...runtime,
       sessionRuntimes: {
@@ -365,13 +368,13 @@ describe("composer recovery", () => {
       },
     })
     expect(
-      readComposerRecovery().sessionRuntimes.s?.pendingPromptSubmissions["same-id"]
+      (await readComposerRecovery()).sessionRuntimes.s?.pendingPromptSubmissions["same-id"]
     ).toMatchObject({ id: "same-id", phase: "failed" })
     expect(sendPrompt).not.toHaveBeenCalled()
     vi.unstubAllGlobals()
   })
 
-  it("ignores malformed records without losing other drafts", () => {
+  it("ignores malformed records without losing other drafts", async () => {
     localStorage.setItem(
       "vykor.desktop.composer-recovery.v1",
       JSON.stringify({
@@ -386,7 +389,7 @@ describe("composer recovery", () => {
         submissions: [],
       })
     )
-    expect(Object.keys(readComposerRecovery().composerDraftsByScope)).toEqual(["good"])
+    expect(Object.keys(decodeComposerRecovery(JSON.parse(localStorage.getItem("vykor.desktop.composer-recovery.v1")!)).composerDraftsByScope)).toEqual(["good"])
   })
 
   it("blocks a second identical send while the first is pending", async () => {
@@ -397,7 +400,7 @@ describe("composer recovery", () => {
           finish = resolve
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({ activeSessionId: "s", sessionView: emptySessionView("s") })
     const first = useDesktopSessionStore.getState().sendMessage("hello")
     let secondFinished = false
@@ -409,7 +412,7 @@ describe("composer recovery", () => {
       })
     await Promise.resolve()
     expect(secondFinished).toBe(false)
-    expect(sendPrompt).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(sendPrompt).toHaveBeenCalledTimes(1))
     finish()
     await Promise.all([first, second])
     vi.unstubAllGlobals()
@@ -418,7 +421,7 @@ describe("composer recovery", () => {
   it("checks acceptance before retrying and keeps a newer draft intact", async () => {
     const sendPrompt = vi.fn().mockRejectedValueOnce(new Error("response lost"))
     const checkPromptAccepted = vi.fn().mockResolvedValue(true)
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt, checkPromptAccepted } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt, checkPromptAccepted } } })
     useDesktopSessionStore.setState({ activeSessionId: "s", sessionView: emptySessionView("s") })
     await expect(useDesktopSessionStore.getState().sendMessage("hello")).rejects.toThrow()
     const id = Object.keys(

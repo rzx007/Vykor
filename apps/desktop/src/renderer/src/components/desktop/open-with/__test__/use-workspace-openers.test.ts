@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it, vi } from "vitest"
@@ -13,7 +14,7 @@ describe("launchWorkspaceOpener", () => {
     updateDefaultOpener.mockClear()
     localStorage.clear()
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         workspace: { openWith },
         settings: { updateDefaultOpener },
       },

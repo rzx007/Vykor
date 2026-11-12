@@ -28,7 +28,9 @@ Electron + React desktop shell for Vykor.
 - `src/preload`: safe renderer-facing desktop API exposed as `window.desktop`.
 - [src/renderer](src/renderer/README.md)：主窗口页面入口、镂空名称启动画面、主题恢复与就绪退场。
 - [src/renderer/src/assets](src/renderer/src/assets/README.md)：全局样式入口、主题变量，以及按 Markdown、工作区、动效、便签和设置分类的样式。
-- `src/shared`: IPC channel names and shared request/result types.
+- [src/shared](src/shared/README.md)：IPC 通道、业务类型与纯校验。
+- [src/main/features/business-data](src/main/features/business-data/README.md)：桌面恢复文件、旧源确认与关闭前刷盘。
+- [src/renderer/src/lib](src/renderer/src/lib/README.md)：跨页面辅助逻辑与异步恢复记录客户端。
 - [src/renderer/src/components/appearance](src/renderer/src/components/appearance/README.md)：主题、字体、字号及外观偏好的读取、保存和应用。
 - [src/document-preview](src/document-preview/README.md)：独立文档预览页面和预览外壳样式。
 

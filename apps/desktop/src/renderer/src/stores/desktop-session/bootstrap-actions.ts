@@ -1,3 +1,4 @@
+import { importOtherLegacyBusinessData } from "@renderer/lib/business-data"
 import { normalizeApprovalMode } from "@vykor/application-client"
 import type {
   DesktopBootstrapData,
@@ -16,7 +17,7 @@ import { resolveInitialProject, sessionProvider, sortSessions } from "./helpers"
 import { clearPersistedActiveSessionId, readPersistedActiveSessionId } from "./persistence"
 import type { BootstrapActions, DesktopSessionState, DesktopStoreContext } from "./types"
 import { createInitialState } from "./initial-state"
-import { clearComposerRecovery } from "./composer-recovery"
+import { clearComposerRecovery, readComposerRecovery } from "./composer-recovery"
 
 export function createBootstrapActions(context: DesktopStoreContext): BootstrapActions {
   const { get, set } = context
@@ -45,6 +46,8 @@ export function createBootstrapActions(context: DesktopStoreContext): BootstrapA
         const daemonStatus = await window.desktop.sessions.daemonStatus()
         set({ daemonStatus })
         const data = await window.desktop.sessions.bootstrap()
+        const recovered = await readComposerRecovery()
+        await importOtherLegacyBusinessData()
         const latestDaemonStatus = await window.desktop.sessions
           .daemonStatus()
           .catch(() => get().daemonStatus)
@@ -57,7 +60,10 @@ export function createBootstrapActions(context: DesktopStoreContext): BootstrapA
         const archivedSessions = sortSessions(data.archivedSessions)
         const persistedSessionId = readPersistedActiveSessionId()
         const recentSelection = mostRecentSessionSelection(data)
-        set({
+        set((state) => ({
+          ...recovered,
+          composerDraftsByScope: { ...recovered.composerDraftsByScope, ...state.composerDraftsByScope },
+          sessionRuntimes: { ...recovered.sessionRuntimes, ...state.sessionRuntimes },
           loadStatus: "ready",
           daemonStatus: latestDaemonStatus,
           projects: data.projects,
@@ -77,7 +83,7 @@ export function createBootstrapActions(context: DesktopStoreContext): BootstrapA
           selectedProjectGit: false,
           selectedProjectGitCheckedAt: null,
           branches: [],
-        })
+        }))
         if (selectedProject)
           await get()
             .selectProject(selectedProject)

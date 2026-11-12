@@ -1,3 +1,4 @@
+import type { DesktopBusinessDataApi } from "./business-data-types"
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
 import type { DesktopWindowThemeSource } from "./window-theme-types"
 import type { TerminalSettingsAPI } from "./terminal-settings-types"
@@ -206,6 +207,7 @@ import type {
 } from "./window-material-types"
 
 export type DesktopAPI = {
+  businessData: DesktopBusinessDataApi
   workflows: import("./workflow-types").DesktopWorkflowAPI
   terminalSettings: TerminalSettingsAPI
   gitSettings: GitSettingsAPI

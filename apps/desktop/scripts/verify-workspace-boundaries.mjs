@@ -9,8 +9,9 @@ const allowedImports = new Set([
   "@vykor/application-client/service",
   "@vykor/server",
   "@vykor/server/daemon-host",
+  "@vykor/host-config/paths",
 ])
-const allowedPackageDependencies = new Set(["@vykor/application-client", "@vykor/server"])
+const allowedPackageDependencies = new Set(["@vykor/application-client", "@vykor/server", "@vykor/host-config"])
 const importPattern =
   /(?:from\s*|import\s*(?:\(\s*)?|require\s*\(\s*)["'](@vykor\/[^"']+|@rzx\/client(?:\/[^"']*)?)["']/g
 
@@ -19,7 +20,7 @@ export function validateDesktopWorkspaceImport(file, specifier) {
     return `Desktop workspace import is not allowed: ${specifier} (${file})`
   }
   const normalized = file.replaceAll("\\", "/")
-  if ((specifier.startsWith("@vykor/server") || specifier === "@vykor/application-client/service") && !normalized.startsWith("src/main/")) {
+  if ((specifier.startsWith("@vykor/server") || specifier === "@vykor/application-client/service" || specifier === "@vykor/host-config/paths") && !normalized.startsWith("src/main/")) {
     return `Desktop local service import is only allowed in main: ${specifier} (${file})`
   }
   return null

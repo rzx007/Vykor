@@ -10,3 +10,5 @@
 `desktop-preferences-storage.ts` 同时保存最近的原生通知目标，供桌面重启后的通知激活查找原会话和待处理请求。只保留最近 1,000 条，读取时丢弃结构无效的目标；未确认的回复文字仅在本机保存，后台确认后清除。通知动作仍由 `../tray/notification-actions.ts` 处理，设置目录不执行授权。`__test__/notification-targets.test.ts` 使用实际文件验证无关设置保存不会丢失目标，成功后可清除回复文字。
 
 `git-settings-service.ts` 的任务 worktree 默认传数据根给共同 manager；manager 自己追加 `worktrees/<仓库标识>`，登记中的 configDir 保留此含义。旧 worktreeRoot 为 null 或与当前数据根等价时允许新建，其他旧根给出具体迁移提示；已有登记仍按原路径保留和清理。Git 设置 JSON 的存放迁入由后续桌面业务存储任务处理，本层不改 Electron 外壳 userData。
+
+`git-settings-storage.ts` 将 Git 偏好和 worktree 登记保存在数据根的 desktop 分类；只迁 JSON 记录，不更改实际 worktree 路径。旧 userData 文件经摘要核对后确认导入，默认保留。

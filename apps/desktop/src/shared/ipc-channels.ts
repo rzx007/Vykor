@@ -1,3 +1,4 @@
+import { BusinessDataChannels, type BusinessDataIpcMap } from "./business-data-types"
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
 import type { DesktopWindowThemeSource } from "./window-theme-types"
 import { TerminalSettingsChannels, type TerminalSettingsIpcMap } from "./terminal-settings-types"
@@ -486,6 +487,7 @@ export const IpcEvents = {
 } as const
 
 export type IpcChannel =
+  | (typeof BusinessDataChannels)[keyof typeof BusinessDataChannels]
   | (typeof IpcChannels)[keyof typeof IpcChannels]
   | (typeof TerminalSettingsChannels)[keyof typeof TerminalSettingsChannels]
   | (typeof GitSettingsChannels)[keyof typeof GitSettingsChannels]
@@ -535,6 +537,7 @@ export interface PetState {
 
 export interface IpcInvokeMap
   extends
+    BusinessDataIpcMap,
     TerminalSettingsIpcMap,
     GitSettingsIpcMap,
     MaintenanceSettingsIpcMap,

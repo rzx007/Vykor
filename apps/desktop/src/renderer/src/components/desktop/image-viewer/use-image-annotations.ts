@@ -1,3 +1,4 @@
+import { recoveryRecord, registerBusinessDataFlusher } from "@renderer/lib/business-data"
 import { useEffect, useRef, useState } from "react"
 import {
   createImageAnnotator,
@@ -56,7 +57,7 @@ export function useImageAnnotations(
   const hostRef = useRef<HTMLDivElement>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const annotatorRef = useRef<ImageAnnotator | null>(null)
-  const flushDraftRef = useRef<(() => boolean) | null>(null)
+  const flushDraftRef = useRef<(() => Promise<boolean>) | null>(null)
   const [regions, setRegions] = useState<ImageRegion[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
@@ -67,8 +68,10 @@ export function useImageAnnotations(
   useEffect(() => {
     const host = hostRef.current
     if (!host) return
+    setReady(false)
     let disposed = false
     let annotator: ImageAnnotator | null = null
+    let unregisterFlush: (() => void) | undefined
     const image = document.createElement("img")
     const objectUrl = url ?? URL.createObjectURL(new Blob([bytes], { type: mediaType }))
     image.alt = name
@@ -81,7 +84,7 @@ export function useImageAnnotations(
       image.src = objectUrl
     })
     void Promise.all([load, imageAnnotationKey(bytes)])
-      .then(([, key]) => {
+      .then(async ([, key]) => {
         if (disposed) return
         const width = image.naturalWidth,
           height = image.naturalHeight
@@ -93,14 +96,34 @@ export function useImageAnnotations(
         annotator = createImageAnnotator(image, { autoSave: true, drawingEnabled: false })
         annotator.setDrawingTool("rectangle")
         annotatorRef.current = annotator
-        let saved: ImageRegion[] = []
+        const storage = recoveryRecord({
+          kind: "image-annotations",
+          imageKey: key.slice("vykor-image-annotations-v1:".length),
+        })
+        let raw: string | null = null
         try {
-          saved = parseImageRegions(localStorage.getItem(key), width, height)
+          raw = localStorage.getItem(key)
         } catch {
-          setError("无法读取批注草稿，本次批注仍可继续")
+          setError("无法读取旧批注草稿，本次批注仍可继续")
         }
+        if (raw) {
+          let value: unknown
+          try {
+            value = JSON.parse(raw)
+          } catch {
+            throw new Error("无法读取批注草稿")
+          }
+          await storage.importLegacy(raw, value)
+        }
+        const saved = parseImageRegions(
+          JSON.stringify((await storage.read())?.value ?? []),
+          width,
+          height
+        )
+        if (disposed) return
         annotator.setAnnotations(saved.map(toAnnotation))
         let lastSaved: string | null = null
+        let failedSave = false
         const sync = (): boolean => {
           if (disposed || !annotator) return false
           const next = annotator
@@ -124,22 +147,36 @@ export function useImageAnnotations(
           setHistory({ undo: annotator.canUndo(), redo: annotator.canRedo() })
           const serialized = JSON.stringify(next)
           if (lastSaved === null) lastSaved = serialized
-          if (serialized === lastSaved) {
+          if (serialized === lastSaved && !failedSave) {
             setError((current) => (current === DRAFT_SAVE_ERROR ? null : current))
             return true
           }
+          void storage
+            .write(next)
+            .then(() => {
+              lastSaved = serialized
+              failedSave = false
+              if (!disposed) setError((current) => (current === DRAFT_SAVE_ERROR ? null : current))
+            })
+            .catch(() => {
+              failedSave = true
+              if (!disposed) setError(DRAFT_SAVE_ERROR)
+            })
+          return false
+        }
+        flushDraftRef.current = async () => {
+          sync()
           try {
-            if (next.length) localStorage.setItem(key, serialized)
-            else localStorage.removeItem(key)
-            lastSaved = serialized
-            setError((current) => (current === DRAFT_SAVE_ERROR ? null : current))
+            await storage.flush()
             return true
           } catch {
-            setError(DRAFT_SAVE_ERROR)
             return false
           }
         }
-        flushDraftRef.current = sync
+        unregisterFlush = registerBusinessDataFlusher(async () => {
+          sync()
+          await storage.flush()
+        })
         annotator.state.store.observe(sync)
         annotator.on("selectionChanged", (selection) => {
           if (!disposed) setSelectedId(selection[0]?.id ?? null)
@@ -151,6 +188,7 @@ export function useImageAnnotations(
         if (!disposed) setError(String(loadError.message ?? loadError))
       })
     return () => {
+      unregisterFlush?.()
       disposed = true
       image.onload = image.onerror = null
       annotator?.destroy()
@@ -179,8 +217,8 @@ export function useImageAnnotations(
     error,
     history,
     selectedId,
-    flushDraft() {
-      return flushDraftRef.current?.() ?? true
+    async flushDraft() {
+      return await (flushDraftRef.current?.() ?? Promise.resolve(true))
     },
     select(id: string) {
       annotatorRef.current?.setSelected(id)

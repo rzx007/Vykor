@@ -1,3 +1,4 @@
+import { businessDataIpcContribution } from "./business-data/ipc"
 import type { IpcContribution } from "../core/ipc/types"
 import { attachmentIpcContribution } from "./attachment/ipc"
 import { browserIpcContribution } from "./browser/ipc"
@@ -29,6 +30,7 @@ import { windowControlsIpcContribution } from "./window-controls/ipc"
 import { workspaceIpcContribution } from "./workspace/ipc"
 
 export const allIpcContributions: IpcContribution[] = [
+  businessDataIpcContribution,
   daemonAutoStartIpcContribution,
   attachmentIpcContribution,
   browserIpcContribution,

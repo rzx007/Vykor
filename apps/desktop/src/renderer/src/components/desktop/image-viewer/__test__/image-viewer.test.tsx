@@ -1,3 +1,4 @@
+import { businessDataFixture, businessDataSnapshot, resetBusinessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 // @vitest-environment jsdom
 import { setTimeout as delay } from "node:timers/promises"
 import { act } from "react"
@@ -24,7 +25,7 @@ const bytes = new Uint8Array([1, 2, 3]).buffer
 let host: HTMLDivElement
 let root: ReturnType<typeof createRoot>
 const resizeCallbacks = new Map<Element, ResizeObserverCallback>()
-const navigationGuard = { current: null as ((keyboard?: boolean) => boolean) | null }
+const navigationGuard = { current: null as ((keyboard?: boolean) => boolean | Promise<boolean>) | null }
 
 beforeEach(() => {
   // 只控制异步事件；库用 performance.now() 合并撤销记录，不伪造其初始时间。
@@ -54,6 +55,8 @@ beforeEach(() => {
   document.body.append(host)
   root = createRoot(host)
   localStorage.clear()
+  resetBusinessDataFixture()
+  Object.assign(window, { desktop: { businessData: businessDataFixture } })
 })
 afterEach(async () => {
   await act(async () => root.unmount())
@@ -200,11 +203,11 @@ it("keeps repeated wheel zoom within the viewer's scale limits", async () => {
   expect(imageTransform().scale).toBe(8)
 })
 
-function canNavigate(keyboard = false): boolean {
+async function canNavigate(keyboard = false): Promise<boolean> {
   expect(navigationGuard.current).toBeTypeOf("function")
   let allowed = false
-  act(() => {
-    allowed = navigationGuard.current!(keyboard)
+  await act(async () => {
+    allowed = await navigationGuard.current!(keyboard)
   })
   return allowed
 }
@@ -225,14 +228,14 @@ it("flushes the final typed character before switching images and restores it wh
   let allowed = false
   await act(async () => {
     inputComment("最后一个字")
-    expect(JSON.parse(localStorage.getItem(key)!)[0].comment).toBe("增加间距")
-    allowed = navigationGuard.current?.() ?? false
+    expect(businessDataSnapshot({ kind: "image-annotations", imageKey: key.slice("vykor-image-annotations-v1:".length) })[0].comment).toBe("增加间距")
+    allowed = await navigationGuard.current?.() ?? false
   })
   expect(allowed).toBe(true)
-  expect(JSON.parse(localStorage.getItem(key)!)[0].comment).toBe("最后一个字")
+  expect(businessDataSnapshot({ kind: "image-annotations", imageKey: key.slice("vykor-image-annotations-v1:".length) })[0].comment).toBe("最后一个字")
   await showImage(new Uint8Array([4, 5, 6]).buffer, undefined, "next.png")
   expect(host.querySelector("rect.a9s-inner")).toBeNull()
-  expect(canNavigate()).toBe(true)
+  expect(await canNavigate()).toBe(true)
   await showImage(bytes)
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="批注"]')!.click())
   expect(host.textContent).toContain("最后一个字")
@@ -241,16 +244,16 @@ it("flushes the final typed character before switching images and restores it wh
 it("blocks leaving changed annotations after a save failure and unlocks once a flush succeeds", async () => {
   const key = await mount()
   await selectRegion()
-  const write = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+  const write = vi.spyOn(businessDataFixture, "write").mockImplementation(async () => {
     throw new Error("quota")
   })
   await act(async () => inputComment("保留未保存的意见"))
-  expect(canNavigate()).toBe(false)
+  expect(await canNavigate()).toBe(false)
   expect(host.textContent).toContain("批注草稿未能保存")
   expect(host.querySelector("textarea")?.value).toBe("保留未保存的意见")
   write.mockRestore()
-  expect(canNavigate()).toBe(true)
-  expect(JSON.parse(localStorage.getItem(key)!)[0].comment).toBe("保留未保存的意见")
+  expect(await canNavigate()).toBe(true)
+  expect(businessDataSnapshot({ kind: "image-annotations", imageKey: key.slice("vykor-image-annotations-v1:".length) })[0].comment).toBe("保留未保存的意见")
   expect(host.textContent).not.toContain("批注草稿未能保存")
 })
 
@@ -258,15 +261,15 @@ it("does not trap unchanged images or write empty drafts when storage is unavail
   vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
     throw new Error("unavailable")
   })
-  const write = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+  const write = vi.spyOn(businessDataFixture, "write").mockImplementation(async () => {
     throw new Error("unavailable")
   })
   const remove = vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
     throw new Error("unavailable")
   })
   await showImage()
-  expect(canNavigate()).toBe(true)
-  expect(canNavigate()).toBe(true)
+  expect(await canNavigate()).toBe(true)
+  expect(await canNavigate()).toBe(true)
   expect(write).not.toHaveBeenCalled()
   expect(remove).not.toHaveBeenCalled()
 })
@@ -274,13 +277,15 @@ it("does not trap unchanged images or write empty drafts when storage is unavail
 it("allows leaving after failed edits return to the last saved data", async () => {
   await mount()
   await selectRegion()
-  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-    throw new Error("quota")
+  const write = businessDataFixture.write.bind(businessDataFixture)
+  vi.spyOn(businessDataFixture, "write").mockImplementation(async (key, value, revision) => {
+    if (JSON.stringify(value) !== JSON.stringify(businessDataSnapshot(key))) throw new Error("quota")
+    return write(key, value, revision)
   })
   await act(async () => inputComment("尚未保存"))
-  expect(canNavigate()).toBe(false)
+  expect(await canNavigate()).toBe(false)
   await act(async () => inputComment("增加间距"))
-  expect(canNavigate()).toBe(true)
+  expect(await canNavigate()).toBe(true)
   expect(host.textContent).not.toContain("批注草稿未能保存")
 })
 
@@ -302,36 +307,36 @@ it("rejects immediate navigation and repeated actions while feedback is being ex
   await act(async () => {
     send.click()
     send.click()
-    expect(navigationGuard.current?.()).toBe(false)
+    expect(await navigationGuard.current?.()).toBe(false)
   })
   expect(encode).toHaveBeenCalledTimes(1)
   expect(feedback).toHaveBeenCalledTimes(1)
   expect(host.textContent).toContain("正在处理图片")
   await act(async () => finish())
-  expect(canNavigate()).toBe(true)
+  expect(await canNavigate()).toBe(true)
   expect(host.textContent).not.toContain("正在处理图片")
 })
 
 it("leaves editing and drawing arrow keys alone while button navigation can finish the draft", async () => {
   await mount(undefined, false)
-  expect(canNavigate(true)).toBe(true)
+  expect(await canNavigate(true)).toBe(true)
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="添加批注"]')!.click())
-  expect(canNavigate(true)).toBe(false)
-  expect(canNavigate()).toBe(true)
+  expect(await canNavigate(true)).toBe(false)
+  expect(await canNavigate()).toBe(true)
   expect(host.querySelector('[data-image-mode="view"]')).not.toBeNull()
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="批注"]')!.click())
   await selectRegion()
   const event = new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true })
   await act(async () => host.querySelector("textarea")!.dispatchEvent(event))
   expect(event.defaultPrevented).toBe(false)
-  expect(canNavigate(true)).toBe(false)
+  expect(await canNavigate(true)).toBe(false)
   host.querySelector<HTMLElement>('[aria-label="图片画布"]')!.focus()
-  expect(canNavigate(true)).toBe(false)
-  expect(canNavigate()).toBe(true)
+  expect(await canNavigate(true)).toBe(false)
+  expect(await canNavigate()).toBe(true)
   const input = document.createElement("input")
   host.append(input)
   input.focus()
-  expect(canNavigate(true)).toBe(false)
+  expect(await canNavigate(true)).toBe(false)
   input.remove()
 })
 
@@ -346,16 +351,16 @@ it("keeps navigation blocked until native pointer gestures end outside the viewe
     })
   }
   pointer(canvas, "pointerdown", 1)
-  expect(canNavigate()).toBe(false)
-  expect(canNavigate(true)).toBe(false)
+  expect(await canNavigate()).toBe(false)
+  expect(await canNavigate(true)).toBe(false)
   pointer(window, "pointerup", 2)
-  expect(canNavigate()).toBe(false)
+  expect(await canNavigate()).toBe(false)
   canvas.addEventListener("pointerup", (event) => event.stopPropagation(), { once: true })
   pointer(canvas, "pointerup", 1)
-  expect(canNavigate()).toBe(true)
+  expect(await canNavigate()).toBe(true)
   pointer(canvas, "pointerdown", 3)
   pointer(window, "pointercancel", 3)
-  expect(canNavigate()).toBe(true)
+  expect(await canNavigate()).toBe(true)
 })
 
 it("cleans up only its own navigation guard", async () => {
@@ -405,7 +410,7 @@ it("keeps comments out of the canvas until explicitly opened, and closes them wi
   expect(host.querySelector('[aria-label="图片批注"]')).not.toBeNull()
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="收起批注"]')!.click())
   expect(host.querySelector('[aria-label="图片批注"]')).toBeNull()
-  expect(JSON.parse(localStorage.getItem(key)!)).toHaveLength(1)
+  expect(businessDataSnapshot({ kind: "image-annotations", imageKey: key.slice("vykor-image-annotations-v1:".length) })).toHaveLength(1)
 })
 
 async function selectRegion() {
@@ -434,7 +439,7 @@ it("restores a region and edits its comment without modifying the original image
     host.querySelector<HTMLButtonElement>('[aria-label="保存批注意见"]')!.click()
   )
   expect(host.textContent).toContain("缩小搜索框")
-  expect(JSON.parse(localStorage.getItem(key)!)[0]).toMatchObject({
+  expect(businessDataSnapshot({ kind: "image-annotations", imageKey: key.slice("vykor-image-annotations-v1:".length) })[0]).toMatchObject({
     comment: "缩小搜索框",
     x: 20,
     width: 40,
@@ -477,7 +482,7 @@ it("keeps a reverse-drag rectangle in original pixels inside a CSS-scaled image"
     pointer("pointerup", 60, 30)
     await vi.advanceTimersByTimeAsync(100)
   })
-  expect(JSON.parse(localStorage.getItem(key)!)[1]).toMatchObject({
+  expect(businessDataSnapshot({ kind: "image-annotations", imageKey: key.slice("vykor-image-annotations-v1:".length) })[1]).toMatchObject({
     x: 60,
     y: 30,
     width: 80,
@@ -503,7 +508,7 @@ it("does not apply annotation undo when typing in the comment editor", async () 
       .querySelector("textarea")!
       .dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }))
   )
-  expect(JSON.parse(localStorage.getItem(key)!)).toHaveLength(1)
+  expect(businessDataSnapshot({ kind: "image-annotations", imageKey: key.slice("vykor-image-annotations-v1:".length) })).toHaveLength(1)
 })
 
 it("does not undo image annotations when Ctrl+Z is pressed in the chat outside the viewer", async () => {
@@ -523,7 +528,7 @@ it("does not undo image annotations when Ctrl+Z is pressed in the chat outside t
     chat.focus()
     chat.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }))
   })
-  expect(JSON.parse(localStorage.getItem(key)!)[0].comment).toBe("保留这条批注")
+  expect(businessDataSnapshot({ kind: "image-annotations", imageKey: key.slice("vykor-image-annotations-v1:".length) })[0].comment).toBe("保留这条批注")
   chat.remove()
 })
 
@@ -549,7 +554,7 @@ it("undoes exactly one image action when focus is inside the image container", a
       .querySelector("svg.a9s-annotationlayer")!
       .dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }))
   )
-  expect(JSON.parse(localStorage.getItem(key)!)[0].comment).toBe("第一步")
+  expect(businessDataSnapshot({ kind: "image-annotations", imageKey: key.slice("vykor-image-annotations-v1:".length) })[0].comment).toBe("第一步")
 })
 
 it("keeps typed feedback on close even before leaving the comment editor", async () => {
@@ -564,7 +569,7 @@ it("keeps typed feedback on close even before leaving the comment editor", async
     textarea.dispatchEvent(new Event("input", { bubbles: true }))
   })
   await act(async () => root.render(null))
-  expect(JSON.parse(localStorage.getItem(key)!)[0].comment).toBe("调整字体")
+  expect(businessDataSnapshot({ kind: "image-annotations", imageKey: key.slice("vykor-image-annotations-v1:".length) })[0].comment).toBe("调整字体")
 })
 
 it("passes an immutable numbered-image snapshot and original pixel regions to the composer action", async () => {

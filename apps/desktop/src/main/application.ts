@@ -1,11 +1,12 @@
-import { app, BrowserWindow, Menu, session } from "electron"
+import { flushDesktopBusinessData } from "./features/business-data/window-flush"
+import { app, BrowserWindow, Menu, session, dialog } from "electron"
 import { resolve } from "node:path"
 import { installDocumentPreviewProtocol } from "./features/workspace/document-preview-protocol"
 import { electronApp, optimizer, is } from "@electron-toolkit/utils"
 
 import { createAppContext, type AppContext } from "./core/app-context"
 import { IpcRegistry } from "./core/ipc/registry"
-import { quitApp } from "./core/services/lifecycle"
+import { quitApp, setForceQuit } from "./core/services/lifecycle"
 import { WindowManager } from "./core/services/window-manager"
 import { allIpcContributions } from "./features"
 import { createMainWindow, showMainWindow } from "./features/main-window/window"
@@ -129,15 +130,29 @@ function startDesktopApplication(): void {
     }
   })
 
-  app.on("before-quit", () => {
-    getDesktopPluginAppService()?.dispose()
-    desktopPluginAppDocuments.clear()
-    updaterRuntime?.service.dispose()
-    updaterRuntime = null
-    ipcRegistry?.dispose()
-    destroyTray()
-    void desktopTerminalService.dispose()
-    void desktopSessionService.dispose()
+  let shutdown: Promise<void> | null = null
+  let shutdownComplete = false
+  app.on("before-quit", (event) => {
+    if (shutdownComplete) return
+    event.preventDefault()
+    if (shutdown) return
+    shutdown = (async () => {
+      await flushDesktopBusinessData()
+      await getDesktopPluginAppService()?.dispose()
+      desktopPluginAppDocuments.clear()
+      updaterRuntime?.service.dispose()
+      updaterRuntime = null
+      await Promise.all([desktopTerminalService.dispose(), desktopSessionService.dispose()])
+      ipcRegistry?.dispose()
+      destroyTray()
+      shutdownComplete = true
+      setForceQuit(true)
+      app.quit()
+    })().catch(() => {
+      setForceQuit(false)
+      ctx?.windowManager.getMain()?.show()
+      dialog.showErrorBox("未能退出", "业务草稿未能保存。请保留当前窗口，重试保存后再退出。")
+    }).finally(() => { shutdown = null })
   })
 }
 

@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 // @vitest-environment jsdom
 import { act, useRef } from "react"
 import { createRoot, type Root } from "react-dom/client"
@@ -43,7 +44,7 @@ beforeEach(() => {
     dismissToast: () => undefined,
   })
   Object.assign(window, {
-    desktop: {
+    desktop: { businessData: businessDataFixture,
       notes: {
         create: async ({ content }: { content: string }) => {
           const note = {

@@ -33,18 +33,18 @@ export function ImageViewerPanel({
   scopeId: string
   gallery?: ImageGallery
   onNavigate?: (direction: -1 | 1) => void
-  navigationGuardRef?: RefObject<((keyboard?: boolean) => boolean) | null>
+  navigationGuardRef?: RefObject<((keyboard?: boolean) => boolean | Promise<boolean>) | null>
 }) {
-  const localGuardRef = useRef<((keyboard?: boolean) => boolean) | null>(null)
+  const localGuardRef = useRef<((keyboard?: boolean) => boolean | Promise<boolean>) | null>(null)
   const guardRef = navigationGuardRef ?? localGuardRef
   const surfaceRef = useRef<HTMLDivElement>(null)
   const index =
     gallery?.sources.findIndex((item) => imageSourceKey(item) === imageSourceKey(source)) ?? -1
   const count = gallery?.sources.length ?? 0
   const browsable = index >= 0 && count > 1 && !!onNavigate
-  const navigate = (direction: -1 | 1, keyboard = false) => {
+  const navigate = async (direction: -1 | 1, keyboard = false) => {
     if (!browsable || index + direction < 0 || index + direction >= count) return
-    if (guardRef.current && !guardRef.current(keyboard)) return
+    if (guardRef.current && !(await guardRef.current(keyboard))) return
     surfaceRef.current?.focus({ preventScroll: true })
     onNavigate?.(direction)
   }

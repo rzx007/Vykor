@@ -1,5 +1,11 @@
 import { z } from "zod"
 import {
+  composerAttachmentSchema as attachment,
+  composerDraftSchema as draft,
+  composerSubmissionSchema as submission,
+} from "@shared/business-data-schema"
+import { recoveryRecord, resetBusinessDataCache } from "@renderer/lib/business-data"
+import {
   composerDocument,
   sameComposerDocument,
   selectComposerDocumentText,
@@ -14,109 +20,62 @@ const transientSessions = new Set<string>()
 export function markComposerSessionTransient(sessionId: string): void {
   transientSessions.add(sessionId)
 }
-const string = z.string()
-const item = z.union([
-  z.object({ type: z.literal("text"), text: string }),
-  z.object({
-    type: z.literal("mention"),
-    name: string,
-    path: string,
-    displayName: string.optional(),
-  }),
-  z.object({
-    type: z.literal("skill"),
-    name: string,
-    path: string,
-    displayName: string.optional(),
-    source: z.enum(["bundled", "user", "project", "plugin"]).optional(),
-  }),
-  z.object({
-    type: z.literal("context"),
-    kind: z.literal("conversation"),
-    id: string,
-    displayName: string,
-  }),
-  z.object({
-    type: z.literal("capability"),
-    kind: z.literal("plugin"),
-    pluginId: string,
-    displayName: string,
-  }),
-  z.object({
-    type: z.literal("capability"),
-    kind: z.literal("plugin_agent"),
-    pluginId: string,
-    agentId: string,
-    displayName: string,
-  }),
-])
-const document = z.object({ version: z.literal(1), items: z.array(item) })
-const attachment = z.object({
-  draftId: string,
-  taskId: string,
-  displayName: string,
-  declaredMediaType: string,
-  sizeBytes: z.number().nonnegative(),
-  bytesUploaded: z.number().nonnegative(),
-  progress: z.number().nullable(),
-  status: z.enum(["uploading", "ready", "failed", "cancelled"]),
-  assetId: string.optional(),
-  mediaType: string.optional(),
-  pastedText: string.optional(),
-  error: z.object({ code: string, message: string, retryable: z.boolean() }).optional(),
-})
-const draft = z.object({
-  document,
-  attachments: z.array(attachment),
-  textSelections: z.array(z.object({ id: string, text: string })).optional(),
-  browserAnnotations: z.array(z.object({
-    id: string,
-    pageUrl: string,
-    target: string,
-    selector: string,
-    locatorKind: z.enum(["unique-id", "semantic", "path"]),
-    tagName: string,
-    role: string,
-    name: string,
-    comment: string,
-  })).optional(),
-})
-const submission = z.object({
-  browserAnnotationContext: string.nullable().optional(),
-  id: string.min(1),
-  sessionId: string.min(1),
-  items: z.array(item),
-  attachments: z.array(
-    z.object({
-      assetId: string.min(1),
-      intent: z.enum(["auto", "vision", "ocr", "document", "tool_resource", "workspace_reference"]),
-      displayName: string,
-      mediaType: string,
-      sizeBytes: z.number().nonnegative(),
-    })
-  ),
-  createdAt: z.number(),
-  placement: z.enum(["transcript", "queue"]),
-  error: string.optional(),
-  dismissed: z.boolean().optional(),
-  pluginAppContextIds: z.array(string).optional(),
-  draftDocument: document.optional(),
-  draftAttachmentIds: z.array(string).optional(),
-})
-
-export function readComposerRecovery(): ComposerDraftState & {
+type RecoveredComposer = ComposerDraftState & {
   sessionRuntimes: Record<string, DesktopSessionRuntime>
-} {
-  const result: ReturnType<typeof readComposerRecovery> = {
+}
+export async function readComposerRecovery(): Promise<RecoveredComposer> {
+  const storage = recoveryRecord({ kind: "composer" })
+  const raw = localStorage.getItem(key)
+  if (raw) {
+    let value: unknown
+    try {
+      value = JSON.parse(raw)
+    } catch {
+      throw new Error("business-data composer import INVALID_JSON")
+    }
+    const restored = decodeComposerRecovery(value)
+    const ids = [
+      ...new Set([
+        ...Object.keys(restored.composerDraftsByScope)
+          .filter((scope) => scope.startsWith("session:"))
+          .map((scope) => scope.slice(8)),
+        ...Object.keys(restored.sessionRuntimes),
+      ]),
+    ]
+    const classes: Record<string, "persistent" | "memory" | "unknown"> = Object.create(null)
+    for (let offset = 0; offset < ids.length; offset += 500)
+      Object.assign(
+        classes,
+        await window.desktop.businessData.classifySessions(ids.slice(offset, offset + 500))
+      )
+    const unresolved = ids.filter((id) => classes[id] === "unknown")
+    const filtered = {
+      ...restored,
+      composerDraftsByScope: Object.fromEntries(
+        Object.entries(restored.composerDraftsByScope).filter(
+          ([scope]) =>
+            scope === "new-conversation" ||
+            (scope.startsWith("session:") && classes[scope.slice(8)] === "persistent")
+        )
+      ),
+      sessionRuntimes: Object.fromEntries(
+        Object.entries(restored.sessionRuntimes).filter(([id]) => classes[id] === "persistent")
+      ),
+    }
+    await storage.importLegacy(raw, exportComposerRecovery(filtered), unresolved)
+  }
+  return decodeComposerRecovery((await storage.read())?.value)
+}
+export function decodeComposerRecovery(raw: unknown): RecoveredComposer {
+  const result: RecoveredComposer = {
     composerDraftsByScope: {},
     sessionRuntimes: {},
   }
   try {
-    const raw = JSON.parse(localStorage.getItem(key) ?? "null")
     const envelope = z
       .object({
         version: z.literal(1),
-        drafts: z.record(string, z.unknown()),
+        drafts: z.record(z.string(), z.unknown()),
         submissions: z.array(z.unknown()),
       })
       .safeParse(raw)
@@ -185,32 +144,38 @@ export function isTransientComposerSession(state: RecoveryState, sessionId: stri
   )
 }
 
-export function saveComposerRecovery(state: RecoveryState): boolean {
-  try {
-    const drafts = Object.fromEntries(
-      Object.entries(state.composerDraftsByScope).filter(
-        ([scope, value]) =>
-          !scope.startsWith("linked-chat:") &&
-          !isTransientComposerSession(state, scope.replace(/^session:/, "")) &&
-          (value.document.items.length || value.attachments.length || value.textSelections?.length || value.browserAnnotations?.length)
-      )
+export function exportComposerRecovery(state: RecoveryState) {
+  const drafts = Object.fromEntries(
+    Object.entries(state.composerDraftsByScope).filter(
+      ([scope, value]) =>
+        !scope.startsWith("linked-chat:") &&
+        !isTransientComposerSession(state, scope.replace(/^session:/, "")) &&
+        (value.document.items.length ||
+          value.attachments.length ||
+          value.textSelections?.length ||
+          value.browserAnnotations?.length)
     )
-    const submissions = Object.entries(state.sessionRuntimes)
-      .filter(([id]) => !isTransientComposerSession(state, id))
-      .flatMap(([, runtime]) => Object.values(runtime.pendingPromptSubmissions))
-      .map((pending) => {
-        const saved: Partial<PendingPromptSubmission> = { ...pending }
-        delete saved.content
-        delete saved.phase
-        if (
-          pending.draftDocument &&
-          sameComposerDocument(pending.draftDocument, composerDocument(pending.items))
-        )
-          delete saved.draftDocument
-        return saved
-      })
-    if (!Object.keys(drafts).length && !submissions.length) localStorage.removeItem(key)
-    else localStorage.setItem(key, JSON.stringify({ version: 1, drafts, submissions }))
+  )
+  const submissions = Object.entries(state.sessionRuntimes)
+    .filter(([id]) => !isTransientComposerSession(state, id))
+    .flatMap(([, runtime]) => Object.values(runtime.pendingPromptSubmissions))
+    .map((pending) => {
+      const saved: Partial<PendingPromptSubmission> = { ...pending }
+      delete saved.content
+      delete saved.phase
+      if (
+        pending.draftDocument &&
+        sameComposerDocument(pending.draftDocument, composerDocument(pending.items))
+      )
+        delete saved.draftDocument
+      return saved
+    })
+  return { version: 1 as const, drafts, submissions }
+}
+
+export async function saveComposerRecovery(state: RecoveryState): Promise<boolean> {
+  try {
+    await recoveryRecord({ kind: "composer" }).write(exportComposerRecovery(state))
     return true
   } catch {
     return false
@@ -218,10 +183,7 @@ export function saveComposerRecovery(state: RecoveryState): boolean {
 }
 
 export function clearComposerRecovery(): void {
+  // A data-root switch clears only runtime classification; old source copies stay intact.
   transientSessions.clear()
-  try {
-    localStorage.removeItem(key)
-  } catch {
-    /* Storage may be unavailable. */
-  }
+  resetBusinessDataCache()
 }

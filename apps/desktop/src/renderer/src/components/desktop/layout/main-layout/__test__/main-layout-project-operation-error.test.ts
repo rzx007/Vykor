@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 // @vitest-environment jsdom
 
 import { act, createElement } from "react"
@@ -564,7 +565,7 @@ describe("desktop slash command actions", () => {
       {
         setPinned: async ({ pinned }: { pinned: boolean }) => ({
           ...session("slash-chat", "idle"),
-          metadata: { desktop: { pinnedAt: pinned ? 2 : 0 } },
+          metadata: { desktop: { businessData: businessDataFixture, pinnedAt: pinned ? 2 : 0 } },
         }),
       }
     )

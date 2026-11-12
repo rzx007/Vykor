@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { composerDocument } from "../composer-document"
@@ -19,7 +20,7 @@ beforeEach(() => {
   resetDesktopSessionStore()
   localStorage.clear()
   vi.clearAllMocks()
-  Object.assign(window, { desktop: { attachments } })
+  Object.assign(window, { desktop: { businessData: businessDataFixture, attachments } })
   useDesktopSessionStore.setState({ attachmentSupport: { interactionEnabled: true } as never })
 })
 
@@ -111,8 +112,8 @@ it.each(["ready", "failed"] as const)(
             error: { code: "network", message: "上传失败", retryable: true },
           }
     )
-    expect(saveComposerRecovery(useDesktopSessionStore.getState())).toBe(true)
-    useDesktopSessionStore.setState(readComposerRecovery())
+    expect(await saveComposerRecovery(useDesktopSessionStore.getState())).toBe(true)
+    useDesktopSessionStore.setState(await readComposerRecovery())
     await store.showPastedTextAttachment(scope, pasted.draftId)
     expect(selectDraftText(useDesktopSessionStore.getState(), scope)).toBe(text)
     expect(useDesktopSessionStore.getState().composerDraftsByScope[scope]!.attachments).toEqual([])

@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 // @vitest-environment jsdom
 import { act, createElement } from "react"
 import { createRoot, type Root } from "react-dom/client"
@@ -52,7 +53,7 @@ beforeEach(() => {
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true)
   resetDesktopSessionStore()
   Object.assign(window, {
-    desktop: {
+    desktop: { businessData: businessDataFixture,
       attachments: {
         uploadClipboardImage: vi.fn().mockResolvedValue(undefined),
         cancelUpload: vi.fn().mockResolvedValue(undefined),

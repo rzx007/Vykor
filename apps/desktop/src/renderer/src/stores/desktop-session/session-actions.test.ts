@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { DesktopSessionView } from "@shared/session-types"
@@ -38,7 +39,7 @@ it("keeps the old work mode and blocks sending until the backend confirms a mode
   view.session.metadata = { runtime: { approvalMode: "full_access", workMode: "execute" } }
   let finish!: (session: DesktopSessionView["session"]) => void
   const sendPrompt = vi.fn()
-  vi.stubGlobal("window", { desktop: { sessions: {
+  vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: {
     updatePermissionMode: () => new Promise((resolve) => { finish = resolve }), sendPrompt,
   } } })
   try {
@@ -67,7 +68,7 @@ it("keeps the old mode after a failed save and reports it through toast", async 
   const view = emptySessionView("failed-mode")
   view.session.metadata = { runtime: { approvalMode: "auto_review", workMode: "execute" } }
   const notification = vi.spyOn(toast, "error")
-  vi.stubGlobal("window", { desktop: { sessions: { updatePermissionMode: async () => { throw new Error("offline") } } } })
+  vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { updatePermissionMode: async () => { throw new Error("offline") } } } })
   try {
     useDesktopSessionStore.setState({ activeSessionId: view.session.id, sessionView: view, sessions: [view.session], selectedPermissionMode: "auto_review" })
     await expect(useDesktopSessionStore.getState().updateSessionWorkMode(view.session.id, "plan")).rejects.toThrow("offline")
@@ -106,7 +107,7 @@ it.each(["model", "permission", "effort", "plugin"])("does not apply a late side
   const delayed = () => new Promise<DesktopSessionView["session"]>((resolve) => {
     finish = () => resolve({ ...emptySessionView("side").session, parentId: "main", storage: "memory" })
   })
-  vi.stubGlobal("window", { desktop: { sessions: { updateModel: delayed, updatePermissionMode: delayed, updateEffort: delayed, updatePluginSelection: delayed } } })
+  vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { updateModel: delayed, updatePermissionMode: delayed, updateEffort: delayed, updatePluginSelection: delayed } } })
   try {
     const main = emptySessionView("main")
     useDesktopSessionStore.setState({ activeSessionId: "main", sessionView: main, sessions: [main.session] })
@@ -171,7 +172,7 @@ describe("desktop session actions", () => {
     const older = emptySessionView("older").session
     older.model = "old-model"
     older.updatedAt = 10
-    older.metadata = { runtime: { model: "old-model", provider: "old-provider" }, desktop: { pinnedAt: 100 } }
+    older.metadata = { runtime: { model: "old-model", provider: "old-provider" }, desktop: { businessData: businessDataFixture, pinnedAt: 100 } }
     const latest = emptySessionView("latest").session
     latest.model = "recent-model"
     latest.updatedAt = 20
@@ -193,7 +194,7 @@ describe("desktop session actions", () => {
     previous.session.model = "model-from-session"
     previous.session.metadata = { runtime: { model: "model-from-session", provider: "session-provider" } }
     const create = vi.fn(async () => emptySessionView("new-session").session)
-    vi.stubGlobal("window", { desktop: { sessions: {
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: {
       close: vi.fn(async () => undefined),
       create,
       open: vi.fn(async (sessionId: string) => emptySessionView(sessionId)),
@@ -228,7 +229,7 @@ describe("desktop session actions", () => {
     const session = emptySessionView("session-created").session
     const sendPrompt = vi.fn(async () => undefined)
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           create: vi.fn(async () => session),
           open: vi.fn(async () => emptySessionView(session.id, 1)),
@@ -264,7 +265,7 @@ describe("desktop session actions", () => {
     const session = emptySessionView("session-skill").session
     const sendPrompt = vi.fn(async () => undefined)
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           create: vi.fn(async () => session),
           open: vi.fn(async () => emptySessionView(session.id, 1)),
@@ -292,7 +293,7 @@ describe("desktop session actions", () => {
   it("clears the migrated structured draft after it is submitted", async () => {
     const session = emptySessionView("session-slash").session
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           create: vi.fn(async () => session),
           open: vi.fn(async () => emptySessionView(session.id, 1)),
@@ -328,7 +329,7 @@ describe("desktop session actions", () => {
       () => new Promise<void>((resolve) => (resolveSend = resolve))
     )
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           create: vi.fn(async () => session),
           open: vi.fn(async () => emptySessionView(session.id, 1)),
@@ -362,7 +363,7 @@ describe("desktop session actions", () => {
 
   it("keeps the new-conversation attachment draft when create fails", async () => {
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           create: vi.fn(async () => {
             throw new Error("create failed")
@@ -393,7 +394,7 @@ describe("desktop session actions", () => {
     const session = emptySessionView("session-created").session
     const sendPrompt = vi.fn(async () => undefined)
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           create: vi.fn(async () => session),
           open: vi.fn(async () => {
@@ -430,7 +431,7 @@ describe("desktop session actions", () => {
   it("keeps the migrated text and ready cards when first-prompt sending fails", async () => {
     const session = emptySessionView("session-created").session
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           create: vi.fn(async () => session),
           open: vi.fn(async () => emptySessionView(session.id, 1)),
@@ -474,7 +475,7 @@ describe("desktop session actions", () => {
     )
     const open = vi.fn(async (sessionId: string) => emptySessionView(sessionId, 1))
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           create,
           open,
@@ -507,7 +508,7 @@ describe("desktop session actions", () => {
         })
     )
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           create: vi.fn(async () => session),
           open: vi.fn(async (sessionId: string) => emptySessionView(sessionId, 1)),
@@ -594,7 +595,7 @@ describe("desktop session actions", () => {
     const open = vi.fn(async (sessionId: string) => emptySessionView(sessionId, 1))
     const sendPrompt = vi.fn(async () => undefined)
     vi.stubGlobal("window", {
-      desktop: { sessions: { create, open, sendPrompt, close: vi.fn(async () => undefined) } },
+      desktop: { businessData: businessDataFixture, sessions: { create, open, sendPrompt, close: vi.fn(async () => undefined) } },
     })
     resetNewConversationState()
 
@@ -643,7 +644,7 @@ describe("desktop session actions", () => {
     )
     const open = vi.fn(async (sessionId: string) => emptySessionView(sessionId, 1))
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           create,
           open,
@@ -682,7 +683,7 @@ describe("desktop session actions", () => {
     )
     const open = vi.fn(async (sessionId: string) => emptySessionView(sessionId, 1))
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           create,
           open,
@@ -723,7 +724,7 @@ describe("desktop session actions", () => {
           resolveOpen = resolve
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { open } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { open } } })
     resetNewConversationState()
 
     const opening = useDesktopSessionStore.getState().openSession("session-1")
@@ -794,7 +795,7 @@ describe("desktop session actions", () => {
       }
     )
     const open = vi.fn(async (sessionId: string) => emptySessionView(sessionId, 1))
-    vi.stubGlobal("window", { desktop: { sessions: { open } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { open } } })
     resetNewConversationState()
     useDesktopSessionStore.setState({
       activeSessionId: "session-old",
@@ -831,7 +832,7 @@ describe("desktop session actions", () => {
           resolvers.push(resolve)
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { open } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { open } } })
     resetNewConversationState()
 
     const firstOpening = useDesktopSessionStore.getState().openSession("session-1")
@@ -862,7 +863,7 @@ describe("desktop session actions", () => {
         aResolvers.push(resolve)
       })
     })
-    vi.stubGlobal("window", { desktop: { sessions: { open } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { open } } })
     resetNewConversationState()
 
     const firstA = useDesktopSessionStore.getState().openSession("session-a")
@@ -893,7 +894,7 @@ describe("desktop session actions", () => {
         })
     )
     const open = vi.fn(async (sessionId: string) => emptySessionView(sessionId, 1))
-    vi.stubGlobal("window", { desktop: { sessions: { fork, open } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { fork, open } } })
     resetNewConversationState()
     useDesktopSessionStore.setState({ sessions: [source], activeSessionId: source.id })
 
@@ -919,7 +920,7 @@ describe("desktop session actions", () => {
         })
     )
     const open = vi.fn(async (sessionId: string) => emptySessionView(sessionId, 1))
-    vi.stubGlobal("window", { desktop: { sessions: { fork, open } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { fork, open } } })
     resetNewConversationState()
     useDesktopSessionStore.setState({ sessions: [source], activeSessionId: source.id })
 
@@ -956,7 +957,7 @@ describe("desktop session actions", () => {
         })
     )
     const open = vi.fn(async (sessionId: string) => emptySessionView(sessionId))
-    vi.stubGlobal("window", { desktop: { sessions: { fork, archive, open } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { fork, archive, open } } })
     resetNewConversationState()
     useDesktopSessionStore.setState({ sessions: [source], activeSessionId: source.id })
 
@@ -991,7 +992,7 @@ describe("desktop session actions", () => {
         })
     )
     const open = vi.fn(async (sessionId: string) => emptySessionView(sessionId))
-    vi.stubGlobal("window", { desktop: { sessions: { fork, delete: remove, open } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { fork, delete: remove, open } } })
     resetNewConversationState()
     useDesktopSessionStore.setState({ sessions: [source], activeSessionId: source.id })
 
@@ -1013,7 +1014,7 @@ describe("desktop session actions", () => {
     const other = emptySessionView("session-b").session
     const remove = vi.fn(async () => [source.id])
     const open = vi.fn(async (sessionId: string) => emptySessionView(sessionId))
-    vi.stubGlobal("window", { desktop: { sessions: { delete: remove, open } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { delete: remove, open } } })
     resetNewConversationState()
     const goalFor = (sessionId: string) => ({
       id: `g-${sessionId}`,
@@ -1060,7 +1061,7 @@ describe("desktop session actions", () => {
       throw new Error("archive failed")
     })
     const open = vi.fn(async (sessionId: string) => emptySessionView(sessionId))
-    vi.stubGlobal("window", { desktop: { sessions: { fork, archive, open } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { fork, archive, open } } })
     resetNewConversationState()
     useDesktopSessionStore.setState({ sessions: [source], activeSessionId: source.id })
 
@@ -1086,7 +1087,7 @@ describe("desktop session actions", () => {
         })
     )
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           create,
           open: vi.fn(async (sessionId: string) => emptySessionView(sessionId)),
@@ -1129,7 +1130,7 @@ describe("desktop session actions", () => {
     }
     const getContextUsage = vi.fn(async () => previousSnapshot)
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           updateModel: vi.fn(async () => ({
             ...view.session,
@@ -1165,7 +1166,7 @@ describe("desktop session actions", () => {
 
   it("chooses a new conversation model without changing global provider settings", async () => {
     const setDefaultModel = vi.fn()
-    vi.stubGlobal("window", { desktop: { sessions: { setDefaultModel } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { setDefaultModel } } })
     resetNewConversationState()
     await useDesktopSessionStore.getState().selectModel({
       id: "chosen-model", label: "Chosen", provider: "Chosen", providerName: "chosen-provider",
@@ -1182,7 +1183,7 @@ describe("desktop session actions", () => {
   it("keeps the newer session model when update responses arrive out of order", async () => {
     const view = emptySessionView("session-model-race")
     const resolvers: Array<(value: typeof view.session) => void> = []
-    vi.stubGlobal("window", { desktop: { sessions: {
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: {
       updateModel: () => new Promise<typeof view.session>((resolve) => resolvers.push(resolve)),
       getContextUsage: vi.fn(async () => null),
     } } })
@@ -1209,7 +1210,7 @@ describe("desktop session actions", () => {
     const getContextUsage = vi.fn(
       () => new Promise<unknown>((resolve) => resolvers.push(resolve))
     )
-    vi.stubGlobal("window", { desktop: { sessions: { getContextUsage } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { getContextUsage } } })
     useDesktopSessionStore.setState({
       activeSessionId: view.session.id,
       sessionView: view,
@@ -1244,7 +1245,7 @@ describe("desktop session actions", () => {
     const getContextUsage = vi.fn(
       () => new Promise<unknown>((resolve, reject) => requests.push({ resolve, reject }))
     )
-    vi.stubGlobal("window", { desktop: { sessions: { getContextUsage } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { getContextUsage } } })
     useDesktopSessionStore.setState({
       activeSessionId: view.session.id,
       sessionView: view,
@@ -1271,7 +1272,7 @@ describe("desktop session actions", () => {
     const getContextUsage = vi.fn(
       () => new Promise<unknown>((resolve) => resolvers.push(resolve))
     )
-    vi.stubGlobal("window", { desktop: { sessions: { getContextUsage } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { getContextUsage } } })
     const first = emptySessionView("usage-first")
     useDesktopSessionStore.setState({ activeSessionId: first.session.id, sessionView: first })
     const earlier = useDesktopSessionStore.getState().refreshContextUsage()
@@ -1295,7 +1296,7 @@ describe("desktop session actions", () => {
           else resolveSecond = resolve
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { setDefaultPermissionMode } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { setDefaultPermissionMode } } })
     resetNewConversationState()
     const first = useDesktopSessionStore.getState().selectPermissionMode("ask")
     const second = useDesktopSessionStore.getState().selectPermissionMode("auto_review")
@@ -1335,7 +1336,7 @@ describe("desktop session actions", () => {
       branches: string[]
     }) => void
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           open: vi.fn(async () => view),
           inspectProject: vi.fn(
@@ -1397,7 +1398,7 @@ describe("desktop session actions", () => {
     }
     let resolveChoose!: (value: ReturnType<typeof projectDetails>) => void
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           chooseProject: vi.fn(
             () =>
@@ -1437,7 +1438,7 @@ describe("desktop session actions", () => {
       typeof useDesktopSessionStore.getState
     >["sessionRuntimes"][string]["operations"] = {}
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           create: vi.fn(async () => session),
           open: vi.fn(async () => {
@@ -1479,7 +1480,7 @@ describe("desktop session actions", () => {
       ...session,
       metadata: { runtime: { model: "m", effort: "max" } },
     }))
-    vi.stubGlobal("window", { desktop: { sessions: { updateEffort } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { updateEffort } } })
     useDesktopSessionStore.setState({ activeSessionId: "session-1" })
 
     await useDesktopSessionStore.getState().updateSessionEffort("session-1", "max")
@@ -1490,7 +1491,7 @@ describe("desktop session actions", () => {
 
   it("applies saved plugin selection preferences to the active session view", async () => {
     const view = emptySessionView("session-1")
-    vi.stubGlobal("window", { desktop: { sessions: {
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: {
       updatePluginSelection: async (input: { pluginAutoSelectionEnabled: boolean }) => ({
         ...view.session,
         metadata: { runtime: { pluginAutoSelectionEnabled: input.pluginAutoSelectionEnabled } },
@@ -1513,7 +1514,7 @@ describe("desktop session actions", () => {
   it("does not discard a pending model change when plugin selection is updated", async () => {
     const view = emptySessionView("session-1")
     let finishModel!: (value: DesktopSessionView["session"]) => void
-    vi.stubGlobal("window", { desktop: { sessions: {
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: {
       updateModel: () => new Promise((resolve) => { finishModel = resolve }),
       updatePluginSelection: async () => ({ ...view.session, metadata: { runtime: { pluginAutoSelectionEnabled: false } } }),
     } } })
@@ -1558,7 +1559,7 @@ describe("desktop session actions", () => {
       metadata: { runtime: { effort: "high" } },
     }
     const open = vi.fn(async () => ({ ...emptySessionView("session-effort-open", 1), session }))
-    vi.stubGlobal("window", { desktop: { sessions: { open } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { open } } })
 
     await useDesktopSessionStore.getState().openSession("session-effort-open")
 
@@ -1599,7 +1600,7 @@ describe("desktop session store outside-project mode", () => {
     const create = vi.fn(async () => session)
     const sendPrompt = vi.fn(async () => undefined)
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           create,
           open: vi.fn(async () => ({
@@ -1675,7 +1676,7 @@ describe("desktop session store outside-project mode", () => {
       updatedAt: 1,
     }
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           create: vi.fn(async () => session),
           open: vi.fn(async () => ({
@@ -1773,7 +1774,7 @@ describe("desktop session store outside-project mode", () => {
       },
     ]
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           open: vi.fn(async () => view),
         },
@@ -1829,7 +1830,7 @@ describe("desktop session store outside-project mode", () => {
         : Promise.resolve(viewB)
     )
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           create: vi.fn(async () => sessionA),
           open,
@@ -1882,7 +1883,7 @@ describe("desktop session store outside-project mode", () => {
     }
     const close = vi.fn(async () => undefined)
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           close,
           open: vi.fn(async () => ({
@@ -1948,7 +1949,7 @@ it("reports unavailable context reads to the caller while retaining the last usa
     computedAt: "2026-10-29T00:00:00.000Z", source: "session_cache" as const,
   }
   const getContextUsage = vi.fn().mockRejectedValue(new Error("unavailable"))
-  vi.stubGlobal("window", { desktop: { sessions: { getContextUsage } } })
+  vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { getContextUsage } } })
   useDesktopSessionStore.setState({ activeSessionId: view.session.id, sessionView: view, contextUsageSnapshot: null })
   try {
     expect(await useDesktopSessionStore.getState().refreshContextUsage()).toBe(false)

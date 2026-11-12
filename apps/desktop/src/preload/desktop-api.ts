@@ -1,3 +1,4 @@
+import { BusinessDataChannels, type BusinessDataKey } from "../shared/business-data-types"
 import { ipcRenderer, webUtils } from "electron"
 import type { DesktopWindowThemeSource } from "../shared/window-theme-types"
 import {
@@ -42,6 +43,25 @@ const invoke = <C extends IpcChannel>(
 ): Promise<IpcInvokeMap[C]["result"]> => ipcRenderer.invoke(channel, ...args)
 
 export const desktopAPI = {
+  businessData: {
+    read: (key: BusinessDataKey) => invoke(BusinessDataChannels.read, key),
+    write: (key: BusinessDataKey, value: unknown, revision: number | null) => invoke(BusinessDataChannels.write, key, value, revision),
+    importLegacy: (key: BusinessDataKey, value: unknown, digest: string, unresolvedSessionIds?: string[]) => invoke(BusinessDataChannels.importLegacy, key, value, digest, unresolvedSessionIds),
+    acknowledgeUnresolvedComposer: (digest: string) => invoke(BusinessDataChannels.acknowledgeUnresolved, digest),
+    classifySessions: (ids: string[]) => invoke(BusinessDataChannels.classifySessions, ids),
+    flush: () => invoke(BusinessDataChannels.flush),
+    onFlushRequested: (listener: () => Promise<void>) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, requestId: string) => {
+        void Promise.resolve().then(listener).then(
+          () => invoke(BusinessDataChannels.flushAck, requestId, true),
+          () => invoke(BusinessDataChannels.flushAck, requestId, false),
+        )
+      }
+      ipcRenderer.on("business-data:flush-request", wrapped)
+      void invoke(BusinessDataChannels.consumerReady)
+      return () => { ipcRenderer.removeListener("business-data:flush-request", wrapped) }
+    },
+  },
   workflows: {
     read: (input: IpcInvokeMap[typeof IpcChannels.workflowRead]["args"][0]) =>
       invoke(IpcChannels.workflowRead, input),

@@ -55,6 +55,7 @@ export default defineConfig({
         exclude: [
           "@electron-toolkit/utils",
           "@vykor/application-client",
+          "@vykor/host-config",
           "@rzx/client",
           "@vykor/server",
           "@vykor/terminal",

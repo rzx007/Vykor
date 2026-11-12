@@ -53,12 +53,16 @@ export class NoteSaveCoordinator {
   stage(draft: NoteRecoveryDraft): void {
     if (!this.record && !draft.noteId && !draft.content.trim() && !this.running) {
       this.pending = null
-      this.options.recovery.remove(draft.draftId)
+      void Promise.resolve(this.options.recovery.remove(draft.draftId)).catch(() =>
+        this.setState("error", "便签草稿未能保存，请重试。")
+      )
       this.setState("idle", null)
       return
     }
     this.pending = draft
-    this.options.recovery.write(draft)
+    void Promise.resolve(this.options.recovery.write(draft)).catch(() =>
+      this.setState("error", "便签草稿未能保存，请重试。")
+    )
     if (
       !this.running &&
       this.record &&
@@ -80,9 +84,14 @@ export class NoteSaveCoordinator {
     this.clearTimer()
     if (this.running) return await this.running
     if (this.state.status === "error" || this.state.status === "conflict") return this.record
-    this.running = this.drain().finally(() => {
-      this.running = null
-    })
+    this.running = this.drain()
+      .catch(() => {
+        this.setState("error", "便签草稿未能保存，请重试。")
+        return this.record
+      })
+      .finally(() => {
+        this.running = null
+      })
     return await this.running
   }
 
@@ -107,6 +116,7 @@ export class NoteSaveCoordinator {
       this.pending = null
       this.setState("saving", null)
       try {
+        await this.options.recovery.write(target)
         const noteId = this.record?.id ?? target.noteId
         const saved = noteId
           ? await this.options.api.update(noteId, {
@@ -119,7 +129,7 @@ export class NoteSaveCoordinator {
         const pendingAfterSave = this.currentPending()
         if (pendingAfterSave?.content === this.savedContent) {
           this.pending = null
-          this.options.recovery.remove(target.draftId)
+          await this.options.recovery.remove(target.draftId)
         } else if (pendingAfterSave) {
           const nextPending = {
             ...pendingAfterSave,
@@ -127,9 +137,9 @@ export class NoteSaveCoordinator {
             baseRevision: saved.revision,
           }
           this.pending = nextPending
-          this.options.recovery.write(nextPending)
+          await this.options.recovery.write(nextPending)
         } else {
-          this.options.recovery.remove(target.draftId)
+          await this.options.recovery.remove(target.draftId)
         }
       } catch (error) {
         this.pending ??= target
@@ -145,7 +155,7 @@ export class NoteSaveCoordinator {
       }
     }
     if (this.pending) {
-      this.options.recovery.remove(this.pending.draftId)
+      await this.options.recovery.remove(this.pending.draftId)
       this.pending = null
     }
     this.setState(this.record ? "saved" : "idle", null)

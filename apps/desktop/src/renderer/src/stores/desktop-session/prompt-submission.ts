@@ -76,10 +76,11 @@ export function createPromptSubmissionSender(
           // A failed write must prevent admission, otherwise a restart could lose the original ID.
           if (
             !isTransientComposerSession(get(), pending.sessionId) &&
-            !saveComposerRecovery(get())
+            !(await saveComposerRecovery(get()))
           ) {
             throw new Error("无法保存发送记录，本次未提交。请释放本机存储空间后重试。")
           }
+          if (!get().sessionRuntimes[pending.sessionId]?.pendingPromptSubmissions[pending.id]) return
           await window.desktop.sessions.sendPrompt({
             id: pending.id,
             sessionId: pending.sessionId,

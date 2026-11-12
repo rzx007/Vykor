@@ -1,3 +1,10 @@
+import { getDesktopDataDir, getLegacyImportFilePath } from "@vykor/host-config/paths"
+import {
+  confirmLegacyImport,
+  digestBusinessValue,
+  readLegacyImportManifest,
+} from "../business-data/legacy-import"
+import { createHash } from "node:crypto"
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { app } from "electron"
@@ -56,7 +63,12 @@ export function readGitSettingsAt(directory: string): GitSettingsFile {
   const path = join(directory, "git-settings.json")
   if (!existsSync(path))
     return { version: 1, preferences: { ...defaultGitPreferences }, worktrees: [] }
-  const file = JSON.parse(readFileSync(path, "utf8")) as GitSettingsFile
+  let file: GitSettingsFile
+  try {
+    file = JSON.parse(readFileSync(path, "utf8")) as GitSettingsFile
+  } catch {
+    throw new Error(`business-data git-settings read INVALID_JSON ${path}`)
+  }
   if (file.version !== 1 || !Array.isArray(file.worktrees))
     throw new Error("不支持的 Git 设置文件版本。")
   validateGitPreferences(file.preferences)
@@ -88,7 +100,8 @@ export function writeGitSettingsAt(directory: string, file: GitSettingsFile): vo
   renameSync(temporary, path)
 }
 export function getGitSettings() {
-  return readGitSettingsAt(app.getPath("userData"))
+  importLegacyGitSettings(app.getPath("userData"), getDesktopDataDir(), getLegacyImportFilePath())
+  return readGitSettingsAt(getDesktopDataDir())
 }
 export function getGitPreferences() {
   return getGitSettings().preferences
@@ -98,11 +111,47 @@ export function saveGitPreferences(preferences: GitPreferences, expected: GitPre
   if (JSON.stringify(file.preferences) !== JSON.stringify(expected))
     throw new Error("Git 设置已被修改，请重新读取后保存。")
   file.preferences = validateGitPreferences(preferences)
-  writeGitSettingsAt(app.getPath("userData"), file)
+  writeGitSettingsAt(getDesktopDataDir(), file)
   return file.preferences
 }
 export function updateGitWorktrees(update: (records: GitWorktreeRecord[]) => GitWorktreeRecord[]) {
   const file = getGitSettings()
   file.worktrees = update(file.worktrees)
-  writeGitSettingsAt(app.getPath("userData"), file)
+  writeGitSettingsAt(getDesktopDataDir(), file)
+}
+
+export function importLegacyGitSettings(
+  legacyDirectory: string,
+  directory: string,
+  manifestPath: string
+): void {
+  const source = join(legacyDirectory, "git-settings.json")
+  if (source === join(directory, "git-settings.json") || !existsSync(source)) return
+  const digest = createHash("sha256").update(readFileSync(source)).digest("hex")
+  const prior = readLegacyImportManifest(manifestPath).sources["git-settings"]
+  if (prior) {
+    if (prior.sourceDigest !== digest)
+      throw new Error(`business-data git-settings import LEGACY_CHANGED ${source}`)
+    if (!existsSync(join(directory, "git-settings.json")))
+      throw new Error("business-data git-settings import TARGET_MISSING")
+    return
+  }
+  let value: GitSettingsFile
+  try {
+    value = readGitSettingsAt(legacyDirectory)
+  } catch {
+    throw new Error(`business-data git-settings import INVALID_VALUE ${source}`)
+  }
+  const targetDigest = digestBusinessValue(value)
+  if (existsSync(join(directory, "git-settings.json"))) {
+    if (digestBusinessValue(readGitSettingsAt(directory)) !== targetDigest)
+      throw new Error("business-data git-settings import LEGACY_CONFLICT")
+  } else writeGitSettingsAt(directory, value)
+  if (digestBusinessValue(readGitSettingsAt(directory)) !== targetDigest)
+    throw new Error("business-data git-settings import VERIFY_FAILED")
+  confirmLegacyImport(manifestPath, "git-settings", {
+    sourceDigest: digest,
+    targetDigest,
+    revision: 0,
+  })
 }

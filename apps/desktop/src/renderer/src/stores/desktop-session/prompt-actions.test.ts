@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { DesktopSessionView, SendDesktopPromptInput } from "@shared/session-types"
@@ -76,7 +77,7 @@ describe("prompt actions session runtime", () => {
 
   it.each(["accepted", "rejected"])("does not recreate a destroyed runtime when a pending send is later %s", async (result) => {
     let finish!: () => void
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt: () => new Promise<void>((resolve, reject) => {
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt: () => new Promise<void>((resolve, reject) => {
       finish = () => result === "accepted" ? resolve() : reject(new Error("Session deleted"))
     }) } } })
     const view = emptySessionView("temporary")
@@ -88,8 +89,10 @@ describe("prompt actions session runtime", () => {
     })
     const request = useDesktopSessionStore.getState().sendMessage("in flight", { document, target: { sessionId: "temporary", view } })
     expect(useDesktopSessionStore.getState().sessionRuntimes.temporary).toBeDefined()
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"))
     // Confirmed destruction removes the cache and draft; late replies must not recreate them.
     useDesktopSessionStore.setState({ sessionRuntimes: {}, composerDraftsByScope: {} })
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"))
     finish()
     if (result === "rejected") await expect(request).rejects.toThrow("Session deleted")
     else await request
@@ -106,13 +109,14 @@ describe("prompt actions session runtime", () => {
     const delayed = () => new Promise<void>((resolve, reject) => {
       finish = () => result === "accepted" ? resolve() : reject(new Error("Session deleted"))
     })
-    vi.stubGlobal("window", { desktop: { sessions: { interrupt: delayed, replyPermission: delayed } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { interrupt: delayed, replyPermission: delayed } } })
     useDesktopSessionStore.setState({ activeSessionId: "main", sessionView: emptySessionView("main") })
     const actions = useDesktopSessionStore.getState()
     const request = operation === "interrupt"
       ? actions.interrupt({ sessionId: "temporary", view: emptySessionView("temporary") })
       : actions.replyPermission("permission-1", "approved", "once", undefined, "temporary")
     useDesktopSessionStore.setState({ sessionRuntimes: {} })
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"))
     finish()
     await request
     expect(useDesktopSessionStore.getState().sessionRuntimes.temporary).toBeUndefined()
@@ -121,7 +125,7 @@ describe("prompt actions session runtime", () => {
 
   it("preserves a failed plugin draft and retries the same structured submission", async () => {
     const received: SendDesktopPromptInput[] = []
-    vi.stubGlobal("window", { desktop: { sessions: { checkPromptAccepted: vi.fn().mockResolvedValue(false), sendPrompt: async (input: SendDesktopPromptInput) => {
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { checkPromptAccepted: vi.fn().mockResolvedValue(false), sendPrompt: async (input: SendDesktopPromptInput) => {
       received.push(input)
       if (received.length === 1) throw new Error("session_plugin_capability_unavailable")
     } } } })
@@ -155,7 +159,7 @@ describe("prompt actions session runtime", () => {
           resolveSend = resolve
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: null,
@@ -163,6 +167,7 @@ describe("prompt actions session runtime", () => {
     })
 
     const request = useDesktopSessionStore.getState().sendMessage("pending")
+    await vi.waitFor(() => expect(sendPrompt).toHaveBeenCalled())
     const inputId = sendPrompt.mock.calls[0]![0].id
     useDesktopSessionStore.getState().applySessionUpdate({
       ...viewContainingInput("session-1", inputId, 1),
@@ -178,13 +183,14 @@ describe("prompt actions session runtime", () => {
       },
     })
 
+    await vi.waitFor(() => expect(resolveSend).toBeTypeOf("function"))
     resolveSend()
     await request
   })
 
   it("sends an attachment-only snapshot in ready-card order", async () => {
     const sendPrompt = vi.fn(async () => undefined)
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({ activeSessionId: "session-1" })
     const attachments = [
       readyAttachment("draft-b", "asset-b"),
@@ -213,7 +219,7 @@ describe("prompt actions session runtime", () => {
 
   it("does not send while any attachment is not ready", async () => {
     const sendPrompt = vi.fn(async () => undefined)
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({ activeSessionId: "session-1" })
     const uploading = { ...readyAttachment("draft-a", "asset-a"), status: "uploading" as const }
 
@@ -232,7 +238,7 @@ describe("prompt actions session runtime", () => {
           resolveSend = resolve
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     const submitted = readyAttachment("draft-submitted", "asset-submitted")
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
@@ -254,6 +260,7 @@ describe("prompt actions session runtime", () => {
         },
       },
     }))
+    await vi.waitFor(() => expect(resolveSend).toBeTypeOf("function"))
     resolveSend()
     await request
 
@@ -266,7 +273,7 @@ describe("prompt actions session runtime", () => {
     const sendPrompt = vi.fn<(input: SendDesktopPromptInput) => Promise<void>>(async () => {
       throw new Error("offline")
     })
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     const attachment = readyAttachment("draft-a", "asset-a")
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
@@ -288,7 +295,7 @@ describe("prompt actions session runtime", () => {
     const sendPrompt = vi.fn<(input: SendDesktopPromptInput) => Promise<void>>(async () => {
       throw new Error("offline")
     })
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({ activeSessionId: "session-1" })
     const first = readyAttachment("draft-a", "asset-a")
     const second = readyAttachment("draft-b", "asset-b")
@@ -305,7 +312,7 @@ describe("prompt actions session runtime", () => {
 
   it("submits a selected skill as an ordered item and keeps attachments", async () => {
     const sendPrompt = vi.fn(async () => undefined)
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({ activeSessionId: "session-1" })
     const document = composerDocument([
       { type: "text", text: "review " },
@@ -328,7 +335,7 @@ describe("prompt actions session runtime", () => {
 
   it("submits a selected skill even when it has no task text", async () => {
     const sendPrompt = vi.fn(async () => undefined)
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({ activeSessionId: "session-1" })
     const document = composerDocument([
       { type: "skill", name: "archify", path: "D:/skills/archify/SKILL.md", displayName: "Archify" },
@@ -351,7 +358,7 @@ describe("prompt actions session runtime", () => {
           else resolveNew = resolve
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-old",
       sessionView: null,
@@ -365,6 +372,7 @@ describe("prompt actions session runtime", () => {
     useDesktopSessionStore.setState({ activeSessionId: "session-new" })
     const newRequest = useDesktopSessionStore.getState().sendMessage("new")
 
+    await vi.waitFor(() => expect(resolveOld).toBeTypeOf("function"))
     resolveOld()
     await oldRequest
 
@@ -373,6 +381,7 @@ describe("prompt actions session runtime", () => {
     expect(runtimes["session-old"]!.pendingPromptSubmissions).toEqual({})
     expect(Object.values(runtimes["session-new"]!.operations)).toHaveLength(1)
 
+    await vi.waitFor(() => expect(resolveNew).toBeTypeOf("function"))
     resolveNew()
     await newRequest
   })
@@ -385,7 +394,7 @@ describe("prompt actions session runtime", () => {
           resolveReply = resolve
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { replyPermission } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { replyPermission } } })
     useDesktopSessionStore.setState({ activeSessionId: "session-1" })
 
     const firstReply = useDesktopSessionStore.getState().replyPermission("permission-1", "approved")
@@ -412,7 +421,7 @@ describe("prompt actions session runtime", () => {
           rejectSend = reject
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: null,
@@ -420,6 +429,7 @@ describe("prompt actions session runtime", () => {
     })
 
     const request = useDesktopSessionStore.getState().sendMessage("confirmed")
+    await vi.waitFor(() => expect(sendPrompt).toHaveBeenCalled())
     const inputId = sendPrompt.mock.calls[0]![0].id
     useDesktopSessionStore
       .getState()
@@ -429,6 +439,7 @@ describe("prompt actions session runtime", () => {
       operations: {},
       pendingPromptSubmissions: {},
     })
+    await vi.waitFor(() => expect(rejectSend).toBeTypeOf("function"))
     rejectSend(new Error("response lost"))
 
     await expect(request).resolves.toBeUndefined()
@@ -445,7 +456,7 @@ describe("prompt actions session runtime", () => {
           rejectPromote = reject
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { promoteQueuedPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { promoteQueuedPrompt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: null,
@@ -487,7 +498,7 @@ describe("prompt actions session runtime", () => {
           rejectInterrupt = reject
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { interrupt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { interrupt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: {
@@ -536,7 +547,7 @@ describe("prompt actions session runtime", () => {
           resolveInterrupt = resolve
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { interrupt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { interrupt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: viewWithActiveRun("session-1", "run-1"),
@@ -556,7 +567,7 @@ describe("prompt actions session runtime", () => {
 
   it("keeps stopping after the RPC succeeds until the targeted run is terminal", async () => {
     const interrupt = vi.fn(async () => undefined)
-    vi.stubGlobal("window", { desktop: { sessions: { interrupt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { interrupt } } })
     const view = viewWithActiveRun("session-1", "run-1")
     useDesktopSessionStore.setState({ activeSessionId: "session-1", sessionView: view })
 
@@ -592,7 +603,7 @@ describe("prompt actions session runtime", () => {
               resolveNext = resolve
             })
         )
-      vi.stubGlobal("window", { desktop: { sessions: { interrupt } } })
+      vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { interrupt } } })
       const oldView = viewWithActiveRun("session-1", "run-old")
       useDesktopSessionStore.setState({ activeSessionId: "session-1", sessionView: oldView })
       const previous = useDesktopSessionStore.getState().interrupt()
@@ -630,7 +641,7 @@ describe("prompt actions session runtime", () => {
       .fn()
       .mockRejectedValueOnce(new Error("stop unavailable"))
       .mockResolvedValueOnce(undefined)
-    vi.stubGlobal("window", { desktop: { sessions: { interrupt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { interrupt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: viewWithActiveRun("session-1", "run-1"),
@@ -651,7 +662,7 @@ describe("prompt actions session runtime", () => {
 
   it("finishes a session-wide stop without a target run when the RPC settles", async () => {
     const interrupt = vi.fn(async () => undefined)
-    vi.stubGlobal("window", { desktop: { sessions: { interrupt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { interrupt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: emptySessionView("session-1"),
@@ -726,7 +737,7 @@ describe("prompt actions with an explicit ordinary session target", () => {
   it("sends ordered context, skill, plugin and attachments to B while A keeps running", async () => {
     const received: SendDesktopPromptInput[] = []
     let resolveSend!: () => void
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt: (input: SendDesktopPromptInput) => {
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt: (input: SendDesktopPromptInput) => {
       received.push(input)
       return new Promise<void>((resolve) => { resolveSend = resolve })
     } } } })
@@ -756,6 +767,7 @@ describe("prompt actions with an explicit ordinary session target", () => {
       attachments: [attachment],
     })
 
+    await vi.waitFor(() => expect(received.length).toBeGreaterThan(0))
     expect(received).toEqual([{
       id: expect.any(String),
       sessionId: "session-b",
@@ -774,6 +786,7 @@ describe("prompt actions with an explicit ordinary session target", () => {
       placement: "transcript",
     })
     expect(sessionRuntime("session-a")).toEqual(createEmptySessionRuntime())
+    await vi.waitFor(() => expect(resolveSend).toBeTypeOf("function"))
     resolveSend()
     await request
     const state = useDesktopSessionStore.getState()
@@ -788,7 +801,7 @@ describe("prompt actions with an explicit ordinary session target", () => {
 
   it("uses B's visible run to place its submission in the queue", async () => {
     let resolveSend!: () => void
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt: () =>
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt: () =>
       new Promise<void>((resolve) => { resolveSend = resolve })
     } } })
     useDesktopSessionStore.setState({ activeSessionId: "session-a", sessionView: emptySessionView("session-a") })
@@ -798,13 +811,14 @@ describe("prompt actions with an explicit ordinary session target", () => {
       target: { sessionId: "session-b", view: targetView },
     })
     expect(onlyPendingPromptSubmission("session-b")).toMatchObject({ placement: "queue" })
+    await vi.waitFor(() => expect(resolveSend).toBeTypeOf("function"))
     resolveSend()
     await request
   })
 
   it("reuses B's failed structured input id with the same automatic context", async () => {
     const received: SendDesktopPromptInput[] = []
-    vi.stubGlobal("window", { desktop: { sessions: { checkPromptAccepted: vi.fn().mockResolvedValue(false), sendPrompt: async (input: SendDesktopPromptInput) => {
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { checkPromptAccepted: vi.fn().mockResolvedValue(false), sendPrompt: async (input: SendDesktopPromptInput) => {
       received.push(input)
       if (received.length === 1) throw new Error("offline")
     } } } })
@@ -827,7 +841,7 @@ describe("prompt actions with an explicit ordinary session target", () => {
 
   it("preserves B's later draft edit when its earlier context-backed send succeeds", async () => {
     let resolveSend!: () => void
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt: () =>
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt: () =>
       new Promise<void>((resolve) => { resolveSend = resolve })
     } } })
     const document = composerDocument([{ type: "text", text: "old B draft" }])
@@ -841,6 +855,7 @@ describe("prompt actions with an explicit ordinary session target", () => {
     })
     const nextDocument = composerDocument([{ type: "text", text: "new B draft" }])
     useDesktopSessionStore.getState().setComposerDraftDocument("session:session-b", nextDocument)
+    await vi.waitFor(() => expect(resolveSend).toBeTypeOf("function"))
     resolveSend()
     await request
     expect(useDesktopSessionStore.getState().composerDraftsByScope["session:session-b"]?.document).toEqual(nextDocument)
@@ -850,7 +865,7 @@ describe("prompt actions with an explicit ordinary session target", () => {
   it("accepts B's auxiliary input confirmation before a lost response without retry or failure", async () => {
     const received: SendDesktopPromptInput[] = []
     let rejectSend!: (error: Error) => void
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt: (input: SendDesktopPromptInput) => {
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt: (input: SendDesktopPromptInput) => {
       received.push(input)
       return new Promise<void>((_resolve, reject) => { rejectSend = reject })
     } } } })
@@ -863,10 +878,12 @@ describe("prompt actions with an explicit ordinary session target", () => {
     const request = useDesktopSessionStore.getState().sendMessage("", {
       target: { sessionId: "session-b", view: null }, document,
     })
+    await vi.waitFor(() => expect(received.length).toBeGreaterThan(0))
     const inputId = received[0]!.id
     useDesktopSessionStore.getState().applySessionUpdate(viewContainingInput("session-b", inputId, 1))
     expect(sessionRuntime("session-b").operations).toEqual({})
     expect(sessionRuntime("session-b").pendingPromptSubmissions[inputId]).toMatchObject({ phase: "accepted" })
+    await vi.waitFor(() => expect(rejectSend).toBeTypeOf("function"))
     rejectSend(new Error("response lost"))
     await expect(request).resolves.toBeUndefined()
     expect(received).toHaveLength(1)
@@ -912,7 +929,7 @@ describe("prompt actions with an explicit ordinary session target", () => {
   it("stops B's clicked run and ignores a late failure after B confirms it stopped", async () => {
     let rejectInterrupt!: (error: Error) => void
     const interrupt = vi.fn(() => new Promise<void>((_resolve, reject) => { rejectInterrupt = reject }))
-    vi.stubGlobal("window", { desktop: { sessions: { interrupt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { interrupt } } })
     const primary = emptySessionView("session-a")
     primary.session.status = "running"
     primary.runs = [{ id: "run-a", sessionId: "session-a", status: "running", metadata: {}, createdAt: 1, updatedAt: 1 }]
@@ -937,7 +954,7 @@ describe("prompt actions with an explicit ordinary session target", () => {
   it("approves B's permission once and reconciles its auxiliary approval", async () => {
     let rejectReply!: (error: Error) => void
     const replyPermission = vi.fn(() => new Promise<void>((_resolve, reject) => { rejectReply = reject }))
-    vi.stubGlobal("window", { desktop: { sessions: { replyPermission } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { replyPermission } } })
     useDesktopSessionStore.setState({ activeSessionId: "session-a" })
     const request = useDesktopSessionStore.getState().replyPermission("permission-b", "approved", "once", "yes", "session-b")
     await useDesktopSessionStore.getState().replyPermission("permission-b", "denied", "once", undefined, "session-b")
@@ -973,7 +990,7 @@ describe("desktop session store prompt intent boundaries", () => {
     const sendPrompt = vi.fn(async () => undefined)
     const editLatestPrompt = vi.fn(async () => undefined)
     vi.stubGlobal("window", {
-      desktop: { sessions: { sendPrompt, editLatestPrompt } },
+      desktop: { businessData: businessDataFixture, sessions: { sendPrompt, editLatestPrompt } },
     })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
@@ -1028,7 +1045,7 @@ describe("desktop session store prompt intent boundaries", () => {
         else resolveNew = resolve
       })
     })
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-old",
     })
@@ -1037,11 +1054,13 @@ describe("desktop session store prompt intent boundaries", () => {
     useDesktopSessionStore.setState({ activeSessionId: "session-new" })
     const newRequest = useDesktopSessionStore.getState().sendMessage("new request")
 
+    await vi.waitFor(() => expect(resolveOld).toBeTypeOf("function"))
     resolveOld()
     await oldRequest
     expect(useDesktopSessionStore.getState().activeSessionId).toBe("session-new")
     expect(selectSessionSending(useDesktopSessionStore.getState(), "session-new")).toBe(true)
 
+    await vi.waitFor(() => expect(resolveNew).toBeTypeOf("function"))
     resolveNew()
     await newRequest
     expect(selectSessionSending(useDesktopSessionStore.getState(), "session-new")).toBe(false)
@@ -1055,7 +1074,7 @@ describe("desktop session store prompt intent boundaries", () => {
           resolveSend = resolve
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
     })
@@ -1070,6 +1089,7 @@ describe("desktop session store prompt intent boundaries", () => {
       placement: "transcript",
     })
 
+    await vi.waitFor(() => expect(resolveSend).toBeTypeOf("function"))
     resolveSend()
     await request
 
@@ -1090,7 +1110,7 @@ describe("desktop session store prompt intent boundaries", () => {
           resolveSend = resolve
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     const runningView = emptySessionView("session-1")
     runningView.session.status = "running"
     runningView.runs = [
@@ -1117,6 +1137,7 @@ describe("desktop session store prompt intent boundaries", () => {
       placement: "queue",
     })
 
+    await vi.waitFor(() => expect(resolveSend).toBeTypeOf("function"))
     resolveSend()
     await request
   })
@@ -1125,7 +1146,7 @@ describe("desktop session store prompt intent boundaries", () => {
     const sendPrompt = vi.fn(async (input: { id: string; sessionId: string; content: string }) => {
       void input
     })
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: emptySessionView("session-1"),
@@ -1223,13 +1244,14 @@ describe("desktop session store prompt intent boundaries", () => {
         rejectSend = reject
       })
     })
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: emptySessionView("session-1"),
     })
 
     const request = useDesktopSessionStore.getState().sendMessage("confirmed request")
+    await vi.waitFor(() => expect(sendPrompt).toHaveBeenCalled())
     const inputId = sendPrompt.mock.calls[0]![0].id
     useDesktopSessionStore.getState().applySessionUpdate({
       ...emptySessionView("session-1", 1),
@@ -1251,6 +1273,7 @@ describe("desktop session store prompt intent boundaries", () => {
       activeSessionId: "session-2",
       sessionView: emptySessionView("session-2", 1),
     })
+    await vi.waitFor(() => expect(rejectSend).toBeTypeOf("function"))
     rejectSend(new Error("response lost"))
 
     await expect(request).resolves.toBeUndefined()
@@ -1262,7 +1285,7 @@ describe("desktop session store prompt intent boundaries", () => {
       .fn()
       .mockRejectedValueOnce(new Error("response lost"))
       .mockResolvedValueOnce(undefined)
-    vi.stubGlobal("window", { desktop: { sessions: { checkPromptAccepted: vi.fn().mockResolvedValue(false), sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { checkPromptAccepted: vi.fn().mockResolvedValue(false), sendPrompt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
     })
@@ -1282,7 +1305,7 @@ describe("desktop session store prompt intent boundaries", () => {
 
   it("waits for the pending mode save before editing and resubmitting", async () => {
     const editLatestPrompt = vi.fn(async () => undefined)
-    vi.stubGlobal("window", { desktop: { sessions: { editLatestPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { editLatestPrompt } } })
     useDesktopSessionStore.setState({ activeSessionId: "session-1", pendingModeChanges: { "session-1": true } })
 
     await useDesktopSessionStore.getState().editLatestMessage("message-1", "replacement")
@@ -1297,7 +1320,7 @@ describe("desktop session store prompt intent boundaries", () => {
   it("includes the selected source message when explicitly editing", async () => {
     const editLatestPrompt = vi.fn(async () => undefined)
     vi.stubGlobal("window", {
-      desktop: { sessions: { editLatestPrompt } },
+      desktop: { businessData: businessDataFixture, sessions: { editLatestPrompt } },
     })
     useDesktopSessionStore.setState({ activeSessionId: "session-1" })
 
@@ -1314,7 +1337,7 @@ describe("desktop session store prompt intent boundaries", () => {
 
   it("preserves structured items when editing a task with a selected skill", async () => {
     const editLatestPrompt = vi.fn(async () => undefined)
-    vi.stubGlobal("window", { desktop: { sessions: { editLatestPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { editLatestPrompt } } })
     const view = emptySessionView("session-1", 1)
     const originalItems = [
       { type: "skill" as const, name: "archify", path: "D:/skills/archify/SKILL.md" },
@@ -1363,7 +1386,7 @@ describe("desktop session store prompt intent boundaries", () => {
 
   it("preserves authoritative ordered attachment refs when editing a pure-attachment message", async () => {
     const editLatestPrompt = vi.fn(async () => undefined)
-    vi.stubGlobal("window", { desktop: { sessions: { editLatestPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { editLatestPrompt } } })
     const view = emptySessionView("session-1", 1)
     view.messages = [
       {
@@ -1415,7 +1438,7 @@ describe("desktop session store prompt intent boundaries", () => {
       .mockRejectedValueOnce(new Error("response lost"))
       .mockResolvedValueOnce(undefined)
     vi.stubGlobal("window", {
-      desktop: { sessions: { editLatestPrompt } },
+      desktop: { businessData: businessDataFixture, sessions: { editLatestPrompt } },
     })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
@@ -1447,7 +1470,7 @@ describe("desktop session store prompt intent boundaries", () => {
         })
     )
     vi.stubGlobal("window", {
-      desktop: { sessions: { editLatestPrompt, sendPrompt } },
+      desktop: { businessData: businessDataFixture, sessions: { editLatestPrompt, sendPrompt } },
     })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
@@ -1464,6 +1487,7 @@ describe("desktop session store prompt intent boundaries", () => {
     expect(useDesktopSessionStore.getState().activeSessionId).toBe("session-2")
     expect(selectSessionSending(useDesktopSessionStore.getState(), "session-2")).toBe(true)
 
+    await vi.waitFor(() => expect(resolveSend).toBeTypeOf("function"))
     resolveSend()
     await sending
     expect(selectSessionSending(useDesktopSessionStore.getState(), "session-2")).toBe(false)
@@ -1471,7 +1495,7 @@ describe("desktop session store prompt intent boundaries", () => {
 
   it("binds stop to the active run visible at click time", async () => {
     const interrupt = vi.fn(async () => undefined)
-    vi.stubGlobal("window", { desktop: { sessions: { interrupt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { interrupt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: {
@@ -1501,7 +1525,7 @@ describe("desktop session store prompt intent boundaries", () => {
     const promoteQueuedPrompt = vi.fn(async () => undefined)
     const cancelQueuedPrompt = vi.fn(async () => undefined)
     vi.stubGlobal("window", {
-      desktop: { sessions: { promoteQueuedPrompt, cancelQueuedPrompt } },
+      desktop: { businessData: businessDataFixture, sessions: { promoteQueuedPrompt, cancelQueuedPrompt } },
     })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
@@ -1537,7 +1561,7 @@ describe("desktop session store prompt intent boundaries", () => {
           resolvePromote = resolve
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { promoteQueuedPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { promoteQueuedPrompt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: emptySessionView("session-1"),
@@ -1577,7 +1601,7 @@ describe("desktop session store prompt intent boundaries", () => {
           resolvePromote = resolve
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { promoteQueuedPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { promoteQueuedPrompt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: emptySessionView("session-1"),
@@ -1602,7 +1626,7 @@ describe("desktop session store prompt intent boundaries", () => {
           rejectPromote = reject
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { promoteQueuedPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { promoteQueuedPrompt } } })
     const pendingView = emptySessionView("session-1", 1)
     pendingView.runs = [
       {
@@ -1642,7 +1666,7 @@ describe("desktop session store prompt intent boundaries", () => {
     const promoteQueuedPrompt = vi.fn(async () => {
       throw new Error("Active run changed")
     })
-    vi.stubGlobal("window", { desktop: { sessions: { promoteQueuedPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { promoteQueuedPrompt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: emptySessionView("session-1"),
@@ -1668,7 +1692,7 @@ describe("desktop session store prompt intent boundaries", () => {
           rejectPromote = reject
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { promoteQueuedPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { promoteQueuedPrompt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: emptySessionView("session-1"),

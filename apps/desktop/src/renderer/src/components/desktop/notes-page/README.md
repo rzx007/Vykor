@@ -34,3 +34,5 @@
 ## 维护约定
 
 新增独立子功能时同步补充 README 和父级导航。移动文件时更新导入、动态导入与测试 mock，不保留旧路径转发文件。完整规则见 [Desktop 协作约定](../AGENTS.md)。
+
+`note-recovery.ts` 异步加载主/quick 恢复记录，`note-save-coordinator.ts` 先等待草稿写入再提交 Markdown 文件。选中笔记 ID 仍属于 localStorage 界面偏好。旧恢复键保留作恢复副本。

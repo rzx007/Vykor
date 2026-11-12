@@ -1,3 +1,5 @@
+import { setTimeout as delay } from "node:timers/promises"
+import { businessDataFixture, businessDataSnapshot, resetBusinessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 // @vitest-environment jsdom
 
 import { act } from "react"
@@ -63,6 +65,8 @@ describe("useNotesController", () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     localStorage.clear()
+    resetBusinessDataFixture()
+    Object.defineProperty(window, "desktop", { configurable: true, value: { businessData: businessDataFixture } })
     container = document.createElement("div")
     document.body.append(container)
     root = createRoot(container)
@@ -82,6 +86,7 @@ describe("useNotesController", () => {
     Object.defineProperty(window, "desktop", {
       configurable: true,
       value: {
+        businessData: businessDataFixture,
         notes: {
           list: vi.fn(async () => list),
           create: vi.fn(async ({ content }: { content: string }) => ({
@@ -115,11 +120,13 @@ describe("useNotesController", () => {
       await Promise.resolve()
       await Promise.resolve()
     })
+    await act(async () => { await delay(30) })
+    expect(latest.status).not.toBe("loading")
   }
 
   it("opens unfinished recovery before a fresh paper without overwriting other saved notes", async () => {
     writeSelectedNoteId(localStorage, first.id)
-    writeRecoveryDraft(localStorage, {
+    await writeRecoveryDraft(localStorage, {
       draftId: "recovery-n2",
       noteId: second.id,
       baseRevision: second.revision,
@@ -200,6 +207,7 @@ describe("useNotesController", () => {
     act(() => {
       flushing = latest.flushSelected()
     })
+    await act(async () => { await delay(10) })
     act(() => latest.setAppearance(latest.selectedKey!, { pinned: true, color: "rose" }))
     await act(async () => {
       finish({ ...first, id: "created", content: "new idea" })
@@ -244,8 +252,8 @@ describe("useNotesController", () => {
     )
     await render([first])
     expect(latest.content).toBe("quick window idea")
-    expect(localStorage.getItem("vykor.desktop.note-recovery-v1:quick")).toBeNull()
-    expect(localStorage.getItem("vykor.desktop.note-recovery-v1")).toContain("quick window idea")
+    expect(localStorage.getItem("vykor.desktop.note-recovery-v1:quick")).toContain("quick window idea")
+    expect(JSON.stringify(businessDataSnapshot({ kind: "notes" }))).toContain("quick window idea")
   })
 
   it("keeps a new blank draft local and creates it after nonblank input", async () => {

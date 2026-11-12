@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
@@ -20,6 +21,7 @@ function stubDesktopSessions(sessions: {
     configurable: true,
     writable: true,
     value: {
+      businessData: businessDataFixture,
       sessions: {
         daemonStatus:
           sessions.daemonStatus ??

@@ -14,7 +14,4 @@ export function quitApp(): void {
   forceQuit = true
   app.quit()
 
-  setTimeout(() => {
-    app.exit(0)
-  }, 3000).unref()
 }

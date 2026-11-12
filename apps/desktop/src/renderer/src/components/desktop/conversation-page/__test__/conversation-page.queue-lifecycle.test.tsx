@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 // @vitest-environment jsdom
 import { act, type ReactNode } from "react"
 import { createRoot, type Root } from "react-dom/client"
@@ -217,7 +218,7 @@ it.each(["stop", "remove"] as const)(
     const sendPrompt = vi.fn(() => sendReply)
     const interrupt = vi.fn(() => cancelReply)
     const cancelQueuedPrompt = vi.fn(() => cancelReply)
-    vi.stubGlobal("desktop", { sessions: { sendPrompt, interrupt, cancelQueuedPrompt } })
+    vi.stubGlobal("desktop", { businessData: businessDataFixture, sessions: { sendPrompt, interrupt, cancelQueuedPrompt } })
     useDesktopSessionStore.setState({
       activeSessionId: sessionId,
       sessions: [view.session],
