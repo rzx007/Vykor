@@ -35,8 +35,8 @@
 
 ## 数据根副本重定位
 
-纯维护入口为 `@vykor/services/data-root-relocation`。协调器取得停写后的独立数据库及 WAL 副本，再调用 `readDatabasePathRegistrations(copy, { managedRoots })`。它以只读连接核对完整性、外键、表/列和已声明索引，返回 schema 状态、普通工作区、渠道、worktree、真实项目和 cwd 路径清单，不返回正文或整份 metadata。受管根来自本次已知来源；`outside_project`、渠道来源及 worktree 登记区分自动创建的 project location。受管根内没有归属证据的项目登记返回 `unsupported`，需要核对后重新预检。
+纯维护入口为 `@vykor/services/data-root-relocation`。协调器取得停写后的独立数据库及 WAL 副本，再调用 `readDatabasePathRegistrations(copy, { managedRoots })`。它以只读连接核对完整性、外键、表/列和已声明索引的名称、唯一性、列顺序及 partial 条件（只约束部分记录的 WHERE 条件），返回 schema 状态、普通工作区、渠道、worktree、真实项目和 cwd 路径清单，不返回正文或整份 metadata。WHERE 按当前 schema 生成的 SQL 严格比较；不同定义先返回 `unsupported`，不会猜测等价关系后写入。受管根来自本次已知来源；`outside_project`、渠道来源及 worktree 登记区分自动创建的 project location。受管根内没有归属证据的项目登记返回 `unsupported`，需要核对后重新预检。
 
-`workspacePaths` 需由协调器筛出 Documents/Vykor 内的普通工作区再交给 T6 的 `legacy.workspacePaths`；规范根内工作区、渠道和 worktree 由各自来源处理，不能全塞进这个旧入口。`projectPaths` 用于复核真实项目祖先边界，`cwdPaths` 供项目哈希键搬迁。
+`workspacePaths` 需由协调器筛出 Documents/Vykor 内的普通工作区再交给 T6 的 `legacy.workspacePaths`；规范根内工作区、渠道和 worktree 由各自来源处理，不能全塞进这个旧入口。`projectPaths` 用于复核真实项目祖先边界，也包含定时任务中尚无 project_location、且没有明确会话分配证据的项目引用；这些路径即使位于 Documents/Vykor 内也不进入工作区清单。已由会话宿主标记证明归属的相同路径可继续搬迁。`cwdPaths` 供项目哈希键搬迁。
 
 最终映射确定后，`relocateDatabasePaths(copy, moves)` 只对副本写入最终逻辑路径，不打开 SessionStore、不应用数据库迁移、不启动维护服务。更新 session 的 cwd/相对目录和已定义宿主绑定、project_location 路径及索引键、session_task、scheduled_task 项目路径和活动 workflow v1 快照。未知可恢复格式返回零变更及 `unsupported`；约束或事务失败抛错并回滚。消息、工具参数、事件、终态工作流原文、附件来源与笔记内容保持原样。`changed` 按更新记录计数，`unchangedExternal` 统计未被本次映射覆盖的字段。

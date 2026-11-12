@@ -84,7 +84,7 @@ it("relocates only structured fields in the owned SQLite copy and keeps identiti
 it("returns only path registrations from a stopped copy and validates the schema", () => {
   const found = inspect(copy, { managedRoots: [] });
   expect(found.schema).toBe("supported"); expect(found.unsupported).toEqual([]);
-  expect(found.projectPaths).toEqual([oldCwd]); expect(found.workspacePaths).toEqual([]);
+  expect(found.projectPaths).toEqual([oldCwd, join(root, "real-project")].sort()); expect(found.workspacePaths).toEqual([]);
   expect(found.cwdPaths).toContain(join(root, "real-project"));
   expect(JSON.stringify(found)).not.toContain("temporary-input"); expect(found).not.toHaveProperty("metadata");
   const invalid = new Database(join(root, "unknown.db")); invalid.exec("CREATE TABLE session(id TEXT)"); invalid.close();
@@ -123,7 +123,26 @@ it.each([
   db.prepare("UPDATE session SET metadata_json=? WHERE id='formal'").run(JSON.stringify(metadata));
   db.close();
   const found = inspect(copy, { managedRoots: [source] });
-  expect(found.projectPaths).toEqual([]); expect([...found.workspacePaths, ...found.channelPaths, ...found.worktreePaths]).toContain(oldCwd); expect(found.unsupported).toEqual([]);
+  expect(found.projectPaths).toEqual([join(root, "real-project")]); expect([...found.workspacePaths, ...found.channelPaths, ...found.worktreePaths]).toContain(oldCwd); expect(found.unsupported).toEqual([]);
+});
+
+it("protects a schedule-only project under Documents/Vykor without claiming it as an allocated workspace", () => {
+  const documents = join(root, "Documents", "Vykor"), project = join(documents, "my-real-project");
+  const scheduleCopy = join(root, "schedule-only.db"), db = SessionDatabase.open({ path: scheduleCopy });
+  db.orm.insert(tables.scheduledTasks).values({ id: "never-run", name: "s", prompt: project, recurrence: "0 * * * *", recurrenceFormat: "cron", timezone: "UTC", status: "active", destination: "standalone", projectPathsJson: JSON.stringify([project]), executionMode: "local", skillNamesJson: "[]", pluginNamesJson: "[]", permissionProfileJson: "{}", overlapPolicy: "skip", missedRunPolicy: "skip", createdBy: "user", runCount: 0, createdAt: 1, updatedAt: 2 }).run();
+  expect(db.orm.select().from(tables.sessions).all()).toEqual([]); expect(db.orm.select().from(tables.projectLocations).all()).toEqual([]); db.close();
+  const before = readFileSync(scheduleCopy);
+  expect(inspect(scheduleCopy, { managedRoots: [documents] })).toMatchObject({ schema: "supported", workspacePaths: [], projectPaths: [project], cwdPaths: [project], unsupported: [] });
+  expect(readFileSync(scheduleCopy)).toEqual(before);
+});
+
+it("keeps schedule references to proven allocated workspaces eligible for relocation", () => {
+  const db = new Database(copy); db.prepare("UPDATE session SET metadata_json=? WHERE id='formal'").run(JSON.stringify({ desktop: { workspaceMode: "outside_project" } })); db.close();
+  const found = inspect(copy, { managedRoots: [source] });
+  expect(found.workspacePaths).toContain(oldCwd); expect(found.projectPaths).not.toContain(oldCwd); expect(found.unsupported).toEqual([]);
+  expect(relocate(copy, moves()).unsupported).toEqual([]);
+  const reopened = new Database(copy, { readonly: true });
+  try { expect(JSON.parse((reopened.prepare("SELECT project_paths_json FROM scheduled_task WHERE id='schedule'").get() as any).project_paths_json)).toEqual([newCwd, join(root, "real-project")]); } finally { reopened.close(); }
 });
 
 it("blocks ambiguous project ownership and unknown database tables", () => {
@@ -144,6 +163,29 @@ it("classifies a channel fork as an ordinary workspace and rejects a stale workt
 it("rejects a copy missing the project path uniqueness constraint", () => {
   const db = new Database(copy); db.exec("DROP INDEX project_location_active_path"); db.close();
   expect(relocate(copy, moves())).toMatchObject({ changed: 0, unsupported: expect.arrayContaining([{ table: "project_location", id: "schema" }]) });
+});
+
+it.each([
+  ["project_location_active_path", "UNIQUE", "id", ""],
+  ["project_location_active_path", "UNIQUE", "normalized_path", " WHERE \"project_location\".\"status\" = 'inactive'"],
+  ["project_location_active_path", "UNIQUE", "normalized_path", ""],
+  ["project_location_active_project", "UNIQUE", "id", " WHERE \"project_location\".\"status\" = 'active'"],
+  ["project_location_active_project", "UNIQUE", "project_id", " WHERE \"project_location\".\"status\" = 'inactive'"],
+  ["project_location_project_idx", "", "status,project_id", ""],
+])("rejects a same-name index with changed columns or predicate: %s (%s %s%s)", (name, unique, columns, predicate) => {
+  const db = SessionDatabase.open({ path: copy });
+  db.orm.insert(tables.projects).values({ id: "collision", name: "collision", createdAt: 1, updatedAt: 2, lastOpenedAt: 3 }).run();
+  db.orm.insert(tables.projectLocations).values({ id: "collision", projectId: "collision", path: newCwd, normalizedPath: process.platform === "win32" ? newCwd.replace(/\\/g, "/").toLowerCase() : newCwd, status: "active", boundAt: 1 }).run();
+  db.connection.exec(`DROP INDEX ${name}; CREATE ${unique} INDEX ${name} ON project_location(${columns})${predicate}`); db.close();
+  const before = readFileSync(copy);
+  expect(inspect(copy, { managedRoots: [] })).toMatchObject({ schema: "unsupported", unsupported: expect.arrayContaining([{ table: "project_location", id: "schema" }]) });
+  expect(relocate(copy, moves())).toMatchObject({ changed: 0, unsupported: expect.arrayContaining([{ table: "project_location", id: "schema" }]) });
+  const reopened = new Database(copy, { readonly: true });
+  try {
+    expect((reopened.prepare("SELECT cwd FROM session WHERE id='formal'").get() as any).cwd).toBe(oldCwd);
+    expect(reopened.prepare("SELECT path FROM project_location ORDER BY id").all()).toEqual([{ path: newCwd }, { path: oldCwd }]);
+  } finally { reopened.close(); }
+  expect(readFileSync(copy)).toEqual(before);
 });
 
 it("reads committed registrations in an owned WAL copy without initializing or losing them", () => {

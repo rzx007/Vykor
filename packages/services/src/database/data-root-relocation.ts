@@ -3,7 +3,7 @@ import { isAbsolute, relative } from "node:path";
 import Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
-import { getTableConfig } from "drizzle-orm/sqlite-core";
+import { getTableConfig, SQLiteSyncDialect } from "drizzle-orm/sqlite-core";
 import { isCompleteAbsolutePath, isWithinManagedPath, relocateManagedPath, type ManagedPathMove, type PathRelocationReport } from "@vykor/host-config/paths";
 import { relocateWorkflowSnapshotPaths } from "@vykor/coordinator/workflow-relocation";
 import * as schema from "../session-runtime/schema.js";
@@ -27,9 +27,21 @@ function validateCopy(connection: Database.Database, result: PathRelocationRepor
   for (const table of Object.values(schema)) {
     const { name, columns, indexes } = getTableConfig(table);
     const actual = connection.pragma(`table_info(${JSON.stringify(name)})`) as Array<{ name: string; type: string }>;
-    const actualIndexes = connection.pragma(`index_list(${JSON.stringify(name)})`) as Array<{ name: string; unique: number }>;
+    const actualIndexes = connection.pragma(`index_list(${JSON.stringify(name)})`) as Array<{ name: string; unique: number; partial: number }>;
+    const indexesMatch = indexes.every(({ config }) => {
+      const actualIndex = actualIndexes.find(item => item.name === config.name);
+      if (!actualIndex || !!actualIndex.unique !== config.unique || !!actualIndex.partial !== !!config.where) return false;
+      const indexedColumns = connection.pragma(`index_info(${JSON.stringify(config.name)})`) as Array<{ seqno: number; name: string | null }>;
+      indexedColumns.sort((a, b) => a.seqno - b.seqno);
+      if (indexedColumns.length !== config.columns.length || config.columns.some((column, i) => !("name" in column) || column.name !== indexedColumns[i]!.name)) return false;
+      const actualSql = connection.prepare("SELECT sql FROM sqlite_master WHERE type='index' AND name=?").get(config.name) as { sql: string };
+      const actualWhere = /\bWHERE\s+([\s\S]*)$/i.exec(actualSql.sql)?.[1]?.trim();
+      // Compare the current schema's generated predicate, not an inferred equivalent.
+      const expectedWhere = config.where && new SQLiteSyncDialect().sqlToQuery(config.where).sql.trim();
+      return actualWhere === expectedWhere;
+    });
     if (columns.some(column => !actual.some(item => item.name === column.name && item.type.toLowerCase() === column.getSQLType().toLowerCase())) || actual.length !== columns.length
-      || indexes.some(index => !actualIndexes.some(item => item.name === index.config.name && !!item.unique === !!index.config.unique)))
+      || !indexesMatch)
       result.unsupported.push({ table: name, id: "schema" });
   }
   return result.unsupported.length === 0;
@@ -89,7 +101,7 @@ export interface DatabasePathRegistrations {
   workspacePaths: string[];
   channelPaths: string[];
   worktreePaths: string[];
-  /** All registered project locations; never infer ownership from a broad root move. */
+  /** Protected project locations and schedule references without proven workspace ownership. */
   projectPaths: string[];
   /** All known cwd/host paths for hash-key relocation and final boundary checks. */
   cwdPaths: string[];
@@ -130,10 +142,16 @@ export function readDatabasePathRegistrations(databasePath: string, options: { m
         projects.add(row.path); return row.path;
       });
       for (const row of db.select({ id: schema.sessionTasks.id, cwd: schema.sessionTasks.cwd, metadataJson: schema.sessionTasks.metadataJson }).from(schema.sessionTasks).all()) safe(result, "session_task", row.id!, row.metadataJson, () => { workspace(row.cwd); return hostMetadata(row.metadataJson, add); });
-      for (const row of db.select({ id: schema.scheduledTasks.id, projectPathsJson: schema.scheduledTasks.projectPathsJson }).from(schema.scheduledTasks).all()) safe(result, "scheduled_task", row.id, row.projectPathsJson, () => pathsArray(row.projectPathsJson, workspace));
+      for (const row of db.select({ id: schema.scheduledTasks.id, projectPathsJson: schema.scheduledTasks.projectPathsJson }).from(schema.scheduledTasks).all()) safe(result, "scheduled_task", row.id, row.projectPathsJson, () => pathsArray(row.projectPathsJson, value => {
+        add(value);
+        // A project reference does not prove allocation, even inside Documents/Vykor.
+        if (!ownedLocations.has(normalizeProjectPath(value))) projects.add(value);
+        return value;
+      }));
       for (const row of db.select({ runId: schema.workflowRuns.runId, status: schema.workflowRuns.status, snapshotJson: schema.workflowRuns.snapshotJson }).from(schema.workflowRuns).all()) if (!terminal(row.status)) safe(result, "workflow_run", row.runId, row.snapshotJson, () => relocateWorkflowSnapshotPaths(row.snapshotJson, value => isAbsolute(value) ? workspace(value) : value, row));
     }
-    return { schema: result.unsupported.length ? "unsupported" : "supported", workspacePaths: [...workspaces].filter(path => !channels.has(path) && !worktrees.has(path)).sort(), channelPaths: [...channels].sort(), worktreePaths: [...worktrees].sort(), projectPaths: [...projects].sort(), cwdPaths: [...cwd].sort(), unsupported: result.unsupported };
+    const protectedPaths = new Set([...projects].map(normalizeProjectPath));
+    return { schema: result.unsupported.length ? "unsupported" : "supported", workspacePaths: [...workspaces].filter(path => !channels.has(path) && !worktrees.has(path) && !protectedPaths.has(normalizeProjectPath(path))).sort(), channelPaths: [...channels].sort(), worktreePaths: [...worktrees].sort(), projectPaths: [...projects].sort(), cwdPaths: [...cwd].sort(), unsupported: result.unsupported };
   } finally { connection.close(); }
 }
 
