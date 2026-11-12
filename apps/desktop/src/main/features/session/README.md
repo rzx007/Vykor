@@ -14,6 +14,8 @@
 
 ## 新增代码和测试
 
+`read-tool-image-preview.ts` 仍只接受后台保存的成功 Read 图片结果；其 Native 历史路径先经 `resolveManagedHistoryPath` 解析并检查真实边界，再执行原图片格式、大小和解码限制。附件卡片使用 assetId，继续走已授权的附件下载流程；不会改写历史正文、工具参数原文或 Shell 命令。
+
 新增会话或项目动作放在 `session-operations.ts` 或其对应职责的辅助文件，服务入口负责获取 client 和转交输入。连接缓存、重建与关闭逻辑保留在连接服务中，不在操作类保存临时 client。
 
 新测试放在 `__test__/`；已有测试可就地补充。`__test__/session-branch-client.test.ts` 暂停 Git 步骤，验证交错的分支调用和迟到连接各自返回所属 client 的项目详情。现有 `session-operations-worktree.test.ts`、`session-service*.test.ts` 和 `daemon-connection-service.lifecycle.test.ts` 覆盖工作目录补偿、输入转交、切换失败恢复和安全关闭。

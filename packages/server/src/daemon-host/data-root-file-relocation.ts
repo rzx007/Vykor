@@ -46,7 +46,8 @@ function gitSettings(value: Record<string, any>, path: (value: string) => string
       if (configDir === tree.configDir || !isWithinManagedPath(next, join(configDir, "worktrees"))) throw new Error("Worktree manager mapping is missing");
       tree.path = next; tree.configDir = configDir;
     }
-    // A projectPath is the external main repository, not the worktree manager.
+    // Final moves already exclude real projects; an owned main follows its proven workspace move.
+    tree.projectPath = path(tree.projectPath);
   }
 }
 

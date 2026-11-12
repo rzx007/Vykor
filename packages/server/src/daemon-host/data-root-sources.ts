@@ -9,6 +9,8 @@ import {
 } from "@vykor/host-config/paths";
 import { loadSettingsFile } from "@vykor/host-config";
 import { dataLocationFile, readLegacyDataLocation } from "./data-location.js";
+import { inspectMigrationGit, type MigrationGitWorktree, type RegisteredMigrationWorktree } from "./data-root-git.js";
+import { readDatabasePathRegistrations } from "@vykor/services/data-root-relocation";
 
 export interface DataRootMigrationRequest {
   homeDir: string;
@@ -41,6 +43,7 @@ export interface DataRootMigrationPreview {
   links: Array<{ path: string; target: string; action: "preserve" | "relocate" }>;
   databases: Array<{ path: string; walPath?: string; shmPath?: string; inspection: "file-only" }>;
   blockers: MigrationBlocker[];
+  gitWorktrees: MigrationGitWorktree[];
   files: number; bytes: number;
   /** Mandatory gates for T8/T10, not claims that these checks have passed. */
   requiredValidations: string[];
@@ -71,9 +74,23 @@ async function readJson(path: string): Promise<unknown> {
 
 /** File-only inventory. Never opens SQLite, creates a directory, acquires a lock or parses LevelDB. */
 export async function inspectDataRootMigration(input: DataRootMigrationRequest): Promise<DataRootMigrationPreview> {
+  return inspectSources(input, []);
+}
+
+/** Internal stopped-copy entry: ownership comes from SQLite, never a public request hint. */
+export async function inspectDataRootMigrationFromStoppedCopy(input: DataRootMigrationRequest, databasePath: string, managedRoots: readonly string[]) {
+  const registrations = readDatabasePathRegistrations(databasePath, { managedRoots });
+  if (registrations.unsupported.length || registrations.schema !== "supported") throw new Error("Unsupported stopped-copy registrations");
+  const documents = input.legacy?.documentsDir;
+  const workspaces = documents ? registrations.workspacePaths.filter(path => isWithinManagedPath(path, join(documents, "Vykor")) && !isWithinManagedPath(path, join(documents, "Vykor/channels"))) : [];
+  const preview = await inspectSources({ ...input, projectPaths: [...new Set([...(input.projectPaths ?? []), ...registrations.projectPaths])], legacy: { ...input.legacy, workspacePaths: [...new Set([...(input.legacy?.workspacePaths ?? []), ...workspaces])] } }, registrations.workspacePaths);
+  return { preview, registrations };
+}
+
+async function inspectSources(input: DataRootMigrationRequest, ownedMains: readonly string[]): Promise<DataRootMigrationPreview> {
   const preview: DataRootMigrationPreview = {
     sourceRoot: input.sourceRoot, targetRoot: input.targetRoot, mode: "different-root", moves: [], sources: [], entries: [], links: [], databases: [],
-    blockers: [], files: 0, bytes: 0,
+    blockers: [], gitWorktrees: [], files: 0, bytes: 0,
     requiredValidations: ["sqlite-on-stopped-copy", "registered-paths-from-stopped-copy", "source-stability-after-stop", "target-write-permissions", "target-space-before-copy"],
     registrationSnapshot: { workspaces: input.legacy?.workspacePaths === undefined ? "not-provided" : "host-supplied", projects: input.projectPaths === undefined ? "not-provided" : "host-supplied" },
     writersToClose: ["daemon and auto-start supervisor", "SQLite and managed runs/terminals/uploads/plugins"],
@@ -103,6 +120,7 @@ export async function inspectDataRootMigration(input: DataRootMigrationRequest):
   preview.sourceRoot = source; preview.targetRoot = target; preview.mode = same(source, target) ? "same-root" : "different-root";
   const paths = resolveUserDataPaths(target);
   const projects: string[] = [];
+  const deferredGitMains: string[] = [], registeredTrees: RegisteredMigrationWorktree[] = [];
   for (const path of input.projectPaths ?? []) {
     await check("invalid_project_path", path, async () => { projects.push(await resolveManagedRealPath(path), resolve(path)); });
   }
@@ -259,7 +277,8 @@ export async function inspectDataRootMigration(input: DataRootMigrationRequest):
         const registeredRoot = join(item.configDir, "worktrees");
         if (!isWithinManagedPath(item.path, registeredRoot)) block("unsafe_worktree", item.path, "Registered worktree is outside its recorded managed worktrees directory.");
         else await addSource("worktree", registeredRoot, paths.worktreesDir, "desktop-registered-worktrees", item.configDir);
-        projects.push(await resolveManagedRealPath(item.projectPath), resolve(item.projectPath));
+        registeredTrees.push(item as RegisteredMigrationWorktree);
+        await protectGitMain(item.projectPath);
       }
       const confirmed = manifest?.sources["git-settings"];
       if (confirmed && confirmed.sourceDigest !== await fileDigest(gitFile)) block("desktop_source_changed", gitFile, "The retained git-settings source has changed since import.");
@@ -278,6 +297,20 @@ export async function inspectDataRootMigration(input: DataRootMigrationRequest):
     preview.requiredValidations.push("host-desktop-profile-location");
     if (hasBrowserSources) needDesktopExport(manifestPath);
   }
+  async function protectGitMain(path: string) {
+    const actual = await resolveManagedRealPath(path);
+    if (ownedMains.some(owned => same(owned, path) && same(owned, actual))) return;
+    if (isWithinManagedPath(path, source) || (documents && isWithinManagedPath(path, join(documents, "Vykor")))) {
+      deferredGitMains.push(actual, resolve(path));
+      block("git_main_ownership_pending", path, "The stopped database must prove that this Git main repository is an allocated managed workspace.");
+    } else projects.push(actual, resolve(path));
+  }
+  await check("invalid_git_settings", resolveUserDataPaths(source).gitSettingsFilePath, async () => {
+    const settings = await readJson(resolveUserDataPaths(source).gitSettingsFilePath);
+    if (settings === undefined) return;
+    if (!validGitSettings(settings)) throw new Error("git settings");
+    for (const tree of settings.worktrees) { registeredTrees.push(tree); await protectGitMain(tree.projectPath); }
+  });
   for (const root of [source, target]) if (projects.some(project => isWithinManagedPath(project, root)))
     block("unsafe_root", root, "The managed root contains a registered real project.");
   if (preview.blockers.some(item => item.code === "unsafe_root")) return preview;
@@ -292,7 +325,7 @@ export async function inspectDataRootMigration(input: DataRootMigrationRequest):
         if (!(await metadata(directory))) return;
         for (const name of (await readdir(directory)).sort()) {
           const path = join(directory, name);
-          if (projects.some(project => isWithinManagedPath(path, project)) || preview.sources.some(item => same(item.from, path))) continue;
+          if ([...projects, ...deferredGitMains].some(project => isWithinManagedPath(path, project)) || preview.sources.some(item => same(item.from, path))) continue;
           if (projects.some(project => isWithinManagedPath(project, path))) { await unregistered(path); continue; }
           await addSource("workspace", path, join(paths.workspacesDir, "legacy", relative(legacyRoot, path)), "documents-unregistered", legacyRoot);
         }
@@ -302,7 +335,7 @@ export async function inspectDataRootMigration(input: DataRootMigrationRequest):
   }
 
   const runtimeRoots = preview.sources.filter(item => item.origin === "runtime-data").map(item => item.from);
-  const excluded = [...projects, join(source, "settings.json.lock"), join(source, "runtime-environment-secrets.json.lock"), ...runtimeRoots.flatMap(directory => ["registry.json", "registry.json.owner.lock", "registry.json.sdk-start.lock"].map(name => join(directory, "daemon", name)))];
+  const excluded = [...projects, ...deferredGitMains, join(source, "settings.json.lock"), join(source, "runtime-environment-secrets.json.lock"), ...runtimeRoots.flatMap(directory => ["registry.json", "registry.json.owner.lock", "registry.json.sdk-start.lock"].map(name => join(directory, "daemon", name)))];
   const visited = new Set<string>();
   const destinations = new Map<string, MigrationSourceEntry>();
   const walk = async (path: string): Promise<void> => {
@@ -336,6 +369,13 @@ export async function inspectDataRootMigration(input: DataRootMigrationRequest):
     });
   };
   for (const item of preview.sources) await walk(item.from);
+  await inspectMigrationGit(preview, registeredTrees);
+  for (const tree of preview.gitWorktrees) {
+    if ((isWithinManagedPath(tree.mainFrom, source) || !same(tree.mainFrom, tree.mainTo))
+      && !ownedMains.some(path => same(path, tree.mainFrom))
+      && !preview.blockers.some(blocker => blocker.code === "git_main_ownership_pending" && blocker.path === tree.mainFrom))
+      block("git_main_ownership_pending", tree.mainFrom, "The stopped database must prove that this Git main repository is an allocated managed workspace.");
+  }
   const databaseSignatures = new Set(preview.databases.map(db => [db.path, db.walPath].map(path => path ? preview.entries.find(entry => same(entry.source, path))?.digest : "").join(":")));
   if (databaseSignatures.size > 1) block("database_conflict", undefined, "Multiple different database/WAL datasets cannot be merged automatically.");
   if (!same(source, target)) await check("target_unreadable", target, async () => {

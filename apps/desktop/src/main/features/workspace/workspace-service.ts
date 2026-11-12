@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { open, readdir, readFile, realpath, rename, stat, unlink } from "node:fs/promises"
-import { getDataRoot, resolveUserDataPaths } from "@vykor/host-config/paths"
+import { getDataRoot, resolveUserDataPaths, resolveManagedHistoryPath } from "@vykor/host-config/paths"
 import {
   basename,
   dirname,
@@ -330,7 +330,7 @@ class WorkspaceService {
   ): Promise<{ absolutePath: string; classification: WorkspacePathClassification }> {
     const rootPath = await resolveDirectory(projectRoot)
     const roots = this.rootsFor(rootPath)
-    const cleaned = stripLocationSuffix(rawPath).replace(/^\/(?=[a-z]:[\\/])/i, "")
+    const cleaned = await resolveManagedHistoryPath(stripLocationSuffix(rawPath).replace(/^\/(?=[a-z]:[\\/])/i, ""), roots.configDir)
     const pathApi = process.platform === "win32" ? win32 : posix
     const classification = classifyWorkspacePath(cleaned, roots, { win32, posix })
     // 只允许显式打开项目外文件或在文件管理器中打开目录；写入和目录扫描仍走原边界。

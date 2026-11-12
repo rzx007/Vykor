@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { posix, win32 } from "node:path";
 import { getDataRoot, resolveUserDataPaths } from "./paths.js";
+import { assertManagedPathBoundary, isCompleteAbsolutePath, isWithinManagedPath, relocateManagedPath, resolveManagedRealPath } from "./managed-path-relocation.js";
 
 export interface ManagedPathMove {
   kind: "user-root" | "runtime-data" | "workspace" | "channel" | "worktree";
@@ -32,6 +33,24 @@ export function readManagedPathMap(dataRoot: string = getDataRoot()): ManagedPat
     throw new Error(`Invalid managed path-map: ${file}`);
   }
   return map as ManagedPathMap;
+}
+
+/** Resolve a saved native path before the caller's existing access checks; never adds allowed roots. */
+export async function resolveManagedHistoryPath(path: string, dataRoot: string = getDataRoot()): Promise<string> {
+  if (!isCompleteAbsolutePath(path)) return path;
+  const map = readManagedPathMap(dataRoot);
+  if (map.excludedRoots?.some(root => isWithinManagedPath(path, root))) return path;
+  const move = map.moves.filter(move => isWithinManagedPath(path, move.from)).sort((a, b) => b.from.length - a.from.length)[0];
+  if (!move) return path;
+  const next = relocateManagedPath(path, [move]);
+  const originalScope = await resolveManagedRealPath(move.from);
+  if (!isWithinManagedPath(originalScope, move.from) || !isWithinManagedPath(move.from, originalScope)) throw new Error("Managed history source escapes its recorded scope");
+  await assertManagedPathBoundary(path, move.from);
+  await assertManagedPathBoundary(move.to, dataRoot);
+  await assertManagedPathBoundary(next, move.to);
+  // A mapping destination replaced by a link must not become a new authorization scope.
+  if (!isWithinManagedPath(await resolveManagedRealPath(next), move.to)) throw new Error("Managed history path escapes its mapped scope");
+  return next;
 }
 
 export function getManagedWorkspaceRoots(dataRoot: string = getDataRoot()): string[] {

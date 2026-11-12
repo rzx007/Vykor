@@ -1,5 +1,6 @@
 import { realpath, stat } from "node:fs/promises"
 import { join, posix, sep, win32 } from "node:path"
+import { resolveManagedHistoryPath } from "@vykor/host-config/paths"
 
 export type WorkspaceFileScope = "project" | "extra-root"
 
@@ -58,6 +59,7 @@ export async function resolveWorkspaceOpenTarget(
 ): Promise<{ path: string; isDirectory: boolean }> {
   if (typeof path !== "string" || !path.trim()) throw new Error("路径不能为空。")
   if (typeof rootPath !== "string" || !rootPath.trim()) throw new Error("项目路径不能为空。")
+  path = await resolveManagedHistoryPath(stripLocationSuffix(path), roots.configDir)
 
   const classification = classifyWorkspacePath(
     path,

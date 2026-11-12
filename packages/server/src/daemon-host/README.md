@@ -32,6 +32,7 @@ Desktop 无窗口入口和 CLI 本机登记入口调用 `runRegisteredDaemon()`�
 | [data-location.ts](./data-location.ts) | 读写已提交的数据位置和最近的切换结果，校验恢复目标 |
 | [data-root-sources.ts](./data-root-sources.ts) | 只读清点旧来源、文件摘要、具体迁移映射、冲突和后续必验条件 |
 | [data-root-file-relocation.ts](./data-root-file-relocation.ts) | 副本中的桌面、Git、设置、文件工作流字段与项目哈希目录键处理器 |
+| [data-root-git.ts](./data-root-git.ts) | 只读 Git 登记检查、同锁 repair、限定指针的摘要核验与逆向恢复 |
 | [data-root-migration.ts](./data-root-migration.ts) | 停写后的独立复制、相邻安装、同根交换、提交与重复恢复 |
 | [data-root-migration-journal.ts](./data-root-migration-journal.ts) | 私有迁移记录、原子落盘、目录身份与源/目标摘要 |
 | [system-service.ts](./system-service.ts) | `DaemonSystemServiceState`、`DaemonSystemServiceStatus`、`SystemCommandResult`、`DaemonServiceInvocation` 等 |
@@ -43,6 +44,14 @@ Desktop 无窗口入口和 CLI 本机登记入口调用 `runRegisteredDaemon()`�
 测试放在本分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移文件时同步导入、公开入口、文档链接与旧引用清单。
 
 ## 数据根迁移预检
+
+Git 的 main（主仓库）若由停写数据库证明是已分配受管工作区，最终 moves 才覆盖它，Git 设置的 projectPath 随之重定位。公开请求没有“已证明”或忽略保护参数；仅 Git 登记产生的 `git_main_ownership_pending` 可等待独立数据库副本完成归属检查，宿主与数据库中的真实项目保护仍优先。完整业务复制前必须消除所有 blocker。
+
+`data-root-git.ts` 检查明确 Git 登记和最终文件清单中的受管 `.git` 文件，因此默认 child manager、没有 Desktop 登记的工作树也进入同一宿主流程。预检只执行 rev-parse、symbolic-ref 和版本查询，关闭 Git 可选锁及 fsmonitor，不执行可能运行过滤器的 status；锁定、丢失/不一致的登记、不能安全修复的布局会返回具体路径。WSL 登记使用指定发行版的 Git，Native 参数先通过现有 sandbox 挂载盘转换，输出及指针转回 Native 后核验；默认发行版在预检时固定到 journal，无法双向映射的 Linux 私有路径会阻止。版本也来自同一执行环境，主仓库实际路径改变时要求 Git 2.48+，因为更旧的 repair 会继续使用仍存在的旧主仓库；主仓库附带本次未搬的外部 worktree 时也阻止。
+
+有 `withInstalledCopy` 时，核心在持有稳定锁和 pending 的阶段先从最终主仓库执行 `git worktree repair`，再把控制交给验证/提交回调。动作前写 journal 意图，只允许 worktree 的 `.git` 和主仓库下对应 `gitdir` 两种指针变化；指针内容、权限、top-level/common-dir、HEAD、分支与 index 均核验，其余目标树及外部 Git 元数据保持原摘要。没有回调的文件层入口仍停在 verified；有工作树而未完成 repair 时禁止独立 commit。
+
+恢复先核对副本并恢复目录，再从旧主仓库 repair 旧位置。逆向 repair 可能重写内容相同的旧 `.git`，所以另存限定恢复指针的摘要，不刷新原完整 sourceTrees 基线；其它文件或时间戳改变仍拒绝。正向/逆向意图均可重复恢复，未完成时 pending 一直保留，成功后仍保留 stage/旧业务副本。真实验证位于 [Git 测试](./__test__/data-root-git-migration.test.ts) 和 [POSIX 跨文件系统与进程中断测试](./__test__/data-root-git-migration.posix.mjs)。
 
 停写及复制后，`relocateDataRootFiles({stagedRoot,targetRoot,moves,workflowDirectories,settingsPaths})` 处理 `data/desktop` 下的 composer 恢复记录和 Git 设置，以及根设置。`workflowDirectories` 和附加 `settingsPaths` 必须是副本内部、由已知受管 cwd 推导的明确物理路径。composer 只处理 mention/skill 路径，保留 revision、inputId、assetId、顺序和文本；当前附件卡片没有 sourcePath。Git 按 `<configDir>/worktrees` 与最终目录的关系同步修改 path/configDir/偏好基目录，保留外部 projectPath、分支和 baseCommit。
 

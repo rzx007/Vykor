@@ -1,8 +1,9 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { assertManagedPathBoundary, relocateManagedPath } from "../managed-path-relocation.js";
+import * as history from "../managed-path-map.js";
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }); });
@@ -32,4 +33,26 @@ it("checks missing descendants against their nearest existing ancestor without c
   await expect(assertManagedPathBoundary(join(scope, "escape", "not-yet-created"), scope)).rejects.toThrow(/outside|escape/i);
   await expect(assertManagedPathBoundary(join(scope, "safe", "new"), scope)).resolves.toBeUndefined();
   expect(readdirSync(scope)).toEqual(["escape"]);
+});
+
+it("resolves old native history paths without authorizing prefix siblings, traversal or physical escapes", async () => {
+  const root = mkdtempSync(join(tmpdir(), "managed-history-")); roots.push(root);
+  const dataRoot = join(root, "new"), old = join(root, "old"), moved = join(dataRoot, "workspaces/chat"), outside = join(root, "outside");
+  mkdirSync(join(dataRoot, "data/migrations"), { recursive: true }); mkdirSync(moved, { recursive: true }); mkdirSync(outside);
+  writeFileSync(join(dataRoot, "data/migrations/path-map.json"), JSON.stringify({ version: 1, moves: [{ kind: "workspace", from: old, to: moved }] }));
+  expect(history).toHaveProperty("resolveManagedHistoryPath");
+  const resolveHistory = (history as any).resolveManagedHistoryPath;
+  expect(await resolveHistory(join(old, "missing/child.txt"), dataRoot)).toBe(join(moved, "missing/child.txt"));
+  expect(await resolveHistory(`${old}-other/file.txt`, dataRoot)).toBe(`${old}-other/file.txt`);
+  expect(await resolveHistory(join(old, "../outside/file.txt"), dataRoot)).toBe(join(outside, "file.txt"));
+  expect(await resolveHistory("run --cwd old", dataRoot)).toBe("run --cwd old");
+  symlinkSync(outside, old, "junction");
+  await expect(resolveHistory(join(old, "file.txt"), dataRoot)).rejects.toThrow(/escape|scope/i);
+  rmSync(old);
+  symlinkSync(outside, join(moved, "escape"), "junction");
+  await expect(resolveHistory(join(old, "escape/missing.txt"), dataRoot)).rejects.toThrow(/escape|scope/i);
+  // A moved scope that is itself replaced by a link must not authorize a different subtree.
+  const replacement = join(dataRoot, "workspaces/replaced"); symlinkSync(outside, replacement, "junction");
+  writeFileSync(join(dataRoot, "data/migrations/path-map.json"), JSON.stringify({ version: 1, moves: [{ kind: "workspace", from: old, to: replacement }] }));
+  await expect(resolveHistory(join(old, "file.txt"), dataRoot)).rejects.toThrow(/escape|scope/i);
 });

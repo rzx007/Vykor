@@ -236,7 +236,7 @@ it("uses old worktreeRoot as configDir, preserving external project paths and br
   file(join(tree, "result.txt")); file(join(project, "untouched.ts")); file(join(manager, "unrelated.txt"));
   file(join(userData, "git-settings.json"), JSON.stringify({ version: 1, preferences: { defaultScope: "uncommitted", viewMode: "unified", ignoreWhitespace: false, branchPrefix: "vykor/", defaultTaskLocation: "current", worktreeRoot: manager, autoCleanup: false }, worktrees: [{ id: "t", projectId: "p", projectPath: project, path: tree, branch: "task", slug: "task", configDir: manager, disposable: false, baseCommit: "abc" }] }));
   const preview = await inspectDataRootMigration({ ...request(), legacy: { userDataDir: userData } });
-  expect(preview.blockers).toEqual([]);
+  expect(preview.blockers).toEqual([expect.objectContaining({ code: "git_worktree_unavailable", path: tree })]);
   expect(preview.entries.find(item => item.source.endsWith("result.txt"))?.target).toBe(join(targetRoot, "worktrees", "task", "result.txt"));
   expect(preview.entries.some(item => /untouched.ts|unrelated.txt/.test(item.source))).toBe(false);
   expect(relocateManagedPath(project, preview.moves)).toBe(project);
@@ -247,7 +247,7 @@ it("includes registered worktrees from an earlier configDir after the preference
   const tree = join(previous, "worktrees", "retained-task"); file(join(tree, "kept.txt"));
   file(join(userData, "git-settings.json"), JSON.stringify({ version: 1, preferences: { defaultScope: "uncommitted", viewMode: "unified", ignoreWhitespace: false, branchPrefix: "vykor/", defaultTaskLocation: "current", worktreeRoot: manager, autoCleanup: false }, worktrees: [{ id: "t", projectId: "p", projectPath: project, path: tree, branch: "task", slug: "task", configDir: previous, disposable: false, baseCommit: "abc" }] }));
   const preview = await inspectDataRootMigration({ ...request(), legacy: { userDataDir: userData } });
-  expect(preview.blockers).toEqual([]);
+  expect(preview.blockers).toEqual([expect.objectContaining({ code: "git_worktree_unavailable", path: tree })]);
   expect(preview.entries.find(item => item.source.endsWith("kept.txt"))?.target).toBe(join(targetRoot, "worktrees", "retained-task", "kept.txt"));
 });
 
