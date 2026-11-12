@@ -1,4 +1,4 @@
-import { getDataRoot, getWorkspacesDir } from "@vykor/host-config/paths"
+import { dataRootChildEnvironment, getDataRoot, getWorkspacesDir } from "@vykor/host-config/paths"
 import { spawn } from "node:child_process"
 import { join } from "node:path"
 import { app } from "electron"
@@ -26,7 +26,7 @@ export async function runDesktopDaemonEntry(mode: DesktopDaemonMode): Promise<vo
     if (registry && daemonPidAlive(registry.pid)) return
     if (!(await shouldStartManagedDaemon())) return
     const args = [...(app.isPackaged ? [] : [app.getAppPath()]), "--data-root", getDataRoot(), "--daemon-service"]
-    const child = spawn(process.execPath, args, { detached: true, stdio: "ignore", windowsHide: true })
+    const child = spawn(process.execPath, args, { detached: true, stdio: "ignore", windowsHide: true, env: dataRootChildEnvironment() })
     child.unref()
     return
   }

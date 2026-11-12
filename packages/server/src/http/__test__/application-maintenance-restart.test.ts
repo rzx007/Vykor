@@ -20,6 +20,21 @@ function fixture(tasks: Array<{ status: string }> = [], terminals: Array<{ statu
   return { app, gate, closeApplication };
 }
 describe("resident daemon safe restart preparation", () => {
+  it("blocks root migration until an open temporary chat is handled without persisting its body", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "migration-temporary-"));
+    vi.stubEnv("VYKOR_CONFIG_DIR", directory); vi.stubEnv("VYKOR_DATA_DIR", join(directory, "data"));
+    const server = new VykorHttpServer({ storePath: join(directory, "sessions.db"), token: "owned-token", logger: () => {} });
+    try {
+      await server.application.ready();
+      server.store.sessions.create({ id: "temporary", cwd: directory, model: "test", storage: "memory" });
+      const headers = { authorization: "Bearer owned-token", "x-vykor-protocol-version": String(CURRENT_PROTOCOL_VERSION) };
+      const blocked = await server.app.request("/maintenance/prepare-root-migration", { method: "POST", headers });
+      expect(blocked.status).toBe(409); expect(server.application.diagnosticState.accepting).toBe(true);
+      server.store.sessions.archive("temporary");
+      const prepared = await server.app.request("/maintenance/prepare-root-migration", { method: "POST", headers });
+      expect(prepared.status).toBe(200); expect(server.application.diagnosticState.accepting).toBe(false);
+    } finally { await server.close(); vi.unstubAllEnvs(); rmSync(directory, { recursive: true, force: true }); }
+  });
   it("closes admission before releasing its barrier and replies only after draining", async () => {
     const { app, gate, closeApplication } = fixture();
     const response = await app.request("/maintenance/prepare-restart", { method: "POST" });

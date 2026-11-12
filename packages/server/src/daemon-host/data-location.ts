@@ -44,9 +44,10 @@ export async function readLegacyDataLocation(path?: string): Promise<RegisteredD
 }
 
 export async function readRegisteredDataLocation(
-  baseDataDirectory = getDataDir(),
+  baseDataDirectory?: string,
   legacyDataLocationPath?: string,
 ): Promise<RegisteredDataLocation | undefined> {
+  if (baseDataDirectory === undefined) return defaultDataLocation(getDataDir());
   const saved = await readDataLocationState(dataLocationFile(baseDataDirectory));
   return saved?.location ?? await readLegacyDataLocation(legacyDataLocationPath);
 }

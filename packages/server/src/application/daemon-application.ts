@@ -220,7 +220,7 @@ export interface DurableAgentApplication {
   /** Bounded, in-memory OAuth login operations owned by this daemon instance. */
   readonly mcpOAuthOperations: McpOAuthOperationService;
   ready(): Promise<void>;
-  activateBackgroundWork?(): void;
+  activateBackgroundWork?(): void | Promise<void>;
   close(): Promise<void>;
 }
 
@@ -284,8 +284,9 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly runAdmission: RunAdmissionService;
   readonly runControl: RunControlService;
   private readonly localOcr: LocalOcrService;
-  private readonly startupRecovery: Promise<void>;
-  private backgroundActivated = false;
+  private startupRecovery: Promise<void>;
+  private deferredRecovery?: () => Promise<void>;
+  private backgroundActivation?: Promise<void>;
   createMaintenanceService(host: Pick<MaintenanceApplicationContext, "logs" | "settings"> & { beforeClose?(): void } = {}) {
     return createMaintenanceApplicationService({ store: this.store, control: this.control, commands: this.commands, terminals: this.terminals, ...host, readiness: () => this.diagnosticState, closeApplication: () => { host.beforeClose?.(); return this.close(); } });
   }
@@ -335,6 +336,7 @@ export class DaemonApplication implements DurableAgentApplication {
         attachmentRoot: options.attachmentRoot,
         attachmentLimits: options.attachmentLimits,
         attachments: options.attachments,
+        deferActivation: options.deferBackgroundActivation,
       });
       this.attachments = attachmentServices.attachments;
       this.attachmentResources = attachmentServices.resources;
@@ -1132,7 +1134,7 @@ export class DaemonApplication implements DurableAgentApplication {
         recoverGoalWaits: () => { this.goals.recoverExternalWaits(); },
         recoverWorkflows: () => recoverInterruptedWorkflows({ workflowHost: this.workflowHost }),
       });
-      this.startupRecovery = recovery.run()
+      const runRecovery = () => recovery.run()
         .then(
           () => {
             if (this.readyState === "starting") this.readyState = "ready";
@@ -1145,6 +1147,9 @@ export class DaemonApplication implements DurableAgentApplication {
             throw error;
           },
         );
+      this.deferredRecovery = options.deferBackgroundActivation ? runRecovery : undefined;
+      this.startupRecovery = options.deferBackgroundActivation ? Promise.resolve() : runRecovery();
+      if (options.deferBackgroundActivation) this.readyState = "ready";
       void this.startupRecovery.catch(() => {});
     } catch (error) {
       createdAgentPool?.stopIdleEviction();
@@ -1161,15 +1166,23 @@ export class DaemonApplication implements DurableAgentApplication {
 
   async ready(): Promise<void> {
     await this.startupRecovery;
-    if (!this.options.deferBackgroundActivation) this.activateBackgroundWork();
+    if (!this.options.deferBackgroundActivation) await this.activateBackgroundWork();
   }
 
-  activateBackgroundWork(): void {
-    if (this.backgroundActivated || this.readyState !== "ready") return;
-    this.backgroundActivated = true;
-    this.schedules.start();
-    // 后台自动连接 enabled 渠道：不阻塞 listen，也不 reject。
-    void this.channelRuntime?.startEnabled();
+  activateBackgroundWork(): Promise<void> {
+    if (this.backgroundActivation) return this.backgroundActivation;
+    if (this.readyState !== "ready") return Promise.resolve();
+    this.backgroundActivation = (async () => {
+      this.attachmentResources.activate();
+      if (this.deferredRecovery) {
+        const recover = this.deferredRecovery; this.deferredRecovery = undefined;
+        this.startupRecovery = recover(); await this.startupRecovery;
+      }
+      if (this.readyState !== "ready") return;
+      this.schedules.start();
+      void this.channelRuntime?.startEnabled();
+    })();
+    return this.backgroundActivation;
   }
 
   close(): Promise<void> {
@@ -1241,7 +1254,7 @@ export class DaemonApplication implements DurableAgentApplication {
       failures.push(error);
     }
     try {
-      const settlementRecovery = recoverProjectionSettlements(this.options.store);
+      const settlementRecovery = this.deferredRecovery ? { pending: 0 } : recoverProjectionSettlements(this.options.store);
       if (settlementRecovery.pending > 0) {
         throw new Error(
           `Daemon shutdown left ${settlementRecovery.pending} projection settlement(s) pending`,

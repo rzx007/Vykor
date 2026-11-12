@@ -43,6 +43,14 @@ it("retains only pre-initialization root inputs, including a shadowed external p
   } });
   expect(env.VYKOR_CONFIG_DIR).toBe(join(home, "selected"));
 });
+it.each([false, true])("propagates only original root environment inputs to children (external=%s)", async external => {
+  vi.resetModules();
+  const module = await import("../data-root-selection.js"), home = temporaryHome(), root = join(home, "selected");
+  const env = external ? { VYKOR_CONFIG_DIR: root } : {};
+  await module.initializeDataRoot({ homeDir: home, explicitRoot: root, env });
+  expect(env).toHaveProperty("VYKOR_CONFIG_DIR", root);
+  expect(module.dataRootChildEnvironment().VYKOR_CONFIG_DIR).toBe(external ? root : undefined);
+});
 
 it.runIf(process.platform === "win32")("accepts a complete UNC share with a dotted server name", () => {
   const path = "\\\\server.example\\share\\root";

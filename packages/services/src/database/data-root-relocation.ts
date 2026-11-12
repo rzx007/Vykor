@@ -199,6 +199,13 @@ export async function verifyDataRootCopy(databasePath: string): Promise<void> {
   try {
     if (!validateCopy(connection, result)) throw new Error("Unsupported database copy schema");
     const db = drizzle(connection, { schema }), blobs = new AttachmentBlobStore({ root: join(dirname(databasePath), "attachments") });
+    for (const { pid } of db.select({ pid: schema.applicationOwners.pid }).from(schema.applicationOwners).all()) {
+      let stopped = false;
+      if (Number.isSafeInteger(pid) && pid > 0) {
+        try { process.kill(pid, 0); } catch (error) { stopped = (error as NodeJS.ErrnoException).code === "ESRCH"; }
+      }
+      if (!stopped) throw new Error("Stopped copy still names a live or unverifiable application owner");
+    }
     const resources = db.select().from(schema.attachmentAssets).all();
     for (const item of resources) {
       if (!item.sha256 || item.sizeBytes === null) continue;
@@ -220,6 +227,27 @@ export async function verifyDataRootCopy(databasePath: string): Promise<void> {
     }
     // Runtime leases refer to stopped owners. Durable asset/source identities stay intact.
     db.delete(schema.attachmentLeases).run();
+    db.delete(schema.applicationOwners).run();
     connection.pragma("wal_checkpoint(TRUNCATE)");
+  } finally { connection.close(); }
+}
+
+/** Only owned migration copies: hashes every schema/row, never returns bodies or credentials. */
+export function digestDataRootCopy(databasePath: string, options: { stoppedValidationPid?: number } = {}): string {
+  const connection = openCopy(databasePath, true), hash = createHash("sha256"), checked = report();
+  try {
+    if (!validateCopy(connection, checked) || checked.unsupported.length) throw new Error("Unsupported database copy schema");
+    const objects = connection.prepare("SELECT type, name, tbl_name, sql FROM sqlite_master ORDER BY type, name").all() as Array<{ type: string; name: string; tbl_name: string; sql: string | null }>;
+    hash.update(JSON.stringify(objects));
+    for (const table of objects.filter(object => object.type === "table")) {
+      hash.update(table.name);
+      const rows: string[] = [];
+      const where = table.name === "application_owner" && options.stoppedValidationPid ? ` WHERE NOT (key = 'application' AND pid = ${Number(options.stoppedValidationPid)})` : "";
+      for (const row of connection.prepare(`SELECT * FROM "${table.name.replaceAll('"', '""')}"${where}`).safeIntegers(true).raw(true).iterate())
+        rows.push(createHash("sha256").update(JSON.stringify(row, (_key, value) => typeof value === "bigint" ? { integer: value.toString() } : value)).digest("hex"));
+      // ponytail: keep one hash per row; external sorting only if this exceeds migration memory limits.
+      rows.sort(); for (const digest of rows) hash.update(digest);
+    }
+    return hash.digest("hex");
   } finally { connection.close(); }
 }

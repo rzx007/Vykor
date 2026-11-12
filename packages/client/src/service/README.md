@@ -21,3 +21,5 @@
 Node 服务发现通过 `@vykor/host-config/paths` 的轻量模块共享产品根选择，按调用者传入的 env、固定定位记录、默认根定位。`discover({ env })` 与 `ensure({ env })` 使用同一规则；损坏、迁移中或找不到已选数据库时拒绝启动。`ensure` 把同一根及 home 传给子进程。该工作区引用只用于构建并内联，不增加发布依赖；浏览器入口不导入它。
 
 `ensure` 遇到正常根初始化锁时，在调用者的同一个总 deadline 和 AbortSignal 内等待并重新校验；并发加入者有自己的等待期限，不取消原启动者。显式 env 未提供 home 时使用系统账户 home，不读取全局 HOME/USERPROFILE。
+
+默认服务启动先在 home 锁中重验并取得 `sdk-control` 写资格，再等待 registry 控制锁；清理和释放不反向等待 home。默认 discover/ensure 返回的 endpoint 保存本次来源，stop 在停止及清理 registry 前重新登记。显式 file 的调用者管理契约不被全局 root 或无关环境覆盖。迁移遇到现有 SDK 控制者会报告忙；不会持有 home 再等该控制者。

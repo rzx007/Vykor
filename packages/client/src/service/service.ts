@@ -1,4 +1,4 @@
-import { dataRootHome, waitForDataRootSelection } from "@vykor/host-config/paths";
+import { acquireDataRootWriter, dataRootHome, isCompleteAbsolutePath, resolveDataRootSelection, waitForDataRootSelection } from "@vykor/host-config/paths";
 import { access, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -68,13 +68,18 @@ async function probe(endpoint: ServiceEndpoint, options: DiscoverServiceOptions)
   }
 }
 
+// Only endpoints found through managed discovery carry root admission provenance.
+// Explicit registry-file embedding remains caller managed, including unrelated home/env inputs.
+const managedEndpoints = new WeakMap<ServiceEndpoint, { homeDir: string; dataRoot: string }>();
 /** Reads and probes a local endpoint; never starts or replaces a daemon. */
 export async function discover(options: DiscoverServiceOptions = {}): Promise<ServiceEndpoint | undefined> {
   options.signal?.throwIfAborted();
   timeout(options.timeoutMs, 1_000);
   const endpoint = await readEndpoint(resolve(options.file ?? registryFile(options.env)));
   if (!endpoint || !(await probe(endpoint, options))) return undefined;
-  return sameInstance(endpoint, await readEndpoint(endpoint.file)) ? endpoint : undefined;
+  if (!sameInstance(endpoint, await readEndpoint(endpoint.file))) return undefined;
+  if (!options.file) managedEndpoints.set(endpoint, { homeDir: dataRootHome(options.env ?? process.env), dataRoot: resolveDataRootSelection({ env: options.env ?? process.env }).dataRoot });
+  return endpoint;
 }
 
 const startups = new Map<string, Promise<ServiceEndpoint>>();
@@ -103,11 +108,14 @@ export async function ensure(options: EnsureServiceOptions = {}): Promise<Servic
   }
   const file = resolve(options.file ?? registryFileForRoot(env.VYKOR_CONFIG_DIR!, selectionEnv));
   const existing = await discover({ ...options, file, timeoutMs: Math.max(1, end - Date.now()) });
-  if (existing) return existing;
+  const managed = !options.file ? { homeDir: dataRootHome(selectionEnv), dataRoot: env.VYKOR_CONFIG_DIR! } : undefined;
+  if (existing) { if (managed) managedEndpoints.set(existing, managed); return existing; }
   let pending = startups.get(file);
   const joinsExistingStartup = pending !== undefined;
   if (!pending) {
-    pending = startService({ ...options, file }, env, end).finally(() => { startups.delete(file); });
+    const root = env.VYKOR_CONFIG_DIR;
+    const writerRoot = isCompleteAbsolutePath(root) && file === registryFileForRoot(root, selectionEnv) ? root : undefined;
+    pending = startService({ ...options, file }, env, end, writerRoot).finally(() => { startups.delete(file); });
     startups.set(file, pending);
   }
   // The owner must wait for its timed-out child's cleanup. A joining caller has
@@ -117,27 +125,32 @@ export async function ensure(options: EnsureServiceOptions = {}): Promise<Servic
   if (typeof options.version === "string" && endpoint.version !== options.version
     || typeof options.version === "function" && !options.version(endpoint.version))
     throw new Error("Started service does not satisfy the requested version.");
+  if (managed) managedEndpoints.set(endpoint, managed);
   return endpoint;
 }
 
-async function startService(options: EnsureServiceOptions & { file: string }, env: Record<string, string | undefined>, end: number): Promise<ServiceEndpoint> {
-  const lease = await acquireStartupLock(options.file, end, options.signal);
+async function startService(options: EnsureServiceOptions & { file: string }, env: Record<string, string | undefined>, end: number, writerRoot?: string): Promise<ServiceEndpoint> {
+  // Order is home admission, then SDK control. Never wait for home while holding control.
+  const writer = writerRoot ? await acquireDataRootWriter({ homeDir: dataRootHome(options.env ?? process.env), dataRoot: writerRoot, kind: "sdk-control", timeoutMs: Math.max(1, end - Date.now()) }) : undefined;
   try {
-    const locked = { ...options, signal: lease.signal };
-    const existing = await discover({ ...locked, timeoutMs: Math.max(1, end - Date.now()) });
-    if (existing) return existing;
-    return await startRegisteredService(locked, env, end);
-  } finally { await lease.release(); }
+    const lease = await acquireStartupLock(options.file, end, options.signal);
+    try {
+      const locked = { ...options, signal: lease.signal };
+      const existing = await discover({ ...locked, timeoutMs: Math.max(1, end - Date.now()) });
+      if (existing) return existing;
+      return await startRegisteredService(locked, env, end, writerRoot);
+    } finally { await lease.release(); }
+  } finally { await writer?.release(); }
 }
 
-async function startRegisteredService(options: EnsureServiceOptions & { file: string }, env: Record<string, string | undefined>, end: number): Promise<ServiceEndpoint> {
+async function startRegisteredService(options: EnsureServiceOptions & { file: string }, env: Record<string, string | undefined>, end: number, writerRoot?: string): Promise<ServiceEndpoint> {
   const previous = await readEndpoint(options.file);
   if (previous && pidAlive(previous.pid))
     throw new Error("Registered Vykor service is incompatible or unhealthy; manage it explicitly before starting another.");
   if (!previous && await access(options.file).then(() => true, () => false))
     throw new Error("Vykor registry is malformed; inspect it before starting a service.");
   const cwd = resolve(options.cwd ?? process.cwd());
-  if (!options.command && options.file !== registryFileForRoot((await waitForDataRootSelection({ env }, { deadline: end, signal: options.signal })).dataRoot, env))
+  if (!options.command && !writerRoot)
     throw new Error("A custom registry file requires a command that writes it, or a matching VYKOR_DATA_DIR.");
   const command = options.command ?? await defaultCommand(cwd);
   options.signal?.throwIfAborted();
@@ -169,6 +182,12 @@ async function startRegisteredService(options: EnsureServiceOptions & { file: st
 export async function stop(endpoint: ServiceEndpoint, options: Pick<DiscoverServiceOptions, "signal" | "timeoutMs"> = {}): Promise<boolean> {
   options.signal?.throwIfAborted();
   const milliseconds = timeout(options.timeoutMs, 5_000);
+  const managed = managedEndpoints.get(endpoint);
+  const writer = managed ? await acquireDataRootWriter({ ...managed, kind: "sdk-control", timeoutMs: milliseconds }) : undefined;
+  try { return await stopInstance(endpoint, options, milliseconds); }
+  finally { await writer?.release(); }
+}
+async function stopInstance(endpoint: ServiceEndpoint, options: Pick<DiscoverServiceOptions, "signal" | "timeoutMs">, milliseconds: number): Promise<boolean> {
   if (endpoint.pid === process.pid) throw new Error("Refusing to stop the calling process.");
   if (!sameInstance(endpoint, await readEndpoint(endpoint.file))) return false;
   if (!(await probe(endpoint, { ...options, timeoutMs: Math.min(1_000, milliseconds) }))) return false;

@@ -5,6 +5,7 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
+    "./migration-validation": { "import": "./src/daemon-host/migration-validation-entry.ts", "types": "./src/daemon-host/migration-validation-entry.ts" },
     ".": {
       "import": "./src/index.ts",
       "types": "./src/index.ts"

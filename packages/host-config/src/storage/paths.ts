@@ -3,6 +3,7 @@ import { basename, isAbsolute, join, normalize, parse, resolve, sep } from "node
 import { homedir } from "node:os";
 import { currentDataRoot, type RootEnvironment } from "./data-root-selection.js";
 export * from "./data-root-selection.js";
+export * from "./data-root-writers.js";
 export * from "./managed-path-map.js";
 export * from "./managed-path-relocation.js";
 

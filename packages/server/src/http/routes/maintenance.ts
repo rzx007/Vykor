@@ -49,6 +49,7 @@ export function createMaintenanceRoutes(context: {
       "/maintenance/prepare-restart",
       reply((c) => service.prepareRestart(undefined, c.req.raw.signal)),
     )
+    .post("/maintenance/prepare-root-migration", reply(() => service.prepareDataRootMigration()))
     .post("/maintenance/data-switch", async (c) => {
       if (!context.registeredDaemon || c.req.header("origin"))
         return errorResponse(404, "当前后台未提供本机数据切换。");

@@ -10,7 +10,7 @@ Desktop 无窗口入口和 CLI 本机登记入口调用 `runRegisteredDaemon()`�
 
 连接时，CLI 和 Desktop 用同一套规则决定是否启动系统服务。Windows 计划任务空闲且后台已退出时立即触发一次检查。Unix 服务已运行，或 Linux 的 systemd 正在启动服务时，客户端等待后台发布登记。需要改动启动项时，先取得控制锁，再核对设置和服务状态。
 
-按需后台切换数据前用同一把控制锁挡住启停操作，并检查当前工作已经结束。后台记录切换 ID，关闭旧监听器，再在原进程内打开目标。目标就绪后提交选择、发布新地址并启动定时任务和渠道。恢复库必须在 SQLite 打开时存在。目标打开失败时用旧位置重新启动。
+产品默认运行固定使用当前用户根的 canonical 数据库；旧 data-location 只作迁移来源，根切换由宿主协调器关闭旧进程后启动新进程。显式注入 baseDataDirectory 的嵌入调用仍保留原有独立数据库和进程内切换契约。
 
 桌面宿主还可在启动服务前调用该入口导出的 `setHostResponseLocale()`，提供操作系统的首选显示语言。普通 Agent 和审批器共享这个进程级默认值；它不持久化为设置，也不改变用户明确指定的回复语言。
 
@@ -18,7 +18,7 @@ Desktop 无窗口入口和 CLI 本机登记入口调用 `runRegisteredDaemon()`�
 
 自启动偏好与系统服务配置保存在各自配置位置，进程状态来自操作系统和守护进程登记信息。
 
-基础数据目录下的 `daemon/registry.json` 存当前进程地址，`daemon/data-location.json` 存已提交的数据位置和最近一次切换结果。两份文件都用原子替换写入。启动过程读取已提交位置，切换中断后也从该位置打开数据。
+用户根下的 `data/daemon/registry.json` 存当前进程地址。产品选择保存在 home 旁的固定 selector；旧 `daemon/data-location.json` 不再覆盖产品 canonical 路径。显式嵌入调用仍用该旧文件记录其独立数据位置。
 
 ## 主要文件
 
@@ -35,6 +35,10 @@ Desktop 无窗口入口和 CLI 本机登记入口调用 `runRegisteredDaemon()`�
 | [data-root-git.ts](./data-root-git.ts) | 只读 Git 登记检查、同锁 repair、限定指针的摘要核验与逆向恢复 |
 | [data-root-migration.ts](./data-root-migration.ts) | 停写后的独立复制、相邻安装、同根交换、提交与重复恢复 |
 | [data-root-migration-journal.ts](./data-root-migration-journal.ts) | 私有迁移记录、原子落盘、目录身份与源/目标摘要 |
+| [data-root-coordination.ts](./data-root-coordination.ts) | 宿主停写、服务协调、验证和解锁后的普通新进程启动 |
+| [data-root-service.ts](./data-root-service.ts) | 私有服务定义备份、阶段意图与恢复 |
+| [data-root-validation.ts](./data-root-validation.ts) | 真实验证子进程与限定 DB 等价恢复 |
+| [migration-validation-entry.ts](./migration-validation-entry.ts) | 普通产品初始化前的受信任内部 child 入口 |
 | [system-service.ts](./system-service.ts) | `DaemonSystemServiceState`、`DaemonSystemServiceStatus`、`SystemCommandResult`、`DaemonServiceInvocation` 等 |
 
 ## 测试与维护
@@ -90,3 +94,17 @@ Git 的 main（主仓库）若由停写数据库证明是已分配受管工作�
 写旧根迁出标记前，journal 先记录本次新增的 `data`、`data/migrations` 目录链。恢复先逐层确认只有预期子目录和本记录的标记，再按原始源树摘要校验，最后从深到浅移除这些新目录。链上出现未知文件或链接就保留现场并拒绝恢复；不会忽略整个 `data` 树或刷新源摘要。创建或清理中断后，只处理已记录且仍存在的目录。
 
 `recoverDataRootMigration(path,{homeDir})` 先验证记录路径、物理父目录和各副本身份，再选择回退步骤。它把已安装的新树移回暂存、把 backup 还原，不删除任一业务副本；失败阶段保留，重复调用不会再导入草稿或生成会话。未知路径、摘要变化、丢失旧副本会阻止启动并保留现场。已发布普通写入后只允许修复当前目标或显式反向迁移，不能自动换回旧数据。没有 journal 的普通死亡启动锁通过 `withDataRootRecoveryLock(homeDir, operation)` 显式恢复；它不猜测数据根。
+
+## 全写入者与新实例协调
+
+`migrateDataRootAndRestart(request, coordination)` 先列出 CLI/TUI、Desktop、SDK 控制写入者；这些进程在稳定 home 锁内取得根内资格，已有工作排空及资格释放不等待该锁。源 daemon 必须与登记 PID/token 的鉴权响应一致，目标活进程、控制锁竞争或非 daemon 写入者阻止复制。维护入口还拒绝未处理的临时聊天。
+
+唯一主 journal 先持久化，再写 pending，然后捕获服务定义和停写；`preparation.complete` 独立于操作进度，只有合法 flush/退出后才建立完整 sourceTrees。早期 stage 必须为空；本次服务原定义保存在固定的 `<journal>.service.json` 私有文件，主记录只存路径、摘要和意图。数据库检查副本位于完成停写后的 stage/.database-snapshot，不通过空库证明旧数据可用。
+
+`data-root-service.ts` 在动作前记录暂停、安装和恢复意图；Windows 原任务 XML/launcher、macOS plist、Linux unit 只进入私有备份。目标定义安装时保持停止，原来不存在的服务不会新增。恢复顺序为目录/Git、暂停状态的原定义、原 selector，之后用新的短锁恢复原 enabled/running；Linux start 使用 --no-block，不等待新 Node 进程取得同一 home 锁。
+
+`data-root-validation.ts` 启动真实新子进程。内部验证入口仅接受活跃锁持有者父进程、匹配 pending/journal/目标和本次记录 PID；不提供公开 ignore 开关，也不发布普通 registry。应用延迟运行恢复、定时任务、渠道和附件资源清理。验证关闭后核对全部业务表和其它文件，只忽略本次已退出 PID 的运行 owner，再从私有 `<journal>.validation/database.db` 恢复原 DB 字节及时间。备份必须匹配进入回调时的 verified 树；未知变化、活子进程或不同业务行均保留现场并拒绝恢复。
+
+同锁回调按 validate → commit → markWritersReleased 执行。普通子进程只在核心解锁后启动，以显式目标参数及原始外部目录环境输入初始化；不修改旧 parent 的 pinned 根。新 PID/token 和正式登记从普通新进程产生。放行目标写入后启动失败只报告向前修复。恢复旧源也先持久化 recoveryWritersReleased；之后服务 resume 失败不能再回退数据或重挂旧 pending，遇到后续迁移直接跳过旧服务恢复。
+
+旧分离数据集同样走高层：只选inspect.sources中origin=runtime-data与canonical sourceRoot/data的有限目录，检查单一活registry和其数据库身份；多活源拒绝。早期journal记录这些已存在目录身份，原服务launcher/logs只从同组目录派生，不为了发现旧库创建新canonical库。Windows固定launcher/logs在stagedTree与Git基线之前生成，最终安装相同文本不重写；未知业务改动仍按全树摘要拒绝。

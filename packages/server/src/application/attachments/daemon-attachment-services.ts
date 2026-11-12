@@ -16,6 +16,7 @@ export function createDaemonAttachmentServices(input: {
   attachmentRoot?: string;
   attachmentLimits?: Partial<AttachmentLimits>;
   attachments?: AttachmentService;
+  deferActivation?: boolean;
 }): {
   blobs: AttachmentBlobStore;
   attachments: AttachmentService;
@@ -32,6 +33,7 @@ export function createDaemonAttachmentServices(input: {
     limits: input.attachmentLimits,
   });
   const resources = new SessionAttachmentResources({
+    deferActivation: input.deferActivation,
     root: join(dirname(store.path), "attachment-session-resources"),
     attachments,
   });

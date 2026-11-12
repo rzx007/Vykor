@@ -1,9 +1,9 @@
 import { execFile, spawnSync } from "node:child_process";
 
 /** User-scoped operating-system service manager for a local daemon host. */
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 
 import { getLogsDir } from "@vykor/host-config";
 
@@ -64,6 +64,19 @@ export interface DaemonSystemServiceOptions {
   ) => Promise<SystemCommandResult>;
 }
 
+/** Contains private command/environment text. Persist only in a private backup, never a journal. */
+export interface DaemonServiceSnapshot {
+  version: 1;
+  options: Pick<DaemonSystemServiceOptions, "invocation" | "platform" | "homeDir" | "logsDir" | "uid">;
+  installed: boolean;
+  wasRunning: boolean;
+  wasEnabled: boolean;
+  definition?: string;
+  definitionMode?: number;
+  launcher?: string;
+  launcherMode?: number;
+}
+
 export class DaemonSystemService {
   private readonly platform: NodeJS.Platform;
   private readonly homeDir: string;
@@ -87,6 +100,94 @@ export class DaemonSystemService {
 
   invocation(): DaemonServiceInvocation {
     return this.options.invocation;
+  }
+
+  forDataRoot(dataRoot: string): DaemonSystemService {
+    const args = [...this.options.invocation.args];
+    const index = args.findIndex(arg => arg === "--data-root" || arg.startsWith("--data-root="));
+    if (index < 0) args.push("--data-root", dataRoot);
+    else if (args[index] === "--data-root") args.splice(index, 2, "--data-root", dataRoot);
+    else args[index] = `--data-root=${dataRoot}`;
+    return new DaemonSystemService({ ...this.options, homeDir: this.homeDir, platform: this.platform, uid: this.uid,
+      logsDir: join(dataRoot, "data/logs"), invocation: { ...this.options.invocation, args } });
+  }
+
+  snapshotForMigration(): DaemonServiceSnapshot {
+    const status = this.status();
+    if (status.state === "unknown") throw new Error("Cannot verify system service state");
+    const snapshot: DaemonServiceSnapshot = { version: 1, options: { invocation: this.options.invocation, platform: this.platform, homeDir: this.homeDir, logsDir: this.logsDir, uid: this.uid }, installed: status.state !== "not-installed", wasRunning: this.platform === "win32" ? status.detail === "running" : status.state === "running", wasEnabled: status.state !== "not-installed" && status.detail !== "disabled" };
+    if (snapshot.installed && this.platform === "linux") {
+      const enabled = this.runCommand("systemctl", ["--user", "is-enabled", SERVICE_LABEL]);
+      if (enabled.error) throw new Error("Cannot verify service enablement");
+      snapshot.wasEnabled = ["enabled", "enabled-runtime"].includes(enabled.stdout.trim());
+    }
+    if (snapshot.installed && this.platform === "darwin") {
+      const disabled = this.checked("launchctl", ["print-disabled", this.launchdDomain()]);
+      const state = /"dev\.vykor\.daemon"\s*=>\s*(true|false)/.exec(disabled.stdout);
+      snapshot.wasEnabled = state?.[1] !== "true";
+    }
+    if (snapshot.installed && this.platform === "win32") {
+      const state = JSON.parse(this.checked("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `$task = Get-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' -ErrorAction Stop; @{ enabled = [bool]$task.Settings.Enabled; running = ($task.State.ToString() -eq 'Running') } | ConvertTo-Json -Compress`]).stdout);
+      if (typeof state.enabled !== "boolean" || typeof state.running !== "boolean") throw new Error("Cannot verify scheduled task intent");
+      snapshot.wasEnabled = state.enabled; snapshot.wasRunning = state.running;
+    }
+    const read = (path: string) => { const metadata = lstatSync(path); if (!metadata.isFile() || metadata.isSymbolicLink()) throw new Error("Unsafe service definition"); return { content: readFileSync(path, "utf8"), mode: metadata.mode & 0o777 }; };
+    if (snapshot.installed) {
+      if (this.platform === "win32") snapshot.definition = this.checked("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `Export-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}'`]).stdout;
+      else { const saved = read(this.configPath()); snapshot.definition = saved.content; snapshot.definitionMode = saved.mode; }
+    }
+    if (this.platform === "win32" && existsSync(this.windowsLauncherPath())) {
+      const saved = read(this.windowsLauncherPath()); snapshot.launcher = saved.content; snapshot.launcherMode = saved.mode;
+    }
+    return snapshot;
+  }
+
+  pauseForMigration(): void {
+    if (this.status().state === "not-installed") return;
+    if (this.platform === "win32") this.stopWindowsTask(true, true);
+    else if (this.platform === "darwin") { if (this.status().state !== "stopped") this.checked("launchctl", ["bootout", this.launchdTarget()]); }
+    else if (this.platform === "linux") this.checked("systemctl", ["--user", "disable", "--now", SERVICE_LABEL]);
+    else throw new Error("Unsupported system service migration");
+  }
+
+  /** Recreate the old definition while still paused; normal startup follows selector recovery. */
+  restoreMigrationSnapshot(snapshot: DaemonServiceSnapshot): void {
+    if (snapshot.version !== 1 || snapshot.options.platform !== this.platform || snapshot.options.homeDir !== this.homeDir || snapshot.options.logsDir !== this.logsDir) throw new Error("Service backup scope mismatch");
+    this.pauseForMigration();
+    if (!snapshot.installed) { this.uninstall(); return; }
+    if (typeof snapshot.definition !== "string") throw new Error("Service backup definition missing");
+    if (this.platform === "win32") {
+      if (snapshot.launcher !== undefined) { const path = this.windowsLauncherPath(); mkdirSync(dirname(path), { recursive: true }); if (!existsSync(path) || readFileSync(path, "utf8") !== snapshot.launcher) writeFileSync(path, snapshot.launcher); chmodSync(path, snapshot.launcherMode ?? 0o600); }
+      this.checked("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `Register-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' -Xml $env:VK_TASK_XML -Force | Out-Null; Disable-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' | Out-Null`], { VK_TASK_XML: snapshot.definition });
+    } else {
+      const path = this.configPath(); mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, snapshot.definition); chmodSync(path, snapshot.definitionMode ?? 0o600);
+      if (this.platform === "linux") this.checked("systemctl", ["--user", "daemon-reload"]);
+    }
+  }
+
+  resumeMigrationSnapshot(snapshot: DaemonServiceSnapshot): void {
+    if (!snapshot.installed) return;
+    if (snapshot.wasEnabled && this.platform === "linux") this.checked("systemctl", ["--user", "enable", SERVICE_LABEL]);
+    if (snapshot.wasEnabled && this.platform === "win32") this.checked("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `Enable-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' | Out-Null`]);
+    if (snapshot.wasRunning) {
+      if (!snapshot.wasEnabled && this.platform === "darwin") this.checked("launchctl", ["enable", this.launchdTarget()]);
+      try {
+        if (this.platform === "linux") this.checked("systemctl", ["--user", "start", "--no-block", SERVICE_LABEL]);
+        else this.start();
+      }
+      finally {
+        if (!snapshot.wasEnabled && this.platform === "win32") this.checked("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", `Disable-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' | Out-Null`]);
+        if (!snapshot.wasEnabled && this.platform === "darwin") this.checked("launchctl", ["disable", this.launchdTarget()]);
+      }
+    }
+  }
+
+  /** Prepare only the fixed launcher/log locations in the independently owned copy. */
+  stageMigrationFiles(stagingRoot: string, targetRoot: string): void {
+    mkdirSync(join(stagingRoot, "data/logs"), { recursive: true });
+    if (this.platform !== "win32") return;
+    const path = join(stagingRoot, relative(targetRoot, this.windowsLauncherPath()));
+    mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, this.windowsLauncherText());
   }
 
   status(): DaemonSystemServiceStatus {
@@ -145,7 +246,7 @@ export class DaemonSystemService {
     return this.status().state !== "not-installed";
   }
 
-  install(): void {
+  install(options: { start?: boolean } = {}): void {
     mkdirSync(this.logsDir, { recursive: true });
     if (this.platform === "win32") {
       this.stopWindowsTask();
@@ -158,7 +259,7 @@ export class DaemonSystemService {
           "-ExecutionPolicy",
           "Bypass",
           "-Command",
-          WINDOWS_REGISTER_SCRIPT,
+          options.start === false ? WINDOWS_REGISTER_SCRIPT.replace(`Start-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}'`, `Disable-ScheduledTask -TaskName '${WINDOWS_TASK_NAME}' | Out-Null`) : WINDOWS_REGISTER_SCRIPT,
         ],
         {
           VK_EXECUTABLE: windowsScriptHostPath(),
@@ -178,6 +279,7 @@ export class DaemonSystemService {
     if (this.platform === "darwin") {
       this.runCommand("launchctl", ["bootout", this.launchdTarget()]);
       writeFileSync(configPath, this.launchdPlist(), "utf-8");
+      if (options.start === false) return;
       this.checked("launchctl", [
         "bootstrap",
         this.launchdDomain(),
@@ -189,7 +291,7 @@ export class DaemonSystemService {
       this.runCommand("systemctl", ["--user", "stop", SERVICE_LABEL]);
       writeFileSync(configPath, this.systemdUnit(), "utf-8");
       this.checked("systemctl", ["--user", "daemon-reload"]);
-      this.checked("systemctl", ["--user", "enable", "--now", SERVICE_LABEL]);
+      if (options.start !== false) this.checked("systemctl", ["--user", "enable", "--now", SERVICE_LABEL]);
       return;
     }
     throw new Error(
@@ -355,6 +457,12 @@ export class DaemonSystemService {
   private writeWindowsLauncher(): string {
     const launcherPath = this.windowsLauncherPath();
     mkdirSync(dirname(launcherPath), { recursive: true });
+    const script = this.windowsLauncherText();
+    if (!existsSync(launcherPath) || readFileSync(launcherPath, "utf8") !== script) writeFileSync(launcherPath, script, "utf-8");
+    return launcherPath;
+  }
+
+  private windowsLauncherText(): string {
     const command = serializeWindowsArguments([
       this.options.invocation.command,
       ...this.options.invocation.args,
@@ -366,8 +474,7 @@ export class DaemonSystemService {
       "WScript.Quit exitCode",
       "",
     ].join("\r\n");
-    writeFileSync(launcherPath, script, "utf-8");
-    return launcherPath;
+    return script;
   }
 
   private windowsLauncherPath(): string {

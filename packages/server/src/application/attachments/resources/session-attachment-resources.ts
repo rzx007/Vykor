@@ -11,12 +11,20 @@ import type { AttachmentRoutingDecision } from "../routing/attachment-routing-ty
 export interface SessionAttachmentResourcesOptions {
   root: string;
   attachments: AttachmentService;
+  deferActivation?: boolean;
 }
 
 export class SessionAttachmentResources {
+  private activated = false;
   constructor(private readonly options: SessionAttachmentResourcesOptions) {
+    if (!options.deferActivation) this.activate();
+  }
+
+  activate(): void {
+    if (this.activated) return;
     rmSync(this.options.root, { recursive: true, force: true });
     mkdirSync(this.options.root, { recursive: true });
+    this.activated = true;
   }
 
   async prepareSession(sessionId: string): Promise<string> {
@@ -24,6 +32,7 @@ export class SessionAttachmentResources {
   }
 
   prepareSessionSync(sessionId: string): string {
+    this.activate();
     const root = this.sessionRoot(sessionId);
     mkdirSync(root, { recursive: true });
     return root;
@@ -71,6 +80,7 @@ export class SessionAttachmentResources {
   }
 
   async close(): Promise<void> {
+    if (!this.activated) return;
     await rm(this.options.root, { recursive: true, force: true });
   }
 

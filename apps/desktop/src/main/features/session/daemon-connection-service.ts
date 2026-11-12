@@ -161,6 +161,14 @@ export class DaemonConnectionService {
     return Promise.resolve()
   }
 
+  /** Called after Desktop's final business export; no reconnect is allowed in this pinned process. */
+  async freezeForDataRootMigration(): Promise<void> {
+    this.beginMaintenance()
+    const pending = this.clientPromise
+    this.invalidateClient()
+    await pending?.catch(() => undefined)
+  }
+
   onInvalidated(listener: () => void): () => void {
     this.invalidationListeners.add(listener)
     return () => { this.invalidationListeners.delete(listener) }

@@ -51,9 +51,9 @@ export const desktopAPI = {
     acknowledgeUnresolvedComposer: (digest: string) => invoke(BusinessDataChannels.acknowledgeUnresolved, digest),
     classifySessions: (ids: string[]) => invoke(BusinessDataChannels.classifySessions, ids),
     flush: () => invoke(BusinessDataChannels.flush),
-    onFlushRequested: (listener: () => Promise<void>) => {
-      const wrapped = (_event: Electron.IpcRendererEvent, requestId: string) => {
-        void Promise.resolve().then(listener).then(
+    onFlushRequested: (listener: (freeze?: boolean) => Promise<void>) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, requestId: string, freeze?: boolean) => {
+        void Promise.resolve().then(() => listener(freeze === true)).then(
           () => invoke(BusinessDataChannels.flushAck, requestId, true),
           () => invoke(BusinessDataChannels.flushAck, requestId, false),
         )

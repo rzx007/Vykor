@@ -8,7 +8,8 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CURRENT_PROTOCOL_VERSION } from "@vykor/protocol";
 import { Service } from "../index.js";
-import { withDataRootLock } from "@vykor/host-config/paths";
+import { listDataRootWriters, withDataRootLock } from "@vykor/host-config/paths";
+import { acquireStartupLock } from "../startup-lock.js";
 
 const fixture = fileURLToPath(new URL("./service-fixture.mjs", import.meta.url));
 let directory: string;
@@ -45,6 +46,30 @@ async function start(version = "1.2.3", protocol = String(CURRENT_PROTOCOL_VERSI
 }
 
 describe("local service management", () => {
+  it("registers SDK control writes before waiting for the registry lock and releases ownership after timeout", async () => {
+    const root = join(directory, ".vykor"), registry = join(root, "data", "daemon", "registry.json");
+    const control = await acquireStartupLock(registry, Date.now() + 5000);
+    const pending = Service.ensure({ env: { HOME: directory, USERPROFILE: directory }, command: ["must-not-start"], timeoutMs: 1800 }).catch(error => error);
+    try {
+      let writers: Awaited<ReturnType<typeof listDataRootWriters>> = [];
+      for (let count = 0; count < 10 && !writers.length; count++) { await sleep(20); writers = await withDataRootLock(directory, () => listDataRootWriters(root)); }
+      expect(writers).toMatchObject([{ kind: "sdk-control", pid: process.pid }]);
+      // Migration holding home sees busy and can refuse without acquiring control.
+      await withDataRootLock(directory, async () => { expect(await listDataRootWriters(root)).toHaveLength(1); });
+      expect(await pending).toBeInstanceOf(Error);
+      expect(await listDataRootWriters(root)).toEqual([]);
+    } finally { await control.release(); await pending; }
+  }, 10000);
+  it("requires fresh root writer admission before stopping and cleaning a default discovered endpoint", async () => {
+    const registry = join(directory, ".vykor/data/daemon/registry.json"), env = { HOME: directory, USERPROFILE: directory };
+    const endpoint = await Service.ensure({ env, command: [process.execPath, fixture, registry, "1.2.3", String(CURRENT_PROTOCOL_VERSION)], timeoutMs: 5000 }); endpoints.push(endpoint);
+    const discovered = await Service.discover({ env }); expect(discovered).toBeDefined();
+    await withDataRootLock(directory, lock => lock.writeSelector({ version: 1, dataRoot: join(directory, ".vykor"), pendingMigration: { id: "owned-migration", journalPath: join(directory, "migration.json") } }));
+    await expect(Service.stop(discovered!)).rejects.toThrow(/pending|migration/);
+    await expect(Service.stop(endpoint)).rejects.toThrow(/pending|migration/);
+    expect(process.kill(endpoint.pid, 0)).toBe(true);
+    expect(await readFile(registry, "utf8")).toContain(String(endpoint.pid));
+  });
   it("keeps explicit registry-file embedding independent of unrelated invalid root and home inputs", async () => {
     const registry = await start();
     const endpoint = await Service.discover({ file, env: { HOME: "relative-home", USERPROFILE: "relative-home", VYKOR_CONFIG_DIR: "relative-root" } });

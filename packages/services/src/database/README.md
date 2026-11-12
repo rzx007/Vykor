@@ -42,3 +42,5 @@
 最终映射确定后，`relocateDatabasePaths(copy, moves)` 只对副本写入最终逻辑路径，不打开 SessionStore、不应用数据库迁移、不启动维护服务。更新 session 的 cwd/相对目录和已定义宿主绑定、project_location 路径及索引键、session_task、scheduled_task 项目路径和活动 workflow v1 快照。未知可恢复格式返回零变更及 `unsupported`；约束或事务失败抛错并回滚。消息、工具参数、事件、终态工作流原文、附件来源与笔记内容保持原样。`changed` 按更新记录计数，`unchangedExternal` 统计未被本次映射覆盖的字段。
 
 `verifyDataRootCopy(databasePath)` 仅处理已经停止写入的独立副本。它再次打开真实 SQLite 核对完整性、外键和当前 schema，借助附件 blob 读取入口核对大小与 SHA-256，读取 Markdown 并验证笔记组织和索引摘要。它不创建 SessionStore、不生成新会话、不运行升级；成功后清空已停止 owner 的附件租约并整理副本 WAL。源库不能传入这个维护入口。
+
+`digestDataRootCopy()` 只读取迁移拥有的副本，核对 schema/完整性并对所有表记录生成与 SQLite 页布局无关的摘要，不返回正文。只有协调器已确认退出的本次验证 PID 对应 application_owner 行可被忽略；业务表、其它运行 owner 和 schema 改动仍改变摘要。验证副本在复制准备时清理已经停止的运行租约与 owner，源库保持原样。

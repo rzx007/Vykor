@@ -3,6 +3,7 @@ import { mkdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { getDataDir } from "@vykor/host-config";
+import { acquireDataRootWriter, dataRootHome, getDataRoot, getInitializedDataRootInputs } from "@vykor/host-config/paths";
 import { startVykorDaemon, type VykorDaemonOptions } from "../daemon/default-daemon.js";
 import {
   clearMatchingDaemonRegistry,
@@ -49,7 +50,7 @@ type RegisteredRuntime = {
   server: {
     store: { path: string };
     close(): Promise<void>;
-    application: { activateBackgroundWork?(): void };
+    application: { activateBackgroundWork?(): void | Promise<void> };
   };
 };
 
@@ -118,6 +119,8 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
   }
   let releaseOwner: (() => Promise<void>) | undefined;
   try {
+    // Direct product callers also retain ownership through later process exit writes.
+    if (!options.baseDataDirectory) await acquireDataRootWriter({ homeDir: getInitializedDataRootInputs()?.homeDir ?? dataRootHome(), dataRoot: getDataRoot(), kind: "daemon" });
     await mkdir(dirname(registryPath), { recursive: true });
     releaseOwner = await waitForOwnership();
     if (!releaseOwner || stopping) return;
@@ -125,7 +128,12 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
 
     const saved = await readDataLocationState(statePath);
     const legacy = !saved ? await readLegacyDataLocation(options.legacyDataLocationPath) : undefined;
-    state = saved ?? { version: 1, location: legacy ?? defaultDataLocation(base) };
+    if (!options.baseDataDirectory) {
+      const selected = saved?.location ?? legacy;
+      const canonical = defaultDataLocation(base);
+      if (selected && (selected.directory !== canonical.directory || selected.storePath !== canonical.storePath)) throw new Error("旧数据位置需要通过 data-root migrate 导入；不会创建另一份空数据库。");
+    }
+    state = options.baseDataDirectory ? saved ?? { version: 1, location: legacy ?? defaultDataLocation(base) } : { version: 1, location: defaultDataLocation(base) };
     if (state.result?.status === "pending") {
       state = { ...state, result: { id: state.result.id, status: "interrupted" } };
       await saveDataLocationState(statePath, state);
@@ -137,10 +145,10 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
         fileMustExist: Boolean(saved || legacy),
       });
     }
-    if (current && !stopping && legacy) await saveDataLocationState(statePath, state);
+    if (current && !stopping && legacy && options.baseDataDirectory) await saveDataLocationState(statePath, state);
     if (current && !stopping) {
       if (options.shouldStart && !await options.shouldStart()) return;
-      if (!stopping) publish(current);
+      if (!stopping) await publish(current);
     }
     const error = await stopped;
     if (error) throw error;
@@ -206,9 +214,12 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
     { token = createBearerToken(), fileMustExist = true }: { token?: string; fileMustExist?: boolean } = {},
   ): Promise<OpenedRuntime> {
     if (ownerError) throw ownerError;
-    if (!dataDirectoryChanged) initialDataDirectory = process.env.VYKOR_DATA_DIR;
-    dataDirectoryChanged = true;
-    process.env.VYKOR_DATA_DIR = location.directory;
+    // Explicit embedded runtimes retain their legacy contract. Product roots never change in-process.
+    if (options.baseDataDirectory) {
+      if (!dataDirectoryChanged) initialDataDirectory = process.env.VYKOR_DATA_DIR;
+      dataDirectoryChanged = true;
+      process.env.VYKOR_DATA_DIR = location.directory;
+    }
     const runtime = await start({
       host,
       port: options.port ?? 0,
@@ -231,8 +242,9 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
     return { ...runtime, token };
   }
 
-  function publish(runtime: OpenedRuntime): void {
+  async function publish(runtime: OpenedRuntime): Promise<void> {
     if (ownerError) throw ownerError;
+    await runtime.server.application.activateBackgroundWork?.();
     const entry = createDaemonRegistryEntry({
       url: runtime.listen.url,
       pid: process.pid,
@@ -246,13 +258,13 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
     writeDaemonRegistry(entry, registryPath);
     published = entry;
     if (options.launcher === "cli") console.log(`[daemon] listening ${entry.url}`);
-    runtime.server.application.activateBackgroundWork?.();
   }
 
   async function requestSwitch(
     target: RegisteredDataLocation & { id?: string },
     prepare: PrepareSwitch,
   ): Promise<{ id: string }> {
+    if (!options.baseDataDirectory) throw new ApplicationError(409, "请通过本机 data-root migrate 迁移用户根并重启后台。");
     const id = target.id ?? randomUUID();
     if (!/^[\w-]{1,80}$/.test(id)) throw new ApplicationError(400, "数据切换标识无效。");
     if (state.result?.id === id) return { id };
@@ -345,7 +357,7 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
       }
     }
     // A failure here leaves the selected location committed for the next launch.
-    publish(current);
+    await publish(current);
   }
 }
 

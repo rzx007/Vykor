@@ -24,7 +24,7 @@ export interface DesktopBusinessDataApi extends BusinessDataApi {
   ): Promise<BusinessDataRecord>
   acknowledgeUnresolvedComposer(sourceDigest: string): Promise<void>
   classifySessions(ids: string[]): Promise<Record<string, "persistent" | "memory" | "unknown">>
-  onFlushRequested(listener: () => Promise<void>): () => void
+  onFlushRequested(listener: (freeze?: boolean) => Promise<void>): () => void
 }
 export const BusinessDataChannels = {
   recordDesktopScan: "business-data:record-desktop-scan",

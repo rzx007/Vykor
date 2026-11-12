@@ -10,7 +10,8 @@ import { applyStartupTheme } from "./apply-startup-theme"
 import { watchStartupOverlay } from "./startup-overlay"
 import App from "./App"
 
-window.desktop.businessData.onFlushRequested(async () => {
+window.desktop.businessData.onFlushRequested(async (freeze) => {
+  if (freeze) document.documentElement.inert = true
   try {
     await flushRendererBusinessData()
   } catch (error) {

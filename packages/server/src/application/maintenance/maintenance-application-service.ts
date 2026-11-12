@@ -111,7 +111,7 @@ export function createMaintenanceApplicationService(
     return { runs, tasks, terminals };
   }
 
-  async function holdRestart() {
+  async function holdRestart(requireTemporaryChatsClosed = false) {
     assertAvailable(true);
     const closeApplication = context.closeApplication;
     if (!closeApplication)
@@ -121,6 +121,8 @@ export function createMaintenanceApplicationService(
       throw new ApplicationError(409, "仍有运行或尚未收尾的任务，不能准备重启");
     try {
       const preview = await restartPreview();
+      if (requireTemporaryChatsClosed && context.store.sessions.list().some(session => session.storage === "memory"))
+        throw new ApplicationError(409, "仍有未关闭的临时聊天；迁移会丢失内存正文，请先处理后重试。");
       if (preview.runs.length || preview.tasks.length || preview.terminals.length)
         throw new ApplicationError(409, "任务、后台任务或终端尚未结束，请收尾后重试");
       return {
@@ -172,6 +174,10 @@ export function createMaintenanceApplicationService(
       return await restartPreview();
     },
     holdRestart,
+    async prepareDataRootMigration() {
+      try { await (await holdRestart(true)).close(); return { prepared: true }; }
+      catch (error) { throw maintenanceError(error); }
+    },
     async prepareRestart(request: unknown = {}, signal?: AbortSignal) {
       try {
         await (await holdRestart()).close();

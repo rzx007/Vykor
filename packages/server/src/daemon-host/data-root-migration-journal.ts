@@ -6,9 +6,11 @@ import { securePrivateFile, writeJsonFileAtomically } from "@vykor/host-config";
 import { isWithinManagedPath, requireCompleteAbsolutePath, resolveManagedRealPath, type DataRootSelector, type ManagedPathMove } from "@vykor/host-config/paths";
 import type { MigrationSourceEntry } from "./data-root-sources.js";
 import { validateMigrationGitJournal, type MigrationGitRepair, type MigrationGitWorktree } from "./data-root-git.js";
+import { validateMigrationServiceJournal, type MigrationSystemService } from "./data-root-service.js";
+import { validateMigrationValidationJournal, type MigrationValidation } from "./data-root-validation.js";
 
 export type MigrationPhase = "prepared" | "staged" | "installed" | "verified" | "committed" | "failed" | "rollback_failed";
-export interface DataRootMigrationResult { id: string; phase: MigrationPhase; journalPath: string; writersReleased: boolean }
+export interface DataRootMigrationResult { id: string; phase: MigrationPhase; journalPath: string; writersReleased: boolean; recoveryWritersReleased?: boolean; serviceResumeStatus?: "pending" | "complete" | "failed" | "skipped" }
 export interface TreeIdentity { identity: string; digest: string; files: number; bytes: number }
 export interface MigrationJournal extends DataRootMigrationResult {
   version: 1;
@@ -18,12 +20,15 @@ export interface MigrationJournal extends DataRootMigrationResult {
   parents: Array<{ path: string; identity: string }>;
   sourceTrees: Array<{ path: string; tree: TreeIdentity }>;
   stagingIdentity: string;
+  preparation?: { sourceIdentity: string; complete: boolean; runtimeDirectories?: Array<{ path: string; identity: string }> };
   entries: Array<MigrationSourceEntry & { metadata?: { identity: string; mode: number; mtimeMs: number; ctimeMs: number } }>;
   moves: ManagedPathMove[];
   stagedTree?: TreeIdentity;
   gitWorktrees?: MigrationGitWorktree[];
   gitRepair?: MigrationGitRepair;
-  operation: "copy" | "rewrite" | "backup-source" | "install" | "verify" | "git-repair" | "git-restore" | "commit-selector" | "mark-old-root" | "inspect-recovery" | "rollback-target" | "restore-source" | "restore-selector" | "complete";
+  systemService?: MigrationSystemService;
+  validation?: MigrationValidation;
+  operation: "stop-writers" | "service-capture" | "service-pause" | "service-install" | "service-restore" | "validate-instance" | "copy" | "rewrite" | "backup-source" | "install" | "verify" | "git-repair" | "git-restore" | "commit-selector" | "mark-old-root" | "inspect-recovery" | "rollback-target" | "restore-source" | "restore-selector" | "complete";
   failedOperation?: MigrationJournal["operation"];
   recovered?: boolean;
   oldMarkerCreatedDirectories?: Array<"data" | "data/migrations">;
@@ -84,7 +89,14 @@ export async function readMigrationJournal(path: string, homeDir: string): Promi
   if (j.version !== 1 || !/^[a-f0-9-]{36}$/.test(j.id) || !phases.includes(j.phase) || typeof j.writersReleased !== "boolean"
     || !["same-root", "different-root"].includes(j.mode) || typeof j.stagingIdentity !== "string"
     || !Array.isArray(j.parents) || !Array.isArray(j.sourceTrees) || !Array.isArray(j.entries) || !Array.isArray(j.moves)) throw new Error("Invalid migration journal");
+  if (j.recoveryWritersReleased !== undefined && typeof j.recoveryWritersReleased !== "boolean" || j.serviceResumeStatus !== undefined && !["pending", "complete", "failed", "skipped"].includes(j.serviceResumeStatus)) throw new Error("Invalid recovery release state");
+  if (j.preparation?.runtimeDirectories) {
+    if (!Array.isArray(j.preparation.runtimeDirectories) || j.preparation.runtimeDirectories.some(item => typeof item?.identity !== "string")) throw new Error("Invalid preparation runtime directories");
+    for (const item of j.preparation.runtimeDirectories) requireCompleteAbsolutePath(item.path, "source runtime directory");
+  }
   const created = j.oldMarkerCreatedDirectories;
+  if (j.preparation && (typeof j.preparation.sourceIdentity !== "string" || typeof j.preparation.complete !== "boolean"
+    || (!j.preparation.complete && (j.sourceTrees.length || j.entries.length || j.stagedTree || j.writersReleased)))) throw new Error("Invalid migration preparation state");
   if (created !== undefined && !(Array.isArray(created) && (created.length === 0
     || (created.length === 1 && created[0] === "data/migrations")
     || (created.length === 2 && created[0] === "data" && created[1] === "data/migrations")))) throw new Error("Invalid migration marker directory chain");
@@ -96,6 +108,8 @@ export async function readMigrationJournal(path: string, homeDir: string): Promi
     || !samePath(j.stagingRoot, join(dirname(j.targetRoot), `.vykor-migration-${j.id}`)) || !samePath(j.backupRoot, join(dirname(j.sourceRoot), `.vykor-migration-${j.id}-backup`))
     || (j.mode === "same-root") !== samePath(j.sourceRoot, j.targetRoot) || isWithinManagedPath(homeDir, j.sourceRoot) || isWithinManagedPath(homeDir, j.targetRoot)) throw new Error("Migration journal path mismatch");
   validateMigrationGitJournal(j);
+  validateMigrationServiceJournal(j);
+  validateMigrationValidationJournal(j);
   await assertJournalPaths(j);
   return j;
 }

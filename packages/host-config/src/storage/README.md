@@ -65,3 +65,7 @@
 `.vykor-root.json.lock/active/owner.json` 保存本次 PID 和 UUID token；固定 `.lock` 目录可以长期存在，只有 active 阻止正常发现。所有启动、迁移和恢复都通过同一目录 lease（独占创建的所有权记录）串行执行。普通操作不偷锁，只有明确的 `withDataRootRecoveryLock` 会处理合法死亡 owner；仅进程探测返回 ESRCH 才认为已退出，不根据时间或文件年龄判断。
 
 恢复把死亡 active 原子移动到 `.lock/claims/<旧 token>`，该非空目录永久保留，再尝试创建新 active。两个恢复者即使同时读到旧 token，迟到者也无法用新 active 覆盖已有非空 claim。正常 release 核对本 PID/token，将自己的 active 移到唯一 released 目录后才删除。恢复在 claim 后再次退出不会留下第二把无法恢复的 guard。旧文件格式、未写完 owner、坏 token、链接或未知文件类型都保留并报错。锁容器与迁移目录使用真实 Windows 私有 ACL，POSIX 使用 0700；不修改已有 home 的权限。
+
+`data-root-writers.ts` 为产品 Desktop、CLI/TUI、daemon 与默认 SDK 控制操作登记写入资格。资格创建与 pending/moved 重验共用稳定 home 锁，覆盖初始化完成到登记之间的窗口；封闭操作完成或 Desktop 封门排空后直接核对并删除自己的 PID/token 文件，不等待迁移持有的 home 锁。CLI/TUI 和 daemon 的进程资格保留至 PID 确实退出，覆盖后注册的同步 exit 写入；只读列表仅在 ESRCH 时忽略死进程记录，迁移不复制这些记录，损坏或不可验证记录保留并拒绝继续。
+
+`dataRootChildEnvironment()` 恢复初始化前的四个目录环境输入，使内部传播的根不会成为下次启动的外部固定配置。内部验证 child 的初始化仅接受持锁父进程和匹配本次 journal/PID 的受信任目标。

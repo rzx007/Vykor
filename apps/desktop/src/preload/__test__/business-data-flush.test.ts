@@ -6,6 +6,12 @@ const electron = vi.hoisted(() => ({
 }))
 vi.mock("electron", () => ({ ipcRenderer: electron, webUtils: { getPathForFile: vi.fn() } }))
 import { desktopAPI } from "../desktop-api"
+it("passes the migration freeze to the renderer before acknowledging its final flush", async () => {
+  let frozen = false
+  desktopAPI.businessData.onFlushRequested(async (freeze) => { frozen = freeze === true })
+  electron.on.mock.lastCall![1]({}, "migration", true)
+  await vi.waitFor(() => expect(frozen).toBe(true))
+})
 it("registers the consumer before signalling ready and acknowledges only after persistence settles", async () => {
   let finish!: () => void
   const off = desktopAPI.businessData.onFlushRequested(

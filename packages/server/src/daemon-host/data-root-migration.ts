@@ -8,17 +8,20 @@ import { relocateDatabasePaths, verifyDataRootCopy } from "@vykor/services/data-
 import { relocateInstalledPluginStore } from "@vykor/plugins";
 import { inspectDataRootMigration, inspectDataRootMigrationFromStoppedCopy, type DataRootMigrationPreview, type DataRootMigrationRequest, type MigrationSourceEntry } from "./data-root-sources.js";
 import { repairMigrationGit, restoreMigrationGit, verifyMigrationGitTrees, verifyRestoredGitSource } from "./data-root-git.js";
+import { captureMigrationService, installMigrationService, pauseMigrationService, restoreMigrationService, resumeMigrationService, stageMigrationService } from "./data-root-service.js";
+import type { DaemonSystemService } from "./system-service.js";
+import { restoreValidationDatabase, validateMigrationInNewProcess, type MigrationValidationInvocation } from "./data-root-validation.js";
 import { relocateDataRootFiles, relocateProjectStorageKeys } from "./data-root-file-relocation.js";
 import { assertJournalPaths, fileDigest, identity, info, readMigrationJournal, samePath, saveMigrationJournal, treeIdentity, writePrivateJson, type DataRootMigrationResult, type MigrationJournal, type TreeIdentity } from "./data-root-migration-journal.js";
 
 export type { DataRootMigrationResult, MigrationPhase } from "./data-root-migration-journal.js";
 /** T10 owns the shutdown/freeze lifetime. It must remain held through commit and publication. */
 export interface DataRootMigrationCoordination {
-  prepareStoppedCopy(): Promise<{ freshDesktopScanId?: string; desktopExportPath?: string }>;
+  prepareStoppedCopy(context: { journalPath: string; runtimeDirectories: readonly string[]; captureSystemService(service: DaemonSystemService): Promise<void>; pauseSystemService(): Promise<void> }): Promise<{ freshDesktopScanId?: string; desktopExportPath?: string }>;
   /** T9/T10 keep repair and trusted verification inside this lock-scoped callback. */
-  withInstalledCopy?(handle: { journalPath: string; commit(): Promise<DataRootMigrationResult>; markWritersReleased(): Promise<DataRootMigrationResult> }): Promise<void>;
+  withInstalledCopy?(handle: { journalPath: string; validateInNewProcess(invocation: MigrationValidationInvocation): Promise<{ pid: number; storePath: string }>; commit(): Promise<DataRootMigrationResult>; markWritersReleased(): Promise<DataRootMigrationResult> }): Promise<void>;
 }
-const result = (j: MigrationJournal): DataRootMigrationResult => ({ id: j.id, phase: j.phase, journalPath: j.journalPath, writersReleased: j.writersReleased });
+const result = (j: MigrationJournal): DataRootMigrationResult => ({ id: j.id, phase: j.phase, journalPath: j.journalPath, writersReleased: j.writersReleased, ...(j.recoveryWritersReleased ? { recoveryWritersReleased: true } : {}), ...(j.serviceResumeStatus ? { serviceResumeStatus: j.serviceResumeStatus } : {}) });
 const supported = (report: { unsupported: unknown[] }) => { if (report.unsupported.length) throw new Error("Unsupported structured migration data"); };
 const checked = (preview: DataRootMigrationPreview) => { if (preview.blockers.length) throw new Error(`Migration preflight blocked: ${[...new Set(preview.blockers.map(item => item.code))].join(", ")}`); };
 const project = (path: string, j: Pick<MigrationJournal, "targetRoot" | "stagingRoot">) => {
@@ -105,7 +108,11 @@ async function rewriteCopy(j: MigrationJournal, cwdPaths: string[]): Promise<voi
   await writePrivateJson(paths.pathMapFilePath, { version: 1, moves: [...unique.values()], excludedRoots: [...new Set([...(previous.excludedRoots ?? []), j.stagingRoot, j.backupRoot])] });
   const location = join(paths.daemonDir, "data-location.json");
   if (await info(location)) await writePrivateJson(location, { version: 1, location: { directory: join(j.targetRoot, "data"), storePath: resolveUserDataPaths(j.targetRoot).sessionsDatabasePath } });
-  if (await info(paths.sessionsDatabasePath)) await verifyDataRootCopy(paths.sessionsDatabasePath);
+  if (await info(paths.sessionsDatabasePath)) {
+    await verifyDataRootCopy(paths.sessionsDatabasePath);
+    const databaseMetadata = await lstat(paths.sessionsDatabasePath);
+    await utimes(paths.sessionsDatabasePath, databaseMetadata.atime, databaseMetadata.mtime);
+  }
 }
 
 /** Known-path migration core. Git repair stays under the lock; the caller owns daemon/writer lifetime. */
@@ -123,27 +130,43 @@ async function migrateStoppedRoot(input: DataRootMigrationRequest, coordination:
     const previousSelector = readDataRootSelector(input.homeDir);
     if (previousSelector?.pendingMigration) throw new Error("Recover the pending migration first");
     if (await info(movedDataRootMarkerPath(first.sourceRoot))) throw new Error("Source root has already moved");
-    const stopped = await coordination.prepareStoppedCopy();
-    const request = { ...input, sourceRoot: first.sourceRoot, targetRoot: first.targetRoot, ...(stopped.desktopExportPath ? { desktopExportPath: stopped.desktopExportPath } : {}) };
-    let preview = await inspectDataRootMigration(request); checked({ ...preview, blockers: preview.blockers.filter(blocker => blocker.code !== "git_main_ownership_pending") });
-    if (preview.requiredValidations.includes("host-documents-location") || preview.requiredValidations.includes("host-desktop-profile-location")) throw new Error("Migration requires host Documents and Desktop profile locations");
-    if (preview.requiredValidations.includes("fresh-desktop-scan-after-freeze") && (!stopped.freshDesktopScanId || stopped.freshDesktopScanId !== preview.desktopScanId)) throw new Error("needs_desktop_export");
-    const receipt = request.desktopExportPath ?? resolveUserDataPaths(preview.sourceRoot).legacyImportFilePath;
-    if (await info(receipt)) {
-      const scan = JSON.parse(await readFile(receipt, "utf8")).desktopScan;
-      if (scan) request.legacy = { ...request.legacy, documentsDir: request.legacy?.documentsDir ?? scan.documentsDir, userDataDir: request.legacy?.userDataDir ?? scan.userDataDir };
-    }
-    const id = randomUUID(), parent = dirname(preview.targetRoot), stagingRoot = join(parent, `.vykor-migration-${id}`);
+    const id = randomUUID(), parent = dirname(first.targetRoot), stagingRoot = join(parent, `.vykor-migration-${id}`);
     // Only owned adjacent locations are probed; no pending pointer before a durable journal exists.
     await mkdir(parent, { recursive: true }); await mkdir(stagingRoot, { mode: 0o700 });
     await securePrivateDirectory(stagingRoot);
     const probe = join(stagingRoot, ".write-probe"); await writeFile(probe, "probe", { flag: "wx", mode: 0o600 }); await rm(probe);
-    const j: MigrationJournal = { version: 1, id, phase: "prepared", writersReleased: false, journalPath: join(parent, `.vykor-migration-${id}.json`), homeDir: input.homeDir, sourceRoot: preview.sourceRoot, targetRoot: preview.targetRoot, stagingRoot, backupRoot: join(dirname(preview.sourceRoot), `.vykor-migration-${id}-backup`), mode: preview.mode, previousSelector, parents: [], sourceTrees: [], stagingIdentity: await identity(stagingRoot), entries: [], moves: [], operation: "copy" };
+    const j: MigrationJournal = { version: 1, id, phase: "prepared", writersReleased: false, journalPath: join(parent, `.vykor-migration-${id}.json`), homeDir: input.homeDir, sourceRoot: first.sourceRoot, targetRoot: first.targetRoot, stagingRoot, backupRoot: join(dirname(first.sourceRoot), `.vykor-migration-${id}-backup`), mode: first.mode, previousSelector, parents: [], sourceTrees: [], stagingIdentity: await identity(stagingRoot), entries: [], moves: [], preparation: { sourceIdentity: await identity(first.sourceRoot), complete: false }, operation: "stop-writers" };
+    j.preparation!.runtimeDirectories = [];
+    for (const path of new Set([join(first.sourceRoot, "data"), ...first.sources.filter(source => source.origin === "runtime-data").map(source => source.from)])) {
+      if (await info(path)) j.preparation!.runtimeDirectories.push({ path, identity: await identity(path) });
+    }
     for (const path of new Set([input.homeDir, dirname(j.sourceRoot), parent])) j.parents.push({ path, identity: await identity(path) });
-    j.sourceTrees.push({ path: j.sourceRoot, tree: await treeIdentity(j.sourceRoot) });
     await saveMigrationJournal(j);
     await lock.writeSelector({ version: 1, dataRoot: previousSelector?.dataRoot ?? j.sourceRoot, pendingMigration: { id, journalPath: j.journalPath } });
+    let systemService: DaemonSystemService | undefined;
     try {
+      let preparing = true, pendingPreparation: Promise<void> = Promise.resolve();
+      const prepare = (action: () => Promise<void>) => {
+        if (!preparing) return Promise.reject(new Error("Migration preparation handle expired"));
+        return pendingPreparation = pendingPreparation.then(action);
+      };
+      let stopped: Awaited<ReturnType<DataRootMigrationCoordination["prepareStoppedCopy"]>>;
+      try { stopped = await coordination.prepareStoppedCopy({ journalPath: j.journalPath, runtimeDirectories: Object.freeze(j.preparation!.runtimeDirectories!.map(item => item.path)),
+        captureSystemService: service => prepare(async () => { await captureMigrationService(j, service); systemService = service; }),
+        pauseSystemService: () => prepare(async () => { if (!systemService) throw new Error("Capture the service before pausing it"); await pauseMigrationService(j, systemService); }),
+      }); }
+      finally { preparing = false; await pendingPreparation; }
+      const request = { ...input, sourceRoot: first.sourceRoot, targetRoot: first.targetRoot, ...(stopped.desktopExportPath ? { desktopExportPath: stopped.desktopExportPath } : {}) };
+      let preview = await inspectDataRootMigration(request); checked({ ...preview, blockers: preview.blockers.filter(blocker => blocker.code !== "git_main_ownership_pending") });
+      if (preview.requiredValidations.includes("host-documents-location") || preview.requiredValidations.includes("host-desktop-profile-location")) throw new Error("Migration requires host Documents and Desktop profile locations");
+      if (preview.requiredValidations.includes("fresh-desktop-scan-after-freeze") && (!stopped.freshDesktopScanId || stopped.freshDesktopScanId !== preview.desktopScanId)) throw new Error("needs_desktop_export");
+      const receipt = request.desktopExportPath ?? resolveUserDataPaths(preview.sourceRoot).legacyImportFilePath;
+      if (await info(receipt)) {
+        const scan = JSON.parse(await readFile(receipt, "utf8")).desktopScan;
+        if (scan) request.legacy = { ...request.legacy, documentsDir: request.legacy?.documentsDir ?? scan.documentsDir, userDataDir: request.legacy?.userDataDir ?? scan.userDataDir };
+      }
+      j.sourceTrees.push({ path: j.sourceRoot, tree: await treeIdentity(j.sourceRoot) });
+      j.preparation!.complete = true; j.operation = "copy"; await saveMigrationJournal(j);
       const snapshot = join(stagingRoot, ".database-snapshot"); await mkdir(snapshot);
       const sourceDatabase = preview.databases[0]; let cwdPaths: string[] = [];
       const snapshotDigests = new Map(preview.entries.filter(entry => entry.kind === "file").map(entry => [entry.source, entry.digest]));
@@ -175,6 +198,7 @@ async function migrateStoppedRoot(input: DataRootMigrationRequest, coordination:
       await checkSources(j); await copyInventory(preview, j); await checkSources(j);
       for (const entry of j.entries) if (entry.kind === "file" && await fileDigest(entry.source) !== entry.digest) throw new Error("Migration source changed");
       j.operation = "rewrite"; await saveMigrationJournal(j); await rewriteCopy(j, cwdPaths);
+      await stageMigrationService(j, systemService);
       await checkSources(j); j.stagedTree = await treeIdentity(stagingRoot); j.phase = "staged"; await saveMigrationJournal(j);
       await assertJournalPaths(j); await checkSources(j); await sameTree(stagingRoot, j.stagedTree);
       if (j.mode === "same-root") {
@@ -189,10 +213,12 @@ async function migrateStoppedRoot(input: DataRootMigrationRequest, coordination:
       await sameTree(j.targetRoot, j.stagedTree); j.phase = "verified"; await saveMigrationJournal(j);
       if (coordination.withInstalledCopy) {
         await repairMigrationGit(j);
+        await installMigrationService(j, systemService);
         let active = true;
         let pending: Promise<unknown> = Promise.resolve();
         const requireActive = () => { if (!active) throw new Error("Migration coordination handle expired"); };
         try { await coordination.withInstalledCopy({ journalPath: j.journalPath,
+          validateInNewProcess: async invocation => { requireActive(); const operation = pending.then(() => validateMigrationInNewProcess(j, invocation)); pending = operation; return operation; },
           commit: async () => { requireActive(); const operation = pending.then(() => commitLocked(j, lock)); pending = operation; return operation; },
           markWritersReleased: async () => { requireActive(); const operation = pending.then(() => releaseLocked(j, lock)); pending = operation; return operation; },
         }); }
@@ -262,14 +288,35 @@ async function releaseLocked(j: MigrationJournal, lock: DataRootLock): Promise<D
 }
 
 /** Recovery preserves every copy. An ambiguous identity stops before any rename or selector restoration. */
-export async function recoverDataRootMigration(path: string, options: { homeDir: string }): Promise<DataRootMigrationResult> {
-  return withDataRootRecoveryLock(options.homeDir, async lock => {
-    const j = await selectedJournal(path, options.homeDir);
+export async function recoverDataRootMigration(path: string, options: { homeDir: string; systemService?: DaemonSystemService }): Promise<DataRootMigrationResult> {
+  const restored = await withDataRootRecoveryLock(options.homeDir, async lock => {
+    const record = await readMigrationJournal(path, options.homeDir);
+    // A released source can contain new writes or a new pending migration. Only finish our selector once.
+    const j = record.recoveryWritersReleased ? record : await selectedJournal(path, options.homeDir);
     if (j.writersReleased) throw new Error("Migration writers were released; repair the current target or perform a reverse migration");
+    if (j.recoveryWritersReleased) {
+      const pending = readDataRootSelector(j.homeDir)?.pendingMigration;
+      if (pending?.id === j.id && samePath(pending.journalPath, j.journalPath)) {
+        const expected = j.preparation?.sourceIdentity ?? j.sourceTrees.find(source => samePath(source.path, j.sourceRoot))?.tree.identity;
+        if (await identity(j.sourceRoot) !== expected) throw new Error("Restored source identity changed");
+        await restoreSelector(lock, j);
+      }
+      j.recovered = true; j.phase = "failed"; j.operation = "complete"; await saveMigrationJournal(j); return result(j);
+    }
     if (j.recovered) return result(j);
     j.operation = "inspect-recovery";
     try {
       await assertJournalPaths(j);
+      await restoreValidationDatabase(j);
+      if (j.preparation && !j.preparation.complete) {
+        if (await identity(j.sourceRoot) !== j.preparation.sourceIdentity || await identity(j.stagingRoot) !== j.stagingIdentity
+          || (await readdir(j.stagingRoot)).length || await info(j.backupRoot)) throw new Error("Unknown early migration preparation contents");
+        for (const runtime of j.preparation.runtimeDirectories ?? []) if (await identity(runtime.path) !== runtime.identity) throw new Error("Early source runtime identity changed");
+        await restoreMigrationService(j, options.systemService);
+        j.recoveryWritersReleased = true; j.serviceResumeStatus = "pending";
+        j.operation = "restore-selector"; await saveMigrationJournal(j); await restoreSelector(lock, j);
+        j.recovered = true; j.phase = "failed"; j.operation = "complete"; await saveMigrationJournal(j); return result(j);
+      }
       const sourceTree = j.sourceTrees.find(source => samePath(source.path, j.sourceRoot))?.tree;
       if (!sourceTree) throw new Error("Migration source identity was not recorded");
       const oldPath = j.mode === "same-root" && await info(j.backupRoot) ? j.backupRoot : j.sourceRoot;
@@ -310,11 +357,29 @@ export async function recoverDataRootMigration(path: string, options: { homeDir:
       if (j.mode === "same-root" && samePath(oldPath, j.backupRoot)) { j.operation = "restore-source"; await saveMigrationJournal(j); await rename(j.backupRoot, j.sourceRoot); }
       await restoreMigrationGit(j);
       await checkSources(j);
-      j.operation = "restore-selector"; await saveMigrationJournal(j); await restoreSelector(lock, j);
+      await restoreMigrationService(j, options.systemService);
+      j.recoveryWritersReleased = true; j.serviceResumeStatus = "pending";
+        j.operation = "restore-selector"; await saveMigrationJournal(j); await restoreSelector(lock, j);
       j.recovered = true; j.phase = "failed"; j.operation = "complete"; await saveMigrationJournal(j); return result(j);
     } catch {
       j.failedOperation ??= j.operation; j.phase = "rollback_failed"; await saveMigrationJournal(j); return result(j);
     }
+  });
+  if (!restored.recoveryWritersReleased || restored.phase === "rollback_failed") return restored;
+  // Fresh short lock only surrounds immediate OS actions; never await daemon initialization here.
+  return withDataRootRecoveryLock(options.homeDir, async () => {
+    const j = await readMigrationJournal(path, options.homeDir);
+    if (j.serviceResumeStatus === "complete" || j.serviceResumeStatus === "skipped") return result(j);
+    const selector = readDataRootSelector(j.homeDir);
+    if (JSON.stringify(selector) !== JSON.stringify(j.previousSelector) || await info(movedDataRootMarkerPath(j.sourceRoot))) j.serviceResumeStatus = "skipped";
+    else {
+      try {
+        const expected = j.preparation?.sourceIdentity ?? j.sourceTrees.find(source => samePath(source.path, j.sourceRoot))?.tree.identity;
+        if (await identity(j.sourceRoot) !== expected) throw new Error("Restored source identity changed");
+        await resumeMigrationService(j, options.systemService); j.serviceResumeStatus = "complete";
+      } catch { j.serviceResumeStatus = "failed"; }
+    }
+    await saveMigrationJournal(j); return result(j);
   });
 }
 async function restoreSelector(lock: DataRootLock, j: MigrationJournal): Promise<void> { await lock.restoreSelector(j.previousSelector); }

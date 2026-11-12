@@ -197,6 +197,8 @@ export function readDataRootLockState(homeDir: string): DataRootLockState | unde
 }
 
 export interface DataRootLock {
+  /** Recheck a previously selected root before granting new write ownership. */
+  assertWritableRoot(dataRoot: string): void;
   /** Atomically save while holding the stable home lock; safe for migration commit. */
   writeSelector(selector: DataRootSelector): Promise<void>;
   restoreSelector(selector: DataRootSelector | undefined): Promise<void>;
@@ -272,7 +274,7 @@ async function withRootLease<T>(homeDir: string, operation: (lock: DataRootLock)
         await rename(temporary, file);
       } finally { await rm(temporary, { force: true }); }
     };
-    return await operation({ writeSelector, restoreSelector: async selector => { if (selector) await writeSelector(selector); else await rm(file, { force: true }); } });
+    return await operation({ assertWritableRoot: dataRoot => { resolveUnlockedDataRootSelection({ homeDir, explicitRoot: dataRoot, env: {} }); }, writeSelector, restoreSelector: async selector => { if (selector) await writeSelector(selector); else await rm(file, { force: true }); } });
   } finally {
     await handle.close();
     const owner = readDataRootLockState(homeDir);
@@ -319,6 +321,30 @@ export function getInitializedDataRootSelection(): DataRootSelection | undefined
 /** Original host inputs only: never captures credentials or the internally injected root. */
 export function getInitializedDataRootInputs(): InitializedDataRootInputs | undefined {
   return initializedInputs && { ...initializedInputs, environment: { ...initializedInputs.environment } };
+}
+
+/** Preserve genuine launch overrides without turning our internal root propagation into a user pin. */
+export function dataRootChildEnvironment(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  if (initializedInputs) for (const key of ["VYKOR_CONFIG_DIR", "VYKOR_DATA_DIR", "VYKOR_CHANNELS_DIR", "VYKOR_IMAGE_ATTACHMENT_CACHE_DIR"] as const)
+    env[key] = initializedInputs.environment[key];
+  return env;
+}
+
+/** Internal child entry only. The active coordinator parent and its exact pending journal are mandatory. */
+export function initializeMigrationValidationRoot(context: { homeDir: string; targetRoot: string; journalPath: string }): void {
+  if (!process.send || !process.connected || initializedSelection) throw new Error("Migration validation requires a fresh coordinator child");
+  const homeDir = absoluteRoot(context.homeDir, "validation home"), targetRoot = absoluteRoot(context.targetRoot, "validation root");
+  const pending = readDataRootSelector(homeDir)?.pendingMigration, owner = readDataRootLockState(homeDir);
+  if (!owner?.alive || owner.pid !== process.ppid || !pending || pending.journalPath !== context.journalPath) throw new Error("Migration validation coordinator is not the lock owner");
+  const journal = JSON.parse(readFileSync(context.journalPath, "utf8"));
+  if (journal.version !== 1 || journal.id !== pending.id || journal.homeDir !== homeDir || journal.targetRoot !== targetRoot
+    || journal.validation?.pid !== process.pid || journal.validation?.state !== "started" || journal.phase !== "verified" || journal.writersReleased || realpathSync(targetRoot) !== targetRoot) throw new Error("Migration validation target is not verified");
+  assertDatabaseAvailable(join(targetRoot, "data/session-runtime/sessions.db"));
+  initializedSelection = Object.freeze({ dataRoot: targetRoot, source: "explicit" });
+  initializedInputs = { homeDir, explicitRoot: targetRoot, environment: {} };
+  process.env.VYKOR_CONFIG_DIR = targetRoot;
+  for (const key of ["VYKOR_DATA_DIR", "VYKOR_CHANNELS_DIR", "VYKOR_IMAGE_ATTACHMENT_CACHE_DIR"]) delete process.env[key];
 }
 
 /** Only the leading host option is unambiguous without parsing command-specific values. */

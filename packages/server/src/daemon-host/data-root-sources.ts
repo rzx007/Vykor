@@ -335,7 +335,7 @@ async function inspectSources(input: DataRootMigrationRequest, ownedMains: reado
   }
 
   const runtimeRoots = preview.sources.filter(item => item.origin === "runtime-data").map(item => item.from);
-  const excluded = [...projects, ...deferredGitMains, join(source, "settings.json.lock"), join(source, "runtime-environment-secrets.json.lock"), ...runtimeRoots.flatMap(directory => ["registry.json", "registry.json.owner.lock", "registry.json.sdk-start.lock"].map(name => join(directory, "daemon", name)))];
+  const excluded = [...projects, ...deferredGitMains, join(source, "settings.json.lock"), join(source, "runtime-environment-secrets.json.lock"), ...runtimeRoots.flatMap(directory => ["registry.json", "registry.json.owner.lock", "registry.json.sdk-start.lock", "writers"].map(name => join(directory, "daemon", name)))];
   const visited = new Set<string>();
   const destinations = new Map<string, MigrationSourceEntry>();
   const walk = async (path: string): Promise<void> => {
