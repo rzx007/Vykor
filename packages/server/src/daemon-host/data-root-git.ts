@@ -20,12 +20,14 @@ function hostPath(path: string, environment: GitEnvironment): string {
 const validDistribution = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 256 && value === value.trim() && !/[\0\r\n]/.test(value) && !value.startsWith("-");
 async function gitEnvironment(records: readonly RegisteredMigrationWorktree[]): Promise<GitEnvironment> {
   const first = records[0], environment = first?.environment ?? "native";
-  if (!["native", "wsl"].includes(environment) || records.some(record => (record.environment ?? "native") !== environment || (record.distribution && first?.distribution && record.distribution !== first.distribution))) throw new Error("Conflicting Git execution environments");
+  if (!["native", "wsl"].includes(environment) || records.some(record => (record.environment ?? "native") !== environment)) throw new Error("Conflicting Git execution environments");
   if (environment === "native") return native;
   if (process.platform !== "win32") throw new Error("WSL Git requires its Windows host");
-  // Pin a default distribution before journaling so recovery never follows a later default change.
-  const distribution = first?.distribution ?? (await exec("wsl.exe", ["--exec", "printenv", "WSL_DISTRO_NAME"], { windowsHide: true, timeout: 15000 })).stdout.trim();
-  if (!validDistribution(distribution) || records.some(record => record.distribution && record.distribution !== distribution)) throw new Error("Invalid or conflicting WSL distribution");
+  // Every unspecified record means the current default, regardless of record order. Pin it once.
+  const defaultDistribution = records.some(record => record.distribution === undefined)
+    ? (await exec("wsl.exe", ["--exec", "printenv", "WSL_DISTRO_NAME"], { windowsHide: true, timeout: 15000 })).stdout.trim() : undefined;
+  const distribution = first?.distribution ?? defaultDistribution;
+  if (!validDistribution(distribution) || records.some(record => (record.distribution ?? defaultDistribution) !== distribution)) throw new Error("Invalid or conflicting WSL distribution");
   return { environment, distribution };
 }
 /** Only plumbing here: status can invoke user fsmonitor/clean filters even with optional locks disabled. */

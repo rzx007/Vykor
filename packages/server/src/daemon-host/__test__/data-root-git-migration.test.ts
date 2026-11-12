@@ -14,8 +14,21 @@ import { hostPathToWslPath, wslPathToHostPath } from "@vykor/sandbox";
 import { migrateDataRoot, recoverDataRootMigration, commitDataRootMigration } from "../data-root-migration.js";
 import { inspectDataRootMigration } from "../data-root-sources.js";
 
+const defaultWsl = vi.hoisted(() => ({ distribution: undefined as string | undefined, queries: 0 }));
+vi.mock("node:child_process", async importOriginal => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  const { promisify } = await import("node:util"), run = promisify(actual.execFile);
+  const execFile = (...args: Parameters<typeof actual.execFile>) => actual.execFile(...args);
+  Object.defineProperty(execFile, promisify.custom, { value: async (file: string, args: string[], options: import("node:child_process").ExecFileOptions) => {
+    if (defaultWsl.distribution !== undefined && file === "wsl.exe" && args.join(" ") === "--exec printenv WSL_DISTRO_NAME") {
+      defaultWsl.queries++; return { stdout: defaultWsl.distribution + "\n", stderr: "" };
+    }
+    return run(file, args, options);
+  } });
+  return { ...actual, execFile };
+});
 const cleanup: string[] = [];
-afterEach(() => { vi.restoreAllMocks(); for (const root of cleanup.splice(0)) rmSync(root, { recursive: true, force: true }); });
+afterEach(() => { defaultWsl.distribution = undefined; defaultWsl.queries = 0; vi.restoreAllMocks(); for (const root of cleanup.splice(0)) rmSync(root, { recursive: true, force: true }); });
 const file = (path: string, data: string) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, data); };
 const digest = (path: string) => createHash("sha256").update(readFileSync(path)).digest("hex");
 const supportsCopiedMain = (version: string) => { const match = version.match(/git version (\d+)\.(\d+)/); return !!match && (+match[1]! > 2 || (+match[1]! === 2 && +match[2]! >= 48)); };
@@ -226,10 +239,19 @@ it.runIf(hasWslGit)("repairs and restores a real dirty WSL worktree using its re
   expect(f.snapshot()).toEqual(f.before);
 });
 
-it.runIf(hasWslGit)("blocks conflicting default and explicit WSL distribution registrations before copying", async () => {
+it.runIf(hasWslGit).each([
+  { explicitFirst: false, defaultDistribution: "Ubuntu" },
+  { explicitFirst: true, defaultDistribution: "Ubuntu" },
+  { explicitFirst: false, defaultDistribution: "Debian" },
+  { explicitFirst: true, defaultDistribution: "Debian" },
+])("resolves every default and explicit WSL registration before copying: %j", async ({ explicitFirst, defaultDistribution }) => {
   const f = fixture(false, false, false, true), legacy = join(f.root, "Electron/git-settings.json");
-  const settings = JSON.parse(readFileSync(legacy, "utf8")); delete settings.worktrees[0].distribution;
-  settings.worktrees.push({ ...settings.worktrees[0], id: "duplicate", distribution: "not-the-default-distribution" }); file(legacy, JSON.stringify(settings));
-  expect((await inspectDataRootMigration(f.request)).blockers).toContainEqual(expect.objectContaining({ code: "git_worktree_unavailable", path: f.tree }));
+  const settings = JSON.parse(readFileSync(legacy, "utf8")), explicit = settings.worktrees[0], implicit = { ...explicit, id: "duplicate" }; delete implicit.distribution;
+  settings.worktrees = explicitFirst ? [explicit, implicit] : [implicit, explicit]; file(legacy, JSON.stringify(settings));
+  defaultWsl.distribution = defaultDistribution;
+  const preview = await inspectDataRootMigration(f.request);
+  if (defaultDistribution !== "Debian") expect(preview.blockers).toContainEqual(expect.objectContaining({ code: "git_worktree_unavailable", path: f.tree }));
+  else { expect(preview.blockers).toEqual([]); expect(preview.gitWorktrees).toContainEqual(expect.objectContaining({ from: f.tree, environment: "wsl", distribution: "Debian" })); }
+  expect(defaultWsl.queries).toBe(1);
   expect(f.snapshot()).toEqual(f.before);
 });
