@@ -30,6 +30,7 @@ Desktop 无窗口入口和 CLI 本机登记入口调用 `runRegisteredDaemon()`�
 | [registered-daemon.ts](./registered-daemon.ts) | 本机登记入口、退出和进程内数据切换 |
 | [registry-lease.ts](./registry-lease.ts) | 协调启动、启停和切换的控制锁，以及后台持有的登记所有权 |
 | [data-location.ts](./data-location.ts) | 读写已提交的数据位置和最近的切换结果，校验恢复目标 |
+| [data-root-sources.ts](./data-root-sources.ts) | 只读清点旧来源、文件摘要、具体迁移映射、冲突和后续必验条件 |
 | [system-service.ts](./system-service.ts) | `DaemonSystemServiceState`、`DaemonSystemServiceStatus`、`SystemCommandResult`、`DaemonServiceInvocation` 等 |
 
 ## 测试与维护
@@ -37,3 +38,17 @@ Desktop 无窗口入口和 CLI 本机登记入口调用 `runRegisteredDaemon()`�
 系统服务和进程控制放在这里；守护进程内部业务组装放在 daemon，保持本目录的公开入口。
 
 测试放在本分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移文件时同步导入、公开入口、文档链接与旧引用清单。
+
+## 数据根迁移预检
+
+`inspectDataRootMigration({homeDir,sourceRoot,targetRoot,...})` 从明确的根、已知位置记录和宿主输入收集来源，返回清单，不修改正在运行的库或创建文件。`legacy.documentsDir` 和 `legacy.userDataDir` 应取宿主真实系统位置；已有 Desktop 扫描收据也可提供这两个位置。没有这些信息时返回待补齐条件，不猜测 `home/Documents`。`legacy.databasePath/dataLocationPath/imageAttachmentCacheDir` 和相关旧目录环境值限定额外来源；`legacy.workspacePaths`、`projectPaths` 是宿主已知登记，缺失与空列表由 `registrationSnapshot` 区分。
+
+`sources` 和 `moves` 使用既有 kind/from/to。`entries` 列出文件、目录与链接的来源、目标、字节数及文件摘要；同一真实路径只扫描一次。自定义数据库、WAL/SHM、附件、笔记、策略和用量设置有具体映射；其它运行日志和任务仍进入 `data/`，旧 CLI 图片目录进入 `data/attachments/images/`。Documents 渠道与已登记工作区单列；未登记文件进入 `workspaces/legacy/`。真实项目不复制，映射也不覆盖；Desktop 浏览器与窗口偏好不迁入。活动登记、token 所在的 registry 和已知活动锁排除，SQLite WAL 不属于可丢弃缓存。
+
+预检不连接 SQLite，仅检查文件头、大小和摘要。`databases[].inspection = file-only` 不代表库为空或已通过完整性校验。`requiredValidations` 是后续执行的必要门槛：停写后独立副本上的 SQLite 完整性、记录/schema 与登记路径读取；源稳定性；目标写权限与复制空间；已知桌面 profile 的冻结后新扫描。宿主提供的登记也要与副本复核，不能用空数组跳过。T8 必须用副本补齐工作区/真实项目列表，再重新预检生成最终清单，之后才可复制完整业务树或交换根。
+
+根是磁盘根、home 或真实项目祖先，根互相包含、不同数据库、内容/大小写碰撞、非空且未确认归属的目标、越界 junction、可判断的权限或容量失败都会形成 blocker。同根升级单独标记。外部符号链接只保留链接及原指向；受管指向按映射登记修复，不跟随链接复制根外内容。
+
+`access(W_OK)` 只报告可只读判定的权限失败；Windows 完整 ACL 不能据此宣称验证成功，因此始终保留 `target-write-permissions` 门槛。T8 在业务复制和根交换前，通过受管相邻暂存目录的实际创建、写入和权限验证解除该门槛；日志父目录无权限时应在写 pending 选择前安全失败，不伪造日志位置。预检不会启动可能创建 profile 缓存的 PowerShell。
+
+`desktopExportPath` 指向既有 `legacy-import.json` 收据；它不是 LevelDB 或业务正文导出目录。只认可绑定真实 userData 的完整支持键扫描（含零键）及对应来源摘要。未 ACK 的 partial 返回 `needs_desktop_export` 和未解决会话数量；旧目标正常编辑不会因历史 targetDigest 变化而失败。CLI 只读该收据，不能检测未知旧进程对 LevelDB 的离线改动。T10 必须保持冻结并调用 Desktop 新扫描准备接口，T11 在用户明确处理 partial 后重试；已有收据只支持预览，不充当本次停写证明。

@@ -9,6 +9,8 @@ import {
   confirmLegacyImport,
   digestBusinessValue,
   readLegacyImportManifest,
+  invalidateDesktopScan,
+  recordDesktopScan,
 } from "./legacy-import"
 export class BusinessDataService {
   // ponytail: one queue for desktop recovery volume; split by record only if throughput requires it.
@@ -119,11 +121,14 @@ export class BusinessDataService {
       )
         throw new Error("business-data import INVALID_UNRESOLVED_IDS")
       const manifestPath = this.paths().legacyImportFilePath,
-        prior = readLegacyImportManifest(manifestPath).sources[id]
+        manifest = readLegacyImportManifest(manifestPath), prior = manifest.sources[id]
+      if (manifest.desktopScan && manifest.desktopScan.sources[id] !== sourceDigest) invalidateDesktopScan(manifestPath)
       let current = await this.load(key, path)
       if (prior) {
-        if (prior.sourceDigest !== sourceDigest)
+        if (prior.sourceDigest !== sourceDigest) {
+          invalidateDesktopScan(manifestPath)
           throw new Error(`business-data ${key.kind} import LEGACY_CHANGED`)
+        }
         if (!current) throw new Error(`business-data ${key.kind} import TARGET_MISSING`)
         return current
       }
@@ -152,6 +157,32 @@ export class BusinessDataService {
     return this.enqueue(async () =>
       acknowledgeUnresolvedComposer(this.paths().legacyImportFilePath, digest)
     )
+  }
+  recordDesktopScan(sources: Record<string, string>, host: { userDataDir: string; documentsDir: string }): Promise<{ id: string; ready: boolean }> {
+    return this.enqueue(async () => {
+      if (!sources || typeof sources !== "object" || Array.isArray(sources)) {
+        invalidateDesktopScan(this.paths().legacyImportFilePath)
+        throw new Error("business-data desktop-scan INVALID_SCAN")
+      }
+      const manifest = readLegacyImportManifest(this.paths().legacyImportFilePath)
+      for (const id of Object.keys(sources)) {
+        // Validate IPC input first; do not treat a missing target as a successful export.
+        if (!/^(composer|notes|quick-notes|image-annotations:[a-f0-9]{64})$/.test(id)) continue
+        const input: BusinessDataKey = id.startsWith("image-annotations:")
+          ? { kind: "image-annotations", imageKey: id.slice("image-annotations:".length) }
+          : { kind: id as "composer" | "notes" | "quick-notes" }
+        const { key, path } = this.location(input)
+        if (manifest.sources[id]) {
+          let valid = false
+          try { valid = !!await this.load(key, path) } catch { /* Invalid records are not exported. */ }
+          if (!valid) {
+            invalidateDesktopScan(this.paths().legacyImportFilePath)
+            throw new Error("business-data desktop-scan TARGET_MISSING")
+          }
+        }
+      }
+      return recordDesktopScan(this.paths().legacyImportFilePath, sources, host)
+    })
   }
   async flush(): Promise<void> {
     await this.tail

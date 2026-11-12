@@ -23,6 +23,7 @@ export async function flushRendererBusinessData(): Promise<void> {
   while (pendingTasks.size) await Promise.all([...pendingTasks])
   if (taskFailures.size) throw taskFailures.values().next().value
   await window.desktop.businessData.flush()
+  await recordLegacyBusinessScan()
 }
 export function recoveryRecord(key: BusinessDataKey): RecoveryRecord {
   const api = window.desktop.businessData
@@ -42,6 +43,27 @@ export function recoveryRecord(key: BusinessDataKey): RecoveryRecord {
 export async function legacyDigest(raw: string): Promise<string> {
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw))
   return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("")
+}
+
+/** Only digests cross IPC. A complete zero-key scan is a useful receipt too. */
+export async function collectLegacyBusinessSources(storage: Storage = localStorage): Promise<Record<string, string>> {
+  const keys: Record<string, string> = {
+    "vykor.desktop.composer-recovery.v1": "composer", "vykor.desktop.note-recovery-v1": "notes",
+    "vykor.desktop.note-recovery-v1:quick": "quick-notes",
+  }
+  for (let index = 0; index < storage.length; index++) {
+    const key = storage.key(index)
+    if (key && /^vykor-image-annotations-v1:[a-f0-9]{64}$/.test(key)) keys[key] = `image-annotations:${key.slice("vykor-image-annotations-v1:".length)}`
+  }
+  const sources: Record<string, string> = {}
+  for (const [key, id] of Object.entries(keys)) {
+    const raw = storage.getItem(key)
+    if (raw !== null) sources[id] = await legacyDigest(raw)
+  }
+  return sources
+}
+export async function recordLegacyBusinessScan(): Promise<{ id: string; ready: boolean }> {
+  return window.desktop.businessData.recordDesktopScan(await collectLegacyBusinessSources())
 }
 // This client only addresses the four schema-checked business kinds, never paths.
 class RecoveryRecord {

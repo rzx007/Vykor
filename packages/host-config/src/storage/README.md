@@ -11,6 +11,7 @@
 | [private-file-permissions.ts](./private-file-permissions.ts) | 新定位文件与锁的私有权限；保留既有 home 权限 |
 | [git.ts](./git.ts) | `GitRepositoryInfo`、`resolveGitRepository` |
 | [managed-path-map.ts](./managed-path-map.ts) | 读取迁移映射，仅识别旧受管工作区与隐藏迁移暂存/保留项目 |
+| [managed-path-relocation.ts](./managed-path-relocation.ts) | 完整根路径校验、最长目录边界映射、现存父目录与 junction 边界检查 |
 | [paths.ts](./paths.ts) | `UserDataPaths`、`ResolvedPaths`、`resolveUserDataPaths`、`resolvePaths`、`getDataRoot` 及命名路径 getter |
 
 ## 入口与处理步骤
@@ -39,10 +40,16 @@
 
 已保存的 selector 表示恢复既有根：除根目录外，规范 sessions.db 或旧 data-location 指向的数据库也必须存在。首次新建应使用尚未保存选择的显式参数、环境或默认根；不能通过保存一个空目录跳过恢复保护。
 
+已保存的数据集还会拒绝零字节数据库，防止 SQLite 将损坏或截断的旧文件当作新空库打开；未保存选择的新 profile 仍可首次初始化。此启动保护只检查文件存在、类型和非零长度，完整 SQLite 验证仍属于停写副本步骤。
+
 显式传入 env 缺少 HOME/USERPROFILE 时，`dataRootHome` 使用操作系统账户 home（`userInfo()`），不回读全局环境；默认调用仍可使用 process.env。异步启动用 `waitForDataRootSelection(input, {deadline, signal})` 等待正常根锁竞争并重新校验，迁移中、迁出、损坏和丢失库仍直接报错。
 
 定位候选文件和锁先收敛权限再写内容：POSIX 新文件为 0600；Windows 设置并核验受保护 ACL，只允许当前用户与 SYSTEM，失败不发布候选文件。既有 home 的模式和 ACL 不修改。Windows 权限工具只在临时隔离 profile 下运行，避免 PowerShell 初始化目录污染调用者 home。
 
 `parseDataRootArgument` 仅识别第一个参数位置的 `--data-root <路径>` 或 `--data-root=<路径>`，后面的参数原样交给宿主选项解析，防止把其他选项的文本值误当作根。
+
+根和 home 必须是当前系统的完整绝对路径。Windows 的 `\volume-relative`、`/volume-relative`、`C:relative` 在创建定位锁前就拒绝；完整盘符路径和 UNC 共享路径可用。`getInitializedDataRootInputs()` 返回初始化前的 home、显式根和四个相关目录环境变量的副本，不采集其它环境值；它保留被显式根遮住的外部设置，区别于初始化后为子进程注入的 `VYKOR_CONFIG_DIR`。`getInitializedDataRootSelection()` 的原合同保持不变。
+
+`relocateManagedPath(path,moves)` 复用 `ManagedPathMove`，按最长目录关系匹配，保留相似前缀的兄弟路径和外部路径。Windows 比较大小写和分隔符，POSIX 保留大小写。`assertManagedPathBoundary(path,scope)` 与 `resolveManagedRealPath(path)` 只读检查已存在路径或最近的已存在父目录，不创建缺失目录；映射本身不授予访问权限，也不改写普通文本。
 
 `readManagedPathMap(dataRoot?)` 从规范 `data/migrations/path-map.json` 读取 `{version:1,moves:[{kind,from,to}],excludedRoots?:string[]}`；不存在时返回空映射，损坏时抛错。`ManagedPathMove.kind` 为 `user-root | runtime-data | workspace | channel | worktree`。`getManagedWorkspaceRoots(dataRoot?)`、`isManagedWorkspacePath(path,dataRoot?)` 只识别规范 workspaces/channels 与明确 workspace/channel 映射的 from/to，不把 user-root、runtime-data 或 worktree 当项目外聊天。`isHiddenManagedProjectPath(path,dataRoot?)` 另外识别 excludedRoots，用于隐藏暂存/保留项目。以上识别接口不授予文件访问权限；历史链接须由打开入口重定位到目标，再检查原有访问边界。

@@ -47,3 +47,4 @@ export { BROWSER_BRIDGE_MAX_RESULT_BODY_BYTES, BROWSER_BRIDGE_RESULT_TOO_LARGE }
 export { isWindowsDaemonServiceEnabled, runRegisteredDaemon, type RegisteredDaemonControl } from "./registered-daemon.js";
 export { readRegisteredDataLocation, readRegisteredDataSwitchResult } from "./data-location.js";
 export { acquireRegistryLease, withDaemonControlLock } from "./registry-lease.js";
+export { inspectDataRootMigration, type DataRootMigrationRequest, type DataRootMigrationPreview, type MigrationBlocker, type MigrationSourceEntry } from "./data-root-sources.js";

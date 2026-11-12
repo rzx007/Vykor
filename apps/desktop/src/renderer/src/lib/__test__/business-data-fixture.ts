@@ -6,6 +6,7 @@ import type {
 const records = new Map<string, BusinessDataRecord>()
 const sources = new Map<string, string>()
 export let businessDataFixture: DesktopBusinessDataApi = {
+  async recordDesktopScan() { return { id: "fixture-scan", ready: true } },
   async read(key) {
     return records.get(JSON.stringify(key)) ?? null
   },

@@ -123,6 +123,31 @@ it("does not recreate a missing database referenced by the old saved location", 
   expect(existsSync(directory)).toBe(false);
 });
 
+it.each(["selector", "legacy-location"])("rejects a zero-byte saved database selected by %s before opening stores", async selection => {
+  const root = join(home, "root"), data = join(root, "data"), database = join(data, "session-runtime", "sessions.db");
+  mkdirSync(join(data, "session-runtime"), { recursive: true }); writeFileSync(database, "");
+  if (selection === "selector") writeFileSync(join(home, ".vykor-root.json"), JSON.stringify({ version: 1, dataRoot: root }));
+  else {
+    mkdirSync(join(data, "daemon"));
+    writeFileSync(join(data, "daemon", "data-location.json"), JSON.stringify({ version: 1, location: { directory: data, storePath: database } }));
+  }
+  const selected = { ...input(), ...(selection === "legacy-location" ? { explicitRoot: root } : {}) };
+  expect(() => resolveDataRootSelection(selected)).toThrow(/empty.*recover/i);
+  await expect(initializeDataRoot(selected)).rejects.toThrow(/empty.*recover/i);
+  expect(readFileSync(database).length).toBe(0);
+});
+
+it.runIf(process.platform === "win32").each(["missing", "empty"])("does not bypass a saved %s database by changing root case or separators", state => {
+  const root = join(home, "saved-root"), database = join(root, "data", "session-runtime", "sessions.db");
+  mkdirSync(join(root, "data", "session-runtime"), { recursive: true });
+  if (state === "empty") writeFileSync(database, "");
+  writeFileSync(join(home, ".vykor-root.json"), JSON.stringify({ version: 1, dataRoot: root }));
+  const equivalent = root.toUpperCase().replaceAll("\\", "/");
+  expect(() => resolveDataRootSelection({ ...input(), explicitRoot: equivalent })).toThrow(/database.*recover/i);
+  expect(() => resolveDataRootSelection({ ...input(), env: { VYKOR_CONFIG_DIR: equivalent } })).toThrow(/database.*recover/i);
+  expect(resolveDataRootSelection({ ...input(), explicitRoot: join(home, "genuinely-new") }).source).toBe("explicit");
+});
+
 it("parses host roots without consuming literal prompt arguments", () => {
   const root = join(home, "with space");
   expect(parseDataRootArgument([`--data-root=${root}`, "serve", "--register"])).toEqual({ explicitRoot: root, argv: ["serve", "--register"] });

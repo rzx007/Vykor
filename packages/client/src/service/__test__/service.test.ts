@@ -45,6 +45,11 @@ async function start(version = "1.2.3", protocol = String(CURRENT_PROTOCOL_VERSI
 }
 
 describe("local service management", () => {
+  it("keeps explicit registry-file embedding independent of unrelated invalid root and home inputs", async () => {
+    const registry = await start();
+    const endpoint = await Service.discover({ file, env: { HOME: "relative-home", USERPROFILE: "relative-home", VYKOR_CONFIG_DIR: "relative-root" } });
+    expect(endpoint?.pid).toBe(registry.pid);
+  });
   it("waits for normal root initialization and shares the resulting default startup", async () => {
     const registry = join(directory, ".vykor", "data", "daemon", "registry.json");
     const options = { env: { HOME: directory, USERPROFILE: directory, START_RECORD: join(directory, "starts") }, command: [process.execPath, fixture, registry, "1.2.3", String(CURRENT_PROTOCOL_VERSION)], timeoutMs: 5_000 };

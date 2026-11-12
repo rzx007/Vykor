@@ -1,6 +1,7 @@
 import { open, readFile, realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { getDataDir, writeJsonFileAtomically } from "@vykor/host-config";
+import { isCompleteAbsolutePath } from "@vykor/host-config/paths";
 import { ApplicationError } from "../shared/application-error.js";
 
 export interface RegisteredDataLocation {
@@ -39,8 +40,7 @@ export async function readDataLocationState(path: string): Promise<DataLocationS
 
 export async function readLegacyDataLocation(path?: string): Promise<RegisteredDataLocation | undefined> {
   if (!path) return undefined;
-  const saved = await readJson(path);
-  return saved?.version === 1 ? parseLocation(saved.location) : undefined;
+  return (await readDataLocationState(path))?.location;
 }
 
 export async function readRegisteredDataLocation(
@@ -62,11 +62,11 @@ export async function saveDataLocationState(path: string, state: DataLocationSta
 
 function parseLocation(value: unknown): RegisteredDataLocation | undefined {
   if (!value || typeof value !== "object" || !("directory" in value) ||
-    typeof value.directory !== "string" || !isAbsolute(value.directory)) return undefined;
+    !isCompleteAbsolutePath(value.directory)) return undefined;
   const directory = resolve(value.directory);
   const storePath = "storePath" in value ? value.storePath : undefined;
   if (storePath === undefined) return defaultDataLocation(directory);
-  if (typeof storePath !== "string" || !isAbsolute(storePath)) return undefined;
+  if (!isCompleteAbsolutePath(storePath)) return undefined;
   return { directory, storePath: resolve(storePath) };
 }
 
@@ -75,7 +75,7 @@ async function readJson(path: string): Promise<DataLocationState | undefined> {
     return JSON.parse(await readFile(path, "utf8")) as DataLocationState;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-    throw error;
+    throw new Error(`Invalid daemon data location: ${path}`);
   }
 }
 

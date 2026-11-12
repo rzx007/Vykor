@@ -13,3 +13,7 @@ composer 的 `partial` 记录含 `unresolvedSessionIds` 和 `reason: session-not
 `window-flush.ts` 只跟踪主业务窗口，且以 renderer 注册 flush listener 的 consumer-ready 通知作为参与起点；尚未加载、没有消费者的窗口直接完成。发送随机请求 ID 并核对 renderer 回执及 sender。`flushDesktopBusinessData()` 是关闭和未来根迁移的等待入口，必须在 IPC/renderer 被销毁前调用；失败不允许继续。它等待已有工作，不替代迁移协调者的停写锁。宠物和插件窗口不参与。
 
 同职责的新校验和导入逻辑放本目录；跨进程类型和纯 schema 放 `src/shared`。测试放 `__test__/`，仅使用临时目录。
+
+`legacy-import.json` 可包含 `desktopScan:{version:1,id,userDataDir,documentsDir,sources}`。sources 是所有当前支持 localStorage 键的 sourceId→原字符串 SHA-256，可为空；renderer 只提交摘要，两个系统路径由 main 的 `app.getPath` 绑定。启动恢复完成后和每次 renderer flush 末尾都重新扫描。主进程沿既有业务队列核对来源确认和目标记录，保存收据；未知来源、摘要改变或缺失目标使旧收据失效。partial 可留下未就绪收据供普通启动继续，迁移仍需匹配摘要的明确 ACK。
+
+T10/T11 可在取得迁移互斥并冻结编辑之后调用 `prepareDesktopBusinessDataExport()`。该函数等待既有 flush，并要求产生不同于调用前的扫描 ID，且所有当前支持来源 confirmed 或已有 partial ACK，返回 `{desktopExportPath,scanId,userDataDir,documentsDir}`；没有就绪 renderer、只存在旧收据或有未处理 partial 时失败为 `needs_desktop_export`。调用方保持冻结直到迁移结束/取消，不能在读取收据后提前销毁 IPC。主进程不解析 LevelDB，旧键和桌面偏好继续保留；历史 targetDigest 不约束用户后来正常编辑的目标。

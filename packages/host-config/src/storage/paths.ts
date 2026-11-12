@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { currentDataRoot, type RootEnvironment } from "./data-root-selection.js";
 export * from "./data-root-selection.js";
 export * from "./managed-path-map.js";
+export * from "./managed-path-relocation.js";
 
 /** Project-level config directory name, matching the user-level `~/.vykor`. */
 export const PROJECT_CONFIG_DIR_NAME = ".vykor";

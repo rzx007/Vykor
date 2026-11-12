@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto"
 import { readFileSync, mkdirSync, writeFileSync, renameSync, rmSync } from "node:fs"
 import { dirname } from "node:path"
 import { z } from "zod"
+import { requireCompleteAbsolutePath } from "@vykor/host-config/paths"
 const confirmation = z.object({
   sourceDigest: z.string().regex(/^[a-f0-9]{64}$/),
   targetDigest: z.string().regex(/^[a-f0-9]{64}$/),
@@ -11,7 +12,11 @@ const confirmation = z.object({
   reason: z.literal("session-not-found").optional(),
   retainedSourceAcknowledged: z.boolean().optional(),
 })
-const schema = z.object({ version: z.literal(1), sources: z.record(z.string(), confirmation) })
+const scanSources = z.record(z.string().regex(/^(composer|notes|quick-notes|image-annotations:[a-f0-9]{64})$/), z.string().regex(/^[a-f0-9]{64}$/))
+const desktopScan = z.object({
+  version: z.literal(1), id: z.string().min(1), userDataDir: z.string().min(1), documentsDir: z.string().min(1), sources: scanSources,
+})
+const schema = z.object({ version: z.literal(1), sources: z.record(z.string(), confirmation), desktopScan: desktopScan.optional() })
 export type LegacyImportConfirmation = z.input<typeof confirmation>
 export function digestBusinessValue(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex")
@@ -31,6 +36,11 @@ export function confirmLegacyImport(
 ): void {
   const manifest = readLegacyImportManifest(path)
   manifest.sources[source] = confirmation.parse(record)
+  if (source !== "git-settings" && manifest.desktopScan && manifest.desktopScan.sources[source] !== record.sourceDigest) delete manifest.desktopScan
+  writeManifest(path, manifest)
+}
+
+function writeManifest(path: string, manifest: z.infer<typeof schema>): void {
   mkdirSync(dirname(path), { recursive: true })
   const temporary = `${path}.${randomUUID()}.tmp`
   try {
@@ -41,6 +51,32 @@ export function confirmLegacyImport(
   } finally {
     rmSync(temporary, { force: true })
   }
+}
+
+export function invalidateDesktopScan(path: string): void {
+  const manifest = readLegacyImportManifest(path)
+  if (!manifest.desktopScan) return
+  delete manifest.desktopScan
+  writeManifest(path, manifest)
+}
+
+/** Called only with app.getPath locations by the host; the renderer supplies digests, never paths. */
+export function recordDesktopScan(path: string, sources: Record<string, string>, host: { userDataDir: string; documentsDir: string }): { id: string; ready: boolean } {
+  const parsed = scanSources.safeParse(sources)
+  if (!parsed.success) { invalidateDesktopScan(path); throw new Error("business-data desktop-scan INVALID_SCAN") }
+  const manifest = readLegacyImportManifest(path)
+  for (const [id, digest] of Object.entries(parsed.data)) {
+    if (manifest.sources[id]?.sourceDigest !== digest) {
+      invalidateDesktopScan(path)
+      throw new Error("business-data desktop-scan UNCONFIRMED_SOURCE")
+    }
+  }
+  const scan = { version: 1 as const, id: randomUUID(),
+    userDataDir: requireCompleteAbsolutePath(host.userDataDir, "userDataDir"),
+    documentsDir: requireCompleteAbsolutePath(host.documentsDir, "documentsDir"), sources: parsed.data }
+  manifest.desktopScan = scan
+  writeManifest(path, manifest)
+  return { id: scan.id, ready: Object.keys(scan.sources).every(id => manifest.sources[id]!.status === "confirmed" || manifest.sources[id]!.retainedSourceAcknowledged === true) }
 }
 
 export function acknowledgeUnresolvedComposer(path: string, sourceDigest: string): void {

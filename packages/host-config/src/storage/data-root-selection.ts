@@ -2,9 +2,10 @@ import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { open, rename, rm } from "node:fs/promises";
 import { userInfo } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { securePrivateFile } from "./private-file-permissions.js";
+import { isCompleteAbsolutePath, requireCompleteAbsolutePath } from "./managed-path-relocation.js";
 
 export type RootEnvironment = Record<string, string | undefined>;
 export interface DataRootSelection {
@@ -23,10 +24,15 @@ export interface DataRootSelectionInput {
 }
 
 let initializedSelection: DataRootSelection | undefined;
+export interface InitializedDataRootInputs {
+  homeDir: string;
+  explicitRoot?: string;
+  environment: Partial<Record<"VYKOR_CONFIG_DIR" | "VYKOR_DATA_DIR" | "VYKOR_CHANNELS_DIR" | "VYKOR_IMAGE_ATTACHMENT_CACHE_DIR", string>>;
+}
+let initializedInputs: InitializedDataRootInputs | undefined;
 
 function absoluteRoot(value: string, source: string): string {
-  if (!value.trim() || !isAbsolute(value)) throw new Error(`${source} must be a non-empty absolute data root: ${JSON.stringify(value)}`);
-  return resolve(value);
+  return requireCompleteAbsolutePath(value, source);
 }
 
 /** Pure selection: no disk access, mutation, or directory creation. */
@@ -34,32 +40,33 @@ export function selectDataRoot(input: {
   explicitRoot?: string; env: RootEnvironment; homeDir: string; selector?: DataRootSelector;
 }): DataRootSelection {
   // Validate both product inputs even when one would shadow the other.
+  const homeDir = absoluteRoot(input.homeDir, "homeDir");
   const explicit = input.explicitRoot === undefined ? undefined : absoluteRoot(input.explicitRoot, "--data-root / explicitRoot");
   const environment = input.env.VYKOR_CONFIG_DIR === undefined ? undefined : absoluteRoot(input.env.VYKOR_CONFIG_DIR, "VYKOR_CONFIG_DIR");
   if (explicit !== undefined) return { dataRoot: explicit, source: "explicit" };
   if (environment !== undefined) return { dataRoot: environment, source: "environment" };
   if (input.selector) return { dataRoot: absoluteRoot(input.selector.dataRoot, ".vykor-root.json dataRoot"), source: "selector" };
-  return { dataRoot: join(input.homeDir, ".vykor"), source: "default" };
+  return { dataRoot: join(homeDir, ".vykor"), source: "default" };
 }
 
 /** Explicit env callers must not accidentally consult process.env for their home. */
 export function dataRootHome(env: RootEnvironment = process.env): string {
-  return env.USERPROFILE ?? env.HOME ?? userInfo().homedir;
+  return absoluteRoot(env.USERPROFILE ?? env.HOME ?? userInfo().homedir, "homeDir (USERPROFILE / HOME)");
 }
 
-export function dataRootSelectorPath(homeDir: string): string { return join(homeDir, ".vykor-root.json"); }
+export function dataRootSelectorPath(homeDir: string): string { return join(absoluteRoot(homeDir, "homeDir"), ".vykor-root.json"); }
 export function movedDataRootMarkerPath(dataRoot: string): string { return join(dataRoot, "data", "migrations", "moved-root.json"); }
 
 function validateSelector(value: unknown, file: string): DataRootSelector {
   const invalid = () => new Error(`Invalid data root selector ${file}; inspect this file and run data-root recover before starting.`);
   if (!value || typeof value !== "object") throw invalid();
   const record = value as Record<string, unknown>;
-  if (record.version !== 1 || typeof record.dataRoot !== "string" || !record.dataRoot.trim() || !isAbsolute(record.dataRoot)) throw invalid();
+  if (record.version !== 1 || !isCompleteAbsolutePath(record.dataRoot)) throw invalid();
   let pendingMigration: DataRootSelector["pendingMigration"];
   if (record.pendingMigration !== undefined) {
     const pending = record.pendingMigration as Record<string, unknown> | null;
     if (!pending || typeof pending.id !== "string" || !pending.id.trim()
-      || typeof pending.journalPath !== "string" || !isAbsolute(pending.journalPath)) throw invalid();
+      || !isCompleteAbsolutePath(pending.journalPath)) throw invalid();
     pendingMigration = { id: pending.id, journalPath: pending.journalPath };
   }
   return { version: 1, dataRoot: resolve(record.dataRoot), ...(pendingMigration ? { pendingMigration } : {}) };
@@ -109,7 +116,7 @@ function resolveUnlockedDataRootSelection(input: DataRootSelectionInput): DataRo
   if (selector?.pendingMigration) throw new Error(`Data root migration ${selector.pendingMigration.id} is pending (${selector.pendingMigration.journalPath}); run data-root recover before starting.`);
   const selected = selectDataRoot({ ...input, env, homeDir, selector });
   if (existsSync(movedDataRootMarkerPath(selected.dataRoot))) throw new Error(`Data root ${selected.dataRoot} has moved; inspect ${movedDataRootMarkerPath(selected.dataRoot)} and run data-root recover.`);
-  const restoresSavedRoot = selected.source === "selector" || selector?.dataRoot === selected.dataRoot;
+  const restoresSavedRoot = selected.source === "selector" || (selector !== undefined && relative(selector.dataRoot, selected.dataRoot) === "");
   if (restoresSavedRoot) {
     try { if (!statSync(selected.dataRoot).isDirectory()) throw new Error("not a directory"); }
     catch { throw new Error(`Saved data root is missing or unavailable: ${selected.dataRoot}; reconnect its disk or run data-root recover. No empty root was created.`); }
@@ -124,8 +131,8 @@ function resolveUnlockedDataRootSelection(input: DataRootSelectionInput): DataRo
 
 /** Until old selection is migrated, refusing a lost database prevents silent data loss. */
 function assertDatabaseAvailable(file: string): void {
-  try { if (!statSync(file).isFile()) throw new Error("not a database file"); }
-  catch { throw new Error(`Saved database is missing or unavailable (${file}); reconnect its disk or run data-root recover. No empty database was created.`); }
+  try { const info = statSync(file); if (!info.isFile() || info.size === 0) throw new Error("not an existing database"); }
+  catch { throw new Error(`Saved database is missing, empty or unavailable (${file}); reconnect its disk or run data-root recover. No empty database was created.`); }
 }
 
 function assertLegacyDatabaseAvailable(file: string): boolean {
@@ -135,10 +142,12 @@ function assertLegacyDatabaseAvailable(file: string): boolean {
   try {
     const value = JSON.parse(text);
     const location = value?.version === 1 && value.location;
-    if (!location || typeof location.directory !== "string" || !isAbsolute(location.directory)) throw new Error("invalid location");
+    if (!location || !isCompleteAbsolutePath(location.directory)) throw new Error("invalid location");
     const storePath = location.storePath ?? join(location.directory, "session-runtime", "sessions.db");
-    if (typeof storePath !== "string" || !isAbsolute(storePath) || !statSync(storePath).isFile()) throw new Error("missing database");
-  } catch { throw new Error(`Saved database is missing or its location is invalid (${file}); reconnect its disk or run data-root recover before starting.`); }
+    if (!isCompleteAbsolutePath(storePath)) throw new Error("invalid database path");
+    const info = statSync(storePath);
+    if (!info.isFile() || info.size === 0) throw new Error("missing or empty database");
+  } catch { throw new Error(`Saved database is missing, empty or its location is invalid (${file}); reconnect its disk or run data-root recover before starting.`); }
   return true;
 }
 
@@ -204,6 +213,7 @@ export async function withDataRootLock<T>(homeDir: string, operation: (lock: Dat
 }
 
 export async function writeDataRootSelector(homeDir: string, selector: DataRootSelector): Promise<void> {
+  validateSelector(selector, dataRootSelectorPath(homeDir));
   await withDataRootLock(homeDir, lock => lock.writeSelector(selector));
 }
 
@@ -211,10 +221,18 @@ export async function writeDataRootSelector(homeDir: string, selector: DataRootS
 export async function initializeDataRoot(input: DataRootSelectionInput = {}): Promise<DataRootSelection> {
   const env = input.env ?? process.env;
   const homeDir = input.homeDir ?? dataRootHome(env);
+  selectDataRoot({ ...input, env, homeDir }); // Validate before even creating the stable lock.
+  readDataRootSelector(homeDir); // Reject malformed saved paths before the lock; reread under it for races.
   return withDataRootLock(homeDir, async () => {
     const selected = resolveUnlockedDataRootSelection({ ...input, env, homeDir });
     if (initializedSelection && initializedSelection.dataRoot !== selected.dataRoot) throw new Error("Data root is already initialized; restart the process to change it.");
     initializedSelection ??= Object.freeze(selected);
+    initializedInputs ??= {
+      homeDir: absoluteRoot(homeDir, "homeDir"),
+      ...(input.explicitRoot !== undefined ? { explicitRoot: input.explicitRoot } : {}),
+      environment: Object.fromEntries(["VYKOR_CONFIG_DIR", "VYKOR_DATA_DIR", "VYKOR_CHANNELS_DIR", "VYKOR_IMAGE_ATTACHMENT_CACHE_DIR"]
+        .flatMap(key => env[key] === undefined ? [] : [[key, env[key]]])),
+    };
     env.VYKOR_CONFIG_DIR = selected.dataRoot;
     return { ...initializedSelection };
   });
@@ -226,6 +244,11 @@ export function currentDataRoot(): string {
 
 export function getInitializedDataRootSelection(): DataRootSelection | undefined {
   return initializedSelection && { ...initializedSelection };
+}
+
+/** Original host inputs only: never captures credentials or the internally injected root. */
+export function getInitializedDataRootInputs(): InitializedDataRootInputs | undefined {
+  return initializedInputs && { ...initializedInputs, environment: { ...initializedInputs.environment } };
 }
 
 /** Only the leading host option is unambiguous without parsing command-specific values. */

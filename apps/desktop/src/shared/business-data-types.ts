@@ -15,6 +15,7 @@ export interface BusinessDataApi {
   flush(): Promise<void>
 }
 export interface DesktopBusinessDataApi extends BusinessDataApi {
+  recordDesktopScan(sources: Record<string, string>): Promise<{ id: string; ready: boolean }>
   importLegacy(
     key: BusinessDataKey,
     value: unknown,
@@ -26,6 +27,7 @@ export interface DesktopBusinessDataApi extends BusinessDataApi {
   onFlushRequested(listener: () => Promise<void>): () => void
 }
 export const BusinessDataChannels = {
+  recordDesktopScan: "business-data:record-desktop-scan",
   read: "business-data:read",
   write: "business-data:write",
   flush: "business-data:flush",
@@ -36,6 +38,7 @@ export const BusinessDataChannels = {
   consumerReady: "business-data:consumer-ready",
 } as const
 export interface BusinessDataIpcMap {
+  [BusinessDataChannels.recordDesktopScan]: { args: [Record<string, string>]; result: { id: string; ready: boolean } }
   [BusinessDataChannels.consumerReady]: { args: []; result: void }
   [BusinessDataChannels.acknowledgeUnresolved]: { args: [string]; result: void }
   [BusinessDataChannels.read]: { args: [BusinessDataKey]; result: BusinessDataRecord | null }

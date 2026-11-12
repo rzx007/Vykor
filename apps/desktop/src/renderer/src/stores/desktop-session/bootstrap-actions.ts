@@ -1,4 +1,4 @@
-import { importOtherLegacyBusinessData } from "@renderer/lib/business-data"
+import { importOtherLegacyBusinessData, recordLegacyBusinessScan } from "@renderer/lib/business-data"
 import { normalizeApprovalMode } from "@vykor/application-client"
 import type {
   DesktopBootstrapData,
@@ -48,6 +48,7 @@ export function createBootstrapActions(context: DesktopStoreContext): BootstrapA
         const data = await window.desktop.sessions.bootstrap()
         const recovered = await readComposerRecovery()
         await importOtherLegacyBusinessData()
+        await recordLegacyBusinessScan()
         const latestDaemonStatus = await window.desktop.sessions
           .daemonStatus()
           .catch(() => get().daemonStatus)

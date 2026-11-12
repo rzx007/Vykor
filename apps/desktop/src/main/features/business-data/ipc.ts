@@ -1,4 +1,5 @@
 import { classifyRecoverySessions } from "./legacy-composer"
+import { app } from "electron"
 import { BusinessDataChannels, type BusinessDataKey } from "../../../shared/business-data-types"
 import type { IpcContribution } from "../../core/ipc/types"
 import { desktopSessionService } from "../session/session-service"
@@ -7,6 +8,12 @@ import { acknowledgeBusinessDataFlush, markBusinessDataWindowReady } from "./win
 export const businessDataIpcContribution: IpcContribution = {
   id: "business-data",
   register: () => [
+    {
+      channel: BusinessDataChannels.recordDesktopScan,
+      handler: (_event, sources) => desktopBusinessDataService.recordDesktopScan(sources as Record<string, string>, {
+        userDataDir: app.getPath("userData"), documentsDir: app.getPath("documents"),
+      }),
+    },
     {
       channel: BusinessDataChannels.consumerReady,
       handler: (event) => markBusinessDataWindowReady(event.sender.id),

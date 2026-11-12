@@ -44,6 +44,7 @@ const invoke = <C extends IpcChannel>(
 
 export const desktopAPI = {
   businessData: {
+    recordDesktopScan: (sources: Record<string, string>) => invoke(BusinessDataChannels.recordDesktopScan, sources),
     read: (key: BusinessDataKey) => invoke(BusinessDataChannels.read, key),
     write: (key: BusinessDataKey, value: unknown, revision: number | null) => invoke(BusinessDataChannels.write, key, value, revision),
     importLegacy: (key: BusinessDataKey, value: unknown, digest: string, unresolvedSessionIds?: string[]) => invoke(BusinessDataChannels.importLegacy, key, value, digest, unresolvedSessionIds),
