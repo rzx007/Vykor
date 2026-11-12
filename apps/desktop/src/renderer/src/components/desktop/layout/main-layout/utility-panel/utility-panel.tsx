@@ -7,7 +7,7 @@ import {
   PluginAppCatalog,
 } from "@renderer/components/desktop/shell/plugin-apps/panel"
 import type * as React from "react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import {
   BrowserTool,
@@ -64,6 +64,7 @@ import {
   type UtilityTool,
 } from "./utility-panel-tabs"
 import { useUtilityPanelRuntime } from "./use-utility-panel-runtime"
+import { useImageLeaveGuard, type ImageLeaveGuard } from "./use-image-leave-guard"
 import { useUtilityPanelClose } from "./use-utility-panel-close"
 import { ImageViewerPanel } from "@renderer/components/desktop/image-viewer/image-viewer-panel"
 import {
@@ -77,6 +78,7 @@ type UtilityPanelProps = {
   maximized: boolean
   onToggleMaximized: () => void
   onClose: () => void
+  beforeCollapseRef?: React.RefObject<ImageLeaveGuard | null>
   fileOpenRequest: { id: number; path: string; line?: number } | null
   reviewOpenRequest: DesktopGitReviewRequest | null
   terminalOpenRequest: { id: number; terminalId: string } | null
@@ -101,6 +103,7 @@ export function UtilityPanel({
   maximized,
   onToggleMaximized,
   onClose,
+  beforeCollapseRef,
   fileOpenRequest,
   reviewOpenRequest,
   terminalOpenRequest,
@@ -147,40 +150,56 @@ export function UtilityPanel({
     setHandledAppRequestId,
   } = useUtilityPanelRuntime(scopeId)
   const [terminalCommands, setTerminalCommands] = useState<TerminalPanelCommand[]>([])
-  const imageNavigationGuardRef = useRef<((keyboard?: boolean) => boolean | Promise<boolean>) | null>(null)
+  const imageNavigationGuardRef = useRef<
+    ((keyboard?: boolean) => boolean | Promise<boolean>) | null
+  >(null)
+
+  const leaveImage = useImageLeaveGuard(imageNavigationGuardRef, scopeId, activeTabId, open)
+  useLayoutEffect(() => {
+    if (!beforeCollapseRef) return
+    beforeCollapseRef.current = leaveImage
+    return () => {
+      if (beforeCollapseRef.current === leaveImage) beforeCollapseRef.current = null
+    }
+  }, [beforeCollapseRef, leaveImage])
 
   useEffect(() => {
     if (!imageOpenRequest || handledImageRequestId === imageOpenRequest.id) return
-    let cancelled = false
-    const timer = window.setTimeout(async () => {
-      // Consume a blocked request so it cannot unexpectedly switch images after saving later.
-      const allowed = !imageNavigationGuardRef.current || await imageNavigationGuardRef.current()
-      if (cancelled) return
+    const timer = window.setTimeout(() => {
+      // Consume blocked requests; retries require another explicit open action.
       setHandledImageRequestId(imageOpenRequest.id)
-      if (!allowed) return
-      const source = imageOpenRequest.source
-      const gallery = imageOpenRequest.gallery?.sources.some(
-        (item) => imageSourceKey(item) === imageSourceKey(source)
-      )
-        ? imageOpenRequest.gallery
-        : undefined
-      const id = gallery ? `image-gallery:${gallery.id}` : imageSourceKey(source)
-      const imageTab: UtilityTab = {
-        id,
-        tool: "image",
-        title: source.name,
-        imageSource: source,
-        ...(gallery ? { imageGallery: gallery } : {}),
-      }
-      setTabs((current) =>
-        current.some((tab) => tab.id === id)
-          ? current.map((tab) => (tab.id === id ? imageTab : tab))
-          : [...current, imageTab]
-      )
-      setActiveTabId(id)
+      leaveImage(() => {
+        const source = imageOpenRequest.source
+        const gallery = imageOpenRequest.gallery?.sources.some(
+          (item) => imageSourceKey(item) === imageSourceKey(source)
+        )
+          ? imageOpenRequest.gallery
+          : undefined
+        const id = gallery ? `image-gallery:${gallery.id}` : imageSourceKey(source)
+        const imageTab: UtilityTab = {
+          id,
+          tool: "image",
+          title: source.name,
+          imageSource: source,
+          ...(gallery ? { imageGallery: gallery } : {}),
+        }
+        setTabs((current) =>
+          current.some((tab) => tab.id === id)
+            ? current.map((tab) => (tab.id === id ? imageTab : tab))
+            : [...current, imageTab]
+        )
+        setActiveTabId(id)
+      })
     }, 0)
-    return () => { cancelled = true; window.clearTimeout(timer) }
-  }, [imageOpenRequest, handledImageRequestId, setTabs, setActiveTabId, setHandledImageRequestId])
+    return () => window.clearTimeout(timer)
+  }, [
+    imageOpenRequest,
+    handledImageRequestId,
+    setTabs,
+    setActiveTabId,
+    setHandledImageRequestId,
+    leaveImage,
+  ])
   const terminalCommandSequenceRef = useRef(0)
   const handledReviewRequestRef = useRef<number | null>(null)
   const [persistedFileTabs, setPersistedFileTabs] = useState<PersistedFileTabsByScope>(
@@ -238,14 +257,15 @@ export function UtilityPanel({
       appPanelRequest.sequence === handledAppRequestId
     )
       return
-    setActiveTabId("plugin-app:" + appPanelRequest.pageId)
     setHandledAppRequestId(appPanelRequest.sequence)
+    leaveImage(() => setActiveTabId("plugin-app:" + appPanelRequest.pageId))
   }, [
     appPanelRequest,
     activeSessionId,
     handledAppRequestId,
     setActiveTabId,
     setHandledAppRequestId,
+    leaveImage,
   ])
   const activeApp =
     activeTab?.tool === "plugin-app"
@@ -264,15 +284,17 @@ export function UtilityPanel({
     if (prepared.placeholderPath || prepared.browserUrl) return
     const timer = window.setTimeout(() => {
       setHandledFileRequestId(fileOpenRequest.id)
-      setTabs((current) => {
-        const existing = current.find((tab) => tab.id === filesTabId || tab.tool === "files")
-        if (existing) {
-          setActiveTabId(existing.id)
-          return current
-        }
-        setActiveTabId(filesTabId)
-        return [...current, { id: filesTabId, tool: "files", title: utilityToolMeta.files.label }]
-      })
+      leaveImage(() =>
+        setTabs((current) => {
+          const existing = current.find((tab) => tab.id === filesTabId || tab.tool === "files")
+          if (existing) {
+            setActiveTabId(existing.id)
+            return current
+          }
+          setActiveTabId(filesTabId)
+          return [...current, { id: filesTabId, tool: "files", title: utilityToolMeta.files.label }]
+        })
+      )
     }, 0)
     return () => window.clearTimeout(timer)
   }, [
@@ -282,6 +304,7 @@ export function UtilityPanel({
     setActiveTabId,
     setHandledFileRequestId,
     setTabs,
+    leaveImage,
   ])
 
   useEffect(() => {
@@ -296,18 +319,20 @@ export function UtilityPanel({
     handledReviewRequestRef.current = reviewOpenRequest.id
     const timer = window.setTimeout(() => {
       const id = toolTabId("review")
-      setTabs((current) => {
-        const existing = current.find((tab) => tab.id === id)
-        if (existing) {
-          setActiveTabId(existing.id)
-          return current
-        }
-        setActiveTabId(id)
-        return [...current, { id, tool: "review", title: utilityToolMeta.review.label }]
-      })
+      leaveImage(() =>
+        setTabs((current) => {
+          const existing = current.find((tab) => tab.id === id)
+          if (existing) {
+            setActiveTabId(existing.id)
+            return current
+          }
+          setActiveTabId(id)
+          return [...current, { id, tool: "review", title: utilityToolMeta.review.label }]
+        })
+      )
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [reviewOpenRequest, activeWorkspaceIsGit, setActiveTabId, setTabs])
+  }, [reviewOpenRequest, activeWorkspaceIsGit, setActiveTabId, setTabs, leaveImage])
 
   useEffect(() => {
     if (activeWorkspaceIsGit === true) return
@@ -343,7 +368,7 @@ export function UtilityPanel({
     const { browserUrl, openPath } = preparedFileOpenRequest
     const timer = window.setTimeout(() => {
       setHandledFileRequestId(fileOpenRequest.id)
-      openBrowserTab(browserUrl, openPath.split("/").pop())
+      leaveImage(() => openBrowserTab(browserUrl, openPath.split("/").pop()))
     }, 0)
     return () => window.clearTimeout(timer)
   }, [
@@ -351,6 +376,7 @@ export function UtilityPanel({
     handledFileRequestId,
     openBrowserTab,
     preparedFileOpenRequest,
+    leaveImage,
     setHandledFileRequestId,
   ])
 
@@ -441,12 +467,21 @@ export function UtilityPanel({
     if (!toolOpenRequest || handledToolRequestId === toolOpenRequest.id) return
     const timer = window.setTimeout(() => {
       setHandledToolRequestId(toolOpenRequest.id)
-      if (toolOpenRequest.tool === "browser" && toolOpenRequest.url)
-        openBrowserTab(toolOpenRequest.url)
-      else addTab(toolOpenRequest.tool)
+      leaveImage(() => {
+        if (toolOpenRequest.tool === "browser" && toolOpenRequest.url)
+          openBrowserTab(toolOpenRequest.url)
+        else addTab(toolOpenRequest.tool)
+      })
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [addTab, openBrowserTab, handledToolRequestId, setHandledToolRequestId, toolOpenRequest])
+  }, [
+    addTab,
+    openBrowserTab,
+    handledToolRequestId,
+    setHandledToolRequestId,
+    toolOpenRequest,
+    leaveImage,
+  ])
 
   function persistFileTabs(paths: string[], activePath: string | null): void {
     if (!selectedProjectPath) return
@@ -475,6 +510,14 @@ export function UtilityPanel({
     setFileTabs,
     closeOrdinaryTabs,
     persistFileTabs,
+    beforeClose: (ids, preferred, commit, blocked) => {
+      if (
+        activeTab?.tool === "image" &&
+        (ids.includes(activeTab.id) || (preferred && preferred !== activeTab.id))
+      )
+        leaveImage(commit, blocked)
+      else commit()
+    },
     closeTerminals: (terminalIds) =>
       setTerminalCommands((current) => [
         ...current,
@@ -488,7 +531,7 @@ export function UtilityPanel({
   const savingBeforeClose = close.request?.phase === "files" && close.request.busy
   const closingSideChat = close.request?.phase === "side-chat" && close.request.busy
 
-  const selectTab = (tab: UtilityTab): void => {
+  const selectTabNow = (tab: UtilityTab): void => {
     setActiveTabId(tab.id)
     if (tab.filePath) {
       setActiveFilePath(tab.filePath)
@@ -503,6 +546,11 @@ export function UtilityPanel({
           : null
       )
     }
+  }
+
+  const selectTab = (tab: UtilityTab): void => {
+    if (tab.id === activeTab?.id) return
+    leaveImage(() => selectTabNow(tab))
   }
 
   const startFileTab = (path: string): void => {
@@ -580,7 +628,7 @@ export function UtilityPanel({
         },
       ]
     })
-    if (activate) setActiveTabId(id)
+    if (activate) leaveImage(() => setActiveTabId(id))
   }
 
   const removeTerminalTab = (terminalId: string): void => {
@@ -620,11 +668,11 @@ export function UtilityPanel({
   }
 
   const handleActiveTerminalChange = (terminalId: string | null): void => {
-    if (terminalId) setActiveTabId(terminalTabId(terminalId))
+    if (terminalId) leaveImage(() => setActiveTabId(terminalTabId(terminalId)))
   }
 
   const closeOtherTabs = (tab: UtilityTab): void => {
-    selectTab(tab)
+    if (activeTab?.tool !== "image") selectTabNow(tab)
     closeTabs(
       visibleTabs.filter((item) => item.id !== tab.id).map((item) => item.id),
       tab.id
@@ -634,7 +682,7 @@ export function UtilityPanel({
   const closeTabsToRight = (tab: UtilityTab): void => {
     const index = visibleTabs.findIndex((item) => item.id === tab.id)
     if (index < 0) return
-    selectTab(tab)
+    if (activeTab?.tool !== "image") selectTabNow(tab)
     closeTabs(
       visibleTabs.slice(index + 1).map((item) => item.id),
       tab.id
@@ -759,15 +807,13 @@ export function UtilityPanel({
           activeTab={activeTab}
           availableTools={availableTools}
           maximized={maximized}
-          onAdd={addTab}
+          onAdd={(tool) => leaveImage(() => addTab(tool))}
           onSelect={selectTab}
           onCloseTab={closeTab}
           onCloseOtherTabs={closeOtherTabs}
           onCloseTabsToRight={closeTabsToRight}
           onToggleMaximized={onToggleMaximized}
-          onClosePanel={() => {
-            onClose()
-          }}
+          onClosePanel={() => (beforeCollapseRef ? onClose() : leaveImage(onClose))}
         />
 
         <div className="relative min-h-0 flex-1 bg-conversation">
@@ -804,7 +850,10 @@ export function UtilityPanel({
             />
           )}
           {!activeTab && !pendingTerminal && (
-            <EmptyUtilityPanelState availableTools={availableTools} onAdd={addTab} />
+            <EmptyUtilityPanelState
+              availableTools={availableTools}
+              onAdd={(tool) => leaveImage(() => addTab(tool))}
+            />
           )}
           {browserTabs.map((tab) => (
             <BrowserTool

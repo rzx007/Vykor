@@ -1,3 +1,4 @@
+import type { ImageLeaveGuard } from "./use-image-leave-guard"
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react"
 import type { GroupImperativeHandle, Layout, PanelImperativeHandle } from "react-resizable-panels"
 
@@ -59,6 +60,7 @@ type UseUtilityPanelControllerOptions = {
   workspaceGroupRef: RefObject<GroupImperativeHandle | null>
   groupElementRef: RefObject<HTMLDivElement | null>
   onCollapseSidebar: () => void
+  beforeCollapseRef?: RefObject<ImageLeaveGuard | null>
 }
 
 export type UtilityPanelController = {
@@ -104,6 +106,7 @@ export function useUtilityPanelController({
   workspaceGroupRef,
   groupElementRef,
   onCollapseSidebar,
+  beforeCollapseRef,
 }: UseUtilityPanelControllerOptions): UtilityPanelController {
   const scopeId = utilityPanelScopeId(activeSessionId, selectedProjectId)
   const [initialState] = useState(() => {
@@ -284,35 +287,45 @@ export function useUtilityPanelController({
     ]
   )
 
-  const collapse = useCallback((): void => {
-    const currentLayout = workspaceGroupRef.current?.getLayout()
-    if (isOpenLayout(currentLayout)) {
-      lastOpenLayoutRef.current = currentLayout
-      setLayout(currentLayout)
-      persistActiveView({ layout: currentLayout })
+  const collapse = useCallback((): boolean => {
+    let committed = false
+    const commit = () => {
+      committed = true
+      const currentLayout = workspaceGroupRef.current?.getLayout()
+      if (isOpenLayout(currentLayout)) {
+        lastOpenLayoutRef.current = currentLayout
+        setLayout(currentLayout)
+        persistActiveView({ layout: currentLayout })
+      }
+      previousLayoutRef.current = null
+      persistActiveView({ open: false, maximized: false })
+      setMaximized(false)
+      setOpen(false)
+      runAnimatedLayoutChange(() => {
+        utilityPanelRef.current?.collapse()
+      })
     }
-    previousLayoutRef.current = null
-    persistActiveView({ open: false, maximized: false })
-    setMaximized(false)
-    setOpen(false)
-    runAnimatedLayoutChange(() => {
-      utilityPanelRef.current?.collapse()
-    })
-  }, [persistActiveView, runAnimatedLayoutChange, utilityPanelRef, workspaceGroupRef])
+    if (beforeCollapseRef?.current) beforeCollapseRef.current(commit)
+    else commit()
+    return committed
+  }, [
+    beforeCollapseRef,
+    persistActiveView,
+    runAnimatedLayoutChange,
+    utilityPanelRef,
+    workspaceGroupRef,
+  ])
 
   const toggle = useCallback((): void => {
     const panel = utilityPanelRef.current
     if (!panel) {
-      setOpen((current) => {
-        const nextOpen = !current
-        persistActiveView({ open: nextOpen, maximized: false })
-        return nextOpen
-      })
+      if (open) collapse()
+      else restore()
       return
     }
     if (panel.isCollapsed()) restore()
     else collapse()
-  }, [collapse, persistActiveView, restore, utilityPanelRef])
+  }, [collapse, open, restore, utilityPanelRef])
 
   const toggleMaximized = useCallback((): void => {
     if (maximizedRef.current) {
@@ -346,7 +359,12 @@ export function useUtilityPanelController({
     (source: ImageSource, gallery?: ImageGallery, expectedPanelScopeId?: string): void => {
       if (expectedPanelScopeId && expectedPanelScopeId !== activeScopeIdRef.current) return
       restore()
-      setImageRequest({ id: ++toolRequestSequence, scopeId: activeScopeIdRef.current, source, gallery })
+      setImageRequest({
+        id: ++toolRequestSequence,
+        scopeId: activeScopeIdRef.current,
+        source,
+        gallery,
+      })
     },
     [restore]
   )
@@ -482,9 +500,14 @@ export function useUtilityPanelController({
       // Widths during an explicit open/close are animation frames, not user intent.
       if (groupElementRef.current?.hasAttribute("data-panel-animating")) return
       const nextOpen = sizeInPixels > 1
-      setOpen((current) => (current === nextOpen ? current : nextOpen))
+      if (!nextOpen && open) {
+        if (!collapse()) {
+          // A drag already reduced the native panel to zero. Restore its width while saving.
+          workspaceGroupRef.current?.setLayout(lastOpenLayoutRef.current ?? defaultLayout)
+        }
+      } else setOpen((current) => (current === nextOpen ? current : nextOpen))
     },
-    [groupElementRef]
+    [collapse, defaultLayout, groupElementRef, open, workspaceGroupRef]
   )
 
   return {

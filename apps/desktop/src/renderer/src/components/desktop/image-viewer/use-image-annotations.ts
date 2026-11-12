@@ -122,7 +122,8 @@ export function useImageAnnotations(
         )
         if (disposed) return
         annotator.setAnnotations(saved.map(toAnnotation))
-        let lastSaved: string | null = null
+        let lastSaved = JSON.stringify(saved)
+        let lastQueued = lastSaved
         let failedSave = false
         const sync = (): boolean => {
           if (disposed || !annotator) return false
@@ -146,11 +147,11 @@ export function useImageAnnotations(
           setRegions(next)
           setHistory({ undo: annotator.canUndo(), redo: annotator.canRedo() })
           const serialized = JSON.stringify(next)
-          if (lastSaved === null) lastSaved = serialized
-          if (serialized === lastSaved && !failedSave) {
+          if (serialized === lastQueued && !failedSave) {
             setError((current) => (current === DRAFT_SAVE_ERROR ? null : current))
-            return true
+            return serialized === lastSaved
           }
+          lastQueued = serialized
           void storage
             .write(next)
             .then(() => {
@@ -164,19 +165,23 @@ export function useImageAnnotations(
             })
           return false
         }
-        flushDraftRef.current = async () => {
-          sync()
-          try {
+        const flush = async () => {
+          // A completed earlier write must not acknowledge a newer edit, including undo to A.
+          do {
+            sync()
             await storage.flush()
+            if (disposed) throw new Error("图片编辑器已关闭")
+          } while (!sync())
+        }
+        flushDraftRef.current = async () => {
+          try {
+            await flush()
             return true
           } catch {
             return false
           }
         }
-        unregisterFlush = registerBusinessDataFlusher(async () => {
-          sync()
-          await storage.flush()
-        })
+        unregisterFlush = registerBusinessDataFlusher(flush)
         annotator.state.store.observe(sync)
         annotator.on("selectionChanged", (selection) => {
           if (!disposed) setSelectedId(selection[0]?.id ?? null)

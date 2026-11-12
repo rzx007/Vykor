@@ -1,3 +1,4 @@
+import type { ImageLeaveGuard } from "./utility-panel/use-image-leave-guard"
 import type { ConversationSearchTarget } from "../../conversation-page/transcript/conversation-find-model"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Outlet, useNavigate, useRouter, useRouterState } from "@tanstack/react-router"
@@ -112,7 +113,9 @@ export function MainLayout(): React.JSX.Element {
     setSidebarMasked(true)
     sidebarPanelRef.current?.collapse()
   }, [sidebarPanelRef])
+  const beforeUtilityCollapseRef = useRef<ImageLeaveGuard | null>(null)
   const utilityPanel = useUtilityPanelController({
+    beforeCollapseRef: beforeUtilityCollapseRef,
     activeSessionId,
     selectedProjectId,
     sessionIds,
@@ -445,6 +448,7 @@ export function MainLayout(): React.JSX.Element {
             maximized={utilityMaximized}
             onToggleMaximized={toggleUtilityMaximized}
             onClose={collapseUtilityPanel}
+            beforeCollapseRef={beforeUtilityCollapseRef}
             fileOpenRequest={fileOpenRequest}
             reviewOpenRequest={reviewOpenRequest}
             terminalOpenRequest={terminalOpenRequest}

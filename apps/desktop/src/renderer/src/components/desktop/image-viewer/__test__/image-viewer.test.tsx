@@ -599,3 +599,41 @@ it("passes an immutable numbered-image snapshot and original pixel regions to th
   canvasContext.mockRestore()
   canvasBlob.mockRestore()
 })
+
+ it.each(["增加间距", "保存期间继续编辑"])("flushes the latest annotation %s after an earlier write was delayed", async (finalComment) => {
+  const key = await mount()
+  await selectRegion()
+  const write = businessDataFixture.write.bind(businessDataFixture)
+  let release!: () => void
+  const pending = new Promise<void>(resolve => { release = resolve })
+  let calls = 0
+  vi.spyOn(businessDataFixture, "write").mockImplementation(async (...args) => {
+    if (++calls === 1) await pending
+    return write(...args)
+  })
+  await act(async () => inputComment("B"))
+  await vi.waitFor(() => expect(calls).toBe(1))
+  let completed = false
+  let flushing!: Promise<boolean>
+  await act(async () => {
+    flushing = Promise.resolve(navigationGuard.current!()).then(allowed => { completed = true; return allowed })
+  })
+  expect(completed).toBe(false)
+  await act(async () => inputComment(finalComment))
+  await act(async () => { release(); expect(await flushing).toBe(true) })
+  expect(businessDataSnapshot({ kind: "image-annotations", imageKey: key.slice("vykor-image-annotations-v1:".length) })[0].comment).toBe(finalComment)
+})
+
+it("does not acknowledge an image that was disposed during a pending flush", async () => {
+  await mount()
+  await selectRegion()
+  const write = businessDataFixture.write.bind(businessDataFixture)
+  let release!: () => void
+  const pending = new Promise<void>(resolve => { release = resolve })
+  vi.spyOn(businessDataFixture, "write").mockImplementation(async (...args) => { await pending; return write(...args) })
+  await act(async () => inputComment("pending"))
+  let flushing!: Promise<boolean>
+  await act(async () => { flushing = Promise.resolve(navigationGuard.current!()) })
+  await act(async () => root.render(null))
+  await act(async () => { release(); expect(await flushing).toBe(false) })
+})
