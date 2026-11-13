@@ -4,15 +4,16 @@ import { tmpdir } from "node:os"
 import { expect, it, vi } from "vitest"
 const maintenance = vi.hoisted(() => vi.fn(async () => {}))
 const normal = vi.hoisted(() => vi.fn())
+const appendSwitch = vi.hoisted(() => vi.fn())
 vi.mock("../data-root-maintenance", () => ({ startDataRootMaintenance: maintenance }))
 vi.mock("../application", () => { normal(); return {} })
-vi.mock("electron", () => ({ app: { isPackaged: false, getPath: (name: string) => join(process.env.USERPROFILE!, name), whenReady: async () => {}, exit: vi.fn() }, dialog: { showErrorBox: vi.fn() } }))
+vi.mock("electron", () => ({ app: { isPackaged: false, commandLine: { appendSwitch }, getPath: (name: string) => join(process.env.USERPROFILE!, name), whenReady: async () => {}, exit: vi.fn() }, dialog: { showErrorBox: vi.fn() } }))
 vi.mock("../core/linux-input-method", () => ({ configureLinuxInputMethod: () => {} }))
 vi.mock("../features/workspace/document-preview-protocol", () => ({ registerDocumentPreviewScheme: () => {} }))
 vi.mock("../features/plugin-apps/document-protocol", () => ({ registerPluginAppScheme: () => {} }))
 
 it.each([false, true])("uses a retained host source only when canonical DB is absent; canonical=%s", async canonical => {
-  vi.resetModules(); maintenance.mockClear(); normal.mockClear()
+  vi.resetModules(); maintenance.mockClear(); normal.mockClear(); appendSwitch.mockClear()
   const home = await mkdtemp(join(tmpdir(), "desktop-retained-source-")), source = join(home, "source"), old = join(home, "old-data"), previousArgv = process.argv
   try {
     await mkdir(join(source, "data/desktop"), { recursive: true }); await mkdir(old)
@@ -26,6 +27,7 @@ it.each([false, true])("uses a retained host source only when canonical DB is ab
     vi.stubEnv("VYKOR_DATA_DIR", undefined); vi.stubEnv("VYKOR_CHANNELS_DIR", undefined); vi.stubEnv("VYKOR_IMAGE_ATTACHMENT_CACHE_DIR", undefined)
     process.argv = ["node", "desktop.ts"]
     await import("../index")
+    if (process.platform === "linux") expect(appendSwitch).toHaveBeenCalledWith("enable-transparent-visuals")
     if (canonical) {
       await vi.waitFor(() => expect(normal).toHaveBeenCalledOnce(), { timeout: 30000 })
       expect(maintenance).not.toHaveBeenCalled()

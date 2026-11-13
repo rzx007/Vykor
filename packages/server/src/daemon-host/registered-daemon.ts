@@ -86,6 +86,8 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
     throw new Error("The shared registered daemon requires a non-empty token.");
   }
   const base = resolve(options.baseDataDirectory ?? getDataDir());
+  // Channels belong to the chosen user root, not an embedded runtime's switchable database.
+  const channelsWorkspaceRoot = options.channelsWorkspaceRoot ?? getChannelsDir();
   const registryPath = join(base, "daemon", "registry.json");
   const statePath = dataLocationFile(base);
   const start = options.start ?? startVykorDaemon;
@@ -232,7 +234,7 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
       ...(options.allowedOrigins ? { allowedOrigins: options.allowedOrigins } : {}),
       ...(options.outsideProjectWorkspaceRoot
         ? { outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot } : {}),
-      channelsWorkspaceRoot: options.channelsWorkspaceRoot ?? getChannelsDir(),
+      channelsWorkspaceRoot,
       registeredDaemonControl: control,
       deferBackgroundActivation: true,
     });

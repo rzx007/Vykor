@@ -65,8 +65,8 @@ describe("classifyWorkspacePath", () => {
     )
   })
 
-  it("falls back /src/foo.ts to a project-relative path", () => {
-    expect(classifyWorkspacePath("/src/foo.ts", windowsRoots, { win32, posix })).toMatchObject({
+  it("keeps an explicitly relative project path", () => {
+    expect(classifyWorkspacePath("./src/foo.ts", windowsRoots, { win32, posix })).toMatchObject({
       kind: "project",
       relativePath: "src/foo.ts",
     })
@@ -112,14 +112,8 @@ describe("classifyWorkspacePath", () => {
     })
   })
 
-  it("does not classify /etc/passwd as extra-root", () => {
-    expect(classifyWorkspacePath("/etc/passwd", posixRoots, { win32, posix })?.kind).not.toBe(
-      "extra-root"
-    )
-    expect(classifyWorkspacePath("/etc/passwd", posixRoots, { win32, posix })).toMatchObject({
-      kind: "project",
-      relativePath: "etc/passwd",
-    })
+  it("rejects an absolute POSIX path outside the allowed roots", () => {
+    expect(classifyWorkspacePath("/etc/passwd", posixRoots, { win32, posix })).toBeNull()
   })
 
   it("prefers the current project when it sits inside an extra root", () => {

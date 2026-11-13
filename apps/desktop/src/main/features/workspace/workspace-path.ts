@@ -111,10 +111,7 @@ export function stillInsideAllowedRoot(
           ? roots.userProfilePath
           : roots.skillsDir
         : classification.rootPath
-  return (
-    isPathInside(absolutePath, checkRoot, pathOps.win32) ||
-    isPathInside(absolutePath, checkRoot, pathOps.posix)
-  )
+  return isInsideAny(absolutePath, checkRoot, pathOps)
 }
 
 export function classifyWorkspacePath(
@@ -131,9 +128,10 @@ export function classifyWorkspacePath(
     if (matched) return matched
   }
 
-  if (isWindowsAbsolutePath(toForwardSlashes(stripExtendedPrefix(cleaned)))) return null
+  // 绝对路径必须命中允许根，不能剥去根前缀后当作项目相对路径。
+  if (candidates.length > 0) return null
 
-  const relativePath = toForwardSlashes(cleaned).replace(/^\.\//, "").replace(/^\//, "")
+  const relativePath = toForwardSlashes(cleaned).replace(/^\.\//, "")
   if (!relativePath || relativePath === ".." || relativePath.startsWith("../")) return null
 
   return {
@@ -161,7 +159,7 @@ function collectAbsoluteCandidates(
     candidates.push(pathOps.posix.normalize(posixForm))
     for (const root of extraMappingRoots(roots)) {
       if (!root) continue
-      const drive = pathOps.win32.parse(pathOps.win32.resolve(root)).root
+      const drive = pathOps.win32.parse(root).root
       if (!isWindowsDriveRoot(drive)) continue
       candidates.push(pathOps.win32.resolve(drive, posixForm.replace(/^\//, "")))
     }
@@ -251,11 +249,9 @@ function isInsideAny(candidate: string, root: string, pathOps: WorkspacePathOps)
 }
 
 function isSameFile(left: string, right: string, pathOps: WorkspacePathOps): boolean {
-  if (!right) return false
-  return (
-    normalizeComparable(left, pathOps.win32) === normalizeComparable(right, pathOps.win32) ||
-    normalizeComparable(left, pathOps.posix) === normalizeComparable(right, pathOps.posix)
-  )
+  if (!right || looksWindowsAbsolute(left) !== looksWindowsAbsolute(right)) return false
+  const flavor = looksWindowsAbsolute(right) ? pathOps.win32 : pathOps.posix
+  return normalizeComparable(left, flavor) === normalizeComparable(right, flavor)
 }
 
 function normalizeComparable(path: string, pathApi: PathFlavor): string {

@@ -265,9 +265,13 @@ describe("registered daemon", () => {
     expect(closed).toEqual([]);
   });
 
-  it("reopens and republishes the previous database when the target fails to start", async () => {
+  it.each(["default", "explicit"] as const)("reopens and republishes the previous database when the target fails to start with %s channels", async (channels) => {
+    const channelsRoot = channels === "explicit" ? join(root, "channels") : join(process.env.VYKOR_CONFIG_DIR!, "channels");
+    const openedChannels: (string | undefined)[] = [];
     const entry = launch({
+      ...(channels === "explicit" ? { channelsWorkspaceRoot: channelsRoot } : {}),
       async start(options) {
+        openedChannels.push(options.channelsWorkspaceRoot);
         if (options.storePath === targetStore) throw new Error("target failed");
         return entry.start(options);
       },
@@ -286,6 +290,7 @@ describe("registered daemon", () => {
     expect(reopened.token).not.toBe(initial.token);
     expect(entry.closed).toEqual([initial.storePath]);
     expect(entry.activated).toEqual([initial.storePath, initial.storePath]);
+    expect(openedChannels).toEqual([channelsRoot, channelsRoot, channelsRoot]);
   });
 
   it("commits the verified location before publishing a fresh endpoint in the same process", async () => {

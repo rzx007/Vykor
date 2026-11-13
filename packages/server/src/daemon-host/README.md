@@ -12,6 +12,8 @@ Desktop 无窗口入口和 CLI 本机登记入口调用 `runRegisteredDaemon()`�
 
 产品默认运行固定使用当前用户根的 canonical 数据库；旧 data-location 只作迁移来源，根切换由宿主协调器关闭旧进程后启动新进程。显式注入 baseDataDirectory 的嵌入调用仍保留原有独立数据库和进程内切换契约。
 
+渠道工作区在登记入口启动时选定，默认使用用户根下的 `channels/`，也接受显式 `channelsWorkspaceRoot`。嵌入调用切换数据库或恢复旧库时复用该目录，不根据切换中的数据位置重新选择用户根。
+
 桌面宿主还可在启动服务前调用该入口导出的 `setHostResponseLocale()`，提供操作系统的首选显示语言。普通 Agent 和审批器共享这个进程级默认值；它不持久化为设置，也不改变用户明确指定的回复语言。
 
 ## 状态归属
