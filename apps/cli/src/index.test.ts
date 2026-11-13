@@ -45,14 +45,14 @@ describe("CLI plugin options", () => {
     }) as never);
     vi.spyOn(console, "error").mockImplementation(() => {});
 
-    await expect(import("./index.js")).rejects.toThrow("exit:1");
+    await expect(import("./program.js")).rejects.toThrow("exit:1");
     expect(mocks.mainAction).not.toHaveBeenCalled();
   });
 
   it("keeps --no-plugins as the current switch", async () => {
     process.argv = ["node", "vk", "--no-plugins"];
 
-    await import("./index.js");
+    await import("./program.js");
     await vi.waitFor(() => expect(mocks.mainAction).toHaveBeenCalledOnce());
     expect(mocks.mainAction.mock.calls[0]?.[1]).toMatchObject({ plugins: false });
   });
@@ -71,7 +71,7 @@ describe("CLI plugin options", () => {
     vi.spyOn(console, "log").mockImplementation(() => {});
 
     try {
-      await import("./index.js");
+      await import("./program.js");
       await vi.waitFor(() => {
         const saved = JSON.parse(readFileSync(join(configDir, "settings.json"), "utf-8"));
         expect(saved.autoReview).toEqual({ mode: "risk_based" });

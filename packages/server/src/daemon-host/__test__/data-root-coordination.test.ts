@@ -87,7 +87,10 @@ it("keeps the committed target when the ordinary child cannot start after releas
     target: { command: join(request.homeDir, "missing-owned-executable"), args: ["--data-root", request.targetRoot], cwd: request.homeDir }, timeoutMs: 1000 });
   expect(migrated, await readFile(migrated.journalPath, "utf8")).toMatchObject({ phase: "committed", writersReleased: true, startup: "failed" });
   expect(readDataRootSelector(request.homeDir)).toEqual({ version: 1, dataRoot: request.targetRoot });
-  await expect(coordination.recoverDataRootMigration(migrated.journalPath, { homeDir: request.homeDir })).rejects.toThrow(/released/);
+  await writeFile(join(request.targetRoot, "legitimate-post-release"), "preserve newer target data");
+  expect(await coordination.recoverDataRootMigration(migrated.journalPath, { homeDir: request.homeDir })).toMatchObject({ phase: "committed", writersReleased: true });
+  expect(readDataRootSelector(request.homeDir)).toEqual({ version: 1, dataRoot: request.targetRoot });
+  expect(await readFile(join(request.targetRoot, "legitimate-post-release"), "utf8")).toBe("preserve newer target data");
 }, 60000);
 
 it("reports daemon busy without pausing or reinstalling its still-running service", async () => {

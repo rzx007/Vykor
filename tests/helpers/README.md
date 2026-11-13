@@ -5,6 +5,7 @@
 ## 入口与处理步骤
 
 - [posix-shell.ts](./posix-shell.ts) 的 `findPosixShell()` 为本地执行固定 WSL 脚本的测试寻找真实 POSIX Shell，也就是理解 `/bin/sh` 命令语法的程序。Windows 依次探测 PATH 中的 `sh.exe`、`git --exec-path` 对应安装目录下的 `bin/sh.exe`，以及 Program Files 中的 Git Shell；其他平台探测 `/bin/sh`。每个候选都实际执行 `exit 0`，只返回能够运行的程序。
+- [data-root-fixture.ts](./data-root-fixture.ts) 分配独占临时用户根，组装离线模型的真实应用，并调用真实 CLI 子进程验证迁移副本。调用方先关闭源应用，再复制；帮助代码不操作用户真实 profile 或系统服务。
 
 ## 状态与新增代码
 

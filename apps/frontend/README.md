@@ -28,4 +28,6 @@
 
 在仓库根运行 `pnpm --filter @vykor/frontend build` 或 `pnpm --filter @vykor/frontend check-types`。单包测试使用 `pnpm --filter @vykor/frontend test`，需要 Bun。
 
+测试命令先加载 [隔离测试主机](src/__test__/setup-isolated-host.ts)，再导入界面。整个 Bun 进程使用独占临时 home、用户根和桌面环境目录，避免跨文件共享的频率缓存读写真实用户数据；退出时清理临时目录。频率存储用例在改变测试根前先关闭旧缓存。
+
 体验开发通过 `bun apps/cli/src/index.ts --tui` 启动完整连接流程；仅运行前端源码需要自行提供有效 daemon 连接配置。CLI 参数见 [CLI README](../cli/README.md)。

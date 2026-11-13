@@ -104,6 +104,8 @@ export async function ensure(options: EnsureServiceOptions = {}): Promise<Servic
   if (!options.file) {
     env.VYKOR_CONFIG_DIR = (await waitForDataRootSelection({ env: selectionEnv }, { deadline: end, signal: options.signal })).dataRoot;
     env.VYKOR_DATA_DIR = selectionEnv.VYKOR_DATA_DIR;
+    env.VYKOR_CHANNELS_DIR = selectionEnv.VYKOR_CHANNELS_DIR;
+    env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR = selectionEnv.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR;
     env.HOME = env.USERPROFILE = dataRootHome(selectionEnv);
   }
   const file = resolve(options.file ?? registryFileForRoot(env.VYKOR_CONFIG_DIR!, selectionEnv));
@@ -115,6 +117,8 @@ export async function ensure(options: EnsureServiceOptions = {}): Promise<Servic
     if (file === registryFileForRoot(selected.dataRoot, selectionEnv)) {
       env.VYKOR_CONFIG_DIR = selected.dataRoot;
       env.VYKOR_DATA_DIR = selectionEnv.VYKOR_DATA_DIR;
+      env.VYKOR_CHANNELS_DIR = selectionEnv.VYKOR_CHANNELS_DIR;
+      env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR = selectionEnv.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR;
       env.HOME = env.USERPROFILE = dataRootHome(selectionEnv);
       managed = { homeDir: dataRootHome(selectionEnv), dataRoot: selected.dataRoot };
     }

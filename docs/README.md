@@ -74,6 +74,7 @@
 - [认证、Provider 和 Model](./auth-provider-model.md)：配置文件、凭据来源和解析顺序。
 - [远程连接](./remote-attach.md)、[daemon 系统服务](./daemon-system-service.md)：连接发现和系统常驻。
 - [运维与恢复](./operations-and-recovery.md)：启动恢复、数据目录写入者、清理、备份和格式演进。
+- [用户数据根与迁移恢复](./data-root-migration.md)：统一位置、旧数据保留、桌面业务导出、绝对路径修复和恢复边界；[验收记录](./data-root-verification.md)说明实际平台范围；[实施记录](./superpowers/plans/2026-11-12-data-root-unification.md)保留任务与验收过程。
 - [未知工具结果阻断的决定](./tool-outcome-blocking-decision.md)：默认关闭的原因、保留的检查、设置入口与待重新评估的问题。
 - [开发数据重置](./development-data-reset.md)：人工预检及逐项授权的操作说明。
 - [诊断与可观测性](./observability.md)：运行追踪、日志、状态快照和排障。
@@ -88,7 +89,6 @@
 
 本节描述目标与验收要求，不代表代码已经实现；不能从创建日期或文件名推断完成状态。
 
-- [用户数据根统一与迁移实施计划](./superpowers/plans/2026-11-12-data-root-unification.md)：待实施；统一 `dataRoot`，补齐受管工作区与散落业务数据，保持临时聊天正文仅在内存，覆盖旧数据、绝对路径引用和中断恢复。
 - [运行中补充设计](./superpowers/specs/2026-11-10-running-follow-up-design.md)与[六项实施计划](./superpowers/plans/2026-11-10-running-follow-up.md)：待实施；经复杂度审核收缩，复用现有记录、事件和协议；先修三个前置问题，再接通主聊与侧聊，完全访问默认补充、其他授权默认排队，支持本条手动切换和可靠重试。
 - [有限客户端 UI 扩展设计](./superpowers/specs/2026-10-28-desktop-ui-extensions-design.md)：待评审；起始页视觉支持资源和脚本渲染，与独立宠物分开；明确会话视图和全局浮动 UI 的贡献、数据与生命周期。
 - [子代理与工作流生命周期调研及架构建议](./research/2026-10-27-agent-task-lifecycle-comparison.md)：对照五个参考项目，建议明确任务归属、稳定运行身份、分开执行额度与会话保留，并统一 Workflow 收尾；尚未修改生产代码。

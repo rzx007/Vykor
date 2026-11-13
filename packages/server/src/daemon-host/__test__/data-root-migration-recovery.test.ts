@@ -11,6 +11,8 @@ import * as api from "../data-root-migration.js";
 import { DaemonSystemService } from "../system-service.js";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 vi.mock("node:fs/promises", async importOriginal => ({ ...await importOriginal<typeof import("node:fs/promises")>() }));
 let root: string, source: string, target: string, home: string;
 const request = () => ({ homeDir: home, sourceRoot: source, targetRoot: target, environment: {}, legacy: { documentsDir: join(root, "Documents"), userDataDir: join(root, "Electron") } });
@@ -224,7 +226,8 @@ it("commits same-root selection with the moved marker only in its old backup, th
   expect(existsSync(join(source, "data/migrations/moved-root.json"))).toBe(false); expect(existsSync(join(journal.backupRoot, "data/migrations/moved-root.json"))).toBe(true);
   await api.markDataRootMigrationWritersReleased(migrated.journalPath, { homeDir: home });
   expect(resolveDataRootSelection({ homeDir: home, env: {} }).dataRoot).toBe(source);
-  await expect(api.recoverDataRootMigration(migrated.journalPath, { homeDir: home })).rejects.toThrow(/released/);
+  expect((await api.recoverDataRootMigration(migrated.journalPath, { homeDir: home })).phase).toBe("committed");
+  expect(resolveDataRootSelection({ homeDir: home, env: {} }).dataRoot).toBe(source);
 });
 it("can roll back after selection commit and survive a second interruption during recovery", async () => {
   target = source; const migrated = await api.migrateDataRoot(request(), stopped); await api.commitDataRootMigration(migrated.journalPath, { homeDir: home });
@@ -298,7 +301,7 @@ it.each(["id", "journalPath"])("requires the pending %s as well as the other jou
     expect(readDataRootSelector(home)).toEqual(selector);
   }
 });
-it("finishes its own interrupted release after writersReleased was persisted", async () => {
+async function interruptTargetRelease() {
   const migrated = await api.migrateDataRoot(request(), stopped);
   await api.commitDataRootMigration(migrated.journalPath, { homeDir: home });
   const rename = fs.rename;
@@ -311,8 +314,34 @@ it("finishes its own interrupted release after writersReleased was persisted", a
   expect(JSON.parse(readFileSync(migrated.journalPath, "utf8")).writersReleased).toBe(true);
   expect(readDataRootSelector(home)?.pendingMigration?.id).toBe(migrated.id);
   expect(() => resolveDataRootSelection({ homeDir: home, env: {} })).toThrow(/pending/);
-  expect((await api.markDataRootMigrationWritersReleased(migrated.journalPath, { homeDir: home })).writersReleased).toBe(true);
+  return migrated;
+}
+it("finishes its own interrupted target release through the local recover command", async () => {
+  const migrated = await interruptTargetRelease();
+  const cli = fileURLToPath(new URL("../../../../../apps/cli/src/index.ts", import.meta.url));
+  const loader = pathToFileURL(createRequire(import.meta.url).resolve("tsx")).href;
+  const { stdout } = await promisify(execFile)(process.execPath, ["--import", loader, cli, "data-root", "recover", "--journal", migrated.journalPath], {
+    env: { ...process.env, HOME: home, USERPROFILE: home, VYKOR_CONFIG_DIR: undefined, VYKOR_DATA_DIR: undefined, VYKOR_CHANNELS_DIR: undefined, VYKOR_IMAGE_ATTACHMENT_CACHE_DIR: undefined }, windowsHide: true, timeout: 45000,
+  });
+  expect(JSON.parse(stdout)).toMatchObject({ phase: "committed", writersReleased: true });
   expect(readDataRootSelector(home)?.pendingMigration).toBeUndefined();
+  writeFileSync(join(target, "new-user-data"), "legitimate new target write");
+  expect((await api.recoverDataRootMigration(migrated.journalPath, { homeDir: home })).phase).toBe("committed");
+  expect(readDataRootSelector(home)).toEqual({ version: 1, dataRoot: target });
+  expect(readFileSync(join(target, "new-user-data"), "utf8")).toBe("legitimate new target write");
+  expect(existsSync(join(source, "data/session-runtime/sessions.db"))).toBe(true);
+}, 60000);
+it.each(["new-pending", "wrong-root", "replaced-target"] as const)("preserves %s instead of forwarding an unrelated released journal", async kind => {
+  const migrated = await interruptTargetRelease();
+  const selected = readDataRootSelector(home)!;
+  if (kind === "new-pending") selected.pendingMigration = { id: "next-migration", journalPath: join(root, "next.json") };
+  if (kind === "wrong-root") selected.dataRoot = source;
+  if (kind !== "replaced-target") await writeDataRootSelector(home, selected);
+  else { await fs.rename(target, join(root, "retained-installed-target")); mkdirSync(target); }
+  writeFileSync(join(target, "new-user-data"), "preserve current target");
+  await expect(api.recoverDataRootMigration(migrated.journalPath, { homeDir: home })).rejects.toThrow(/selected|selection|identity|released|changed/i);
+  expect(readDataRootSelector(home)).toEqual(selected);
+  expect(readFileSync(join(target, "new-user-data"), "utf8")).toBe("preserve current target");
 });
 async function useExternalDatabase() {
   const databasePath = join(root, "custom/activity.sqlite");

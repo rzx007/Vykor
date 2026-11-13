@@ -9,6 +9,7 @@ const allowedImports = new Set([
   "@vykor/application-client/service",
   "@vykor/server",
   "@vykor/server/daemon-host",
+  "@vykor/server/migration-validation",
   "@vykor/host-config/paths",
 ])
 const allowedPackageDependencies = new Set(["@vykor/application-client", "@vykor/server", "@vykor/host-config"])

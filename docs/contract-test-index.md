@@ -10,6 +10,8 @@
 
 ## 环境相关测试
 
+数据根迁移的实际平台限制、命令退出码和最终验收状态单独记录在[用户数据根验收](./data-root-verification.md)，操作入口见[迁移与恢复](./data-root-migration.md)。
+
 `pnpm test` 按宿主平台运行工作区和跨包测试。补齐环境后应实际重跑，不能把平台跳过计为通过，也不能用模拟结果代替真实进程、文件系统或沙箱。
 
 - Windows 的[WSL 脚本边界测试](../packages/sandbox/src/environment/__test__/wsl-process-boundary.test.ts)和[文件操作测试](../packages/tools/src/file/__test__/operations.test.ts)通过[公共测试帮助代码](../tests/helpers/README.md)查找 Git 中实际可执行的 `sh`，支持非默认盘符安装，不要求复制到 C 盘。
@@ -17,6 +19,14 @@
 - [办公入口](../packages/plugins/src/__test__/office-work-entry.test.ts)和[研究写作插件](../packages/agent-runtime/src/node/plugins/native-tools/__test__/knowledge-work.test.ts)兼容性检查需要真实的独立 `vykor-plugins` 源码。运行前显式设置已有的 `VYKOR_OFFICIAL_PLUGINS_DIR` 指向该仓库的 `plugins` 目录，再执行 `pnpm test`。Turbo 传入该变量；这两个包的测试不缓存外部源码结果，不自动发现相邻目录或用户安装。
 - [Hooks 引号与注入安全](../packages/hooks/src/__test__/index.test.ts)的两项 POSIX 用例，以及[文件操作](../packages/tools/src/file/__test__/operations.test.ts)的可执行权限位用例，需要在 Linux 或 macOS 的 Node 中运行。Windows 的 `cmd` 和文件权限模型无法验证同一行为。在独立 Linux 检出中按锁文件安装依赖后，分别运行 `pnpm --filter @vykor/hooks exec vitest run src/__test__/index.test.ts` 和 `pnpm --filter @vykor/tools exec vitest run src/file/__test__/operations.test.ts`。
 - [SRT 端到端测试](../packages/sandbox/__test__/e2e/srt.e2e.test.ts)运行真实受限命令。在 Linux 或 WSL 的 Linux Node 中安装 `@anthropic-ai/sandbox-runtime`，并提供它实际使用的 `bubblewrap` 和 `socat`，再运行 `pnpm --filter @vykor/sandbox e2e:srt`；原生 Windows 不支持这一沙箱。缺少运行器时应阻止执行的 Hooks 测试显式指定不存在的运行器，避免与这项正常运行测试的环境前提冲突。
+
+## 统一数据根验收（A01–A28）
+
+- A01–A03、A27：路径派生与根选择见[路径](../packages/host-config/src/storage/__test__/user-data-paths.test.ts)、[启动选择](../packages/host-config/src/storage/__test__/data-root-selection.test.ts)、[SDK 连续迁移发现](../tests/server-client/__test__/data-root-discovery.test.ts)。独立安装与浏览器隔离由 `pnpm --filter @rzx/client verify:pack` 和 `pnpm test:client-browser` 验证。
+- A04–A08、A14–A16、A19：来源边界与外部路径见[来源预检](../packages/server/src/daemon-host/__test__/data-root-sources.test.ts)、[真实数据库改写](../packages/services/src/database/__test__/data-root-relocation.test.ts)、[文件改写](../packages/server/src/daemon-host/__test__/data-root-file-relocation.test.ts)、[复制与权限](../packages/server/src/daemon-host/__test__/data-root-migration.test.ts)。
+- A09–A13、A26：[草稿与同根恢复贯通](../tests/desktop-integration/__test__/data-root-migration.test.ts)、[实际源分类](../packages/server/src/daemon-host/__test__/legacy-desktop-export.test.ts)、[业务导出收据](../apps/desktop/src/main/features/business-data/__test__/desktop-export.test.ts)、[保存失败](../apps/desktop/src/main/features/business-data/__test__/write-failure.test.ts)。临时聊天还由[正式会话继续与临时正文检查](../tests/server-client/__test__/data-root-discovery.test.ts)覆盖；jsdom 验证不当作真实 Electron profile 实测。
+- A17–A18：[真实 Git 修复与回退](../packages/server/src/daemon-host/__test__/data-root-git-migration.test.ts)、[桌面历史文件打开](../apps/desktop/src/main/features/workspace/__test__/history-paths.test.ts)，以及连续两次迁移的历史路径映射链。
+- A20–A25、A28：[后台停写与真实验证进程](../packages/server/src/daemon-host/__test__/data-root-coordination.test.ts)、[逐阶段恢复](../packages/server/src/daemon-host/__test__/data-root-migration-recovery.test.ts)、[服务定义](../packages/server/src/daemon-host/__test__/system-service-migration.test.ts)、[桌面实际迁移入口](../apps/desktop/src/main/features/settings/__test__/data-root-settings-migration.test.ts)与[有界死亡锁恢复](../packages/host-config/src/storage/__test__/data-root-lock-recovery.test.ts)。
 
 ## 生命周期契约编号
 

@@ -1,13 +1,19 @@
 # Operations and Recovery
 
-> 状态：当前 daemon 启动、停机、恢复、清理和备份的权威操作手册。最后核对：2026-08-23。
+> 状态：当前 daemon 启动、停机、恢复、清理和备份的权威操作手册。数据根流程核对：2026-11-13。
+
+## 用户数据根
+
+所有默认用户数据从 `dataRoot` 派生，默认 `~/.vykor`；`data/` 是它的子目录。进程启动按显式首位 `--data-root`、`VYKOR_CONFIG_DIR`、home 定位记录、默认值选根，选定后保持不变。Electron 缓存与窗口偏好仍在原位置，临时聊天正文仍只放内存。
+
+整根迁移使用本机 `vk data-root inspect/migrate/recover` 流程，默认保留源副本。待完成记录会阻止普通启动；目标放行新写入后不再自动回退。具体语法、桌面草稿导出、路径修复和失败阶段处理见[用户数据根与迁移恢复](./data-root-migration.md)，实际平台范围见[验收记录](./data-root-verification.md)。不要把旧的仅切换数据库目录操作当作整根迁移。
 
 ## 最重要的原则
 
 - 同一个数据目录同一时刻只允许一个 Durable Application 写入。
 - 重启只恢复记录，不复活已经消失的模型请求、Tool 进程或 live Handle。
 - 看见 `running` 不代表一定还在跑；必须同时检查 Application owner 和 live runtime。
-- 每次打开应用迁移链；不做旧库接管。与当前基线不匹配的库会带提示失败，删除重建即可；不要手改 __drizzle_migrations。
+- 每次打开应用迁移链；不做不明格式的旧库接管。与当前基线不匹配时保留原库和副本并按错误处理，不因迁移失败删除源；不要手改 __drizzle_migrations。
 
 ## 启动到 ready 的顺序
 

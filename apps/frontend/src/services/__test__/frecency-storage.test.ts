@@ -9,6 +9,8 @@ test("close flushes the bound root and reopens without cached data or an old tim
   const first = join(base, "first"), second = join(base, "second"), home = join(base, "home"); mkdirSync(home);
   const env = { config: process.env.VYKOR_CONFIG_DIR, home: process.env.HOME, profile: process.env.USERPROFILE };
   try {
+    // Earlier UI tests can read the module cache. Dispose that owned test root first.
+    frecency.closeFrecency();
     process.env.HOME = home; process.env.USERPROFILE = home; process.env.VYKOR_CONFIG_DIR = first;
     frecency.record("command", "first-command");
     process.env.VYKOR_CONFIG_DIR = second;

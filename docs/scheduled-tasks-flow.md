@@ -45,6 +45,8 @@ sequenceDiagram
 
 ## 当前边界
 
+- 无项目任务的工作目录由同一个 `dataRoot/workspaces` 分配，默认受管 Git worktree 位于 `dataRoot/worktrees`；真实项目路径保持原位置。整根迁移连同任务记录中的受管结构化路径和 Git 登记一起处理，保留旧数据，见[迁移与恢复](./data-root-migration.md)。
+
 - 已支持本地项目执行，以及结果进入独立对话或返回关联对话。
 - `executionMode=worktree` 仅用于独立对话。每次运行创建独立 Git worktree；无改动时自动清理，有改动时保留分支和目录供审查。项目不是 Git 仓库或 worktree 创建失败时会标记为“需要处理”，不会悄悄退化为本地执行。
 - `permissionProfile` 会映射到 Agent 的只读、工作区可写或完全访问模式；任务可进一步限制工具。`network=false` 会禁用 Agent 的 WebFetch/WebSearch。

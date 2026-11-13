@@ -28,6 +28,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   for (const endpoint of endpoints) {
     try { process.kill(endpoint.pid, "SIGKILL"); } catch {}
     for (let attempt = 0; attempt < 50; attempt++) {
@@ -48,7 +49,51 @@ async function start(version = "1.2.3", protocol = String(CURRENT_PROTOCOL_VERSI
   throw new Error("Fixture did not start");
 }
 
+async function installCapturingCli(registry: string, record: string, verifyRealGuard = false) {
+  const cli = join(directory, "node_modules/@rzx/ohs"); await mkdir(cli, { recursive: true });
+  await writeFile(join(cli, "package.json"), JSON.stringify({ name: "@rzx/ohs", bin: { vk: "cli.mjs" } }));
+  const realCli = fileURLToPath(new URL("../../../../../apps/cli/src/index.ts", import.meta.url));
+  const loader = new URL("../../../../../apps/cli/node_modules/tsx/dist/loader.mjs", import.meta.url).href;
+  await writeFile(join(cli, "cli.mjs"), `import {writeFile} from 'node:fs/promises';
+await writeFile(${JSON.stringify(record)},JSON.stringify({channels:process.env.VYKOR_CHANNELS_DIR??null,images:process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR??null}));
+${verifyRealGuard ? `const {spawnSync}=await import('node:child_process');const child=spawnSync(process.execPath,['--import',${JSON.stringify(loader)},${JSON.stringify(realCli)},'serve','--register'],{stdio:'inherit',windowsHide:true,timeout:5000});process.exit(child.status??1);`
+    : `process.argv=[process.execPath,${JSON.stringify(fixture)},${JSON.stringify(registry)},'1.2.3','${CURRENT_PROTOCOL_VERSION}'];await import(${JSON.stringify(pathToFileURL(fixture).href)});`}`);
+  return join(cli, "cli.mjs");
+}
+
 describe("local service management", () => {
+  it.each([
+    { canonical: false, inherited: "old" }, { canonical: false, inherited: "empty" },
+    { canonical: true, inherited: "old" }, { canonical: true, inherited: "empty" },
+  ])("uses only explicit managed directory environment: canonical=$canonical inherited=$inherited", async ({ canonical, inherited }) => {
+    const registry = join(directory, ".vykor/data/daemon/registry.json"), record = join(directory, "child-env.json");
+    vi.stubEnv("VYKOR_CHANNELS_DIR", inherited === "empty" ? "" : join(directory, "global-channels"));
+    vi.stubEnv("VYKOR_IMAGE_ATTACHMENT_CACHE_DIR", inherited === "empty" ? "" : join(directory, "global-images"));
+    await installCapturingCli(registry, record);
+    const endpoint = await Service.ensure({ ...(canonical ? { file: registry } : {}), cwd: directory,
+      env: { HOME: directory, USERPROFILE: directory }, timeoutMs: 5000 }); endpoints.push(endpoint);
+    expect(JSON.parse(await readFile(record, "utf8"))).toEqual({ channels: null, images: null });
+  });
+
+  it("preserves explicit managed old pins so the real CLI directory guard refuses them", async () => {
+    const registry = join(directory, ".vykor/data/daemon/registry.json"), record = join(directory, "child-env.json"), logPath = join(directory, "guard.log");
+    vi.stubEnv("VYKOR_CHANNELS_DIR", ""); vi.stubEnv("VYKOR_IMAGE_ATTACHMENT_CACHE_DIR", "");
+    await installCapturingCli(registry, record, true);
+    const env = { HOME: directory, USERPROFILE: directory, VYKOR_CHANNELS_DIR: join(directory, "explicit-old-channels"), VYKOR_IMAGE_ATTACHMENT_CACHE_DIR: join(directory, "explicit-old-images") };
+    await expect(Service.ensure({ cwd: directory, env, logPath, timeoutMs: 10000 })).rejects.toThrow(/exited/);
+    expect(JSON.parse(await readFile(record, "utf8"))).toEqual({ channels: env.VYKOR_CHANNELS_DIR, images: env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR });
+    expect(await readFile(logPath, "utf8")).toMatch(/VYKOR_CHANNELS_DIR.*VYKOR_IMAGE_ATTACHMENT_CACHE_DIR/s);
+    await expect(readFile(registry)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("keeps caller-managed directory environment merging independent of managed root selection", async () => {
+    const record = join(directory, "child-env.json"), inherited = join(directory, "global-channels");
+    vi.stubEnv("VYKOR_CHANNELS_DIR", inherited); vi.stubEnv("VYKOR_IMAGE_ATTACHMENT_CACHE_DIR", "");
+    const command = await installCapturingCli(file, record);
+    const endpoint = await Service.ensure({ file, command: [process.execPath, command], env: { HOME: directory, USERPROFILE: directory, VYKOR_CONFIG_DIR: "relative-caller-root" }, timeoutMs: 5000 }); endpoints.push(endpoint);
+    expect(JSON.parse(await readFile(record, "utf8"))).toEqual({ channels: inherited, images: "" });
+  });
+
   it("starts an explicit canonical registry with no root environment or custom command", async () => {
     const root = join(directory, ".vykor"), registry = join(root, "data/daemon/registry.json");
     const cli = join(directory, "node_modules/@rzx/ohs"); await mkdir(cli, { recursive: true });

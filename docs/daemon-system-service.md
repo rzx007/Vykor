@@ -4,7 +4,7 @@
 
 ## 一句话结论
 
-`~/.vykor/settings.json` 中的 `daemon.autoStart` 决定主 daemon 是否交给操作系统常驻。开启后，Vykor 会在当前用户登录时启动主 daemon；daemon 意外退出时，Windows 计划任务、macOS LaunchAgent 或 Linux systemd user service 会重新启动它。
+`dataRoot/settings.json`（默认 `~/.vykor/settings.json`）中的 `daemon.autoStart` 决定主 daemon 是否交给操作系统常驻。开启后，Vykor 会在当前用户登录时启动主 daemon；daemon 意外退出时，Windows 计划任务、macOS LaunchAgent 或 Linux systemd user service 会重新启动它。服务命令显式携带同一个数据根，不依赖操作系统服务进程猜测当前目录。
 
 TUI、Web 和 Desktop 可以连接同一个本机 daemon。已安排任务和 Agent 在该进程内执行。
 
@@ -72,7 +72,7 @@ flowchart TD
     Health --> Ready["TUI / Web / Desktop 可以连接"]
 ```
 
-macOS 和 Linux 会把普通输出追加到 `~/.vykor/data/logs/daemon.log`。Windows 的每次计划任务只做一次健康检查：daemon 正常就立即退出，不正常才启动 daemon。Windows 通过系统自带的无窗口脚本宿主运行检查，因此每分钟执行时不会弹出终端窗口。服务端自己的结构化日志仍使用原来的日志目录。
+macOS 和 Linux 会把普通输出追加到 `dataRoot/data/logs/daemon.log`。Windows 的每次计划任务只做一次健康检查：daemon 正常就立即退出，不正常才启动 daemon；无窗口启动器位于 `dataRoot/data/daemon/daemon-watchdog.vbs`，检查与普通后台使用同一根。服务端自己的结构化日志仍使用根内日志目录。
 
 ## TUI 自动连接时怎么处理
 
@@ -94,7 +94,7 @@ Desktop 和 CLI 的默认本机后台共用登记位置。登记记录包含实�
 
 同一后台运行时可以由系统服务或客户端按需启动。桌面无需在发现兼容 CLI 后台时重启它。若登记进程仍存活但后台暂时不可达，连接报告可重试状态。显式远程监听和自定义 CLI 数据库沿用各自的启动参数。
 
-切换恢复后的数据目录前先停用系统常驻。按需后台确认任务和终端已经安全收尾后，在同一进程内打开目标数据目录，再登记新地址和 token。目标数据库必须在 SQLite 打开时存在。目标启动失败时尝试恢复旧数据位置。界面在后台重新就绪后重建订阅。
+整根迁移由[本机迁移协调器](./data-root-migration.md)先私有备份服务原定义，再暂停常驻并等待已核对身份的后台退出。目标服务定义携带目标根，独立验证通过后才提交和启动新进程；父进程不原地换库。原本未安装或未启用的服务不会被迁移顺带启用。目标写入一旦放行，启动失败只做向前修复，不能自动切回旧副本；源在恢复中放行后也遵守相同的新写入保护。
 
 ## 崩溃和正常停止
 

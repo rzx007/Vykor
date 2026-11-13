@@ -261,7 +261,7 @@ console.log(await client.sessions.list());
 | `Service.clientOptions(endpoint)` | 返回可直接传给 `new VykorClient()` 的地址和 token |
 | `Service.stop(endpoint, options?)` | 核对登记身份和鉴权后停止该进程；实例已替换时返回 `false` |
 
-登记路径依次使用 `VYKOR_DATA_DIR/daemon/registry.json`、`VYKOR_CONFIG_DIR/data/daemon/registry.json`、`~/.vykor/data/daemon/registry.json`。`file` 可显式指定登记文件。Endpoint 含 token，应按凭据保管。
+默认登记固定在所选 `dataRoot/data/daemon/registry.json`。Node SDK 按 `VYKOR_CONFIG_DIR`、home 的 `.vykor-root.json` 定位记录和默认 `~/.vykor` 选根，与 Desktop、CLI 和系统服务一致；根外旧 `VYKOR_DATA_DIR` 需通过[整根迁移](./data-root-migration.md)归并。`file` 可显式指定调用者管理的独立登记文件；恰为默认登记且未提供 command 时仍可使用默认启动命令。Endpoint 含 token，应按凭据保管。
 
 `ensure` 的默认命令从 `cwd`（默认 `process.cwd()`）定位已安装的 `@rzx/ohs`，用当前 Node 运行 CLI 的 `serve --register --host 127.0.0.1 --port 0`。它不依赖调用者的 `process.argv[1]`，不修改系统自启动设置，也不会结束已有但不兼容的后台。
 
@@ -270,7 +270,7 @@ const endpoint = await Service.ensure({
   cwd: "/path/to/application", // 在这里查找 @rzx/ohs
   version: version => version.startsWith("1."), // 可选 CLI 版本限制
   timeoutMs: 15_000,
-  env: { VYKOR_DATA_DIR: "/path/to/isolated-vykor-data" },
+  env: { VYKOR_CONFIG_DIR: "/path/to/isolated-vykor-root" },
 });
 ```
 
@@ -284,7 +284,11 @@ const endpoint = await Service.ensure({
 });
 ```
 
-命令直接执行，不做 shell 展开；Windows 上使用 Node 和 CLI 文件路径，避免依赖 `.cmd` 包装。自定义 `file` 时，自定义命令必须把实例写到该文件；默认 CLI 可通过 `env.VYKOR_DATA_DIR` 选择对应位置。
+命令直接执行，不做 shell 展开；Windows 上使用 Node 和 CLI 文件路径，避免依赖 `.cmd` 包装。自定义 `file` 时，自定义命令必须把实例写到该文件；默认 CLI 可通过 `env.VYKOR_CONFIG_DIR` 选择整个用户根。
+
+默认根的启动和停止先取得 home 写入资格，再进入登记控制锁；迁移待完成或根已搬走时拒绝启动空副本。等待共用同一个总截止时间并接收 AbortSignal，取消后不会继续在后台排队拿资格。Windows 已在执行的单次权限检查需结束后再响应取消。浏览器主入口不含 Node 路径模块，独立 Node 安装无需未发布的工作区包。
+
+发现根和传给默认 CLI 的旧目录覆盖使用同一份 `env`。显式环境未提供的渠道、图片缓存覆盖不会从全局环境补回；显式提供的旧值仍交给启动保护校验，不会静默丢弃。
 
 同一 Node 进程内，对同一文件的并发 `ensure` 共享一次启动；启动命令、环境和启动取消信号采用首个发起者的设置。后来加入的调用者可以用自己的 signal 结束等待，不影响原发起者。`timeoutMs` 默认启动等待 10 秒、单次探测 1 秒、停止等待 5 秒。启动超时、取消或子进程退出会清理本次启动的子进程；失败时不会替换活着的登记实例。
 

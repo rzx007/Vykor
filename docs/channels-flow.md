@@ -32,7 +32,7 @@ vk channels add feishu
 - 默认走**扫码创建应用**：终端显示二维码与授权链接，用飞书 App 扫码确认后，daemon 拿到新应用的 `appId`/`appSecret`。
 - 也可选择**手填** `App ID` / `App Secret`，并选地区（国内 `feishu` / 国际 `lark`）；手填会**当场校验**（换 tenant access token），校验失败不写任何配置。
 - 扫码路径默认把**扫码者本人**加入白名单；其他人或群用 `vk channels allow <ou_...|oc_...>` 添加。
-- 渠道配置与密钥统一写入默认 `~/.vykor/channel-credentials.json`（受 `VYKOR_CONFIG_DIR` 覆盖，v2，POSIX `0600`）；`settings.json` 不再承载 `channels`。
+- 渠道配置与密钥统一写入 `dataRoot/channel-credentials.json`（默认 `~/.vykor/channel-credentials.json`，v2，POSIX `0600`）；`settings.json` 不再承载 `channels`。根选择和旧目录归并见[用户数据根](./data-root-migration.md)。
 - Desktop 的「设置 → 连接」提供同样的扫码/手填、状态、白名单与启停能力。
 
 ## 一条消息实际怎么走
@@ -75,10 +75,10 @@ daemon close()
 渠道消息没有“当前项目”，所以每个外部会话使用专用工作目录：
 
 ```text
-<VYKOR_CHANNELS_DIR 或 <文档>/Vykor/channels>/<connector>/<sanitize(chatId)>-<hash(会话键)>/
+<dataRoot>/channels/<connector>/<sanitize(chatId)>-<hash(会话键)>/
 ```
 
-会话键与 Session 分类键一致（`connector + accountId + chatId + threadId`），hash 后缀避免不同会话落到同一目录；目录按需创建。默认放在 Desktop 的"项目外工作区"根（`<文档>/Vykor`）下，因此渠道会话被当作项目外会话：不进「项目」，对应自动创建的项目行也会被隐藏。旧的 `~/.vykor/channels` 目录不迁移。
+会话键与 Session 分类键一致（`connector + accountId + chatId + threadId`），hash 后缀避免不同会话落到同一目录；目录按需创建。渠道会话属于受管的项目外会话，不进「项目」，对应自动创建的项目行也会被隐藏。旧 Documents/Vykor/channels 和根外 `VYKOR_CHANNELS_DIR` 是迁移来源，须经整根迁移归并，原副本保留。
 
 ## Desktop 的「IM 会话」分区
 
@@ -230,7 +230,7 @@ Desktop 的「设置 → 连接」页展示同样的信息，并可启停、增�
 | 应用服务 | `packages/server/src/application/channel/channel-application-service.ts` | 映射 Session、幂等准入、等待 Run、保存回复 |
 | Desktop 服务 | `apps/desktop/src/main/features/channels/channel-service.ts` | 经 daemon HTTP 调渠道接口、生成二维码、拒绝高水位 |
 | Desktop 页面 | `apps/desktop/src/renderer/src/components/desktop/settings-page/connections/connections-settings.tsx` | 「连接」板块：接入、状态、白名单、启停、被拒提示 |
-| 工作目录根 | `packages/host-config/src/storage/paths.ts` | `resolveChannelWorkspaceRoot()`（默认项目外根下的 `channels`） |
+| 工作目录根 | `packages/host-config/src/storage/paths.ts` | 产品通过 `getChannelsDir()` 使用 `dataRoot/channels`；显式嵌入目录由调用方负责 |
 | Desktop IM 分区 | `apps/desktop/src/renderer/src/components/desktop/layout/main-layout/sidebar/sidebar.tsx` | 「IM 会话」分区：按平台分组 |
 | 数据库 | `packages/services/src/session-runtime/migrations/0000_current_schema.sql` | 迁移链基线（起点），包含聊天映射和回复状态 |
 

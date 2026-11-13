@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, expect, it } from "vitest";
@@ -48,7 +48,7 @@ it("resolves old native history paths without authorizing prefix siblings, trave
   expect(await resolveHistory("run --cwd old", dataRoot)).toBe("run --cwd old");
   symlinkSync(outside, old, "junction");
   await expect(resolveHistory(join(old, "file.txt"), dataRoot)).rejects.toThrow(/escape|scope/i);
-  rmSync(old);
+  unlinkSync(old);
   symlinkSync(outside, join(moved, "escape"), "junction");
   await expect(resolveHistory(join(old, "escape/missing.txt"), dataRoot)).rejects.toThrow(/escape|scope/i);
   // A moved scope that is itself replaced by a link must not authorize a different subtree.

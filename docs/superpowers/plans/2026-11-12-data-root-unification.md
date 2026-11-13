@@ -2,7 +2,7 @@
 
 > **面向 AI 代理的工作者：** 实施时使用 `subagent-driven-development` 或 `executing-plans` 逐任务推进；复选框表示尚未执行的工作。用户已于 2026-11-12 授权按计划实施；只在临时数据上验证迁移，不操作真实用户资料。
 >
-> 状态：实施中，按 2026-11-12 的源码扫描和用户确认范围推进；完成项以逐任务记录和测试证据为准。
+> 状态：已实现并完成自动回归（2026-11-13）；实际平台覆盖和原始失败记录见[验收记录](../../data-root-verification.md)。Windows 跨盘完整提交及真实 Electron profile/图形重启不计作已完成。
 
 **目标：** 用一个 `dataRoot` 决定 Vykor 用户业务数据的位置，补齐受管工作区和散落的数据，提供可检查、可恢复的迁移；临时聊天正文继续仅在内存中，桌面缓存和窗口偏好保持原位置。
 
@@ -292,7 +292,7 @@ inspect 只做文件信息、已有记录和只读文件内容检查，不实例
 
 ## 6. 文件组织与职责
 
-以下“新增”为未来实现文件，本轮不创建这些源码。测试都放所属分类的 `__test__/`。
+以下为实施文件的职责分工；按任务创建和修改，测试都放所属分类的 `__test__/`。
 
 | 分类 | 新增或修改文件 | 职责 |
 | --- | --- | --- |
@@ -321,11 +321,11 @@ inspect 只做文件信息、已有记录和只读文件内容检查，不实例
 
 **修改：** `packages/host-config/src/storage/paths.ts`、`src/index.ts`、`package.json`、storage 与包 README。**新增测试：** `packages/host-config/src/storage/__test__/user-data-paths.test.ts`；扩展已有 `paths.test.ts`。
 
-- [ ] 写路径测试：所有用户默认路径处于指定 `dataRoot` 内；项目目录仍按传入项目计算；中文、空格、Windows 盘符和不同 cwd 不改变用户根。
-- [ ] 运行 `pnpm --filter @vykor/host-config exec vitest run src/storage/__test__/paths.test.ts src/storage/__test__/user-data-paths.test.ts`，确认缺失新字段/接口的测试失败。
-- [ ] 实现第 3.3 节接口与轻量 exports；用户根计算不创建目录，不把项目 memoryDir 混入与 cwd 无关的用户路径缓存。相同根的多次求值一致，显式不同根不会命中旧缓存。
-- [ ] 将 `cache`、`channels`、`workspaces`、`worktrees`、`desktopDataDir` 和扫描遗漏的文件路径补入同一模块。已有 named getter 委托同一份路径规则。
-- [ ] 重跑本任务测试及 `pnpm --filter @vykor/host-config check-types`。提交范围只含本任务文件，提交说明建议 `feat(config): 统一用户数据根路径定义`。
+- [x] 写路径测试：所有用户默认路径处于指定 `dataRoot` 内；项目目录仍按传入项目计算；中文、空格、Windows 盘符和不同 cwd 不改变用户根。
+- [x] 运行 `pnpm --filter @vykor/host-config exec vitest run src/storage/__test__/paths.test.ts src/storage/__test__/user-data-paths.test.ts`，确认缺失新字段/接口的测试失败。
+- [x] 实现第 3.3 节接口与轻量 exports；用户根计算不创建目录，不把项目 memoryDir 混入与 cwd 无关的用户路径缓存。相同根的多次求值一致，显式不同根不会命中旧缓存。
+- [x] 将 `cache`、`channels`、`workspaces`、`worktrees`、`desktopDataDir` 和扫描遗漏的文件路径补入同一模块。已有 named getter 委托同一份路径规则。
+- [x] 重跑本任务测试及 `pnpm --filter @vykor/host-config check-types`。提交范围只含本任务文件，提交说明建议 `feat(config): 统一用户数据根路径定义`。
 
 代表性测试，下面的接口由本任务新增：
 
@@ -350,12 +350,12 @@ it("derives managed workspaces and runtime data from the same user root", () => 
 
 **新增：** `packages/host-config/src/storage/data-root-selection.ts`、`__test__/data-root-selection.test.ts`。**修改：** CLI 入口 `apps/cli/src/index.ts` 与 `src/commands/daemon.ts`；Desktop `apps/desktop/src/main/index.ts`、`features/daemon-autostart/daemon-entry.ts`；`packages/client/src/service/registry.ts`、`service.ts`、`package.json` 和已有 service 测试。
 
-- [ ] 先写选择优先级、损坏定位记录、进行中迁移、已迁出源根、两个启动者争用稳定锁的测试。覆盖“找不到旧库时不能创建空库”的失败分支。
-- [ ] 实现定位文件原子读写，沿用现有文件锁；定位记录的父目录和文件权限收敛到本机用户。空字符串和相对根路径在产品参数边界报错，显示参数来源。
-- [ ] 所有产品入口先初始化选择，再导入或创建会持有路径的 store。Node 子进程、系统服务 invocation 与后续重启传递同一个明确根。
-- [ ] Node SDK 通过轻量路径入口读取相同选择；沿用 `registryFile(env)` 的可测试调用方式，为显式传入 env 的调用者也使用同一优先级，不读取另一套全局 env。
-- [ ] SDK 只增加构建时工作区引用，由现有 esbuild 打包内联；不能把 `@vykor/host-config` 变成用户必须另装的发布依赖，不能让浏览器入口引入 Node 代码。
-- [ ] 运行 host-config 根选择测试、`pnpm --filter @rzx/client test`、`pnpm --filter @rzx/client verify:pack`、`pnpm test:client-browser`。检查 CLI 与 Desktop 类型；提交说明建议 `feat(startup): 统一用户根定位与服务发现`。
+- [x] 先写选择优先级、损坏定位记录、进行中迁移、已迁出源根、两个启动者争用稳定锁的测试。覆盖“找不到旧库时不能创建空库”的失败分支。
+- [x] 实现定位文件原子读写与排他锁；仅为本程序新建文件和新建专用目录收敛权限，保留既有 home 的 POSIX 模式与 Windows ACL。定位记录和锁文件仅当前用户及必要系统主体可访问；Windows 需实际设置或校验文件 ACL，不能将 mode=0600 当作已收敛。无法满足时明确失败，不修改既有 home 权限。空字符串和相对根路径在产品参数边界报错，显示参数来源。
+- [x] 所有产品入口先初始化选择，再导入或创建会持有路径的 store。Node 子进程、系统服务 invocation 与后续重启传递同一个明确根。
+- [x] Node SDK 通过轻量路径入口读取相同选择；沿用 `registryFile(env)` 的可测试调用方式，为显式传入 env 的调用者也使用同一优先级，不读取另一套全局 env。
+- [x] SDK 只增加构建时工作区引用，由现有 esbuild 打包内联；不能把 `@vykor/host-config` 变成用户必须另装的发布依赖，不能让浏览器入口引入 Node 代码。
+- [x] 运行 host-config 根选择测试、`pnpm --filter @rzx/client test`、`pnpm --filter @rzx/client verify:pack`、`pnpm test:client-browser`。检查 CLI 与 Desktop 类型；提交说明建议 `feat(startup): 统一用户根定位与服务发现`。
 
 ```ts
 import { resolve } from "node:path";
@@ -377,11 +377,11 @@ it("uses the same explicit environment before a saved default selection", () => 
 
 **修改：** `packages/auth/src/credentials/credential-storage.ts`、`packages/personalization/src/index.ts`、`packages/skills/src/index.ts`、`packages/output-styles/src/index.ts`、`apps/frontend/src/services/frecency.ts`、`packages/api/src/providers/recordings/capture-probe.ts`、`apps/cli/src/commands/main.ts`；核对 prompts、runtime secrets、agents 和 memory 的已有路径调用。**测试：** 各被测模块同分类的 `__test__/`，扩展现有测试，不新建一个跨全仓目录工具包。
 
-- [ ] 先写根切到临时目录后的实际读写测试：输出样式、凭据、frecency、规则、USER/SOUL、待审批更新、环境密钥、用户 Agent、技能、模型缓存均读到目标；真实 home 不产生新文件。
-- [ ] 把自行拼 `homedir()/.vykor` 和自行读取根变量的生产调用改为规范入口。区分外部 Codex 凭据、共享技能等有意保留的 home 路径，不能全仓替换 homedir。
-- [ ] 让旧独立覆盖进入来源检查，不在模块中继续各自覆盖目标。保留测试和嵌入 API 显式传路径的能力；产品启动发现根外覆盖时返回来源明细。
-- [ ] 关闭/重建凭据和 OAuth store、渠道 store、frecency 内存数据及延迟保存定时器后才允许切换，不保留指向旧根的 debounce 写入。
-- [ ] 运行受影响包测试与类型检查；用精确搜索确认产品根解析仅留在规范入口和明确标注的迁移来源读取中。提交说明建议 `refactor(storage): 收拢用户业务数据读写路径`。
+- [x] 先写根切到临时目录后的实际读写测试：输出样式、凭据、frecency、规则、USER/SOUL、待审批更新、环境密钥、用户 Agent、技能、模型缓存均读到目标；真实 home 不产生新文件。
+- [x] 把自行拼 `homedir()/.vykor` 和自行读取根变量的生产调用改为规范入口。区分外部 Codex 凭据、共享技能等有意保留的 home 路径，不能全仓替换 homedir。
+- [x] 让旧独立覆盖进入来源检查，不在模块中继续各自覆盖目标。保留测试和嵌入 API 显式传路径的能力；产品启动发现根外覆盖时返回来源明细。
+- [x] 关闭/重建凭据和 OAuth store、渠道 store、frecency 内存数据及延迟保存定时器后才允许切换，不保留指向旧根的 debounce 写入。
+- [x] 运行受影响包测试与类型检查；用精确搜索确认产品根解析仅留在规范入口和明确标注的迁移来源读取中。提交说明建议 `refactor(storage): 收拢用户业务数据读写路径`。
 
 本任务测试至少包含以下实际动作，不能只断言路径字符串：
 
@@ -399,11 +399,11 @@ it("uses the same explicit environment before a saved default selection", () => 
 
 **测试：** 扩展 `outside-project-workspace.test.ts`、`session-operations-modes.test.ts`、`session-operations-worktree.test.ts`；新增纯路径和并发分配测试到相应 `__test__/`，扩展渠道与定时任务既有测试。
 
-- [ ] 先测无项目创建的 cwd 位于 `root/workspaces/日期/xN`，并发请求不会共用目录；日期继续按用户本地时区，失败只清理本次新建的空目录。
-- [ ] 将分配器参数改为“工作区根”，禁止再默认拼 Documents 或重复附加 Vykor。渠道直接用 channelsDir，定时任务用同一个 workspacesDir。
-- [ ] 默认任务 worktree 使用 worktreesDir；调用 manager 的参数语义要核对，避免得到 `worktrees/worktrees`。真实项目内工具创建的项目级 worktree 保持原语义。
-- [ ] 项目外会话隐藏、渠道项目隐藏、文件分类、工作区额外访问范围和 bootstrap 返回的根一起更新；旧路径识别只从迁移映射读取，不再把所有 Documents/Vykor 永久当新默认。
-- [ ] 运行 Desktop 对应会话与 Git 测试、server 渠道/定时任务测试，以及受影响包类型检查。提交说明建议 `feat(workspaces): 将受管工作区纳入用户数据根`。
+- [x] 先测无项目创建的 cwd 位于 `root/workspaces/日期/xN`，并发请求不会共用目录；日期继续按用户本地时区，失败只清理本次新建的空目录。
+- [x] 将分配器参数改为“工作区根”，禁止再默认拼 Documents 或重复附加 Vykor。渠道直接用 channelsDir，定时任务用同一个 workspacesDir。
+- [x] 默认任务 worktree 使用 worktreesDir；调用 manager 的参数语义要核对，避免得到 `worktrees/worktrees`。真实项目内工具创建的项目级 worktree 保持原语义。
+- [x] 项目外会话隐藏、渠道项目隐藏、文件分类、工作区额外访问范围和 bootstrap 返回的根一起更新；旧路径识别只从迁移映射读取，不再把所有 Documents/Vykor 永久当新默认。
+- [x] 运行 Desktop 对应会话与 Git 测试、server 渠道/定时任务测试，以及受影响包类型检查。提交说明建议 `feat(workspaces): 将受管工作区纳入用户数据根`。
 
 验收脚本：使用同一临时根创建两个无项目聊天、一个渠道聊天、一个无项目定时任务、一个项目任务 worktree；断言五者位置正确、界面项目分类正确、真实项目 cwd 未搬。暂存与最终迁移目录不能出现在项目列表中。
 
@@ -431,15 +431,15 @@ interface BusinessDataApi {
 }
 ```
 
-- [ ] 先测 IPC 无法传路径逃逸；同一记录并发写串行；旧 revision 被拒绝，不能静默覆盖另一窗口的新草稿；写盘失败时返回失败而非成功回执。
-- [ ] 以原子文件替换保存各业务种类。保留现有恢复格式的 ID、顺序和内容；不要把 localStorage 的所有键导入。应用窗口选择状态、滚动位置与浏览器偏好不迁。
-- [ ] 将现有同步恢复改成初始化时 await 读取；加载完成前不以空草稿覆盖已有记录。`saveComposerRecovery()` 的调用方全部等待持久化成功，特别是 `prompt-submission.ts` 中保存原 inputId 后才能发 IPC 的约束。
-- [ ] 保留临时会话和 linked-chat 草稿过滤；不能把目标临时会话正文藏进普通 source 会话草稿导出。普通新会话草稿继续恢复。
-- [ ] 使用已有 schema 读取旧 composer、main/quick 笔记、图片批注键，写入新根并核对摘要后标记导入。重启或重复导入不能用旧 localStorage 覆盖更新的目标记录；保留旧数据供恢复，不调用 localStorage.clear。
-- [ ] 批注继续按图片字节的 SHA-256 标识，沿用 `image-annotations.ts` 的算法；导入时只剥离已知 localStorage 键前缀作为受限 imageKey。不能改成按绝对图片路径命名，否则文件搬迁后会找不到原批注。
-- [ ] 窗口关闭与迁移前等待 flush；保存失败时保留编辑内容，停止发送/迁移并显示现有错误反馈。不能在 beforeunload 中启动一个无人等待的异步写入。
-- [ ] `git-settings.json` 的业务记录改存 desktopDataDir；可以整体保留现有 Git 偏好和 worktrees 结构，不为窗口偏好增加迁移。旧文件导入遵循相同确认规则。
-- [ ] 扩展 composer-recovery、temporary-chat-state、笔记恢复、批注和主进程业务服务测试；检查 preload/shared/renderer 类型。提交说明建议 `feat(desktop): 将用户业务恢复数据保存到数据根`。
+- [x] 先测 IPC 无法传路径逃逸；同一记录并发写串行；旧 revision 被拒绝，不能静默覆盖另一窗口的新草稿；写盘失败时返回失败而非成功回执。
+- [x] 以原子文件替换保存各业务种类。保留现有恢复格式的 ID、顺序和内容；不要把 localStorage 的所有键导入。应用窗口选择状态、滚动位置与浏览器偏好不迁。
+- [x] 将现有同步恢复改成初始化时 await 读取；加载完成前不以空草稿覆盖已有记录。`saveComposerRecovery()` 的调用方全部等待持久化成功，特别是 `prompt-submission.ts` 中保存原 inputId 后才能发 IPC 的约束。
+- [x] 保留临时会话和 linked-chat 草稿过滤；不能把目标临时会话正文藏进普通 source 会话草稿导出。普通新会话草稿继续恢复。
+- [x] 使用已有 schema 读取旧 composer、main/quick 笔记、图片批注键，写入新根并核对摘要后标记导入。重启或重复导入不能用旧 localStorage 覆盖更新的目标记录；保留旧数据供恢复，不调用 localStorage.clear。
+- [x] 批注继续按图片字节的 SHA-256 标识，沿用 `image-annotations.ts` 的算法；导入时只剥离已知 localStorage 键前缀作为受限 imageKey。不能改成按绝对图片路径命名，否则文件搬迁后会找不到原批注。
+- [x] 窗口关闭与迁移前等待 flush；保存失败时保留编辑内容，停止发送/迁移并显示现有错误反馈。不能在 beforeunload 中启动一个无人等待的异步写入。
+- [x] `git-settings.json` 的业务记录改存 desktopDataDir；可以整体保留现有 Git 偏好和 worktrees 结构，不为窗口偏好增加迁移。旧文件导入遵循相同确认规则。
+- [x] 扩展 composer-recovery、temporary-chat-state、笔记恢复、批注和主进程业务服务测试；检查 preload/shared/renderer 类型。提交说明建议 `feat(desktop): 将用户业务恢复数据保存到数据根`。
 
 必须保留的失败测试顺序：
 
@@ -455,13 +455,15 @@ interface BusinessDataApi {
 
 **新增：** `packages/server/src/daemon-host/data-root-sources.ts`、`__test__/data-root-sources.test.ts`；`packages/host-config/src/storage/managed-path-relocation.ts`、`__test__/managed-path-relocation.test.ts`。**修改：** `data-location.ts` 的旧位置读取及 desktop 旧导出接线；本阶段不改变正在运行的库。
 
-- [ ] 使用临时目录建出旧根、分离的运行数据、Documents 工作区、userData 和已导出的业务内容。先测返回完整来源清单；重复目录只出现一次，渠道与普通工作区不重复复制。
-- [ ] 逐项实现第 4.1 节来源。无来源文件属于正常缺项；损坏的设置、指针或 SQLite 文件返回具体错误，不能用默认空内容替代。
-- [ ] 拒绝磁盘根、用户 home 本身和真实项目祖先作为要整体交换的受管根；校验规范化后的源/目标都处于明确用户指定的迁移范围。未确认归属的非空目标不写入。
-- [ ] 两个不同会话库、同名不同内容、大小写冲突、空间不足、不可写目标和不安全 junction 均成为 blocker。源与目标相同只进入同根升级分支，不被误判为普通目标冲突。
-- [ ] 实现第 4.2 节边界正确的映射；不跟随符号链接复制根外内容。外部链接保留链接，指向被搬受管资源的链接按映射修复并记录。
-- [ ] CLI 检测到未导出的桌面业务数据返回 `needs_desktop_export`，给出打开桌面应用完成导入的动作；不能直接打开 LevelDB 解析正文。
-- [ ] 运行新来源和映射测试及 server/host-config 类型检查。提交说明建议 `feat(migration): 清点旧数据来源并验证迁移边界`。
+- [x] 使用临时目录建出旧根、分离的运行数据、Documents 工作区、userData 和已导出的业务内容。先测返回完整来源清单；重复目录只出现一次，渠道与普通工作区不重复复制。
+- [x] 逐项实现第 4.1 节来源。无来源文件属于正常缺项；损坏的设置、指针或 SQLite 文件返回具体错误，不能用默认空内容替代。
+  预检仅用只读文件头、大小与摘要识别可判定的格式错误，不建立会自建 SHM 的 SQLite 连接；记录/schema、完整性、外键及库内登记路径列为强制的停写后副本校验。宿主列表缺失不能视为空库，协调器须从独立副本补全并重新预检后才安装。
+- [x] 拒绝磁盘根、用户 home 本身和真实项目祖先作为要整体交换的受管根；校验规范化后的源/目标都处于明确用户指定的迁移范围。未确认归属的非空目标不写入。
+- [x] 两个不同会话库、同名不同内容、大小写冲突、空间不足、不可写目标和不安全 junction 均成为 blocker。源与目标相同只进入同根升级分支，不被误判为普通目标冲突。
+  Windows 有效 ACL 不能仅由只读 W_OK 检查可靠证明时，预检明确列为迁移准备强制项；协调器须在业务复制和交换前用自有相邻暂存验证实际写入及必要权限，失败阻止继续，不能声称预检已验证可写。
+- [x] 实现第 4.2 节边界正确的映射；不跟随符号链接复制根外内容。外部链接保留链接，指向被搬受管资源的链接按映射修复并记录。
+- [x] CLI 检测到未导出的桌面业务数据返回 `needs_desktop_export`，给出打开桌面应用完成导入的动作；不能直接打开 LevelDB 解析正文。
+- [x] 运行新来源和映射测试及 server/host-config 类型检查。提交说明建议 `feat(migration): 清点旧数据来源并验证迁移边界`。
 
 ```ts
 import { resolve, join } from "node:path";
@@ -496,14 +498,14 @@ function relocateDatabasePaths(databasePath: string, moves: readonly ManagedPath
 async function relocateInstalledPluginStore(storePath: string, moves: readonly ManagedPathMove[]): Promise<PathRelocationReport>;
 ```
 
-- [ ] 建立包含正式/临时来源附件、笔记、受管与外部项目、session task、schedule、workflow、插件外链和授权的真实 SQLite/文件 fixture；记录所有 ID 与关键内容摘要。
-- [ ] 先写失败测试：受管字段全部更新，外部路径不变；消息正文、Markdown、command 与 prompt 即使包含旧根字符串也保持原文；插件授权与行为摘要完全相同。
-- [ ] 用 Drizzle 和现有 schema 在目标数据库内事务更新第 4.2 节字段。不能为修改几列加载整套 Agent Runtime 或启动后台维护；事务失败回滚目标副本的本轮变更。
-- [ ] 更新 project location 的规范路径与索引键，核对唯一约束和 `cwdRelative`；保持项目/会话 ID、引用和排序，不删库重建项目。
-- [ ] 为已定义的可恢复工作流快照和宿主 metadata 写显式字段处理器。遇到不能安全恢复的版本报告 unsupported 并阻止提交；终态原始事件不做全文替换。
-- [ ] 迁移受管 cwd 对应的 local_rules、memory、session-memory 哈希目录，复用已有规范化和摘要算法。若新键已存在且内容不同，回到冲突预检，不覆盖。
-- [ ] 改写插件安装记录中的受管 cachePath；外链路径、授权、版本和摘要保留。对改写后路径运行既有插件校验；不要改插件快照内容来绕过摘要失败。
-- [ ] 运行新迁移测试、已有 workflow、notes、attachments、plugin installation 测试和 services/plugins 类型检查。提交说明建议 `feat(migration): 重定位受管数据引用并保留历史内容`。
+- [x] 建立包含正式/临时来源附件、笔记、受管与外部项目、session task、schedule、workflow、插件外链和授权的真实 SQLite/文件 fixture；记录所有 ID 与关键内容摘要。
+- [x] 先写失败测试：受管字段全部更新，外部路径不变；消息正文、Markdown、command 与 prompt 即使包含旧根字符串也保持原文；插件授权与行为摘要完全相同。
+- [x] 用 Drizzle 和现有 schema 在目标数据库内事务更新第 4.2 节字段。不能为修改几列加载整套 Agent Runtime 或启动后台维护；事务失败回滚目标副本的本轮变更。
+- [x] 更新 project location 的规范路径与索引键，核对唯一约束和 `cwdRelative`；保持项目/会话 ID、引用和排序，不删库重建项目。
+- [x] 为已定义的可恢复工作流快照和宿主 metadata 写显式字段处理器。遇到不能安全恢复的版本报告 unsupported 并阻止提交；终态原始事件不做全文替换。
+- [x] 迁移受管 cwd 对应的 local_rules、memory、session-memory 哈希目录，复用已有规范化和摘要算法。若新键已存在且内容不同，回到冲突预检，不覆盖。
+- [x] 改写插件安装记录中的受管 cachePath；外链路径、授权、版本和摘要保留。对改写后路径运行既有插件校验；不要改插件快照内容来绕过摘要失败。
+- [x] 运行新迁移测试、已有 workflow、notes、attachments、plugin installation 测试和 services/plugins 类型检查。提交说明建议 `feat(migration): 重定位受管数据引用并保留历史内容`。
 
 测试必须实际重新打开目标库，执行外键和完整性检查，读取一份附件与一条笔记、验证一个插件。不能只检查 JSON 中出现了新字符串。
 
@@ -511,15 +513,15 @@ async function relocateInstalledPluginStore(storePath: string, moves: readonly M
 
 **新增：** `packages/server/src/daemon-host/data-root-migration.ts`、`data-root-migration-journal.ts`、`__test__/data-root-migration.test.ts`、`__test__/data-root-migration-recovery.test.ts`。**复用：** `packages/host-config/src/storage/atomic-json-write.ts`、现有备份校验和附件完整性检查。
 
-- [ ] 先用临时 home、sourceRoot、targetRoot 测试复制、验证与失败恢复；所有测试调用都明确传入 `homeDir`，不能读真实定位文件。
-- [ ] 实现 prepared → staged → installed → verified → committed 的持久记录。每一阶段保存前先完成上阶段校验；源摘要与改写后摘要分开；记录不包含正文和凭据。
-- [ ] 先复制后改写，确保目标副本没有与源共享内容的硬链接；复制时检查来源是否被并发改动，发现变化立即中止。对文件数量、字节数、摘要、模式与必要时间戳做对照。
-- [ ] 识别并重建登记、活动租约和运行副本；保留未知文件、未知锁文件以及记忆整理时间。损坏密钥文件不能用空 JSON 修复。
-- [ ] 不同根采用相邻暂存安装；同根采用“原根 → 相邻保留副本、暂存 → 原路径”的两步交换。执行前与恢复时都验证绝对路径仍在预检范围，Windows 全程使用同一套文件系统 API。
-- [ ] 将前一任务的结构化重定位应用于副本，核对 SQLite、blob、笔记和插件一致性后才安装。不能把现有应用备份误称为完整用户根备份；它不含的根级凭据、技能、草稿和工作区由本任务清单补齐。
-- [ ] 实现 recover：先读记录，再核对 source/staging/backup/target 的实际身份；恢复操作可重复执行。来源不存在、摘要不匹配或两个副本身份不明时保留现场并阻止启动。
-- [ ] 覆盖中断测试：复制一半、改写失败、第一次同根 rename 完成、安装完成但未验证、定位提交前后、恢复再中断。用受控 Promise 或文件操作故障注入，不靠固定 sleep 赌时序。
-- [ ] 运行本任务测试和 server 类型检查。提交说明建议 `feat(migration): 增加可恢复的数据根复制与交换`。
+- [x] 先用临时 home、sourceRoot、targetRoot 测试复制、验证与失败恢复；所有测试调用都明确传入 `homeDir`，不能读真实定位文件。
+- [x] 实现 prepared → staged → installed → verified → committed 的持久记录。每一阶段保存前先完成上阶段校验；源摘要与改写后摘要分开；记录不包含正文和凭据。
+- [x] 先复制后改写，确保目标副本没有与源共享内容的硬链接；复制时检查来源是否被并发改动，发现变化立即中止。对文件数量、字节数、摘要、模式与必要时间戳做对照。
+- [x] 识别并重建登记、活动租约和运行副本；保留未知文件、未知锁文件以及记忆整理时间。损坏密钥文件不能用空 JSON 修复。
+- [x] 不同根采用相邻暂存安装；同根采用“原根 → 相邻保留副本、暂存 → 原路径”的两步交换。执行前与恢复时都验证绝对路径仍在预检范围，Windows 全程使用同一套文件系统 API。
+- [x] 将前一任务的结构化重定位应用于副本，核对 SQLite、blob、笔记和插件一致性后才安装。不能把现有应用备份误称为完整用户根备份；它不含的根级凭据、技能、草稿和工作区由本任务清单补齐。
+- [x] 实现 recover：先读记录，再核对 source/staging/backup/target 的实际身份；恢复操作可重复执行。来源不存在、摘要不匹配或两个副本身份不明时保留现场并阻止启动。
+- [x] 覆盖中断测试：复制一半、改写失败、第一次同根 rename 完成、安装完成但未验证、定位提交前后、恢复再中断。用受控 Promise 或文件操作故障注入，不靠固定 sleep 赌时序。
+- [x] 运行本任务测试和 server 类型检查。提交说明建议 `feat(migration): 增加可恢复的数据根复制与交换`。
 
 代表性故障验收，使用真实目录与真实目标库：
 
@@ -539,28 +541,28 @@ async function relocateInstalledPluginStore(storePath: string, moves: readonly M
 
 **修改：** Desktop `features/settings/git-settings-service.ts`、`git-settings-storage.ts`；`packages/agent-runtime/src/node/children/child-environment.ts`；Desktop `features/workspace/workspace-service.ts` 和文件打开/图片预览入口。**新增或扩展测试：** 以上分类的 `__test__/`，以及 `packages/host-config/src/storage/__test__/managed-path-relocation.test.ts`。
 
-- [ ] 使用真实临时 Git 仓库创建受管 worktree，包含暂存修改、未暂存修改和未跟踪文件。记录分支、HEAD、git status 和文件摘要，不能通过 mock 掩盖登记问题。
-- [ ] 文件副本安装到最终目标后，用主仓库执行 `git worktree repair <目标目录>`，验证目标的 top-level、common-dir 和分支。跨盘用复制加 repair，不假定 `git worktree move` 能处理所有工作树。
-- [ ] 如果主仓库本身位于被搬的受管工作区，先定位新的主仓库，再修复它的 worktree；不能继续拿保留副本中的旧主仓库当唯一主仓库。真实外部主仓库位置保持不变。
-- [ ] 将 Git repair 和恢复旧登记作为迁移记录中的一组动作。目标验证失败时，对旧位置执行对应 repair 并校验；不使用 reset、clean、强制 checkout 或直接全文改写 `.git`。
-- [ ] 被锁 worktree、主仓库不可用或不支持安全修复的情况在预检成为 blocker；错误包含具体 worktree，保留全部副本。
-- [ ] 保存受管历史路径映射。文件打开、工具图片预览和结构化附件卡片在权限检查前解析映射，再按目标真实路径执行原访问限制；普通用户文字和 Shell 命令不改。
-- [ ] 使用前缀相似的外部路径、越界路径、WSL/Native 转换和真实文件链接测试，确认映射不扩大权限。Native 受管路径先重定位，再复用现有环境路径转换。
-- [ ] 运行 Git/workspace/预览测试和 Desktop/agent-runtime/host-config 类型检查。提交说明建议 `feat(migration): 修复工作树登记与受管历史文件引用`。
+- [x] 使用真实临时 Git 仓库创建受管 worktree，包含暂存修改、未暂存修改和未跟踪文件。记录分支、HEAD、git status 和文件摘要，不能通过 mock 掩盖登记问题。
+- [x] 文件副本安装到最终目标后，用主仓库执行 `git worktree repair <目标目录>`，验证目标的 top-level、common-dir 和分支。跨盘用复制加 repair，不假定 `git worktree move` 能处理所有工作树。
+- [x] 如果主仓库本身位于被搬的受管工作区，先定位新的主仓库，再修复它的 worktree；不能继续拿保留副本中的旧主仓库当唯一主仓库。真实外部主仓库位置保持不变。
+- [x] 将 Git repair 和恢复旧登记作为迁移记录中的一组动作。目标验证失败时，对旧位置执行对应 repair 并校验；不使用 reset、clean、强制 checkout 或直接全文改写 `.git`。
+- [x] 被锁 worktree、主仓库不可用或不支持安全修复的情况在预检成为 blocker；错误包含具体 worktree，保留全部副本。
+- [x] 保存受管历史路径映射。文件打开、工具图片预览和结构化附件卡片在权限检查前解析映射，再按目标真实路径执行原访问限制；普通用户文字和 Shell 命令不改。
+- [x] 使用前缀相似的外部路径、越界路径、WSL/Native 转换和真实文件链接测试，确认映射不扩大权限。Native 受管路径先重定位，再复用现有环境路径转换。
+- [x] 运行 Git/workspace/预览测试和 Desktop/agent-runtime/host-config 类型检查。提交说明建议 `feat(migration): 修复工作树登记与受管历史文件引用`。
 
 ### T10：接入停写、验证实例和系统自启动
 
 **修改：** `packages/server/src/daemon-host/registered-daemon.ts`、`data-location.ts`、`registry-lease.ts`、`system-service.ts`、公开入口；`packages/server/src/application/control/daemon-operation-gate.ts`、维护与备份协调入口；Desktop `daemon-connection-service.ts`、`daemon-autostart/daemon-entry.ts`。**测试：** daemon-host 的 `__test__/`，扩展已有 system-service/lifecycle 与 Desktop connection 测试。
 
-- [ ] 先测源/目标后台仍存活、控制锁竞争、上传未完、定时任务/渠道仍会触发、终端未退出时都不能搬目录；测试确定触发并等待排空，不扩大为强杀未知进程。
-- [ ] 复用维护屏障和现有停止流程，暂停所有自动写入者与自启动监督者，等待 SQLite、受管终端、插件后台和文件句柄关闭。释放会跟随目录改名失效的旧根租约前，固定启动锁和 pendingMigration 已生效。
-- [ ] 验证实例使用迁移协调器持有的明确路径与现有 `deferBackgroundActivation` 能力，不增加一个可绕开启动保护的公开参数。定时任务、渠道和恢复执行保持关闭直到提交。
-- [ ] 根迁移不再修改旧进程的环境并原地换库。旧 `data-location.json` 和 userData/runtime-data-location.json 只用于来源导入；目标运行数据与库位置按统一布局保存。
-- [ ] 生成新 token、PID/地址登记。旧 registry 与 lease 不是可恢复业务数据。SDK 和 Desktop 只能在定位提交后发现新正式登记。
-- [ ] 系统服务用目标根重建 launcher、参数和日志路径；Windows 计划任务引用新启动器，macOS/Linux 服务文件仍位于系统目录。修改期间不能触发普通写入，启动入口看到 pending 状态必须退出或等待。
-- [ ] 服务变更先保存原定义；注入安装失败、验证实例打不开目标库、启动超时等故障，核对旧 Git/服务/选择恢复。恢复失败时状态必须是 rollback_failed。
-- [ ] 定位提交后才发布登记和激活写入；激活时持久记下 writersReleased。该标记写入失败时不得先放行普通写入。
-- [ ] 运行新恢复测试、daemon-host/maintenance/connection 的受影响测试与类型检查。提交说明建议 `feat(daemon): 协调数据根迁移与后台重启`。
+- [x] 先测源/目标后台仍存活、控制锁竞争、上传未完、定时任务/渠道仍会触发、终端未退出时都不能搬目录；测试确定触发并等待排空，不扩大为强杀未知进程。
+- [x] 复用维护屏障和现有停止流程，暂停所有自动写入者与自启动监督者，等待 SQLite、受管终端、插件后台和文件句柄关闭。释放会跟随目录改名失效的旧根租约前，固定启动锁和 pendingMigration 已生效。
+- [x] 验证实例使用迁移协调器持有的明确路径与现有 `deferBackgroundActivation` 能力，不增加一个可绕开启动保护的公开参数。定时任务、渠道和恢复执行保持关闭直到提交。
+- [x] 根迁移不再修改旧进程的环境并原地换库。旧 `data-location.json` 和 userData/runtime-data-location.json 只用于来源导入；目标运行数据与库位置按统一布局保存。
+- [x] 生成新 token、PID/地址登记。旧 registry 与 lease 不是可恢复业务数据。SDK 和 Desktop 只能在定位提交后发现新正式登记。
+- [x] 系统服务用目标根重建 launcher、参数和日志路径；Windows 计划任务引用新启动器，macOS/Linux 服务文件仍位于系统目录。修改期间不能触发普通写入，启动入口看到 pending 状态必须退出或等待。
+- [x] 服务变更先保存原定义；注入安装失败、验证实例打不开目标库、启动超时等故障，核对旧 Git/服务/选择恢复。恢复失败时状态必须是 rollback_failed。
+- [x] 定位提交后才发布登记和激活写入；激活时持久记下 writersReleased。该标记写入失败时不得先放行普通写入。
+- [x] 运行新恢复测试、daemon-host/maintenance/connection 的受影响测试与类型检查。提交说明建议 `feat(daemon): 协调数据根迁移与后台重启`。
 
 ### T11：接通本机 inspect、migrate、recover 操作
 
@@ -574,26 +576,26 @@ vk data-root migrate --from <完整旧根> --to <完整目标根>
 vk data-root recover --journal <完整迁移记录路径>
 ```
 
-- [ ] 先测 inspect 只读，不创建定位文件、锁、暂存、数据库或目录；输出根来源、迁移清单、冲突、预计空间和重启影响，不打印凭据或草稿。
-- [ ] migrate/recover 调用同一个宿主实现；Desktop 先 flush 与导出业务键，再进入相同流程。请求中的 homeDir、源 profile 等由本机宿主确定，不能从 renderer 任意传入。
-- [ ] Desktop 提供明确的“用户数据根”含义与当前实际路径，选择的是整根目录。不能把旧的 `switchData(directory)` 中 `join(directory, "sessions.db")` 继续套在新参数上。
-- [ ] 旧只切库入口不再作为产品设置行为。已有旧数据库位置作为迁移来源导入；旧接口调用应返回明确的迁移提示，不静默按新语义解释旧参数。
-- [ ] 复用已有维护进度和错误展示。失败说明停在哪一步、当前可使用的根和恢复记录位置；用户内容不放进诊断错误或日志。远程连接不开放本机任意根迁移 HTTP 接口。
-- [ ] 切换时清理旧业务数据读缓存、订阅和客户端，Desktop 重启并从新根重新 hydration。只有确认目标草稿恢复成功才标记旧业务导入完成。
-- [ ] 保留现有键盘操作和减少动态效果。优先复用现有组件；确需新组件时按 beUI 及 `apps/desktop/DESIGN.md` 选型。样式交给用户查看，不主动建预览或截图。
-- [ ] 运行 CLI 命令、维护 IPC、设置服务和相关 store 测试，检查 CLI/Desktop 类型。提交说明建议 `feat(storage): 接通本机数据根迁移与恢复操作`。
+- [x] 先测 inspect 只读，不创建定位文件、锁、暂存、数据库或目录；输出根来源、迁移清单、冲突、预计空间和重启影响，不打印凭据或草稿。
+- [x] migrate/recover 调用同一个宿主实现；Desktop 先 flush 与导出业务键，再进入相同流程。请求中的 homeDir、源 profile 等由本机宿主确定，不能从 renderer 任意传入。
+- [x] Desktop 提供明确的“用户数据根”含义与当前实际路径，选择的是整根目录。不能把旧的 `switchData(directory)` 中 `join(directory, "sessions.db")` 继续套在新参数上。
+- [x] 旧只切库入口不再作为产品设置行为。已有旧数据库位置作为迁移来源导入；旧接口调用应返回明确的迁移提示，不静默按新语义解释旧参数。
+- [x] 复用已有维护进度和错误展示。失败说明停在哪一步、当前可使用的根和恢复记录位置；用户内容不放进诊断错误或日志。远程连接不开放本机任意根迁移 HTTP 接口。
+- [x] 切换时清理旧业务数据读缓存、订阅和客户端，Desktop 重启并从新根重新 hydration。只有确认目标草稿恢复成功才标记旧业务导入完成。
+- [x] 保留现有键盘操作和减少动态效果。优先复用现有组件；确需新组件时按 beUI 及 `apps/desktop/DESIGN.md` 选型。样式交给用户查看，不主动建预览或截图。
+- [x] 运行 CLI 命令、维护 IPC、设置服务和相关 store 测试，检查 CLI/Desktop 类型。提交说明建议 `feat(storage): 接通本机数据根迁移与恢复操作`。
 
 ### T12：贯通验收、发布关口与文档收口
 
 **新增：** `tests/desktop-integration/__test__/data-root-migration.test.ts`、`tests/server-client/__test__/data-root-discovery.test.ts` 和必要的同分类测试 fixture。**修改文档：** 下节列出的当前手册、目录 README、源码引用登记。
 
-- [ ] 在临时 home 和脚本化 Provider 下，从旧布局建立正式聊天、临时聊天、附件、笔记、规则、技能、插件、业务草稿、受管工作区、worktree 和自启动定义；不访问真实用户数据或付费模型。
-- [ ] 运行一次新根迁移和一次同根归拢，按第 8 节逐条验收。目标启动后实际读取资源、打开旧消息链接、继续正式会话；验证临时正文不能从 SQLite 或迁移文件恢复。
-- [ ] 逐阶段故障注入和重复恢复后，再核对 source/target、定位记录、Git、系统服务与业务导入的一致性。只要回退仍有疑点，就不能开放迁移 UI 或发布自动目录切换。
+- [x] 在临时 home 和脚本化 Provider 下，从旧布局建立正式聊天、临时聊天、附件、笔记、规则、技能、插件、业务草稿、受管工作区、worktree 和自启动定义；不访问真实用户数据或付费模型。
+- [x] 运行一次新根迁移和一次同根归拢，按第 8 节逐条验收。目标启动后实际读取资源、打开旧消息链接、继续正式会话；验证临时正文不能从 SQLite 或迁移文件恢复。
+- [x] 逐阶段故障注入和重复恢复后，再核对 source/target、定位记录、Git、系统服务与业务导入的一致性。只要回退仍有疑点，就不能开放迁移 UI 或发布自动目录切换。
 - [ ] 明确验证 source 保留、Windows 跨盘复制、macOS/Linux 路径、大小写边界、中文路径、权限失败与非空目标冲突。跨盘测试在可提供两个卷的环境执行；单卷测试只能证明复制逻辑，不能宣称跨卷平台验收完成。
-- [ ] 检查所有新增测试归属、公开导出和 README；更新当前手册而非批量改写历史方案。迁移源码文件或修改旧引用时，同步精确引用登记的路径、行号和原文。
-- [ ] 执行第 9 节最终命令，记录命令、退出码和受限环境。通过后逐项勾选验收，不用前一轮的 78 项测试代替本轮验证。
-- [ ] 检查 `git diff`，只提交本计划实施范围；不覆盖用户已有改动。提交说明建议 `test(storage): 验收统一数据根与迁移恢复`。
+- [x] 检查所有新增测试归属、公开导出和 README；更新当前手册而非批量改写历史方案。迁移源码文件或修改旧引用时，同步精确引用登记的路径、行号和原文。
+- [x] 执行第 9 节最终命令，记录命令、退出码和受限环境。通过后逐项勾选验收，不用前一轮的 78 项测试代替本轮验证。
+- [x] 检查 `git diff`，只提交本计划实施范围；不覆盖用户已有改动。提交说明建议 `test(storage): 验收统一数据根与迁移恢复`。
 
 ## 8. 验收清单
 

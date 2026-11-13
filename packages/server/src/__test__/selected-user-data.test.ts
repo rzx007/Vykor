@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promis
 import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { expect, it, vi } from "vitest";
-import { initializeDataRoot, getSkillsDir, getProjectMemoryDir } from "@vykor/host-config/paths";
+import { initializeDataRoot, getSkillsDir, getProjectMemoryDir, readDataRootLockState } from "@vykor/host-config/paths";
 import { CredentialStorage } from "@vykor/auth";
 import { saveFacts, loadFacts, loadLocalRules, saveLocalRules } from "@vykor/personalization";
 import { initializePersonalPromptFiles, loadSoulMd, loadUserProfile, queueUserProfileUpdate, listPendingUserProfileUpdates } from "@vykor/prompts";
@@ -23,7 +23,7 @@ async function snapshot(root: string, current = root): Promise<string[]> {
   return items.sort();
 }
 
-it("persists and reopens all user business files in the initialized root, leaving old home untouched", async () => {
+it("persists and reopens all user business files in the initialized root, leaving old home business files untouched", async () => {
   const base = await mkdtemp(join(tmpdir(), "vykor-user-data-"));
   const home = join(base, "home"), old = join(home, ".vykor"), root = join(base, ".vykor");
   await mkdir(old, { recursive: true });
@@ -66,7 +66,8 @@ it("persists and reopens all user business files in the initialized root, leavin
     expect(JSON.parse(await readFile(join(root, "cache", "models-dev.json"), "utf8")).target.models.selected.name).toBe("Selected model");
     vi.stubGlobal("fetch", async () => { throw new Error("offline"); });
     expect((await new ModelCatalogService().load()).target?.models?.selected?.name).toBe("Selected model");
-    expect(await snapshot(home)).toEqual(before);
+    expect(await snapshot(home)).toEqual([...before, ".vykor-root.json.lock/"].sort());
+    expect(readDataRootLockState(home)).toBeUndefined();
     expect(await readdir(base)).not.toContain("late-env");
   } finally { vi.unstubAllGlobals(); vi.unstubAllEnvs(); await rm(base, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); }
 });

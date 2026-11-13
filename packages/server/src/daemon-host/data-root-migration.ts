@@ -291,9 +291,18 @@ export async function markDataRootMigrationWritersReleased(path: string, options
 }
 async function releaseLocked(j: MigrationJournal, lock: DataRootLock): Promise<DataRootMigrationResult> {
     if (j.phase !== "committed") throw new Error("Migration selection is not committed");
-    if (j.writersReleased && !readDataRootSelector(j.homeDir)?.pendingMigration) return result(j);
-    if (!j.writersReleased) { if (!j.stagedTree) throw new Error("Migration target identity missing"); await sameTree(j.targetRoot, j.stagedTree); await verifyMigrationGitTrees(j, j.targetRoot); }
-    j.writersReleased = true; await saveMigrationJournal(j);
+    const selected = readDataRootSelector(j.homeDir), pending = selected?.pendingMigration;
+    if (!selected || !samePath(selected.dataRoot, j.targetRoot)
+      || pending && (pending.id !== j.id || !samePath(pending.journalPath, j.journalPath))) throw new Error("Migration target selection changed");
+    if (j.writersReleased) {
+      // New target writes are legitimate. Only its physical identity remains fixed.
+      if (await identity(j.targetRoot) !== j.stagingIdentity) throw new Error("Migration target identity changed after release");
+      if (!pending) return result(j);
+    } else {
+      if (!pending || !j.stagedTree) throw new Error("Migration target identity or pending selection missing");
+      await sameTree(j.targetRoot, j.stagedTree); await verifyMigrationGitTrees(j, j.targetRoot);
+      j.writersReleased = true; await saveMigrationJournal(j);
+    }
     await lock.writeSelector({ version: 1, dataRoot: j.targetRoot }); return result(j);
 }
 
@@ -303,7 +312,7 @@ export async function recoverDataRootMigration(path: string, options: { homeDir:
     const record = await readMigrationJournal(path, options.homeDir);
     // A released source can contain new writes or a new pending migration. Only finish our selector once.
     const j = record.recoveryWritersReleased ? record : await selectedJournal(path, options.homeDir);
-    if (j.writersReleased) throw new Error("Migration writers were released; repair the current target or perform a reverse migration");
+    if (j.writersReleased) return releaseLocked(j, lock);
     if (j.recoveryWritersReleased) {
       const pending = readDataRootSelector(j.homeDir)?.pendingMigration;
       if (pending?.id === j.id && samePath(pending.journalPath, j.journalPath)) {
@@ -375,7 +384,7 @@ export async function recoverDataRootMigration(path: string, options: { homeDir:
       j.failedOperation ??= j.operation; j.phase = "rollback_failed"; await saveMigrationJournal(j); return result(j);
     }
   });
-  if (!restored.recoveryWritersReleased || restored.phase === "rollback_failed") return restored;
+  if (restored.writersReleased || !restored.recoveryWritersReleased || restored.phase === "rollback_failed") return restored;
   // Fresh short lock only surrounds immediate OS actions; never await daemon initialization here.
   return withDataRootRecoveryLock(options.homeDir, async () => {
     const j = await readMigrationJournal(path, options.homeDir);
