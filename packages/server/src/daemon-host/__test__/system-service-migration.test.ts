@@ -15,6 +15,7 @@ it("restores the exact original service definition and installs target arguments
   writeFileSync(config, original);
   let running = true;
   const service = new DaemonSystemService({ platform: "linux", homeDir, logsDir: join(source, "data/logs"), invocation: { command: "/usr/bin/node", args: ["/app/daemon.js", "--data-root", source], cwd: "/app" }, runCommand: (_command, args) => {
+    if (args.includes("show")) return { status: 0, stdout: `FragmentPath=${config}\nDropInPaths=\nNeedDaemonReload=no\n`, stderr: "" };
     if (args.includes("is-active")) return { status: 0, stdout: running ? "active" : "inactive", stderr: "" };
     if (args.includes("stop") || args.includes("disable")) running = false;
     if (args.includes("start") || args.includes("--now") && args.includes("enable")) running = true;
@@ -44,11 +45,12 @@ it.each(["win32", "darwin"] as const)("keeps original running and disabled inten
     if (call.includes("Export-ScheduledTask")) return { status: 0, stdout: "<Task>original-private-xml</Task>", stderr: "" };
     if (call.includes("Get-ScheduledTask")) return { status: 0, stdout: running ? "running" : "disabled", stderr: "" };
     if (args[0] === "print-disabled") return { status: 0, stdout: 'disabled services = { "dev.vykor.daemon" => true }', stderr: "" };
-    if (args[0] === "print") return { status: running ? 0 : 1, stdout: "state = running", stderr: "" };
+    if (args[0] === "print") return { status: running ? 0 : 1, stdout: `state = running\nprogram = ${process.execPath}\narguments = {\n${[process.execPath, "/main", "--data-root", source].map(arg => `\t${arg}`).join("\n")}\n}\n`, stderr: "" };
     if (call.includes("Stop-ScheduledTask") || args[0] === "bootout") running = false;
     if (call.includes("Start-ScheduledTask") || args[0] === "bootstrap") running = true;
     return { status: 0, stdout: "", stderr: "" };
   } });
+  if (platform === "darwin") { service.install({ start: false }); running = true; }
   const snapshot = service.snapshotForMigration(); expect(snapshot).toMatchObject({ wasEnabled: false, wasRunning: true });
   service.pauseForMigration(); service.forDataRoot(target).install({ start: false }); expect(running).toBe(false);
   service.restoreMigrationSnapshot(snapshot); expect(running).toBe(false);

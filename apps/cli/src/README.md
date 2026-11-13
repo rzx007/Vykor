@@ -6,4 +6,6 @@
 
 新增命令放在 `commands/`；新的启动测试放在本目录 `__test__/`。界面入口是 `tui/`，daemon 进程管理继续放在现有 daemon 模块。
 
+普通 `serve` 在默认应用创建数据库前也检查旧选库，不能通过省略 `--register` 或改为非本机监听绕过迁移要求。对应子进程回归在 `__test__/data-root-bootstrap.test.ts`，只使用临时根和临时 SQLite 文件，并核对旧库字节不变、默认空库未创建。
+
 `data-root inspect/migrate/recover` 在初始化、写资格和 program.ts 导入前分流。inspect 只输出来源、清单、冲突、空间与重启影响，不创建目录。migrate 复用服务器整根协调；recover 从私有记录恢复，`recover --startup-lock` 仅处理没有 pending 的可核对死亡启动锁。命令与测试放在 [commands/](./commands/README.md)。

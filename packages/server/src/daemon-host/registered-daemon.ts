@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { getDataDir } from "@vykor/host-config";
+import { getChannelsDir, getDataDir } from "@vykor/host-config";
 import { acquireDataRootWriter, dataRootHome, getDataRoot, getInitializedDataRootInputs } from "@vykor/host-config/paths";
 import { startVykorDaemon, type VykorDaemonOptions } from "../daemon/default-daemon.js";
 import {
@@ -62,7 +62,7 @@ type RegisteredRuntimeOptions = VykorDaemonOptions & {
 
 export interface RegisteredDaemonOptions extends Pick<
   VykorDaemonOptions,
-  "allowedOrigins" | "host" | "outsideProjectWorkspaceRoot" | "port"
+  "allowedOrigins" | "host" | "outsideProjectWorkspaceRoot" | "channelsWorkspaceRoot" | "port"
 > {
   launcher: "desktop" | "cli";
   version: string;
@@ -232,6 +232,7 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
       ...(options.allowedOrigins ? { allowedOrigins: options.allowedOrigins } : {}),
       ...(options.outsideProjectWorkspaceRoot
         ? { outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot } : {}),
+      channelsWorkspaceRoot: options.channelsWorkspaceRoot ?? getChannelsDir(),
       registeredDaemonControl: control,
       deferBackgroundActivation: true,
     });

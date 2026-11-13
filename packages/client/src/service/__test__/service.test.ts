@@ -63,6 +63,91 @@ ${verifyRealGuard ? `const {spawnSync}=await import('node:child_process');const 
 
 describe("local service management", () => {
   it.each([
+    { state: "invalid selector", rootEnv: true, canonicalShape: false },
+    { state: "pending migration", rootEnv: true, canonicalShape: false },
+    { state: "invalid selector", rootEnv: true, canonicalShape: true },
+    { state: "pending migration", rootEnv: true, canonicalShape: true },
+    { state: "invalid selector", rootEnv: false, canonicalShape: false },
+    { state: "pending migration", rootEnv: false, canonicalShape: false },
+    { state: "invalid selector", rootEnv: false, canonicalShape: true },
+    { state: "pending migration", rootEnv: false, canonicalShape: true },
+  ])("reuses an unrelated explicit existing registry without a command: $state rootEnv=$rootEnv canonicalShape=$canonicalShape", async ({ state, rootEnv, canonicalShape }) => {
+    const root = join(directory, "product");
+    file = canonicalShape ? join(directory, "caller/data/daemon/registry.json") : join(directory, "caller-registry.json");
+    await start();
+    if (state === "invalid selector") await writeFile(join(directory, ".vykor-root.json"), "broken selector");
+    else await withDataRootLock(directory, lock => lock.writeSelector({ version: 1, dataRoot: root,
+      pendingMigration: { id: "owned", journalPath: join(directory, "journal") } }));
+    const env = { HOME: directory, USERPROFILE: directory, ...(rootEnv ? { VYKOR_CONFIG_DIR: root } : {}) };
+    expect(await Service.discover({ file, env })).toMatchObject({ file });
+    const endpoint = await Service.ensure({ file, env, timeoutMs: 5000 });
+    endpoints.push(endpoint);
+    expect(endpoint.file).toBe(file);
+    expect(await Service.stop(endpoint)).toBe(true);
+    expect(await listDataRootWriters(root)).toEqual([]);
+  });
+
+  it.each([false, true])("rejects an invalid selector for an existing explicit canonical registry without a command: rootEnv=$0", async rootEnv => {
+    const root = join(directory, ".vykor");
+    file = join(root, "data/daemon/registry.json");
+    await start();
+    await writeFile(join(directory, ".vykor-root.json"), "broken selector");
+    await expect(Service.ensure({ file, env: { HOME: directory, USERPROFILE: directory,
+      ...(rootEnv ? { VYKOR_CONFIG_DIR: root } : {}) }, timeoutMs: 3000 })).rejects.toThrow(/Invalid data root selector/);
+  });
+
+  it("keeps mixed concurrent ensure callers' management provenance independent", async () => {
+    const root = join(directory, ".vykor"), registry = join(root, "data/daemon/registry.json");
+    const env = { HOME: directory, USERPROFILE: directory, VYKOR_CONFIG_DIR: root, START_RECORD: join(directory, "starts") };
+    const ownedStartup = Service.ensure({ file: registry, env, command: [process.execPath, fixture, registry, "1.2.3", String(CURRENT_PROTOCOL_VERSION), "300"], timeoutMs: 5000 });
+    await sleep(30);
+    const managedStartup = Service.ensure({ file: registry, env, timeoutMs: 5000 });
+    const [owned, managed] = await Promise.all([ownedStartup, managedStartup]);
+    endpoints.push(owned, managed);
+    expect(managed.pid).toBe(owned.pid);
+    expect(await readFile(env.START_RECORD, "utf8")).toBe("start\n");
+    await withDataRootLock(directory, lock => lock.writeSelector({ version: 1, dataRoot: root,
+      pendingMigration: { id: "owned", journalPath: join(directory, "journal") } }));
+    await expect(Service.stop(managed)).rejects.toThrow(/pending|migration/);
+    expect(await Service.stop(owned)).toBe(true);
+  });
+
+  it.each(["invalid selector", "pending migration"] as const)("keeps explicit canonical file plus command caller managed with %s", async state => {
+    const root = join(directory, ".vykor"), registry = join(root, "data/daemon/registry.json");
+    if (state === "invalid selector") await writeFile(join(directory, ".vykor-root.json"), "broken selector");
+    else await withDataRootLock(directory, lock => lock.writeSelector({ version: 1, dataRoot: root,
+      pendingMigration: { id: "owned", journalPath: join(directory, "journal") } }));
+    const endpoint = await Service.ensure({ file: registry, command: [process.execPath, fixture, registry, "1.2.3", String(CURRENT_PROTOCOL_VERSION)],
+      env: { HOME: directory, USERPROFILE: directory, VYKOR_CONFIG_DIR: root }, timeoutMs: 5000 });
+    endpoints.push(endpoint);
+    expect(endpoint.file).toBe(registry);
+    expect(await Service.stop(endpoint)).toBe(true);
+    expect(await listDataRootWriters(root)).toEqual([]);
+  });
+
+  it.each([false, true])("protects managed startup from an invalid selector: explicit canonical=$0", async explicit => {
+    const root = join(directory, ".vykor"), registry = join(root, "data/daemon/registry.json");
+    await writeFile(join(directory, ".vykor-root.json"), "broken selector");
+    await expect(Service.ensure({ ...(explicit ? { file: registry } : {}), cwd: directory,
+      env: { HOME: directory, USERPROFILE: directory, VYKOR_CONFIG_DIR: root }, timeoutMs: 3000 })).rejects.toThrow(/Invalid data root selector/);
+    await expect(readFile(registry)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("retains managed provenance when reusing an explicit canonical registry without a command", async () => {
+    const root = join(directory, ".vykor"), registry = join(root, "data/daemon/registry.json");
+    const env = { HOME: directory, USERPROFILE: directory, VYKOR_CONFIG_DIR: root };
+    const started = await Service.ensure({ file: registry, env, command: [process.execPath, fixture, registry, "1.2.3", String(CURRENT_PROTOCOL_VERSION)], timeoutMs: 5000 });
+    endpoints.push(started);
+    const reused = await Service.ensure({ file: registry, env, timeoutMs: 5000 });
+    await withDataRootLock(directory, lock => lock.writeSelector({ version: 1, dataRoot: root,
+      pendingMigration: { id: "owned", journalPath: join(directory, "journal") } }));
+    await expect(Service.ensure({ file: registry, env, timeoutMs: 3000 })).rejects.toThrow(/pending|migration/);
+    await expect(Service.stop(reused)).rejects.toThrow(/pending|migration/);
+    // The explicit command endpoint keeps its original caller-managed ownership.
+    expect(await Service.stop(started)).toBe(true);
+  });
+
+  it.each([
     { canonical: false, inherited: "old" }, { canonical: false, inherited: "empty" },
     { canonical: true, inherited: "old" }, { canonical: true, inherited: "empty" },
   ])("uses only explicit managed directory environment: canonical=$canonical inherited=$inherited", async ({ canonical, inherited }) => {

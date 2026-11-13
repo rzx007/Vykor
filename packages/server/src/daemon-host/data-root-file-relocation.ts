@@ -149,12 +149,21 @@ export async function relocateProjectStorageKeys(input: { stagedRoot: string; cw
     await visit(directory, ""); return hash.digest("hex");
   };
   const exists = async (path: string) => { try { await lstat(path); return true; } catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return false; throw error; } };
+  const key = (name: string) => process.platform === "win32" ? name.toLowerCase() : name;
+  const stores: Array<{ base: string; folded: boolean; keys: Set<string> }> = [];
+  for (const [base, folded] of [[paths.localRulesDir, false], [paths.userMemoryDir, true], [paths.sessionMemoryDir, false]] as const) {
+    await assertManagedPathBoundary(base, input.stagedRoot);
+    if (!await exists(base)) continue;
+    stores.push({ base, folded, keys: new Set((await readdir(base)).map(key)) });
+  }
   for (const cwd of new Set(input.cwdPaths)) {
     const next = relocateManagedPath(cwd, input.moves);
     if (next === cwd) { result.unchangedExternal++; continue; }
-    for (const [base, folded] of [[paths.localRulesDir, false], [paths.userMemoryDir, true], [paths.sessionMemoryDir, false]] as const) {
-      const from = join(base, getProjectDirectoryKey(cwd, folded)), to = join(base, getProjectDirectoryKey(next, folded));
-      if (from === to || !await exists(from)) continue;
+    for (const { base, folded, keys } of stores) {
+      const originalKey = getProjectDirectoryKey(cwd, folded);
+      if (!keys.has(key(originalKey))) continue;
+      const from = join(base, originalKey), to = join(base, getProjectDirectoryKey(next, folded));
+      if (from === to) continue;
       const digest = await signature(from);
       await assertManagedPathBoundary(to, input.stagedRoot);
       if (await exists(to)) { if (digest !== await signature(to)) throw new Error(`Project storage key conflict: ${to}`); continue; }

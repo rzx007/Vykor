@@ -109,7 +109,17 @@ async function rewriteCopy(j: MigrationJournal, cwdPaths: string[]): Promise<voi
       await writePrivateJson(paths.legacyImportFilePath, manifest);
     }
   }
-  supported(await relocateProjectStorageKeys({ stagedRoot: j.stagingRoot, moves: j.moves, cwdPaths }));
+  // Temporary/deleted sessions leave durable facts without a SQLite cwd registration.
+  const finalPaths = resolveUserDataPaths(j.targetRoot), storageCwds = new Set(cwdPaths);
+  const workspaceRoots = [finalPaths.workspacesDir, finalPaths.channelsDir, finalPaths.worktreesDir];
+  for (const entry of j.entries) if (entry.kind === "directory" && workspaceRoots.some(root => isWithinManagedPath(entry.target, root))) {
+    storageCwds.add(entry.source);
+    for (const move of j.moves) if (isWithinManagedPath(entry.target, move.to)) {
+      const original = join(move.from, relative(move.to, entry.target));
+      if (samePath(relocateManagedPath(original, j.moves), entry.target)) storageCwds.add(original);
+    }
+  }
+  supported(await relocateProjectStorageKeys({ stagedRoot: j.stagingRoot, moves: j.moves, cwdPaths: [...storageCwds] }));
   if (await info(paths.installedPluginStorePath)) supported(await relocateInstalledPluginStore(paths.installedPluginStorePath, j.moves, { stagedRoot: j.stagingRoot, targetRoot: j.targetRoot }));
   const previous = readManagedPathMap(j.stagingRoot);
   const moves: ManagedPathMove[] = [...previous.moves.map(move => ({ ...move, to: relocateManagedPath(move.to, j.moves) })), ...j.moves].filter(move => !samePath(move.from, move.to));

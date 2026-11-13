@@ -51,10 +51,11 @@ it("preserves unknown files left in early preparation and keeps startup blocked"
 it.each([false, true])("privately backs up service definitions before pause and records a restore failure=%s", async failRestore => {
   const config = join(home, ".config/systemd/user/dev.vykor.daemon.service");
   mkdirSync(join(home, ".config/systemd/user"), { recursive: true });
-  const original = "[Service]\nEnvironment=SECRET=SERVICE_PRIVATE_SENTINEL\nExecStart=/original\n";
+  const original = `[Service]\nEnvironment=SECRET=SERVICE_PRIVATE_SENTINEL\nExecStart="/original" "--data-root" "${source.replaceAll("\\", "\\\\")}"\n`;
   writeFileSync(config, original);
   let installing = false, restoring = false;
   const service = new DaemonSystemService({ platform: "linux", homeDir: home, logsDir: join(source, "data/logs"), invocation: { command: "/usr/bin/node", args: ["/app/main.js", "--data-root", source], cwd: "/app" }, runCommand: (_command, args) => {
+    if (args.includes("show")) return { status: 0, stdout: `FragmentPath=${config}\nDropInPaths=\nNeedDaemonReload=no\n`, stderr: "" };
     if (args.includes("is-active")) return { status: 0, stdout: "inactive", stderr: "" };
     if (restoring && failRestore || installing && args.includes("daemon-reload")) return { status: 1, stdout: "", stderr: "COMMAND_PRIVATE_SENTINEL" };
     return { status: 0, stdout: "", stderr: "" };

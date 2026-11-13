@@ -1,4 +1,4 @@
-import { dataRootChildEnvironment, getDataRoot, getWorkspacesDir } from "@vykor/host-config/paths"
+import { dataRootChildEnvironment, getChannelsDir, getDataRoot, getWorkspacesDir } from "@vykor/host-config/paths"
 import { spawn } from "node:child_process"
 import { join } from "node:path"
 import { app } from "electron"
@@ -41,5 +41,6 @@ export async function runDesktopDaemonEntry(mode: DesktopDaemonMode): Promise<vo
       : {}),
     legacyDataLocationPath: join(app.getPath("userData"), "runtime-data-location.json"),
     outsideProjectWorkspaceRoot: getWorkspacesDir(),
+    channelsWorkspaceRoot: getChannelsDir(),
   })
 }

@@ -31,6 +31,7 @@ describe("desktop daemon entry", () => {
       expect(host.runRegisteredDaemon).toHaveBeenCalledWith(expect.objectContaining({
         launcher: "desktop", version: "1.0.0", supervised,
         outsideProjectWorkspaceRoot: join(process.env.VYKOR_CONFIG_DIR!, "workspaces"),
+        channelsWorkspaceRoot: join(process.env.VYKOR_CONFIG_DIR!, "channels"),
         ...(mode === "service" && process.platform === "win32"
           ? { shouldStart: host.isWindowsDaemonServiceEnabled }
           : {}),

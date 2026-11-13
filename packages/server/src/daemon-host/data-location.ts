@@ -1,7 +1,9 @@
 import { open, readFile, realpath, stat } from "node:fs/promises";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { getDataDir, writeJsonFileAtomically } from "@vykor/host-config";
-import { isCompleteAbsolutePath } from "@vykor/host-config/paths";
+import { getDataRoot, isCompleteAbsolutePath } from "@vykor/host-config/paths";
 import { ApplicationError } from "../shared/application-error.js";
 
 export interface RegisteredDataLocation {
@@ -32,10 +34,39 @@ export function defaultDataLocation(directory: string): RegisteredDataLocation {
 
 export async function readDataLocationState(path: string): Promise<DataLocationState | undefined> {
   const saved = await readJson(path);
+  return parseDataLocationState(saved, path);
+}
+
+function parseDataLocationState(saved: unknown, path: string): DataLocationState | undefined {
   if (saved === undefined) return undefined;
-  const location = saved?.version === 1 && parseLocation(saved.location);
+  const value = saved as Partial<DataLocationState> | null;
+  const location = value?.version === 1 && parseLocation(value.location);
   if (!location) throw new Error(`Invalid daemon data location: ${path}`);
-  return { version: 1, location, ...(saved.result ? { result: saved.result } : {}) };
+  return { version: 1, location, ...(value?.result ? { result: value.result } : {}) };
+}
+
+export function legacyDesktopDataLocation(): string | undefined {
+  if (getDataRoot() !== join(homedir(), ".vykor") || process.env.VYKOR_DATA_DIR) return undefined;
+  const profile = process.platform === "win32" ? process.env.APPDATA ?? join(homedir(), "AppData", "Roaming")
+    : process.platform === "darwin" ? join(homedir(), "Library", "Application Support")
+    : process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config");
+  return join(profile, "Vykor", "runtime-data-location.json");
+}
+
+/** All default application entries must reject old selections before constructing a Store. */
+export function assertCanonicalDataLocation(): void {
+  const directory = getDataDir(), canonical = defaultDataLocation(directory);
+  for (const path of [dataLocationFile(directory), legacyDesktopDataLocation()]) {
+    if (!path) continue;
+    let text: string;
+    try { text = readFileSync(path, "utf8"); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") continue; throw error; }
+    const selected = parseDataLocationState(JSON.parse(text), path)!.location;
+    if (relative(canonical.directory, selected.directory) || relative(canonical.storePath, selected.storePath))
+      throw new Error("旧数据位置需要通过 data-root migrate 导入；不会创建另一份空数据库。");
+    // The current root record takes precedence over retained Desktop legacy data.
+    return;
+  }
 }
 
 export async function readLegacyDataLocation(path?: string): Promise<RegisteredDataLocation | undefined> {

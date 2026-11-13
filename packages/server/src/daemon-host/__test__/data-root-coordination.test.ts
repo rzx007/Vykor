@@ -95,7 +95,7 @@ it("keeps the committed target when the ordinary child cannot start after releas
 
 it("reports daemon busy without pausing or reinstalling its still-running service", async () => {
   const { request, systemService } = await fixture();
-  vi.spyOn(systemService, "snapshotForMigration").mockReturnValue({ version: 1, installed: true, wasRunning: true, wasEnabled: true, definition: "original", options: { platform: "linux", homeDir: request.homeDir, logsDir: join(request.sourceRoot, "data/logs"), invocation: systemService.invocation() } });
+  vi.spyOn(systemService, "snapshotForMigration").mockReturnValue({ version: 1, installed: true, wasRunning: true, wasEnabled: true, definition: `[Service]\nExecStart="/node" "--data-root" "${request.sourceRoot.replaceAll("\\", "\\\\")}"\n`, options: { platform: "linux", homeDir: request.homeDir, logsDir: join(request.sourceRoot, "data/logs"), invocation: systemService.invocation() } });
   const pause = vi.spyOn(systemService, "pauseForMigration"), restore = vi.spyOn(systemService, "restoreMigrationSnapshot"), resume = vi.spyOn(systemService, "resumeMigrationSnapshot");
   const file = join(request.sourceRoot, "data/daemon/registry.json");
   const script = `const fs=require('node:fs'), http=require('node:http'); const server=http.createServer((req,res)=>{res.setHeader('content-type','application/json'); if(req.url==='/debug/process') res.end(JSON.stringify({pid:process.pid})); else {res.statusCode=409;res.end(JSON.stringify({error:'PRIVATE_BUSY_BODY'}));}}); server.listen(0,'127.0.0.1',()=>{fs.mkdirSync(require('node:path').dirname(process.argv[1]),{recursive:true});fs.writeFileSync(process.argv[1],JSON.stringify({pid:process.pid,url:'http://127.0.0.1:'+server.address().port,token:'owned-token',version:'test',storePath:process.argv[2],startedAt:Date.now()}));});`;
@@ -137,20 +137,20 @@ it("moves a known legacy runtime registry and actual Windows launcher without cr
   await mkdir(join(legacy, "daemon"), { recursive: true }); await mkdir(join(legacy, "logs"));
   await rename(canonical, oldDb); await mkdir(join(request.sourceRoot, "data/daemon"), { recursive: true });
   await writeFile(join(request.sourceRoot, "data/daemon/data-location.json"), JSON.stringify({ version: 1, location: { directory: legacy, storePath: oldDb } }));
-  await writeFile(join(legacy, "daemon/daemon-watchdog.vbs"), "original-private-launcher");
-  let running = true, enabled = true; const registrations: string[] = [];
+  let running = true, enabled = true, definition = ""; const registrations: string[] = [];
   const systemService = new DaemonSystemService({ platform: "win32", homeDir: request.homeDir, logsDir: join(legacy, "logs"), invocation: { command: process.execPath, args: ["/desktop-main", "--data-root", request.sourceRoot, "--daemon-watchdog"], cwd: request.homeDir }, runCommand: (_command, args, env) => {
     const call = args.join(" ");
     if(call.includes("ConvertTo-Json")) return {status:0,stdout:JSON.stringify({running,enabled}),stderr:""};
-    if(call.includes("Export-ScheduledTask")) return {status:0,stdout:"<Task>original-private-definition</Task>",stderr:""};
+    if(call.includes("Export-ScheduledTask")) return {status:0,stdout:definition,stderr:""};
     if(call.includes("Get-ScheduledTask")) return {status:0,stdout:running?"running":enabled?"ready":"disabled",stderr:""};
     if(call.includes("Stop-ScheduledTask")) running=false;
     if(call.includes("Disable-ScheduledTask")) enabled=false;
     if(call.includes("Enable-ScheduledTask")) enabled=true;
     if(call.includes("Start-ScheduledTask")) running=true;
-    if(env?.VK_TASK_ARGUMENTS) registrations.push(env.VK_TASK_ARGUMENTS);
+    if(env?.VK_TASK_ARGUMENTS) { registrations.push(env.VK_TASK_ARGUMENTS); definition = `<Task><Actions><Exec><Command>wscript.exe</Command><Arguments>${env.VK_TASK_ARGUMENTS.replaceAll("&", "&amp;").replaceAll('"', "&quot;")}</Arguments></Exec></Actions></Task>`; }
     return {status:0,stdout:"",stderr:""};
   } });
+  systemService.install();
   const old = await ownedRegistered(join(legacy, "daemon/registry.json"), oldDb);
   try {
     const cli = fileURLToPath(new URL("../../../../../apps/cli/src/index.ts", import.meta.url)), loader = pathToFileURL(createRequire(import.meta.url).resolve("tsx")).href;

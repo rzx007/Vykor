@@ -24,4 +24,4 @@ Node 服务发现通过 `@vykor/host-config/paths` 的轻量模块共享产品�
 
 默认服务启动先在 home 锁中重验并取得 `sdk-control` 写资格，再等待 registry 控制锁；清理和释放不反向等待 home。默认 discover/ensure 返回的 endpoint 保存本次来源，stop 在停止及清理 registry 前重新登记。显式 file 的调用者管理契约不被全局 root 或无关环境覆盖。迁移遇到现有 SDK 控制者会报告忙；不会持有 home 再等该控制者。
 
-显式 file 与正常选择的 canonical registry 相同时，省略 command 仍可启动调用方安装的默认 CLI，并接受 pending 等根保护；独立 file 加自定义 command 保持调用者管理。ensure 和 stop 的 home 写资格等待传递原 AbortSignal 与同一绝对 deadline；私有目录准备、取锁和资格写入后均检查剩余期限，取消完成前清理本次资格，不留后台等锁任务。stop 的鉴权和退出等待也共用这一期限。
+显式 file 与正常选择的 canonical registry 相同时，省略 command 仍可启动调用方安装的默认 CLI；复用已有服务时同样接受 pending 等根保护，并给 stop 保留管理来源。独立显式 file 的已有健康服务可以直接复用，无需 command，也不受无关 selector 或 pending 阻止。显式 file 加自定义 command 始终保持调用者管理，即使路径碰巧等于 canonical registry，也不读取无关 selector 或登记根写资格。共享同一次启动的调用者分别取得自己的 endpoint 对象，管理来源只属于本次调用，不互相改变 stop 的管理边界。ensure 和 stop 的 home 写资格等待传递原 AbortSignal 与同一绝对 deadline；私有目录准备、取锁和资格写入后均检查剩余期限，取消完成前清理本次资格，不留后台等锁任务。stop 的鉴权和退出等待也共用这一期限。

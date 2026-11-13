@@ -6,6 +6,8 @@
 
 `createDefaultNodeApplication()` 组装默认配置与本机能力；`DaemonApplication` 创建各项服务，处理启动与关闭。`settings-api.ts` 定义可注入的服务接口，`support.ts` 保存共用的运行快照和辅助函数。
 
+默认组装在创建数据库前检查根内旧选库记录，以及适用的旧 Desktop 选库记录。旧记录指向其他位置时要求先执行 `data-root migrate`，普通 `serve`、非本机监听和 HTTP 默认入口都不能另建空库；明确传入的 `store` 或 `storePath` 仍由嵌入调用方负责。
+
 ## 状态归属
 
 应用持有服务实例与资源生命周期；持久记录通过 services 提供的接口访问，各业务目录保存自己的临时协调状态。

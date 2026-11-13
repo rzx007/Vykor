@@ -1,4 +1,5 @@
 import { SessionStore } from "@vykor/services";
+import { assertCanonicalDataLocation } from "../daemon-host/data-location.js";
 
 import { getDefaultSessionStorePath } from "../daemon/paths.js";
 import {
@@ -22,6 +23,7 @@ export interface DefaultNodeApplicationOptions
 export function createDefaultNodeApplication(
   options: DefaultNodeApplicationOptions,
 ): DaemonApplication {
+  if (!options.store && options.storePath === undefined) assertCanonicalDataLocation();
   const store =
     options.store ??
     new SessionStore({

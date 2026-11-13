@@ -16,3 +16,5 @@
 启用自动清理时，保存 Git 偏好的 IPC 会等待本次 worktree 清理和登记更新结束才返回；迁移冻结因此能排空已取得 daemon client 的异步 Git 操作，再 flush 和释放 Desktop 写资格。`__test__/git-cleanup-drain.test.ts` 覆盖这条实际调用链。
 
 `data-root-settings-service.ts` / `data-root-settings-ipc.ts` 提供整根维护，home、Documents、userData 均由宿主确定，renderer 只选择完整目标或迁移记录。迁移复用服务器协调器及最终业务 flush、新扫描和封门。封门后成功和回退都恢复原始外部环境来源、以首位目标参数重启 Desktop，不复用旧客户端、不再次 flush sealed renderer。未完成导出的失败仅在协调器确认原 source 身份、无 pending 且未封门时恢复交互，保留内存草稿允许重试；恢复失败保持冻结并提供本记录恢复重试。旧 switchData 与 session 只切库接口明确返回整根迁移提示，不再追加 sessions.db，备份页也不再提供旧切库按钮。
+
+“关闭窗口并恢复”在最后业务保存失败时，同样核对原目录身份与根选择记录；尚未封门、没有待恢复迁移且原根未变，才解除操作暂停并把保存失败返回页面，用户可继续编辑和重试。有效根按进程初始化时的显式参数、原始环境、保存记录优先级重新计算，合法覆盖其他保存根不影响重试；记录不可读、待恢复迁移、移动标记、有效选中根改变或原目录被替换都不放行。无法确认时，主进程持续保留原生恢复对话框，提供按当前 pending 记录恢复和重新检查原根的入口，不依赖已经冻结的页面。只有重新确认原根安全后才恢复页面，内存草稿始终保留。`__test__/data-root-recovery-export.test.ts` 从设置 IPC 经过实际操作门和窗口保存回执覆盖这些分支。

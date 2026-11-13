@@ -162,8 +162,10 @@ export interface DaemonApplicationOptions {
   getSettingsForCwd?: (cwd: string) => Promise<Settings>;
   executionSurface?: "desktop_managed" | "cli_advanced";
   deferBackgroundActivation?: boolean;
-  /** Root used for scheduled conversations that intentionally run outside a project. */
+  /** Root for projectless schedules; embedded channels use its channels/ subdirectory unless overridden. */
   outsideProjectWorkspaceRoot?: string;
+  /** Complete channel workspace root. Product hosts pass the selected data root's channels directory. */
+  channelsWorkspaceRoot?: string;
   createAgent?: CreateDaemonAgent;
   /** Browser control is supplied by an embedding desktop host; the server builds the agent tool. */
   browserHost?: BrowserHost;
@@ -1082,6 +1084,7 @@ export class DaemonApplication implements DurableAgentApplication {
           getSettings: options.getSettings,
           settings: options.settings,
           outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot,
+          channelsWorkspaceRoot: options.channelsWorkspaceRoot,
           log: options.log,
         });
         this.channelRuntime = channelServices.runtime;

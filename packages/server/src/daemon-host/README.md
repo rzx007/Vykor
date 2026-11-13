@@ -61,7 +61,7 @@ Git 的 main（主仓库）若由停写数据库证明是已分配受管工作�
 
 设置处理器只访问 MCP stdio.cwd、sandbox 文件系统路径列表、permission.pathRules.pattern 和明确 shell executable。命令、参数、环境变量、密钥、OAuth、供应商配置和正文不改写。当前凭据/OAuth、便签恢复、图片批注格式没有待搬迁的路径字段，原文件保留。文件工作流仅解码活动 v1 快照；终态快照和 NDJSON 事件原文不变。全部已知文件解析通过后才写入；非空 `unsupported` 阻止本轮 JSON 写入，写入故障由协调器丢弃或恢复本次副本，不能继续安装。
 
-`relocateProjectStorageKeys({stagedRoot,cwdPaths,moves})` 使用原写入者共享的目录键算法，重命名副本内 local_rules/projects、data/memory 和 data/session-memory 的旧 cwd 键。先核对全部源/目标及真实路径边界；不同内容冲突抛错且不覆盖，相同内容的已有目标保留，正文、来源、ID 和整理时间不重写。所有写入都显式指向 `stagedRoot`，不读取进程全局根。
+`relocateProjectStorageKeys({stagedRoot,cwdPaths,moves})` 使用原写入者共享的目录键算法，重命名副本内 local_rules/projects、data/memory 和 data/session-memory 的旧 cwd 键。候选路径既包含数据库登记，也包含最终复制清单中的受管工作区、渠道与 worktree 目录及来源别名；临时会话或已删除会话没有数据库登记，也不会遗漏其已保存的长期事实。先一次读取已有键名，只有命中完整旧键才检查和重命名，避免对工作区中每个目录重复探测三类存储。先核对全部源/目标及真实路径边界；不同内容冲突抛错且不覆盖，相同内容的已有目标保留，正文、来源、ID 和整理时间不重写。所有写入都显式指向 `stagedRoot`，不读取进程全局根。
 
 `inspectDataRootMigration({homeDir,sourceRoot,targetRoot,...})` 从明确的根、已知位置记录和宿主输入收集来源，返回清单，不修改正在运行的库或创建文件。`legacy.documentsDir` 和 `legacy.userDataDir` 应取宿主真实系统位置；已有 Desktop 扫描收据也可提供这两个位置。没有这些信息时返回待补齐条件，不猜测 `home/Documents`。`legacy.databasePath/dataLocationPath/imageAttachmentCacheDir` 和相关旧目录环境值限定额外来源；`legacy.workspacePaths`、`projectPaths` 是宿主已知登记，缺失与空列表由 `registrationSnapshot` 区分。
 
@@ -102,6 +102,8 @@ Git 的 main（主仓库）若由停写数据库证明是已分配受管工作�
 唯一主 journal 先持久化，再写 pending，然后捕获服务定义和停写；`preparation.complete` 独立于操作进度，只有合法 flush/退出后才建立完整 sourceTrees。早期 stage 必须为空；本次服务原定义保存在固定的 `<journal>.service.json` 私有文件，主记录只存路径、摘要和意图。数据库检查副本位于完成停写后的 stage/.database-snapshot，不通过空库证明旧数据可用。
 
 `data-root-service.ts` 在动作前记录暂停、安装和恢复意图；Windows 原任务 XML/launcher、macOS plist、Linux unit 只进入私有备份。目标定义安装时保持停止，原来不存在的服务不会新增。恢复顺序为目录/Git、暂停状态的原定义、原 selector，之后用新的短锁恢复原 enabled/running；Linux start 使用 --no-block，不等待新 Node 进程取得同一 home 锁。
+
+捕获与暂停前都要核对实际服务定义的根参数，不能用新建 adapter 的路径证明全局服务归属。Linux 还核对系统当前加载的主文件、附加配置和重载状态；macOS 已加载的服务还要求实际 program/arguments 与 plist 完全相同并明示根参数；Windows 核对任务实际引用的 launcher、脚本文本和物理路径。Linux 和未加载的 macOS 旧服务可用明示的 `VYKOR_CONFIG_DIR` 或本次已核准的 `VYKOR_DATA_DIR` 绑定源；已加载 macOS 服务或旧 Windows launcher 没有明示根参数时，继承的环境或 selector 可能选择另一个根，因此拒绝迁移并提示重装或移除旧自启动。异根、未知语法及捕获后被替换的定义都在暂停前拒绝。
 
 `data-root-validation.ts` 启动真实新子进程。内部验证入口仅接受活跃锁持有者父进程、匹配 pending/journal/目标和本次记录 PID；不提供公开 ignore 开关，也不发布普通 registry。应用延迟运行恢复、定时任务、渠道和附件资源清理。验证关闭后核对全部业务表和其它文件，只忽略本次已退出 PID 的运行 owner，再从私有 `<journal>.validation/database.db` 恢复原 DB 字节及时间。备份必须匹配进入回调时的 verified 树；未知变化、活子进程或不同业务行均保留现场并拒绝恢复。
 

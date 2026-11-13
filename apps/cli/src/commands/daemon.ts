@@ -1,6 +1,4 @@
-import { getDataRoot } from "@vykor/host-config/paths";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { mkdir } from "node:fs/promises";
 import { statSync } from "node:fs";
 import { Command, Option } from "commander";
@@ -12,6 +10,7 @@ import {
   daemonPidAlive,
   getDaemonRegistryPath,
   isWindowsDaemonServiceEnabled,
+  legacyDesktopDataLocation,
   runRegisteredDaemon,
   stopRegisteredDaemon,
   withDaemonControlLock,
@@ -47,16 +46,6 @@ export function assertSafeDaemonBinding(
   if (!isLoopbackHost(options.host) && !options.token) {
     throw new Error("A non-loopback daemon requires an explicit --token");
   }
-}
-
-function legacyDesktopDataLocation(): string | undefined {
-  if (getDataRoot() !== join(homedir(), ".vykor") || process.env.VYKOR_DATA_DIR) return undefined;
-  const root = process.platform === "win32"
-    ? process.env.APPDATA ?? join(homedir(), "AppData", "Roaming")
-    : process.platform === "darwin"
-      ? join(homedir(), "Library", "Application Support")
-      : process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config");
-  return join(root, "Vykor", "runtime-data-location.json");
 }
 
 export function daemonHealthUrl(baseUrl: string): string {

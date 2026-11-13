@@ -123,6 +123,8 @@ export interface VykorServerOptions {
   getSettingsForCwd?: (cwd: string) => Promise<Settings>;
   executionSurface?: "desktop_managed" | "cli_advanced";
   outsideProjectWorkspaceRoot?: string;
+  /** Complete channel workspace root; otherwise explicit outsideProjectWorkspaceRoot uses channels/. */
+  channelsWorkspaceRoot?: string;
   /** 生产 daemon 注入渠道配置 store；不提供时不启用渠道运行时（测试/嵌入式无渠道）。 */
   channelConfigStore?: ChannelConfigStore;
   /** Test/embedding seam. Production daemon creation uses createDefaultNodeAgent directly. */
@@ -200,6 +202,7 @@ export class VykorHttpServer {
         getSettingsForCwd: options.getSettingsForCwd,
         executionSurface: options.executionSurface,
         outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot,
+        channelsWorkspaceRoot: options.channelsWorkspaceRoot,
         deferBackgroundActivation: options.deferBackgroundActivation,
         createAgent: options.createAgent,
         browserHost: options.browserHost ?? this.browserBridge,

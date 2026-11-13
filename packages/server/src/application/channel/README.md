@@ -29,4 +29,4 @@
 
 测试放在本分类同层的 `__test__/`；覆盖多个子分类的测试放在共同上层的 `__test__/`。迁移文件时同步导入、公开入口、文档链接与旧引用清单。
 
-普通 `createDaemonChannelRuntime` 直接使用所选数据根的 `channels/`，不从 Documents、outsideProjectWorkspaceRoot 或旧渠道环境变量推导。嵌入调用仍可向 `ChannelRuntimeService` 显式注入独立 workspaceRoot；实际渠道目录按 connector 和聊天标识在该根下创建。
+未传目录时，`createDaemonChannelRuntime` 使用所选数据根的 `channels/`，不读取旧渠道环境变量。嵌入宿主经 `startVykorDaemon`、`VykorServerOptions` 或应用组装传入 `outsideProjectWorkspaceRoot` 时，继续使用 `<显式目录>/channels`；新增 `channelsWorkspaceRoot` 可直接指定完整渠道根，优先于该兼容规则。Desktop、登记式 daemon 和迁移校验显式传入产品 `channels/`，因此项目外工作目录 `workspaces/` 不会改变渠道位置。运行时再按 connector 和聊天标识创建子目录。

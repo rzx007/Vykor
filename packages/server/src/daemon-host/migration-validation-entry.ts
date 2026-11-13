@@ -23,6 +23,7 @@ export async function runMigrationValidationEntry(): Promise<void> {
   const runtime = await startVykorDaemon({ host: "127.0.0.1", port: 0, token, version: "migration-validation",
     storePath: resolveUserDataPaths(context.targetRoot).sessionsDatabasePath, storeFileMustExist: true,
     outsideProjectWorkspaceRoot: resolveUserDataPaths(context.targetRoot).workspacesDir,
+    channelsWorkspaceRoot: resolveUserDataPaths(context.targetRoot).channelsDir,
     deferBackgroundActivation: true, logger: () => {} });
   close = () => runtime.server.close();
   if (stopping) { await stop(); return; }

@@ -1,4 +1,4 @@
-import { acquireDataRootWriter, dataRootHome, isCompleteAbsolutePath, resolveDataRootSelection, waitForDataRootSelection } from "@vykor/host-config/paths";
+import { acquireDataRootWriter, dataRootHome, isCompleteAbsolutePath, readDataRootSelector, resolveDataRootSelection, selectDataRoot, waitForDataRootSelection } from "@vykor/host-config/paths";
 import { access, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -84,6 +84,25 @@ export async function discover(options: DiscoverServiceOptions = {}): Promise<Se
 
 const startups = new Map<string, Promise<ServiceEndpoint>>();
 
+/** Identify an existing explicit registry without admitting unrelated product-root state. */
+function isManagedRegistryCandidate(file: string, env: Record<string, string | undefined>): boolean {
+  if (env.VYKOR_DATA_DIR !== undefined) return file === resolve(env.VYKOR_DATA_DIR, "daemon", "registry.json");
+  if (env.VYKOR_CONFIG_DIR !== undefined)
+    return isCompleteAbsolutePath(env.VYKOR_CONFIG_DIR) && file === registryFileForRoot(env.VYKOR_CONFIG_DIR, env);
+  let homeDir: string;
+  try { homeDir = dataRootHome(env); }
+  catch { return false; } // An invalid unrelated home cannot establish managed provenance.
+  const fallback = selectDataRoot({ env, homeDir });
+  let selector: ReturnType<typeof readDataRootSelector>;
+  try { selector = readDataRootSelector(homeDir); }
+  catch (error) {
+    if (file === registryFileForRoot(fallback.dataRoot, env)) throw error;
+    return false;
+  }
+  // Pure selection recognizes a saved root even when migration admission is pending.
+  return file === registryFileForRoot(selectDataRoot({ env, homeDir, selector }).dataRoot, env);
+}
+
 function waitForStartup(pending: Promise<ServiceEndpoint>, end: number, signal?: AbortSignal): Promise<ServiceEndpoint> {
   signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
@@ -111,7 +130,7 @@ export async function ensure(options: EnsureServiceOptions = {}): Promise<Servic
   const file = resolve(options.file ?? registryFileForRoot(env.VYKOR_CONFIG_DIR!, selectionEnv));
   const existing = await discover({ ...options, file, timeoutMs: Math.max(1, end - Date.now()) });
   let managed = !options.file ? { homeDir: dataRootHome(selectionEnv), dataRoot: env.VYKOR_CONFIG_DIR! } : undefined;
-  if (existing) { if (managed) managedEndpoints.set(existing, managed); return existing; }
+  if (existing && options.file && (options.command || !isManagedRegistryCandidate(file, selectionEnv))) return existing;
   if (options.file && !options.command) {
     const selected = await waitForDataRootSelection({ env: selectionEnv }, { deadline: end, signal: options.signal });
     if (file === registryFileForRoot(selected.dataRoot, selectionEnv)) {
@@ -123,11 +142,11 @@ export async function ensure(options: EnsureServiceOptions = {}): Promise<Servic
       managed = { homeDir: dataRootHome(selectionEnv), dataRoot: selected.dataRoot };
     }
   }
+  if (existing) { if (managed) managedEndpoints.set(existing, managed); return existing; }
   let pending = startups.get(file);
   const joinsExistingStartup = pending !== undefined;
   if (!pending) {
-    const root = env.VYKOR_CONFIG_DIR;
-    const writerRoot = isCompleteAbsolutePath(root) && file === registryFileForRoot(root, selectionEnv) ? root : undefined;
+    const writerRoot = managed?.dataRoot;
     pending = startService({ ...options, file }, env, end, writerRoot).finally(() => { startups.delete(file); });
     startups.set(file, pending);
   }
@@ -138,8 +157,10 @@ export async function ensure(options: EnsureServiceOptions = {}): Promise<Servic
   if (typeof options.version === "string" && endpoint.version !== options.version
     || typeof options.version === "function" && !options.version(endpoint.version))
     throw new Error("Started service does not satisfy the requested version.");
-  if (managed) managedEndpoints.set(endpoint, managed);
-  return endpoint;
+  // Startup coordination shares one result internally; ownership belongs to each caller's handle.
+  const result = { ...endpoint };
+  if (managed) managedEndpoints.set(result, managed);
+  return result;
 }
 
 async function startService(options: EnsureServiceOptions & { file: string }, env: Record<string, string | undefined>, end: number, writerRoot?: string): Promise<ServiceEndpoint> {

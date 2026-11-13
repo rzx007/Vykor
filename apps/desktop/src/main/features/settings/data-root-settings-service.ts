@@ -1,7 +1,7 @@
 import { app, dialog } from "electron"
 import { dirname, join } from "node:path"
 import { lstat } from "node:fs/promises"
-import { dataRootHome, getDataRoot, getInitializedDataRootInputs, getInitializedDataRootSelection, isWithinManagedPath, readDataRootSelector, requireCompleteAbsolutePath, resolveManagedRealPath, resolveUserDataPaths, type InitializedDataRootInputs } from "@vykor/host-config/paths"
+import { dataRootHome, getDataRoot, getInitializedDataRootInputs, getInitializedDataRootSelection, isWithinManagedPath, readDataRootSelector, requireCompleteAbsolutePath, resolveDataRootSelection, resolveManagedRealPath, resolveUserDataPaths, type DataRootSelector, type InitializedDataRootInputs } from "@vykor/host-config/paths"
 import { DaemonSystemService, inspectDataRootMigration, migrateDataRootAndRestart, recoverDataRootMigration, type DataRootMigrationRequest } from "@vykor/server/daemon-host"
 import { prepareDesktopRootMigration, resumeDesktopAfterFailedExport } from "../business-data/window-flush"
 import { readLegacyImportManifest } from "../business-data/legacy-import"
@@ -50,6 +50,19 @@ export function relaunchDesktopAtRoot(root: string): void {
   app.relaunch({ args: [...(app.isPackaged ? [] : [app.getAppPath()]), "--data-root", root] })
   app.quit()
 }
+/** A failed export may reopen only the original directory, with no unfinished root switch. */
+async function canResumeDesktopSource(homeDir: string, sourceRoot: string, sourceIdentity: Awaited<ReturnType<typeof lstat>>): Promise<boolean> {
+  try {
+    const original = getInitializedDataRootInputs()
+    if (!original || original.homeDir !== homeDir) return false
+    // Reapply startup precedence: explicit/env roots legitimately override an unrelated saved selector.
+    // The resolver also rejects pending migrations, moved markers and an unavailable saved database.
+    const selected = resolveDataRootSelection({ homeDir, explicitRoot: original.explicitRoot, env: original.environment })
+    const current = await lstat(sourceRoot)
+    return await resolveManagedRealPath(selected.dataRoot) === await resolveManagedRealPath(sourceRoot)
+      && current.isDirectory() && !current.isSymbolicLink() && current.dev === sourceIdentity.dev && current.ino === sourceIdentity.ino
+  } catch { return false } // Unknown selector/root state never authorizes writes.
+}
 export async function migrateDesktopDataRoot(target: string): Promise<DataRootOperation> {
   const request = desktopDataRootRequest(target), preview = await inspectDataRootMigration(request)
   if (preview.blockers.some(blocker => !["needs_desktop_export", "git_main_ownership_pending"].includes(blocker.code)) || dataRootInfo().unresolvedComposer)
@@ -89,9 +102,7 @@ export async function migrateDesktopDataRoot(target: string): Promise<DataRootOp
     }
   }
   if (exportAttempted && !restartRequired && sourceRecovered) {
-    const selector = readDataRootSelector(request.homeDir), current = await lstat(request.sourceRoot)
-    if (!selector?.pendingMigration && (!selector || await resolveManagedRealPath(selector.dataRoot) === await resolveManagedRealPath(request.sourceRoot))
-      && current.isDirectory() && !current.isSymbolicLink() && current.dev === sourceIdentity.dev && current.ino === sourceIdentity.ino) {
+    if (await canResumeDesktopSource(request.homeDir, request.sourceRoot, sourceIdentity)) {
       resumeDesktopAfterFailedExport()
       result.error = "业务草稿未保存，迁移已停止且原根已恢复。请重试保存后再迁移。"
     }
@@ -107,7 +118,24 @@ export async function migrateDesktopDataRoot(target: string): Promise<DataRootOp
 }
 export async function recoverDesktopDataRoot(journal: string): Promise<DataRootOperation> {
   requireCompleteAbsolutePath(journal, "迁移记录")
-  await prepareDesktopRootMigration(pauseDesktopConnections)
+  const homeDir = dataRootHome(), sourceRoot = getDataRoot(), sourceIdentity = await lstat(sourceRoot)
+  try { await prepareDesktopRootMigration(pauseDesktopConnections) }
+  catch (error) {
+    if (restartRequired) throw error // Sealed objects must never reopen their old paths.
+    while (!await canResumeDesktopSource(homeDir, sourceRoot, sourceIdentity)) {
+      let pending: DataRootSelector["pendingMigration"]
+      try { pending = readDataRootSelector(homeDir)?.pendingMigration } catch { /* Keep host controls available for an unreadable selector. */ }
+      const choice = await dialog.showMessageBox({ type: "warning", title: "草稿未保存，原根尚未确认可用",
+        buttons: pending ? ["按记录恢复原根", "重新检查原根"] : ["重新检查原根"], defaultId: pending ? 1 : 0, cancelId: pending ? 1 : 0,
+        message: `内存草稿仍保留，当前窗口继续暂停写入。${pending ? `\n恢复记录：${pending.journalPath}\n可按记录恢复，或在外部恢复完成后重新检查。` : "\n请修复数据根选择记录并还原原目录后重新检查。"}` })
+      if (pending && choice.response === 0) {
+        try { await recoverDataRootMigration(pending.journalPath, { homeDir }) }
+        catch { /* Retry remains available in this native host dialog, outside the frozen renderer. */ }
+      }
+    }
+    resumeDesktopAfterFailedExport()
+    throw error
+  }
   setTimeout(() => {
     const env = dataRootRelaunchEnvironment(process.env, getInitializedDataRootInputs())
     for (const key of ["VYKOR_CONFIG_DIR", "VYKOR_DATA_DIR", "VYKOR_CHANNELS_DIR", "VYKOR_IMAGE_ATTACHMENT_CACHE_DIR"]) {

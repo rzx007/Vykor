@@ -8,7 +8,7 @@ import { installLocalNativePlugin } from "../../../../plugins/src/installation/i
 import { writeNativeAppFixture } from "../../../../plugins/src/__test__/helpers/native-app.js";
 import { SessionDatabase } from "../../../../services/src/database/session-database.js";
 import * as tables from "../../../../services/src/session-runtime/schema.js";
-import { readDataRootSelector } from "@vykor/host-config/paths";
+import { getProjectDirectoryKey, readDataRootSelector } from "@vykor/host-config/paths";
 import { securePrivateDirectory, securePrivateFile } from "@vykor/host-config";
 
 let root: string, source: string, target: string, home: string;
@@ -41,6 +41,34 @@ it("copies only the final inventory, keeps original bytes/times and installs ind
   expect(copy.orm.select().from(tables.sessions).all()).toMatchObject([{ id: "session", cwd: join(target, "workspaces/chat") }]); copy.close();
   expect(readDataRootSelector(home)?.pendingMigration?.id).toBe(result.id);
   const journal = readFileSync(result.journalPath, "utf8"); for (const text of ["never-journal-secret", "never-journal-body", "never-journal-environment", "never-copy-active-token"]) expect(journal).not.toContain(text);
+});
+
+it.each(["workspace", "channel", "legacy-documents", "recovery"])("keeps %s memory and rules readable without persistent session registrations", async kind => {
+  const db = SessionDatabase.open({ path: database() });
+  db.orm.delete(tables.sessions).run(); db.close();
+  const oldCwd = kind === "legacy-documents" ? join(root, "Documents/Vykor/memory-only")
+    : join(source, kind === "channel" ? "channels/connector/chat" : "workspaces/memory-only/nested");
+  const nextCwd = kind === "legacy-documents" ? join(target, "workspaces/legacy/memory-only")
+    : join(target, kind === "channel" ? "channels/connector/chat" : "workspaces/memory-only/nested");
+  file(join(oldCwd, "keep.txt"), "managed workspace");
+  const directories = [["local_rules/projects", false], ["data/memory", true], ["data/session-memory", false]] as const;
+  for (const [directory, folded] of directories)
+    file(join(source, directory, getProjectDirectoryKey(oldCwd, folded), "fact.md"), "explicitly retained fact");
+  const result = await (await api()).migrateDataRoot(request(), stopped);
+  expect(result.phase).toBe("verified");
+  expect(readFileSync(join(nextCwd, "keep.txt"), "utf8")).toBe("managed workspace");
+  for (const [directory, folded] of directories) {
+    expect(readFileSync(join(target, directory, getProjectDirectoryKey(nextCwd, folded), "fact.md"), "utf8")).toBe("explicitly retained fact");
+    expect(readFileSync(join(source, directory, getProjectDirectoryKey(oldCwd, folded), "fact.md"), "utf8")).toBe("explicitly retained fact");
+  }
+  if (kind === "recovery") {
+    const recovered = await (await api()).recoverDataRootMigration(result.journalPath, { homeDir: home });
+    expect(recovered).toMatchObject({ phase: "failed", recoveryWritersReleased: true });
+    expect(readDataRootSelector(home)).toBeUndefined();
+    expect(await (await api()).recoverDataRootMigration(result.journalPath, { homeDir: home })).toEqual(recovered);
+    for (const [directory, folded] of directories)
+      expect(readFileSync(join(source, directory, getProjectDirectoryKey(oldCwd, folded), "fact.md"), "utf8")).toBe("explicitly retained fact");
+  }
 });
 
 it.each(["canonical", "custom"])("uses committed %s WAL records and protects a schedule-only project during the second inventory", async kind => {

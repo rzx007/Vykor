@@ -1,5 +1,5 @@
 import { lstat, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { resolveManagedRealPath } from "@vykor/host-config/paths";
 import { DaemonSystemService, type DaemonServiceSnapshot } from "./system-service.js";
 import { fileDigest, samePath, saveMigrationJournal, writePrivateJson, type MigrationJournal } from "./data-root-migration-journal.js";
@@ -17,6 +17,14 @@ export function validateMigrationServiceJournal(j: MigrationJournal): void {
     || !["captured", "pause-intent", "paused", "install-intent", "installed", "restore-intent", "restored"].includes(service.state))) throw new Error("Invalid migration service backup scope");
 }
 const sourceLogs = (j: MigrationJournal, logs: string) => [{ path: join(j.sourceRoot, "data") }, ...(j.preparation?.runtimeDirectories ?? [])].some(runtime => samePath(logs, join(runtime.path, "logs")));
+const sourceRuntimes = (j: MigrationJournal) => [join(j.sourceRoot, "data"), ...(j.preparation?.runtimeDirectories ?? []).map(runtime => runtime.path)];
+async function verifyOwnership(j: MigrationJournal, service: DaemonSystemService, snapshot: DaemonServiceSnapshot): Promise<void> {
+  service.assertMigrationOwnership(snapshot, j.sourceRoot, sourceRuntimes(j));
+  if (snapshot.installed && snapshot.options.platform === "win32") {
+    const launcher = join(dirname(snapshot.options.logsDir!), "daemon/daemon-watchdog.vbs");
+    if (!samePath(await resolveManagedRealPath(launcher), launcher)) throw new Error("System service launcher ownership escaped its source runtime");
+  }
+}
 async function backup(j: MigrationJournal): Promise<DaemonServiceSnapshot> {
   validateMigrationServiceJournal(j);
   const record = j.systemService;
@@ -35,13 +43,16 @@ export async function captureMigrationService(j: MigrationJournal, service: Daem
   const snapshot = service.snapshotForMigration();
   if (!snapshot.options.homeDir || !samePath(snapshot.options.homeDir, j.homeDir) || !snapshot.options.logsDir
     || !sourceLogs(j, snapshot.options.logsDir)) throw new Error("System service does not belong to this migration root/home");
+  await verifyOwnership(j, service, snapshot);
   const backupPath = `${j.journalPath}.service.json`;
   await writePrivateJson(backupPath, snapshot);
   j.systemService = { backupPath, digest: await fileDigest(backupPath), state: "captured" };
   j.operation = "service-capture"; await saveMigrationJournal(j);
 }
 export async function pauseMigrationService(j: MigrationJournal, service: DaemonSystemService): Promise<void> {
-  await backup(j);
+  const saved = await backup(j), current = service.snapshotForMigration();
+  await verifyOwnership(j, service, current);
+  if (current.installed !== saved.installed || current.definition !== saved.definition || current.launcher !== saved.launcher) throw new Error("System service definition changed after migration capture");
   j.systemService!.state = "pause-intent"; j.systemService!.resumeRequired = true; j.operation = "service-pause"; await saveMigrationJournal(j);
   service.pauseForMigration();
   j.systemService!.state = "paused"; await saveMigrationJournal(j);

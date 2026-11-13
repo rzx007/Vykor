@@ -19,6 +19,7 @@ export type VykorDaemonOptions = Pick<
   | "host"
   | "logger"
   | "outsideProjectWorkspaceRoot"
+  | "channelsWorkspaceRoot"
   | "port"
   | "store"
   | "storePath"
