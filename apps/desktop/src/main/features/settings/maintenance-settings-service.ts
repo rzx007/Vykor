@@ -76,7 +76,7 @@ export class MaintenanceSettingsService {
   backup(input: { destination: string; includeMemory: boolean; includeOutput: boolean }) { return this.request<MaintenanceBackupResult>("/maintenance/backup", input, AbortSignal.timeout(600_000)) }
   verifyBackup(source: string) { return this.request<MaintenanceBackupResult>("/maintenance/backup/verify", { source }) }
   restore(input: { source: string; target: string }) { return this.request<MaintenanceBackupResult>("/maintenance/backup/restore", input, AbortSignal.timeout(600_000)) }
-  async switchData(directory: string) { await desktopSessionService.switchDataDirectory(directory, { stopActive: false, storePath: join(directory, "sessions.db") }) }
+  async switchData(_directory: string) { throw new Error("旧的只切换数据库入口已停用，请使用用户数据根迁移；所选目录必须是完整用户数据根。") }
   async reconnect() { await desktopSessionService.refreshDaemonClient() }
   async restart() { await desktopSessionService.restartDaemon({ stopActive: false }) }
   cancelDiagnosis(input?: { requestId: string }) {

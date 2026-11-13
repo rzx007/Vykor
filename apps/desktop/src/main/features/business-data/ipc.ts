@@ -1,17 +1,17 @@
 import { classifyRecoverySessions } from "./legacy-composer"
 import { app } from "electron"
+import type { LegacyDesktopSourceReceipt } from "@vykor/server/daemon-host"
 import { BusinessDataChannels, type BusinessDataKey } from "../../../shared/business-data-types"
 import type { IpcContribution } from "../../core/ipc/types"
-import { desktopSessionService } from "../session/session-service"
 import { desktopBusinessDataService } from "./business-data-service"
 import { acknowledgeBusinessDataFlush, markBusinessDataWindowReady } from "./window-flush"
-export const businessDataIpcContribution: IpcContribution = {
+export function createBusinessDataIpcContribution(lookup?: (ids: readonly string[]) => Promise<Record<string, "persistent" | "memory" | "unknown">>, legacySources?: LegacyDesktopSourceReceipt): IpcContribution { return {
   id: "business-data",
   register: () => [
     {
       channel: BusinessDataChannels.recordDesktopScan,
       handler: (_event, sources) => desktopBusinessDataService.recordDesktopScan(sources as Record<string, string>, {
-        userDataDir: app.getPath("userData"), documentsDir: app.getPath("documents"),
+        userDataDir: app.getPath("userData"), documentsDir: app.getPath("documents"), legacySources,
       }),
     },
     {
@@ -51,9 +51,11 @@ export const businessDataIpcContribution: IpcContribution = {
     {
       channel: BusinessDataChannels.classifySessions,
       handler: async (_event, ids) => {
-        const client = await desktopSessionService.daemonClient()
+        if (lookup) return lookup(ids as string[])
+        const client = await (await import("../session/session-service")).desktopSessionService.daemonClient()
         return classifyRecoverySessions(ids, (id) => client.sessions.get(id))
       },
     },
   ],
-}
+} }
+export const businessDataIpcContribution = createBusinessDataIpcContribution()

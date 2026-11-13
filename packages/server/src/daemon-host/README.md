@@ -108,3 +108,7 @@ Git 的 main（主仓库）若由停写数据库证明是已分配受管工作�
 同锁回调按 validate → commit → markWritersReleased 执行。普通子进程只在核心解锁后启动，以显式目标参数及原始外部目录环境输入初始化；不修改旧 parent 的 pinned 根。新 PID/token 和正式登记从普通新进程产生。放行目标写入后启动失败只报告向前修复。恢复旧源也先持久化 recoveryWritersReleased；之后服务 resume 失败不能再回退数据或重挂旧 pending，遇到后续迁移直接跳过旧服务恢复。
 
 旧分离数据集同样走高层：只选inspect.sources中origin=runtime-data与canonical sourceRoot/data的有限目录，检查单一活registry和其数据库身份；多活源拒绝。早期journal记录这些已存在目录身份，原服务launcher/logs只从同组目录派生，不为了发现旧库创建新canonical库。Windows固定launcher/logs在stagedTree与Git基线之前生成，最终安装相同文本不重写；未知业务改动仍按全树摘要拒绝。
+
+`prepareLegacyDesktopSessionLookup(request)` 是本机维护窗口的准备入口。在 home 锁内复用有限来源、唯一 DB、PID/token 和写入者检查；可信旧 daemon 逐 ID 鉴权查询，覆盖归档与 memory，不用分页缺项判断不存在。无 live 源时复制停写 DB/WAL/SHM 到 home 下私有临时目录，校验当前 schema、完整性、外键后读取正式 ID，核对源前后身份和摘要，成功后仅清理已核对临时目录。结果为内存分类函数及可选的宿主来源收据，均不含正文；未知 ID 为 unknown；不改 selector、服务或源库，也不代替正式迁移的最终停写和新扫描。
+
+旧环境覆盖的来源证据保存在现有 legacy-import.json 顶层 legacySources，避免业务 scan 失效时丢失它。data-root-legacy-receipt.ts 绑定 sourceRoot 目录身份、宿主 profile/Documents 和已核实来源身份；只补当前缺省来源，原 rootInputs 外部 pin 不改。已有 canonical DB 优先于旧 DB/runtime 候选，独立 channels/images 仍可补回；坏绑定或被替换的来源拒绝。T8 在受管 staged 副本将状态改为 consumed，原副本保留 pending，same-root 新目录身份也不会令已消费来源复活。

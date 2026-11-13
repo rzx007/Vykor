@@ -45,3 +45,13 @@ it("returns only a failure acknowledgement without exposing draft errors", async
   )
   expect(JSON.stringify(electron.invoke.mock.calls)).not.toContain("PRIVATE BODY")
 })
+it("restores interaction only on the host export-resumed event and releases its listener", () => {
+  let resumed = false
+  const off = desktopAPI.businessData.onFlushRequested(async () => {}, () => { resumed = true })
+  const listener = electron.on.mock.calls.findLast(([channel]) => channel === "business-data:export-resumed")![1]
+  expect(resumed).toBe(false)
+  listener({})
+  expect(resumed).toBe(true)
+  off()
+  expect(electron.removeListener).toHaveBeenCalledWith("business-data:export-resumed", listener)
+})

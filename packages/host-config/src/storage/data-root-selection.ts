@@ -88,7 +88,7 @@ export function readDataRootSelector(homeDir: string): DataRootSelector | undefi
 export class DataRootLockBusyError extends Error {
   readonly code = "data_root_locked";
   constructor(readonly lockPath: string) {
-    super(`Data root lock is held at ${lockPath}; wait for the owner or run data-root recover after verifying it has stopped.`);
+    super(`Data root lock is held at ${lockPath}; wait for its owner, or run vk data-root recover --startup-lock only after verifying it has stopped (pending migrations require recover --journal <absolute-path>).`);
   }
 }
 
@@ -228,7 +228,7 @@ async function withRootLease<T>(homeDir: string, operation: (lock: DataRootLock)
   let deadline = options.deadline ?? Infinity;
   const checkWaiting = () => {
     options.signal?.throwIfAborted();
-    if (Date.now() >= deadline) throw new Error(`Data root lock wait timed out (busy): ${lockPath}; run data-root recover only after its owner stops.`);
+    if (Date.now() >= deadline) throw new Error(`Data root lock wait timed out (busy): ${lockPath}; run vk data-root recover --startup-lock only after its owner stops (pending migrations require recover --journal <absolute-path>).`);
   };
   checkWaiting();
   if (!directoryIfPresent(lockPath)) {

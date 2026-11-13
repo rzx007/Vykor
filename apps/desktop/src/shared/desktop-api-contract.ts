@@ -207,6 +207,7 @@ import type {
 } from "./window-material-types"
 
 export type DesktopAPI = {
+  dataRootMaintenance?: boolean
   businessData: DesktopBusinessDataApi
   workflows: import("./workflow-types").DesktopWorkflowAPI
   terminalSettings: TerminalSettingsAPI

@@ -19,3 +19,7 @@ composer 的 `partial` 记录含 `unresolvedSessionIds` 和 `reason: session-not
 T10/T11 可在取得迁移互斥并冻结编辑之后调用 `prepareDesktopBusinessDataExport()`。该函数等待既有 flush，并要求产生不同于调用前的扫描 ID，且所有当前支持来源 confirmed 或已有 partial ACK，返回 `{desktopExportPath,scanId,userDataDir,documentsDir}`；没有就绪 renderer、只存在旧收据或有未处理 partial 时失败为 `needs_desktop_export`。调用方保持冻结直到迁移结束/取消，不能在读取收据后提前销毁 IPC。主进程不解析 LevelDB，旧键和桌面偏好继续保留；历史 targetDigest 不约束用户后来正常编辑的目标。
 
 根迁移使用 `prepareDesktopRootMigration(pauseConnections)`：先拒绝新增普通 IPC 并等完整异步调用（含 Git 子进程）结束；要求所有主业务 renderer 冻结编辑、完成业务写队列及新扫描；随后封住业务 IPC、暂停连接重试，最后释放 Desktop 的根写资格。未知/未就绪窗口不能充当完成证明。freeze 失败后仍保持冻结，调用方应关闭并重新启动 Desktop，不能把持旧路径的对象原地转到新根。
+
+本机旧布局维护使用 createBusinessDataIpcContribution(lookup)，分类函数来自已核对的真实旧数据集；默认窗口继续通过已有 daemon 分类。最终 flush 失败且尚未 seal 时，只有设置宿主确认原根恢复和无 pending 后才能通知 renderer 恢复交互；已 seal 窗口退出时不再二次 flush。
+
+legacy-import.json 的顶层 legacySources 只由本机维护宿主提供已核实路径和身份，renderer 只能提交支持键摘要。普通 scan 失效不会删除这份来源证据；目标迁移副本置 consumed 后继续保留审计，不作为下次迁移输入。

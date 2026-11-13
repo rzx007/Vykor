@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import { lstatSync, realpathSync } from "node:fs";
-import { lstat } from "node:fs/promises";
+import { copyFile, lstat, mkdtemp, rm } from "node:fs/promises";
+import { securePrivateDirectory } from "@vykor/host-config";
+import { readPersistentSessionIdsFromCopy } from "@vykor/services/data-root-relocation";
 import { dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { getInitializedDataRootInputs, listDataRootWriters, readDataRootSelector, resolveUserDataPaths, withDataRootLock, type DataRootWriter } from "@vykor/host-config/paths";
@@ -13,7 +15,8 @@ import { inspectDataRootMigration, type DataRootMigrationRequest } from "./data-
 import type { MigrationValidationInvocation } from "./data-root-validation.js";
 import type { DaemonServiceInvocation, DaemonSystemService } from "./system-service.js";
 import { resumeMigrationService } from "./data-root-service.js";
-import { identity, readMigrationJournal, samePath } from "./data-root-migration-journal.js";
+import { captureLegacyDesktopSources, restoreLegacyDesktopSources, type LegacyDesktopSourceReceipt } from "./data-root-legacy-receipt.js";
+import { fileDigest, identity, readMigrationJournal, samePath } from "./data-root-migration-journal.js";
 
 export class DataRootWritersBusyError extends Error {
   readonly code = "data_root_writers_busy";
@@ -64,6 +67,73 @@ async function writers(input: DataRootMigrationRequest, allowDesktop: boolean, d
     result.push(writer);
   }
   return result;
+}
+
+/** Local maintenance only. Never initializes another store or reads source SQLite. */
+export interface PreparedLegacyDesktopSessionLookup {
+  lookup(ids: readonly string[]): Promise<Record<string, "persistent" | "memory" | "unknown">>;
+  legacySources?: LegacyDesktopSourceReceipt;
+}
+export async function prepareLegacyDesktopSessionLookup(input: DataRootMigrationRequest): Promise<PreparedLegacyDesktopSessionLookup> {
+  return withDataRootLock(input.homeDir, async () => {
+    input = await restoreLegacyDesktopSources(input);
+    if (readDataRootSelector(input.homeDir)?.pendingMigration) throw new Error("Recover the pending migration before exporting Desktop business data");
+    const preview = await inspectDataRootMigration(input);
+    const permitted = new Set(["needs_desktop_export", "git_main_ownership_pending", "fixed_root_environment", "fixed_directory_environment", "target_not_empty", "insufficient_space"]);
+    if (preview.blockers.some(item => !permitted.has(item.code)) || preview.databases.length !== 1) throw new Error("Cannot verify the unique legacy Desktop dataset; inspect its sources first");
+    const database = preview.databases[0]!;
+    const directories = [...new Set([join(preview.sourceRoot, "data"), ...preview.sources.filter(source => source.origin === "runtime-data").map(source => source.from)])];
+    const source = sourceDaemon(directories, database.path), busy = await writers(input, false, source?.registry.pid);
+    if (busy.length) throw new DataRootWritersBusyError(busy);
+    const legacySources = await captureLegacyDesktopSources(input, preview);
+    if (source) {
+      if (!await identityMatches(source.registry)) throw new Error("Cannot verify the legacy source daemon");
+      return { legacySources, lookup: async ids => {
+        if (ids.length > 500 || ids.some(id => typeof id !== "string" || !id || id.length > 256)) throw new Error("Invalid legacy session IDs");
+        if (!sameDaemonRegistration(readControlledRegistry(source.file), source.registry) || !await identityMatches(source.registry)) throw new Error("Legacy source daemon identity changed");
+        const classes: Record<string, "persistent" | "memory" | "unknown"> = Object.create(null);
+        for (const id of new Set(ids)) {
+          const response = await fetch(new URL(`/sessions/${encodeURIComponent(id)}`, source.registry.url), { headers: headers(source.registry), redirect: "error", signal: AbortSignal.timeout(5000) });
+          if (response.status === 404) { classes[id] = "unknown"; continue; }
+          if (!response.ok) throw new Error("Legacy source session lookup failed");
+          const value = await response.json() as { session?: { id?: string; storage?: string } };
+          if (value.session?.id !== id || (value.session.storage !== undefined && !["persistent", "memory"].includes(value.session.storage))) throw new Error("Invalid legacy session classification");
+          classes[id] = value.session.storage === "memory" ? "memory" : "persistent";
+        }
+        if (!sameDaemonRegistration(readControlledRegistry(source.file), source.registry) || !await identityMatches(source.registry)) throw new Error("Legacy source daemon identity changed");
+        return classes;
+      } };
+    }
+    const directory = await mkdtemp(join(input.homeDir, ".vykor-desktop-export-"));
+    await securePrivateDirectory(directory);
+    const directoryIdentity = await identity(directory);
+    // The home lease blocks writer admission; source daemon discovery and writer drain happened above.
+    // Keep a failed/changed copy for diagnosis; only a verified owned successful copy is removed.
+    const expected: Array<{ path: string; identity: string; digest: string }> = [];
+    for (const path of [database.path, database.walPath, database.shmPath].filter((path): path is string => !!path)) {
+      const entry = preview.entries.find(entry => entry.source === path && entry.kind === "file");
+      if (!entry?.digest) throw new Error("Legacy database is outside the verified inventory");
+      const before = await fileIdentity(path);
+      if (await fileDigest(path) !== entry.digest) throw new Error("Legacy database changed before export");
+      const target = join(directory, `sessions.db${path.slice(database.path.length)}`);
+      await copyFile(path, target);
+      if (await fileDigest(target) !== entry.digest) throw new Error("Legacy export copy digest mismatch");
+      expected.push({ path, identity: before, digest: entry.digest });
+    }
+    const persistent = new Set(readPersistentSessionIdsFromCopy(join(directory, "sessions.db")));
+    for (const entry of expected) if (await fileIdentity(entry.path) !== entry.identity || await fileDigest(entry.path) !== entry.digest) throw new Error("Legacy source changed during export preparation");
+    if (await identity(directory) !== directoryIdentity) throw new Error("Legacy export temporary directory identity changed");
+    await rm(directory, { recursive: true });
+    return { legacySources, lookup: async ids => {
+      if (ids.length > 500 || ids.some(id => typeof id !== "string" || !id || id.length > 256)) throw new Error("Invalid legacy session IDs");
+      return Object.fromEntries([...new Set(ids)].map(id => [id, persistent.has(id) ? "persistent" as const : "unknown" as const]));
+    } };
+  });
+}
+async function fileIdentity(path: string): Promise<string> {
+  const value = await lstat(path);
+  if (!value.isFile() || value.isSymbolicLink() || !samePath(realpathSync(path), path)) throw new Error("Legacy database file identity is unsafe");
+  return `${value.dev}:${value.ino}:${value.size}:${value.mtimeMs}:${value.ctimeMs}`;
 }
 
 /** Product coordinator. The file-layer core still supports deliberate prepare-only embedding. */

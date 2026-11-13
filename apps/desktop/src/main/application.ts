@@ -1,4 +1,5 @@
 import { flushDesktopBusinessData } from "./features/business-data/window-flush"
+import { isDataRootMigrationShutdown } from "./features/settings/data-root-settings-service"
 import { app, BrowserWindow, Menu, session, dialog } from "electron"
 import { resolve } from "node:path"
 import { installDocumentPreviewProtocol } from "./features/workspace/document-preview-protocol"
@@ -137,7 +138,7 @@ function startDesktopApplication(): void {
     event.preventDefault()
     if (shutdown) return
     shutdown = (async () => {
-      await flushDesktopBusinessData()
+      if (!isDataRootMigrationShutdown()) await flushDesktopBusinessData()
       await getDesktopPluginAppService()?.dispose()
       desktopPluginAppDocuments.clear()
       updaterRuntime?.service.dispose()

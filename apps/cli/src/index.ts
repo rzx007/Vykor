@@ -1,12 +1,15 @@
-import { acquireDataRootWriter, assertNoLegacyDirectoryOverrides, dataRootHome, initializeDataRoot, parseDataRootArgument } from "@vykor/host-config/paths";
+import { acquireDataRootWriter, assertNoLegacyDirectoryOverrides, dataRootHome, initializeDataRoot, parseDataRootArgument, resolveDataRootSelection } from "@vykor/host-config/paths";
 
 async function main(): Promise<void> {
   if (process.argv[2] === "--internal-data-root-validation") {
     await (await import("@vykor/server/migration-validation")).runMigrationValidationEntry(); return;
   }
   const parsed = parseDataRootArgument(process.argv.slice(2));
-  // Local data-root inspect/migrate/recover must be routed here, before normal
-  // initialization and before importing program.ts (which loads product stores).
+  if (parsed.argv[0] === "data-root") {
+    if (parsed.explicitRoot) throw new Error("data-root 操作使用 --from/--to 选择完整根，不使用全局 --data-root。");
+    await (await import("./commands/data-root.js")).runDataRootCommand(parsed.argv.slice(1), process.argv[1]!); return;
+  }
+  assertNoLegacyDirectoryOverrides(resolveDataRootSelection({ explicitRoot: parsed.explicitRoot }).dataRoot);
   const selected = await initializeDataRoot({ explicitRoot: parsed.explicitRoot });
   assertNoLegacyDirectoryOverrides(selected.dataRoot);
   // Holds credentials, TUI delayed saves and command writes until process exit.

@@ -51,16 +51,18 @@ export const desktopAPI = {
     acknowledgeUnresolvedComposer: (digest: string) => invoke(BusinessDataChannels.acknowledgeUnresolved, digest),
     classifySessions: (ids: string[]) => invoke(BusinessDataChannels.classifySessions, ids),
     flush: () => invoke(BusinessDataChannels.flush),
-    onFlushRequested: (listener: (freeze?: boolean) => Promise<void>) => {
+    onFlushRequested: (listener: (freeze?: boolean) => Promise<void>, onExportResumed?: () => void) => {
       const wrapped = (_event: Electron.IpcRendererEvent, requestId: string, freeze?: boolean) => {
         void Promise.resolve().then(() => listener(freeze === true)).then(
           () => invoke(BusinessDataChannels.flushAck, requestId, true),
           () => invoke(BusinessDataChannels.flushAck, requestId, false),
         )
       }
+      const resumed = () => onExportResumed?.()
+      ipcRenderer.on("business-data:export-resumed", resumed)
       ipcRenderer.on("business-data:flush-request", wrapped)
       void invoke(BusinessDataChannels.consumerReady)
-      return () => { ipcRenderer.removeListener("business-data:flush-request", wrapped) }
+      return () => { ipcRenderer.removeListener("business-data:flush-request", wrapped); ipcRenderer.removeListener("business-data:export-resumed", resumed) }
     },
   },
   workflows: {
@@ -493,6 +495,10 @@ export const desktopAPI = {
     test: (input) => invoke(ProviderDefaultsChannels.test, input),
   },
   maintenance: {
+    dataRootInfo: () => invoke(MaintenanceSettingsChannels.dataRootInfo),
+    inspectDataRoot: (target) => invoke(MaintenanceSettingsChannels.inspectDataRoot, target),
+    migrateDataRoot: (target) => invoke(MaintenanceSettingsChannels.migrateDataRoot, target),
+    recoverDataRoot: (journal) => invoke(MaintenanceSettingsChannels.recoverDataRoot, journal),
     usage: (filter) => invoke(MaintenanceSettingsChannels.usage, filter),
     price: (price) => invoke(MaintenanceSettingsChannels.price, price),
     budget: (budget) => invoke(MaintenanceSettingsChannels.budget, budget),

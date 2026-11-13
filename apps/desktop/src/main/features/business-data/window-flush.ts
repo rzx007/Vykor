@@ -7,6 +7,7 @@ import { desktopOperationGate, releaseDesktopRootWriter } from "../../core/ipc/o
 const windows = new Set<WebContents>()
 const readyWindows = new WeakSet<WebContents>()
 const requests = new Map<string, { senderId: number; finish: (success: boolean) => void }>()
+let failedExport = false
 export function trackBusinessDataWindow(sender: WebContents): void {
   windows.add(sender)
   sender.once("destroyed", () => {
@@ -73,9 +74,20 @@ export async function prepareDesktopBusinessDataExport(freeze = false): Promise<
 /** Remains sealed after return. The old process must restart even after a recovered migration. */
 export async function prepareDesktopRootMigration(pauseConnections: () => Promise<void>) {
   await desktopOperationGate.freeze()
-  const receipt = await prepareDesktopBusinessDataExport(true)
+  let receipt: Awaited<ReturnType<typeof prepareDesktopBusinessDataExport>>
+  try { receipt = await prepareDesktopBusinessDataExport(true) }
+  catch (error) { failedExport = true; throw error }
+  failedExport = false
   await desktopOperationGate.seal()
   await pauseConnections()
   await releaseDesktopRootWriter()
   return { ...receipt, freshDesktopScanId: receipt.scanId }
+}
+
+/** No renderer path can call this. The settings host first verifies completed source recovery. */
+export function resumeDesktopAfterFailedExport(): void {
+  if (!failedExport) throw new Error("桌面导出尚未处于可重试状态。")
+  desktopOperationGate.resumeAfterFailedExport()
+  failedExport = false
+  for (const sender of windows) if (!sender.isDestroyed() && readyWindows.has(sender)) sender.send("business-data:export-resumed")
 }

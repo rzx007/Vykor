@@ -13,10 +13,15 @@ const confirmation = z.object({
   retainedSourceAcknowledged: z.boolean().optional(),
 })
 const scanSources = z.record(z.string().regex(/^(composer|notes|quick-notes|image-annotations:[a-f0-9]{64})$/), z.string().regex(/^[a-f0-9]{64}$/))
+const legacySources = z.object({
+  version: z.literal(1), status: z.enum(["pending", "consumed"]), sourceRoot: z.string(), sourceIdentity: z.string(), userDataDir: z.string(), documentsDir: z.string(),
+  environment: z.object({ VYKOR_DATA_DIR: z.string().optional(), VYKOR_CHANNELS_DIR: z.string().optional(), VYKOR_IMAGE_ATTACHMENT_CACHE_DIR: z.string().optional() }).strict(),
+  identities: z.array(z.object({ path: z.string(), identity: z.string() })).max(4), databasePath: z.string().optional(),
+})
 const desktopScan = z.object({
   version: z.literal(1), id: z.string().min(1), userDataDir: z.string().min(1), documentsDir: z.string().min(1), sources: scanSources,
 })
-const schema = z.object({ version: z.literal(1), sources: z.record(z.string(), confirmation), desktopScan: desktopScan.optional() })
+const schema = z.object({ version: z.literal(1), sources: z.record(z.string(), confirmation), desktopScan: desktopScan.optional(), legacySources: legacySources.optional() })
 export type LegacyImportConfirmation = z.input<typeof confirmation>
 export function digestBusinessValue(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex")
@@ -61,7 +66,7 @@ export function invalidateDesktopScan(path: string): void {
 }
 
 /** Called only with app.getPath locations by the host; the renderer supplies digests, never paths. */
-export function recordDesktopScan(path: string, sources: Record<string, string>, host: { userDataDir: string; documentsDir: string }): { id: string; ready: boolean } {
+export function recordDesktopScan(path: string, sources: Record<string, string>, host: { userDataDir: string; documentsDir: string; legacySources?: z.infer<typeof legacySources> }): { id: string; ready: boolean } {
   const parsed = scanSources.safeParse(sources)
   if (!parsed.success) { invalidateDesktopScan(path); throw new Error("business-data desktop-scan INVALID_SCAN") }
   const manifest = readLegacyImportManifest(path)
@@ -74,6 +79,7 @@ export function recordDesktopScan(path: string, sources: Record<string, string>,
   const scan = { version: 1 as const, id: randomUUID(),
     userDataDir: requireCompleteAbsolutePath(host.userDataDir, "userDataDir"),
     documentsDir: requireCompleteAbsolutePath(host.documentsDir, "documentsDir"), sources: parsed.data }
+  if (host.legacySources) manifest.legacySources = legacySources.parse(host.legacySources)
   manifest.desktopScan = scan
   writeManifest(path, manifest)
   return { id: scan.id, ready: Object.keys(scan.sources).every(id => manifest.sources[id]!.status === "confirmed" || manifest.sources[id]!.retainedSourceAcknowledged === true) }

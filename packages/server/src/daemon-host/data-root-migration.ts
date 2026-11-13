@@ -21,7 +21,10 @@ export interface DataRootMigrationCoordination {
   /** T9/T10 keep repair and trusted verification inside this lock-scoped callback. */
   withInstalledCopy?(handle: { journalPath: string; validateInNewProcess(invocation: MigrationValidationInvocation): Promise<{ pid: number; storePath: string }>; commit(): Promise<DataRootMigrationResult>; markWritersReleased(): Promise<DataRootMigrationResult> }): Promise<void>;
 }
-const result = (j: MigrationJournal): DataRootMigrationResult => ({ id: j.id, phase: j.phase, journalPath: j.journalPath, writersReleased: j.writersReleased, ...(j.recoveryWritersReleased ? { recoveryWritersReleased: true } : {}), ...(j.serviceResumeStatus ? { serviceResumeStatus: j.serviceResumeStatus } : {}) });
+const operations = new Set(["stop-writers", "service-capture", "service-pause", "service-install", "service-restore", "validate-instance", "copy", "rewrite", "backup-source", "install", "verify", "git-repair", "git-restore", "commit-selector", "mark-old-root", "inspect-recovery", "rollback-target", "restore-source", "restore-selector", "complete"]);
+const result = (j: MigrationJournal): DataRootMigrationResult => ({ id: j.id, phase: j.phase, journalPath: j.journalPath, writersReleased: j.writersReleased,
+  ...(operations.has(j.operation) ? { operation: j.operation } : {}), ...(j.failedOperation && operations.has(j.failedOperation) ? { failedOperation: j.failedOperation } : {}),
+  ...(j.recoveryWritersReleased ? { recoveryWritersReleased: true } : {}), ...(j.serviceResumeStatus ? { serviceResumeStatus: j.serviceResumeStatus } : {}) });
 const supported = (report: { unsupported: unknown[] }) => { if (report.unsupported.length) throw new Error("Unsupported structured migration data"); };
 const checked = (preview: DataRootMigrationPreview) => { if (preview.blockers.length) throw new Error(`Migration preflight blocked: ${[...new Set(preview.blockers.map(item => item.code))].join(", ")}`); };
 const project = (path: string, j: Pick<MigrationJournal, "targetRoot" | "stagingRoot">) => {
@@ -99,6 +102,13 @@ async function rewriteCopy(j: MigrationJournal, cwdPaths: string[]): Promise<voi
     }
   }
   supported(await relocateDataRootFiles({ stagedRoot: j.stagingRoot, targetRoot: j.targetRoot, moves: j.moves, workflowDirectories, settingsPaths }));
+  if (await info(paths.legacyImportFilePath)) {
+    const manifest = JSON.parse(await readFile(paths.legacyImportFilePath, "utf8"));
+    if (manifest.legacySources?.status === "pending") {
+      manifest.legacySources.status = "consumed";
+      await writePrivateJson(paths.legacyImportFilePath, manifest);
+    }
+  }
   supported(await relocateProjectStorageKeys({ stagedRoot: j.stagingRoot, moves: j.moves, cwdPaths }));
   if (await info(paths.installedPluginStorePath)) supported(await relocateInstalledPluginStore(paths.installedPluginStorePath, j.moves, { stagedRoot: j.stagingRoot, targetRoot: j.targetRoot }));
   const previous = readManagedPathMap(j.stagingRoot);

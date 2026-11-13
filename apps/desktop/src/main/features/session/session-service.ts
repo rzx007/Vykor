@@ -100,6 +100,7 @@ export type DesktopSessionConnection = Pick<
   | "restart"
   | "switchDataDirectory"
   | "dispose"
+  | "freezeForDataRootMigration"
 >
 
 export class DesktopSessionService {
@@ -633,36 +634,10 @@ export class DesktopSessionService {
   }
 
   async switchDataDirectory(
-    directory: string,
-    options: { stopActive?: boolean; storePath?: string } = {}
+    _directory: string,
+    _options: { stopActive?: boolean; storePath?: string } = {}
   ): Promise<void> {
-    let invalidated = false
-    const detach = this.connection.onInvalidated(() => {
-      invalidated = true
-    })
-    try {
-      const client = await this.connection.switchDataDirectory(directory, options)
-      await this.activitySubscriptions.replaceClient(client)
-      for (const window of BrowserWindow.getAllWindows()) {
-        if (!window.webContents.isDestroyed())
-          window.webContents.send(IpcEvents.sessionDataDirectoryChanged)
-      }
-    } catch (error) {
-      // A failed switch can have restarted the original database during rollback.
-      // Keep its UI selection, but reconnect subscriptions to that recovered client.
-      if (invalidated && this.connection.getDaemonStatus().phase === "ready") {
-        await (async () => {
-          await this.activitySubscriptions.replaceClient(await this.connection.getClient())
-          for (const window of BrowserWindow.getAllWindows()) {
-            if (!window.webContents.isDestroyed())
-              window.webContents.send(IpcEvents.sessionDaemonRestarted)
-          }
-        })().catch(() => undefined)
-      }
-      throw error
-    } finally {
-      detach()
-    }
+    throw new Error("旧的只切换数据库入口已停用，请使用用户数据根迁移。")
   }
 
   private getClient(): Promise<VykorClient> {

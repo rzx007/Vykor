@@ -71,3 +71,5 @@
 `dataRootChildEnvironment()` 恢复初始化前的四个目录环境输入，使内部传播的根不会成为下次启动的外部固定配置。内部验证 child 的初始化仅接受持锁父进程和匹配本次 journal/PID 的受信任目标。
 
 home 锁与写资格可接收同一 `deadline`（绝对毫秒时间）和 `signal`；私有权限准备不会重置等待预算。取消会结束实际取锁循环，并在获得锁后、创建资格前及返回资格前重新检查；已创建的本次资格先释放再返回原取消原因。
+
+普通死亡启动锁的产品恢复语法为 `vk data-root recover --startup-lock`；如存在 pending，改用提示的 `recover --journal <完整记录路径>`。活锁、损坏 owner 或无法核对身份的锁保持拒绝。

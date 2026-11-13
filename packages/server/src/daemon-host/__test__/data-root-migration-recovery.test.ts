@@ -29,9 +29,11 @@ it("persists the only journal and pending selector before stopping writers and r
     throw new Error("private preparation failure");
   } });
   expect(prepared).toBe(true); expect(migrated.phase).toBe("failed");
+  expect(migrated).toMatchObject({ operation: "stop-writers", failedOperation: "stop-writers" });
   await expect(retained!.pauseSystemService()).rejects.toThrow(/expired/);
   const recovered = await api.recoverDataRootMigration(migrated.journalPath, { homeDir: home });
   expect(recovered.phase).toBe("failed"); expect(readDataRootSelector(home)).toBeUndefined();
+  expect(recovered).toMatchObject({ operation: "complete", failedOperation: "stop-writers" });
   expect(existsSync(join(source, "data/session-runtime/sessions.db"))).toBe(true);
   expect(readFileSync(migrated.journalPath, "utf8")).not.toContain("private preparation failure");
 });

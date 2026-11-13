@@ -44,3 +44,5 @@
 `verifyDataRootCopy(databasePath)` 仅处理已经停止写入的独立副本。它再次打开真实 SQLite 核对完整性、外键和当前 schema，借助附件 blob 读取入口核对大小与 SHA-256，读取 Markdown 并验证笔记组织和索引摘要。它不创建 SessionStore、不生成新会话、不运行升级；成功后清空已停止 owner 的附件租约并整理副本 WAL。源库不能传入这个维护入口。
 
 `digestDataRootCopy()` 只读取迁移拥有的副本，核对 schema/完整性并对所有表记录生成与 SQLite 页布局无关的摘要，不返回正文。只有协调器已确认退出的本次验证 PID 对应 application_owner 行可被忽略；业务表、其它运行 owner 和 schema 改动仍改变摘要。验证副本在复制准备时清理已经停止的运行租约与 owner，源库保持原样。
+
+`readPersistentSessionIdsFromCopy(path)` 只在已存在的独立停写副本上检查当前 schema、完整性与外键，然后读取全部正式会话 ID（含归档），不给出标题、正文或临时聊天。由 daemon-host 的受限本机导出准备调用，不能向它传源库。

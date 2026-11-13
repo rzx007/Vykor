@@ -11,6 +11,7 @@ import { loadSettingsFile } from "@vykor/host-config";
 import { dataLocationFile, readLegacyDataLocation } from "./data-location.js";
 import { inspectMigrationGit, type MigrationGitWorktree, type RegisteredMigrationWorktree } from "./data-root-git.js";
 import { readDatabasePathRegistrations } from "@vykor/services/data-root-relocation";
+import { restoreLegacyDesktopSources } from "./data-root-legacy-receipt.js";
 
 export interface DataRootMigrationRequest {
   homeDir: string;
@@ -74,11 +75,19 @@ async function readJson(path: string): Promise<unknown> {
 
 /** File-only inventory. Never opens SQLite, creates a directory, acquires a lock or parses LevelDB. */
 export async function inspectDataRootMigration(input: DataRootMigrationRequest): Promise<DataRootMigrationPreview> {
-  return inspectSources(input, []);
+  let restored: DataRootMigrationRequest;
+  try { restored = await restoreLegacyDesktopSources(input); }
+  catch {
+    const preview = await inspectSources(input, []);
+    preview.blockers.push({ code: "legacy_source_receipt_invalid", message: "The retained host source receipt is invalid or its source/profile identity changed; preserve the old data and inspect the host receipt." });
+    return preview;
+  }
+  return inspectSources(restored, []);
 }
 
 /** Internal stopped-copy entry: ownership comes from SQLite, never a public request hint. */
 export async function inspectDataRootMigrationFromStoppedCopy(input: DataRootMigrationRequest, databasePath: string, managedRoots: readonly string[]) {
+  input = await restoreLegacyDesktopSources(input);
   const registrations = readDatabasePathRegistrations(databasePath, { managedRoots });
   if (registrations.unsupported.length || registrations.schema !== "supported") throw new Error("Unsupported stopped-copy registrations");
   const documents = input.legacy?.documentsDir;

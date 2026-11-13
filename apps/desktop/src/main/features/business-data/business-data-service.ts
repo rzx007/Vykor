@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto"
 import { getDataRoot, resolveUserDataPaths } from "@vykor/host-config/paths"
 import { businessDataKeySchema, businessSchemas } from "../../../shared/business-data-schema"
 import type { BusinessDataKey, BusinessDataRecord } from "../../../shared/business-data-types"
+import type { LegacyDesktopSourceReceipt } from "@vykor/server/daemon-host"
 import {
   acknowledgeUnresolvedComposer,
   confirmLegacyImport,
@@ -158,7 +159,7 @@ export class BusinessDataService {
       acknowledgeUnresolvedComposer(this.paths().legacyImportFilePath, digest)
     )
   }
-  recordDesktopScan(sources: Record<string, string>, host: { userDataDir: string; documentsDir: string }): Promise<{ id: string; ready: boolean }> {
+  recordDesktopScan(sources: Record<string, string>, host: { userDataDir: string; documentsDir: string; legacySources?: LegacyDesktopSourceReceipt }): Promise<{ id: string; ready: boolean }> {
     return this.enqueue(async () => {
       if (!sources || typeof sources !== "object" || Array.isArray(sources)) {
         invalidateDesktopScan(this.paths().legacyImportFilePath)

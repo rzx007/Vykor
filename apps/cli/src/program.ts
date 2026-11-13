@@ -14,6 +14,7 @@ import { buildSettingsPatch, coerceConfigValue } from "./config-coerce";
 import { createCliDaemonAutoStartController } from "./daemon-system-service";
 import { withDaemonControlLock } from "@vykor/server/daemon-host";
 import { VERSION } from "./version";
+import { createDataRootCommand } from "./commands/data-root";
 
 const program = new Command();
 program.enablePositionalOptions();
@@ -84,6 +85,7 @@ program.addCommand(createWorkflowCommand());
 program.addCommand(createDebugCommand());
 program.addCommand(createServeCommand());
 program.addCommand(createDaemonCommand());
+program.addCommand(createDataRootCommand(process.argv[1]!));
 
 program
   .command("config")

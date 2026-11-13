@@ -10,7 +10,7 @@ import { validateMigrationServiceJournal, type MigrationSystemService } from "./
 import { validateMigrationValidationJournal, type MigrationValidation } from "./data-root-validation.js";
 
 export type MigrationPhase = "prepared" | "staged" | "installed" | "verified" | "committed" | "failed" | "rollback_failed";
-export interface DataRootMigrationResult { id: string; phase: MigrationPhase; journalPath: string; writersReleased: boolean; recoveryWritersReleased?: boolean; serviceResumeStatus?: "pending" | "complete" | "failed" | "skipped" }
+export interface DataRootMigrationResult { id: string; phase: MigrationPhase; journalPath: string; writersReleased: boolean; operation?: string; failedOperation?: string; recoveryWritersReleased?: boolean; serviceResumeStatus?: "pending" | "complete" | "failed" | "skipped" }
 export interface TreeIdentity { identity: string; digest: string; files: number; bytes: number }
 export interface MigrationJournal extends DataRootMigrationResult {
   version: 1;

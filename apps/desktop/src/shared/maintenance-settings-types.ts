@@ -6,7 +6,11 @@ export interface DiagnosticLog { time: number; level: string; module: string; ev
 export interface DiagnosticReport { checkedAt: number; desktopVersion: string; platform: string; architecture: string; target: string | null; checks: DiagnosticCheck[]; logs: DiagnosticLog[]; missing: string[]; activeWork?: { runs: Array<{ id: string; sessionId: string; status: string }>; tasks: Array<{ id: string; sessionId: string; status: string }>; terminals: Array<{ id: string; status: string }> } }
 export interface DiagnosticFilter { from?: number; level?: string; module?: string; runId?: string; query?: string }
 export interface DiagnosisRequest { requestId: string }
+export interface DataRootInfo { currentRoot: string; source: string; retainedProfile: string; unresolvedComposer: { count: number; reason: "session-not-found"; sourceDigest: string } | null }
+export interface DataRootPreview { sourceRoot: string; targetRoot: string; files: number; bytes: number; blockers: Array<{ code: string; path?: string; message: string }>; entries: Array<{ source: string; target: string; kind: string; bytes: number }>; impacts: string[]; requiredValidations: string[] }
+export interface DataRootOperation { phase: string; operation?: string; failedOperation?: string; journalPath?: string; usableRoot: string; startup?: string; error?: string }
 export const MaintenanceSettingsChannels = {
+  dataRootInfo: "settings:maintenance:data-root-info", inspectDataRoot: "settings:maintenance:inspect-data-root", migrateDataRoot: "settings:maintenance:migrate-data-root", recoverDataRoot: "settings:maintenance:recover-data-root",
   usage: "settings:maintenance:usage", price: "settings:maintenance:price", budget: "settings:maintenance:budget", exportUsage: "settings:maintenance:export-usage",
   storage: "settings:maintenance:storage", openDirectory: "settings:maintenance:open-directory", chooseDirectory: "settings:maintenance:choose-directory",
   backup: "settings:maintenance:backup", verifyBackup: "settings:maintenance:verify-backup", restore: "settings:maintenance:restore", switchData: "settings:maintenance:switch-data",
@@ -15,6 +19,10 @@ export const MaintenanceSettingsChannels = {
   storagePolicy: "settings:maintenance:storage-policy", updateStoragePolicy: "settings:maintenance:update-storage-policy",
 } as const
 export interface MaintenanceSettingsIpcMap {
+  [MaintenanceSettingsChannels.dataRootInfo]: { args: []; result: DataRootInfo }
+  [MaintenanceSettingsChannels.inspectDataRoot]: { args: [string]; result: DataRootPreview }
+  [MaintenanceSettingsChannels.migrateDataRoot]: { args: [string]; result: DataRootOperation }
+  [MaintenanceSettingsChannels.recoverDataRoot]: { args: [string]; result: DataRootOperation }
   [MaintenanceSettingsChannels.storagePolicy]: { args: []; result: StorageRetentionPolicy }
   [MaintenanceSettingsChannels.updateStoragePolicy]: { args: [{ enabled: boolean; days: number; expected: { enabled: boolean; days: number } }]; result: StorageRetentionPolicy }
   [MaintenanceSettingsChannels.cleanupPreview]: { args: [{ kind: "session" | "log"; olderThan: number }]; result: CleanupPreview }
@@ -40,6 +48,10 @@ export interface MaintenanceSettingsIpcMap {
   [MaintenanceSettingsChannels.restart]: { args: []; result: void }
 }
 export interface MaintenanceSettingsAPI {
+  dataRootInfo(): Promise<DataRootInfo>
+  inspectDataRoot(target: string): Promise<DataRootPreview>
+  migrateDataRoot(target: string): Promise<DataRootOperation>
+  recoverDataRoot(journal: string): Promise<DataRootOperation>
   storagePolicy(): Promise<StorageRetentionPolicy>
   updateStoragePolicy(input: { enabled: boolean; days: number; expected: { enabled: boolean; days: number } }): Promise<StorageRetentionPolicy>
   cleanupPreview(input: { kind: "session" | "log"; olderThan: number }): Promise<CleanupPreview>

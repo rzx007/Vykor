@@ -51,6 +51,15 @@ function validateCopy(connection: Database.Database, result: PathRelocationRepor
   return result.unsupported.length === 0;
 }
 
+/** Only a host-owned stopped copy; persistent DB rows include archived sessions, never memory chats. */
+export function readPersistentSessionIdsFromCopy(path: string): string[] {
+  const connection = openCopy(path, true), result = report();
+  try {
+    if (!validateCopy(connection, result)) throw new Error("Unsupported export database schema");
+    return (connection.prepare("SELECT id FROM session").all() as Array<{ id: string }>).map(row => row.id);
+  } finally { connection.close(); }
+}
+
 function jsonObject(text: string): Record<string, unknown> {
   const value: unknown = JSON.parse(text);
   if (!record(value)) throw new Error("Invalid structured metadata");

@@ -18,6 +18,11 @@ export class DesktopOperationGate {
   }
   async freeze(): Promise<void> { this.phase = "draining"; await this.drain() }
   async seal(): Promise<void> { this.phase = "sealed"; await this.drain() }
+  /** Only the host may call after failed export and verified recovery of the unchanged source. */
+  resumeAfterFailedExport(): void {
+    if (this.phase !== "draining") throw new Error("已封门的桌面必须重新启动。")
+    this.phase = "open"
+  }
   private async drain(): Promise<void> {
     const own = this.context.getStore()
     while ([...this.active.keys()].some(id => id !== own))

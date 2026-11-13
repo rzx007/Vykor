@@ -7,6 +7,9 @@ vi.mock("../daemon-autostart/daemon-autostart-service", () => ({ createDesktopDa
 vi.mock("./desktop-preferences", () => ({ getDesktopPreferences: () => ({ notificationMode: "always" }) }))
 import { MaintenanceSettingsService, redactDiagnosticLog, usageCsv } from "./maintenance-settings-service"
 describe("maintenance export boundary", () => {
+  it("rejects the old database-only switch with an explicit whole-root migration hint", async () => {
+    await expect(new MaintenanceSettingsService().switchData("unused")).rejects.toThrow(/用户数据根.*迁移/)
+  })
   afterEach(() => vi.unstubAllGlobals())
   it("keeps only operational fields and never arbitrary content, paths or credentials", () => {
     const log = redactDiagnosticLog({ timestamp: "2026-10-01T10:00:00Z", level: "error", event: "session.run.failed", runId: "run-1", message: "private prompt", error: "Bearer private", path: "D:/private/source", apiKey: "secret", input: "raw tool" })

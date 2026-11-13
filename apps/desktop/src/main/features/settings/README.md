@@ -14,3 +14,5 @@
 `git-settings-storage.ts` 将 Git 偏好和 worktree 登记保存在数据根的 desktop 分类；只迁 JSON 记录，不更改实际 worktree 路径。旧 userData 文件经摘要核对后确认导入，默认保留。
 
 启用自动清理时，保存 Git 偏好的 IPC 会等待本次 worktree 清理和登记更新结束才返回；迁移冻结因此能排空已取得 daemon client 的异步 Git 操作，再 flush 和释放 Desktop 写资格。`__test__/git-cleanup-drain.test.ts` 覆盖这条实际调用链。
+
+`data-root-settings-service.ts` / `data-root-settings-ipc.ts` 提供整根维护，home、Documents、userData 均由宿主确定，renderer 只选择完整目标或迁移记录。迁移复用服务器协调器及最终业务 flush、新扫描和封门。封门后成功和回退都恢复原始外部环境来源、以首位目标参数重启 Desktop，不复用旧客户端、不再次 flush sealed renderer。未完成导出的失败仅在协调器确认原 source 身份、无 pending 且未封门时恢复交互，保留内存草稿允许重试；恢复失败保持冻结并提供本记录恢复重试。旧 switchData 与 session 只切库接口明确返回整根迁移提示，不再追加 sessions.db，备份页也不再提供旧切库按钮。
