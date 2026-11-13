@@ -16,6 +16,7 @@
 | --- | --- |
 | [index.ts](./index.ts) | 汇总本分类的公开接口 |
 | [protocol-middleware.ts](./protocol-middleware.ts) | `protocolMiddleware` |
+| [daemon-request.ts](./daemon-request.ts) | `requestDaemon`：为宿主的 daemon 探测和维护请求添加鉴权与当前协议版本头，保留调用者的超时、取消和重定向选项 |
 | [provider-configuration-update.ts](./provider-configuration-update.ts) | `withProviderConfigurationUpdate` |
 | [server.ts](./server.ts) | `VykorServerServices`、`VykorServerOptions`、`ListenResult`、`VykorHttpServer` 等 |
 | [support.ts](./support.ts) | `JsonRecord`、`HttpPermissionStatus`、`VykorServerHealth`、`SseClient` 等 |

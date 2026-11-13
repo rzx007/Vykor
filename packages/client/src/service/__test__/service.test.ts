@@ -10,7 +10,7 @@ import { CURRENT_PROTOCOL_VERSION } from "@vykor/protocol";
 import { Service } from "../index.js";
 import { listDataRootWriters, withDataRootLock } from "@vykor/host-config/paths";
 import { acquireStartupLock } from "../startup-lock.js";
-import * as roots from "@vykor/host-config/paths";
+import * as rootWriters from "../../../../host-config/src/storage/data-root-writers.js";
 import * as registries from "../registry.js";
 
 const fixture = fileURLToPath(new URL("./service-fixture.mjs", import.meta.url));
@@ -223,8 +223,8 @@ describe("local service management", () => {
       const original = registries.readEndpoint;
       vi.spyOn(registries, "readEndpoint").mockImplementationOnce(async path => { holding = hold(); await held; return original(path); });
     } else { holding = hold(); await held; }
-    const acquire = roots.acquireDataRootWriter;
-    vi.spyOn(roots, "acquireDataRootWriter").mockImplementation(input => { admitted(); return acquire(input); });
+    const acquire = rootWriters.acquireDataRootWriter;
+    vi.spyOn(rootWriters, "acquireDataRootWriter").mockImplementation(input => { admitted(); return acquire(input); });
     const controller = new AbortController(), reason = new Error("owned admission cancelled");
     let settled = false;
     const pending = (operation === "ensure" ? Service.ensure({ ...options, signal: controller.signal }) : Service.stop(endpoint!, { timeoutMs: 5000, signal: controller.signal }))
@@ -246,8 +246,8 @@ describe("local service management", () => {
     const root = join(directory, ".vykor"), registry = join(root, "data/daemon/registry.json"), env = { HOME: directory, USERPROFILE: directory };
     const endpoint = await Service.ensure({ env, command: [process.execPath, fixture, registry, "1.2.3", String(CURRENT_PROTOCOL_VERSION)], timeoutMs: 5000 }); endpoints.push(endpoint);
     const before = await readFile(registry, "utf8"), end = Date.now() + 5000;
-    const acquire = roots.acquireDataRootWriter;
-    vi.spyOn(roots, "acquireDataRootWriter").mockImplementation(async input => {
+    const acquire = rootWriters.acquireDataRootWriter;
+    vi.spyOn(rootWriters, "acquireDataRootWriter").mockImplementation(async input => {
       const lease = await acquire(input);
       vi.spyOn(Date, "now").mockReturnValue(end + 1);
       return lease;

@@ -16,6 +16,8 @@ Desktop 无窗口入口和 CLI 本机登记入口调用 `runRegisteredDaemon()`�
 
 ## 状态归属
 
+数据根协调与新子进程验证通过 [HTTP 请求入口](../http/daemon-request.ts) 发送带 token 和当前协议版本的请求；宿主继续负责 PID、登记、会话可读性和停写结果检查，以及各请求的超时、取消与重定向策略。普通 `/health` 不证明 PID 或协议版本，不能替代这些检查。
+
 自启动偏好与系统服务配置保存在各自配置位置，进程状态来自操作系统和守护进程登记信息。
 
 用户根下的 `data/daemon/registry.json` 存当前进程地址。产品选择保存在 home 旁的固定 selector；旧 `daemon/data-location.json` 不再覆盖产品 canonical 路径。显式嵌入调用仍用该旧文件记录其独立数据位置。

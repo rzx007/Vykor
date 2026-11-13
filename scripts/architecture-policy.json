@@ -976,7 +976,9 @@
       ],
       "allowTargetPaths": [
         "packages/host-config/src/storage/paths.ts",
-        "packages/host-config/src/storage/data-root-selection.ts"
+        "packages/host-config/src/storage/data-root-selection.ts",
+        "packages/host-config/src/storage/data-root-writers.ts",
+        "packages/host-config/src/storage/managed-path-relocation.ts"
       ],
       "removeByPhase": "P13",
       "migrationId": "M30"

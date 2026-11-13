@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { securePrivateDirectory, securePrivateFile } from "@vykor/host-config";
 import { resolveManagedRealPath, resolveUserDataPaths } from "@vykor/host-config/paths";
 import { digestDataRootCopy } from "@vykor/services/data-root-relocation";
-import { CURRENT_PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER } from "@vykor/protocol";
+import { requestDaemon } from "../http/daemon-request.js";
 import { fileDigest, info, samePath, saveMigrationJournal, treeIdentity, type MigrationJournal, type TreeIdentity } from "./data-root-migration-journal.js";
 
 export interface MigrationValidationInvocation { command: string; args: string[]; timeoutMs?: number }
@@ -90,7 +90,7 @@ export async function validateMigrationInNewProcess(j: MigrationJournal, invocat
     j.validation.pid = child.pid; j.validation.state = "started"; await saveMigrationJournal(j);
     child.send({ type: "validate-data-root", homeDir: j.homeDir, targetRoot: j.targetRoot, journalPath: j.journalPath });
     const endpoint = await ready;
-    const response = await fetch(`${endpoint.url}/sessions?limit=1`, { headers: { authorization: `Bearer ${endpoint.token}`, [PROTOCOL_VERSION_HEADER]: String(CURRENT_PROTOCOL_VERSION) }, signal: AbortSignal.timeout(5000) });
+    const response = await requestDaemon(endpoint, "/sessions?limit=1", { signal: AbortSignal.timeout(5000) });
     if (!response.ok || !Array.isArray((await response.json() as { sessions?: unknown }).sessions)) throw new Error("Migration validation cannot read target sessions");
     child.send({ type: "close-validation" }); await awaitClosed();
     j.validation.state = "closed"; await saveMigrationJournal(j); await restoreValidationDatabase(j);

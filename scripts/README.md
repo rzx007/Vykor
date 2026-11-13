@@ -12,4 +12,6 @@
 
 新增脚本按用途命名；只为某个插件服务的脚本放到该插件目录，新增测试放所属 `__test__/`。发行临时产物写入忽略目录，不与源码或运行数据混放。
 
+Node SDK 的根路径许可只作用于 `packages/client/src/service/`，精确包含路径计算、根选择、写者登记和路径校验四个来源文件。声明追踪会继续检查重导出的真实文件；历史路径映射、设置加载和其它宿主模块仍被拒绝，浏览器入口也不能使用这些 Node 能力。对应回归在 `__test__/client-data-root-boundary.test.mjs`。
+
 `architecture-policy.mjs` 对指定测试驱动提供一条精确能力许可：只有 `packages/services/src/database/persistence/__test__/storage-growth.bench.mjs` 可以导入 `node:child_process` 的 `spawnSync` 来启动全新测量进程。该文件的其它禁用能力、普通生产 mjs、近似文件名及其它路径仍执行原有限制；不提供通用 `__test__` 或 `.bench.mjs` 豁免。这是门禁的一处明确规则变化，未提高旧调用基线，也未改变生产存储模块的能力边界。上述行为由 `architecture-boundaries.test.mjs` 的真实文件扫描测试验证。

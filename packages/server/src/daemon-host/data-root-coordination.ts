@@ -6,7 +6,7 @@ import { readPersistentSessionIdsFromCopy } from "@vykor/services/data-root-relo
 import { dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { getInitializedDataRootInputs, listDataRootWriters, readDataRootSelector, resolveUserDataPaths, withDataRootLock, type DataRootWriter } from "@vykor/host-config/paths";
-import { CURRENT_PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER } from "@vykor/protocol";
+import { requestDaemon } from "../http/daemon-request.js";
 import { readDaemonRegistry, sameDaemonRegistration, type DaemonRegistry } from "../daemon/paths.js";
 import { daemonPidAlive, stopRegisteredDaemon } from "./lifecycle.js";
 import { acquireRegistryLease } from "./registry-lease.js";
@@ -50,12 +50,11 @@ function sourceDaemon(directories: readonly string[], databasePath?: string) {
   if (live[0] && (!databasePath || !samePath(live[0].registry.storePath, databasePath))) throw new Error("Source daemon dataset does not match the inspected database");
   return live[0];
 }
-const headers = (registry: DaemonRegistry) => ({ authorization: `Bearer ${registry.token}`, [PROTOCOL_VERSION_HEADER]: String(CURRENT_PROTOCOL_VERSION) });
 async function identityMatches(registry: DaemonRegistry): Promise<boolean> {
   try {
     const url = new URL(registry.url);
     if (!["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) || url.protocol !== "http:" || !registry.token) return false;
-    const response = await fetch(new URL("/debug/process", url), { headers: headers(registry), redirect: "error", signal: AbortSignal.timeout(5000) });
+    const response = await requestDaemon(registry, "/debug/process", { redirect: "error", signal: AbortSignal.timeout(5000) });
     return response.ok && (await response.json() as { pid?: number }).pid === registry.pid;
   } catch { return false; }
 }
@@ -93,7 +92,7 @@ export async function prepareLegacyDesktopSessionLookup(input: DataRootMigration
         if (!sameDaemonRegistration(readControlledRegistry(source.file), source.registry) || !await identityMatches(source.registry)) throw new Error("Legacy source daemon identity changed");
         const classes: Record<string, "persistent" | "memory" | "unknown"> = Object.create(null);
         for (const id of new Set(ids)) {
-          const response = await fetch(new URL(`/sessions/${encodeURIComponent(id)}`, source.registry.url), { headers: headers(source.registry), redirect: "error", signal: AbortSignal.timeout(5000) });
+          const response = await requestDaemon(source.registry, `/sessions/${encodeURIComponent(id)}`, { redirect: "error", signal: AbortSignal.timeout(5000) });
           if (response.status === 404) { classes[id] = "unknown"; continue; }
           if (!response.ok) throw new Error("Legacy source session lookup failed");
           const value = await response.json() as { session?: { id?: string; storage?: string } };
@@ -172,7 +171,7 @@ export async function migrateDataRootAndRestart(input: DataRootMigrationRequest,
         const current = currentSource?.registry;
         if (current && daemonPidAlive(current.pid)) {
           if (current.pid === process.pid || !original || !sameDaemonRegistration(current, original) || !await identityMatches(current)) { blockers.push({ code: "daemon_identity_changed", pid: current.pid }); throw new Error("Cannot verify the source daemon process"); }
-          const response = await fetch(new URL("/maintenance/prepare-root-migration", current.url), { method: "POST", headers: headers(current), signal: AbortSignal.any([compromised.signal, AbortSignal.timeout(60000)]) });
+          const response = await requestDaemon(current, "/maintenance/prepare-root-migration", { method: "POST", signal: AbortSignal.any([compromised.signal, AbortSignal.timeout(60000)]) });
           if (!response.ok || (await response.json() as { prepared?: boolean }).prepared !== true) { blockers.push({ code: "daemon_busy", pid: current.pid }); throw new Error("Source daemon still has active runs, uploads, terminals or plugin work"); }
           if (!sameDaemonRegistration(readControlledRegistry(registryPath), current)) throw new Error("Source daemon registration changed while draining");
         }
