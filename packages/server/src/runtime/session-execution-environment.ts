@@ -1,5 +1,5 @@
 import { getSkillsDir, type Settings } from "@vykor/host-config";
-import { createWorkspaceBinding, type ExecutionEnvironmentHandle } from "@vykor/environment";
+import { createWorkspaceBinding, type ExecutionEnvironmentHandle, type ExecutionEnvironmentConsumer } from "@vykor/environment";
 import { normalizeApprovalMode } from "@vykor/host-config";
 import { readSessionRuntimeConfig } from "../application/session/configuration/runtime-configuration.js";
 import type { SessionRecord } from "@vykor/domain-contracts/sessions";
@@ -10,12 +10,16 @@ import { resolve } from "node:path";
 import { sessionSettingsRoot } from "./session-settings-root.js";
 
 export function createSessionEnvironmentAcquirer(input: {surface?: "desktop_managed" | "cli_advanced"; loadSecrets?: boolean} = {}) {
-  return async (session: SessionRecord, settings: Settings): Promise<ExecutionEnvironmentHandle> => {
+  return async (session: SessionRecord, settings: Settings, consumer?: ExecutionEnvironmentConsumer): Promise<ExecutionEnvironmentHandle> => {
     const runtime = readSessionRuntimeConfig(session, { approvalMode: normalizeApprovalMode(settings.permission.mode) });
-    settings = settingsForApprovalMode(settings, runtime.approvalMode);
+    // Background tools already captured their policy; never replace it with a later session choice.
+    const approvalMode = consumer?.kind === "background" ? normalizeApprovalMode(settings.permission.mode) : runtime.approvalMode;
+    const baseline = settingsForApprovalMode(settings, "ask");
+    settings = { ...baseline, permission: { ...baseline.permission } };
     const surface = input.surface ?? "desktop_managed";
     // CLI advanced Agents use native file tools even if desktop WSL preferences exist.
     if (surface === "cli_advanced") settings = { ...settings, agentEnvironment: { ...settings.agentEnvironment, kind: "native" } };
+    settings = settingsForApprovalMode(settings, approvalMode);
     const config = resolveExecutionEnvironmentConfig({ surface, settings, cwd: session.cwd });
     const binding = createWorkspaceBinding({
       kind: config.kind,

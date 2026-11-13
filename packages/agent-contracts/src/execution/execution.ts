@@ -44,6 +44,8 @@ export interface AgentEffectContext {
   cwd: string;
   traceId: string;
   childId?: string;
+  /** Captured by the runtime, never taken from tool arguments or a caller-supplied scope. */
+  approvalMode?: import("../policy/permissions.js").ApprovalMode;
   signal: AbortSignal;
 }
 

@@ -31,6 +31,7 @@ import {
 } from "./tool-result-feedback";
 
 export interface CheckedToolExecutionOptions {
+  captureToolExecution?: import("../../types/runtime").QueryEngineOptions["captureToolExecution"];
   toolUses: ToolUseBlock[];
   toolRegistry: MutableToolRegistry;
   messages?: readonly Message[];
@@ -165,6 +166,7 @@ export async function executeCheckedTools(
   );
   const groupTails = new Map<string, Promise<ToolExecutionResult>>();
   const executedIndexes = new Set<number>();
+  const toolScopes = new Map<number, ReturnType<NonNullable<CheckedToolExecutionOptions["captureToolExecution"]>>>();
   const changesMode = readyForPermission.some(
     ({ tool }) => tool.serialGroup === "permission-mode",
   );
@@ -250,19 +252,21 @@ export async function executeCheckedTools(
           };
         } else if (results[idx]) result = results[idx]!;
         else {
-          const prepared = preparedByIndex.get(idx)!;
-          toolUse = prepared.toolUse;
-          const denied = await authorizeToolCall(
-            prepared,
-            permissionChecker,
-            hookExecutor,
-            pendingExecution,
-            internalTools,
-            startSignal,
-            identity(),
-          );
-          if (denied) result = denied;
-          else {
+          const runInScope = options.captureToolExecution?.() ?? (async <T>(work: () => Promise<T>) => work());
+          toolScopes.set(idx, runInScope);
+          result = await runInScope(async () => {
+            const prepared = preparedByIndex.get(idx)!;
+            toolUse = prepared.toolUse;
+            const denied = await authorizeToolCall(
+              prepared,
+              permissionChecker,
+              hookExecutor,
+              pendingExecution,
+              internalTools,
+              startSignal,
+              identity(),
+            );
+            if (denied) return denied;
             const tool = prepared.tool;
             startSignal.throwIfAborted();
             await execution?.limits?.check("tool", {
@@ -273,6 +277,11 @@ export async function executeCheckedTools(
             const preflight = execution?.contribution?.tools?.find(item => item.definition === tool)?.beforeDispatch;
             if (preflight) await validateBeforeDispatch(preflight, toolUse.input, createToolContext(toolUse, toolAttemptId, control), startSignal, timeoutMs);
             const context = createToolContext(toolUse, toolAttemptId, control);
+            if (tool.execution?.network && context.canUseNetwork === false) return {
+              toolUseId: toolUse.id, toolName: toolUse.name,
+              content: [{ type: "text", text: "Tool requires network access, which is disabled for this invocation." }],
+              isError: true, failureKind: "policy", executionState: "not_started",
+            };
             await emitToolLifecycle(
               pendingExecution,
               toolUse.id,
@@ -307,8 +316,8 @@ export async function executeCheckedTools(
                 }
               },
             );
-            result = returnedResult(returned, tool);
-          }
+            return returnedResult(returned, tool);
+          });
         }
       } catch (error) {
         if (isAgentExecutionLimitError(error)) failExecution(error);
@@ -365,10 +374,11 @@ export async function executeCheckedTools(
     const result = results[idx]!;
     if (signal?.aborted || execution?.profile?.executableHooks === false) break;
     try {
-      await hookExecutor.execute("post_tool_use", {
+      const postHook = () => hookExecutor.execute("post_tool_use", {
         tool: result.toolName,
         result: publicToolResult(result),
       });
+      await (toolScopes.get(idx)?.(postHook) ?? postHook());
     } catch (error) {
       failExecution(error);
     }

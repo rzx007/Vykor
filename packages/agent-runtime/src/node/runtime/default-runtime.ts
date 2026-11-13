@@ -5,6 +5,7 @@ import {
 import { DEFAULT_MODEL_RETRY_POLICY } from "@vykor/core/engine";
 import { NodeRunCatalogue } from "../capabilities/node-run-catalogue.js";
 import { NodeRuntimeBuilder } from "./node-runtime-builder.js";
+import { createToolAuthorization } from "./tool-authorization.js";
 import type { AgentRequestConfigurationReader } from "@vykor/host-config";
 import type { RunCapabilityView } from "./node-runtime-resources.js";
 import type {
@@ -47,10 +48,7 @@ import { buildRuntimeSystemPrompt } from "@vykor/prompts";
 import type { SandboxRuntimeReporter } from "@vykor/sandbox";
 import {
   resolveHostShellLauncher,
-  settingsForApprovalMode,
 } from "@vykor/sandbox";
-import { effectivePermissionMode } from "@vykor/permissions";
-import { normalizeApprovalMode } from "@vykor/host-config";
 import type { SkillRegistry } from "@vykor/skills";
 import type { AgentDefinition } from "@vykor/coordinator";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
@@ -154,14 +152,11 @@ export async function createVykorRuntime(
   options: VykorRuntimeOptions,
 ): Promise<RuntimeBundle> {
   const runCatalogue = options.runCatalogue ?? new NodeRunCatalogue();
-  const settings = settingsForApprovalMode(
-    options.settings,
-    options.configuration.approvalMode ??
-      normalizeApprovalMode(
-        options.configuration.permissionMode ??
-          options.settings.permission.mode,
-      ),
-  );
+  const authorization = createToolAuthorization({
+    settings: options.settings, configuration: options.configuration,
+    sessionId: options.sessionId, environment: options.executionEnvironment,
+  });
+  const settings = authorization.settings;
   const hostCwd = options.cwd ?? process.cwd();
   const cwd = options.executionEnvironment?.workspace.executionRoot ?? hostCwd;
   const configuration = options.configuration;
@@ -265,22 +260,6 @@ export async function createVykorRuntime(
       }),
     );
 
-    const selectedMode =
-      configuration.permissionMode ?? settings.permission.mode;
-    const mode =
-      configuration.workMode === "plan" || selectedMode === "plan"
-        ? "plan"
-        : configuration.approvalMode
-          ? effectivePermissionMode(
-              configuration.approvalMode,
-              configuration.workMode ?? "execute",
-            )
-          : selectedMode === "ask" || selectedMode === "auto_review"
-            ? "default"
-            : selectedMode === "full_access"
-              ? "full_auto"
-              : selectedMode;
-
     // 自动放行三来源合并:settings.permission.autoApproveTools(用户显式配置,
     // 此前从未接线)+ swarm worker / 无头只读模式注入非本地 READ_ONLY_TOOLS。
     // denied 永远优先于 autoApprove(checker 内保证)。
@@ -296,7 +275,7 @@ export async function createVykorRuntime(
       ? undefined
       : resolveHostShellLauncher().kind;
     const permissionChecker = new PermissionChecker({
-      mode,
+      mode: authorization.getMode,
       cwd,
       pathStyle: options.executionEnvironment?.info.pathStyle,
       shellDialect: options.executionEnvironment
@@ -313,6 +292,11 @@ export async function createVykorRuntime(
       trustedLocalReadOnlyToolNames: [...trustedBuiltinToolNames],
     });
 
+    const processExecutor = options.executionEnvironment && {
+      execShell: (...args: Parameters<ExecutionEnvironmentHandle["process"]["execShell"]>) => authorization.getEnvironment()!.process.execShell(...args),
+      execProcess: (...args: Parameters<ExecutionEnvironmentHandle["process"]["execProcess"]>) => authorization.getEnvironment()!.process.execProcess(...args),
+    };
+
     const hookExecutor = new HookExecutor({
       disabled: () =>
         configuration.internalTextOnly === true ||
@@ -320,8 +304,11 @@ export async function createVykorRuntime(
       cwd: options.executionEnvironment?.workspace.executionRoot ?? hostCwd,
       sessionId: options.sessionId,
       settings,
-      processExecutor: options.executionEnvironment?.process,
+      processExecutor,
     });
+    const executeHook = hookExecutor.execute.bind(hookExecutor);
+    hookExecutor.execute = (...args) => authorization.hasScope()
+      ? executeHook(...args) : authorization.capture()(() => executeHook(...args));
     const runtimeModel = resolveRuntimeModel(settings, configuration);
 
     // 自定义 prompt 优先。默认提示仅列普通 Skill；有 Run View 时按该次范围重建摘要。
@@ -345,7 +332,7 @@ export async function createVykorRuntime(
         permissionMode:
           permissionChecker.getMode() === "plan"
             ? "plan"
-            : (configuration.approvalMode ?? permissionChecker.getMode()),
+            : authorization.getApprovalMode(),
         fastMode: promptSettings.fastMode,
         effort,
         passes: settings.passes,
@@ -511,6 +498,9 @@ export async function createVykorRuntime(
       : undefined;
 
     const engineOptions = {
+      captureToolExecution: authorization.capture,
+      canUseNetwork: () => authorization.getEnvironment()?.info.networkMode !== "none"
+        && (!settings.sandbox?.enabled || settings.sandbox.network?.mode !== "none"),
       toolDiscovery: {
         searchTool: toolSearchTool,
         shouldDefer: (
@@ -518,10 +508,7 @@ export async function createVykorRuntime(
           source?: import("@vykor/agent-contracts").ToolRegistrationSource,
         ) => source?.kind === "plugin" || source?.kind === "mcp",
       },
-      setPlanMode: (enabled: boolean) => {
-        permissionChecker.setMode(enabled ? "plan" : mode);
-        return permissionChecker.getMode();
-      },
+      setPlanMode: authorization.setPlanMode,
       trustedToolOverrides: new Map(
         [...trustedOverrides].map((name) => [
           name,
@@ -537,7 +524,7 @@ export async function createVykorRuntime(
       toolOutputPolicy: readToolOutputPolicy(),
       toolTimeoutMs: readToolExecutionTimeoutMs(),
       modelRetry: DEFAULT_MODEL_RETRY_POLICY,
-      executionEnvironment: options.executionEnvironment,
+      get executionEnvironment() { return authorization.getEnvironment(); },
       ...(resolveRequestConfiguration ? { resolveRequestConfiguration } : {}),
       systemPromptForTools: (
         tools: readonly ToolDefinition[],
@@ -579,6 +566,8 @@ export async function createVykorRuntime(
       ]),
     );
     bundle.resolveRequestConfiguration = resolveRequestConfiguration;
+    bundle.getApprovalMode = authorization.getApprovalMode;
+    bundle.processExecutor = processExecutor;
     await attachSandboxRuntime(
       bundle,
       hostCwd,

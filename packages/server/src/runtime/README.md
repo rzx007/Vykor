@@ -8,6 +8,8 @@
 
 `createSessionEnvironmentAcquirer({ surface, loadSecrets: false })` 为只读文件请求复用环境创建流程。CLI advanced 与其 Agent 一样使用 native 文件环境；Desktop 保留 local/WSL 选择。只读入口不要求加载 Agent 执行用的机密变量；常规 Agent、终端和后台入口保持原有默认值。
 
+环境工厂先取回原设置基线，调整 Native/WSL 选择后再应用本次批准方式，避免 CLI 展开设置时丢失沙箱恢复信息。后台消费者使用已捕获的 `settings.permission.mode`，不按稍后的会话选择覆盖它；后台服务每次获取当前会话归属，HTTP 调用则先按当前元数据准备设置。
+
 ## 状态归属
 
 运行中的等待与取消由协调器持有，环境由对应宿主管理，配置和密钥通过既有服务保存。

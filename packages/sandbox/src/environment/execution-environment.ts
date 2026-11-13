@@ -17,6 +17,7 @@ import { signalProcessTree } from "../process/process-control.js";
 import { createProcess, createShellProcess, resolveHostShellLauncher, resolveShellDescriptor } from "../process/shell.js";
 import type { ShellDescriptor } from "@vykor/environment";
 import { createWslPathResolver, preflightWsl, spawnWslProcess, type WslEnvironmentFacts } from "./wsl-environment.js";
+import { settingsForApprovalMode } from "../policy/approval-policy.js";
 
 const PROCESS_OUTPUT_DRAIN_TIMEOUT_MS = 3_000;
 
@@ -129,6 +130,13 @@ async function createLocalHandle(input: CreateExecutionEnvironmentInput, depende
     process: createLocalProcessExecutor(input, dependencies, shellDescriptor),
     terminal: createLocalTerminalFactory(input), files: unavailableFileSystem(),
     paths: createLocalPathResolver(input.binding), async release() {},
+    withFullAccess(this: ExecutionEnvironmentHandle, enabled: boolean) {
+      const captured = { ...input, settings: settingsForApprovalMode(input.settings, enabled ? "full_access" : "ask") };
+      return { ...this,
+        process: createLocalProcessExecutor(captured, dependencies, shellDescriptor),
+        terminal: createLocalTerminalFactory(captured),
+      };
+    },
   };
 }
 

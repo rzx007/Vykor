@@ -15,6 +15,7 @@ export interface ToolExecutionContextOptions {
   cwd: string;
   sessionId?: string;
   environment?: ToolContext["environment"];
+  canUseNetwork?: boolean;
   toolUse: ToolUseBlock;
   toolAttemptId: string;
   signal?: AbortSignal;
@@ -51,6 +52,7 @@ export function createToolExecutionContext(
     ...(options.projectInstructions ? { projectInstructions: options.projectInstructions } : {}),
     sessionId: options.sessionId,
     ...(options.environment ? { environment: options.environment } : {}),
+    ...(options.canUseNetwork !== undefined ? { canUseNetwork: options.canUseNetwork } : {}),
     toolCallId: options.toolUse.id,
     toolAttemptId: options.toolAttemptId,
     runAbortSignal: options.signal,

@@ -92,6 +92,8 @@ export interface VykorAgentConfiguration {
   /** Default expression preference; a complete systemPrompt remains an exact override. */
   permissionMode?: PermissionMode;
   approvalMode?: ApprovalMode;
+  /** Host-owned live selection for this actual session; each tool captures it once. */
+  readApprovalMode?: (sessionId: string) => ApprovalMode | undefined;
   workMode?: WorkMode;
   maxTurns?: number;
   /** Maximum tools granted by the SDK/host. Descendant agents inherit this ceiling. */

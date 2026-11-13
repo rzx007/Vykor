@@ -1245,6 +1245,7 @@ export class QueryEngine implements IQueryEngine {
     const projectInstructions = projectInstructionState(this.messages, async path =>
       (await this.permissionChecker.checkTool("Read", { file_path: path })).action === "allow");
     const outcome = await executeCheckedTools({
+      captureToolExecution: this.options.captureToolExecution,
       toolUses,
       generationId,
       toolRegistry,
@@ -1310,6 +1311,7 @@ export class QueryEngine implements IQueryEngine {
       ...(options.signal ? [options.signal] : []),
     ]);
     let { results, fatalFailure } = await executeCheckedTools({
+      captureToolExecution: this.options.captureToolExecution,
       toolUses: [{ ...toolUse }],
       toolRegistry,
       messages: [],
@@ -1437,6 +1439,7 @@ export class QueryEngine implements IQueryEngine {
   ): ToolContext {
     const { signal, execution, requestConfiguration, toolDiscovery, onUnexposedTool, reportFatalFailure, dispatchSignal, projectInstructions } = options;
     const context = createToolExecutionContext({
+      canUseNetwork: this.options.canUseNetwork?.(),
       cwd: this.cwd, sessionId: this.sessionId, environment: this.options.executionEnvironment,
       toolUse, toolAttemptId, toolRegistry, signal, execution, requestConfiguration, toolDiscovery,
       permissionChecker: this.permissionChecker,
@@ -1489,6 +1492,7 @@ export class QueryEngine implements IQueryEngine {
             }
           : undefined;
         const { results, fatalFailure } = await executeCheckedTools({
+          captureToolExecution: this.options.captureToolExecution,
           toolUses: [{ type: "tool_use", id: `nested_${randomUUID()}`, name, input }],
           toolRegistry,
           messages: [],

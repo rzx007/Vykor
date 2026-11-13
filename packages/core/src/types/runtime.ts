@@ -62,6 +62,9 @@ export interface MemoryRetriever {
 }
 
 export interface QueryEngineOptions {
+  /** Capture the host policy at tool start, then run checks, invocation and post hooks in that scope. */
+  captureToolExecution?: () => <T>(work: () => Promise<T>) => Promise<T>;
+  canUseNetwork?: () => boolean;
   /** Optional host policy. Omission preserves full authorized tool exposure. */
   toolDiscovery?: {
     searchTool: import("@vykor/agent-contracts").ToolDefinition;

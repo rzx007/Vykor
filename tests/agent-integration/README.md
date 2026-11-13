@@ -1,5 +1,7 @@
 # Agent 跨包回归测试
 
+`__test__/live-approval-modes.integration.test.ts` 通过真实 DaemonApplication、默认 Node 工厂、SQLite、同一个实际 Run 和文件写入，验证运行中依次切换三种批准方式。旧人工请求保留到人工回复，旧自动审核在切回人工方式后仍按原决定完成，新调用使用当时的方式；全程只创建一个 Agent。仅替换外部模型和审核模型的响应，不访问第三方。
+
 这里验证 Core 模型/工具循环与 API、权限、提示词、真实文件工具组合后的行为：流中断重试、参数纠错、文件保护、内容复用、Shell 分页、Job 等待时限及 ToolSearch 注册表接入。
 
 `__test__/delegation-guidance.integration.test.ts` 执行提示词里的 Job 工具调用示例，将生成参数交给真实工具输入校验器，检查完整目标包含子代理 runId。子结果等待和最终输出的运行流程在 `packages/agent-runtime/src/kernel/__test__/child-result-collection.test.ts` 覆盖。

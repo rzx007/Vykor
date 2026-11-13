@@ -3,6 +3,9 @@ import { resolve } from "node:path";
 import { sessionSettingsRoot } from "../../../runtime/session-settings-root.js";
 
 import type { Settings } from "@vykor/host-config";
+import { normalizeApprovalMode } from "@vykor/host-config";
+import { settingsForApprovalMode } from "@vykor/sandbox";
+import { readRuntimeMetadata } from "@vykor/domain-contracts/sessions";
 import type {
   ExecutionEnvironmentConsumer,
   ExecutionEnvironmentHandle,
@@ -265,9 +268,18 @@ export class BackgroundShellService {
       },
       acquireEnvironment: async input => {
         if (!this.context.acquireEnvironment) return { launch: input, release: async () => {} };
-        const settings = input.settings ?? await this.context.getSettingsForCwd?.(sessionSettingsRoot(session));
+        const current = this.sessions.getSession(session.id);
+        if (!current) throw new BackgroundShellError(404, "Background shell session no longer exists");
+        let settings = input.settings ?? await this.context.getSettingsForCwd?.(sessionSettingsRoot(current));
         if (!settings) throw new BackgroundShellError(400, "Background shell settings are required");
-        const environment = await this.context.acquireEnvironment(session, settings, { kind: "background", id: input.id! });
+        if (!input.settings || input.requestNamespace !== "tool") {
+          const runtime = readRuntimeMetadata(current.metadata);
+          const approvalMode = normalizeApprovalMode(runtime.approvalMode ?? runtime.permissionMode)
+            ?? normalizeApprovalMode(settings.permission.mode) ?? "ask";
+          const baseline = settingsForApprovalMode(settings, "ask");
+          settings = settingsForApprovalMode({ ...baseline, permission: { ...baseline.permission, mode: approvalMode } }, approvalMode);
+        }
+        const environment = await this.context.acquireEnvironment(current, settings, { kind: "background", id: input.id! });
         try {
           if (input.shellDescriptor && !sameShellDescriptor(input.shellDescriptor, environment.info.shellDescriptor)) throw new BackgroundShellError(409, "Background shell no longer matches the owning session shell.");
           const cwd = await environment.paths.resolve(input.executionCwd ?? environment.workspace.executionRoot, "execute");

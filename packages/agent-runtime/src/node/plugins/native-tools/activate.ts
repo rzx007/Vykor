@@ -121,8 +121,9 @@ export async function activateNativePluginTools(
           if (tools && (captured?.source?.kind !== "plugin" || captured.source.id !== plugin.manifest.id)) {
             return Promise.resolve({ isError:true, failureKind:"policy" as const, executionState:"not_started" as const, content:[{type:"text" as const,text:"Native Tool is not available in this Run."}] });
           }
-          if (definition.execution?.network && (toolContext.environment?.info.networkMode === "none" ||
-            (context.settings?.sandbox?.enabled && context.settings.sandbox.network?.mode === "none"))) {
+          const networkAllowed = toolContext.canUseNetwork ?? (toolContext.environment?.info.networkMode !== "none"
+            && (!context.settings?.sandbox?.enabled || context.settings.sandbox.network?.mode !== "none"));
+          if (definition.execution?.network && !networkAllowed) {
             return Promise.resolve({
               isError: true, failureKind: "policy" as const, executionState: "not_started" as const,
               content: [{ type: "text" as const, text: "Tool requires network access, which is disabled in this Run." }],

@@ -80,13 +80,11 @@ async function createDefaultNodeAgentInternal(
   internal: InternalAgentOptions,
   internals: DefaultNodeAgentInternals,
 ): Promise<DefaultNodeAgent> {
+  let getApprovalMode = () => options.approvalMode;
+  const requestPermission: AgentEffects["requestPermission"] = options.effects?.requestPermission
+    ?? (async () => ({ status: "denied", reason: "No permission effect configured" }));
   const effects: AgentEffects = {
-    requestPermission:
-      options.effects?.requestPermission ??
-      (async () => ({
-        status: "denied",
-        reason: "No permission effect configured",
-      })),
+    requestPermission: (request, context) => requestPermission(request, { ...context, approvalMode: getApprovalMode() }),
     ...(options.effects?.askUserPrompt
       ? { askUserPrompt: options.effects.askUserPrompt }
       : {}),
@@ -113,6 +111,7 @@ async function createDefaultNodeAgentInternal(
         internals,
       ),
   });
+  getApprovalMode = composition.runtime.getApprovalMode ?? getApprovalMode;
   try {
     return createAssembledAgent({
       ...composition,

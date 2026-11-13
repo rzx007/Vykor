@@ -213,6 +213,8 @@ export interface ExecutionEnvironmentHandle {
   readonly terminal: EnvironmentTerminalFactory;
   readonly files: EnvironmentFileSystem;
   readonly paths: EnvironmentPathResolver;
+  /** Copy one invocation's process policy; false restores the configured baseline. */
+  withFullAccess?(enabled: boolean): ExecutionEnvironmentHandle;
   release(): Promise<void>;
 }
 

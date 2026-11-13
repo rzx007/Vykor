@@ -33,6 +33,7 @@ export function sessionPermissionRequest(input: {
   const runtime = readSessionRuntimeConfig(session, {
     approvalMode: normalizeApprovalMode(settings?.permission.mode) ?? "ask",
   });
+  runtime.approvalMode = context.approvalMode ?? runtime.approvalMode;
   const revision = readSessionRuntimeRevision(session.metadata);
   const { toolSource, toolDescription } = request;
   const appAction = () => {

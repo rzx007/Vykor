@@ -5,6 +5,8 @@ import { MemoryToolResultArchive } from "../../results/memory-tool-result-archiv
 import { QueryEngine } from "../../query-engine.js";
 import { ToolRegistry } from "../tool-registry.js";
 import { AgentExecutionLimitError } from "@vykor/agent-contracts";
+import { AsyncLocalStorage } from "node:async_hooks";
+import type { QueryEngineOptions } from "../../../types/runtime.js";
 
 afterEach(() => vi.useRealTimers());
 
@@ -15,6 +17,11 @@ function fixture(options: {
   toolTimeoutMs?: number;
   source?: ToolRegistrationSource;
   modelTool?: ToolUseBlock;
+  modelTools?: ToolUseBlock[];
+  serialGroup?: string;
+  network?: boolean;
+  canUseNetwork?: () => boolean;
+  captureToolExecution?: QueryEngineOptions["captureToolExecution"];
 } = {}) {
   const inputs: Record<string, unknown>[] = [];
   const contexts: ToolContext[] = [];
@@ -25,6 +32,8 @@ function fixture(options: {
   let clientCalls = 0;
   const definition: ToolDefinition = {
     name: "Inspect", description: "Native plugin fixture",
+    serialGroup: options.serialGroup,
+    execution: options.network ? { domain: "control_plane", network: true } : undefined,
     inputSchema: { type: "object", properties: {
       text: { type: "string" }, text_from: { type: "string" },
     }, required: ["text"] },
@@ -59,14 +68,15 @@ function fixture(options: {
   };
   const engine = new QueryEngine({ streamMessage: async function* (): AsyncIterable<StreamEvent> {
     clientCalls++;
-    if (clientCalls === 1 && options.modelTool) yield { type: "tool_use_start", toolUse: options.modelTool };
-    yield { type: "complete", stopReason: clientCalls === 1 && options.modelTool ? "tool_use" : "end_turn" };
+    const tools = options.modelTools ?? (options.modelTool ? [options.modelTool] : []);
+    if (clientCalls === 1) for (const toolUse of tools) yield { type: "tool_use_start", toolUse };
+    yield { type: "complete", stopReason: clientCalls === 1 && tools.length ? "tool_use" : "end_turn" };
   } }, registry, { checkTool: async (...args) => {
     checked.push({ ...args[1] });
     return options.permission?.(...args) ?? { action: "allow" };
   } }, { register() {}, execute: async (...args) => {
     hooks.push(args[0]); return options.hook?.(...args) ?? { blocked: false };
-  } }, { cwd: "/runtime", toolTimeoutMs: options.toolTimeoutMs });
+  } }, { cwd: "/runtime", toolTimeoutMs: options.toolTimeoutMs, captureToolExecution: options.captureToolExecution, canUseNetwork: options.canUseNetwork });
   engine.loadMessages([
     { type: "user", content: "old conversation" },
     { type: "assistant", content: "", toolUses: [{ type: "tool_use", id: "old", name: "Inspect", input: { text: "private old input" } }] },
@@ -78,6 +88,82 @@ function fixture(options: {
 }
 
 describe("history-free checked tool execution", () => {
+  it("uses the calling session's network policy for inherited network tools", async () => {
+    let allowed = false;
+    const f = fixture({ network: true, canUseNetwork: () => allowed });
+    expect(await f.engine.executeTool(f.toolUse, { execution: f.execution })).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
+    expect(f.inputs).toEqual([]);
+    allowed = true;
+    expect(await f.engine.executeTool({ ...f.toolUse, id: "network-allowed" }, { execution: f.execution })).toMatchObject({ executionState: "completed" });
+    expect(f.inputs).toEqual([{ text: "hello" }]);
+  });
+
+  it("captures a fresh host scope for a nested tool and restores its parent afterwards", async () => {
+    const local = new AsyncLocalStorage<string>();
+    let selected = "ask";
+    const observed: string[] = [];
+    const f = fixture({
+      captureToolExecution: () => { const captured = selected; return work => local.run(captured, work); },
+      invoke: async (input, context) => {
+        observed.push(local.getStore() ?? "missing");
+        if (input.text === "hello") {
+          selected = "full_access";
+          await context.invokeTool!("Inspect", { text: "nested" });
+          observed.push(local.getStore() ?? "missing");
+        }
+        return { content: [] };
+      },
+    });
+    expect(await f.engine.executeTool(f.toolUse, { execution: f.execution })).toMatchObject({ executionState: "completed" });
+    expect(observed).toEqual(["ask", "full_access", "ask"]);
+  });
+
+  it("captures queued calls only when they start and keeps post hooks in the original scope", async () => {
+    const local = new AsyncLocalStorage<string>();
+    let selected = "ask";
+    const observed: string[] = [], post: string[] = [];
+    const f = fixture({ serialGroup: "ordered", modelTools: [
+      { type: "tool_use", id: "first", name: "Inspect", input: { text: "first" } },
+      { type: "tool_use", id: "second", name: "Inspect", input: { text: "second" } },
+    ],
+      captureToolExecution: () => { const captured = selected; return work => local.run(captured, work); },
+      invoke: async input => {
+        observed.push(`${input.text}:${local.getStore() ?? "missing"}`);
+        if (input.text === "first") selected = "full_access";
+        return { content: [] };
+      },
+      hook: async event => { if (event === "post_tool_use") post.push(local.getStore() ?? "missing"); return { blocked: false }; },
+    });
+    for await (const _ of f.engine.submitMessage("inspect", { execution: f.execution })) { /* consume */ }
+    expect(observed).toEqual(["first:ask", "second:full_access"]);
+    expect(post).toEqual(["ask", "full_access"]);
+  });
+
+  it("keeps concurrent tool calls in their captured host execution context", async () => {
+    const local = new AsyncLocalStorage<string>();
+    let selected = "ask";
+    let started!: () => void;
+    const entered = new Promise<void>(resolve => { started = resolve; });
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    const f = fixture({
+      captureToolExecution: () => { const captured = selected; return work => local.run(captured, work); },
+      invoke: async input => {
+        if (input.text === "hello") { started(); await held; }
+        return { content: [{ type: "text", text: local.getStore() ?? "missing" }] };
+      },
+    });
+    const old = f.engine.executeTool(f.toolUse, { execution: f.execution });
+    try {
+      await entered;
+      selected = "full_access";
+      expect(await f.engine.executeTool({ ...f.toolUse, id: "new", input: { text: "new" } }, { execution: f.execution }))
+        .toMatchObject({ content: [{ type: "text", text: "full_access" }] });
+      release();
+      expect(await old).toMatchObject({ content: [{ type: "text", text: "ask" }] });
+    } finally { release(); await old; }
+  });
+
   it("keeps ordinary returned errors completed and lets a corrected call execute", async () => {
     const f = fixture({ invoke: async input => ({ content: [{ type: "text", text: String(input.text) }], isError: input.text === "hello" }) });
     const failed = await f.engine.executeTool(f.toolUse, { execution: f.execution });
