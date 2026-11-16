@@ -251,3 +251,10 @@ describe("HTTP request parsers", () => {
     expectInvalid(() => parseUpdateScheduledTaskRequest({ id: "replacement" }), "id");
   });
 });
+
+it("requires a real target with explicit steer delivery", () => {
+  expect(parseAdmitPromptRequest({ content: "clarify", delivery: "steer", expectedActiveRunId: "r1" }))
+    .toMatchObject({ delivery: "steer", expectedActiveRunId: "r1" });
+  expectInvalid(() => parseAdmitPromptRequest({ content: "clarify", delivery: "queue", expectedActiveRunId: "r1" }), "expectedActiveRunId");
+  expectInvalid(() => parseAdmitPromptRequest({ content: "clarify", delivery: "steer", expectedActiveRunId: "  " }), "expectedActiveRunId");
+});

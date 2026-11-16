@@ -567,6 +567,7 @@ export async function createVykorRuntime(
     );
     bundle.resolveRequestConfiguration = resolveRequestConfiguration;
     bundle.getApprovalMode = authorization.getApprovalMode;
+    bundle.getExplicitApprovalMode = authorization.getExplicitApprovalMode;
     bundle.processExecutor = processExecutor;
     await attachSandboxRuntime(
       bundle,

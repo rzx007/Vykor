@@ -15,21 +15,25 @@ export function createToolAuthorization(input: {
 }) {
   const local = new AsyncLocalStorage<{
     approvalMode: ApprovalMode; mode: PermissionMode; settings: Settings;
+    explicitApprovalMode?: ApprovalMode;
     environment?: ExecutionEnvironmentHandle;
   }>();
   let planning = false;
   const selected = () => {
     const { configuration, settings } = input;
-    const live = input.sessionId ? configuration.readApprovalMode?.(input.sessionId) : undefined;
     const selectedMode = configuration.permissionMode ?? settings.permission.mode;
-    const approvalMode = live ?? configuration.approvalMode ?? normalizeApprovalMode(selectedMode) ?? "ask";
+    const normalizedMode = normalizeApprovalMode(selectedMode);
+    const explicitApprovalMode = (input.sessionId ? configuration.readApprovalMode?.(input.sessionId) : undefined)
+      ?? configuration.approvalMode
+      ?? (selectedMode === normalizedMode ? normalizedMode : undefined);
+    const approvalMode = explicitApprovalMode ?? normalizedMode ?? "ask";
     const mode: PermissionMode = planning || configuration.workMode === "plan" || selectedMode === "plan"
       ? "plan"
-      : live || configuration.approvalMode
+      : explicitApprovalMode
         ? effectivePermissionMode(approvalMode, "execute")
         : selectedMode === "ask" || selectedMode === "auto_review" ? "default"
           : selectedMode === "full_access" ? "full_auto" : selectedMode;
-    return { approvalMode, mode, settings: settingsForApprovalMode(settings, approvalMode) };
+    return { approvalMode, explicitApprovalMode, mode, settings: settingsForApprovalMode(settings, approvalMode) };
   };
   const current = () => local.getStore() ?? selected();
   // Tool factories and hooks retain this object, including through host-object spreads.
@@ -44,6 +48,7 @@ export function createToolAuthorization(input: {
   return {
     settings,
     getApprovalMode: () => current().approvalMode,
+    getExplicitApprovalMode: () => current().explicitApprovalMode,
     getMode: () => current().mode,
     getEnvironment: () => local.getStore()?.environment
       ?? input.environment?.withFullAccess?.(selected().approvalMode === "full_access") ?? input.environment,

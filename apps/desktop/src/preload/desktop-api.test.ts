@@ -25,6 +25,16 @@ it("does not expose retired UI IPC", () => {
   expect(Object.values(IpcChannels).some((channel) => channel.startsWith("plugin-ui:"))).toBe(false)
 })
 
+it("forwards the chosen delivery and exact Run target for a follow-up", async () => {
+  const input = {
+    id: "follow-up", sessionId: "side-chat", delivery: "steer" as const, expectedActiveRunId: "run",
+    items: [{ type: "text" as const, text: "clarify" }],
+    attachments: [],
+  }
+  await desktopAPI.sessions.sendPrompt(input)
+  expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.sessionSendPrompt, input)
+})
+
 it("forwards a read-only child activity request to the session bridge", async () => {
   const input = { sessionId: "parent", jobId: "child", runId: "run" }
   await desktopAPI.sessions.readAgentActivity(input)

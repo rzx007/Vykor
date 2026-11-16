@@ -5,7 +5,11 @@ import { pluginAppModelContexts } from "./plugin-app-model-context"
 import { usePluginAppPages } from "./provider"
 export function PluginAppComposerContext({ sessionId, readOnly }: { sessionId: string | null; readOnly: boolean }) {
   const pages = usePluginAppPages()
-  const entries = useSyncExternalStore(pluginAppModelContexts.subscribe, pluginAppModelContexts.snapshot).filter(entry => entry.source.sessionId === sessionId)
+  const entries = useSyncExternalStore(
+    pluginAppModelContexts.subscribe,
+    pluginAppModelContexts.snapshot,
+    pluginAppModelContexts.serverSnapshot
+  ).filter(entry => entry.source.sessionId === sessionId)
   if (!entries.length) return null
   return <AttachmentGroup aria-label="插件上下文" className="px-3 pt-2">
     {entries.map(entry => <Attachment key={entry.id} size="sm">

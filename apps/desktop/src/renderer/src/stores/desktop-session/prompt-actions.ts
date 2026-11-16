@@ -1,5 +1,6 @@
 import { pluginAppModelContexts } from "@renderer/components/desktop/shell/plugin-apps/plugin-app-model-context"
 import { formatBrowserAnnotationContext, readBrowserAnnotationContext, stripBrowserAnnotationContext } from "@renderer/components/desktop/tools/browser/browser-annotation-context"
+import { selectSessionInterrupting } from "./selectors"
 import { errorMessage } from "./error-state"
 import { createPromptSubmissionSender } from "./prompt-submission"
 import { markComposerSessionTransient } from "./composer-recovery"
@@ -9,7 +10,7 @@ import {
   failOperation,
   removeOperation,
 } from "./operation-state"
-import { classifyPromptPlacement, updatePendingPromptSubmission } from "./pending-prompt-state"
+import { classifyFollowUps, classifyPromptPlacement, FOLLOW_UP_TARGET_UNAVAILABLE, removePendingPromptSubmission, updatePendingPromptSubmission } from "./pending-prompt-state"
 import type {
   DesktopSessionRuntime,
   DesktopStoreContext,
@@ -17,7 +18,7 @@ import type {
   PendingPromptSubmission,
   PromptActions,
 } from "./types"
-import { composerDocument, selectComposerDocumentText } from "./composer-document"
+import { composerDocument, sameComposerDocument, selectComposerDocumentText } from "./composer-document"
 
 interface PromptActionsContext extends DesktopStoreContext {
   scheduleSelectedProjectGitRefresh: (force: boolean) => void
@@ -30,12 +31,41 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
     submitPromptSubmission: createPromptSubmissionSender(context),
     async retryPromptSubmission(inputId, targetSessionId) {
       const sessionId = targetSessionId ?? get().activeSessionId
-      if (!sessionId || get().pendingModeChanges[sessionId]) return
+      if (!sessionId || get().pendingModeChanges[sessionId] || selectSessionInterrupting(get(), sessionId)) return
       const pending = get().sessionRuntimes[sessionId]?.pendingPromptSubmissions[inputId]
       if (pending) await get().submitPromptSubmission(pending, "retry")
     },
-    dismissPromptSubmission(inputId) {
-      const sessionId = get().activeSessionId
+    async restoreFollowUp(inputId, target) {
+      const sessionId = target?.sessionId ?? get().activeSessionId
+      const view = target?.view ?? get().sessionView
+      if (!sessionId || view?.session.id !== sessionId) return false
+      const input = view.inputs.find(item => item.id === inputId)
+      const pending = get().sessionRuntimes[sessionId]?.pendingPromptSubmissions[inputId]
+      if (input) {
+        if (classifyFollowUps(view).get(inputId) !== "failed") return false
+      } else {
+        if (pending?.error !== FOLLOW_UP_TARGET_UNAVAILABLE ||
+            await window.desktop.sessions.checkPromptAccepted({ sessionId, inputId })) return false
+        if (get().sessionRuntimes[sessionId]?.pendingPromptSubmissions[inputId]?.phase !== "failed") return false
+      }
+      const scope = `session:${sessionId}`
+      const items = input?.items.filter(item => !(target && item.type === "context" &&
+        item.kind === "conversation" && item.id === view.session.parentId))
+      const restored = pending?.draftDocument ?? composerDocument(items ?? pending?.items ?? [])
+      const current = get().composerDraftsByScope[scope]?.document
+      if (!current?.items.length || !sameComposerDocument(current, restored)) {
+        get().setComposerDraftDocument(scope, current?.items.length
+          ? composerDocument([...current.items, { type: "text", text: "\n\n" }, ...restored.items])
+          : restored)
+      }
+      replaceRuntime(sessionId, runtime => removeOperation({
+        ...runtime,
+        pendingPromptSubmissions: removePendingPromptSubmission(runtime.pendingPromptSubmissions, inputId),
+      }, inputId))
+      return true
+    },
+    dismissPromptSubmission(inputId, targetSessionId) {
+      const sessionId = targetSessionId ?? get().activeSessionId
       if (!sessionId) return
       replaceRuntime(sessionId, (runtime) =>
         removeOperation(
@@ -58,7 +88,7 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       const sessionId = options?.target?.sessionId ?? get().activeSessionId
       if (options?.target?.view?.session.storage === "memory")
         markComposerSessionTransient(options.target.sessionId)
-      if (sessionId && get().pendingModeChanges[sessionId]) return
+      if (sessionId && (get().pendingModeChanges[sessionId] || selectSessionInterrupting(get(), sessionId))) return
       const appContexts = pluginAppModelContexts.forSession(sessionId ?? null)
       const browserAnnotationContext = formatBrowserAnnotationContext(
         get().composerDraftsByScope[`session:${sessionId}`]?.browserAnnotations ?? []
@@ -85,6 +115,9 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
         return
       }
 
+      const delivery = options?.delivery ?? "queue"
+      const expectedActiveRunId = options?.expectedActiveRunId
+      if (delivery === "steer" && !expectedActiveRunId) throw new Error("当前回复已切换，请确认后重新发送。")
       const current = get()
       const runtime = getSessionRuntime(current, sessionId)
       const matching = Object.values(runtime.pendingPromptSubmissions).find(
@@ -98,12 +131,16 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
           sameAttachmentSnapshot(submission.attachments, attachments)
       )
       if (matching) {
+        if ((matching.delivery ?? "queue") !== delivery || matching.expectedActiveRunId !== expectedActiveRunId) {
+          throw new Error("这条消息还有一次发送待核对，请先处理发送记录。")
+        }
         if (matching.phase === "failed") await get().retryPromptSubmission(matching.id, sessionId)
         else await get().submitPromptSubmission(matching)
         return
       }
       const submission: PendingPromptSubmission = {
         browserAnnotationContext,
+        ...(delivery === "steer" ? { delivery, expectedActiveRunId } : {}),
         id: globalThis.crypto.randomUUID(),
         sessionId,
         content: prompt,
@@ -112,6 +149,7 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
           : {}),
         items,
         draftDocument: document,
+        ...(options?.draftTextSelectionIds?.length ? { draftTextSelectionIds: options.draftTextSelectionIds } : {}),
         draftAttachmentIds: attachmentDrafts.map((attachment) => attachment.draftId),
         attachments,
         createdAt: Date.now(),

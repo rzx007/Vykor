@@ -10,6 +10,7 @@ import {
   removeOperation,
 } from "./operation-state"
 import {
+  FOLLOW_UP_TARGET_UNAVAILABLE,
   removePendingPromptSubmission,
   updatePendingPromptSubmission,
 } from "./pending-prompt-state"
@@ -84,6 +85,8 @@ export function createPromptSubmissionSender(
           await window.desktop.sessions.sendPrompt({
             id: pending.id,
             sessionId: pending.sessionId,
+            ...(snapshot.delivery === undefined ? {} : { delivery: snapshot.delivery }),
+            ...(snapshot.expectedActiveRunId === undefined ? {} : { expectedActiveRunId: snapshot.expectedActiveRunId }),
             items: snapshot.browserAnnotationContext
               ? [...snapshot.items, { type: "text", text: snapshot.browserAnnotationContext }]
               : snapshot.items,
@@ -101,7 +104,11 @@ export function createPromptSubmissionSender(
         if (accepted && get().activeSessionId === pending.sessionId)
           await get().resyncActiveSessionSnapshot()
       } catch (error) {
-        if (!settlePromptSubmission(context, pending, errorMessage(error))) throw error
+        const message = errorMessage(error)
+        const feedback = pending.delivery === "steer" && /active_run_changed|steer_delivery_failed|targeting an active Run/.test(message)
+          ? FOLLOW_UP_TARGET_UNAVAILABLE
+          : message
+        if (!settlePromptSubmission(context, pending, feedback)) throw feedback === message ? error : new Error(feedback)
       } finally {
         context.scheduleSelectedProjectGitRefresh(true)
       }
@@ -163,7 +170,7 @@ export function settlePromptSubmission(
     } else if (error !== undefined && next.operations[pending.id]?.kind !== "create-session")
       next = failOperation(next, pending.id, error, Date.now())
     return {
-      ...(accepted ? clearSubmittedDraft(state, pending) : {}),
+      ...(accepted && current && current.phase !== "accepted" ? clearSubmittedDraft(state, pending) : {}),
       sessionRuntimes: { ...state.sessionRuntimes, [pending.sessionId]: next },
     }
   })

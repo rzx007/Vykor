@@ -99,5 +99,7 @@ describe("diagnoseShellDialectMismatch", () => {
     });
     expect(description).toContain("Get-Content -Raw -Encoding UTF8 -LiteralPath");
     expect(description).toContain("ConvertFrom-Json does not support -Depth");
+    expect(description).toContain("Invoke-WebRequest with -UseBasicParsing");
+    expect(description).toContain("exit 1");
   });
 });

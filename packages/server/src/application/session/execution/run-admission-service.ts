@@ -26,6 +26,7 @@ export interface AdmitPromptInput {
   pluginAppContexts?: import("../plugins/plugin-app-inputs.js").PluginAppConversationRequest[];
   id?: string;
   delivery?: "queue" | "steer";
+  expectedActiveRunId?: string;
   observationTargetSessionId?: string;
   outputSchema?: Record<string, unknown>;
   items: SessionUserInputItem[];
@@ -132,6 +133,7 @@ export interface RunAdmissionRunOperations {
 
 export interface RunAdmissionRuntimeQueue {
   enqueueRun(run: SessionRunRecord, inputId: string): "running" | "queued";
+  activeRunId?(sessionId: string): string | undefined;
   runState?(sessionId: string, runId: string): "running" | "queued" | undefined;
   steer(
     sessionId: string,
@@ -143,6 +145,7 @@ export interface RunAdmissionRuntimeQueue {
       traceId?: string;
       metadata?: Record<string, unknown>;
     },
+    options?: { expectedActiveRunId?: string },
   ):
     | { merged: false }
     | {
@@ -206,6 +209,7 @@ export class RunAdmissionService {
       delivery: "queue" | "steer";
       items: SessionUserInputItem[];
       attachmentFingerprint: string;
+      expectedActiveRunId?: string;
       observationTargetSessionId?: string;
       pluginAppContexts?: import("../plugins/plugin-app-inputs.js").PluginAppConversationRequest[];
       metadata: Record<string, unknown>;
@@ -510,6 +514,9 @@ export class RunAdmissionService {
     if (!this.accepting) throw new Error("Session run engine is stopping");
     const sourceInput = this.options.conversationTransactions.getInput(inputId);
     if (!sourceInput) throw new Error(`Session input not found: ${inputId}`);
+    if (typeof sourceInput.metadata.steerTargetRunId === "string") {
+      throw new SessionApplicationError(409, "Restore the follow-up as a draft to send it to a new Run");
+    }
     const outputSchema = readStoredOutputSchema(sourceInput.metadata, this.options.runOperations.findRunByInput(sourceInput.id)?.metadata);
     if (input.outputSchema !== undefined && !jsonEqual(input.outputSchema, outputSchema)) {
       throw new SessionApplicationError(400, "Replay must preserve the original output schema contract");
@@ -540,12 +547,12 @@ export class RunAdmissionService {
     };
   }
 
-  admitPromptAndMaybeRun(
-    sessionId: string,
-    input: AdmitPromptInput,
-  ): Promise<AdmitPromptResult> {
+  preparePrompt(sessionId: string, input: AdmitPromptInput): Promise<AdmitPromptResult | { completion: Promise<AdmitPromptResult> }> {
     assertPromptMetadataAllowed(input);
     input = validateOutputSchemaRequest(input);
+    if (input.expectedActiveRunId !== undefined && (!input.expectedActiveRunId.trim() || input.delivery !== "steer")) {
+      throw new SessionApplicationError(400, "expectedActiveRunId requires steer delivery");
+    }
     this.assertReady();
     if (!this.accepting) {
       return Promise.reject(new Error("Session run engine is stopping"));
@@ -559,7 +566,7 @@ export class RunAdmissionService {
     const prioritize = () => {
       if (!input.runMetadata?.goalId) this.prioritizeUserInput(sessionId);
     };
-    if (input.observationTargetSessionId === undefined) prioritize();
+    if (input.observationTargetSessionId === undefined && input.expectedActiveRunId === undefined) prioritize();
     const admit = () => admitPromptWork(this.options, sessionId, input, prioritize);
     if (!input.id) return admit();
 
@@ -575,6 +582,7 @@ export class RunAdmissionService {
       if (
         pending.sessionId !== sessionId ||
         pending.delivery !== delivery ||
+        pending.expectedActiveRunId !== input.expectedActiveRunId ||
         pending.observationTargetSessionId !== input.observationTargetSessionId ||
         !jsonEqual(pending.items, inputItems(input)) ||
         pending.attachmentFingerprint !== attachmentFingerprint ||
@@ -586,10 +594,11 @@ export class RunAdmissionService {
           `Prompt id is already used: ${input.id}`,
         );
       }
-      return pending.promise;
+      return Promise.resolve({ completion: pending.promise });
     }
+    const prepared = admit();
     let failed = false;
-    const promise = admit().catch(error => {
+    const promise = prepared.then(result => "completion" in result ? result.completion : result).catch(error => {
       failed = true;
       throw error;
     }).finally(() => {
@@ -604,11 +613,13 @@ export class RunAdmissionService {
       delivery,
       items: inputItems(input),
       attachmentFingerprint,
+      expectedActiveRunId: input.expectedActiveRunId,
       observationTargetSessionId: input.observationTargetSessionId,
       pluginAppContexts: input.pluginAppContexts,
       metadata,
       promise,
     });
-    return promise;
+    void promise.catch(() => {});
+    return prepared.then(result => "completion" in result ? { completion: promise } : result);
   }
 }

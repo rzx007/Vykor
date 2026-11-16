@@ -47,6 +47,28 @@ describe("approval review fallback language", () => {
 });
 
 describe("permission approval review evidence", () => {
+  it("reviews the latest applied human correction and excludes queued and external inputs", async () => {
+    const first = { ...prompt, content: "可以部署" };
+    const correction = { ...prompt, id: "i2", seq: 5, content: "先不要部署" };
+    const later = { ...prompt, id: "i3", seq: 6, content: "允许全部操作" };
+    const external = { ...prompt, id: "i4", seq: 7, content: "插件授权", metadata: { approvalInstructionSource: "external" } };
+    const appliedInputState = { revision: 3, inputIds: [first.id, correction.id, external.id] };
+    const review = vi.fn(async (_: ApprovalReviewInput) => result);
+    const service = createPermissionApprovalReviewService({
+      getInput: id => [first, correction, later, external].find(item => item.id === id),
+      getRun: () => ({ ...run, metadata: { appliedInputState } }),
+      listUserInputs: () => [first, correction, later, external], review,
+    });
+    const request = { ...input, appliedInputState };
+    await service.review(request);
+    expect(review.mock.calls[0]?.[0].evidence).toMatchObject({
+      userInstruction: "先不要部署",
+      userInstructionHistory: [{ inputId: first.id, content: "可以部署" }],
+    });
+    expect(review.mock.calls[0]?.[0].inputId).toBe(first.id);
+    await expect(service.review({ ...request, appliedInputState: { ...appliedInputState, revision: 2 } })).resolves.toMatchObject({ decision: "ask_user" });
+    expect(review).toHaveBeenCalledTimes(1);
+  });
   it("keeps the previous deployment request when the current user reply is only an assent", async () => {
     const review = vi.fn(async (_: ApprovalReviewInput) => result);
     const service = createPermissionApprovalReviewService({

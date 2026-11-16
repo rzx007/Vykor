@@ -13,7 +13,7 @@ import { installAppFixture, appFixtureSettings } from "../../agent-runtime/test-
 import { createDefaultPluginService } from "../src/application/default-services/extensions/plugin-service.js";
 import { createDefaultSettingsService } from "../src/application/default-services/configuration/settings-service.js";
 
-export async function pluginAppHarness(kind: "native-tools" | "mcp-server", modelTool = false, autosave = false) {
+export async function pluginAppHarness(kind: "native-tools" | "mcp-server", modelTool = false, autosave = false, extension?: runtime.VykorAgentExtension) {
   const root = mkdtempSync(join(tmpdir(), "app-http-"));
   vi.stubEnv("VYKOR_CONFIG_DIR", join(root, "config"));
   const fixture = await installAppFixture(root, kind, undefined, modelTool, autosave);
@@ -36,6 +36,7 @@ export async function pluginAppHarness(kind: "native-tools" | "mcp-server", mode
     logger: () => {}, getSettings: () => settingsRef.current,
     services: { plugin: createDefaultPluginService(settingsRef), settings: createDefaultSettingsService(settingsRef) },
     createAgent: hostedAgentFactory(async ({ options }) => runtime.createDefaultNodeAgent({ ...options, ...(modelTool ? { approvalMode: "full_access" as const } : {}),
+      ...(extension ? { extensions: [...(options.extensions ?? []), extension] } : {}),
       capabilityOverrides: { ...options.capabilityOverrides, terminal: false, memory: false },
       client: { async *streamMessage() { modelCalls++;
         if (modelTool && modelCalls === 1) { yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "native-model-result", name: "SaveDocument", input: { value: "model" } } }; yield { type: "complete", stopReason: "tool_use" }; }

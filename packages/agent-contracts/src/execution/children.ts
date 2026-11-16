@@ -193,7 +193,10 @@ export interface AgentPostRunChildParent {
   signal?: AbortSignal;
 }
 
-export interface AgentSteerInput extends AgentChildInput {}
+export interface AgentSteerInput extends AgentChildInput {
+  /** A promoted queue item can be cancelled before the Run takes it. */
+  signal?: AbortSignal;
+}
 
 export interface AgentChildRunSnapshot {
   readonly receipt: AgentInputReceipt;

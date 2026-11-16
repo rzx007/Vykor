@@ -64,6 +64,7 @@ import { IpcEvents } from "../../../shared/ipc-channels"
 import { requireDesktopPluginCapabilities } from "../../../shared/plugin-capabilities"
 import type { DesktopContextUsageSnapshot } from "../../../shared/context-usage-types"
 import {
+  isLegacyOutsideProjectWorkspacePath,
   normalizeWorkspacePath,
 } from "./outside-project-workspace"
 import { isChannelSessionMetadata } from "../../../shared/channel-types"
@@ -241,10 +242,14 @@ export class DesktopSessionService {
         .filter((session) => isChannelSessionMetadata(session.metadata ?? {}))
         .map((session) => normalizeWorkspacePath(session.cwd))
     )
+    const documentsDir = app.getPath("documents")
     const projects = await Promise.all(
       projectRecords
         .filter(
-          (project) => !isHiddenManagedProjectPath(project.path) && !channelSessionCwds.has(normalizeWorkspacePath(project.path))
+          (project) =>
+            !isLegacyOutsideProjectWorkspacePath(project.path, documentsDir) &&
+            !isHiddenManagedProjectPath(project.path) &&
+            !channelSessionCwds.has(normalizeWorkspacePath(project.path))
         )
         .map(toDesktopProject)
     )

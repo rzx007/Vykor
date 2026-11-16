@@ -86,18 +86,36 @@ describe("ProjectApplicationService", () => {
     const store = new SessionStore({ path: join(directory, "store.db") });
     const project = store.projects.inspect(directory);
     store.sessions.create({ id: "s1", cwd: directory, projectId: project.id, model: "test" });
-    const application = new DaemonApplication({ store, settings: { model: "test", sandbox: { enabled: false }, memory: { enabled: false } } as any, log: () => {} });
-    let rejectAdmission!: (error: Error) => void;
-    const pending = new Promise<never>((_resolve, reject) => { rejectAdmission = reject; });
+    const application = new DaemonApplication({
+      store,
+      settings: {
+        model: "test",
+        apiFormat: "anthropic",
+        maxTurns: 1,
+        permission: { mode: "ask" },
+        sandbox: { enabled: false },
+        memory: { enabled: false },
+      },
+      log: () => {},
+    });
+    const { promise: pending, reject: rejectAdmission } = Promise.withResolvers<never>();
     void pending.catch(() => {});
-    let admitted: Promise<any> | undefined;
+    let admitted: Promise<unknown> | undefined;
     try {
       await (application as any).startupRecovery;
       if (kind === "shell") {
-        (application.backgroundShells as any).context.acquireEnvironment = () => pending;
-        admitted = application.backgroundShells.create({ requestId: "acquiring", sessionId: "s1", command: "echo blocked" }).catch(error => error);
-        await vi.waitFor(() => expect(store.listSessionTasks("s1")).toHaveLength(1));
-        store.transitionPendingSessionTask(store.listSessionTasks("s1")[0]!.id, { status: "stopped" });
+        const acquiring = Promise.withResolvers<void>();
+        application.backgroundShells["context"].acquireEnvironment = () => {
+          acquiring.resolve();
+          return pending;
+        };
+        const creation = application.backgroundShells.create({ requestId: "acquiring", sessionId: "s1", command: "echo blocked" });
+        admitted = creation.catch(error => error);
+        await Promise.race([acquiring.promise, creation]);
+        const tasks = store.listSessionTasks("s1");
+        expect(tasks).toHaveLength(1);
+        // Keep the task row from blocking rebind independently of the admission guard.
+        expect(store.transitionPendingSessionTask(tasks[0]!.id, { status: "stopped" }).transitioned).toBe(true);
       } else {
         const send = vi.fn((_input: unknown) => pending);
         vi.spyOn((application as any).agentPool, "peekHost").mockReturnValue({
@@ -110,8 +128,9 @@ describe("ProjectApplicationService", () => {
       }
       await expect(application.projects.rebind(project.id, tmpdir())).rejects.toMatchObject({ status: 409 });
       expect(store.sessions.get("s1")?.cwd).toBe(directory);
-      rejectAdmission(new Error("controlled admission failure"));
-      await admitted;
+      const admissionFailure = new Error("controlled admission failure");
+      rejectAdmission(admissionFailure);
+      expect(await admitted).toBe(admissionFailure);
       await expect(application.projects.rebind(project.id, tmpdir())).resolves.toMatchObject({ path: tmpdir() });
     } finally {
       rejectAdmission(new Error("cleanup")); await admitted; await application.close(); store.close(); rmSync(directory, { recursive: true, force: true }); vi.restoreAllMocks();

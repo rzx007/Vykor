@@ -330,7 +330,7 @@ export function ComposerSendButton({
   disabled: boolean
   onInterrupt?: () => void
 }): React.JSX.Element {
-  if (interrupting || sending) {
+  if (interrupting || (sending && !running)) {
     return (
       <Button
         type="button"
@@ -346,9 +346,9 @@ export function ComposerSendButton({
     )
   }
 
-  if (running) {
-    return (
-      <Button
+  return (
+    <>
+      {running ? <Button
         type="button"
         size="icon"
         aria-label="停止生成"
@@ -357,12 +357,8 @@ export function ComposerSendButton({
         className="ml-1 size-8 rounded-full  hover:bg-primary/90"
       >
         <Square fill="currentColor" className="size-3.5" />
-      </Button>
-    )
-  }
-
-  return (
-    <Button
+      </Button> : null}
+      {running && (disabled || sending) ? null : <Button
       type="submit"
       size="icon"
       aria-label="发送"
@@ -371,6 +367,7 @@ export function ComposerSendButton({
       className="ml-1 size-8 rounded-full hover:bg-primary/90 disabled:bg-ui-muted disabled:text-background disabled:opacity-55"
     >
       <ArrowUp />
-    </Button>
+    </Button>}
+    </>
   )
 }

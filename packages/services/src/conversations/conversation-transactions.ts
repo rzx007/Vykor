@@ -732,7 +732,12 @@ export class ConversationTransactions {
           });
         }
         this.settleActiveRunAttempts(run.id, "cancelled", reason);
-        this.requireRuns().updateRun(run.id, { status: "interrupted", error: reason, metadata: { toolGeneration: [] } });
+        this.requireRuns().updateRun(run.id, { status: "interrupted", error: reason, metadata: {
+          toolGeneration: [],
+          ...(run.metadata.promotion && typeof run.metadata.promotion === "object" &&
+              "kind" in run.metadata.promotion && run.metadata.promotion.kind === "steering"
+            ? { promotion: { ...run.metadata.promotion, kind: "failed" } } : {}),
+        } });
         this.testHooks?.afterRecoveryMutation?.();
       }
       return active.length;
@@ -744,8 +749,12 @@ export class ConversationTransactions {
       const runs = this.requireRuns();
       const unowned = Object.values(this.storage.state.inputs).filter((input) => {
         const session = this.storage.state.sessions[input.sessionId];
-        return session !== undefined && session.status !== "archived" && session.status !== "closing"
-          && runs.findRunByInput(input.id) === undefined;
+        if (!session || session.status === "archived" || session.status === "closing" || runs.findRunByInput(input.id)) return false;
+        const targetId = input.metadata.steerTargetRunId;
+        if (typeof targetId !== "string") return true;
+        const target = runs.getRun(targetId);
+        const applied = target?.metadata.appliedInputState as { inputIds?: string[] } | undefined;
+        return target?.sessionId !== input.sessionId || !applied?.inputIds?.includes(input.id);
       });
       for (const input of unowned) {
         const traceId = typeof input.metadata.traceId === "string" ? input.metadata.traceId : undefined;

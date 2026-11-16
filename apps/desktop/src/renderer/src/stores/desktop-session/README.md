@@ -226,3 +226,7 @@ operation 的阶段是 `pending`、`acknowledged`、`failed`。
 `refreshContextUsage` 保留最近成功快照，并向显式打开用量面板的调用方返回 true（已更新）或 false（读取失败、不可用或格式无效）。同会话被后台刷新接替时，旧调用等待最新读取结果；会话已切换时返回 undefined。后台刷新仍可忽略结果，面板自身负责短期加载与重试反馈，不增加一份全局加载状态。
 
 普通草稿和待提交身份由 `composer-recovery.ts` 异步读写 `window.desktop.businessData`，bootstrap 完成分类与恢复后才设为 ready。发送原 inputId 成功持久化后才发请求；失败保留正文和原身份。临时及 linked-chat 草稿在导出前过滤。
+
+## 运行中补充
+
+`sendMessage` 为本次提交固定投递方式和目标 Run，恢复时以同一 Input ID 核对。侧聊使用显式会话目标发送、提升、取消和恢复草稿。队列显示从目标 Run 已应用的输入列表判断何时结束等待。

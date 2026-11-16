@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, createElement } from "react"
 import { createRoot, type Root } from "react-dom/client"
+import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { $getRoot, COPY_COMMAND, PASTE_COMMAND, getNearestEditorFromDOMNode } from "lexical"
 import { Composer } from "../composer"
@@ -45,33 +46,32 @@ afterEach(async () => {
   vi.unstubAllGlobals()
   Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT")
 })
-async function render(
+function composerElement(
   draft: ComposerDocument = { version: 1, items: [] },
   enabled?: boolean,
   id = "plugin-test",
 ) {
-  await act(async () =>
-    root.render(
-      createElement(Composer, {
-        id,
-        draft,
-        sending: false,
-        models: [],
-        selectedModel: null,
-        selectedProvider: null,
-        effort: null,
-        modelLabel: "Model",
-        permissionMode: "ask",
-        plugins: [plugin],
-        pluginMentionsEnabled: enabled,
-        onDraftChange: () => {},
-        onSubmit: () => {},
-        onSelectModel: () => {},
-        onSelectPermissionMode: () => {},
-        onSelectEffort: () => {},
-      })
-    )
-  )
+  return createElement(Composer, {
+    id,
+    draft,
+    sending: false,
+    models: [],
+    selectedModel: null,
+    selectedProvider: null,
+    effort: null,
+    modelLabel: "Model",
+    permissionMode: "ask",
+    plugins: [plugin],
+    pluginMentionsEnabled: enabled,
+    onDraftChange: () => {},
+    onSubmit: () => {},
+    onSelectModel: () => {},
+    onSelectPermissionMode: () => {},
+    onSelectEffort: () => {},
+  })
+}
+async function render(...args: Parameters<typeof composerElement>) {
+  await act(async () => root.render(composerElement(...args)))
 }
 const editor = () => getNearestEditorFromDOMNode(container.querySelector('[role="textbox"]')!)!
 const plus = () => container.querySelector<HTMLButtonElement>('button[aria-label="添加上下文"]')!
@@ -79,6 +79,9 @@ const pluginOption = () =>
   [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')].find((node) =>
     node.textContent?.includes("Quality")
   )
+it("statically renders the composer without a plugin app window", () => {
+  expect(renderToStaticMarkup(composerElement())).toContain('aria-label="添加上下文"')
+})
 it("uses the 20KB or 5000-character long-paste threshold", () => {
   expect(shouldPasteAsTextAttachment("a".repeat(4_999))).toBe(false)
   expect(shouldPasteAsTextAttachment("a".repeat(5_000))).toBe(true)

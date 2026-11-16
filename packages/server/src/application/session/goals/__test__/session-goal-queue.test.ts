@@ -59,7 +59,8 @@ async function harness() {
   const user = async (id: string) => {
     const gate = deferred(); releases.set(id, gate);
     const begun = deferred(); started.set(id, begun);
-    const result = await services.admission.admitPromptAndMaybeRun("s", { id, items: [{ type: "text", text: id }] });
+    const result = await services.admission.preparePrompt("s", { id, items: [{ type: "text", text: id }] });
+    if ("completion" in result) throw new Error("Expected a queued admission");
     await begun.promise;
     return { runId: result.run!.id, release: () => gate.resolve() };
   };

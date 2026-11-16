@@ -1,5 +1,5 @@
 import { ChevronDown, Goal, Plus, ShieldCheck, X, Undo2 } from "lucide-react"
-import { useState, type ReactNode } from "react"
+import { useState, useSyncExternalStore, type ReactNode } from "react"
 
 import { Button } from "@renderer/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@renderer/components/ui/popover"
@@ -15,6 +15,7 @@ import type {
 } from "@shared/session-types"
 import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session/store"
+import { pluginAppModelContexts } from "../../shell/plugin-apps/plugin-app-model-context"
 import { PluginAppComposerContext } from "../../shell/plugin-apps/composer-context"
 import { ComposerAttachments } from "./composer-attachments"
 import { ComposerBrowserAnnotations } from "./composer-browser-annotations"
@@ -68,6 +69,8 @@ export function Composer({
   onOpenContextUsage,
   onDraftChange,
   onSubmit,
+  followUpRunId,
+  lastAcceptedInputId,
   onCommand,
   onInterrupt,
   onSelectModel,
@@ -122,7 +125,9 @@ export function Composer({
   contextUsage?: DesktopContextUsageSnapshot | null
   onOpenContextUsage?: () => void | Promise<boolean | void>
   onDraftChange: (value: ComposerDocument) => void
-  onSubmit: () => void
+  onSubmit: (delivery?: "queue" | "steer") => void
+  followUpRunId?: string
+  lastAcceptedInputId?: string
   onCommand?: (command: ComposerPickerCommand) => Promise<void>
   onInterrupt?: () => void
   onSelectModel: (model: DesktopModel) => void
@@ -155,7 +160,7 @@ export function Composer({
     }
   }
   const [activePicker, setActivePicker] = useState<
-    "model" | "permission" | "effort" | "goal" | null
+    "model" | "permission" | "effort" | "goal" | "delivery" | null
   >(null)
   const [contextPickerRequest, setContextPickerRequest] = useState(0)
   const [contextPickerOpen, setContextPickerOpen] = useState(false)
@@ -228,9 +233,34 @@ export function Composer({
       : []),
   ]
 
+  const [deliveryChoice, setDeliveryChoice] = useState<{
+    delivery: "queue" | "steer"
+    runId?: string
+    afterInputId?: string
+  } | null>(null)
+  const appContexts = useSyncExternalStore(
+    pluginAppModelContexts.subscribe,
+    pluginAppModelContexts.snapshot,
+    pluginAppModelContexts.serverSnapshot
+  )
+  const showFollowUpChoice = Boolean(followUpRunId && !goalMode)
+  const firstDraftItem = draft.items[0]
+  const queueOnlyReason = attachments.length
+    ? "附件需要排队发送"
+    : appContexts.some(entry => entry.source.sessionId === activeSessionId) ||
+        draft.items.some(item => item.type === "capability" || (item.type === "skill" && item.source === "plugin"))
+      ? "插件内容需要排队发送"
+      : firstDraftItem?.type === "text" && /^\s*observe-session(?:\s|$)/u.test(firstDraftItem.text)
+        ? "观察会话需要排队发送"
+        : undefined
+  const delivery = showFollowUpChoice && !queueOnlyReason
+    ? (deliveryChoice && deliveryChoice.runId === followUpRunId && deliveryChoice.afterInputId === lastAcceptedInputId
+        ? deliveryChoice.delivery
+        : permissionMode === "full_access" ? "steer" : "queue")
+    : "queue"
   const submit = (): void => {
-    if (sending || !allowSubmit) return
-    onSubmit()
+    if (sending || interrupting || !allowSubmit) return
+    onSubmit(showFollowUpChoice ? delivery : undefined)
   }
 
   return (
@@ -555,6 +585,37 @@ export function Composer({
             }}
           />
           <ContextUsageControl snapshot={contextUsage} onOpen={onOpenContextUsage} />
+          {showFollowUpChoice ? (
+            <Popover open={activePicker === "delivery"} onOpenChange={(open) => setActivePicker(open ? "delivery" : null)}>
+              <PopoverTrigger
+                render={<Button type="button" variant="control" shape="pill" size="sm" />}
+                disabled={sending || interrupting}
+                aria-label="本条消息的发送方式"
+                title={queueOnlyReason}
+              >
+                {delivery === "steer" ? "现在补充" : "排队"}
+                <ChevronDown className="size-3" />
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-40 p-1">
+                <Button type="button" variant="ghost" size="sm" className="w-full justify-start"
+                  disabled={Boolean(queueOnlyReason)}
+                  onClick={() => {
+                    setDeliveryChoice({ delivery: "steer", runId: followUpRunId, afterInputId: lastAcceptedInputId })
+                    closePicker()
+                  }}>
+                  现在补充
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="w-full justify-start"
+                  onClick={() => {
+                    setDeliveryChoice({ delivery: "queue", runId: followUpRunId, afterInputId: lastAcceptedInputId })
+                    closePicker()
+                  }}>
+                  排队
+                </Button>
+                {queueOnlyReason ? <p className="px-2 py-1 text-xs text-muted-foreground">{queueOnlyReason}</p> : null}
+              </PopoverContent>
+            </Popover>
+          ) : null}
           {goalEditing ? (
             <Button type="submit" size="sm" shape="pill" disabled={sending || !allowSubmit}>
               {sending ? "正在保存…" : "保存目标"}

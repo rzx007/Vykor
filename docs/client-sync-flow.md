@@ -166,3 +166,7 @@ Resource response
 - `scripts/client-public-api-contract.json`：当前公共面事实源。
 
 服务端请求与投影流程见 [Daemon Application Architecture](./daemon-application-architecture.md)，协议错误和 breaking change 规则见 [Protocol Contract](./protocol-contract.md)。
+
+## 运行中补充的确认
+
+发送回执只用于结算本次请求。界面使用事件或快照里的 Input ID 核对接纳，并清理同一条已提交草稿。目标 Run 的 `appliedInputState` 决定补充是否已进入历史。连接结果未知时，以原 Input ID 和目标核对及重试。

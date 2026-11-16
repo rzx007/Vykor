@@ -276,7 +276,7 @@ expect(httpCompletedAtThatPoint).toBe(false);
 
 ```powershell
 pnpm --filter @vykor/desktop exec vitest run src/renderer/src/stores/desktop-session/__test__/prompt-follow-up.test.ts src/renderer/src/stores/desktop-session/__test__/composer-recovery.test.ts src/renderer/src/stores/desktop-session/prompt-actions.test.ts src/renderer/src/components/desktop/conversation-page/__test__/conversation-page.queue-lifecycle.test.tsx src/renderer/src/components/desktop/tools/side-chat/__test__/side-chat-follow-up.test.tsx src/renderer/src/components/desktop/tools/side-chat/__test__/side-chat-panel.test.tsx src/main/features/session/session-operations-modes.test.ts src/preload/desktop-api.test.ts
-pnpm --filter @vykor/desktop run check-types
+pnpm --filter @vykor/desktop run typecheck
 ```
 
 ## T6：一条完整链路与验收收口
@@ -299,7 +299,8 @@ pnpm --filter @vykor/desktop run check-types
 pnpm exec vitest run --config tests/server-client/vitest.config.ts tests/server-client/__test__/running-follow-up.test.ts
 pnpm --filter @vykor/server exec vitest run src/application/recovery/__test__/startup-recovery-service.test.ts
 pnpm --filter @rzx/client exec vitest run src/state/__test__/session-sync-controller.test.ts
-pnpm --filter @vykor/agent-contracts --filter @vykor/core --filter @vykor/agent-runtime --filter @vykor/server --filter @vykor/protocol --filter @rzx/client --filter @vykor/application-client --filter @vykor/desktop run check-types
+pnpm --filter @vykor/agent-contracts --filter @vykor/core --filter @vykor/agent-runtime --filter @vykor/server --filter @vykor/protocol --filter @rzx/client --filter @vykor/application-client run check-types
+pnpm --filter @vykor/desktop run typecheck
 pnpm check-types:server-client
 pnpm check:architecture
 pnpm check-docs
@@ -311,15 +312,13 @@ git diff --check
 
 文档修订自检：六项任务保留 17 项场景；三个前置修复仍有 G1 关口；只保留 Run 应用版本；没有新列、五状态、逐输入版本、强制协议升级或偏好持久化。新建测试明确标注，未新增业务文件。
 
-本轮文档验证：`pnpm check-docs` 通过（1005 个 Markdown 文件），`pnpm check:retired-ui` 通过，`git diff --check` 通过。以下实施任务仍全部未开始，未运行新实现测试。
+实施按 T1 到 T6 顺序推进。三个前置问题通过定向验收后，接通目标校验和桌面入口。测试沿用现有套件，并新增一条真实本机 HTTP 与 SDK 链路。
 
-| 任务 | 实施状态 | 验证状态 |
-| --- | --- | --- |
-| T1 | 未开始 | 未执行实现验证 |
-| T2 | 未开始 | 未执行实现验证 |
-| T3 / G1 | 未开始 | 未执行实现验证 |
-| T4 | 未开始 | 未执行实现验证 |
-| T5 | 未开始 | 未执行实现验证 |
-| T6 | 未开始 | 未执行实现验证 |
-
-全部仍待实施；先前 212 项现有测试不作为新实现的验收结果。
+| 任务 | 实施结果 |
+| --- | --- |
+| T1 | 在会话操作通道外等待补充消费与提升结果。 |
+| T2 | 记录已应用输入，审批和工具派发核对所依据的版本。 |
+| T3 / G1 | 拒绝携带输出要求的队列提升。三项前置通过后再启用桌面选择。 |
+| T4 | 指定并校验目标 Run，SDK 读取 steer 能力。提升在应用事务内结算。 |
+| T5 | 主聊和侧聊共用发送时机、队列反馈和原 ID 的核对恢复。 |
+| T6 | 已补入定向和跨层测试。场景入口与验证边界见[实施记录](../reviews/2026-11-16-running-follow-up.md)。 |

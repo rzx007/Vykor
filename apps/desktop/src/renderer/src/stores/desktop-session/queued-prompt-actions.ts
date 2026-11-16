@@ -1,3 +1,4 @@
+import { selectSessionInterrupting } from "./selectors"
 import { errorMessage } from "./error-state"
 import {
   acknowledgeOperation,
@@ -24,195 +25,90 @@ export function createQueuedPromptActions(
   const { get, set } = context
 
   return {
-    async promoteQueuedPrompt(inputId, queuedRunId, expectedActiveRunId) {
-      const sessionId = get().activeSessionId
-      if (!sessionId || !inputId || !queuedRunId || !expectedActiveRunId) return
-      const action: QueuedPromptAction = {
-        sessionId,
-        inputId,
-        runId: queuedRunId,
-        kind: "promote",
-        phase: "pending",
-      }
-      const actionKey = queuedPromptActionKey(sessionId, queuedRunId)
-      if (getSessionRuntime(get(), sessionId).queuedPromptActions[actionKey]?.phase === "pending")
-        return
-
-      replaceRuntime(sessionId, actionKey, action, (runtime) =>
-        beginOperation(
-          {
-            ...runtime,
-            queuedPromptActions: { ...runtime.queuedPromptActions, [actionKey]: action },
-          },
-          {
-            id: actionKey,
-            kind: "promote-prompt",
-            sessionId,
-            target: queuedRunId,
-            startedAt: Date.now(),
-          }
-        )
+    async promoteQueuedPrompt(inputId, queuedRunId, expectedActiveRunId, targetSessionId) {
+      if (!expectedActiveRunId) return
+      await runAction("promote", inputId, queuedRunId, targetSessionId, (sessionId) =>
+        window.desktop.sessions.promoteQueuedPrompt({ sessionId, inputId, queuedRunId, expectedActiveRunId })
       )
-      try {
-        await window.desktop.sessions.promoteQueuedPrompt({
-          sessionId,
-          inputId,
-          queuedRunId,
-          expectedActiveRunId,
-        })
-        const keepLocalAcknowledgement = get().activeSessionId === sessionId
-        replaceRuntime(sessionId, actionKey, action, (runtime) =>
-          settleAcknowledgedAction(
-            runtime,
-            actionKey,
-            action,
-            get().sessionView,
-            keepLocalAcknowledgement
-          )
-        )
-      } catch (error) {
-        const message = queuedPromptActionError("promote", error)
-        const confirmed = queuedActionConfirmed(get(), sessionId, actionKey, action)
-        replaceRuntime(sessionId, actionKey, action, (runtime) =>
-          confirmed
-            ? removeActionAndOperation(runtime, actionKey)
-            : failAction(runtime, actionKey, message)
-        )
-      } finally {
-        context.scheduleSelectedProjectGitRefresh(true)
-      }
     },
 
-    async cancelQueuedPrompt(inputId, queuedRunId) {
-      const sessionId = get().activeSessionId
-      if (!sessionId || !inputId || !queuedRunId) return
-      const action: QueuedPromptAction = {
-        sessionId,
-        inputId,
-        runId: queuedRunId,
-        kind: "cancel",
-        phase: "pending",
-      }
-      const actionKey = queuedPromptActionKey(sessionId, queuedRunId)
-      if (getSessionRuntime(get(), sessionId).queuedPromptActions[actionKey]?.phase === "pending")
-        return
-
-      replaceRuntime(sessionId, actionKey, action, (runtime) =>
-        beginOperation(
-          {
-            ...runtime,
-            queuedPromptActions: { ...runtime.queuedPromptActions, [actionKey]: action },
-          },
-          {
-            id: actionKey,
-            kind: "cancel-prompt",
-            sessionId,
-            target: queuedRunId,
-            startedAt: Date.now(),
-          }
-        )
+    cancelQueuedPrompt(inputId, queuedRunId, targetSessionId) {
+      return runAction("cancel", inputId, queuedRunId, targetSessionId, (sessionId) =>
+        window.desktop.sessions.cancelQueuedPrompt({ sessionId, inputId, queuedRunId })
       )
-      try {
-        await window.desktop.sessions.cancelQueuedPrompt({ sessionId, inputId, queuedRunId })
-        const keepLocalAcknowledgement = get().activeSessionId === sessionId
-        replaceRuntime(sessionId, actionKey, action, (runtime) =>
-          settleAcknowledgedAction(
-            runtime,
-            actionKey,
-            action,
-            get().sessionView,
-            keepLocalAcknowledgement
-          )
-        )
-      } catch (error) {
-        const message = queuedPromptActionError("cancel", error)
-        const confirmed = queuedActionConfirmed(get(), sessionId, actionKey, action)
-        replaceRuntime(sessionId, actionKey, action, (runtime) =>
-          confirmed
-            ? removeActionAndOperation(runtime, actionKey)
-            : failAction(runtime, actionKey, message)
-        )
-      } finally {
-        context.scheduleSelectedProjectGitRefresh(true)
-      }
     },
   }
 
-  function replaceRuntime(
-    sessionId: string,
-    _actionKey: string,
-    _action: QueuedPromptAction,
-    update: (runtime: DesktopSessionRuntime) => DesktopSessionRuntime
-  ): void {
-    set((state) => {
-      const runtime = update(getSessionRuntime(state, sessionId))
-      return { sessionRuntimes: { ...state.sessionRuntimes, [sessionId]: runtime } }
-    })
+  async function runAction(
+    kind: QueuedPromptAction["kind"],
+    inputId: string,
+    runId: string,
+    targetSessionId: string | undefined,
+    request: (sessionId: string) => Promise<void>
+  ): Promise<void> {
+    const state = get()
+    const sessionId = targetSessionId ?? state.activeSessionId
+    if (!sessionId || !inputId || !runId) return
+    if (kind === "promote" && selectSessionInterrupting(state, sessionId)) return
+
+    const key = queuedPromptActionKey(sessionId, runId)
+    const previous = state.sessionRuntimes[sessionId]?.queuedPromptActions[key]
+    if (previous?.phase === "pending" && (kind === "promote" || previous.kind === "cancel")) return
+    const action: QueuedPromptAction = { sessionId, inputId, runId, kind, phase: "pending" }
+
+    updateRuntime(runtime => beginOperation(
+      {
+        ...runtime,
+        queuedPromptActions: { ...runtime.queuedPromptActions, [key]: action },
+      },
+      {
+        id: key,
+        kind: kind === "promote" ? "promote-prompt" : "cancel-prompt",
+        sessionId,
+        target: runId,
+        startedAt: Date.now(),
+      }
+    ))
+    try {
+      await request(sessionId)
+      settle()
+    } catch (error) {
+      settle(queuedPromptActionError(kind, error))
+    } finally {
+      context.scheduleSelectedProjectGitRefresh(true)
+    }
+
+    function settle(error?: string): void {
+      updateRuntime(runtime => {
+        // A cancellation or newer snapshot can replace the action before its reply arrives.
+        if (runtime.queuedPromptActions[key] !== action) return runtime
+        const current = get()
+        if (queuedPromptActionConfirmed(current.sessionView, action) ||
+            (error === undefined && targetSessionId === undefined && current.activeSessionId !== sessionId))
+          return removeActionAndOperation(runtime, key)
+        const next: DesktopSessionRuntime = {
+          ...runtime,
+          queuedPromptActions: {
+            ...runtime.queuedPromptActions,
+            [key]: { ...action, phase: error === undefined ? "acknowledged" : "failed", error },
+          },
+        }
+        return error === undefined
+          ? acknowledgeOperation(next, key, Date.now())
+          : failOperation(next, key, error, Date.now())
+      })
+    }
+
+    function updateRuntime(update: (runtime: DesktopSessionRuntime) => DesktopSessionRuntime): void {
+      set(current => {
+        const before = current.sessionRuntimes[action.sessionId] ?? createEmptySessionRuntime()
+        const after = update(before)
+        return after === before ? current : {
+          sessionRuntimes: { ...current.sessionRuntimes, [action.sessionId]: after },
+        }
+      })
+    }
   }
-}
-
-function getSessionRuntime(
-  state: Pick<import("./types").DesktopSessionState, "sessionRuntimes">,
-  sessionId: string
-): DesktopSessionRuntime {
-  return state.sessionRuntimes[sessionId] ?? createEmptySessionRuntime()
-}
-
-function settleAcknowledgedAction(
-  runtime: DesktopSessionRuntime,
-  actionKey: string,
-  action: QueuedPromptAction,
-  view: import("@shared/session-types").DesktopSessionView | null,
-  keepLocalAcknowledgement: boolean
-): DesktopSessionRuntime {
-  const current = runtime.queuedPromptActions[actionKey]
-  if (!current || current.kind !== action.kind || current.inputId !== action.inputId) return runtime
-  if (queuedPromptActionConfirmed(view, action)) return removeActionAndOperation(runtime, actionKey)
-  if (!keepLocalAcknowledgement) return removeActionAndOperation(runtime, actionKey)
-  return acknowledgeOperation(
-    {
-      ...runtime,
-      queuedPromptActions: {
-        ...runtime.queuedPromptActions,
-        [actionKey]: { ...current, phase: "acknowledged", error: undefined },
-      },
-    },
-    actionKey,
-    Date.now()
-  )
-}
-
-function queuedActionConfirmed(
-  state: Pick<import("./types").DesktopSessionState, "sessionRuntimes" | "sessionView">,
-  sessionId: string,
-  actionKey: string,
-  action: QueuedPromptAction
-): boolean {
-  return (
-    !getSessionRuntime(state, sessionId).queuedPromptActions[actionKey] ||
-    queuedPromptActionConfirmed(state.sessionView, action)
-  )
-}
-
-function failAction(
-  runtime: DesktopSessionRuntime,
-  actionKey: string,
-  error: string
-): DesktopSessionRuntime {
-  const action = runtime.queuedPromptActions[actionKey]
-  if (!action) return runtime
-  return failOperation(
-    {
-      ...runtime,
-      queuedPromptActions: {
-        ...runtime.queuedPromptActions,
-        [actionKey]: { ...action, phase: "failed", error },
-      },
-    },
-    actionKey,
-    error,
-    Date.now()
-  )
 }
 
 function removeActionAndOperation(

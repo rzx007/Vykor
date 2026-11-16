@@ -116,6 +116,7 @@ it("reads a suspended child's archive without recreating its instance", async ()
     const { parent, parentTarget, child, target } = await spawnNested(f, "nested-archived", "nested-archived-result");
     await child.waitRun(target.runId);
     await child.close();
+    await parent.waitRun(parentTarget.runId);
     expect(await parent.requestSuspend(parentTarget.runId)).toBe(true);
     expect(parent.state).toBe("suspended");
     expect(f.agent.host.resolveSessionHost(parent.sessionId)).toBeUndefined();

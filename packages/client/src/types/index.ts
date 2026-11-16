@@ -76,6 +76,7 @@ export interface AdmitClientPromptInput {
   id?: string;
   items: SessionUserInputItem[];
   delivery?: InputDelivery;
+  expectedActiveRunId?: string;
   outputSchema?: Record<string, unknown>;
   attachments?: AdmitPromptAttachmentInput[];
   metadata?: Record<string, unknown>;

@@ -310,9 +310,11 @@ export function clearSubmittedDraft(
   const sentDocument = pending.draftDocument ?? composerDocument(pending.items)
   const assets = new Set(pending.attachments.map((value) => value.assetId))
   const draftIds = pending.draftAttachmentIds ? new Set(pending.draftAttachmentIds) : null
+  const sentSelections = new Set(pending.draftTextSelectionIds)
   const sentAnnotations = readBrowserAnnotationContext(pending.browserAnnotationContext ?? "")?.annotations ?? []
   const updated: DesktopComposerDraft = {
     ...current,
+    ...(current.textSelections ? { textSelections: current.textSelections.filter(selection => !sentSelections.has(selection.id)) } : {}),
     ...(current.browserAnnotations ? {
       browserAnnotations: current.browserAnnotations.filter(record => !sentAnnotations.some(sent =>
         sent.id === record.id && sent.pageUrl === record.pageUrl && sent.comment === record.comment &&
@@ -344,7 +346,7 @@ export function reconcileSubmittedDrafts(
   for (const pending of Object.values(
     state.sessionRuntimes[view.session.id]?.pendingPromptSubmissions ?? {}
   )) {
-    if (ids.has(pending.id)) result = clearSubmittedDraft(result, pending)
+    if (pending.phase !== "accepted" && ids.has(pending.id)) result = clearSubmittedDraft(result, pending)
   }
   return { composerDraftsByScope: result.composerDraftsByScope }
 }

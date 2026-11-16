@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import type { DesktopSessionView } from "@shared/session-types"
 import { createEmptySessionRuntime } from "./operation-state"
 import {
+  classifyFollowUps,
   classifyPromptPlacement,
   queuedPromptActionConfirmed,
   queuedPromptActionKey,
@@ -34,6 +35,26 @@ function emptySessionView(sessionId: string): DesktopSessionView {
     permissions: [],
   }
 }
+
+it("distinguishes an unconfirmed target from a failed or applied follow-up", () => {
+  const view = emptySessionView("s1")
+  const input = { id: "follow-up", sessionId: "s1", seq: 1, delivery: "steer" as const,
+    items: [], content: "clarify", attachments: [], createdAt: 1, metadata: { steerTargetRunId: "target" } }
+  view.inputs = [input]
+  expect(classifyFollowUps(view).get(input.id)).toBe("waiting")
+
+  const target = { id: "target", sessionId: "s1", createdAt: 1, updatedAt: 2 }
+  view.runs = [{ ...target, status: "pending", metadata: {} }]
+  expect(classifyFollowUps(view).get(input.id)).toBe("waiting")
+  view.runs = [{ ...target, status: "completed", metadata: {} }]
+  expect(classifyFollowUps(view).get(input.id)).toBe("failed")
+  view.runs = [{ ...target, status: "completed", metadata: { appliedInputState: { revision: 2, inputIds: [input.id] } } }]
+  expect(classifyFollowUps(view).get(input.id)).toBe("applied")
+
+  view.inputs = [{ ...input, delivery: "queue", metadata: {} }]
+  view.runs = [{ ...target, id: "queued", inputId: input.id, status: "interrupted", metadata: { promotion: { kind: "failed" } } }]
+  expect(classifyFollowUps(view).get(input.id)).toBe("failed")
+})
 
 describe("desktop pending prompt state", () => {
   it("classifies a second unconfirmed prompt as queued", () => {

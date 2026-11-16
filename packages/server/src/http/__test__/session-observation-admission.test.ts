@@ -33,7 +33,12 @@ beforeEach(() => {
     settleGoalRun: async () => {},
   });
   app = createRunExecutionRoutes({
-    application: { admitPrompt: runs.admission.admitPromptAndMaybeRun.bind(runs.admission) } as RunExecutionRoutesContext["application"],
+    application: {
+      admitPrompt: async (sessionId, input) => {
+        const prepared = await runs.admission.preparePrompt(sessionId, input);
+        return "completion" in prepared ? prepared.completion : prepared;
+      },
+    } as RunExecutionRoutesContext["application"],
     traces: { get: () => undefined },
   });
 });
@@ -89,7 +94,7 @@ it("rejects observation on steer and when promoting a queued prompt", async () =
   expect(store.conversations.getInput("steer")).toBeUndefined();
   const response = await submit({ id: "queued", content: instruction });
   const { run } = await response.json();
-  await expect(runs.control.promoteQueuedRun(source, "queued", run.id, "some-active-run")).rejects.toThrow(/observe-session/);
+  await expect(runs.control.prepareQueuedRunPromotion(source, "queued", run.id, "some-active-run")).rejects.toThrow(/observe-session/);
 });
 
 it.each([

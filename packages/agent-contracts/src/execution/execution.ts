@@ -1,7 +1,7 @@
 import type { Message, ToolUseBlock } from "../conversation/messages.js";
 import type { AgentChildController, AgentChildInput, AgentInputReceipt, AgentRunScope, AgentSteerInput } from "./children.js";
 import type { AgentEventInput } from "./events.js";
-import type { AgentPermissionDecision, AgentPermissionRequest } from "../policy/permissions.js";
+import type { AgentPermissionDecision, AgentPermissionRequest, AppliedInputStateSnapshot } from "../policy/permissions.js";
 
 export interface AgentExecutionLimits {
   check(boundary: "run" | "model" | "tool" | "child" | "maintenance",
@@ -37,6 +37,7 @@ export class AgentExecutionLimitError extends Error {
 }
 
 export interface AgentEffectContext {
+  appliedInputState?: AppliedInputStateSnapshot;
   agentId: string;
   sessionId: string;
   runId: string;
@@ -107,6 +108,8 @@ export interface AgentExecutionContext {
   emit(event: AgentEventInput): Promise<void>;
   /** Optional, non-durable diagnostics; never used for execution decisions. */
   observe?(event: AgentEventInput): void;
+  getAppliedInputState?(): AppliedInputStateSnapshot;
+  markInputsApplied?(inputIds: readonly string[]): Promise<void>;
   takeSteeredInputs(options?: { closeIfEmpty?: boolean }): Promise<AgentChildInput[]>;
   closeSteering(): void;
   /** Track the actual invocation, even when its timeout/abort race has returned. */

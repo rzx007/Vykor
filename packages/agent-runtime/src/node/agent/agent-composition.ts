@@ -213,7 +213,7 @@ async function composeVykorAgentInternal(
         activeRuntime?.queryEngine.getAppliedRequestConfiguration?.();
       return {
         ...options,
-        approvalMode: activeRuntime?.getApprovalMode?.() ?? options.approvalMode,
+        approvalMode: activeRuntime?.getExplicitApprovalMode?.() ?? options.approvalMode,
         workMode:
           activeRuntime?.permissionChecker.getMode?.() === "plan"
             ? "plan"

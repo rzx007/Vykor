@@ -23,7 +23,7 @@ import { isObservableSession } from "../execution/session-observation-grant.js";
 import { materializeSessionInput } from "./session-input-materializer.js";
 import { conversationContextCatalog } from "../transcript/session-conversation-context.js";
 import { capturePluginSelectionPolicy, emptyPluginScope } from "../plugins/session-plugin-selection.js";
-import type { RunControlService } from "../execution/run-control-service.js";
+import type { PromoteQueuedRunResult } from "../execution/run-control-service.js";
 import type {
   CancelQueuedPromptInput,
   EditLatestPromptInput,
@@ -212,12 +212,18 @@ export class SessionInteractionService {
     input: AdmitPromptInput,
   ): Promise<AdmitPromptResult> {
     assertPromptMetadataAllowed(input);
+    if (input.expectedActiveRunId !== undefined && this.context.liveChildren.has(sessionId)) {
+      throw new SessionApplicationError(409, "active_run_changed");
+    }
     if (input.outputSchema !== undefined && this.context.liveChildren.has(sessionId)) {
       throw new SessionApplicationError(409, "A live child cannot change its output schema; submit a separate queued Run");
     }
-    const work = () => this.context.operationRunner.run(sessionId, () =>
-      this.admitPromptWork(this.requireSession(sessionId), input),
-    );
+    const work = async () => {
+      const prepared = await this.context.operationRunner.run(sessionId, () =>
+        this.admitPromptWork(this.requireSession(sessionId), input),
+      );
+      return "completion" in prepared ? prepared.completion : prepared;
+    };
     return this.context.admission.withUserInputPreparation
       ? this.context.admission.withUserInputPreparation(sessionId, work) : work();
   }
@@ -225,7 +231,7 @@ export class SessionInteractionService {
   private async admitPromptWork(
     session: SessionRecord,
     originalInput: AdmitPromptInput,
-  ): Promise<AdmitPromptResult> {
+  ): Promise<AdmitPromptResult | { completion: Promise<AdmitPromptResult> }> {
     const sessionId = session.id;
     if (originalInput.observationTargetSessionId !== undefined &&
         (!isObservableSession(session) || this.context.liveChildren.has(sessionId))) {
@@ -399,7 +405,7 @@ export class SessionInteractionService {
     const live =
       hasAttachments || capability.pluginId || input.pluginAppContexts?.length
         ? undefined
-        : await this.context.liveChildren.send(sessionId, {
+        : input.expectedActiveRunId !== undefined ? undefined : await this.context.liveChildren.send(sessionId, {
             id: input.id,
             content: liveContent,
             inputItems: items,
@@ -446,7 +452,7 @@ export class SessionInteractionService {
         ...(run.status === "pending" ? { queue_state: "queued" as const } : {}),
       };
     }
-    return await this.context.admission.admitPromptAndMaybeRun(
+    return await this.context.admission.preparePrompt(
       sessionId,
       input,
     );
@@ -717,11 +723,9 @@ export class SessionInteractionService {
     sessionId: string,
     inputId: string,
     command: PromoteQueuedPromptInput,
-  ): Promise<
-    NonNullable<Awaited<ReturnType<RunControlService["promoteQueuedRun"]>>>
-  > {
-    return this.context.operationRunner.run(sessionId, async () => {
-      const promoted = await this.context.control.promoteQueuedRun(
+  ): Promise<PromoteQueuedRunResult> {
+    const prepared = await this.context.operationRunner.run(sessionId, async () => {
+      const promoted = await this.context.control.prepareQueuedRunPromotion(
         sessionId,
         inputId,
         command.queuedRunId,
@@ -734,6 +738,7 @@ export class SessionInteractionService {
         );
       return promoted;
     });
+    return "completion" in prepared ? prepared.completion : prepared;
   }
 
   async cancelQueuedPrompt(

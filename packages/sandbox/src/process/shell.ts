@@ -257,7 +257,7 @@ export function resolveShellArgv(command: string): string[] {
     case "bash":
       return [shell.bin, "-c", command];
     case "powershell":
-      return [shell.bin, "-NoLogo", "-NoProfile", "-Command", command];
+      return [shell.bin, "-NonInteractive", "-NoLogo", "-NoProfile", "-Command", command];
     case "cmd":
       return [shell.bin, "/d", "/s", "/c", command];
     case "posix-sh":

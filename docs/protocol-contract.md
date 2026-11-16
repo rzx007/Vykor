@@ -40,7 +40,7 @@ GET /capabilities
   "serverVersion": "0.1.0",
   "protocol": { "version": 7 },
   "features": {
-    "steer": 1,
+    "steer": 2,
     "runAttempts": 1,
     "toolAttempts": 1,
     "jobs": 3,
@@ -70,6 +70,8 @@ client = 3, server = 2 -> 拒绝
 Feature 用于同一基本协议下的能力选择。例如客户端使用 Workflow v2 前应检查 `features.workflow >= 2`；不支持时隐藏入口或明确报错，不能用另一个旧请求形状试探。
 
 ## 请求解码
+
+运行中补充使用 `features.steer >= 2`。向 `POST /sessions/:id/prompts` 发送 `delivery: "steer"`、稳定的 Input ID 和 `expectedActiveRunId`，只能把输入交给该会话的指定 Run。目标过期返回 409。带附件、插件能力、插件应用上下文、观察授权或结构化输出要求的输入走排队。旧客户端省略目标时仍走原有补充合同。Client SDK 在发送带目标的请求前检查能力版本。
 
 结构化交付使用附加能力 `features.structuredDelivery = 1`。`POST /sessions/:id/prompts` 可指定纯数据 `outputSchema`，仅对新排队 Run 生效；Server 在保存输入前拒绝未支持的 Schema 约束、超过 64 KiB 的 Schema、`steer` 更换合同和活跃子运行更换合同。相同输入 ID 必须保持同一 Schema，重放沿用原合同。
 

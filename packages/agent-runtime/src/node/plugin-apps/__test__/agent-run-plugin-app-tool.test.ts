@@ -91,10 +91,16 @@ it.each(["native-tools", "mcp-server"] as const)("rechecks %s installation at th
 }, 30_000);
 
 it.each(["post-hook", "terminal-lifecycle", "result-save"])("delivers the real Native result once and propagates %s failure", async failureAt => {
-  const h = await fixture("native-tools"), failure = new Error(failureAt), completed: AgentEventInput[] = [];
-  if (failureAt === "post-hook") vi.spyOn(HookExecutor.prototype, "execute").mockImplementation(async event => {
-    if (event === "post_tool_use") throw failure; return { blocked: false };
-  });
+  const failure = new Error(failureAt), completed: AgentEventInput[] = [];
+  if (failureAt === "post-hook") {
+    const execute = HookExecutor.prototype.execute;
+    // Runtime construction binds the executor to its tool authorization scope.
+    vi.spyOn(HookExecutor.prototype, "execute").mockImplementation(async function (this: HookExecutor, event, context) {
+      if (event === "post_tool_use") throw failure;
+      return execute.call(this, event, context);
+    });
+  }
+  const h = await fixture("native-tools");
   await expect(h.agent.host.plugins.runPluginAppTool({ ...h.request, args: { value: "forge" } }, { scope: h.scope, onToolEvent: async event => {
     if (event.type === "tool.completed") { completed.push(event); if (failureAt === "result-save") throw failure; }
     if (failureAt === "terminal-lifecycle" && event.type === "domain.event" && event.data.name === "tool.lifecycle" && event.data.payload?.phase === "failed") throw failure;
