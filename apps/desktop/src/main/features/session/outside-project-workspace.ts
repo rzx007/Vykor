@@ -60,6 +60,13 @@ export function normalizeWorkspacePath(value: string): string {
   return value.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase()
 }
 
+/** Identify the exact folder layout allocated by older Desktop versions. */
+export function isLegacyOutsideProjectWorkspacePath(path: string, documentsDir: string): boolean {
+  if (!isAbsolute(path) || !isAbsolute(documentsDir)) return false
+  const [day = "", slot = "", extra] = relative(join(documentsDir, "Vykor"), path).split(sep)
+  return extra === undefined && /^\d{4}-\d{2}-\d{2}$/.test(day) && /^x[1-9]\d*$/.test(slot)
+}
+
 /**
  * 项目是否应从「项目」列表隐藏：位于项目外工作区根下，或它就是某个渠道会话的 cwd。
  * 后者识别历史渠道会话的确切目录。

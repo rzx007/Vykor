@@ -141,13 +141,21 @@ describe("managed workspace data root", () => {
     ).toBe("project")
   })
 
-  it("returns the canonical root in bootstrap and hides mapped, channel, and retained projects", async () => {
+  it("hides managed projects and unmapped historical chat folders during bootstrap", async () => {
     const { root } = await writeMapFixture()
+    const documents = join(root, "old-documents")
     const projectPaths = [
       join(root, "workspaces", "x1"),
       join(root, "channels", "chat"),
       join(root, "legacy-documents", "Vykor", "x1"),
       join(root, "retained-migration", "stage"),
+      join(documents, "Vykor", "2026-11-12", "x1"),
+      join(documents, "Vykor", "2026-11-11", "x11"),
+    ]
+    const realProjectPaths = [
+      join(documents, "Vykor", "real-project"),
+      join(documents, "Vykor", "2026-11-12", "real-project"),
+      join(documents, "Vykor-backup", "2026-11-12", "x1"),
       join(root, "Documents", "Vykor", "unmapped"),
       join(root, "external-project"),
     ]
@@ -155,7 +163,7 @@ describe("managed workspace data root", () => {
       system: { getSettings: async () => ({}) },
       runtime: { listModels: async () => [] },
       sessions: { list: async () => [] },
-      projects: { list: async () => projectPaths.map((path, id) => ({ id: String(id), path })) },
+      projects: { list: async () => [...projectPaths, ...realProjectPaths].map((path, id) => ({ id: String(id), path })) },
       protocol: {
         capabilities: async () => ({
           serverVersion: "current",
@@ -168,7 +176,7 @@ describe("managed workspace data root", () => {
     vi.spyOn(connection, "getClient").mockResolvedValue(api as never)
     const result = await new DesktopSessionService(connection).bootstrap()
     expect(result.outsideProjectWorkspaceRoot).toBe(join(root, "workspaces"))
-    expect(result.projects.map((project) => project.path)).toEqual(projectPaths.slice(4))
+    expect(result.projects.map((project) => project.path)).toEqual(realProjectPaths)
   })
 
   it("keeps five managed execution directories in one root and the real project in place", async () => {
