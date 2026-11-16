@@ -321,12 +321,14 @@ export function ComposerSendButton({
   sending,
   running = false,
   interrupting = false,
+  hasContent,
   disabled,
   onInterrupt,
 }: {
   sending: boolean
   running?: boolean
   interrupting?: boolean
+  hasContent: boolean
   disabled: boolean
   onInterrupt?: () => void
 }): React.JSX.Element {
@@ -346,28 +348,19 @@ export function ComposerSendButton({
     )
   }
 
+  const stop = running && !hasContent
+  const label = stop ? "停止生成" : "发送"
   return (
-    <>
-      {running ? <Button
-        type="button"
-        size="icon"
-        aria-label="停止生成"
-        title="停止生成"
-        onClick={onInterrupt}
-        className="ml-1 size-8 rounded-full  hover:bg-primary/90"
-      >
-        <Square fill="currentColor" className="size-3.5" />
-      </Button> : null}
-      {running && (disabled || sending) ? null : <Button
-      type="submit"
+    <Button
+      type={stop ? "button" : "submit"}
       size="icon"
-      aria-label="发送"
-      title="发送"
-      disabled={disabled}
+      aria-label={label}
+      title={label}
+      disabled={!stop && (disabled || sending)}
+      onClick={stop ? onInterrupt : undefined}
       className="ml-1 size-8 rounded-full hover:bg-primary/90 disabled:bg-ui-muted disabled:text-background disabled:opacity-55"
     >
-      <ArrowUp />
-    </Button>}
-    </>
+      {stop ? <Square fill="currentColor" className="size-3.5" /> : <ArrowUp />}
+    </Button>
   )
 }

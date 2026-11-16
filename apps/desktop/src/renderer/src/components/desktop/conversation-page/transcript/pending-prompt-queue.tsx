@@ -69,6 +69,7 @@ export function followUpFeedback(
       continue
     }
     const waiting = status === "waiting"
+    if (waiting && feedback.get(input.id)?.placement === "transcript") continue
     feedback.set(input.id, {
       id: input.id,
       sessionId: input.sessionId,

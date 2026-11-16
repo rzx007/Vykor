@@ -4,6 +4,7 @@ import { selectSessionInterrupting } from "./selectors"
 import { errorMessage } from "./error-state"
 import { createPromptSubmissionSender } from "./prompt-submission"
 import { markComposerSessionTransient } from "./composer-recovery"
+import { latestSessionRecord, sessionPermissionMode } from "./helpers"
 import {
   beginOperation,
   createEmptySessionRuntime,
@@ -120,6 +121,13 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       if (delivery === "steer" && !expectedActiveRunId) throw new Error("当前回复已切换，请确认后重新发送。")
       const current = get()
       const runtime = getSessionRuntime(current, sessionId)
+      const view = options?.target ? options.target.view : current.sessionView
+      const targetSession = options?.target && latestSessionRecord(
+        current.sessions.find(session => session.id === sessionId), view?.session
+      )
+      const permissionMode = targetSession
+        ? sessionPermissionMode(targetSession, current.defaultPermissionMode)
+        : current.selectedPermissionMode
       const matching = Object.values(runtime.pendingPromptSubmissions).find(
         (submission) =>
           submission.phase !== "accepted" &&
@@ -154,11 +162,9 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
         attachments,
         createdAt: Date.now(),
         phase: "submitting",
-        placement: classifyPromptPlacement(
-          options?.target ? options.target.view : current.sessionView,
-          runtime,
-          sessionId
-        ),
+        placement: delivery === "steer" && permissionMode === "full_access"
+          ? "transcript"
+          : classifyPromptPlacement(view, runtime, sessionId),
       }
 
       return get().submitPromptSubmission(submission)

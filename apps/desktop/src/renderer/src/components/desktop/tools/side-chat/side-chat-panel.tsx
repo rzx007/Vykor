@@ -54,6 +54,7 @@ import {
 import {
   sessionProvider,
   sessionPermissionMode,
+  latestSessionRecord,
   sessionWorkMode,
   sessionEffort,
 } from "@renderer/stores/desktop-session/helpers"
@@ -352,11 +353,7 @@ export function SideChatPanel({
   const storedTarget = verifiedTargetId
     ? sessions.find((item) => item.id === verifiedTargetId)
     : undefined
-  // Equal timestamps keep immediate RPC feedback; a newer accepted view wins.
-  const session =
-    storedTarget && (!view || storedTarget.updatedAt >= view.session.updatedAt)
-      ? storedTarget
-      : (view?.session ?? source)
+  const session = latestSessionRecord(storedTarget, view?.session) ?? source
   const cwd = session?.cwd
   const showReasoning = useShowReasoning()
   const model = (!targetId ? preferences.model?.id : undefined) ?? session?.model ?? null

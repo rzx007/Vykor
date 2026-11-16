@@ -13,7 +13,7 @@ import type {
   DesktopWorkMode,
   DesktopSessionRecord,
 } from "@shared/session-types"
-import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
+import { selectComposerDocumentText, type ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session/store"
 import { pluginAppModelContexts } from "../../shell/plugin-apps/plugin-app-model-context"
 import { PluginAppComposerContext } from "../../shell/plugin-apps/composer-context"
@@ -182,7 +182,6 @@ export function Composer({
   const permissionLabel = resolvePermissionModeLabel(permissionMode)
   const PermissionIcon = permissionModeIcons[permissionMode]
   const closePicker = (): void => setActivePicker(null)
-  const allowSubmit = !preparingAttachments && !modeChangePending && (canSubmit ?? draft.items.length > 0)
   const attachDisabled = attachmentReadOnly || sending
   const contextItems: ContextPickerItem[] = [
     {
@@ -243,24 +242,27 @@ export function Composer({
     pluginAppModelContexts.snapshot,
     pluginAppModelContexts.serverSnapshot
   )
-  const showFollowUpChoice = Boolean(followUpRunId && !goalMode)
+  const isFollowUp = Boolean(followUpRunId && !goalMode)
+  const fullAccess = permissionMode === "full_access"
+  const hasAppContext = appContexts.some(entry => entry.source.sessionId === activeSessionId)
+  const hasContent = Boolean(canSubmit || selectComposerDocumentText(draft).trim() ||
+    attachments.length || browserAnnotations?.length || hasAppContext)
+  const allowSubmit = !preparingAttachments && !modeChangePending && (canSubmit ?? hasContent)
   const firstDraftItem = draft.items[0]
   const queueOnlyReason = attachments.length
     ? "附件需要排队发送"
-    : appContexts.some(entry => entry.source.sessionId === activeSessionId) ||
+    : hasAppContext ||
         draft.items.some(item => item.type === "capability" || (item.type === "skill" && item.source === "plugin"))
       ? "插件内容需要排队发送"
       : firstDraftItem?.type === "text" && /^\s*observe-session(?:\s|$)/u.test(firstDraftItem.text)
         ? "观察会话需要排队发送"
         : undefined
-  const delivery = showFollowUpChoice && !queueOnlyReason
-    ? (deliveryChoice && deliveryChoice.runId === followUpRunId && deliveryChoice.afterInputId === lastAcceptedInputId
-        ? deliveryChoice.delivery
-        : permissionMode === "full_access" ? "steer" : "queue")
-    : "queue"
+  const manualDelivery = deliveryChoice && deliveryChoice.runId === followUpRunId &&
+    deliveryChoice.afterInputId === lastAcceptedInputId ? deliveryChoice.delivery : undefined
+  const delivery = queueOnlyReason ? "queue" : fullAccess ? "steer" : manualDelivery ?? "queue"
   const submit = (): void => {
     if (sending || interrupting || !allowSubmit) return
-    onSubmit(showFollowUpChoice ? delivery : undefined)
+    onSubmit(isFollowUp ? delivery : undefined)
   }
 
   return (
@@ -585,7 +587,7 @@ export function Composer({
             }}
           />
           <ContextUsageControl snapshot={contextUsage} onOpen={onOpenContextUsage} />
-          {showFollowUpChoice ? (
+          {isFollowUp && !fullAccess ? (
             <Popover open={activePicker === "delivery"} onOpenChange={(open) => setActivePicker(open ? "delivery" : null)}>
               <PopoverTrigger
                 render={<Button type="button" variant="control" shape="pill" size="sm" />}
@@ -625,6 +627,7 @@ export function Composer({
               sending={sending}
               running={running && !goalMode}
               interrupting={interrupting}
+              hasContent={hasContent}
               disabled={!allowSubmit}
               onInterrupt={onInterrupt}
             />

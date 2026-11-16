@@ -6,6 +6,11 @@ import type {
   DesktopSessionRun,
 } from "@shared/session-types"
 
+const optimisticEntries = new WeakMap<PendingPromptSubmission, {
+  message: DesktopSessionMessage
+  parts: DesktopSessionPart[]
+}>()
+
 export function derivePendingHandoffSubmission(
   messages: DesktopSessionMessage[],
   inputs: DesktopSessionInput[],
@@ -66,25 +71,36 @@ export function mergeOptimisticTranscript(
         : []
     )
   )
-  const optimistic = candidates.filter((submission) => !authoritativeInputIds.has(submission.id))
+  const optimistic = candidates
+    .filter((submission) => !authoritativeInputIds.has(submission.id))
+    .map(optimisticEntry)
   if (optimistic.length === 0) return { messages, parts }
 
   return {
-    messages: [
-      ...messages,
-      ...optimistic.map<DesktopSessionMessage>((submission) => ({
-        id: `optimistic-message:${submission.id}`,
-        sessionId: submission.sessionId,
-        seq: Number.MAX_SAFE_INTEGER,
-        role: "user",
-        inputId: submission.id,
-        metadata: { optimistic: true },
-        createdAt: submission.createdAt,
-        updatedAt: submission.createdAt,
-      })),
-    ],
-    parts: [...parts, ...optimistic.flatMap(optimisticParts)],
+    messages: [...messages, ...optimistic.map((entry) => entry.message)],
+    parts: [...parts, ...optimistic.flatMap((entry) => entry.parts)],
   }
+}
+
+function optimisticEntry(submission: PendingPromptSubmission) {
+  const cached = optimisticEntries.get(submission)
+  if (cached) return cached
+  const message: DesktopSessionMessage = {
+    id: `optimistic-message:${submission.id}`,
+    sessionId: submission.sessionId,
+    seq: Number.MAX_SAFE_INTEGER,
+    role: "user",
+    inputId: submission.id,
+    metadata: {
+      optimistic: true,
+      ...(submission.delivery === "steer" ? { pendingFollowUp: submission.phase } : {}),
+    },
+    createdAt: submission.createdAt,
+    updatedAt: submission.createdAt,
+  }
+  const entry = { message, parts: optimisticParts(submission) }
+  optimisticEntries.set(submission, entry)
+  return entry
 }
 
 function optimisticParts(submission: PendingPromptSubmission): DesktopSessionPart[] {

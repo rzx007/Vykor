@@ -89,6 +89,8 @@ vi.mock("../../message/blocks/content-entrance", () => ({
 }))
 
 import { ConversationTranscript } from "../transcript"
+import { mergeOptimisticTranscript } from "../optimistic-transcript"
+import type { PendingPromptSubmission } from "@renderer/stores/desktop-session/types"
 
 let container: HTMLDivElement
 let root: Root
@@ -272,6 +274,25 @@ describe("streaming transcript cache", () => {
     act(() => root.render(<ConversationTranscript {...fixture.props} parts={[appendedPart]} />))
     expect(entryBuilds.count).toBe(1)
     expect(container.textContent).toContain("AB")
+  })
+
+  it("keeps streaming in the current reply while a direct follow-up waits below it", () => {
+    const fixture = createHistoryFixture()
+    const pending: PendingPromptSubmission = {
+      id: "follow-up", sessionId: fixture.message.sessionId, delivery: "steer",
+      expectedActiveRunId: fixture.message.runId, placement: "transcript", phase: "accepted",
+      content: "next", items: [{ type: "text", text: "next" }], attachments: [], createdAt: 3,
+    }
+    const render = (part: DesktopSessionPart) => act(() => root.render(
+      <ConversationTranscript {...fixture.props} {...mergeOptimisticTranscript(
+        fixture.props.messages, [...fixture.historyParts, part], [pending]
+      )} />
+    ))
+    render(fixture.part)
+    render({ ...fixture.part, text: "AB", updatedAt: 3 })
+    expect(container.textContent).toContain("AB")
+    expect(container.textContent).toContain("等候进入当前回复")
+    expect(entryBuilds.count).toBe(1)
   })
 
   it("rebuilds entries when a new message is added", () => {

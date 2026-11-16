@@ -122,6 +122,14 @@ export function sessionPermissionMode(
   return sessionModes(session, fallback).approvalMode ?? fallback
 }
 
+export function latestSessionRecord(
+  stored: DesktopSessionRecord | undefined,
+  viewed: DesktopSessionRecord | undefined
+): DesktopSessionRecord | undefined {
+  // Equal timestamps keep immediate RPC feedback until the stream catches up.
+  return stored && (!viewed || stored.updatedAt >= viewed.updatedAt) ? stored : viewed
+}
+
 export function sessionWorkMode(session: DesktopSessionRecord): DesktopWorkMode {
   return sessionModes(session, "ask").workMode ?? "execute"
 }
