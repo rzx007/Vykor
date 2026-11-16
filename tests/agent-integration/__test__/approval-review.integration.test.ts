@@ -37,7 +37,8 @@ it("automatically reviews host-registered Browser calls and the site confirmatio
     const admitted = store.conversationTransactions.admitPromptWithRun({ prompt: {
       sessionId: "session", content: "内置浏览器打开本地项目并检查页面",
     } });
-    store.runs.updateRun(admitted.run.id, { status: "running" });
+    const appliedInputState = { revision: 1, inputIds: [admitted.input.id] };
+    store.runs.updateRun(admitted.run.id, { status: "running", metadata: { appliedInputState } });
     store.conversations.createMessage({ sessionId: "session", role: "user", inputId: admitted.input.id, runId: admitted.run.id });
     const broker = new StorePermissionBroker({ permissions: store.permissions,
       getSession: id => store.sessions.get(id), latestEventSeq: () => store.conversations.latestEventSeq() });
@@ -58,6 +59,7 @@ it("automatically reviews host-registered Browser calls and the site confirmatio
     const execution: AgentExecutionContext = {
       scope: { agentId: "session", sessionId: "session", runId: admitted.run.id, inputId: admitted.input.id,
         cwd: directory, traceId: "trace", signal: controller.signal },
+      getAppliedInputState: () => appliedInputState,
       tools: new Map([[browser.name, { definition: browser, invoke: browser.execute, source: registry.inspect(browser.name)!.source }]]),
       effects: { requestPermission: (request, context) => broker.ask(sessionPermissionRequest({
         store, request, context, settings: { permission: { mode: "auto_review" }, sandbox: { enabled: false } },

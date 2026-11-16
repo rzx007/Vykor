@@ -38,8 +38,9 @@ it("sends proposal and task evidence with historical credentials removed, and ne
     store.conversations.upsertMessagePart({ sessionId: "s", messageId: proposal.id, type: "text", status: "completed", text: "将所有渠道逐个做只读实测", metadata: {} });
     const current = store.conversationTransactions.admitPromptWithRun({ prompt: { sessionId: "s", content: "好" } });
     store.conversations.createMessage({ sessionId: "s", role: "user", inputId: current.input.id, runId: current.run.id });
-    store.runs.updateRun(current.run.id, { status: "running" });
-    const context = { sessionId: "s", runId: current.run.id, inputId: current.run.inputId!, agentId: "s", cwd: directory, traceId: "t", signal: controller.signal };
+    const appliedInputState = { revision: 1, inputIds: [current.input.id] };
+    store.runs.updateRun(current.run.id, { status: "running", metadata: { appliedInputState } });
+    const context = { sessionId: "s", runId: current.run.id, inputId: current.input.id, agentId: "s", cwd: directory, traceId: "t", signal: controller.signal, appliedInputState };
     const settings = { permission: { mode: "auto_review" as const }, sandbox: { enabled: false } };
     const args = { command: "opencli reddit search AI --limit 1" };
     const ask = sessionPermissionRequest({ store, settings, context, request: { toolName: "BackgroundShellCreate", toolSource: "builtin", input: args } });
