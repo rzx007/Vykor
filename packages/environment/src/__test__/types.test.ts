@@ -16,8 +16,19 @@ describe("ShellDescriptor", () => {
     };
 
     const argv = shellArgv(shell, "Get-Location");
-    expect(argv.slice(0, 4)).toEqual(["powershell.exe", "-NoLogo", "-NoProfile", "-Command"]);
+    expect(argv.slice(0, -1)).toEqual(["powershell.exe", "-NonInteractive", "-NoLogo", "-NoProfile", "-Command"]);
     expect(argv.at(-1)).toContain("Get-Location");
+
+    const customArgs = ["-NoProfile", "-ExecutionPolicy", "RemoteSigned", "-c"];
+    expect(shellArgv({ ...shell, argsPrefix: customArgs }, "Get-Location").slice(1, -1))
+      .toEqual(["-NonInteractive", ...customArgs]);
+    const nonInteractiveArgs = ["-NoProfile", "-noninteractive", "-Command"];
+    expect(shellArgv({ ...shell, argsPrefix: nonInteractiveArgs }, "Get-Location").slice(1, -1))
+      .toEqual(nonInteractiveArgs);
+
+    const pwsh = { ...shell, dialect: "pwsh" as const, executable: "pwsh.exe" };
+    expect(shellArgv({ ...pwsh, argsPrefix: ["-NoProfile", "-i", "-Command"] }, "Get-Location"))
+      .toEqual(["pwsh.exe", "-NonInteractive", "-NoProfile", "-Command", "Get-Location"]);
   });
 
   it("initializes UTF-8 before a Windows PowerShell command", () => {

@@ -41,6 +41,7 @@ export function ToolDetails({
         <ShellToolDetails
           input={input}
           output={output}
+          metadata={(fullResult ?? fullCall).metadata}
           calling={calling}
           unparsedInput={unparsedInput}
         />
