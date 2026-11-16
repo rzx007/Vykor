@@ -122,6 +122,19 @@ describe("desktop daemon connection", () => {
     }
   })
 
+  it("connects to an existing daemon after a cold Windows capability check", async () => {
+    host.readDaemonRegistry.mockReturnValue(endpoint)
+    host.daemonPidAlive.mockReturnValue(true)
+    // WSL discovery can spend 10 seconds in wsl.exe before the daemon sends its response.
+    sdk.discover.mockImplementation(async ({ timeoutMs }) =>
+      timeoutMs > 10_200 ? endpoint : undefined,
+    )
+
+    const service = new DaemonConnectionService()
+    await expect(service.getClient()).resolves.toBeDefined()
+    expect(service.getDaemonStatus().phase).toBe("ready")
+  })
+
   it("keeps a live unreachable registration and allows a later retry", async () => {
     host.readDaemonRegistry.mockReturnValue(endpoint)
     host.daemonPidAlive.mockReturnValue(true)

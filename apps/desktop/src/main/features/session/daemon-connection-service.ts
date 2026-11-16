@@ -22,7 +22,8 @@ import { isLoopbackDaemonUrl } from "../daemon-autostart/daemon-surface"
 import { IpcEvents } from "../../../shared/ipc-channels"
 import type { DesktopDaemonStatus, DesktopDaemonStatusPhase } from "../../../shared/session-types"
 
-const probeTimeoutMs = 10_000
+// The daemon's Windows capability check can spend 10 seconds in wsl.exe.
+const probeTimeoutMs = 15_000
 const startupTimeoutMs = 45_000
 
 export interface DaemonConnectionServiceOptions {
