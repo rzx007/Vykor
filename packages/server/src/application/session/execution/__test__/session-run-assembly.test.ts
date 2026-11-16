@@ -42,9 +42,10 @@ it("cancels host and admitted model work together and waits for host cleanup and
       await cleanup;
       steps.push("host-cleaned");
     } });
-    const model = await services.admission.admitPromptAndMaybeRun(sessionId, {
+    const model = await services.admission.preparePrompt(sessionId, {
       items: [{ type: "text", text: "queued task" }],
     });
+    if ("completion" in model) throw new Error("Expected a queued admission");
     modelId = model.run!.id;
     expect(model.queue_state).toBe("queued");
     expect(services.control.activeRunId(sessionId)).toBe(host.id);
@@ -132,13 +133,15 @@ it("lets an accepted user run preempt review and execute in the same session lan
     },
   });
   try {
-    const first = await services.admission.admitPromptAndMaybeRun(sessionId, {
+    const first = await services.admission.preparePrompt(sessionId, {
       items: [{ type: "text", text: "first task" }],
     });
+    if ("completion" in first) throw new Error("Expected a queued admission");
     await started;
-    const second = await services.admission.admitPromptAndMaybeRun(sessionId, {
+    const second = await services.admission.preparePrompt(sessionId, {
       items: [{ type: "text", text: "next task" }],
     });
+    if ("completion" in second) throw new Error("Expected a queued admission");
     await services.engine.runtimeBridge.waitForRuns([first.run!.id, second.run!.id]);
     expect(executed).toEqual([first.run!.id, second.run!.id]);
     expect(readAutoReviewRunMetadata(store.runs.getRun(first.run!.id)?.metadata.autoReview))

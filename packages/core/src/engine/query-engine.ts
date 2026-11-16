@@ -297,7 +297,9 @@ export class QueryEngine implements IQueryEngine {
         ? { ...message, content: this.budgetToolResultContent(message) }
         : message,
     );
-    this.messages.push({ type: "user", content: preparedContent });
+    await this.appendAppliedUserInputs(
+      [preparedContent], options.execution ? [options.execution.scope.inputId] : [], options.execution,
+    );
 
     // per-turn 相关记忆检索：按本轮用户输入选相关记忆，作为瞬态上下文。
     // 仅在本轮（这次 submitMessage）拼进发往 API 的 system，不污染持久历史，
@@ -945,13 +947,25 @@ export class QueryEngine implements IQueryEngine {
         ),
       ),
     );
-    this.messages.push(
-      ...preparedFollowUps.map((preparedContent) => ({
-        type: "user" as const,
-        content: preparedContent,
-      })),
+    await this.appendAppliedUserInputs(
+      preparedFollowUps, followUps.flatMap(input => input.id ? [input.id] : []), options.execution,
     );
     return { accepted: true, requestConfiguration };
+  }
+
+  private async appendAppliedUserInputs(
+    contents: (string | ContentBlock[])[],
+    inputIds: string[],
+    execution: SubmitMessageOptions["execution"],
+  ): Promise<void> {
+    const start = this.messages.length;
+    this.messages.push(...contents.map(content => ({ type: "user" as const, content })));
+    try {
+      await execution?.markInputsApplied?.(inputIds);
+    } catch (error) {
+      this.messages.length = start;
+      throw error;
+    }
   }
 
   private prepareUserContent(

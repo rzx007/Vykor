@@ -8,6 +8,20 @@ import {
 import { RunControlService } from "../../execution/run-control-service.js";
 
 describe("SessionInteractionService queued prompt actions", () => {
+  const schema = { type: "object", properties: { result: { type: "string" } } };
+  it.each([
+    [schema, undefined], [undefined, schema], [schema, schema], [schema, { ...schema, required: ["result"] }],
+  ])("keeps a queued prompt with a stored output contract in its original slot", async (inputSchema, runSchema) => {
+    const context = queueContext({ inputMetadata: { outputSchema: inputSchema }, queuedRun: {
+      id: "run-queued", sessionId: "session-1", inputId: "input-queued", status: "pending", metadata: { outputSchema: runSchema },
+    } });
+    const service = new SessionInteractionService(context as any);
+    await expect(service.promoteQueuedPrompt("session-1", "input-queued", {
+      queuedRunId: "run-queued", expectedActiveRunId: "active-visible",
+    })).rejects.toThrow("outputSchema requires a queued Run");
+    expect(context.runEngine.promoteQueuedRun).not.toHaveBeenCalled();
+    expect(context.store.updateRun).not.toHaveBeenCalled();
+  });
   it("rejects promotion for an admitted plugin capability Input", async () => {
     const context = queueContext({ inputMetadata: { pluginId: "dev.vykor.quality" } });
     const service = new SessionInteractionService(context as any);
@@ -134,6 +148,7 @@ function queueContext(
     sessionId: "session-1",
     delivery: "queue",
     content: "continue",
+    items: [{ type: "text", text: "continue" }],
     attachments: [],
     metadata: options.inputMetadata ?? {},
   };
@@ -146,9 +161,9 @@ function queueContext(
       status: "pending",
       metadata: {},
     } as Record<string, unknown>);
-  const activeRuns = new Map([
-    ["active-original", { id: "active-original", sessionId: "session-1" }],
-  ]);
+  const activeRuns = new Map(["active-original", "active-visible"].map(id =>
+    [id, { id, sessionId: "session-1", status: "running", metadata: {} }] as const,
+  ));
   const updateRun = vi.fn((_id, update) => {
     queuedRun = {
       ...queuedRun,

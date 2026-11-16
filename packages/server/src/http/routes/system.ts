@@ -84,7 +84,7 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
             serverVersion: context.version ?? "0.1.0",
             protocol: { version: CURRENT_PROTOCOL_VERSION },
             features: {
-              steer: 1,
+              steer: 2,
               runAttempts: 1,
               toolAttempts: 1,
               jobs: 3,

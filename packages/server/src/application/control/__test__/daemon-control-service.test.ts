@@ -144,7 +144,7 @@ describe("DaemonControlService", () => {
     const runner = new SessionOperationRunner({ sessions: store.sessions, operationGate, events });
     // Observe the actual first drain to reproduce the empty cancellation snapshot deterministically.
     const drain = vi.spyOn(services.control, "stopAndDrain");
-    const admission = runner.run(session.id, () => services.admission.admitPromptAndMaybeRun(session.id, {
+    const admission = runner.run(session.id, () => services.admission.preparePrompt(session.id, {
       id: "late-skill-input", delivery: "steer",
       items: [{ type: "skill", name: "review", path: join(directory, "SKILL.md") }],
     }));
@@ -156,7 +156,8 @@ describe("DaemonControlService", () => {
       await drain.mock.results[0]!.value;
       expect(operationGate.accepting).toBe(false);
       finishMaterialization("prepared skill");
-      const admitted = await admission;
+      const prepared = await admission;
+      const admitted = "completion" in prepared ? await prepared.completion : prepared;
       await shutdown;
       expect(activeWhenPoolClosed).toBe(false);
       expect(services.engine.runtimeBridge.activeRunId(session.id)).toBeUndefined();

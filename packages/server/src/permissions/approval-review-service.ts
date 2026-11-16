@@ -8,6 +8,7 @@ import type {
   SessionInputRecord,
   SessionRunRecord,
 } from "@vykor/domain-contracts/sessions";
+import { jsonEqual } from "../application/support.js";
 import { withoutHostPluginMetadata } from "@vykor/domain-contracts/inputs";
 
 export type ApprovalReviewServiceInput = Omit<
@@ -51,7 +52,19 @@ export function createPermissionApprovalReviewService(
       const run = input.runId ? options.getRun(input.runId) : undefined;
       const independent =
         !prompt && run ? options.appInstruction?.(input, run) : undefined;
-      const instruction = independent ?? prompt?.content;
+      const applied = input.appliedInputState;
+      const appliedInputs = applied?.inputIds.map(id => options.getInput(id));
+      if (!independent && (applied || run?.metadata.appliedInputState) && (
+        !applied || applied.revision < 1 || applied.inputIds[0] !== input.inputId ||
+        !jsonEqual(applied, run?.metadata.appliedInputState) ||
+        appliedInputs?.some(item => item?.sessionId !== input.sessionId)
+      )) {
+        return unavailable(responseText("无法核实当前已应用的用户指令，需要你确认。", "The applied user instructions could not be verified. Please confirm."));
+      }
+      const appliedHumanInputs = appliedInputs?.filter((item): item is SessionInputRecord =>
+        !!item && isDirectHumanInput(item));
+      const current = appliedHumanInputs?.at(-1) ?? prompt;
+      const instruction = independent ?? current?.content;
       if (
         !instruction?.trim() ||
         (prompt &&
@@ -88,16 +101,17 @@ export function createPermissionApprovalReviewService(
               )
           : [];
       if (
-        (prompt && hasSensitiveInput(prompt)) ||
-        previousInputs.some(hasSensitiveInput)
+        (current && hasSensitiveInput(current)) ||
+        previousInputs.some(hasSensitiveInput) ||
+        appliedHumanInputs?.some(hasSensitiveInput)
       ) {
         return unavailable(responseText("审查资料包含敏感用户输入，需要你直接确认。", "The review includes sensitive user input. Please confirm directly."));
       }
-      const history = previousInputs
+      const history = [...previousInputs.sort((left, right) => left.seq - right.seq), ...(appliedHumanInputs?.slice(0, -1) ?? [])]
         .filter(
           (previous) => previous.content.trim() && isDirectHumanInput(previous),
         )
-        .sort((left, right) => left.seq - right.seq)
+        .filter((item, index, items) => item.id !== current?.id && items.findIndex(previous => previous.id === item.id) === index)
         .map((previous) => ({
           inputId: previous.id,
           content: previous.content,

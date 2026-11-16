@@ -14,13 +14,14 @@ import { sessionPermissionRequest } from "../session-approval.js";
 function fixture(toolName = "Shell", source = "builtin", confirmation?: "once", reason?: string) {
   const session = { id: "s", status: "idle", metadata: { runtimeRevision: 1, runtime: { model: "offline", approvalMode: "auto_review", workMode: "execute" } } };
   const abort = new AbortController();
-  const context: AgentEffectContext = { agentId: "a", sessionId: "s", runId: "r", inputId: "i", cwd: process.cwd(), traceId: "t", signal: abort.signal };
+  const appliedInputState = { revision: 1, inputIds: ["i"] };
+  const context: AgentEffectContext = { agentId: "a", sessionId: "s", runId: "r", inputId: "i", cwd: process.cwd(), traceId: "t", signal: abort.signal, appliedInputState };
   const inputs = [{ id: "i", sessionId: "s", seq: 1, content: "Edit a.ts", metadata: {} }] as SessionInputRecord[];
   const messages = [{ id: "m", sessionId: "s", seq: 3, role: "user", inputId: "i", createdAt: 3, metadata: {} }] as SessionMessageRecord[];
   const parts: SessionMessagePartRecord[] = [];
   const approvals: PermissionRequestRecord[] = [];
   const results: Array<{ id: string; sessionId: string; runId: string; toolName: string; sourceKind: string; text: string; totalChars: number; createdAt: number }> = [];
-  const runs = [{ id: "r", inputId: "i", sessionId: "s", status: "running", metadata: {} }] as SessionRunRecord[];
+  const runs = [{ id: "r", inputId: "i", sessionId: "s", status: "running", metadata: { appliedInputState } }] as SessionRunRecord[];
   const store = { sessions: { get: () => session }, runs: { getRun: (id: string) => runs.find(run => run.id === id) }, conversations: {
     getInput: (id: string) => inputs.find(input => input.id === id), listInputs: () => inputs, listMessages: () => messages, listMessageParts: () => parts,
   }, permissions: { list: () => approvals }, toolResults: { list: () => results, readText: (id: string) => results.find(result => result.id === id)!.text } } as unknown as SessionStore;
@@ -126,10 +127,11 @@ describe("session authorization host boundary", () => {
       } });
       const copiedHuman = store.conversations.listInputs("second").find(input => input.content === "检查项目配置")!;
       const current = store.conversationTransactions.admitPromptWithRun({ prompt: { sessionId: "second", content: "好" } });
-      store.runs.updateRun(current.run.id, { status: "running" });
+      const appliedInputState = { revision: 1, inputIds: [current.input.id] };
+      store.runs.updateRun(current.run.id, { status: "running", metadata: { appliedInputState } });
       store.conversations.createMessage({ sessionId: "second", role: "user", inputId: current.input.id });
       const context: AgentEffectContext = { agentId: "a", sessionId: "second", runId: current.run.id,
-        inputId: current.input.id, cwd: directory, traceId: "t", signal: new AbortController().signal };
+        inputId: current.input.id, cwd: directory, traceId: "t", signal: new AbortController().signal, appliedInputState };
       const input = sessionPermissionRequest({ store, context,
         settings: { permission: { mode: "auto_review" }, sandbox: { enabled: false } } as Settings,
         request: { toolName: "Shell", toolSource: "builtin", input: { command: "git status" } },
@@ -231,6 +233,12 @@ describe("session authorization host boundary", () => {
   });
   it("invalidates a cancelled run", () => {
     const sample = fixture(); sample.abort.abort(); expect(sample.input.isCurrent!()).toBe(false);
+  });
+  it("invalidates an approval after a follow-up joins the Run", () => {
+    const sample = fixture();
+    expect(sample.input.isCurrent?.()).toBe(true);
+    sample.runs[0]!.metadata.appliedInputState = { revision: 2, inputIds: ["i", "follow-up"] };
+    expect(sample.input.isCurrent?.()).toBe(false);
   });
   it.each(["Shell", "TerminalOpen"])("reviews a routine %s command without requiring system isolation first", async toolName => {
     const sample = fixture(toolName);

@@ -257,6 +257,7 @@ export async function executeCheckedTools(
           result = await runInScope(async () => {
             const prepared = preparedByIndex.get(idx)!;
             toolUse = prepared.toolUse;
+            const inputRevision = execution?.getAppliedInputState?.().revision;
             const denied = await authorizeToolCall(
               prepared,
               permissionChecker,
@@ -299,10 +300,21 @@ export async function executeCheckedTools(
               } catch (error) { failExecution(error); throw error; }
             }
             startSignal.throwIfAborted();
-            started = true;
-            executedIndexes.add(idx);
             const returned = await executeToolWithTimeout(
-              tool,
+              {
+                ...tool,
+                async execute(input, invocationContext) {
+                  if (execution?.getAppliedInputState?.().revision !== inputRevision) {
+                    return {
+                      content: [{ type: "text", text: "approval_input_revision_changed" }],
+                      isError: true,
+                    };
+                  }
+                  started = true;
+                  executedIndexes.add(idx);
+                  return tool.execute(input, invocationContext);
+                },
+              },
               toolUse.input,
               context,
               timeoutMs,
@@ -316,6 +328,10 @@ export async function executeCheckedTools(
                 }
               },
             );
+            if (!started) return {
+              toolUseId: toolUse.id, toolName: toolUse.name, content: returned.content,
+              isError: true, failureKind: "policy", executionState: "not_started",
+            };
             return returnedResult(returned, tool);
           });
         }

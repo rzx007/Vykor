@@ -34,9 +34,9 @@ export interface SessionInteractionServiceContext {
   sessions: SessionInteractionSessions;
   conversations: SessionInteractionConversations;
   runs: SessionInteractionRuns;
-  admission: Pick<RunAdmissionService, "admitPromptAndMaybeRun" | "replaceLatestPrompt" | "replayInput">
+  admission: Pick<RunAdmissionService, "preparePrompt" | "replaceLatestPrompt" | "replayInput">
     & Partial<Pick<RunAdmissionService, "withUserInputPreparation">>;
-  control: Pick<RunControlService, "activeRunId" | "hasWork" | "interruptRun" | "interruptSession" | "interruptQueuedRun" | "promoteQueuedRun">;
+  control: Pick<RunControlService, "activeRunId" | "hasWork" | "interruptRun" | "interruptSession" | "interruptQueuedRun" | "prepareQueuedRunPromotion">;
   operationRunner: Pick<SessionOperationRunner, "run">;
   agentPool: Pick<AgentPool, "close" | "configured" | "warm">;
   liveChildren: Pick<LiveChildAgentDirectory, "has" | "send" | "interrupt">;

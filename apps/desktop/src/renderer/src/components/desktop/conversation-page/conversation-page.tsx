@@ -62,7 +62,7 @@ import {
   emptyGoalComposer,
   selectGoalObjective,
 } from "@renderer/stores/desktop-session/goal-actions"
-import { PendingPromptQueue } from "./transcript/pending-prompt-queue"
+import { followUpFeedback, PendingPromptQueue, queuedPrompts } from "./transcript/pending-prompt-queue"
 import {
   derivePendingHandoffSubmission,
   mergeOptimisticTranscript,
@@ -250,7 +250,7 @@ function ConversationPane({
   const sessionActions = useSessionActionDialogs()
   const beginFork = sessionActions.beginFork
 
-  const submitDraft = async (): Promise<void> => {
+  const submitDraft = async (delivery?: "queue" | "steer"): Promise<void> => {
     const content = selectComposerDocumentText(draft)
     if (useDesktopSessionStore.getState().composerDraftsByScope[composerScope]?.attachmentPreparation?.pending.length) return
     const ready = areDesktopAttachmentsSendable(attachments)
@@ -261,7 +261,7 @@ function ConversationPane({
         attachmentCount: attachments.length,
         annotationCount,
         ready,
-        blocked: sending || modeChangePending || Boolean(archived),
+        blocked: sending || interrupting || modeChangePending || Boolean(archived),
         goalMode,
       },
       async () => {
@@ -272,7 +272,10 @@ function ConversationPane({
             return
           }
           if (hasSession) {
-            await sendMessage(content, { document: draft, attachments })
+            await sendMessage(content, {
+              document: draft, attachments, delivery,
+              ...(delivery === "steer" ? { expectedActiveRunId: activeRun?.id } : {}),
+            })
           } else {
             await startSession(content, {
               document: draft,
@@ -314,14 +317,7 @@ function ConversationPane({
           (!run.metadata.goalRunKind || run.metadata.goalRunKind === "user")
       )
     )
-  const pendingPrompts = (sessionView?.runs ?? [])
-    .filter((run) => run.status === "pending" && run.inputId)
-    .sort((left, right) => left.createdAt - right.createdAt)
-    .flatMap((run) => {
-      const input = sessionView?.inputs.find((candidate) => candidate.id === run.inputId)
-      const action = queuedPromptActions[`${run.sessionId}:${run.id}`]
-      return input ? [{ input, run, ...(action ? { action } : {}) }] : []
-    })
+  const pendingPrompts = queuedPrompts(sessionView, queuedPromptActions)
   const pendingPermissions = sessionView?.permissions.filter(requiresPermissionReply) ?? []
   const singleAskUserPrompt =
     pendingPermissions.length === 1 && isAskUserPermission(pendingPermissions[0]!)
@@ -825,9 +821,10 @@ function ConversationPane({
                   error={composerValidationError ?? activeSessionError ?? pluginCatalogError}
                 />
                 <PendingPromptQueue
+                  key={`queue:${composerScope}`}
                   prompts={pendingPrompts}
                   activeRunId={activeRun?.id}
-                  localSubmissions={localPromptSubmissions}
+                  localSubmissions={followUpFeedback(sessionView, localPromptSubmissions)}
                   onPromote={(inputId, queuedRunId) => {
                     if (activeRun) void promoteQueuedPrompt(inputId, queuedRunId, activeRun.id)
                   }}
@@ -835,6 +832,7 @@ function ConversationPane({
                   onRetryLocal={(inputId) => {
                     void retryPromptSubmission(inputId).catch(() => undefined)
                   }}
+                  onRestoreLocal={(inputId) => useDesktopSessionStore.getState().restoreFollowUp(inputId)}
                   onDismissLocal={dismissPromptSubmission}
                 />
                 {!hasSession && selectedProject && !goalMode ? (
@@ -876,6 +874,8 @@ function ConversationPane({
                   draft={draft}
                   sending={sending}
                   running={Boolean(activeRun)}
+                  followUpRunId={activeRun?.id}
+                  lastAcceptedInputId={sessionView?.inputs.at(-1)?.id}
                   interrupting={interrupting}
                   models={models}
                   selectedModel={currentModel}
@@ -915,7 +915,7 @@ function ConversationPane({
                   attachmentPreparation={attachmentPreparation}
                   attachmentInteractionEnabled={attachmentSupport.interactionEnabled}
                   onDraftChange={setDraft}
-                  onSubmit={() => void submitDraft()}
+                  onSubmit={(delivery) => void submitDraft(delivery)}
                   onCommand={executeComposerCommand}
                   onPickFiles={() => pickAttachmentFiles(composerScope)}
                   onDropFiles={(files) => addDroppedAttachments(composerScope, files)}

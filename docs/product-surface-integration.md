@@ -109,3 +109,7 @@ Workflow 负责“任务怎样拆、依赖怎样排、失败怎样重试”，Ap
 - 协议：[Protocol Contract](./protocol-contract.md)
 - Runtime 嵌入：[Vykor Agent SDK](./agent-sdk.md)
 - 状态所有权：[Agent Framework Capability Boundary](./agent-framework-capability-boundary.md)
+
+## Desktop 聊天发送时机
+
+主聊天和侧聊的输入框在当前 Run 进行时显示「现在补充」和「排队」。完全访问默认补充，询问审批与自动审查默认排队，计划模式沿用当前权限的选择。手动选择只用于本条。停止有独立按钮，停止期间暂停同一会话的新提交；侧聊队列沿自身会话订阅更新。

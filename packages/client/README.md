@@ -91,3 +91,7 @@ pnpm test:client-browser
 ```
 
 同步与运行边界见 [客户端同步](../../docs/client-sync-flow.md)和[Daemon Application](../../docs/daemon-application-architecture.md)。
+
+### 补充当前运行
+
+`sessions.admitPrompt` 接受 `delivery: "steer"` 和 `expectedActiveRunId`。SDK 在发起目标明确的请求前验证 `features.steer >= 2`。同一条输入重试仍带原 Input ID 和 Run ID，目标已过期则返回 409。

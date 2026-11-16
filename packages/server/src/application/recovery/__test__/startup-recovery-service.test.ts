@@ -15,7 +15,21 @@ describe("StartupRecoveryService", () => {
     let store = new SessionStore({ path: databasePath });
     cleanup.push(() => { store.close(); rmSync(directory, { recursive: true, force: true }); });
     store.sessions.create({ id: "s1", cwd: directory, model: "test" });
-    store.runs.createRun({ id: "r1", sessionId: "s1", status: "running" });
+    for (const id of ["applied", "admitted", "promoting"]) {
+      store.conversationTransactions.admitPrompt({
+        id, sessionId: "s1", content: id,
+        delivery: id === "promoting" ? "queue" : "steer",
+        metadata: id === "promoting" ? {} : { steerTargetRunId: "r1" },
+      });
+    }
+    store.runs.createRun({ id: "r1", sessionId: "s1", status: "running",
+      metadata: { appliedInputState: { revision: 2, inputIds: ["root", "applied"] } } });
+    store.runs.createRun({ id: "reserved", sessionId: "s1", inputId: "promoting",
+      metadata: { promotion: { kind: "steering", activeRunId: "r1", inputId: "promoting" } } });
+    const temporary = store.sessions.create({ cwd: directory, model: "test", storage: "memory" });
+    // Drop the original owner's in-memory state before running startup recovery.
+    store.close();
+    store = new SessionStore({ path: databasePath });
     const order: string[] = [];
     const recovery = new StartupRecoveryService({
       recoverProjectionSettlements: () => { order.push("projection"); },
@@ -34,7 +48,13 @@ describe("StartupRecoveryService", () => {
     await recovery.run();
     store.close();
     store = new SessionStore({ path: databasePath });
-    expect(store.runs.getRun("r1")?.status).toBe("interrupted");
+    expect(store.runs.getRun("r1")).toMatchObject({
+      status: "interrupted", metadata: { appliedInputState: { revision: 2, inputIds: ["root", "applied"] } },
+    });
+    expect(store.runs.findRunByInput("applied")).toBeUndefined();
+    expect(store.runs.findRunByInput("admitted")).toMatchObject({ status: "interrupted" });
+    expect(store.runs.getRun("reserved")).toMatchObject({ status: "interrupted", metadata: { promotion: { kind: "failed" } } });
+    expect(store.sessions.get(temporary.id)).toBeUndefined();
     await recovery.run();
     expect(store.runs.getRun("r1")?.status).toBe("interrupted");
     expect(order.slice(0, 8)).toEqual(["projection", "ui-actions", "runs", "usage", "goals", "inputs", "permissions", "sessions"]);

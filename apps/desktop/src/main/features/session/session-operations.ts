@@ -316,6 +316,10 @@ export class SessionOperations {
   async sendPrompt(client: SessionOperationsClient, input: SendDesktopPromptInput, pluginAppContexts?: import("@vykor/application-client").PluginAppConversationRequest[]): Promise<void> {
     const id = requireString(input.id, "输入 ID")
     const sessionId = requireString(input.sessionId, "会话 ID")
+    if (input.delivery !== undefined && input.delivery !== "queue" && input.delivery !== "steer")
+      throw new Error("消息发送方式无效。")
+    if (input.delivery === "steer") requireString(input.expectedActiveRunId, "当前 Run ID")
+    else if (input.expectedActiveRunId !== undefined) throw new Error("排队消息无需指定当前 Run。")
     const items = requirePromptItems(input.items)
     const attachments = normalizePromptAttachments(input.attachments, true)
     if (!hasPromptItems(items) && attachments.length === 0 && !pluginAppContexts?.length) {
@@ -326,7 +330,8 @@ export class SessionOperations {
       id,
       items,
       attachments,
-      delivery: "queue",
+      delivery: input.delivery ?? "queue",
+      ...(input.expectedActiveRunId === undefined ? {} : { expectedActiveRunId: input.expectedActiveRunId }),
       metadata: {
         origin: {
           client: "desktop",

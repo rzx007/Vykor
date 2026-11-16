@@ -3,6 +3,7 @@ import { bindPreparedToolResults } from "./tool-results.js";
 import { createStructuredDelivery, type StructuredDeliveryController } from "./delivery/structured-delivery.js";
 import type {
   AgentEffects,
+  AppliedInputStateSnapshot,
   AgentEventContext,
   AgentEventInput,
   AgentExecutionContext,
@@ -163,6 +164,8 @@ export class FrameworkAgentRun implements AgentRunHandle {
   private readonly settlement = deferred<AgentRunSettlement>();
   private readonly invocations = new Set<Promise<void>>();
   private acceptingInput = true;
+  private readonly acceptedInputIds = new Set<string>();
+  private appliedInputState: AppliedInputStateSnapshot = { revision: 0, inputIds: [] };
   private externalAbort?: () => void;
   private cleanupRecovery?: () => Promise<void>;
   private cleanupRetry?: Promise<void>;
@@ -290,7 +293,13 @@ export class FrameworkAgentRun implements AgentRunHandle {
         ...(this.options.hardMaxTurns !== undefined
           ? { hardMaxTurns: this.options.hardMaxTurns }
           : {}),
-        effects: this.options.effects,
+        effects: {
+          ...this.options.effects,
+          requestPermission: (request, context) => this.options.effects.requestPermission(request, {
+            ...context,
+            appliedInputState: context.appliedInputState ?? this.getAppliedInputState(),
+          }),
+        },
         children: this.options.children.createController(
           { ...scope, limits: this.options.limits ?? run.limits, bindToolDispatch: this.options.bindToolDispatch ?? run.bindToolDispatch },
           tools,
@@ -330,6 +339,8 @@ export class FrameworkAgentRun implements AgentRunHandle {
           agentId: this.options.agentId, sessionId: this.sessionId, inputId: this.inputId,
           runId: this.id, traceId: this.traceId, ...this.options.identity,
         }),
+        getAppliedInputState: () => this.getAppliedInputState(),
+        markInputsApplied: ids => this.markInputsApplied(ids),
         takeSteeredInputs: (options) => this.takeSteeredInputs(options),
         closeSteering: () => {
           this.acceptingInput = false;
@@ -353,12 +364,13 @@ export class FrameworkAgentRun implements AgentRunHandle {
           ...(this.options.metadata ? { metadata: this.options.metadata } : {}),
         },
       });
+      this.acceptedInputIds.add(this.inputId);
       await this.options.limits?.check("run");
       const prepared = await this.options.preparation.prepare(scope);
       releaseCapabilities = prepared.release;
       this.controller.signal.throwIfAborted();
       const preparedExecution = createExecution(prepared.run);
-      await this.emit({ type: "run.started", data: {} });
+      await this.emit({ type: "run.started", data: { tracksAppliedInputs: true } });
       this.controller.signal.throwIfAborted();
       // Reliable Run projection must create the durable record before archive authorization.
       const execution: AgentExecutionContext = {
@@ -493,6 +505,11 @@ export class FrameworkAgentRun implements AgentRunHandle {
   private async takeSteeredInputs(
     options: { closeIfEmpty?: boolean } = {},
   ): Promise<AgentSteerInput[]> {
+    while (this.steered[0]?.input.signal?.aborted) {
+      const cancelled = this.steered.shift()!;
+      this.pendingSteers.delete(cancelled);
+      cancelled.receipt.reject(new AgentRunNotAcceptingInputError(this.id));
+    }
     const pending = this.steered.splice(0, 1);
     if (pending.length === 0 && options.closeIfEmpty)
       this.acceptingInput = false;
@@ -511,6 +528,7 @@ export class FrameworkAgentRun implements AgentRunHandle {
           },
           { inputId: input.id, traceId: input.traceId },
         );
+        this.acceptedInputIds.add(input.id!);
         inputs.push(input);
       }
     } catch (error) {
@@ -528,6 +546,24 @@ export class FrameworkAgentRun implements AgentRunHandle {
       });
     }
     return inputs;
+  }
+
+  private getAppliedInputState(): AppliedInputStateSnapshot {
+    return { revision: this.appliedInputState.revision, inputIds: [...this.appliedInputState.inputIds] };
+  }
+
+  private async markInputsApplied(ids: readonly string[]): Promise<void> {
+    this.controller.signal.throwIfAborted();
+    const previous = this.appliedInputState;
+    const newIds = [...new Set(ids)].filter(id => !previous.inputIds.includes(id));
+    if (newIds.length === 0) return;
+    if (newIds.some(id => !this.acceptedInputIds.has(id))) {
+      throw new Error("Applied input does not belong to this run");
+    }
+    const next = { revision: previous.revision + 1, inputIds: [...previous.inputIds, ...newIds] };
+    await this.emit({ type: "input.applied", data: next });
+    this.appliedInputState = next;
+    for (const id of newIds) this.acceptedInputIds.delete(id);
   }
 
   private rejectPendingSteers(): void {

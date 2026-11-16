@@ -39,7 +39,14 @@ export interface ApprovalReviewEvidence {
   context?: readonly { kind: "reference" | "tool_output"; content: string }[];
 }
 
+/** Ordered user inputs already written to the model history of one Run. */
+export interface AppliedInputStateSnapshot {
+  revision: number;
+  inputIds: readonly string[];
+}
+
 export interface ApprovalReviewInput {
+  appliedInputState?: AppliedInputStateSnapshot;
   requestId: string;
   sessionId: string;
   runId?: string;

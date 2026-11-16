@@ -13,9 +13,21 @@ import {
   readComposerRecovery,
   saveComposerRecovery,
   decodeComposerRecovery,
+  exportComposerRecovery,
 } from "../composer-recovery"
 
 describe("composer recovery", () => {
+  it("restores the original Input ID, delivery and target Run", () => {
+    const original = {
+      id: "submitted-follow-up", sessionId: "saved", delivery: "steer", expectedActiveRunId: "old-run",
+      items: [{ type: "text", text: "clarify" }], attachments: [], createdAt: 1, placement: "queue",
+    }
+    const decoded = decodeComposerRecovery({ version: 1, drafts: {}, submissions: [original] })
+    const restored = decodeComposerRecovery(exportComposerRecovery(decoded))
+    expect(restored.sessionRuntimes.saved?.pendingPromptSubmissions[original.id])
+      .toMatchObject({ ...original, phase: "failed" })
+  })
+
   it("does not revive a new session deleted while its initial snapshot is pending", async () => {
     let resolveOpen!: (view: ReturnType<typeof emptySessionView>) => void
     const sendPrompt = vi.fn()

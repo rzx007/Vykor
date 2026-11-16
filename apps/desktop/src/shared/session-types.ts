@@ -380,6 +380,8 @@ export type CreateDesktopSessionInput = CreateDesktopSessionBaseInput &
   ({ projectId: string; cwd: string } | { projectId?: undefined; cwd?: undefined })
 
 export interface SendDesktopPromptInput {
+  delivery?: "queue" | "steer"
+  expectedActiveRunId?: string
   pluginAppContextIds?: string[]
   id: string
   sessionId: string

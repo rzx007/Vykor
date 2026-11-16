@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 
 import { SessionApplicationError, SessionInteractionService } from "../session-interaction-service.js";
 import { DaemonOperationGate } from "../../../control/daemon-operation-gate.js";
+import { SessionOperationRunner } from "../../session-operation-runner.js";
+import { RunAdmissionService, type RunAdmissionServiceOptions } from "../../execution/run-admission-service.js";
 
 const session = {
   id: "s1",
@@ -21,6 +23,8 @@ function createService(options: {
   inputs?: Array<Record<string, any>>;
   live?: boolean;
   owningRun?: Record<string, any>;
+  admission?: RunAdmissionService;
+  serial?: boolean;
   resolveSkillCatalog?: () => Promise<{ resolvePath(path: string): { name: string; path: string } | undefined }>;
 } = {}) {
   const store = {
@@ -50,7 +54,7 @@ function createService(options: {
     appendEvent: vi.fn(),
   };
   const runEngine = {
-    admitPromptAndMaybeRun: vi.fn(() => ({
+    preparePrompt: vi.fn(() => ({
       input: { id: "recovery-input", sessionId: "s1" },
       run: { id: "recovery-run", sessionId: "s1", status: "pending" },
       queue_state: "running",
@@ -99,9 +103,9 @@ function createService(options: {
     },
     conversations: store as any,
     runs: store as any,
-    admission: runEngine as any,
+    admission: options.admission ?? runEngine as any,
     control: runEngine as any,
-    operationRunner: {
+    operationRunner: options.serial ? new SessionOperationRunner({ sessions: { get: store.getSession }, operationGate, events: { checkpoint: () => 7, publishSince: broadcastSince } }) : {
       run: async (_id, work) => {
         const result = await work();
         broadcastSince(7);
@@ -117,6 +121,32 @@ function createService(options: {
 }
 
 describe("SessionInteractionService", () => {
+  it("delivers Stop through the session lane while a steered input waits for consumption", async () => {
+    const active = { id: "r1", sessionId: "s1", status: "running", metadata: {} };
+    const consumed = Promise.withResolvers<{ runId: string }>();
+    const admitted = Promise.withResolvers<void>();
+    const admission = new RunAdmissionService({
+      conversationTransactions: { getInput: () => undefined, admitPrompt: (input: object) => ({ ...input, attachments: [] }) },
+      runOperations: { getRun: () => active },
+      runtimeQueue: { hasRuntime: true, steer: () => {
+        admitted.resolve();
+        return { merged: true, activeRunId: "r1", delivery: consumed.promise };
+      } },
+      events: { checkpoint: () => 0, publishSince: () => {} },
+    } as unknown as RunAdmissionServiceOptions);
+    const { service, runEngine } = createService({ admission, serial: true });
+    const submission = service.admitPrompt("s1", { id: "i1", delivery: "steer", items: [{ type: "text", text: "correct scope" }] });
+    await admitted.promise;
+    const stopped = service.interruptSession("s1", "r1");
+    try {
+      // Let promise continuations run while the runtime remains deliberately blocked.
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(runEngine.interruptRun).toHaveBeenCalledWith("s1", "r1");
+    } finally {
+      consumed.resolve({ runId: "r1" });
+      await Promise.all([submission, stopped]);
+    }
+  });
   it("records an explicit system stop without labelling it as a user stop", async () => {
     const run = { id: "r1", sessionId: "s1", status: "running", metadata: {} };
     const { service, runEngine } = createService({ run });
@@ -178,7 +208,7 @@ describe("SessionInteractionService", () => {
       await expect(service.admitPrompt("s1", { content: "hello", [namespace]: { [name]: {} } }))
         .rejects.toMatchObject({ code: "invalid_request" });
       expect(liveChildren.send).not.toHaveBeenCalled();
-      expect(runEngine.admitPromptAndMaybeRun).not.toHaveBeenCalled();
+      expect(runEngine.preparePrompt).not.toHaveBeenCalled();
       expect(store.admitPrompt).not.toHaveBeenCalled();
     }
   });
@@ -232,7 +262,7 @@ describe("SessionInteractionService", () => {
       content: "follow up",
       metadata: expect.objectContaining({ requestedBy: "test", pluginScope: expect.objectContaining({ scopeVersion: 2, pluginIds: [] }) }),
     }));
-    expect(runEngine.admitPromptAndMaybeRun).not.toHaveBeenCalled();
+    expect(runEngine.preparePrompt).not.toHaveBeenCalled();
     expect(admitted).toMatchObject({ input, run, queue_state: "running" });
   });
 
@@ -249,7 +279,7 @@ describe("SessionInteractionService", () => {
       expect.objectContaining<Partial<SessionApplicationError>>({ status: 500 }),
     );
     expect(store.admitPrompt).not.toHaveBeenCalled();
-    expect(runEngine.admitPromptAndMaybeRun).not.toHaveBeenCalled();
+    expect(runEngine.preparePrompt).not.toHaveBeenCalled();
   });
 
   it("accepts an active child steer owned by a transcript message in the current run", async () => {
@@ -303,7 +333,7 @@ describe("SessionInteractionService", () => {
     });
 
     expect(liveChildren.send).not.toHaveBeenCalled();
-    expect(runEngine.admitPromptAndMaybeRun).toHaveBeenCalledWith(
+    expect(runEngine.preparePrompt).toHaveBeenCalledWith(
       "s1",
       expect.objectContaining({
         id: "file-input",

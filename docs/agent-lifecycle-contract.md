@@ -172,3 +172,7 @@ stateDiagram-v2
 4. reliable sink settle 与 public handle settle 的先后是否保持？
 5. restart 后能否仅从 durable state 恢复，不依赖旧 live handle？
 6. 对应契约编号是否已有回归测试；没有则随改动新增。
+
+## 运行中补充的边界
+
+接纳消息后发布原有输入事件，HTTP 在会话操作通道之外等运行器消费。因此等待补充期间仍可停止或取消。Core 在内容准备成功并写入当前 Run 的历史后报告 `input.applied`，收到宿主持久化确认才继续发模型请求。

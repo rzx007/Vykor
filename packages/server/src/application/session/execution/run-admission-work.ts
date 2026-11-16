@@ -57,7 +57,11 @@ export async function admitPromptWork(
   sessionId: string,
   input: AdmitPromptInput,
   prioritizeObservation: () => void,
-): Promise<AdmitPromptResult> {
+): Promise<AdmitPromptResult | { completion: Promise<AdmitPromptResult> }> {
+  const targetRunId = input.expectedActiveRunId;
+  if (targetRunId !== undefined && (input.attachments?.length || input.pluginAppContexts?.length)) {
+    throw new SessionApplicationError(409, "Attachments and app context require a queued Run");
+  }
   if (input.pluginAppContexts?.length) {
     if (!options.materializePluginAppContexts || input.delivery === "steer") throw new Error("plugin_app_context_unavailable");
     const contexts = await options.materializePluginAppContexts(sessionId, input.pluginAppContexts);
@@ -76,7 +80,11 @@ export async function admitPromptWork(
     normalizeTraceId(input.traceId) ??
     normalizeTraceId(input.metadata?.traceId) ??
     randomUUID();
-  const metadata = { ...outputSchemaMetadata(input.metadata, input.outputSchema), traceId };
+  const metadata = {
+    ...outputSchemaMetadata(input.metadata, input.outputSchema),
+    ...(targetRunId !== undefined ? { steerTargetRunId: targetRunId } : {}),
+    traceId,
+  };
   const runMetadata: Record<string, unknown> = { ...outputSchemaMetadata(input.runMetadata, input.outputSchema), traceId };
   const existingInput = input.id
     ? options.conversationTransactions.getInput(input.id)
@@ -110,6 +118,10 @@ export async function admitPromptWork(
         "prompt_id_conflict",
         `Prompt id is already used: ${input.id}`,
       );
+    }
+    if (targetRunId !== undefined) {
+      const target = existingRun ?? options.runOperations.getRun(targetRunId);
+      return { input: existingInput, ...(target?.sessionId === sessionId ? { run: target } : {}) };
     }
     if (!existingRun && options.runtimeQueue.hasRuntime) {
       const before = options.events.checkpoint();
@@ -168,6 +180,15 @@ export async function admitPromptWork(
     };
   }
 
+  const items = inputItems(input);
+  const steerContent = delivery === "steer" && options.runtimeQueue.hasRuntime && items.some(item => item.type === "skill")
+    ? await materializeSteerInput(options, sessionId, items)
+    : undefined;
+  if (targetRunId !== undefined &&
+      (!options.runtimeQueue.hasRuntime || options.runtimeQueue.activeRunId?.(sessionId) !== targetRunId ||
+        options.runOperations.getRun(targetRunId)?.status !== "running")) {
+    throw new SessionApplicationError(409, "active_run_changed");
+  }
   const admission = {
     id: input.id,
     sessionId,
@@ -184,38 +205,43 @@ export async function admitPromptWork(
     : options.conversationTransactions.admitPrompt(admission);
 
   if (delivery === "steer" && options.runtimeQueue.hasRuntime) {
-    const items = inputItems(input);
-    const steerContent = items.some((item) => item.type === "skill")
-      ? await materializeSteerInput(options, sessionId, items)
-      : admitted.content;
     const steered = options.runtimeQueue.steer(sessionId, {
       id: admitted.id,
-      content: steerContent,
+      content: steerContent ?? admitted.content,
       inputItems: admitted.items,
       delivery: "steer",
       traceId,
       metadata: admitted.metadata,
-    });
+    }, targetRunId === undefined ? undefined : { expectedActiveRunId: targetRunId });
     if (steered.merged && steered.activeRunId) {
       options.events.publishSince(before);
-      let delivered: Awaited<typeof steered.delivery>;
-      try {
-        delivered = await steered.delivery;
-      } catch (error) {
+      if (targetRunId !== undefined) prioritizeObservation();
+      const completion = steered.delivery.then(delivered => {
+        const activeRun = options.runOperations.getRun(delivered.runId);
+        if (!activeRun || activeRun.sessionId !== sessionId || (targetRunId !== undefined && activeRun.id !== targetRunId)) {
+          throw new Error(`Steered input run was not found: ${delivered.runId}`);
+        }
+        return {
+          input: admitted,
+          run: activeRun,
+          ...(activeRun.status === "running" ? { queue_state: "running" as const } : {}),
+          ...(activeRun.status === "pending" ? { queue_state: "queued" as const } : {}),
+        };
+      }, error => {
         terminalizeUndeliveredSteer(options, sessionId, admitted.id, traceId, error);
+        if (targetRunId !== undefined) throw new SessionApplicationError(409, "steer_delivery_failed");
         throw error;
-      }
-      const activeRun = options.runOperations.getRun(delivered.runId);
-      if (!activeRun || activeRun.sessionId !== sessionId) {
-        throw new Error(`Steered input run was not found: ${delivered.runId}`);
-      }
-      return {
-        input: admitted,
-        run: activeRun,
-        ...(activeRun.status === "running" ? { queue_state: "running" as const } : {}),
-        ...(activeRun.status === "pending" ? { queue_state: "queued" as const } : {}),
-      };
+      });
+      void completion.catch(() => {});
+      return { completion };
     }
+  }
+
+  if (targetRunId !== undefined) {
+    options.events.publishSince(before);
+    const error = new SessionApplicationError(409, "active_run_changed");
+    terminalizeUndeliveredSteer(options, sessionId, admitted.id, traceId, error);
+    throw error;
   }
 
   const run = options.runtimeQueue.hasRuntime

@@ -158,7 +158,7 @@ sequenceDiagram
   UI->>C: admitPrompt(sessionId, { content: hi })
   C->>A: POST /sessions/:id/prompts
   A->>R: run(sessionId, work)
-  R->>E: admitPromptAndMaybeRun
+  R->>E: preparePrompt
   E->>S: durable input + pending run
   E->>L: enqueue(sessionId, runId)
   L->>X: execute(workContext)

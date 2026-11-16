@@ -229,6 +229,10 @@ export class SessionResource {
     options: { signal?: AbortSignal } = {},
   ): Promise<PromptResponse> {
     await this.checkOutputSchema(input, options.signal);
+    if (input.expectedActiveRunId !== undefined) {
+      const capabilities = await this.transport.ensureProtocol(options.signal);
+      if ((capabilities.features.steer ?? 0) < 2) throw new Error("Server does not support targeting an active Run");
+    }
     return await this.transport.request<PromptResponse>(
       `/sessions/${encodeURIComponent(sessionId)}/prompts`,
       {

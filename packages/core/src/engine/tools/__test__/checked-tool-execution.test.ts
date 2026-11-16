@@ -88,6 +88,29 @@ function fixture(options: {
 }
 
 describe("history-free checked tool execution", () => {
+  it("blocks dispatch when applied instructions change while a tool waits for approval", async () => {
+    const f = fixture({ permission: async () => ({ action: "ask", reason: "confirm" }) });
+    let revision = 1;
+    f.execution.getAppliedInputState = () => ({ revision, inputIds: revision === 1 ? ["i"] : ["i", "i2"] });
+    f.execution.effects.requestPermission = async () => {
+      revision++;
+      return { status: "approved" };
+    };
+    await expect(f.engine.executeTool(f.toolUse, { execution: f.execution })).resolves.toMatchObject({ isError: true });
+    expect(f.inputs).toHaveLength(0);
+  });
+  it("checks applied instructions inside the actual tool invocation", async () => {
+    const f = fixture({ permission: async () => ({ action: "ask", reason: "confirm" }) });
+    let revision = 1;
+    f.execution.getAppliedInputState = () => ({ revision, inputIds: revision === 1 ? ["i"] : ["i", "i2"] });
+    f.execution.effects.requestPermission = async () => ({ status: "approved" });
+    f.execution.observeInvocation = () => { revision++; };
+
+    await expect(f.engine.executeTool(f.toolUse, { execution: f.execution })).resolves.toMatchObject({
+      isError: true, failureKind: "policy", executionState: "not_started",
+    });
+    expect(f.inputs).toHaveLength(0);
+  });
   it("uses the calling session's network policy for inherited network tools", async () => {
     let allowed = false;
     const f = fixture({ network: true, canUseNetwork: () => allowed });

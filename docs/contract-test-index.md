@@ -231,3 +231,5 @@ P7–P13 实现与集中验收完成，当前策略的 `stageExceptions` 为零�
 | 唯一 coordinator deadline/宽限、实际停止前不重试、旧 attempt 进度隔离、未知停止错误 | [调度器](../packages/coordinator/src/workflow/__test__/scheduler.test.ts) |
 | 普通/Workflow/system inherit 环境前解析、同 tick send/suspend 串行、历史和实例保留 | [子运行](../packages/agent-runtime/src/node/children/__test__/child-agent.test.ts)、[配置](../packages/agent-runtime/src/node/children/__test__/child-agent-options.test.ts) |
 | 删除 adapter、process 回退、重复 timer 与 daemon 生命周期分支 | [架构边界](../scripts/architecture-boundaries.test.mjs) |
+
+运行中补充使用[跨层验收](../tests/server-client/__test__/running-follow-up.test.ts)，各层定向回归和结果见[实施记录](./superpowers/reviews/2026-11-16-running-follow-up.md)。

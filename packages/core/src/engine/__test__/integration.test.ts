@@ -2084,7 +2084,8 @@ describe("Integration: Steer follow-ups", () => {
     expect(engine.getHistory()[0]).toEqual({ type: "user", content: preparedContent });
   });
 
-  it("does not store user content when image preparation fails", async () => {
+  it("does not mark user content applied when image preparation fails", async () => {
+    const markInputsApplied = vi.fn(async () => {});
     const client = {
       prepareUserContent: vi.fn(async () => {
         throw new Error("vision image preparation failed");
@@ -2101,9 +2102,21 @@ describe("Integration: Steer follow-ups", () => {
           type: "image",
           source: { type: "file", mediaType: "image/png", path: "/images/too-large.png" },
         },
-      ])) {}
+      ], { execution: { ...createExecutionContext({}), markInputsApplied } })) {}
     }).rejects.toThrow("vision image preparation failed");
 
+    expect(engine.getHistory()).toEqual([]);
+    expect(markInputsApplied).not.toHaveBeenCalled();
+  });
+
+  it("discards user content when the host cannot save its application", async () => {
+    const { client } = createMockStreamClient([]);
+    const engine = new QueryEngine(client, new ToolRegistry(), allowAll(), noopHooks());
+    await expect(async () => {
+      for await (const _ of engine.submitMessage("do not carry into the next run", {
+        execution: { ...createExecutionContext(), async markInputsApplied() { throw new Error("disk failure"); } },
+      })) {}
+    }).rejects.toThrow("disk failure");
     expect(engine.getHistory()).toEqual([]);
   });
 
@@ -2148,17 +2161,22 @@ describe("Integration: Steer follow-ups", () => {
 
     const engine = new QueryEngine(client, registry, allowAll(), noopHooks());
     const closeModes: Array<boolean | undefined> = [];
+    const markInputsApplied = vi.fn(async (ids: readonly string[]) => {
+      expect(engine.getHistory().at(-1)).toMatchObject({
+        type: "user", content: ids.includes("follow-up") ? "steered follow-up" : "start",
+      });
+    });
+    const execution = createExecutionContext({ takeSteeredInputs: async (options) => {
+      closeModes.push(options?.closeIfEmpty);
+      pullCount++;
+      if (pullCount === 2) return [{ id: "follow-up", content: "steered follow-up" }];
+      return [];
+    } });
     for await (const _ of engine.submitMessage("start", {
-      execution: createExecutionContext({ takeSteeredInputs: async (options) => {
-        closeModes.push(options?.closeIfEmpty);
-        pullCount++;
-        // After tools (1) and before returning from the first text turn (2):
-        // inject once when the model would otherwise stop.
-        if (pullCount === 2) return [{ content: "steered follow-up" }];
-        return [];
-      } }),
+      execution: { ...execution, markInputsApplied },
     })) {}
 
+    expect(markInputsApplied.mock.calls).toEqual([[[execution.scope.inputId]], [["follow-up"]]]);
     expect(getCallCount()).toBe(3);
     expect(closeModes).toContain(true);
     const history = engine.getHistory();

@@ -126,10 +126,13 @@ export class SessionRunCoordinator {
   steer(
     sessionId: string,
     input: AgentSteerInput,
-    options: { recoverRejected?: boolean } = {},
+    options: { expectedActiveRunId?: string } = {},
   ): SteerSessionResult {
     const lane = this.lanes.get(sessionId);
-    if (!lane?.active || !lane.active.acceptingSteers) return { merged: false };
+    if (!lane?.active || !lane.active.acceptingSteers ||
+        (options.expectedActiveRunId !== undefined && lane.active.runId !== options.expectedActiveRunId)) {
+      return { merged: false };
+    }
     let resolve!: PendingSteerRequest["resolve"];
     let reject!: PendingSteerRequest["reject"];
     const delivery = new Promise<{ runId: string }>((done, fail) => {
@@ -139,7 +142,7 @@ export class SessionRunCoordinator {
     void delivery.catch(() => {});
     const request = {
       input,
-      recoverRejected: options.recoverRejected ?? true,
+      recoverRejected: options.expectedActiveRunId === undefined,
       resolve,
       reject,
     };
@@ -170,8 +173,11 @@ export class SessionRunCoordinator {
       return { promoted: false, reason: "queued_run_changed" };
     }
     const queuedTask = lane.queue.splice(queuedIndex, 1)[0]!;
-    lane.promotions.set(queuedRunId, { task: queuedTask, activeRunId: expectedActiveRunId });
-    const steered = this.steer(sessionId, input, { recoverRejected: false });
+    const reservation = { task: queuedTask, activeRunId: expectedActiveRunId };
+    lane.promotions.set(queuedRunId, reservation);
+    const steered = this.steer(sessionId, { ...input, signal: queuedTask.controller.signal }, {
+      expectedActiveRunId,
+    });
     if (!steered.merged || steered.activeRunId !== expectedActiveRunId) {
       lane.promotions.delete(queuedRunId);
       this.restoreQueuedTask(lane, queuedTask, queuedIndex);
@@ -185,10 +191,7 @@ export class SessionRunCoordinator {
             `Steer was delivered to an unexpected run: ${receipt.runId}`,
           );
         }
-        this.rejectQueuedTask(
-          queuedTask,
-          "Queued run promoted into the active run",
-        );
+        queuedTask.reject(new RunInterruptedError("Queued run promoted into the active run"));
         return receipt;
       })
       .catch((error) => {
@@ -196,7 +199,7 @@ export class SessionRunCoordinator {
         this.restoreQueuedTask(lane, queuedTask, queuedIndex);
         throw error;
       }).finally(() => {
-        lane.promotions.delete(queuedRunId);
+        if (lane.promotions.get(queuedRunId) === reservation) lane.promotions.delete(queuedRunId);
         if (!lane.active && lane.queue.length === 0 && lane.promotions.size === 0 && this.lanes.get(sessionId) === lane) this.lanes.delete(sessionId);
       });
     void delivery.catch(() => {});

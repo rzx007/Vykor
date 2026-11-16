@@ -18,6 +18,7 @@ import { buildApprovalReviewContext } from "./approval-context.js";
 import { readPluginAppAction } from "@vykor/domain-contracts/plugin-apps";
 import { stringifyCanonicalJson } from "@vykor/json-data/json";
 import { verifiedAppAction } from "../application/session/plugins/plugin-app-operation-service.js";
+import { jsonEqual, isRecord } from "../application/support.js";
 import type { PermissionAskInput } from "./permission-broker.js";
 
 /** Build evidence and policy from host-owned records, never an agent's approval claim. */
@@ -36,6 +37,8 @@ export function sessionPermissionRequest(input: {
   runtime.approvalMode = context.approvalMode ?? runtime.approvalMode;
   const revision = readSessionRuntimeRevision(session.metadata);
   const { toolSource, toolDescription } = request;
+  const appliedInputState = context.appliedInputState;
+  const appliedInputRevision = appliedInputState?.revision;
   const appAction = () => {
     const run = store.runs.getRun(context.runId),
       raw = run && readPluginAppAction(run.metadata);
@@ -63,6 +66,8 @@ export function sessionPermissionRequest(input: {
       current.status !== "archived" &&
       readSessionRuntimeRevision(current.metadata) === revision &&
       !!run &&
+      (appliedInputRevision === undefined || (appliedInputRevision === 0 && run.metadata.appliedInputState === undefined) ||
+        jsonEqual(run.metadata.appliedInputState, appliedInputState)) &&
       (run.status === "pending" || run.status === "running") &&
       (!Object.hasOwn(run.metadata, "pluginAppAction") || !!appAction())
     );
@@ -87,6 +92,14 @@ export function sessionPermissionRequest(input: {
           ? saved.payload.reason
           : undefined;
       const action = appAction();
+      if (!action && !appliedInputState?.revision) {
+        return {
+          decision: "ask_user",
+          risk: "unknown",
+          authorization: "missing",
+          reason: responseText("无法核实当前已应用的用户指令，需要你确认。", "The applied user instructions could not be verified. Please confirm."),
+        };
+      }
       // Node registers tools supplied by the host (including Browser) as agent,
       // not builtin. This admits them to review; it never approves an operation.
       const hostRegistered = toolSource === "builtin" || toolSource === "agent";
@@ -131,7 +144,12 @@ export function sessionPermissionRequest(input: {
                 (message) =>
                   message.sessionId === sessionId &&
                   message.role === "user" &&
-                  message.inputId,
+                  message.inputId &&
+                  (() => {
+                    const run = message.runId ? store.runs.getRun(message.runId) : undefined;
+                    const state = run?.metadata.appliedInputState;
+                    return !isRecord(state) || (Array.isArray(state.inputIds) && state.inputIds.includes(message.inputId));
+                  })(),
               )
               .map((message) => message.inputId),
           );
@@ -171,6 +189,7 @@ export function sessionPermissionRequest(input: {
           runId: context.runId,
           inputId: context.inputId,
           runtimeRevision: revision,
+          appliedInputState,
           tool: {
             name: saved.toolName,
             source: toolSource ?? "plugin",

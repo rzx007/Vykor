@@ -3079,7 +3079,7 @@
     {
       "path": "packages/domain-contracts/src/inputs/metadata.ts",
       "line": 20,
-      "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\", \"pluginAppAction\", \"pluginAppSubmission\", \"pluginAppSource\", \"sessionObservationGrant\"]) {",
+      "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\", \"pluginAppAction\", \"pluginAppSubmission\", \"pluginAppSource\", \"sessionObservationGrant\", \"appliedInputState\", \"steerTargetRunId\", \"promotion\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
@@ -3630,7 +3630,7 @@
     },
     {
       "path": "packages/server/src/application/recovery/__test__/startup-recovery-service.test.ts",
-      "line": 22,
+      "line": 36,
       "text": "      recoverPluginUiActions: () => { order.push(\"ui-actions\"); },",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
@@ -3684,25 +3684,25 @@
     },
     {
       "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
-      "line": 370,
+      "line": 376,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
-      "line": 464,
+      "line": 483,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
-      "line": 481,
+      "line": 500,
       "text": "    const input = { items: [{ type: \"text\" as const, text: \"hello\" }], [namespace]: { uiAction: {} } };",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
-      "line": 493,
+      "line": 512,
       "text": "    expect(() => service.replayInput(\"i1\", { metadata: { pluginUi: {} } })).toThrow();",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
@@ -3714,31 +3714,31 @@
     },
     {
       "path": "packages/server/src/application/session/interactions/__test__/session-interaction-service.test.ts",
-      "line": 176,
+      "line": 206,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/interactions/__test__/session-interaction-service.test.ts",
-      "line": 399,
+      "line": 429,
       "text": "      uiAction: { schemaVersion: 2, instanceId: \"00000000-0000-0000-0000-000000000002\", requestId: \"00000000-0000-0000-0000-000000000001\",",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/interactions/__test__/session-interaction-service.test.ts",
-      "line": 404,
+      "line": 434,
       "text": "    await expect(service.resumeRun(\"s1\", \"ui-run\", {})).rejects.toMatchObject({ code: \"plugin_ui_action_not_resumable\" });",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/interactions/session-interaction-service.ts",
-      "line": 467,
+      "line": 473,
       "text": "      if (Object.hasOwn(sourceRun.metadata, \"uiAction\") || Object.hasOwn(sourceRun.metadata, \"pluginAppAction\")) {",
       "reason": "Explicit generic-resume refusal for historical actions; no replay."
     },
     {
       "path": "packages/server/src/application/session/interactions/session-interaction-service.ts",
-      "line": 471,
+      "line": 477,
       "text": "          \"plugin_ui_action_not_resumable\",",
       "reason": "Explicit generic-resume refusal for historical actions; no replay."
     },
@@ -4302,7 +4302,7 @@
     },
     {
       "path": "packages/services/src/conversations/conversation-tree-operations.ts",
-      "line": 95,
+      "line": 96,
       "text": "      const { pluginUi: _pluginUi, uiAction: _uiAction, pluginUiSubmission: _pluginUiSubmission, pluginAppAction: _pluginAppAction, pluginAppSubmission: _pluginAppSubmission, pluginAppSource: _pluginAppSource, ...copiedMetadata } = part.metadata;",
       "reason": "Rejects/strips forged host metadata or recognizes non-model historical presentation."
     },
