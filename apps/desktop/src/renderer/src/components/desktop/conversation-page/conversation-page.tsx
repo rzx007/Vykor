@@ -379,7 +379,8 @@ function ConversationPane({
       : null
   const appContextEntries = useSyncExternalStore(
     pluginAppModelContexts.subscribe,
-    pluginAppModelContexts.snapshot
+    pluginAppModelContexts.snapshot,
+    pluginAppModelContexts.serverSnapshot
   )
   const canSubmit =
     areDesktopAttachmentsSendable(attachments) &&

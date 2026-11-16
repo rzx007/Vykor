@@ -1,7 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { getInstalledPluginStorePath } from "@vykor/host-config";
 import { updateInstalledPluginStore } from "@vykor/plugins";
-import { HookExecutor } from "@vykor/hooks";
 import { pluginAppHarness } from "../../../../../test-helpers/plugin-app-harness.js";
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const close of cleanups.splice(0).reverse()) await close(); vi.restoreAllMocks(); vi.unstubAllEnvs(); });
@@ -123,10 +122,17 @@ it.each(["native-tools", "mcp-server"] as const)("rechecks %s approval after rev
 }, 30_000);
 
 it.each(["approved", "forge"])("retains the Native write outcome and original SQLite Part after a post-hook failure (%s)", async value => {
-  const h = await fixture("native-tools");
-  const postHook = vi.spyOn(HookExecutor.prototype, "execute").mockImplementation(async event => {
-    if (event === "post_tool_use") throw new Error("post-return hook failed"); return { blocked: false };
+  const postHook = vi.fn(() => { throw new Error("post-return hook failed"); });
+  const h = await pluginAppHarness("native-tools", false, false, {
+    setup({ hookExecutor }) {
+      const execute = hookExecutor.execute.bind(hookExecutor);
+      hookExecutor.execute = async (event, context) => {
+        if (event === "post_tool_use") postHook();
+        return execute(event, context);
+      };
+    },
   });
+  cleanups.push(h.close);
   const request = { ...h.request, args: { value } };
   const accepted = await h.client().pluginApps.invoke(request); await h.wait(accepted.receipt.runId);
   const response = await h.client().pluginApps.getAction(h.opened.source, "request");
@@ -141,7 +147,7 @@ it.each(["approved", "forge"])("retains the Native write outcome and original SQ
   const { resultRef, ...storedOutput } = parts[0]!.output as Record<string, unknown>;
   expect(resultRef).toMatchObject({ toolName: "SaveDocument", totalChars: 5 });
   expect((await h.client().pluginApps.invoke(request)).receipt).toEqual(response.receipt);
-  expect(postHook.mock.calls.some(([event]) => event === "post_tool_use")).toBe(true);
+  expect(postHook).toHaveBeenCalledOnce();
   expect(h.effects()).toBe(1); expect(h.store().runs.listRuns(h.session.id)).toHaveLength(1); expect(h.modelCalls()).toBe(0);
 }, 30_000);
 it.each(["mcp-malformed", "mcp-oversized", "mcp-valid", "invalid-app-data"])("persists the completed Native %s result before page conversion", async value => {

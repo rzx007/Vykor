@@ -298,7 +298,9 @@ export class QueryEngine implements IQueryEngine {
         : message,
     );
     await this.appendAppliedUserInputs(
-      [preparedContent], options.execution ? [options.execution.scope.inputId] : [], options.execution,
+      [preparedContent],
+      options.execution?.markInputsApplied ? [options.execution.scope.inputId] : [],
+      options.execution,
     );
 
     // per-turn 相关记忆检索：按本轮用户输入选相关记忆，作为瞬态上下文。

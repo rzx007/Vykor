@@ -6,6 +6,7 @@ export class PluginAppModelContexts {
   private readonly listeners = new Set<() => void>()
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener) } }
   snapshot = () => this.entries
+  serverSnapshot = () => empty
   forSession(sessionId: string | null) { return this.entries.filter(entry => entry.source.sessionId === sessionId) }
   put(entry: PluginAppModelContext): void {
     this.entries = [...this.entries.filter(prior => prior.source.sessionId !== entry.source.sessionId || prior.source.appId !== entry.source.appId), entry]

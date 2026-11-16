@@ -238,7 +238,11 @@ export function Composer({
     runId?: string
     afterInputId?: string
   } | null>(null)
-  const appContexts = useSyncExternalStore(pluginAppModelContexts.subscribe, pluginAppModelContexts.snapshot)
+  const appContexts = useSyncExternalStore(
+    pluginAppModelContexts.subscribe,
+    pluginAppModelContexts.snapshot,
+    pluginAppModelContexts.serverSnapshot
+  )
   const showFollowUpChoice = Boolean(followUpRunId && !goalMode)
   const firstDraftItem = draft.items[0]
   const queueOnlyReason = attachments.length
