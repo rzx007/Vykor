@@ -47,6 +47,10 @@
       "import": "./src/plugin-apps/index.ts",
       "types": "./src/plugin-apps/index.ts"
     },
+    "./skills": {
+      "import": "./src/skills/index.ts",
+      "types": "./src/skills/index.ts"
+    },
     "./workspace-changes": {
       "import": "./src/workspace-changes/index.ts",
       "types": "./src/workspace-changes/index.ts"

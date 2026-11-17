@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, writeFile } from "
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { Readable } from "node:stream";
-import type { SkillMarketplaceInstallInput } from "@vykor/protocol";
+import type { SkillMarketplaceInstallInput } from "@vykor/domain-contracts/skills";
 import { createSkillRegistrySnapshot, findProjectSkillDirs } from "@vykor/skills";
 import { afterEach, expect, it, vi } from "vitest";
 import { createSkillManagementService } from "../skill-management-service.js";

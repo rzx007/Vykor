@@ -1,10 +1,5 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import { DaemonOperationGate } from "../../../application/control/daemon-operation-gate.js";
-import { createSkillManagementService } from "../../../application/skills/skill-management-service.js";
 import { createServiceRoutes } from "../service.js";
 
 function createPluginRoutes() {
@@ -165,37 +160,24 @@ function createPluginControl() {
 }
 
 describe("skill marketplace install route", () => {
-  it("admits conversations during archive download and leaves runtimes alone when verification fails", async () => {
-    const configDir = await mkdtemp(join(tmpdir(), "vykor-skill-route-test-"));
+  it("admits conversations during preparation and leaves runtimes alone when verification fails", async () => {
     const gate = new DaemonOperationGate();
     const acquireGlobalMutation = vi.fn(() => gate.tryEnterBarrier({ kind: "global" }, () => true));
     const closeAllRuntimes = vi.fn(async () => {});
-    const downloading = Promise.withResolvers<void>();
+    const preparing = Promise.withResolvers<void>();
     const respond = Promise.withResolvers<void>();
     const id = "market-sample";
     const version = "1.0.0";
     const sha256 = "a".repeat(64);
-    const catalog = JSON.stringify({
-      schemaVersion: 1, release: "skills-v1", skills: [{
-        id, name: id, version, displayName: "Sample", description: "Sample", license: "MIT",
-        source: { repository: "https://github.com/example/skills", commit: "a".repeat(40), path: "." },
-        artifact: {
-          url: `https://github.com/rzx007/vykor-skills/releases/download/skills-v1/${id}-${version}.zip`,
-          sha256, size: 1,
-        },
-      }],
-    });
-    const skillService = createSkillManagementService({
-      configDir, projects: { list: () => [] }, standardSkillsDirs: [], bundledSkills: [],
-      marketplaceRequest: async (url) => {
-        if (url.pathname.endsWith(".json")) {
-          return { status: 200, headers: {}, body: Readable.from([Buffer.from(catalog)]) };
-        }
-        downloading.resolve();
+    const skillService = {
+      list: () => ({ skills: [], projects: [], warnings: [] }),
+      remove: vi.fn(),
+      async prepareMarketplaceInstall() {
+        preparing.resolve();
         await respond.promise;
-        return { status: 200, headers: {}, body: Readable.from([Buffer.from("0")]) };
+        throw new Error("技能包摘要校验失败。");
       },
-    });
+    };
     const routes = createServiceRoutes({
       skillService,
       control: { ...createPluginControl(), acquireGlobalMutation, closeAllRuntimes },
@@ -207,10 +189,10 @@ describe("skill marketplace install route", () => {
 
     try {
       expect(await Promise.race([
-        downloading.promise.then(() => "download"),
+        preparing.promise.then(() => "prepare"),
         request.then(() => "response"),
-      ])).toBe("download");
-      const conversation = gate.enter({ sessionId: "conversation", cwd: configDir });
+      ])).toBe("prepare");
+      const conversation = gate.enter({ sessionId: "conversation", cwd: "/workspace" });
       conversation.release();
       respond.resolve();
       expect((await request).status).toBe(400);
@@ -219,7 +201,6 @@ describe("skill marketplace install route", () => {
     } finally {
       respond.resolve();
       await request;
-      await rm(configDir, { recursive: true, force: true });
     }
   });
 });

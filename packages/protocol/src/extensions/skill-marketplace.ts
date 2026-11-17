@@ -1,27 +1,11 @@
+import type { SkillMarketplaceInstallInput } from "@vykor/domain-contracts/skills";
 import { ProtocolValidationError } from "../requests/requests.js";
 
-export interface SkillMarketplaceSelection {
-  id: string;
-  version: string;
-  sha256: string;
-}
-
-export interface SkillMarketplaceEntry {
-  id: string;
-  name: string;
-  displayName: string;
-  description: string;
-  version: string;
-  license: string;
-  requirements?: string;
-  source: { repository: string; commit: string; path: string };
-  artifact: { url: string; size: number; sha256: string };
-}
-
-export type SkillMarketplaceInstallInput = SkillMarketplaceSelection & (
-  | { scope: "personal" }
-  | { scope: "project"; projectPath: string }
-);
+export type {
+  SkillMarketplaceEntry,
+  SkillMarketplaceInstallInput,
+  SkillMarketplaceSelection,
+} from "@vykor/domain-contracts/skills";
 
 export function parseSkillMarketplaceInstall(value: Record<string, unknown>): SkillMarketplaceInstallInput {
   const { id, version, sha256, scope, projectPath } = value;

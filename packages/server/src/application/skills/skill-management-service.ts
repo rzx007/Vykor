@@ -12,7 +12,7 @@ import {
 import { getSkillsDir } from "@vykor/host-config";
 import { isHiddenManagedProjectPath } from "@vykor/host-config/paths";
 import type { MarketplaceRequest } from "@vykor/plugin-sources";
-import type { SkillMarketplaceInstallInput } from "@vykor/protocol";
+import type { SkillMarketplaceInstallInput } from "@vykor/domain-contracts/skills";
 import {
   createBundledSkills,
   SkillLoader,

@@ -12,7 +12,7 @@ import {
 import type {
   SkillMarketplaceEntry,
   SkillMarketplaceSelection,
-} from "@vykor/protocol";
+} from "@vykor/domain-contracts/skills";
 import { parseSkillMarkdown } from "@vykor/skills";
 
 const source = OFFICIAL_SKILL_MARKETPLACE_SOURCE;
