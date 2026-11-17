@@ -69,10 +69,15 @@ export function useBrowserAnnotations(options: BrowserAnnotationHookOptions): Br
       try {
         if (!busy.current) {
           const next = await window.desktop.browser.readAnnotations({ tabId: options.tabId })
-          if (generation.current === token && operation.current === operationToken) accept(next)
+          if (generation.current === token && operation.current === operationToken) {
+            if (next.ready) {
+              setError(previous => previous === "浏览器标签页已变化，请重新选择" ? null : previous)
+            }
+            accept(next)
+          }
         }
-      } catch (cause) {
-        if (generation.current === token) setError(message(cause))
+      } catch {
+        // The next background read retries after the tab is ready.
       } finally {
         if (generation.current === token) timer = setTimeout(() => void poll(), 100)
       }

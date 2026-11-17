@@ -233,21 +233,25 @@ export function PendingPromptQueue({
             </ItemContent>
             <ItemActions className="min-h-7 shrink-0 gap-1">
               {waitingToApply ? <span className="text-xs text-muted-foreground">等候进入当前回复</span> : null}
-              <Button
-                type="button"
-                variant="ghost"
-                shape="pill"
-                size="sm"
-                disabled={!activeRunId || busy}
-                onClick={() => onPromote(input.id, run.id)}
-              >
-                {promoting ? (
-                  <Spinner data-icon="inline-start" />
-                ) : (
-                  <CornerDownRight data-icon="inline-start" />
-                )}
-                调整方向
-              </Button>
+              {input.attachments.length > 0 ? (
+                <span className="text-xs text-muted-foreground">附件需要排队发送</span>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  shape="pill"
+                  size="sm"
+                  disabled={!activeRunId || busy}
+                  onClick={() => onPromote(input.id, run.id)}
+                >
+                  {promoting ? (
+                    <Spinner data-icon="inline-start" />
+                  ) : (
+                    <CornerDownRight data-icon="inline-start" />
+                  )}
+                  调整方向
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="ghost"

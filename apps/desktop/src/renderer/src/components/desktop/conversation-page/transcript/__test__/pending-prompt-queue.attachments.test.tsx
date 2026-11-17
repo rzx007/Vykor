@@ -117,3 +117,13 @@ it("does not invent an attachment summary for an empty record without attachment
   expect(title.textContent).toBe("")
   expect(title.querySelector("svg")).toBeNull()
 })
+
+it("keeps a queued attachment cancellable and shows direction adjustment only for text", () => {
+  const withAttachment = renderQueue("环境图过渡不平滑", ["截图.png"], "server").closest('[data-slot="item"]')!
+  expect(withAttachment.textContent).not.toContain("调整方向")
+  expect(withAttachment.textContent).toContain("附件需要排队发送")
+  expect(withAttachment.querySelector<HTMLButtonElement>('[aria-label="删除待处理消息"]')?.disabled).toBe(false)
+
+  const textOnly = renderQueue("继续检查", [], "server").closest('[data-slot="item"]')!
+  expect(textOnly.textContent).toContain("调整方向")
+})
