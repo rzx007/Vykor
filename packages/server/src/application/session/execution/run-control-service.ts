@@ -5,7 +5,7 @@ import type { SessionGoal } from "@vykor/domain-contracts/goals";
 import { readRuntimeMetadata } from "@vykor/domain-contracts/sessions";
 import { sessionUserInputText } from "@vykor/domain-contracts/inputs";
 import { AttachmentError } from "@vykor/services";
-import { jsonEqual, normalizeTraceId } from "../../support.js";
+import { isRecord, jsonEqual, normalizeTraceId } from "../../support.js";
 import { SessionApplicationError } from "../session-application-error.js";
 import { isCommittedPublicTextPart } from "../../../session/transcript-text.js";
 import { readInputPluginScope, type RunPluginSelection } from "../plugins/session-plugin-selection.js";
@@ -155,12 +155,7 @@ export class RunControlService {
     const result = this.options.runtime.interruptSession(sessionId, reason);
     if (result.interrupted) {
       this.options.durableRuns.transaction(() => {
-        for (const runId of result.queuedRunIds) {
-          this.options.durableRuns.updateRun(runId, {
-            status: "interrupted",
-            error: reason ?? "Queued run interrupted",
-          });
-        }
+        this.recordInterruptedQueuedRuns(result.queuedRunIds, reason, result.activeRunId);
         this.options.durableRuns.appendEvent({
           type: "session.run.interrupt_requested",
           sessionId,
@@ -196,12 +191,7 @@ export class RunControlService {
     const result = this.options.runtime.interruptRun(sessionId, runId, reason);
     if (result.interrupted) {
       this.options.durableRuns.transaction(() => {
-        for (const queuedRunId of result.queuedRunIds) {
-          this.options.durableRuns.updateRun(queuedRunId, {
-            status: "interrupted",
-            error: reason ?? "Queued run interrupted",
-          });
-        }
+        this.recordInterruptedQueuedRuns(result.queuedRunIds, reason, result.activeRunId === runId ? runId : undefined);
         this.options.durableRuns.appendEvent({
           type: "session.run.interrupt_requested",
           sessionId,
@@ -217,6 +207,23 @@ export class RunControlService {
     }
     if (pauseError) throw new SessionApplicationError(500, "已尝试中断，但目标暂停未保存，请重试：" + (pauseError instanceof Error ? pauseError.message : String(pauseError)));
     return result;
+  }
+
+  private recordInterruptedQueuedRuns(runIds: string[], reason?: string, stoppedActiveRunId?: string): void {
+    for (const runId of runIds) {
+      const queuedRun = stoppedActiveRunId ? this.options.durableRuns.getRun(runId) : undefined;
+      const promotion = queuedRun?.metadata.promotion;
+      // Stopping the target makes an unapplied promotion recoverable as a draft.
+      const failedPromotion = queuedRun?.status === "pending" && isRecord(promotion) &&
+        promotion.kind === "steering" && promotion.activeRunId === stoppedActiveRunId
+        ? { ...promotion, kind: "failed" }
+        : undefined;
+      this.options.durableRuns.updateRun(runId, {
+        status: "interrupted",
+        error: reason ?? "Queued run interrupted",
+        ...(failedPromotion ? { metadata: { promotion: failedPromotion } } : {}),
+      });
+    }
   }
 
   interruptQueuedRun(

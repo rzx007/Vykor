@@ -1,9 +1,11 @@
-import type { PendingPromptSubmission } from "@renderer/stores/desktop-session/types"
+import { queuedPromptActionKey } from "@renderer/stores/desktop-session/pending-prompt-state"
+import type { PendingPromptSubmission, QueuedPromptAction } from "@renderer/stores/desktop-session/types"
 import type {
   DesktopSessionInput,
   DesktopSessionMessage,
   DesktopSessionPart,
   DesktopSessionRun,
+  DesktopSessionView,
 } from "@shared/session-types"
 
 const optimisticEntries = new WeakMap<PendingPromptSubmission, {
@@ -11,41 +13,67 @@ const optimisticEntries = new WeakMap<PendingPromptSubmission, {
   parts: DesktopSessionPart[]
 }>()
 
+export function mergeSessionOptimisticTranscript(
+  view: DesktopSessionView | null,
+  submissions: PendingPromptSubmission[],
+  queuedActions: Record<string, QueuedPromptAction>
+) {
+  const handoff = derivePendingHandoffSubmission(
+    view?.inputs ?? [],
+    view?.runs ?? [],
+    queuedActions
+  )
+  const transcriptSubmissions =
+    handoff &&
+    !submissions.some(
+      (submission) => submission.id === handoff.submission.id && submission.placement === "transcript" &&
+        submission.phase !== "failed"
+    )
+      ? [...submissions, handoff.submission]
+      : submissions
+  return {
+    ...mergeOptimisticTranscript(view?.messages ?? [], view?.parts ?? [], transcriptSubmissions),
+    handoffRunId: handoff?.runId,
+  }
+}
+
 export function derivePendingHandoffSubmission(
-  messages: DesktopSessionMessage[],
   inputs: DesktopSessionInput[],
   runs: DesktopSessionRun[],
-  excludedRunIds: ReadonlySet<string> = new Set()
-): PendingPromptSubmission | undefined {
+  queuedActions: Record<string, QueuedPromptAction> = {}
+): { runId: string; submission: PendingPromptSubmission } | undefined {
   if (runs.some((run) => run.status === "running")) return undefined
 
   const nextRun = runs
-    .filter((run) => run.status === "pending" && run.inputId && !excludedRunIds.has(run.id))
+    .filter((run) => run.status === "pending" && run.inputId)
     .sort((left, right) => left.createdAt - right.createdAt)[0]
   if (!nextRun?.inputId) return undefined
-  if (messages.some((message) => message.role === "user" && message.inputId === nextRun.inputId)) {
+  const promotion = nextRun.metadata.promotion as { kind?: string } | undefined
+  if (promotion?.kind === "steering" || queuedActions[queuedPromptActionKey(nextRun.sessionId, nextRun.id)])
     return undefined
-  }
 
   const input = inputs.find((candidate) => candidate.id === nextRun.inputId)
   if (!input) return undefined
   return {
-    id: input.id,
-    sessionId: input.sessionId,
-    content: input.content,
-    items: input.items,
-    attachments: [...input.attachments]
-      .sort((left, right) => left.seq - right.seq)
-      .map(({ assetId, intent, displayName, mediaType, sizeBytes }) => ({
-        assetId,
-        intent,
-        displayName,
-        mediaType,
-        sizeBytes,
-      })),
-    createdAt: input.createdAt,
-    phase: "accepted",
-    placement: "transcript",
+    runId: nextRun.id,
+    submission: {
+      id: input.id,
+      sessionId: input.sessionId,
+      content: input.content,
+      items: input.items,
+      attachments: [...input.attachments]
+        .sort((left, right) => left.seq - right.seq)
+        .map(({ assetId, intent, displayName, mediaType, sizeBytes }) => ({
+          assetId,
+          intent,
+          displayName,
+          mediaType,
+          sizeBytes,
+        })),
+      createdAt: input.createdAt,
+      phase: "accepted",
+      placement: "transcript",
+    },
   }
 }
 

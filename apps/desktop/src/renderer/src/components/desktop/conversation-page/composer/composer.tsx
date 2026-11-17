@@ -14,6 +14,7 @@ import type {
   DesktopSessionRecord,
 } from "@shared/session-types"
 import { selectComposerDocumentText, type ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
+import { promptQueueOnlyReason } from "@renderer/stores/desktop-session/pending-prompt-state"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session/store"
 import { pluginAppModelContexts } from "../../shell/plugin-apps/plugin-app-model-context"
 import { PluginAppComposerContext } from "../../shell/plugin-apps/composer-context"
@@ -249,14 +250,10 @@ export function Composer({
     attachments.length || browserAnnotations?.length || hasAppContext)
   const allowSubmit = !preparingAttachments && !modeChangePending && (canSubmit ?? hasContent)
   const firstDraftItem = draft.items[0]
-  const queueOnlyReason = attachments.length
-    ? "附件需要排队发送"
-    : hasAppContext ||
-        draft.items.some(item => item.type === "capability" || (item.type === "skill" && item.source === "plugin"))
-      ? "插件内容需要排队发送"
-      : firstDraftItem?.type === "text" && /^\s*observe-session(?:\s|$)/u.test(firstDraftItem.text)
-        ? "观察会话需要排队发送"
-        : undefined
+  const queueOnlyReason = promptQueueOnlyReason(attachments.length, draft.items, {
+    pluginContext: hasAppContext,
+    observation: firstDraftItem?.type === "text" && /^\s*observe-session(?:\s|$)/u.test(firstDraftItem.text),
+  })
   const manualDelivery = deliveryChoice && deliveryChoice.runId === followUpRunId &&
     deliveryChoice.afterInputId === lastAcceptedInputId ? deliveryChoice.delivery : undefined
   const delivery = queueOnlyReason ? "queue" : fullAccess ? "steer" : manualDelivery ?? "queue"
@@ -587,6 +584,9 @@ export function Composer({
             }}
           />
           <ContextUsageControl snapshot={contextUsage} onOpen={onOpenContextUsage} />
+          {isFollowUp && fullAccess && queueOnlyReason ? (
+            <span role="status" className="text-xs text-muted-foreground">{queueOnlyReason}</span>
+          ) : null}
           {isFollowUp && !fullAccess ? (
             <Popover open={activePicker === "delivery"} onOpenChange={(open) => setActivePicker(open ? "delivery" : null)}>
               <PopoverTrigger

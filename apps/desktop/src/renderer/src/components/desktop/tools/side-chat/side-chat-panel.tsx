@@ -10,11 +10,11 @@ import { requiresPermissionReply } from "@renderer/components/desktop/conversati
 import { AskUserCard } from "../../conversation-page/message/blocks/ask-user-card"
 import { isAskUserPermission } from "../../conversation-page/message/blocks/ask-user-payload"
 import { ConversationTranscript } from "../../conversation-page/transcript/transcript"
-import { mergeOptimisticTranscript } from "../../conversation-page/transcript/optimistic-transcript"
+import { mergeSessionOptimisticTranscript } from "../../conversation-page/transcript/optimistic-transcript"
 import { resolveScrollerAgentStatus } from "../../conversation-page/transcript/scroller-agent-status"
 import { useShowReasoning } from "../../conversation-page/shared/use-show-reasoning"
 import { openConversationTextMenu } from "../../conversation-page/shared/conversation-text-actions"
-import { resolveModelLabel } from "../../conversation-page/shared/utils"
+import { resolveModelLabel, stopChatOnEscape } from "../../conversation-page/shared/utils"
 import { Alert, AlertDescription } from "@renderer/components/ui/alert"
 import {
   Empty,
@@ -379,7 +379,7 @@ export function SideChatPanel({
     .filter((operation) => operation.phase === "failed" && operation.kind !== "reply-permission")
     .at(-1)?.error
   const unavailable = Boolean(targetId && (!verifiedTargetId || loadError || draftConflict))
-  const transcript = mergeOptimisticTranscript(view?.messages ?? [], view?.parts ?? [], submissions)
+  const transcript = mergeSessionOptimisticTranscript(view, submissions, runtime.queuedPromptActions)
   const status = resolveScrollerAgentStatus({
     running,
     parts: view?.parts ?? [],
@@ -707,6 +707,21 @@ export function SideChatPanel({
     <section
       ref={sectionRef}
       aria-label="侧边聊天"
+      onKeyDown={(event) => {
+        if (
+          active &&
+          activeRun &&
+          verifiedTargetId &&
+          !archived &&
+          !interrupting &&
+          !unavailable &&
+          isCurrentTarget(verifiedTargetId)
+        ) {
+          stopChatOnEscape(event, () =>
+            update(actions.interrupt({ sessionId: verifiedTargetId, view }))
+          )
+        }
+      }}
       className={cn(
         "conversation-surface size-full min-h-0 flex-col bg-conversation",
         active ? "flex" : "hidden"
@@ -821,6 +836,7 @@ export function SideChatPanel({
               key={`queue:${verifiedTargetId}`}
               prompts={queuedPrompts(view, runtime.queuedPromptActions)}
               activeRunId={activeRun?.id}
+              handoffRunId={transcript.handoffRunId}
               localSubmissions={followUpFeedback(view, submissions)}
               onPromote={(inputId, queuedRunId) => {
                 if (activeRun && isCurrentTarget(verifiedTargetId)) {

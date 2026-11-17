@@ -11,7 +11,12 @@ import {
   ItemTitle,
 } from "@renderer/components/ui/item"
 import { Spinner } from "@renderer/components/ui/spinner"
-import { classifyFollowUps, FOLLOW_UP_TARGET_UNAVAILABLE, queuedPromptActionKey } from "@renderer/stores/desktop-session/pending-prompt-state"
+import {
+  classifyFollowUps,
+  FOLLOW_UP_TARGET_UNAVAILABLE,
+  promptQueueOnlyReason,
+  queuedPromptActionKey,
+} from "@renderer/stores/desktop-session/pending-prompt-state"
 import type {
   PendingPromptSubmission,
   QueuedPromptAction,
@@ -87,6 +92,7 @@ export function followUpFeedback(
 export function PendingPromptQueue({
   prompts,
   activeRunId,
+  handoffRunId,
   localSubmissions = [],
   onPromote,
   onCancel,
@@ -96,6 +102,7 @@ export function PendingPromptQueue({
 }: {
   prompts: PendingPrompt[]
   activeRunId?: string
+  handoffRunId?: string
   localSubmissions?: LocalPendingSubmission[]
   onPromote: (inputId: string, queuedRunId: string) => void
   onCancel: (inputId: string, queuedRunId: string) => void
@@ -112,17 +119,10 @@ export function PendingPromptQueue({
       !authorityInputIds.has(submission.id) &&
       (submission.placement === "queue" || submission.phase === "failed")
   )
-  const activeCandidateRunId =
-    activeRunId ??
-    prompts.reduce<PendingPrompt | undefined>(
-      (oldest, prompt) =>
-        !oldest || prompt.run.createdAt < oldest.run.createdAt ? prompt : oldest,
-      undefined
-    )?.run.id
   const visiblePrompts = prompts.filter(
     ({ run, action }) =>
       (action?.phase !== "acknowledged" || (run.metadata.promotion as { kind?: string } | undefined)?.kind === "steering") &&
-      (run.id !== activeCandidateRunId || action?.phase === "failed")
+      run.id !== handoffRunId
   )
   if (visiblePrompts.length === 0 && visibleLocalSubmissions.length === 0) return null
 
@@ -208,6 +208,11 @@ export function PendingPromptQueue({
         </Item>
       ))}
       {visiblePrompts.map(({ input, run, action }) => {
+        const queueOnlyReason = promptQueueOnlyReason(input.attachments.length, input.items, {
+          observation: Boolean(run.metadata.sessionObservationGrant) && run.metadata.recoveredAdmission !== true,
+          structuredOutput:
+            input.metadata.outputSchema !== undefined || run.metadata.outputSchema !== undefined,
+        })
         const promoting = action?.kind === "promote" && action.phase === "pending"
         const cancelling = action?.kind === "cancel" && action.phase === "pending"
         const promotion = run.metadata.promotion as { kind?: string; accepted?: boolean } | undefined
@@ -233,8 +238,8 @@ export function PendingPromptQueue({
             </ItemContent>
             <ItemActions className="min-h-7 shrink-0 gap-1">
               {waitingToApply ? <span className="text-xs text-muted-foreground">等候进入当前回复</span> : null}
-              {input.attachments.length > 0 ? (
-                <span className="text-xs text-muted-foreground">附件需要排队发送</span>
+              {queueOnlyReason ? (
+                <span className="text-xs text-muted-foreground">{queueOnlyReason}</span>
               ) : (
                 <Button
                   type="button"
@@ -249,7 +254,7 @@ export function PendingPromptQueue({
                   ) : (
                     <CornerDownRight data-icon="inline-start" />
                   )}
-                  调整方向
+                  补充到当前回复
                 </Button>
               )}
               <Button

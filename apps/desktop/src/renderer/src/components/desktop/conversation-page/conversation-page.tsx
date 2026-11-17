@@ -63,10 +63,7 @@ import {
   selectGoalObjective,
 } from "@renderer/stores/desktop-session/goal-actions"
 import { followUpFeedback, PendingPromptQueue, queuedPrompts } from "./transcript/pending-prompt-queue"
-import {
-  derivePendingHandoffSubmission,
-  mergeOptimisticTranscript,
-} from "./transcript/optimistic-transcript"
+import { mergeSessionOptimisticTranscript } from "./transcript/optimistic-transcript"
 import type { ComposerPickerCommand } from "./composer/composer-picker"
 import { toComposerCommands } from "./composer/composer-command-catalog"
 import { toComposerSkills } from "./composer/composer-picker-model"
@@ -92,7 +89,7 @@ import { useTaskLocation } from "./session/use-task-location"
 import { openConversationTextMenu } from "./shared/conversation-text-actions"
 import type { AddToComposerEventDetail, ConversationPaneProps } from "./shared/types"
 import { resolveScrollerAgentStatus } from "./transcript/scroller-agent-status"
-import { resolveModelLabel } from "./shared/utils"
+import { resolveModelLabel, stopChatOnEscape } from "./shared/utils"
 
 function ConversationPane({
   panelOpen,
@@ -324,28 +321,10 @@ function ConversationPane({
   const localPromptSubmissions = Object.values(pendingPromptSubmissions)
     .filter((submission) => submission.sessionId === activeSessionId)
     .sort((left, right) => left.createdAt - right.createdAt)
-  const pendingHandoffSubmission = derivePendingHandoffSubmission(
-    sessionView?.messages ?? [],
-    sessionView?.inputs ?? [],
-    sessionView?.runs ?? [],
-    new Set(
-      Object.values(queuedPromptActions)
-        .filter((action) => action.phase !== "failed")
-        .map((action) => action.runId)
-    )
-  )
-  const transcriptSubmissions =
-    pendingHandoffSubmission &&
-    !localPromptSubmissions.some(
-      (submission) =>
-        submission.id === pendingHandoffSubmission.id && submission.placement === "transcript"
-    )
-      ? [...localPromptSubmissions, pendingHandoffSubmission]
-      : localPromptSubmissions
-  const transcript = mergeOptimisticTranscript(
-    sessionView?.messages ?? [],
-    sessionView?.parts ?? [],
-    transcriptSubmissions
+  const transcript = mergeSessionOptimisticTranscript(
+    sessionView,
+    localPromptSubmissions,
+    queuedPromptActions
   )
   const scrollerAgentStatus = resolveScrollerAgentStatus({
     running,
@@ -556,7 +535,19 @@ function ConversationPane({
 
   return (
     <MessagePluginCatalog.Provider value={pluginCatalog}>
-      <section className="conversation-surface flex h-full min-w-0 flex-1 flex-col overflow-x-hidden bg-conversation">
+      <section
+        className="conversation-surface flex h-full min-w-0 flex-1 flex-col overflow-x-hidden bg-conversation"
+        onKeyDown={(event) => {
+          if (
+            activeRun && activeSessionId && sessionView?.session.id === activeSessionId &&
+            !archived && !interrupting
+          ) {
+            stopChatOnEscape(event, () =>
+              void interrupt({ sessionId: activeSessionId, view: sessionView })
+            )
+          }
+        }}
+      >
         {hasSession ? (
           <header className="flex h-12 shrink-0 items-center border-b bg-background px-3">
             <div className="flex min-w-0 items-center gap-2">
@@ -825,6 +816,7 @@ function ConversationPane({
                   key={`queue:${composerScope}`}
                   prompts={pendingPrompts}
                   activeRunId={activeRun?.id}
+                  handoffRunId={transcript.handoffRunId}
                   localSubmissions={followUpFeedback(sessionView, localPromptSubmissions)}
                   onPromote={(inputId, queuedRunId) => {
                     if (activeRun) void promoteQueuedPrompt(inputId, queuedRunId, activeRun.id)

@@ -9,7 +9,9 @@ import { PendingPromptQueue } from "../pending-prompt-queue"
 function renderQueue(
   content: string,
   names: string[],
-  source: "submitting" | "accepted" | "failed" | "server"
+  source: "submitting" | "accepted" | "failed" | "server",
+  items: DesktopSessionInput["items"] = [],
+  runMetadata: DesktopSessionRun["metadata"] = {}
 ) {
   const attachments = names.map((displayName, index) => ({
     id: `attachment-${index}`,
@@ -39,7 +41,7 @@ function renderQueue(
     attachments,
     seq: 1,
     delivery: "queue",
-    items: [],
+    items,
     metadata: {},
     createdAt: 1,
   }
@@ -48,7 +50,7 @@ function renderQueue(
     sessionId: "chat",
     inputId: "input",
     status: "pending",
-    metadata: {},
+    metadata: runMetadata,
     createdAt: 1,
     updatedAt: 1,
   }
@@ -118,12 +120,29 @@ it("does not invent an attachment summary for an empty record without attachment
   expect(title.querySelector("svg")).toBeNull()
 })
 
-it("keeps a queued attachment cancellable and shows direction adjustment only for text", () => {
+it("keeps a queued attachment cancellable and offers text-only prompts to the active reply", () => {
   const withAttachment = renderQueue("环境图过渡不平滑", ["截图.png"], "server").closest('[data-slot="item"]')!
-  expect(withAttachment.textContent).not.toContain("调整方向")
+  expect(withAttachment.textContent).not.toContain("补充到当前回复")
   expect(withAttachment.textContent).toContain("附件需要排队发送")
   expect(withAttachment.querySelector<HTMLButtonElement>('[aria-label="删除待处理消息"]')?.disabled).toBe(false)
 
   const textOnly = renderQueue("继续检查", [], "server").closest('[data-slot="item"]')!
-  expect(textOnly.textContent).toContain("调整方向")
+  expect(textOnly.textContent).toContain("补充到当前回复")
 })
+
+it.each([
+  {
+    items: [{ type: "capability", kind: "plugin", pluginId: "test.plugin", displayName: "Test" }],
+    metadata: {},
+    reason: "插件内容需要排队发送",
+  },
+  { items: [], metadata: { outputSchema: { type: "object" } }, reason: "结构化输出需要排队发送" },
+  { items: [], metadata: { sessionObservationGrant: { targetSessionId: "other", targetRunId: null, afterSeq: 0 } }, reason: "观察会话需要排队发送" },
+] satisfies Array<{ items: DesktopSessionInput["items"]; metadata: DesktopSessionRun["metadata"]; reason: string }>)(
+  "explains why a durable queue item cannot supplement the active reply: $reason",
+  ({ items, metadata, reason }) => {
+    const row = renderQueue("继续检查", [], "server", items, metadata).closest('[data-slot="item"]')!
+    expect(row.textContent).toContain(reason)
+    expect(row.textContent).not.toContain("补充到当前回复")
+  }
+)

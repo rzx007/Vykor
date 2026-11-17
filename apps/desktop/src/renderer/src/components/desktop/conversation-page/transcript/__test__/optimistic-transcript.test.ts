@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
+import { emptySessionView } from "@renderer/stores/desktop-session/store-test-fixtures"
 import type { PendingPromptSubmission } from "@renderer/stores/desktop-session/types"
 import type {
   DesktopSessionInput,
@@ -11,7 +12,7 @@ import type {
 } from "@shared/session-types"
 import { buildConversationEntries } from "../../message/models/conversation-turn-model"
 import { UserMessage } from "../../message/blocks/user-message"
-import { derivePendingHandoffSubmission, mergeOptimisticTranscript } from "../optimistic-transcript"
+import { derivePendingHandoffSubmission, mergeOptimisticTranscript, mergeSessionOptimisticTranscript } from "../optimistic-transcript"
 
 const submission: PendingPromptSubmission = {
   id: "input-local",
@@ -284,7 +285,6 @@ describe("derivePendingHandoffSubmission", () => {
 
   it("moves the next pending prompt into the transcript while it is being handed off", () => {
     const result = derivePendingHandoffSubmission(
-      [],
       [queuedInput],
       [
         {
@@ -300,7 +300,8 @@ describe("derivePendingHandoffSubmission", () => {
       ]
     )
 
-    expect(result).toEqual({
+    expect(result?.runId).toBe(queuedRun.id)
+    expect(result?.submission).toEqual({
       id: "input-queued",
       sessionId: "session-1",
       items: [{ type: "text" as const, text: "follow-up request" }],
@@ -314,7 +315,6 @@ describe("derivePendingHandoffSubmission", () => {
 
   it("does not move a queued prompt while another run is still active", () => {
     const result = derivePendingHandoffSubmission(
-      [],
       [queuedInput],
       [
         {
@@ -334,32 +334,35 @@ describe("derivePendingHandoffSubmission", () => {
   })
 
   it("lets an authoritative user message take over the pending handoff", () => {
-    const result = derivePendingHandoffSubmission(
-      [
-        {
-          id: "message-server",
-          sessionId: "session-1",
-          seq: 3,
-          role: "user",
-          inputId: queuedInput.id,
-          metadata: {},
-          createdAt: 21,
-          updatedAt: 21,
-        },
-      ],
-      [queuedInput],
-      [queuedRun]
-    )
+    const view = emptySessionView("session-1")
+    view.inputs = [queuedInput]
+    view.runs = [queuedRun]
+    view.messages = [{
+      id: "message-server", sessionId: "session-1", seq: 3, role: "user",
+      inputId: queuedInput.id, metadata: {}, createdAt: 21, updatedAt: 21,
+    }]
+    expect(mergeSessionOptimisticTranscript(view, [], {}).parts.map((part) => part.text))
+      .toEqual([queuedInput.content])
+    view.parts = [{
+      id: "part-server", sessionId: "session-1", messageId: "message-server", seq: 1,
+      type: "text", status: "completed", text: queuedInput.content, metadata: {}, createdAt: 21, updatedAt: 21,
+    }]
 
-    expect(result).toBeUndefined()
+    const result = mergeSessionOptimisticTranscript(view, [], {})
+    expect(result.handoffRunId).toBe(queuedRun.id)
+    expect(result.messages).toEqual(view.messages)
+    expect(result.parts).toEqual(view.parts)
   })
 
-  it("does not move a prompt that is being promoted or cancelled", () => {
+  it.each(["pending", "failed"] as const)("keeps the queue in order when its first action is %s", (phase) => {
     const result = derivePendingHandoffSubmission(
-      [],
-      [queuedInput],
-      [queuedRun],
-      new Set([queuedRun.id])
+      [queuedInput, { ...queuedInput, id: "input-later" }],
+      [queuedRun, { ...queuedRun, id: "run-later", inputId: "input-later", createdAt: queuedRun.createdAt + 1 }],
+      {
+        "session-1:run-queued": {
+          sessionId: queuedRun.sessionId, inputId: queuedInput.id, runId: queuedRun.id, kind: "promote", phase,
+        },
+      }
     )
 
     expect(result).toBeUndefined()
