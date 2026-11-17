@@ -32,11 +32,13 @@ const sourceLabels: Record<DesktopSkillInfo["source"], string> = {
 
 export function SkillDetail({
   skill,
+  overriddenByProject,
   onClose,
   onRemove,
   notify,
 }: {
   skill: DesktopSkillInfo
+  overriddenByProject?: boolean
   onClose: () => void
   onRemove?: () => Promise<string | null>
   notify: (message: string) => void
@@ -44,6 +46,7 @@ export function SkillDetail({
   const [error, setError] = useState("")
   const [confirm, setConfirm] = useState(false)
   const [removing, setRemoving] = useState(false)
+  const removeAction = skill.marketplace ? "卸载" : "删除"
   const copy = async (): Promise<void> => {
     try {
       if (window.desktop?.clipboard) await window.desktop.clipboard.writeText(skill.content)
@@ -98,7 +101,11 @@ export function SkillDetail({
           <p className="text-xs text-muted-foreground">
             {skill.projectName ? `${skill.projectName} · ` : ""}
             {sourceLabels[skill.source]}
+            {skill.marketplace ? ` · 官方技能市场 ${skill.marketplace.version}` : ""}
           </p>
+          {overriddenByProject ? (
+            <p className="text-xs text-muted-foreground">当前项目优先使用同名的项目技能。</p>
+          ) : null}
         </DialogHeader>
         <article
           tabIndex={0}
@@ -129,15 +136,19 @@ export function SkillDetail({
               }}
             >
               <Trash2 data-icon="inline-start" />
-              删除
+              {removeAction}
             </Button>
           </DialogFooter>
         ) : null}
         <SkillConfirm
           open={confirm}
-          title={`删除 ${skill.name}？`}
-          description="将删除这个技能的入口 Markdown 文件。技能目录中的其他资料会保留。"
-          action={removing ? "正在删除…" : "确认删除"}
+          title={`${removeAction} ${skill.name}？`}
+          description={
+            skill.marketplace
+              ? `将移除${skill.projectName ?? "个人"}范围中的这份技能及其打包资料。`
+              : "将删除这个技能的入口 Markdown 文件。技能目录中的其他资料会保留。"
+          }
+          action={removing ? `正在${removeAction}…` : `确认${removeAction}`}
           error={error}
           onCancel={() => !removing && setConfirm(false)}
           onConfirm={() => void remove()}

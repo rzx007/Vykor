@@ -153,6 +153,8 @@ import type {
   DesktopSkillRemoveInput,
   DesktopSkillSnapshot,
   DesktopSkillSnapshotInput,
+  DesktopSkillMarketplaceCatalog,
+  DesktopSkillMarketplaceInstallInput,
 } from "./skill-types"
 import type {
   DesktopSettingsSnapshot,
@@ -441,6 +443,8 @@ export const IpcChannels = {
   pluginCancelGit: "plugin:cancel-git",
 
   skillSnapshot: "skill:snapshot",
+  skillMarketplace: "skill:marketplace",
+  skillMarketplaceInstall: "skill:marketplace-install",
   skillRemove: "skill:remove",
 
   settingsSnapshot: "settings:snapshot",
@@ -1196,6 +1200,14 @@ export interface IpcInvokeMap
   }
   [IpcChannels.skillSnapshot]: {
     args: [input: DesktopSkillSnapshotInput]
+    result: DesktopSkillSnapshot
+  }
+  [IpcChannels.skillMarketplace]: {
+    args: []
+    result: DesktopSkillMarketplaceCatalog
+  }
+  [IpcChannels.skillMarketplaceInstall]: {
+    args: [input: DesktopSkillMarketplaceInstallInput]
     result: DesktopSkillSnapshot
   }
   [IpcChannels.skillRemove]: {

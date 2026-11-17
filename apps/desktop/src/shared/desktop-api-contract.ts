@@ -144,6 +144,8 @@ import type {
   DesktopSkillRemoveInput,
   DesktopSkillSnapshot,
   DesktopSkillSnapshotInput,
+  DesktopSkillMarketplaceCatalog,
+  DesktopSkillMarketplaceInstallInput,
 } from "./skill-types"
 import type {
   DesktopSettingsSnapshot,
@@ -485,6 +487,8 @@ export type DesktopAPI = {
   skills: {
     snapshot: (input: DesktopSkillSnapshotInput) => Promise<DesktopSkillSnapshot>
     remove: (input: DesktopSkillRemoveInput) => Promise<DesktopSkillSnapshot>
+    marketplace: () => Promise<DesktopSkillMarketplaceCatalog>
+    installMarketplace: (input: DesktopSkillMarketplaceInstallInput) => Promise<DesktopSkillSnapshot>
   }
   sessions: {
     readAgentActivity: (input: import("./session-types").ReadDesktopAgentActivityInput) => Promise<import("./session-types").DesktopAgentActivity | null>

@@ -1,8 +1,9 @@
 /**
- * DevelopmentResource: 技能删除、Hook 与 Git 源码控制资源。
+ * DevelopmentResource: 技能市场、技能删除、Hook 与 Git 源码控制资源。
  */
 
 import type { HttpTransport } from "@rzx/client";
+import type { SkillMarketplaceEntry, SkillMarketplaceInstallInput } from "@vykor/protocol";
 import type {
   HookInfo,
   SkillSnapshot,
@@ -10,6 +11,17 @@ import type {
 
 export class DevelopmentResource {
   constructor(private readonly transport: HttpTransport) {}
+
+  async listSkillMarketplace(): Promise<SkillMarketplaceEntry[]> {
+    return await this.transport.request<SkillMarketplaceEntry[]>("/skills/marketplace");
+  }
+
+  async installMarketplaceSkill(input: SkillMarketplaceInstallInput): Promise<SkillSnapshot> {
+    return await this.transport.request<SkillSnapshot>("/skills/marketplace/install", {
+      method: "POST",
+      body: input,
+    });
+  }
 
   /** `DELETE /skills/:id` */
   async removeSkill(

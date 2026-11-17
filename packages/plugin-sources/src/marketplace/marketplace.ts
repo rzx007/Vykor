@@ -31,6 +31,13 @@ export const OFFICIAL_MARKETPLACE_SOURCE: MarketplaceSource = {
   enabled: true,
   builtin: true,
 };
+export const OFFICIAL_SKILL_MARKETPLACE_SOURCE: MarketplaceSource = {
+  id: "vykor-official-skills",
+  name: "Vykor 技能市场",
+  url: "https://rzx007.github.io/vykor-skills/marketplace.json",
+  enabled: true,
+  builtin: true,
+};
 export type MarketplaceRequest = (
   url: URL,
   context?: { builtin: boolean },
@@ -166,6 +173,14 @@ const requestPublic: MarketplaceRequest = (url, context) =>
     });
     req.end();
   });
+function builtinReleasePath(source: MarketplaceSource): string | undefined {
+  if (!source.builtin) return undefined;
+  if (source.id === OFFICIAL_MARKETPLACE_SOURCE.id && source.url === OFFICIAL_MARKETPLACE_SOURCE.url)
+    return "/rzx007/vykor-plugins/releases/download/";
+  if (source.id === OFFICIAL_SKILL_MARKETPLACE_SOURCE.id && source.url === OFFICIAL_SKILL_MARKETPLACE_SOURCE.url)
+    return "/rzx007/vykor-skills/releases/download/";
+  return undefined;
+}
 function assertSourceUrl(
   source: MarketplaceSource,
   value: string,
@@ -173,14 +188,11 @@ function assertSourceUrl(
 ): URL {
   const url = publicUrl(value);
   if (url.origin === new URL(source.url).origin) return url;
-  if (
-    source.builtin &&
-    source.id === OFFICIAL_MARKETPLACE_SOURCE.id &&
-    source.url === OFFICIAL_MARKETPLACE_SOURCE.url
-  ) {
+  const releasePath = builtinReleasePath(source);
+  if (releasePath) {
     if (
       url.origin === "https://github.com" &&
-      url.pathname.startsWith("/rzx007/vykor-plugins/releases/download/")
+      url.pathname.startsWith(releasePath)
     )
       return url;
     if (redirect && assetHosts.has(url.hostname)) return url;
@@ -195,10 +207,7 @@ async function responseFrom(
   let url = assertSourceUrl(source, value);
   for (let redirects = 0; redirects < 6; redirects++) {
     const response = await request(url, {
-      builtin:
-        source.builtin &&
-        source.id === OFFICIAL_MARKETPLACE_SOURCE.id &&
-        source.url === OFFICIAL_MARKETPLACE_SOURCE.url,
+      builtin: builtinReleasePath(source) !== undefined,
     });
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       response.body.destroy();
@@ -216,6 +225,25 @@ async function responseFrom(
   }
   throw new Error("插件源重定向次数过多。");
 }
+export async function readMarketplaceCatalog(
+  source: MarketplaceSource,
+  request: MarketplaceRequest = requestPublic,
+): Promise<Buffer> {
+  const response = await responseFrom(source, source.url, request);
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  for await (const chunk of response.body) {
+    const buffer = Buffer.from(chunk);
+    bytes += buffer.length;
+    if (bytes > MARKETPLACE_LIMITS.catalogBytes) {
+      response.body.destroy();
+      throw new Error("插件市场目录超过 2 MiB。");
+    }
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks);
+}
+
 async function atomicJson(path: string, value: unknown) {
   const temporary = `${path}.${randomUUID()}.tmp`;
   try {
@@ -358,19 +386,7 @@ export class MarketplaceRepository {
     )
       return { source, ...cached };
     try {
-      const response = await responseFrom(source, source.url, this.request);
-      const chunks: Buffer[] = [];
-      let bytes = 0;
-      for await (const chunk of response.body) {
-        const buffer = Buffer.from(chunk);
-        bytes += buffer.length;
-        if (bytes > MARKETPLACE_LIMITS.catalogBytes) {
-          response.body.destroy();
-          throw new Error("插件市场目录超过 2 MiB。");
-        }
-        chunks.push(buffer);
-      }
-      const content = Buffer.concat(chunks);
+      const content = await readMarketplaceCatalog(source, this.request);
       const document = parseMarketplaceDocument(
         JSON.parse(content.toString("utf8")),
       );
@@ -397,42 +413,50 @@ export class MarketplaceRepository {
     source: MarketplaceSource,
     plugin: MarketplacePlugin,
   ): Promise<{ path: string; cleanup(): Promise<void> }> {
-    const root = await mkdtemp(join(tmpdir(), "vykor-marketplace-"));
-    const path = join(root, "plugin.zip");
-    const cleanup = () => rm(root, { recursive: true, force: true });
-    try {
-      const response = await responseFrom(
-        source,
-        plugin.artifact.url,
-        this.request,
-      );
-      const hash = createHash("sha256");
-      let bytes = 0;
-      const limit = new Transform({
-        transform(chunk: Buffer, _encoding, done) {
-          bytes += chunk.length;
-          if (
-            bytes > plugin.artifact.size ||
-            bytes > MARKETPLACE_LIMITS.archiveBytes
-          )
-            return done(new Error("插件包大小不符合目录声明。"));
-          hash.update(chunk);
-          done(null, chunk);
-        },
-      });
-      await pipeline(
-        response.body,
-        limit,
-        createWriteStream(path, { flags: "wx" }),
-      );
-      if (bytes !== plugin.artifact.size)
-        throw new Error("插件包大小不符合目录声明。");
-      if (hash.digest("hex") !== plugin.artifact.sha256)
-        throw new Error("插件包摘要校验失败。");
-      return { path, cleanup };
-    } catch (error) {
-      await cleanup();
-      throw error;
-    }
+    return downloadMarketplaceZip(source, plugin.artifact, this.request);
+  }
+}
+
+export async function downloadMarketplaceZip(
+  source: MarketplaceSource,
+  artifact: MarketplacePlugin["artifact"],
+  request: MarketplaceRequest = requestPublic,
+): Promise<{ path: string; cleanup(): Promise<void> }> {
+  const root = await mkdtemp(join(tmpdir(), "vykor-marketplace-"));
+  const path = join(root, "plugin.zip");
+  const cleanup = () => rm(root, { recursive: true, force: true });
+  try {
+    const response = await responseFrom(
+      source,
+      artifact.url,
+      request,
+    );
+    const hash = createHash("sha256");
+    let bytes = 0;
+    const limit = new Transform({
+      transform(chunk: Buffer, _encoding, done) {
+        bytes += chunk.length;
+        if (
+          bytes > artifact.size ||
+          bytes > MARKETPLACE_LIMITS.archiveBytes
+        )
+          return done(new Error("插件包大小不符合目录声明。"));
+        hash.update(chunk);
+        done(null, chunk);
+      },
+    });
+    await pipeline(
+      response.body,
+      limit,
+      createWriteStream(path, { flags: "wx" }),
+    );
+    if (bytes !== artifact.size)
+      throw new Error("插件包大小不符合目录声明。");
+    if (hash.digest("hex") !== artifact.sha256)
+      throw new Error("插件包摘要校验失败。");
+    return { path, cleanup };
+  } catch (error) {
+    await cleanup();
+    throw error;
   }
 }

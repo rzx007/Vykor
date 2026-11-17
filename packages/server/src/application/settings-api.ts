@@ -372,6 +372,7 @@ export interface SkillInfo {
   readOnly: boolean;
   projectPath?: string;
   projectName?: string;
+  marketplace?: import("@vykor/protocol").SkillMarketplaceSelection;
 }
 export interface SkillProject {
   name: string;
@@ -382,8 +383,14 @@ export interface SkillSnapshot {
   projects: SkillProject[];
   warnings: string[];
 }
+export interface PreparedSkillMarketplaceInstall {
+  commit(): Promise<boolean>;
+  cleanup(): Promise<void>;
+}
 export interface SkillService {
   list(): Promise<SkillSnapshot> | SkillSnapshot;
+  listMarketplace?(): Promise<import("@vykor/protocol").SkillMarketplaceEntry[]>;
+  prepareMarketplaceInstall?(input: import("@vykor/protocol").SkillMarketplaceInstallInput): Promise<PreparedSkillMarketplaceInstall>;
   remove(input: {
     id: string;
     expectedContent: string;

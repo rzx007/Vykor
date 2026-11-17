@@ -1,4 +1,10 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Readable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
+import { DaemonOperationGate } from "../../../application/control/daemon-operation-gate.js";
+import { createSkillManagementService } from "../../../application/skills/skill-management-service.js";
 import { createServiceRoutes } from "../service.js";
 
 function createPluginRoutes() {
@@ -157,6 +163,66 @@ function createPluginControl() {
     inspectRuntimeHooks: vi.fn(async () => []), sessionExists: vi.fn(() => false),
   };
 }
+
+describe("skill marketplace install route", () => {
+  it("admits conversations during archive download and leaves runtimes alone when verification fails", async () => {
+    const configDir = await mkdtemp(join(tmpdir(), "vykor-skill-route-test-"));
+    const gate = new DaemonOperationGate();
+    const acquireGlobalMutation = vi.fn(() => gate.tryEnterBarrier({ kind: "global" }, () => true));
+    const closeAllRuntimes = vi.fn(async () => {});
+    const downloading = Promise.withResolvers<void>();
+    const respond = Promise.withResolvers<void>();
+    const id = "market-sample";
+    const version = "1.0.0";
+    const sha256 = "a".repeat(64);
+    const catalog = JSON.stringify({
+      schemaVersion: 1, release: "skills-v1", skills: [{
+        id, name: id, version, displayName: "Sample", description: "Sample", license: "MIT",
+        source: { repository: "https://github.com/example/skills", commit: "a".repeat(40), path: "." },
+        artifact: {
+          url: `https://github.com/rzx007/vykor-skills/releases/download/skills-v1/${id}-${version}.zip`,
+          sha256, size: 1,
+        },
+      }],
+    });
+    const skillService = createSkillManagementService({
+      configDir, projects: { list: () => [] }, standardSkillsDirs: [], bundledSkills: [],
+      marketplaceRequest: async (url) => {
+        if (url.pathname.endsWith(".json")) {
+          return { status: 200, headers: {}, body: Readable.from([Buffer.from(catalog)]) };
+        }
+        downloading.resolve();
+        await respond.promise;
+        return { status: 200, headers: {}, body: Readable.from([Buffer.from("0")]) };
+      },
+    });
+    const routes = createServiceRoutes({
+      skillService,
+      control: { ...createPluginControl(), acquireGlobalMutation, closeAllRuntimes },
+    });
+    const request = routes.request("/skills/marketplace/install", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id, version, sha256, scope: "personal" }),
+    });
+
+    try {
+      expect(await Promise.race([
+        downloading.promise.then(() => "download"),
+        request.then(() => "response"),
+      ])).toBe("download");
+      const conversation = gate.enter({ sessionId: "conversation", cwd: configDir });
+      conversation.release();
+      respond.resolve();
+      expect((await request).status).toBe(400);
+      expect(acquireGlobalMutation).not.toHaveBeenCalled();
+      expect(closeAllRuntimes).not.toHaveBeenCalled();
+    } finally {
+      respond.resolve();
+      await request;
+      await rm(configDir, { recursive: true, force: true });
+    }
+  });
+});
 
 describe("plugin archive routes", () => {
   it("previews without refreshing and schedules a soft refresh only after installation", async () => {

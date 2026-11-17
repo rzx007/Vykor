@@ -212,3 +212,7 @@ export type { MarketplaceCatalog, MarketplaceSource, MarketplaceSourceView, Mark
 export { VykorClient } from "./application-client.js";
 export type { AppAdmitClientPromptInput } from "./types/index.js";
 export * from "@rzx/client";
+export type {
+  SkillMarketplaceEntry,
+  SkillMarketplaceInstallInput,
+} from "@vykor/protocol";

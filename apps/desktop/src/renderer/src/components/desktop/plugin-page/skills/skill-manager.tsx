@@ -3,11 +3,11 @@ import { Check } from "lucide-react"
 import type { DesktopSkillInfo, DesktopSkillSnapshot } from "@shared/skill-types"
 import { Alert, AlertDescription } from "@renderer/components/ui/alert"
 import { Empty, EmptyHeader, EmptyTitle } from "@renderer/components/ui/empty"
-import { Separator } from "@renderer/components/ui/separator"
 import { Skeleton } from "@renderer/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@renderer/components/motion/tabs"
 import { SkillIcon } from "./skill-controls"
 import { SkillDetail } from "./skill-detail"
+import { SkillMarketplace } from "./skill-marketplace"
 
 export interface SkillManagerProps {
   query: string
@@ -33,6 +33,7 @@ export function SkillManager({
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
+  const [mode, setMode] = useState("installed")
   const [category, setCategory] = useState(() => `project:${pathKey(projectPath)}`)
   const requestId = useRef(0)
   const previousRefresh = useRef(refreshRequest)
@@ -67,18 +68,18 @@ export function SkillManager({
   }, [load, refreshRequest])
 
   const skills = snapshot?.skills ?? []
+  const project = snapshot?.projects.find((item) => pathKey(item.path) === pathKey(projectPath))
   const categories = useMemo(() => {
     const ordered = snapshot?.projects ?? []
-    const current = ordered.find((item) => pathKey(item.path) === pathKey(projectPath))
     return [
-      ...(current ? [{ kind: "project" as const, ...current }] : []),
+      ...(project ? [{ kind: "project" as const, ...project }] : []),
       { kind: "standard" as const, name: "通用" as const },
       { kind: "personal" as const, name: "个人" as const },
       ...ordered
-        .filter((item) => item !== current)
+        .filter((item) => item !== project)
         .map((item) => ({ kind: "project" as const, ...item })),
     ]
-  }, [projectPath, snapshot?.projects])
+  }, [project, snapshot?.projects])
   const activeCategory = categories.some((item) => categoryId(item) === category)
     ? category
     : categoryId(categories[0] ?? { kind: "personal", name: "个人" })
@@ -111,7 +112,7 @@ export function SkillManager({
       ++requestId.current
       setSnapshot(next)
       setSelectedId(null)
-      notify(`${skill.name} 已删除。`)
+      notify(`${skill.name} ${skill.marketplace ? "已卸载" : "已删除"}。`)
       return null
     } catch (cause) {
       return message(cause)
@@ -119,98 +120,139 @@ export function SkillManager({
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-8">
+    <Tabs value={mode} onValueChange={setMode} className="flex min-w-0 flex-col gap-5">
+      <TabsList
+        className="extension-tabs bg-transparent"
+        wrapperClassName="w-auto"
+        aria-label="技能浏览方式"
+      >
+        <TabsTrigger value="marketplace" aria-label="浏览市场">
+          浏览市场
+        </TabsTrigger>
+        <TabsTrigger value="installed" aria-label="已安装">
+          已安装
+        </TabsTrigger>
+      </TabsList>
       {error ? (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
-      {snapshot?.warnings.length ? (
-        <Alert>
-          <AlertDescription>{snapshot.warnings.join("；")}</AlertDescription>
-        </Alert>
-      ) : null}
-      <section aria-label="已安装技能" className="flex flex-col gap-3">
-        <h2 className="text-[15px] font-semibold">已安装</h2>
-        <Separator className="bg-border/50" />
-        {loading ? (
-          <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
-            {[1, 2, 3, 4, 5, 6].map((id) => (
-              <Skeleton key={id} className="h-14 w-full" />
-            ))}
-          </div>
-        ) : installed.length ? (
-          <>
-            <SkillRows
-              skills={expanded ? installed : installed.slice(0, 6)}
-              onOpen={setSelectedId}
-            />
-            {installed.length > 6 ? (
-              <button
-                type="button"
-                className="self-start rounded-sm px-2 py-1 text-left text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
-                aria-expanded={expanded}
-                onClick={() => setExpanded((value) => !value)}
-              >
-                {expanded
-                  ? "收起"
-                  : `查看 ${installed
-                      .slice(6, 8)
-                      .map((skill) => skill.name)
-                      .join(
-                        "、"
-                      )}${installed.length > 7 ? `，另有 ${installed.length - 6} 项` : ""}`}
-              </button>
-            ) : null}
-          </>
-        ) : (
-          <Empty className="py-8">
-            <EmptyHeader>
-              <EmptyTitle>{needle ? "没有匹配的技能" : "还没有技能"}</EmptyTitle>
-            </EmptyHeader>
-          </Empty>
-        )}
-      </section>
-
-      {!loading && skills.length ? (
-        <Tabs
-          value={activeCategory}
-          onValueChange={(value) => setCategory(String(value))}
-          className="flex min-w-0 flex-col gap-5"
-        >
-          <TabsList aria-label="技能来源" className="extension-tabs bg-transparent">
-            {categories.map((item) => (
-              <TabsTrigger
-                key={categoryId(item)}
-                value={categoryId(item)}
-                title={item.name}
-                className="max-w-48 min-w-0"
-              >
-                <span className="truncate">{item.name}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          {categories.map((item) => (
-            <TabsContent key={categoryId(item)} value={categoryId(item)} className="mt-0">
-              {skillsFor(item).length ? (
-                <SkillRows skills={skillsFor(item)} onOpen={setSelectedId} />
-              ) : (
-                <p className="py-3 text-sm text-muted-foreground">暂无技能</p>
-              )}
-            </TabsContent>
-          ))}
-        </Tabs>
-      ) : null}
-
-      {selected ? (
-        <SkillDetail
-          skill={selected}
-          notify={notify}
-          onClose={() => setSelectedId(null)}
-          {...(!selected.readOnly ? { onRemove: () => remove(selected) } : {})}
+      <TabsContent value="marketplace" className="mt-0">
+        <SkillMarketplace
+          project={project}
+          snapshot={snapshot}
+          query={query}
+          refreshRequest={refreshRequest}
+          onInstalled={(result, status) => {
+            ++requestId.current
+            setSnapshot(result)
+            setError("")
+            setLoading(false)
+            notify(status)
+          }}
         />
-      ) : null}
-    </div>
+      </TabsContent>
+      <TabsContent value="installed" className="mt-0">
+        <div className="flex min-w-0 flex-col gap-8">
+          {snapshot?.warnings.length ? (
+            <Alert>
+              <AlertDescription>{snapshot.warnings.join("；")}</AlertDescription>
+            </Alert>
+          ) : null}
+          <section aria-label="已安装技能" className="flex flex-col gap-3">
+            {loading ? (
+              <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
+                {[1, 2, 3, 4, 5, 6].map((id) => (
+                  <Skeleton key={id} className="h-14 w-full" />
+                ))}
+              </div>
+            ) : installed.length ? (
+              <>
+                <SkillRows
+                  skills={expanded ? installed : installed.slice(0, 6)}
+                  onOpen={setSelectedId}
+                />
+                {installed.length > 6 ? (
+                  <button
+                    type="button"
+                    className="self-start rounded-sm px-2 py-1 text-left text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                    aria-expanded={expanded}
+                    onClick={() => setExpanded((value) => !value)}
+                  >
+                    {expanded
+                      ? "收起"
+                      : `查看 ${installed
+                          .slice(6, 8)
+                          .map((skill) => skill.name)
+                          .join(
+                            "、"
+                          )}${installed.length > 7 ? `，另有 ${installed.length - 6} 项` : ""}`}
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <Empty className="py-8">
+                <EmptyHeader>
+                  <EmptyTitle>{needle ? "没有匹配的技能" : "还没有技能"}</EmptyTitle>
+                </EmptyHeader>
+              </Empty>
+            )}
+          </section>
+
+          {!loading && skills.length ? (
+            <Tabs
+              value={activeCategory}
+              onValueChange={(value) => setCategory(String(value))}
+              className="flex min-w-0 flex-col gap-5"
+            >
+              <TabsList aria-label="技能来源" className="extension-tabs bg-transparent">
+                {categories.map((item) => (
+                  <TabsTrigger
+                    key={categoryId(item)}
+                    value={categoryId(item)}
+                    title={item.name}
+                    className="max-w-48 min-w-0"
+                  >
+                    <span className="truncate">{item.name}</span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              {categories.map((item) => (
+                <TabsContent key={categoryId(item)} value={categoryId(item)} className="mt-0">
+                  {skillsFor(item).length ? (
+                    <SkillRows skills={skillsFor(item)} onOpen={setSelectedId} />
+                  ) : (
+                    <p className="py-3 text-sm text-muted-foreground">暂无技能</p>
+                  )}
+                </TabsContent>
+              ))}
+            </Tabs>
+          ) : null}
+
+          {selected ? (
+            <SkillDetail
+              skill={selected}
+              overriddenByProject={
+                selected.source === "personal" &&
+                Boolean(
+                  project &&
+                  skills.some(
+                    (skill) =>
+                      skill.source === "project" &&
+                      skill.projectPath === project.path &&
+                      skill.name === selected.name
+                  )
+                )
+              }
+              notify={notify}
+              onClose={() => setSelectedId(null)}
+              {...(!selected.readOnly ? { onRemove: () => remove(selected) } : {})}
+            />
+          ) : null}
+        </div>
+      </TabsContent>
+    </Tabs>
   )
 }
 
