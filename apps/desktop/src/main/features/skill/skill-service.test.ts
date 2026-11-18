@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { join } from "node:path"
+
+const documentsDir = join(process.cwd(), "test-documents")
+vi.mock("electron", () => ({ app: { getPath: () => documentsDir } }))
 
 const daemon = vi.hoisted(() => ({
   runtime: {
@@ -6,6 +10,7 @@ const daemon = vi.hoisted(() => ({
   },
   development: {
     removeSkill: vi.fn(),
+    listSkillMarketplace: vi.fn(),
   },
 }))
 
@@ -27,6 +32,7 @@ vi.mock("../session/session-service", () => ({
   desktopSessionService: sessionService,
 }))
 
+import { VykorApiError } from "@vykor/application-client"
 import { DesktopSkillService } from "./skill-service"
 
 const snapshot = {
@@ -126,6 +132,23 @@ describe("DesktopSkillService", () => {
     refreshedDaemon.development.removeSkill.mockResolvedValue(snapshot)
   })
 
+  it("reports when the connected daemon has no marketplace route", async () => {
+    daemon.development.listSkillMarketplace.mockRejectedValueOnce(
+      new VykorApiError("Not found", 404, null)
+    )
+    const service = new DesktopSkillService()
+
+    await expect(service.marketplace()).resolves.toBeNull()
+    expect(sessionService.refreshDaemonClient).not.toHaveBeenCalled()
+  })
+
+  it("preserves catalog failures reported by a daemon that supports the marketplace", async () => {
+    const error = new VykorApiError("技能市场无法访问", 502, null)
+    daemon.development.listSkillMarketplace.mockRejectedValueOnce(error)
+
+    await expect(new DesktopSkillService().marketplace()).rejects.toBe(error)
+  })
+
   it("delegates snapshots to the daemon client and hides outside-project workspaces", async () => {
     daemon.runtime.listSkills.mockResolvedValueOnce(mixedSnapshot)
     const service = new DesktopSkillService({ dataRoot: "D:/managed" })
@@ -162,6 +185,26 @@ describe("DesktopSkillService", () => {
     })
   })
 
+  it("hides legacy outside-project folders and their skills while keeping ordinary projects", async () => {
+    const legacyPath = join(documentsDir, "Vykor", "2026-09-09", "x10")
+    const regularProject = { name: "x10", path: join(documentsDir, "Projects", "x10") }
+    daemon.runtime.listSkills.mockResolvedValueOnce({
+      ...snapshot,
+      projects: [{ name: "x10", path: legacyPath }, regularProject],
+      skills: [{ ...mixedSnapshot.skills[6], projectPath: legacyPath }, mixedSnapshot.skills[5]],
+    })
+
+    await expect(
+      new DesktopSkillService({ dataRoot: "D:/managed" }).snapshot({
+        projectPath: regularProject.path,
+      })
+    ).resolves.toEqual({
+      warnings: [],
+      projects: [regularProject],
+      skills: [mixedSnapshot.skills[5]],
+    })
+  })
+
   it("delegates removal and returns the daemon response", async () => {
     const service = new DesktopSkillService({ dataRoot: "D:/managed" })
     const input = {
@@ -183,9 +226,7 @@ describe("DesktopSkillService", () => {
       daemon.runtime.listSkills.mockRejectedValueOnce(new Error(message))
       const service = new DesktopSkillService({ dataRoot: "D:/managed" })
 
-      await expect(service.snapshot({ projectPath: "D:/code/Vykor" })).resolves.toEqual(
-        snapshot
-      )
+      await expect(service.snapshot({ projectPath: "D:/code/Vykor" })).resolves.toEqual(snapshot)
       expect(daemon.runtime.listSkills).toHaveBeenCalledOnce()
       expect(sessionService.refreshDaemonClient).toHaveBeenCalledOnce()
       expect(refreshedDaemon.runtime.listSkills).toHaveBeenCalledOnce()

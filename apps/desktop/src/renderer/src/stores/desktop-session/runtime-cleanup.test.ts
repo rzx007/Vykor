@@ -43,6 +43,18 @@ describe("desktop session runtime cleanup", () => {
         phase: "accepted",
         placement: "transcript",
       },
+      "direct-follow-up": {
+        id: "direct-follow-up",
+        sessionId: "s1",
+        items: [{ type: "text", text: "follow-up" }],
+        content: "follow-up",
+        attachments: [],
+        createdAt: 1,
+        phase: "accepted",
+        delivery: "steer",
+        expectedActiveRunId: "active-run",
+        placement: "transcript",
+      },
       submitting: {
         id: "submitting",
         sessionId: "s1",
@@ -97,6 +109,7 @@ describe("desktop session runtime cleanup", () => {
       failed: runtime.operations.failed,
     })
     expect(released.pendingPromptSubmissions).toEqual({
+      "direct-follow-up": runtime.pendingPromptSubmissions["direct-follow-up"],
       submitting: runtime.pendingPromptSubmissions.submitting,
       failed: runtime.pendingPromptSubmissions.failed,
     })

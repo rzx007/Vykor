@@ -3936,7 +3936,7 @@
     },
     {
       "path": "packages/server/src/application/settings-api.ts",
-      "line": 271,
+      "line": 272,
       "text": "  uiInventory?: PluginUiInventory;",
       "reason": "Bounded installed-package retirement diagnosis or original permission derivation; new import rejects legacy UI."
     },

@@ -115,6 +115,27 @@ function createMockControlOptions() {
 }
 
 describe("RunControlService", () => {
+  it.each(["session", "active", "queued"] as const)("retains recoverable promotion state only when stopping the target from %s", (scope) => {
+    const { options, runs, activeRuns, queuedRuns, inputs } = createMockControlOptions();
+    const promotion = { kind: "steering", queuedRunId: "r-q", inputId: "i-q", activeRunId: "r-active" };
+    runs.set("r-active", { id: "r-active", sessionId: "s1", status: "running", metadata: {}, createdAt: 1, updatedAt: 1 });
+    runs.set("r-q", { id: "r-q", sessionId: "s1", inputId: "i-q", status: "pending", metadata: { promotion }, createdAt: 2, updatedAt: 2 });
+    activeRuns.set("s1", "r-active");
+    queuedRuns.set("s1", ["r-q"]);
+    inputs.set("i-q", { id: "i-q", sessionId: "s1", seq: 1, content: "keep my follow-up", delivery: "queue", items: [{ type: "text", text: "keep my follow-up" }], attachments: [], metadata: {}, createdAt: 2 });
+    const service = new RunControlService(options);
+    if (scope === "session") service.interruptSession("s1");
+    else if (scope === "active") {
+      vi.mocked(options.runtime.interruptRun).mockReturnValueOnce({ activeRunId: "r-active", queuedRunIds: ["r-q"], interrupted: true });
+      service.interruptRun("s1", "r-active");
+    } else service.interruptQueuedRun("s1", "r-q");
+
+    expect(runs.get("r-q")).toMatchObject({ status: "interrupted", metadata: {
+      promotion: { ...promotion, kind: scope === "queued" ? "steering" : "failed" },
+    } });
+    expect(inputs.get("i-q")?.content).toBe("keep my follow-up");
+  });
+
   it.each(["session", "run"] as const)("still interrupts the %s when saving the Goal pause fails", (scope) => {
     const { options, runs, activeRuns } = createMockControlOptions();
     activeRuns.set("s1", "r1");

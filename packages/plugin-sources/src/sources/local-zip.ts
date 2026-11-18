@@ -206,13 +206,14 @@ async function copyAndHash(source: string, privateRoot: string): Promise<{ path:
   return { path: target, digest: hash.digest("hex") };
 }
 
-function extractFile(zip: yauzl.ZipFile, entry: yauzl.Entry, destination: string): Promise<void> {
+function extractFile(zip: yauzl.ZipFile, entry: yauzl.Entry, destination: string, preserveExecutable: boolean): Promise<void> {
   return new Promise((resolveFile, reject) => {
     zip.openReadStream(entry, (openError, stream) => {
       if (openError || !stream) { reject(openError ?? archiveError(`could not read ${entry.fileName}`)); return; }
       const crc = new Crc32();
       let bytes = 0;
-      const output = createWriteStream(destination, { flags: "wx" });
+      const executable = preserveExecutable && ((entry.externalFileAttributes >>> 16) & 0o111) !== 0;
+      const output = createWriteStream(destination, { flags: "wx", mode: executable ? 0o755 : 0o666 });
       const fail = (error: Error) => { stream.destroy(); output.destroy(); reject(error); };
       stream.on("data", (chunk: Buffer) => {
         bytes += chunk.length;
@@ -231,7 +232,7 @@ function extractFile(zip: yauzl.ZipFile, entry: yauzl.Entry, destination: string
   });
 }
 
-function extractEntries(path: string, destination: string, planned: PlannedEntry[]): Promise<void> {
+function extractEntries(path: string, destination: string, planned: PlannedEntry[], preserveExecutable = false): Promise<void> {
   return openZip(path).then((zip) => new Promise((resolveExtraction, reject) => {
     let index = 0;
     let settled = false;
@@ -249,12 +250,18 @@ function extractEntries(path: string, destination: string, planned: PlannedEntry
         if (!expected || expected.entry.fileName !== entry.fileName) throw archiveError("ZIP entry list changed during extraction");
         const target = join(destination, ...expected.path.split("/"));
         if (expected.directory) await mkdir(target, { recursive: true });
-        else { await mkdir(dirname(target), { recursive: true }); await extractFile(zip, entry, target); }
+        else { await mkdir(dirname(target), { recursive: true }); await extractFile(zip, entry, target, preserveExecutable); }
         zip.readEntry();
       } catch (error) { finish(error as Error); }
     });
     try { zip.readEntry(); } catch (error) { finish(error as Error); }
   }));
+}
+
+/** Extract a verified ZIP into a private, empty staging directory. */
+export async function extractMarketplaceZip(path: string, destination: string): Promise<void> {
+  const entries = validateEntries(await readCentralDirectory(path));
+  await extractEntries(path, destination, entries, true);
 }
 
 function localArchiveKind(source: string): LocalArchiveKind {

@@ -1,4 +1,5 @@
 import type { PluginUiInventory } from "@vykor/domain-contracts/plugin-apps/history";
+import type { SkillMarketplaceEntry, SkillMarketplaceInstallInput, SkillMarketplaceSelection } from "@vykor/domain-contracts/skills";
 import type { MemoryEntryRecord, UpdateMemoryEntryInput, ClearMemoryInput } from "@vykor/domain-contracts/memory";
 export type { MemoryEntryRecord } from "@vykor/domain-contracts/memory";
 
@@ -372,6 +373,7 @@ export interface SkillInfo {
   readOnly: boolean;
   projectPath?: string;
   projectName?: string;
+  marketplace?: SkillMarketplaceSelection;
 }
 export interface SkillProject {
   name: string;
@@ -382,8 +384,14 @@ export interface SkillSnapshot {
   projects: SkillProject[];
   warnings: string[];
 }
+export interface PreparedSkillMarketplaceInstall {
+  commit(): Promise<boolean>;
+  cleanup(): Promise<void>;
+}
 export interface SkillService {
   list(): Promise<SkillSnapshot> | SkillSnapshot;
+  listMarketplace?(): Promise<SkillMarketplaceEntry[]>;
+  prepareMarketplaceInstall?(input: SkillMarketplaceInstallInput): Promise<PreparedSkillMarketplaceInstall>;
   remove(input: {
     id: string;
     expectedContent: string;

@@ -36,3 +36,4 @@ export { parseMcpCallResultData, type McpCallResultData } from "@vykor/agent-con
 export { PLUGIN_APP_MANIFEST_LIMITS, PLUGIN_APP_RESOURCE_LIMITS, PLUGIN_APP_DATA_LIMITS } from "@vykor/plugin-contracts/limits";
 export { PLUGIN_APP_INPUT_LIMITS } from "@vykor/domain-contracts/plugin-apps";
 export { MCP_APP_HTML_MIME_TYPE } from "@vykor/agent-contracts/tool-data";
+export * from "./extensions/skill-marketplace.js";

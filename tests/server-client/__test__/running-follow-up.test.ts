@@ -106,12 +106,24 @@ it("binds HTTP follow-ups to one Run and distinguishes admission from model hist
     expect(final.runs.find(run => run.id === queued.run!.id)).toMatchObject({
       status: "interrupted", metadata: { promotion: { kind: "steered", activeRunId: runId } },
     });
+    expect(final.messages.filter(message => message.inputId === "queued")).toHaveLength(1);
+    expect(final.messages.filter(message => message.inputId === "during")).toHaveLength(1);
     expect(histories.some(history => history.includes("revise instructions"))).toBe(true);
     expect(final.parts.filter(part => part.type === "tool" && part.toolUseId === "read-once")).toHaveLength(1);
 
     const newer = await send("newer", "wait for stop");
     const newerRunId = newer.run!.id;
     await pausedRequest.promise;
+    const queuedBeforeStop = await send("queued-before-stop", "keep the unapplied promotion");
+    const queuedBeforeStopId = queuedBeforeStop.run!.id;
+    const promotionAtStop = client.sessions.promoteQueuedPrompt(session.id, "queued-before-stop", {
+      queuedRunId: queuedBeforeStopId, expectedActiveRunId: newerRunId,
+    });
+    void promotionAtStop.catch(() => {});
+    await vi.waitFor(() => {
+      expect(owner.server.store.runs.getRun(queuedBeforeStopId)?.metadata.promotion)
+        .toMatchObject({ kind: "steering", activeRunId: newerRunId });
+    });
     await expect(send("during", "revise instructions", runId)).resolves.toMatchObject({ run: { id: runId } });
     await expect(send("stale", "must not reach the new Run", runId)).rejects.toMatchObject({ status: 409 });
     const stopped = send("before-stop", "must never get applied", newerRunId);
@@ -120,11 +132,17 @@ it("binds HTTP follow-ups to one Run and distinguishes admission from model hist
     await expect(client.sessions.interrupt(session.id, { expectedRunId: newerRunId })).resolves.toBeDefined();
     releasePausedRequest.resolve();
     await expect(stopped).rejects.toMatchObject({ status: 409 });
+    await expect(promotionAtStop).rejects.toBeDefined();
     expect((await wait(newerRunId)).run.status).toBe("interrupted");
     expect(owner.server.store.conversations.getInput("stale")).toBeFalsy();
     expect(histories.some(history => /must never get applied|must not reach/.test(history))).toBe(false);
     const stoppedState = await client.sessions.getState(session.id);
     expect(stoppedState.messages.some(message => message.inputId === "before-stop")).toBe(false);
+    expect(stoppedState.messages.some(message => message.inputId === "queued-before-stop")).toBe(false);
+    expect(stoppedState.inputs.filter(input => input.id === "queued-before-stop")).toHaveLength(1);
+    expect(stoppedState.runs.find(run => run.id === queuedBeforeStopId)).toMatchObject({
+      status: "interrupted", metadata: { promotion: { kind: "failed", activeRunId: newerRunId } },
+    });
   } finally {
     finishFirstRequest.resolve();
     releasePausedRequest.resolve();

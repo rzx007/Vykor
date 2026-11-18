@@ -580,6 +580,9 @@ export const desktopAPI = {
       invoke(IpcChannels.pluginCancelGit, input),
   },
   skills: {
+    marketplace: () => invoke(IpcChannels.skillMarketplace),
+    installMarketplace: (input: IpcInvokeMap[typeof IpcChannels.skillMarketplaceInstall]["args"][0]) =>
+      invoke(IpcChannels.skillMarketplaceInstall, input),
     snapshot: (input: IpcInvokeMap[typeof IpcChannels.skillSnapshot]["args"][0]) =>
       invoke(IpcChannels.skillSnapshot, input),
     remove: (input: IpcInvokeMap[typeof IpcChannels.skillRemove]["args"][0]) =>

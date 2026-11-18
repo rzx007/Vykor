@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { DaemonOperationGate } from "../../../application/control/daemon-operation-gate.js";
 import { createServiceRoutes } from "../service.js";
 
 function createPluginRoutes() {
@@ -157,6 +158,52 @@ function createPluginControl() {
     inspectRuntimeHooks: vi.fn(async () => []), sessionExists: vi.fn(() => false),
   };
 }
+
+describe("skill marketplace install route", () => {
+  it("admits conversations during preparation and leaves runtimes alone when verification fails", async () => {
+    const gate = new DaemonOperationGate();
+    const acquireGlobalMutation = vi.fn(() => gate.tryEnterBarrier({ kind: "global" }, () => true));
+    const closeAllRuntimes = vi.fn(async () => {});
+    const preparing = Promise.withResolvers<void>();
+    const respond = Promise.withResolvers<void>();
+    const id = "market-sample";
+    const version = "1.0.0";
+    const sha256 = "a".repeat(64);
+    const skillService = {
+      list: () => ({ skills: [], projects: [], warnings: [] }),
+      remove: vi.fn(),
+      async prepareMarketplaceInstall() {
+        preparing.resolve();
+        await respond.promise;
+        throw new Error("技能包摘要校验失败。");
+      },
+    };
+    const routes = createServiceRoutes({
+      skillService,
+      control: { ...createPluginControl(), acquireGlobalMutation, closeAllRuntimes },
+    });
+    const request = routes.request("/skills/marketplace/install", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id, version, sha256, scope: "personal" }),
+    });
+
+    try {
+      expect(await Promise.race([
+        preparing.promise.then(() => "prepare"),
+        request.then(() => "response"),
+      ])).toBe("prepare");
+      const conversation = gate.enter({ sessionId: "conversation", cwd: "/workspace" });
+      conversation.release();
+      respond.resolve();
+      expect((await request).status).toBe(400);
+      expect(acquireGlobalMutation).not.toHaveBeenCalled();
+      expect(closeAllRuntimes).not.toHaveBeenCalled();
+    } finally {
+      respond.resolve();
+      await request;
+    }
+  });
+});
 
 describe("plugin archive routes", () => {
   it("previews without refreshing and schedules a soft refresh only after installation", async () => {

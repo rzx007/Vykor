@@ -4,6 +4,7 @@ import type {
   DesktopSessionView,
 } from "@shared/session-types"
 import {
+  isTranscriptFollowUp,
   reconcilePendingPromptSubmissions,
   reconcileQueuedPromptActions,
 } from "./pending-prompt-state"
@@ -166,7 +167,7 @@ export function releaseAcknowledgedRuntime(runtime: DesktopSessionRuntime): Desk
     ),
     pendingPromptSubmissions: Object.fromEntries(
       Object.entries(runtime.pendingPromptSubmissions).filter(
-        ([, submission]) => submission.phase !== "accepted"
+        ([, submission]) => submission.phase !== "accepted" || isTranscriptFollowUp(submission)
       )
     ),
     queuedPromptActions: Object.fromEntries(

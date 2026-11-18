@@ -125,5 +125,5 @@ function queuedPromptActionError(kind: "promote" | "cancel", error: unknown): st
   if (kind === "promote" && /active run|当前运行|target run|409/i.test(message)) {
     return "当前回答已经切换，这条消息仍保留在待处理队列中。"
   }
-  return kind === "promote" ? `调整方向失败：${message}` : `删除失败：${message}`
+  return kind === "promote" ? `补充失败：${message}` : `删除失败：${message}`
 }

@@ -122,7 +122,7 @@ export const ConversationTranscript = memo(function ConversationTranscript({
     { messages, parts, runs, running, showReasoning }
   )
   const lastTurn = useMemo(
-    () => [...entries].reverse().find((entry) => entry.type === "turn"),
+    () => [...entries].reverse().find((entry) => entry.type === "turn" && !entry.turn.userMessage?.metadata.pendingFollowUp),
     [entries]
   )
   // Supplemental input can split one Run across turns; only its last segment owns live status.
@@ -467,6 +467,7 @@ const TranscriptTurn = memo(function TranscriptTurn({
     scroller?.presentedTurns.add(turn.id)
   }, [scroller, turn.id])
   const userMessage = turn.userMessage
+  const pendingFollowUp = userMessage?.metadata.pendingFollowUp
   const turnPlan = useMemo(
     () => (streamingPart ? replacePlannedPart(data.plan, streamingPart) : data.plan),
     [data.plan, streamingPart]
@@ -498,6 +499,11 @@ const TranscriptTurn = memo(function TranscriptTurn({
               onOpenReview={onOpenReview}
               onOpenTerminal={onOpenTerminal}
             />
+            {pendingFollowUp === "submitting" || pendingFollowUp === "accepted" ? (
+              <p role="status" className="mt-1 text-right text-xs text-muted-foreground">
+                {pendingFollowUp === "submitting" ? "正在发送" : "等候进入当前回复"}
+              </p>
+            ) : null}
           </ContentEntrance>
         </MessageScrollerItem>
       ) : null}

@@ -25,6 +25,25 @@ describe("Composer attach button", () => {
     Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT")
   })
 
+  it("explains before sending that a full-access follow-up with an attachment will queue", async () => {
+    const onSubmit = vi.fn()
+    const props = {
+      id: "attachment-follow-up", draft: emptyComposerDocument, running: true, followUpRunId: "run",
+      sending: false, canSubmit: true, models: [], selectedModel: null, selectedProvider: null,
+      modelLabel: "模型", permissionMode: "full_access" as const, effort: null,
+      attachments: [{ draftId: "file", taskId: "upload", displayName: "说明.txt",
+        declaredMediaType: "text/plain", sizeBytes: 123, bytesUploaded: 123, progress: 1,
+        status: "ready" as const, assetId: "asset", mediaType: "text/plain" }],
+      onDraftChange: vi.fn(), onSubmit, onSelectModel: vi.fn(), onSelectPermissionMode: vi.fn(), onSelectEffort: vi.fn(),
+    }
+    await act(async () => root.render(createElement(Composer, props)))
+    expect(container.querySelector('[aria-label="本条消息的发送方式"]')).toBeNull()
+    expect(container.textContent).toContain("附件需要排队发送")
+    expect(onSubmit).not.toHaveBeenCalled()
+    await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="发送"]')!.click())
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith("queue")
+  })
+
   it("blocks submit from restored preparation state and keeps text when attachment reading fails", async () => {
     const onSubmit = vi.fn(), onDraftChange = vi.fn()
     const props = {

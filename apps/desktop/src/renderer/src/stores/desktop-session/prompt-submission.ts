@@ -11,6 +11,7 @@ import {
 } from "./operation-state"
 import {
   FOLLOW_UP_TARGET_UNAVAILABLE,
+  isTranscriptFollowUp,
   removePendingPromptSubmission,
   updatePendingPromptSubmission,
 } from "./pending-prompt-state"
@@ -156,7 +157,8 @@ export function settlePromptSubmission(
         error === undefined
           ? acknowledgeOperation(next, pending.id, Date.now())
           : removeOperation(next, pending.id)
-      if (state.activeSessionId !== pending.sessionId)
+      // Auxiliary streams also reconcile direct follow-ups with the final transcript message.
+      if (state.activeSessionId !== pending.sessionId && !isTranscriptFollowUp(pending))
         next = removeOperation(
           {
             ...next,

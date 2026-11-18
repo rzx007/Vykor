@@ -75,6 +75,26 @@ describe("prompt actions session runtime", () => {
     vi.unstubAllGlobals()
   })
 
+  it.each(["full_access", "ask"] as const)("binds a main-chat follow-up in %s mode to its selected Run", async (mode) => {
+    const sendPrompt = vi.fn(async (_input: SendDesktopPromptInput) => undefined)
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
+    useDesktopSessionStore.setState({
+      activeSessionId: "main",
+      sessionView: viewWithActiveRun("main", "active-run"),
+      selectedPermissionMode: mode,
+    })
+
+    await useDesktopSessionStore.getState().sendMessage("follow-up", {
+      delivery: "steer", expectedActiveRunId: "active-run",
+    })
+
+    const request = sendPrompt.mock.calls[0]![0]
+    expect(request).toMatchObject({ sessionId: "main", delivery: "steer", expectedActiveRunId: "active-run" })
+    expect(sessionRuntime("main").pendingPromptSubmissions[request.id]).toMatchObject({
+      phase: "accepted", placement: mode === "full_access" ? "transcript" : "queue",
+    })
+  })
+
   it.each(["accepted", "rejected"])("does not recreate a destroyed runtime when a pending send is later %s", async (result) => {
     let finish!: () => void
     vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt: () => new Promise<void>((resolve, reject) => {

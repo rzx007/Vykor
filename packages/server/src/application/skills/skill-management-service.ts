@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile, realpath, stat, unlink } from "node:fs/promises";
+import { mkdir, readFile, realpath, stat, unlink } from "node:fs/promises";
 import {
   basename,
   dirname,
@@ -10,6 +10,9 @@ import {
   sep,
 } from "node:path";
 import { getSkillsDir } from "@vykor/host-config";
+import { isHiddenManagedProjectPath } from "@vykor/host-config/paths";
+import type { MarketplaceRequest } from "@vykor/plugin-sources";
+import type { SkillMarketplaceInstallInput } from "@vykor/domain-contracts/skills";
 import {
   createBundledSkills,
   SkillLoader,
@@ -17,12 +20,23 @@ import {
   standardUserSkillDirs,
 } from "@vykor/skills";
 import type {
+  PreparedSkillMarketplaceInstall,
   SkillInfo,
   SkillProject,
   SkillService,
   SkillSnapshot,
   SkillSource,
 } from "../settings-api.js";
+import {
+  cleanupMarketplaceStage,
+  commitMarketplaceSkill,
+  ensureSkillRoot,
+  listSkillMarketplace,
+  needsMarketplaceArchive,
+  readInstalledMarketplaceSkill,
+  stageMarketplaceSkill,
+  uninstallMarketplaceSkill,
+} from "./skill-marketplace.js";
 
 interface ProjectCatalog {
   list(): Array<{ name: string; path: string }>;
@@ -38,6 +52,7 @@ export interface SkillManagementServiceOptions {
   configDir?: string;
   standardSkillsDirs?: readonly string[];
   bundledSkills?: readonly SkillFixture[];
+  marketplaceRequest?: MarketplaceRequest;
 }
 interface ValidProject {
   info: SkillProject;
@@ -99,6 +114,66 @@ export class SkillManagementService implements SkillService {
     return { skills, projects: projects.map(({ info }) => info), warnings };
   }
 
+  async listMarketplace() {
+    return listSkillMarketplace(this.options.marketplaceRequest);
+  }
+
+  async prepareMarketplaceInstall(input: SkillMarketplaceInstallInput): Promise<PreparedSkillMarketplaceInstall> {
+    const catalog = await this.listMarketplace();
+    const skill = catalog.find((entry) => entry.id === input.id
+      && entry.version === input.version && entry.artifact.sha256 === input.sha256);
+    if (!skill) throw new Error("技能市场条目已变化，请刷新后重试。");
+
+    const root = await this.marketplaceRoot(input);
+    await this.assertNoMarketplaceCollision(root, skill.name);
+    const revalidateRoot = () => this.marketplaceRoot(input, root);
+    const staging = await needsMarketplaceArchive(root, skill)
+      ? await stageMarketplaceSkill(skill, revalidateRoot, this.options.marketplaceRequest)
+      : undefined;
+    return {
+      commit: async () => {
+        await revalidateRoot();
+        await this.assertNoMarketplaceCollision(root, skill.name);
+        return commitMarketplaceSkill(root, skill, staging);
+      },
+      cleanup: () => cleanupMarketplaceStage(staging),
+    };
+  }
+
+  private async marketplaceRoot(input: SkillMarketplaceInstallInput, expected?: string): Promise<string> {
+    let owner: string;
+    let parts: string[];
+    if (input.scope === "project") {
+      if (!isAbsolute(input.projectPath)) throw new Error("请选择已登记的项目。");
+      const path = await realpath(input.projectPath).catch(() => undefined);
+      const projects = await validProjects(this.options.projects.list(), []);
+      const project = path && projects.find((item) => key(path) === key(item.root));
+      const config = await realpath(this.configDir).catch(() => this.configDir);
+      if (!project || isHiddenManagedProjectPath(project.root, this.configDir)
+        || key(join(project.root, ".vykor")) === key(config)) {
+        throw new Error("当前项目不可安装技能，请选择已登记的项目。");
+      }
+      owner = project.root;
+      parts = [".vykor", "skills"];
+    } else {
+      await mkdir(this.configDir, { recursive: true });
+      owner = await realpath(this.configDir);
+      parts = ["skills"];
+    }
+    if (expected && key(join(owner, ...parts)) !== key(expected)) {
+      throw new Error("技能安装目录已变化，请重新选择安装范围。");
+    }
+    return ensureSkillRoot(owner, parts);
+  }
+
+  private async assertNoMarketplaceCollision(root: string, name: string): Promise<void> {
+    const installed = await new SkillLoader(new SkillRegistry()).loadFromDirectory(root, { recursive: true });
+    if (installed.some((item) => item.name.toLowerCase() === name
+      && key(item.path) !== key(join(root, name, "SKILL.md")))) {
+      throw new Error("所选范围已存在同名技能，请先处理现有文件。");
+    }
+  }
+
   async remove(input: {
     id: string;
     expectedContent: string;
@@ -116,7 +191,16 @@ export class SkillManagementService implements SkillService {
     const current = await readFile(target, "utf8");
     if (current !== input.expectedContent)
       throw new Error("技能已在其他位置修改，请刷新后重试。");
-    await unlink(target);
+    if (item.marketplace) {
+      const directory = dirname(target);
+      const record = await readInstalledMarketplaceSkill(directory);
+      if (!record || record.sha256 !== item.marketplace.sha256) {
+        throw new Error("技能来源记录已改变，请刷新后重试。");
+      }
+      await uninstallMarketplaceSkill(directory, record);
+    } else {
+      await unlink(target);
+    }
     return await this.list();
   }
 
@@ -154,7 +238,14 @@ export class SkillManagementService implements SkillService {
         const path = await realpath(skill.path);
         if (seen.has(key(path))) continue;
         seen.add(key(path));
-        output.push(desktopSkill({ ...skill, path }, source, project?.info));
+        const item = desktopSkill({ ...skill, path }, source, project?.info);
+        if ((source === "project" || source === "personal")
+          && basename(path) === "SKILL.md" && dirname(dirname(path)) === await realpath(directory)
+          && key(skill.path) === key(join(directory, basename(dirname(path)), "SKILL.md"))) {
+          const record = await readInstalledMarketplaceSkill(dirname(path));
+          if (record) item.marketplace = { id: record.id, version: record.version, sha256: record.sha256 };
+        }
+        output.push(item);
       } catch {
         warnings.push(`无法读取技能文件：${skill.path}`);
       }

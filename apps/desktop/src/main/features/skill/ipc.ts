@@ -1,5 +1,6 @@
 import { IpcChannels } from "../../../shared/ipc-channels"
 import type {
+  DesktopSkillMarketplaceInstallInput,
   DesktopSkillRemoveInput,
   DesktopSkillSnapshotInput,
 } from "../../../shared/skill-types"
@@ -10,6 +11,15 @@ export const skillIpcContribution: IpcContribution = {
   id: "skill",
   register() {
     return [
+      {
+        channel: IpcChannels.skillMarketplace,
+        handler: () => desktopSkillService.marketplace(),
+      },
+      {
+        channel: IpcChannels.skillMarketplaceInstall,
+        handler: (_event, input) =>
+          desktopSkillService.installMarketplace(input as DesktopSkillMarketplaceInstallInput),
+      },
       {
         channel: IpcChannels.skillSnapshot,
         handler: (_event, input) =>
