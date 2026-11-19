@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { DesktopProviderInfo } from "@shared/provider-types"
 vi.mock("../provider-brand-icons", () => ({ resolveProviderBrandIcon: () => undefined }))
-import { ProviderListCard } from "../provider-settings-list"
+import { ProviderList } from "../provider-settings-list"
 
 const provider: DesktopProviderInfo = {
   name: "test",
@@ -36,18 +36,20 @@ describe("beUI provider overflow actions", () => {
     container.remove()
     vi.unstubAllGlobals()
   })
-  const render = (busyProvider: string | null = null) =>
+  const render = (
+    busyProvider: string | null = null,
+    availableProviders: DesktopProviderInfo[] = []
+  ) =>
     act(async () =>
       root.render(
-        <ProviderListCard
+        <ProviderList
           connectedProviders={[provider]}
-          availableProviders={[]}
+          availableProviders={availableProviders}
           additionalProviderCount={0}
           busyProvider={busyProvider}
           onShowMore={vi.fn()}
           onConnect={onConnect}
           onDisconnect={vi.fn()}
-          onAddCustom={vi.fn()}
           onEditCustom={onEditCustom}
           onRemoveCustom={onRemoveCustom}
           verified={{}}
@@ -57,6 +59,26 @@ describe("beUI provider overflow actions", () => {
     )
   const action = (label: string) =>
     container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)
+  it("groups available providers and shows when the default connection is unavailable", async () => {
+    const available = {
+      ...provider,
+      name: "other",
+      displayName: "Other Service",
+      connected: false,
+      active: true,
+      custom: false,
+      credentialSource: "none" as const,
+    }
+    await render(null, [available])
+    expect(container.querySelector('section[aria-label="已配置"]')?.textContent).toContain(
+      "Test Service"
+    )
+    expect(container.querySelector('section[aria-label="可连接"]')?.textContent).toContain(
+      "默认连接"
+    )
+    await act(async () => action("连接 Other Service")!.click())
+    expect(onConnect).toHaveBeenCalledWith(available)
+  })
   it("keeps testing and credential updates visible while hiding edit and delete", async () => {
     await render()
     expect(action("测试 Test Service 连接")).not.toBeNull()

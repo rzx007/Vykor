@@ -24,6 +24,7 @@ export function FieldHelp({ children, label }: FieldHelpProps): React.JSX.Elemen
             type="button"
             variant="ghost"
             size="icon-sm"
+            shape="circle"
             className="text-muted-foreground"
             aria-label={label}
             aria-describedby={descriptionId}
