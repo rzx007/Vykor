@@ -6,4 +6,5 @@
 
 早期研究文件保留在 `docs/` 原路径，统一从[文档目录的历史资料部分](../README.md#决策阶段记录和历史资料)进入。新增研究放在本目录；当前产品行为从[文档目录](../README.md)查阅。
 
+- [OMP 能力调研与 Vykor 讨论清单](./2026-11-17-omp-capabilities-for-vykor.md) 收录代码理解与编辑、联网与电脑操作、开发工作流和长任务体验的 18 个独立议题。
 - [子代理与工作流生命周期调研及架构改进建议](./2026-10-27-agent-task-lifecycle-comparison.md)：对照 Codex、ZCode、Synara、OpenCode 和 MiniMax Code，保留固定版本源码证据；后续明确推荐见[共同执行核心方案](../superpowers/specs/2026-10-27-shared-execution-core-design.md)和[实施计划](../superpowers/plans/2026-10-27-shared-execution-core.md)。
