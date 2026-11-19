@@ -18,4 +18,5 @@
 
 ## 待实施任务
 
+- [Agent 浏览器操作与可重跑流程](./plans/2026-11-17-browser-agent-and-replay.md)复用桌面浏览器和权限，实现从项目聊天走通、保存和重跑，并归档每次结果。
 - [运行中补充设计说明](./specs/2026-11-10-running-follow-up-design.md)与[六项实施计划](./plans/2026-11-10-running-follow-up.md)：按 Ponytail 审核删去重复状态、强制协议升级和偏好持久化；保留三个前置修复、两入口接线及全部 17 项验收场景，实施和验证结果见[验收记录](./reviews/2026-11-16-running-follow-up.md)。
