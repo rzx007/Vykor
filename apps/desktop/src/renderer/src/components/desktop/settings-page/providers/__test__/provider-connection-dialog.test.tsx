@@ -82,12 +82,47 @@ describe("ProviderConnectionDialog", () => {
 
   it("allows an existing catalog connection to update headers without resubmitting its API key", async () => {
     const onSubmit = vi.fn()
-    await renderDialog({ provider: { ...catalogProvider, connected: true, headers: { "X-Session": "old" } }, onSubmit })
-    await act(async () => { findButton("高级选项")?.dispatchEvent(new MouseEvent("click", { bubbles: true })) })
-    await act(async () => { setInputValue(document.querySelector<HTMLInputElement>('input[aria-label="请求头 1 值"]')!, "new") })
+    await renderDialog({
+      provider: { ...catalogProvider, connected: true, headers: { "X-Session": "old" } },
+      onSubmit,
+    })
+    await act(async () => {
+      findButton("高级选项")?.dispatchEvent(new MouseEvent("click", { bubbles: true }))
+    })
+    await act(async () => {
+      setInputValue(
+        document.querySelector<HTMLInputElement>('input[aria-label="请求头 1 值"]')!,
+        "new"
+      )
+    })
     expect(findButton("保存请求头")?.disabled).toBe(false)
-    await act(async () => { document.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })) })
+    expect(document.body.textContent).not.toContain("可能产生费用")
+    await act(async () => {
+      document
+        .querySelector("form")
+        ?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    })
     expect(onSubmit).toHaveBeenCalledWith({ apiKey: "", headers: { "X-Session": "new" } })
+  })
+
+  it("masks an existing key until replacement and warns only for a new key", async () => {
+    const onSubmit = vi.fn()
+    await renderDialog({
+      provider: { ...builtinProvider, connected: true, credentialSource: "credentials" },
+      onSubmit,
+    })
+    const input = document.querySelector<HTMLInputElement>("#provider-api-key")!
+    expect(input.value).toBe("••••••••••••")
+    expect(input.readOnly).toBe(true)
+    expect(document.body.textContent).not.toContain("可能产生费用")
+    await act(async () => findButton("更换")?.click())
+    expect(input.value).toBe("")
+    expect(document.activeElement).toBe(input)
+    expect(document.body.textContent).not.toContain("可能产生费用")
+    await act(async () => setInputValue(input, " sk-new "))
+    expect(document.body.textContent).toContain("可能产生费用")
+    await act(async () => findButton("连接")?.click())
+    expect(onSubmit).toHaveBeenCalledWith({ apiKey: "sk-new" })
   })
 
   it("uses headersDirty three-state semantics for catalog reconnect", async () => {

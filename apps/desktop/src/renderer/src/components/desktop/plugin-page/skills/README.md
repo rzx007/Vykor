@@ -13,6 +13,7 @@ Skill 列表、详情、导出与官方技能市场。「浏览市场」与「�
 - [skill-manager.tsx](skill-manager.tsx)
 - [skill-marketplace.tsx](skill-marketplace.tsx)
 - [skill-detail.tsx](skill-detail.tsx)
+- [skill-quick-start.ts](skill-quick-start.ts) 校验技能在项目中可用，再把引用放进新对话草稿。
 - [skill-controls.tsx](skill-controls.tsx)
 
 ## 维护约定

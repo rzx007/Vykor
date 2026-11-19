@@ -13,6 +13,8 @@
 - [provider-settings.tsx](provider-settings.tsx)
 - [provider-settings-list.tsx](provider-settings-list.tsx)
 - [provider-connection-dialog.tsx](provider-connection-dialog.tsx)
+- [custom-provider-dialog.tsx](custom-provider-dialog.tsx)：添加和编辑供应商。先填写连接信息，再添加模型及可选请求头。已声明的模型参数在重新打开时展开。
+- [provider-dialog-form.tsx](provider-dialog-form.tsx)：两个连接表单共用的滚动布局、保存栏与密钥输入。已保存的密钥显示固定掩码，只有输入新值才提示验证费用。
 - [provider-defaults-control.tsx](provider-defaults-control.tsx)：默认模型入口。首次读取后，供应商、模型和思考方式的选择会自动保存，只影响新对话。
 
 ## 默认模型布局

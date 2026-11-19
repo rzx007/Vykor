@@ -6,8 +6,9 @@
 
 ## 当前计划入口
 
-- [Daemon 公开 Agent 契约与应用客户端退役](./2026-11-19-daemon-public-client-convergence.md)：逐项迁移公开调用、后台管理和桌面便签，定义六批实施关口与删包条件。
-- [用户数据根统一与迁移](./2026-11-12-data-root-unification.md)：十二项待实施任务；包含路径、业务内容、旧布局与绝对路径迁移、恢复和二十八项验收。
+- [Daemon 公开 Agent 契约与应用客户端退役](./2026-11-19-daemon-public-client-convergence.md)记录公开调用、后台管理和桌面便签的迁移、旧包退役及 Windows 覆盖升级验收。
+- [Agent 浏览器操作与可重跑流程](./2026-11-17-browser-agent-and-replay.md)涵盖浏览器操作、聊天保存和重跑、工作流证据和桌面验收。
+- [用户数据根统一与迁移](./2026-11-12-data-root-unification.md)：已实现路径、业务内容、旧布局和绝对引用迁移及恢复；自动回归已收口，二十八项验收的实际平台限制见[验收记录](../../data-root-verification.md)。
 - [运行中补充](./2026-11-10-running-follow-up.md)：六项待实施任务；状态按计划正文阅读。
 
 ## 使用流程与状态归属

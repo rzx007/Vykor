@@ -14,6 +14,7 @@ export interface SkillManagerProps {
   refreshRequest: number
   projectPath: string
   notify: (message: string) => void
+  onTry?: (skill: DesktopSkillInfo) => Promise<void>
 }
 
 type SkillCategory =
@@ -26,6 +27,7 @@ export function SkillManager({
   refreshRequest,
   projectPath,
   notify,
+  onTry,
 }: SkillManagerProps): React.JSX.Element {
   const api = window.desktop.skills
   const [snapshot, setSnapshot] = useState<DesktopSkillSnapshot | null>(null)
@@ -246,6 +248,7 @@ export function SkillManager({
                 )
               }
               notify={notify}
+              onTry={onTry}
               onClose={() => setSelectedId(null)}
               {...(!selected.readOnly ? { onRemove: () => remove(selected) } : {})}
             />

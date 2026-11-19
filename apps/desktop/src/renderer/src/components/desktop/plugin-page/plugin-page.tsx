@@ -26,7 +26,9 @@ import { PluginManager } from "./plugins/plugin-manager"
 import { SkillManager } from "./skills/skill-manager"
 import { McpManager } from "./mcp/mcp-manager"
 import { preparePluginConversation } from "./plugins/plugin-quick-start"
+import { prepareSkillConversation } from "./skills/skill-quick-start"
 import type { DesktopPluginInfo } from "@shared/plugin-types"
+import type { DesktopSkillInfo } from "@shared/skill-types"
 
 type ExtensionTab = "plugins" | "skills" | "mcp"
 const sections = {
@@ -58,6 +60,11 @@ function ExtensionManagement({ projectPath }: { projectPath: string }): React.JS
 
   async function usePlugin(plugin: DesktopPluginInfo, prompt: string): Promise<void> {
     await preparePluginConversation(plugin, prompt, useDesktopSessionStore.getState)
+    await navigate({ to: "/" })
+  }
+
+  async function trySkill(skill: DesktopSkillInfo): Promise<void> {
+    await prepareSkillConversation(skill, useDesktopSessionStore.getState, window.desktop.sessions.listCommands)
     await navigate({ to: "/" })
   }
 
@@ -198,6 +205,7 @@ function ExtensionManagement({ projectPath }: { projectPath: string }): React.JS
                 query={queries.skills}
                 refreshRequest={refreshRequests.skills}
                 notify={setMessage}
+                onTry={trySkill}
               />
             </TabsContent>
             <TabsContent value="mcp" keepMounted className="mt-0">

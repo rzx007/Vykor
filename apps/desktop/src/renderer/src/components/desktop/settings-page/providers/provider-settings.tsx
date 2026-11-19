@@ -1,4 +1,4 @@
-import { RefreshCw } from "lucide-react"
+import { Plus, RefreshCw } from "lucide-react"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import {
@@ -38,7 +38,7 @@ import {
 import { CustomProviderDialog } from "./custom-provider-dialog"
 import {
   MoreProvidersDialog,
-  ProviderListCard,
+  ProviderList,
   providerDisplayName,
 } from "./provider-settings-list"
 
@@ -348,12 +348,24 @@ export function ProviderSettings(): React.JSX.Element {
         onChanged={load}
       />
       <section className="flex flex-col gap-4" aria-labelledby="provider-heading">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <h2 id="provider-heading" className="font-heading text-base tracking-tight">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <h2 id="provider-heading" className="font-heading text-[0.9375rem] font-semibold">
               模型连接
             </h2>
-            <p className="text-xs leading-5 text-muted-foreground">接入你常用的模型服务。</p>
+            <Button
+              type="button"
+              variant="outline"
+              shape="pill"
+              disabled={busyProvider !== null}
+              onClick={() => {
+                setCustomEditTarget(null)
+                setCustomDialogOpen(true)
+              }}
+            >
+              <Plus data-icon="inline-start" />
+              添加自定义供应商
+            </Button>
           </div>
           <Tooltip>
             <TooltipTrigger
@@ -361,7 +373,8 @@ export function ProviderSettings(): React.JSX.Element {
                 <Button
                   type="button"
                   variant="ghost"
-                  size="icon-sm"
+                  size="icon"
+                  shape="circle"
                   aria-label="重新检测供应商"
                   disabled={loading}
                   onClick={() => void load()}
@@ -373,7 +386,7 @@ export function ProviderSettings(): React.JSX.Element {
             <TooltipContent>重新检测供应商</TooltipContent>
           </Tooltip>
         </div>
-        <ProviderListCard
+        <ProviderList
           connectedProviders={connectedProviders}
           availableProviders={visibleAvailableProviders}
           additionalProviderCount={additionalAvailableProviders.length}
@@ -388,10 +401,6 @@ export function ProviderSettings(): React.JSX.Element {
           onTest={(provider) => {
             setTestTarget(provider)
             setTestModel(provider.models[0]?.id ?? "")
-          }}
-          onAddCustom={() => {
-            setCustomEditTarget(null)
-            setCustomDialogOpen(true)
           }}
           onEditCustom={(provider) => {
             setCustomEditTarget(provider)
@@ -542,12 +551,17 @@ export function ProviderSettings(): React.JSX.Element {
 
 function ProviderSettingsSkeleton(): React.JSX.Element {
   return (
-    <div className="flex flex-col gap-8" aria-label="正在加载供应商">
-      <div className="flex flex-col gap-3">
-        <Skeleton className="h-5 w-24" />
-        <Skeleton className="h-4 w-80" />
+    <div className="flex flex-col gap-4" aria-label="正在加载供应商">
+      <div className="flex items-center gap-3">
+        <Skeleton className="h-5 w-20" />
+        <Skeleton className="h-8 w-36 rounded-full" />
       </div>
-      <Skeleton className="h-96 w-full rounded-xl" />
+      {[0, 1, 2].map((row) => (
+        <div key={row} className="flex items-center gap-3 border-t border-border/70 py-3">
+          <Skeleton className="size-8 rounded-lg" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+      ))}
     </div>
   )
 }
