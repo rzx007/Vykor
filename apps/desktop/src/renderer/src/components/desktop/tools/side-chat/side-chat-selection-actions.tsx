@@ -91,7 +91,7 @@ export function SideChatSelectionActions({
         align="start"
         initialFocus={false}
         finalFocus={false}
-        className="w-auto max-w-[calc(100vw-24px)] flex-row flex-wrap items-center gap-0.5 rounded-2xl p-1.5"
+        className="w-auto max-w-[calc(100vw-24px)] flex-row flex-wrap items-center gap-0.5 rounded-2xl bg-popover/60 p-1.5 backdrop-blur-xl"
       >
         <Button
           type="button"
