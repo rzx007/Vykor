@@ -11,6 +11,7 @@ import {
   Sparkles,
 } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
+import { cn } from "@renderer/lib/utils"
 import {
   Dialog,
   DialogContent,
@@ -20,7 +21,13 @@ import {
   DialogTitle,
 } from "@renderer/components/ui/dialog"
 
-export function SkillIcon({ name }: { name: string }): React.JSX.Element {
+export function SkillIcon({
+  name,
+  className,
+}: {
+  name: string
+  className?: string
+}): React.JSX.Element {
   const Icon =
     {
       "code-review": GitPullRequest,
@@ -38,7 +45,10 @@ export function SkillIcon({ name }: { name: string }): React.JSX.Element {
     }[name] ?? Sparkles
   return (
     <span
-      className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground"
+      className={cn(
+        "flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground",
+        className
+      )}
       aria-hidden="true"
     >
       <Icon className="size-5" />

@@ -105,6 +105,9 @@ const api = {
   installMarketplace: vi.fn(async () => filteredSnapshot()),
 }
 const restartDaemon = vi.fn(async () => {})
+const openExternal = vi.fn(async () => {})
+const revealPath = vi.fn(async () => {})
+const trySkill = vi.fn(async () => {})
 const actEnvironment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 
 async function render(): Promise<void> {
@@ -183,7 +186,12 @@ beforeEach(() => {
   }))
   Object.defineProperty(window, "desktop", {
     configurable: true,
-    value: { skills: api, maintenance: { restart: restartDaemon } },
+    value: {
+      skills: api,
+      maintenance: { restart: restartDaemon },
+      window: { openExternal },
+      workspace: { revealPath },
+    },
   })
   vi.clearAllMocks()
   api.snapshot.mockImplementation(async () => filteredSnapshot())
@@ -196,6 +204,7 @@ beforeEach(() => {
     refreshRequest: 0,
     projectPath: "D:/Vykor",
     notify: vi.fn(),
+    onTry: trySkill,
   }
 })
 afterEach(() => {
@@ -206,6 +215,38 @@ afterEach(() => {
 })
 
 describe("SkillManager filesystem management", () => {
+  it("opens the installed entry, reveals its location and starts a trial from the detail", async () => {
+    await render()
+    await click(host.querySelector('[aria-label*="release"]'))
+    const detail = document.querySelector('[role="dialog"]')!
+    expect(detail.querySelector('[aria-label="release 技能说明"]')?.textContent).toContain(
+      "# Release"
+    )
+    const more = detail.querySelector('[aria-label="release 更多操作"]')
+    await click(more)
+    await click(
+      [...document.querySelectorAll('[role="menuitem"]')].find(
+        (item) => item.textContent === "打开"
+      )
+    )
+    expect(openExternal).toHaveBeenCalledWith("file:///D:/Client/.vykor/skills/release/SKILL.md")
+    await click(more)
+    await click(
+      [...document.querySelectorAll('[role="menuitem"]')].find(
+        (item) => item.textContent === "在文件资源管理器中显示"
+      )
+    )
+    expect(revealPath).toHaveBeenCalledWith({
+      rootPath: "D:/Client/.vykor/skills/release/",
+      path: "SKILL.md",
+    })
+    await click(
+      [...detail.querySelectorAll("button")].find((item) => item.textContent === "立即试用")
+    )
+    expect(trySkill).toHaveBeenCalledWith(snapshot.skills[2])
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+  })
+
   it("loads all real sources and offers standard separately from personal", async () => {
     await render()
     expect(api.snapshot).toHaveBeenCalledWith({ projectPath: "D:/Vykor" })
