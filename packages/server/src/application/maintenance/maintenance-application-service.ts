@@ -510,6 +510,7 @@ export function createMaintenanceApplicationService(
           destination: string;
           includeMemory?: boolean;
           includeOutput?: boolean;
+          recordAudit?: boolean;
         };
         assertPath(context.store.path);
         assertPath(input.destination);
@@ -609,28 +610,20 @@ export function createMaintenanceApplicationService(
         });
         verifyApplicationBackup(destination);
         const bytes = backupBytes(destination);
-        const history = join(getDataDir(), "backup-audits");
-        mkdirSync(history, { recursive: true });
-        writeFileSync(
-          join(history, `${manifest.backupId}.json`),
-          JSON.stringify(
-            {
-              version: 1,
-              path: destination,
-              createdAt: manifest.createdAt,
-              bytes,
-              manifest,
-            },
-            null,
-            2,
-          ),
-          { mode: 0o600 },
-        );
+        if (input.recordAudit !== false) {
+          const history = join(getDataDir(), "backup-audits");
+          mkdirSync(history, { recursive: true });
+          writeFileSync(
+            join(history, `${manifest.backupId}.json`),
+            JSON.stringify({ version: 1, path: destination, createdAt: manifest.createdAt, bytes, manifest }, null, 2),
+            { mode: 0o600 },
+          );
+        }
         return {
           path: destination,
           manifest,
           totalBytes: bytes,
-          excludes: ["供应商及渠道凭据", "用户指令与机密设置"],
+          excludes: ["供应商及渠道凭据", "用户指令与机密设置", "桌面便签"],
           settingsExcluded: false,
         };
       } catch (error) {

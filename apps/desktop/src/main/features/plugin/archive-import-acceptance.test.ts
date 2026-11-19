@@ -11,7 +11,8 @@ vi.mock("electron", () => ({
   dialog: { showOpenDialog: vi.fn() },
 }))
 
-import { VykorClient } from "@vykor/application-client"
+import { HttpTransport } from "@rzx/client"
+import { DesktopPluginResource } from "./desktop-plugin-resource"
 import {
   discoverInstalledNativePlugins,
   loadNativePlugin,
@@ -129,13 +130,13 @@ function createDesktopService(archivePath: string): DesktopPluginService {
       queryExecutionObservations: () => { throw new Error("Execution observations are outside this archive test") },
     },
   }))
-  const client = new VykorClient({
+  const transport = new HttpTransport({
     baseUrl: "http://desktop-archive.test",
     fetch: async (input, init) => await routes.request(input, init),
   })
   return new DesktopPluginService({
     chooseArchive: async () => archivePath,
-    daemonClient: async () => client,
+    daemonClient: async () => ({ plugins: new DesktopPluginResource(transport) }),
   })
 }
 

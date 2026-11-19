@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { getLogsDir } from "@vykor/host-config";
 import { setTimeout as delay } from "node:timers/promises";
-import { Service } from "@vykor/application-client/service";
+import { Service } from "@rzx/client/service";
 import {
   daemonPidAlive,
   getDaemonRegistryPath,

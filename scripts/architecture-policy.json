@@ -2,6 +2,9 @@
   "$schema": "./architecture-policy.schema.json",
   "version": 1,
   "currentPhase": "P13",
+  "retiredWorkspaces": [
+    { "name": "@vykor/application-client", "directory": "packages/application-client" }
+  ],
   "packages": {
     "@vykor/agent-contracts": {
       "directory": "packages/agent-contracts",
@@ -392,24 +395,12 @@
       "removeByPhase": "P10",
       "migrationId": "M35"
     },
-    "@vykor/application-client": {
-      "directory": "packages/application-client",
-      "allowed": [
-        "@rzx/client",
-        "@vykor/protocol"
-      ],
+    "@vykor/daemon-admin": {
+      "directory": "packages/daemon-admin",
+      "allowed": ["@rzx/client", "@vykor/protocol"],
+      "allowedDeclarationOrigins": ["@rzx/client", "@vykor/protocol", "@vykor/domain-contracts"],
       "removeByPhase": "P6",
-      "migrationId": "M30",
-      "allowedDeclarationOrigins": [
-        "@rzx/client",
-        "@vykor/protocol",
-        "@vykor/agent-contracts",
-        "@vykor/domain-contracts",
-        "@vykor/plugin-contracts",
-        "@vykor/json-data",
-        "@vykor/jobs",
-        "@vykor/terminal"
-      ]
+      "migrationId": "M30"
     }
   },
   "modules": [
@@ -631,8 +622,7 @@
         "packages/output-styles/src/",
         "packages/themes/src/",
         "packages/environment/src/",
-        "packages/mcp/src/",
-        "packages/application-client/src/"
+        "packages/mcp/src/"
       ],
       "symbols": [
         "^(Settings|loadSettings|saveSettings|loadProjectSettings|saveProjectSettings|updateSettings|withSettingsFileLock|getConfigDir|getConfigFilePath|resolvePaths|getDataDir|getLogsDir|getSessionsDir|getTasksDir|getPluginsDir|getPluginCacheDir|getPluginDataDir|getPluginSourcesDir|getInstalledPluginStorePath|getSkillsDir|getMemoryDir|getProjectMemoryDir|getFeedbackDir|getCredentialsFilePath|getMcpOAuthFilePath|getChannelCredentialsFilePath|getProjectConfigDir|getProjectSettingsFilePath)$"

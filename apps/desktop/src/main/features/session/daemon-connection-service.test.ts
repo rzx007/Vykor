@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { ServiceEndpoint } from "@vykor/application-client/service"
+import type { ServiceEndpoint } from "@rzx/client/service"
 
 const sdk = vi.hoisted(() => ({
   discover: vi.fn(),
@@ -20,18 +20,22 @@ const systemService = vi.hoisted(() => ({
   status: () => ({ platform: "win32", state: "running", detail: "ready" }),
   start: vi.fn(),
 }))
-const state = vi.hoisted(() => ({ browserBridge: 1 }))
+const state = vi.hoisted(() => ({ capabilities: vi.fn(), transportCreated: vi.fn() }))
 vi.mock("electron", () => ({
-  app: { isPackaged: true, getPath: () => "D:/test" },
+  app: { isPackaged: true, getPath: () => "D:/test profile" },
   BrowserWindow: { getAllWindows: () => [] },
 }))
-vi.mock("@vykor/application-client/service", () => ({ Service: sdk }))
+vi.mock("@rzx/client/service", () => ({ Service: sdk }))
 vi.mock("@vykor/server/daemon-host", () => host)
 vi.mock("../daemon-autostart/daemon-autostart-service", () => ({ createDesktopDaemonSystemService: () => systemService }))
-vi.mock("@vykor/application-client", () => ({
+vi.mock("@rzx/client", () => ({
   VykorClient: class {
     constructor(readonly options: { baseUrl: string; token: string }) {}
-    protocol = { capabilities: async () => ({ features: { browserBridge: state.browserBridge } }) }
+    protocol = { capabilities: state.capabilities }
+    sessions = { list: async () => [] }
+  },
+  HttpTransport: class {
+    constructor(readonly options: { baseUrl: string; token: string }) { state.transportCreated(options) }
   },
 }))
 
@@ -46,7 +50,7 @@ beforeEach(() => {
   vi.resetAllMocks()
   sdk.ensure.mockResolvedValue(endpoint)
   host.shouldStartManagedDaemon.mockResolvedValue(false)
-  state.browserBridge = 1
+  state.capabilities.mockResolvedValue({ features: { browserBridge: 1 } })
 })
 
 describe("desktop daemon connection", () => {
@@ -56,15 +60,36 @@ describe("desktop daemon connection", () => {
     const service = new DaemonConnectionService()
     await expect(service.getClient()).resolves.toBeDefined()
     await service.dispose()
+    expect(state.transportCreated).not.toHaveBeenCalled()
     expect(sdk.ensure).not.toHaveBeenCalled()
     expect(host.stopDaemonProcess).not.toHaveBeenCalled()
   })
 
-  it("uses the Electron headless entry when no daemon is registered", async () => {
+  it("shares the management transport and rejects an earlier connection after refresh", async () => {
+    sdk.discover.mockResolvedValue(endpoint)
+    const service = new DaemonConnectionService()
+    const client = await service.getClient()
+    const transport = await service.getTransport(client)
+    await expect(service.getTransport()).resolves.toBe(transport)
+    expect(state.transportCreated).toHaveBeenCalledExactlyOnceWith({ baseUrl: endpoint.url, token: endpoint.token })
+
+    const replacement = { ...endpoint, token: "new-token" }
+    sdk.discover.mockResolvedValue(replacement)
+    const next = await service.refreshClient()
+    await expect(service.getTransport(client)).rejects.toThrow(/连接已变化/)
+    await expect(service.getTransport(next)).resolves.not.toBe(transport)
+    expect(state.transportCreated).toHaveBeenLastCalledWith({ baseUrl: replacement.url, token: replacement.token })
+  })
+
+  it("passes the desktop profile to the Windows Electron daemon when no daemon is registered", async () => {
     const service = new DaemonConnectionService()
     await expect(service.getClient()).resolves.toBeDefined()
     expect(sdk.ensure).toHaveBeenCalledWith(expect.objectContaining({
-      command: [process.execPath, "--daemon-on-demand"],
+      command: [
+        process.execPath,
+        "--daemon-on-demand",
+        ...(process.platform === "win32" ? ["--user-data-dir=D:/test profile"] : []),
+      ],
     }))
   })
 
@@ -145,16 +170,63 @@ describe("desktop daemon connection", () => {
     await expect(service.getClient()).resolves.toBeDefined()
   })
 
-  it("reports a missing desktop capability without replacing an existing daemon", async () => {
+  it("reads sessions from a compatible daemon with no browser bridge", async () => {
     sdk.discover.mockResolvedValue(endpoint)
-    state.browserBridge = 0
-    await expect(new DaemonConnectionService().getClient()).rejects.toThrow(/能力/)
+    host.readDaemonRegistry.mockReturnValue({ ...endpoint, launcher: "cli" })
+    host.readRegisteredDataLocation.mockResolvedValue({ directory: "D:/", storePath: endpoint.storePath })
+    state.capabilities.mockResolvedValue({ features: {} })
+    const onConnected = vi.fn()
+    const service = new DaemonConnectionService({ onConnected })
+
+    const client = await service.getClient()
+    await expect(client.sessions.list()).resolves.toEqual([])
+    expect(service.getDaemonStatus().phase).toBe("ready")
+    expect(onConnected).not.toHaveBeenCalled()
+    expect(sdk.ensure).not.toHaveBeenCalled()
     expect(host.stopDaemonProcess).not.toHaveBeenCalled()
+  })
+
+  it("releases the old bridge and starts a new one only for a daemon advertising it", async () => {
+    const headless = { ...endpoint, token: "headless" }
+    const replacement = { ...endpoint, token: "replacement" }
+    sdk.discover.mockResolvedValueOnce(endpoint).mockResolvedValueOnce(headless).mockResolvedValueOnce(replacement)
+    state.capabilities.mockResolvedValueOnce({ features: { browserBridge: 1 } })
+      .mockResolvedValueOnce({ features: {} })
+      .mockResolvedValueOnce({ features: { browserBridge: 1 } })
+    const firstStop = vi.fn()
+    const replacementStop = vi.fn()
+    const onConnected = vi.fn().mockReturnValueOnce(firstStop).mockReturnValueOnce(replacementStop)
+    const service = new DaemonConnectionService({ onConnected })
+
+    await service.getClient()
+    expect(onConnected).toHaveBeenCalledExactlyOnceWith(endpoint)
+    await service.refreshClient()
+    expect(firstStop).toHaveBeenCalledOnce()
+    expect(onConnected).toHaveBeenCalledTimes(1)
+    await service.refreshClient()
+    expect(onConnected).toHaveBeenNthCalledWith(2, replacement)
+    await service.dispose()
+    expect(firstStop).toHaveBeenCalledOnce()
+    expect(replacementStop).toHaveBeenCalledOnce()
+  })
+
+  it("keeps rejecting a daemon when protocol negotiation fails", async () => {
+    sdk.discover.mockResolvedValue(endpoint)
+    const error = new Error("incompatible protocol")
+    state.capabilities.mockRejectedValue(error)
+    const onConnected = vi.fn()
+    const service = new DaemonConnectionService({ onConnected })
+
+    await expect(service.getClient()).rejects.toBe(error)
+    expect(onConnected).not.toHaveBeenCalled()
+    expect(service.getDaemonStatus().phase).toBe("error")
   })
 
   it("reports a legacy data location mismatch instead of opening the wrong database", async () => {
     sdk.discover.mockResolvedValue(endpoint)
     host.readRegisteredDataLocation.mockResolvedValue({ directory: "D:/new", storePath: "D:/new/sessions.db" })
-    await expect(new DaemonConnectionService().getClient()).rejects.toThrow(/数据/)
+    const onConnected = vi.fn()
+    await expect(new DaemonConnectionService({ onConnected }).getClient()).rejects.toThrow(/数据/)
+    expect(onConnected).not.toHaveBeenCalled()
   })
 })

@@ -1,11 +1,11 @@
+import type { DesktopPluginClient } from "./desktop-plugin-resource"
 import { randomUUID } from "node:crypto"
 import { resolve } from "node:path"
 import type {
-  VykorClient,
   MarketplaceSelection,
   MarketplacePreview,
   MarketplaceOperation,
-} from "@vykor/application-client"
+} from "@vykor/protocol"
 import type { WebContents } from "electron"
 import type { DesktopMarketplacePreview } from "../../../shared/plugin-types"
 
@@ -23,7 +23,7 @@ export class MarketplaceService {
   private windows = new Set<number>()
   private operations = new Map<string, { senderId: number; cwd: string }>()
   constructor(
-    private client: () => Promise<VykorClient>,
+    private client: () => Promise<DesktopPluginClient>,
     private now = Date.now,
     private queryClient = client,
   ) {}

@@ -8,6 +8,15 @@ const packageName = (path) => path.startsWith("@") ? path.split("/").slice(0, 2)
 const phaseNumber = (phase) => Number(phase.slice(1));
 const builtins = new Set(builtinModules.map((name) => name.replace(/^node:/, "")));
 const sourceExtension = /\.(?:[cm]?ts|tsx|[cm]?js|jsx)$/;
+const workspaceReferenceExtension = /\.(?:[cm]?[jt]s|[jt]sx|jsonc?|ya?ml|sh|ps1|cmd|bat)$/i;
+const retirementRuleFiles = new Set([
+  "scripts/architecture-policy.json",
+  "scripts/architecture-boundaries.test.mjs",
+  "scripts/retired-native-ui-allowlist.json",
+  "apps/desktop/scripts/verify-workspace-boundaries.mjs",
+  "apps/desktop/scripts/__test__/workspace-boundaries.test.mjs",
+]);
+const literalPattern = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Validate the committed schema without adding a dependency to this Node script. */
 export function validateArchitecturePolicy(policy, schema) {
@@ -46,6 +55,10 @@ export function validateArchitecturePolicy(policy, schema) {
   if (new Set(ids).size !== ids.length) errors.push("Duplicate architecture module rule id");
   const directories = Object.values(policy.packages).map((item) => item.directory);
   if (new Set(directories).size !== directories.length) errors.push("Duplicate architecture package directory");
+  for (const retired of policy.retiredWorkspaces) {
+    if (policy.packages[retired.name] || directories.includes(retired.directory))
+      errors.push(`Retired workspace cannot be in the package policy: ${retired.name}`);
+  }
   for (const [name, item] of Object.entries(policy.packages)) for (const dependency of [...item.allowed, ...(item.allowedDeclarationOrigins ?? [])]) {
     if (!policy.packages[dependency]) errors.push(`${name}: unknown allowed package ${dependency}`);
   }
@@ -204,12 +217,12 @@ function parseModule(source, file) {
   return { dependencies, exports, imported, stars, locals, declarations, typeReferences };
 }
 
-function walkSources(directory) {
+function walkFiles(directory, extension) {
   if (!existsSync(directory)) return [];
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
-    return entry.isDirectory() ? ["node_modules", "dist", ".git", ".turbo"].includes(entry.name) ? [] : walkSources(path)
-      : entry.isFile() && sourceExtension.test(path) ? [path] : [];
+    return entry.isDirectory() ? ["node_modules", "dist", ".git", ".turbo"].includes(entry.name) ? [] : walkFiles(path, extension)
+      : entry.isFile() && extension.test(path) ? [path] : [];
   });
 }
 
@@ -384,7 +397,7 @@ export function collectPolicyViolations(root, policy) {
         add({ fromFile: normalize(relative(root, join(owner.directory, "package.json"))), specifier: name, importedNames: ["manifest"] });
       }
     }
-    for (const file of walkSources(join(owner.directory, "src"))) {
+    for (const file of walkFiles(join(owner.directory, "src"), sourceExtension)) {
       const fromFile = normalize(relative(root, file));
       const traceRules = policy.modules.filter(rule => rule.traceTypes && matchesFrom(rule, fromFile));
       const legacyTrace = policy.modules.some(rule => ["kernel", "route-storage", "storage-hosts"].includes(rule.id) && matchesFrom(rule, fromFile));
@@ -419,11 +432,37 @@ export function collectPolicyViolations(root, policy) {
   return [...violations.values()].sort((a, b) => a.fromFile.localeCompare(b.fromFile) || a.target.localeCompare(b.target));
 }
 
+function collectRetiredWorkspaceErrors(root, retiredWorkspaces) {
+  if (!retiredWorkspaces.length) return [];
+  const references = retiredWorkspaces.map(({ name, directory }) => {
+    const [parent, folder] = directory.split("/").map(literalPattern);
+    const match = new RegExp(`(?:${literalPattern(name)}|${parent}/+${folder}|(?:\\.{1,2}/+)+${folder})(?![\\w.-])`, "i");
+    return { name, directory, match };
+  });
+  const errors = references.filter(({ directory }) => walkFiles(join(root, directory), workspaceReferenceExtension).length > 0)
+    .map(({ name, directory }) => `${directory}: retired workspace files are present (${name})`);
+  const candidates = [
+    ...readdirSync(root, { withFileTypes: true }).filter(entry => entry.isFile() && workspaceReferenceExtension.test(entry.name)).map(entry => join(root, entry.name)),
+    ...["apps", "packages", "tests", "scripts", ".github"].flatMap(parent => walkFiles(join(root, parent), workspaceReferenceExtension)),
+  ];
+  for (const candidate of candidates) {
+    const file = normalize(relative(root, candidate));
+    if (retirementRuleFiles.has(file) || /^apps\/desktop\/(?:out|build)\//.test(file)) continue;
+    const lines = normalize(readFileSync(candidate, "utf8")).split("\n");
+    for (const { name, match } of references) {
+      const line = lines.findIndex(text => match.test(text));
+      if (line >= 0) errors.push(`${file}:${line + 1}: retired workspace reference (${name})`);
+    }
+  }
+  return errors;
+}
+
 export function collectArchitecturePolicyErrors(root, policy = readArchitecturePolicy(root)) {
   const violations = collectPolicyViolations(root, policy);
   const active = new Map(violations.map((item) => [`${item.fromFile}\0${item.target}`, item]));
   const exceptions = new Set(policy.stageExceptions.map((item) => `${item.fromFile}\0${item.target}`));
   const errors = violations.filter((item) => !exceptions.has(`${item.fromFile}\0${item.target}`)).map((item) => item.message);
+  errors.push(...collectRetiredWorkspaceErrors(root, policy.retiredWorkspaces));
   for (const owner of workspacePackages(root)) if (normalize(relative(root, owner.directory)).startsWith("packages/")) {
     if (policy.packages[owner.json.name]?.directory !== normalize(relative(root, owner.directory))) errors.push(`Workspace package missing architecture policy: ${owner.json.name}`);
   }

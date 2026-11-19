@@ -1,4 +1,4 @@
-import type { VykorClient } from "@vykor/application-client"
+import type { PluginAppClient } from "./plugin-app-client"
 import type { AppMountBinding } from "./plugin-app-service"
 
 /** One authenticated stream for the whole owning window, including hidden mounted pages. */
@@ -6,7 +6,7 @@ export class WindowResourceFeed {
   private abort?: AbortController
   private key = ""
   private generation = 0
-  private client?: VykorClient
+  private client?: PluginAppClient
   private readonly reads = new Map<AppMountBinding, Set<string>>()
   constructor(private readonly emit: (mount: AppMountBinding) => void) {}
   read(mount: AppMountBinding, uri: string): void {
@@ -26,7 +26,7 @@ export class WindowResourceFeed {
     const generation = ++this.generation
     if (!client || typeof client.pluginApps.notifications !== "function") return
     const selected = entries.filter(([mount]) => mount.client === client)
-    const watches: Parameters<VykorClient["pluginApps"]["notifications"]>[0] = selected.map(([mount, uris]) => ({
+    const watches: Parameters<PluginAppClient["pluginApps"]["notifications"]>[0] = selected.map(([mount, uris]) => ({
       source: mount.response.source, lease: mount.response.lease!, leaseGeneration: generation, uris: [...uris],
     }))
     const run = async () => {

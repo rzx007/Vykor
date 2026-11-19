@@ -1,10 +1,12 @@
 import type {
   SkillInfo,
-  SkillMarketplaceEntry,
-  SkillMarketplaceInstallInput,
   SkillProject,
   SkillSnapshot,
-} from "@vykor/application-client"
+} from "@rzx/client"
+import type {
+  SkillMarketplaceEntry,
+  SkillMarketplaceInstallInput,
+} from "@vykor/protocol"
 
 export type DesktopSkillInfo = SkillInfo
 export type DesktopSkillProject = SkillProject

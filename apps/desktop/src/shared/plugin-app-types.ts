@@ -1,4 +1,4 @@
-import type { PluginAppActionResponse, PluginAppRecord, PluginAppResponse, PluginAppSource, PluginAppSubmissionReceipt, PluginAppToolPolicy, VykorClient } from "@vykor/application-client"
+import type { PluginAppActionResponse, PluginAppCatalogResponse, PluginAppRecord, PluginAppResponse, PluginAppSource, PluginAppSubmissionReceipt, PluginAppToolPolicy } from "@vykor/protocol"
 export type PluginAppHostState = Omit<PluginAppResponse, "lease"> & { online: boolean }
 export interface PluginAppMount { mountId: string; url: string; state: PluginAppHostState }
 export interface PluginAppPreparedTool { requestId: string; toolName: string; args: Record<string, unknown>; expectedRevision: number; policy?: PluginAppToolPolicy }
@@ -13,7 +13,7 @@ export interface DesktopPluginAppsAPI {
   cancelMessage(input: { mountId: string; requestId: string }): Promise<void>
   updateModelContext(input: { mountId: string; content?: unknown; structuredContent?: unknown }): Promise<PluginAppModelContext>
 
-  catalog(input: { sessionId: string }): ReturnType<VykorClient["pluginApps"]["catalog"]>
+  catalog(input: { sessionId: string }): Promise<PluginAppCatalogResponse>
   open(input: { sessionId: string; pluginId: string; surfaceId: string }): Promise<PluginAppMount>
   openToolResult?(input: { sessionId: string; sourcePartId: string }): Promise<{ mounted: PluginAppMount; initial: { sourcePartId: string; arguments: Record<string, unknown>; result: unknown; dataError?: string } }>
   mount(input: PluginAppSource): Promise<PluginAppMount>

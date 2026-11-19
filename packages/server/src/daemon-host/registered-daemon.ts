@@ -62,7 +62,8 @@ type RegisteredRuntimeOptions = VykorDaemonOptions & {
 
 export interface RegisteredDaemonOptions extends Pick<
   VykorDaemonOptions,
-  "allowedOrigins" | "host" | "outsideProjectWorkspaceRoot" | "channelsWorkspaceRoot" | "port"
+  | "allowedOrigins" | "host" | "outsideProjectWorkspaceRoot" | "channelsWorkspaceRoot" | "port"
+  | "enableDesktopBrowser" | "enableBrowserDeveloper"
 > {
   launcher: "desktop" | "cli";
   version: string;
@@ -230,7 +231,8 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
       storeFileMustExist: fileMustExist,
       version: options.version,
       executionSurface: "desktop_managed",
-      enableDesktopBrowser: true,
+      enableDesktopBrowser: options.enableDesktopBrowser,
+      enableBrowserDeveloper: options.enableBrowserDeveloper,
       ...(options.allowedOrigins ? { allowedOrigins: options.allowedOrigins } : {}),
       ...(options.outsideProjectWorkspaceRoot
         ? { outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot } : {}),

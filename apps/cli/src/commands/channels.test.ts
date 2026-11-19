@@ -11,14 +11,17 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@vykor/server", () => ({
   readDaemonRegistry: mocks.readDaemonRegistry,
 }));
-vi.mock("@vykor/application-client", () => ({
-  VykorClient: class {
-    protocol = { health: mocks.health };
-    channels = {
-      getFeishu: mocks.getFeishu,
-      runtimeStatus: mocks.runtimeStatus,
-      getStatus: mocks.getStatus,
-    };
+vi.mock("@rzx/client", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@rzx/client")>(),
+  ProtocolClient: class {
+    health = mocks.health;
+  },
+}));
+vi.mock("@vykor/daemon-admin/channels", () => ({
+  ChannelResource: class {
+    getFeishu = mocks.getFeishu;
+    runtimeStatus = mocks.runtimeStatus;
+    getStatus = mocks.getStatus;
   },
 }));
 

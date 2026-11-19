@@ -79,7 +79,7 @@
 | 每次实际请求先准入，拒绝零 Provider 调用，结算失败不重试 | [model-attempt-gate.test.ts](../packages/core/src/engine/model/__test__/model-attempt-gate.test.ts) |
 | Goal 按真实 Run 记账，重复与未发出结算保持原规则 | [goal-model-attempt-service.test.ts](../packages/server/src/application/goals/__test__/goal-model-attempt-service.test.ts) |
 | 事件重放不写 Goal 用量，child 归属保留 | [daemon-agent-event-projector.test.ts](../packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts) |
-| 应用 ready、重启释放凭证、事实归属和便签冲突 | [maintenance-restart.test.ts](../packages/server/src/http/__test__/application-maintenance-restart.test.ts)、[facts.routes.test.ts](../packages/server/src/application/personalization/__test__/facts.routes.test.ts)、[notes.test.ts](../packages/server/src/http/routes/__test__/notes.test.ts) |
+| 应用 ready、重启释放凭证、事实归属和旧便签接口退役 | [maintenance-restart.test.ts](../packages/server/src/http/__test__/application-maintenance-restart.test.ts)、[facts.routes.test.ts](../packages/server/src/application/personalization/__test__/facts.routes.test.ts)、[notes-retirement.test.ts](../packages/server/src/http/__test__/notes-retirement.test.ts) |
 
 ### 模型网络重试（2026-09-26）
 
@@ -174,7 +174,7 @@
 | B07 owner 与团队隔离 | [团队树隔离](../packages/agent-runtime/src/node/children/__test__/team-root-isolation.test.ts)、[Workflow 关闭](../packages/agent-runtime/src/node/workflow/__test__/agent-workflow-close.test.ts) | `pnpm test` |
 | B08 请求前准入与零调用拒绝 | [Engine gate](../packages/core/src/engine/model/__test__/model-attempt-gate.test.ts)、[Node gate](../packages/agent-runtime/src/node/runtime/__test__/model-attempt-gate.test.ts) | `pnpm test` |
 | B09 用量、重复与恢复 | [Goal 准入结算](../packages/server/src/application/goals/__test__/goal-model-attempt-service.test.ts)、[持久 Goal 用量](../packages/services/src/goals/__test__/goal-usage.test.ts) | `pnpm test` |
-| B10 管理用例与 lease | [维护](../packages/server/src/http/__test__/application-maintenance-restart.test.ts)、[事实](../packages/server/src/application/personalization/__test__/project-facts-service.test.ts)、[便签](../packages/server/src/application/notes/__test__/note-application-service.test.ts) | `pnpm test` |
+| B10 管理用例与 lease | [维护](../packages/server/src/http/__test__/application-maintenance-restart.test.ts)、[事实](../packages/server/src/application/personalization/__test__/project-facts-service.test.ts)、[旧便签接口](../packages/server/src/http/__test__/notes-retirement.test.ts)、[本地便签存储](../packages/services/src/notes/__test__/desktop-note-repository.test.ts) | `pnpm test` |
 | B11 SDK 与浏览器 | [独立消费者](../packages/agent-runtime/scripts/verify-pack.mjs)、[浏览器入口](../tests/browser-client/vite.config.ts) | `pnpm --filter @vykor/agent-runtime test:pack`、`pnpm test:client-browser` |
 
 ## 常用命令
@@ -202,7 +202,8 @@ P7–P13 实现与集中验收完成，当前策略的 `stageExceptions` 为零�
 | 插件 HTTP 按结构化错误分类，拒绝输入不受文案和 Runtime bundle 影响，保持接纳与运行错误语义 | [HTTP 错误](../packages/server/src/http/routes/__test__/session-plugin-apps.errors.test.ts)、[真实资源入口](../packages/server/src/http/__test__/session-plugin-apps.test.ts)、[插件 parser](../packages/protocol/src/extensions/__test__/plugin-apps.test.ts)、[Native 后端](../packages/agent-runtime/src/node/plugin-apps/__test__/native-plugin-app-backend.test.ts)、[宿主策略](../packages/agent-runtime/src/node/plugin-apps/__test__/plugin-app-policy.test.ts) | 对应文件的定向 Vitest |
 | 领域输入在非 HTTP 入口也验证，附件默认值只有一个来源 | [领域输入](../packages/domain-contracts/src/inputs/__test__/validation.test.ts)、[附件策略](../packages/services/src/attachments/__test__/attachment-policy.test.ts)、[HTTP 转换](../packages/server/src/http/mappers/__test__/boundary.test.ts) | 对应包定向 Vitest |
 | Job/Terminal 数据与宿主分开，owner 与等待/取消行为保持 | [Jobs](../packages/jobs/src/__test__/index.test.ts)、[定点路由](../packages/jobs/src/__test__/routed-agent-job-host.test.ts)、[Terminal](../packages/terminal-node/src/providers/__test__/local-terminal-provider.test.ts) | Jobs 与 terminal-node 的相关文件 |
-| Client 公开集合、辅助函数及浏览器消费保持原行为 | [公开 API](../packages/client/src/__test__/public-api.test.ts)、[类型消费者](../tests/client-public-api/consumer.ts)、[私有应用策略显示](../packages/application-client/src/resources/plugins/__test__/plugin-app-policy.test.ts) | `pnpm check:client-api`、`pnpm test:client-browser` |
+| Client 公开集合、辅助函数及浏览器消费保持原行为 | [公开 API](../packages/client/src/__test__/public-api.test.ts)、[类型消费者](../tests/client-public-api/consumer.ts) | `pnpm check:client-api`、`pnpm test:client-browser` |
+| 插件应用显示沿用保守默认值、读取服务端策略并拒绝无效策略 | [Desktop 应用策略测试](../apps/desktop/src/main/features/plugin-apps/__test__/plugin-app-policy.test.ts) | `pnpm --filter @vykor/desktop exec vitest run src/main/features/plugin-apps/__test__/plugin-app-policy.test.ts` |
 | Kernel 不可达三个新数据包，Node/Kernel/Workflow 独立声明与运行完整 | [Kernel 反例](../packages/agent-runtime/scripts/__test__/kernel-boundary.test.mjs)、[独立消费者](../packages/agent-runtime/scripts/verify-pack.mjs) | `node --test packages/agent-runtime/scripts/__test__/kernel-boundary.test.mjs`、Runtime `test:pack` |
 
 ## 日常续做与交付闭环

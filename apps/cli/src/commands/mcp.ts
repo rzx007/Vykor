@@ -3,9 +3,8 @@ import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { Command } from "commander";
-import { VykorClient, VykorApiError, IncompatibleProtocolError } from "@vykor/application-client";
-type OAuthOperationView = Awaited<ReturnType<VykorClient["mcp"]["getLogin"]>>;
-type OAuthOperationEvent = ReturnType<VykorClient["mcp"]["watchLogin"]> extends AsyncIterable<infer T> ? T : never;
+import { HttpTransport, IncompatibleProtocolError, ProtocolClient, VykorApiError } from "@rzx/client";
+import { McpResource, type OAuthOperationEvent, type OAuthOperationView } from "@vykor/daemon-admin/mcp";
 import {
   loadSettings,
   updateSettings,
@@ -23,6 +22,8 @@ import {
 import { summarizeMcpEndpoint } from "@vykor/mcp";
 import { createCliMcpRuntimeCoordinator } from "../mcp-runtime-coordinator.js";
 
+type McpDaemonClient = { mcp: McpResource; protocol: ProtocolClient };
+
 export interface McpCommandDeps {
   loadSettings(): Promise<Settings>;
   updateSettings(change: (current: Settings) => Settings): Promise<Settings>;
@@ -32,7 +33,7 @@ export interface McpCommandDeps {
   openBrowser(url: string): Promise<void>;
   readLine(prompt: string, signal?: AbortSignal): Promise<string>;
   stdout(line: string): void;
-  daemon?: { connect(): Promise<{ client: Pick<VykorClient, "mcp" | "protocol">; instanceId: string } | undefined> };
+  daemon?: { connect(): Promise<{ client: McpDaemonClient; instanceId: string } | undefined> };
 }
 
 export function createMcpCommand(deps = createDefaultMcpCommandDeps()): Command {
@@ -200,7 +201,7 @@ function isDaemonLogoutSyncFailure(error: unknown): error is VykorApiError {
 
 async function logoutThroughDaemon(
   deps: McpCommandDeps,
-  client: Pick<VykorClient, "mcp">,
+  client: Pick<McpDaemonClient, "mcp">,
   name: string,
 ): Promise<void> {
   try { await client.mcp.logout(name); }
@@ -224,7 +225,8 @@ export function createDefaultMcpCommandDeps(): McpCommandDeps {
       try { registry = readDaemonRegistry(); }
       catch { throw new Error("MCP daemon registry could not be read; login was not started."); }
       if (!registry) return undefined;
-      const client = new VykorClient({ baseUrl: registry.url, token: registry.token });
+      const transport = new HttpTransport({ baseUrl: registry.url, token: registry.token });
+      const client = { mcp: new McpResource(transport), protocol: new ProtocolClient(transport) };
       let capabilities: Awaited<ReturnType<typeof client.protocol.capabilities>>;
       try { capabilities = await client.protocol.capabilities(); }
       catch (error) {
@@ -265,7 +267,7 @@ function isNetworkFailure(error: unknown): boolean {
 
 async function loginThroughDaemon(
   deps: McpCommandDeps,
-  daemon: { client: Pick<VykorClient, "mcp" | "protocol">; instanceId: string },
+  daemon: { client: McpDaemonClient; instanceId: string },
   name: string,
   scopes: string[],
   noBrowser: boolean,
@@ -377,7 +379,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 async function finishDaemonLogin(
   deps: McpCommandDeps,
-  client: Pick<VykorClient, "mcp">,
+  client: Pick<McpDaemonClient, "mcp">,
   name: string,
   scopes: string[],
   event: OAuthOperationEvent,

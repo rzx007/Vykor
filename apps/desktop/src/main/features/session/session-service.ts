@@ -9,7 +9,12 @@
 import { app, BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from "electron"
 import { getDataRoot, getWorkspacesDir, isHiddenManagedProjectPath } from "@vykor/host-config/paths"
 
-import type { VykorClient } from "@vykor/application-client"
+import type { HttpTransport, VykorClient } from "@rzx/client"
+import type { PluginAppConversationRequest } from "@vykor/protocol"
+import { SystemResource } from "@vykor/daemon-admin/configuration"
+import { KnowledgeResource } from "@vykor/daemon-admin/knowledge"
+import { CommandCatalogResource, DevelopmentResource } from "@vykor/daemon-admin/workspace"
+import { ProjectResource } from "./project-resource"
 import type {
   CheckoutDesktopProjectBranchInput,
   CloseDesktopAuxSessionInput,
@@ -102,7 +107,7 @@ export type DesktopSessionConnection = Pick<
   | "switchDataDirectory"
   | "dispose"
   | "freezeForDataRootMigration"
->
+> & Partial<Pick<DaemonConnectionService, "getTransport">>
 
 export class DesktopSessionService {
   async readAgentActivity(owner: WebContents, input: ReadDesktopAgentActivityInput): Promise<DesktopAgentActivity | null> {
@@ -111,7 +116,7 @@ export class DesktopSessionService {
     const runId = requireString(input?.runId, "运行 ID")
     const token = this.subscriptions.getOwnerSessionToken(owner.id, sessionId)
     if (!token) throw new Error("请先打开所属会话。")
-    const client = await this.getClient()
+    const client = await this.agentClient()
     if (this.subscriptions.getOwnerSessionToken(owner.id, sessionId) !== token) throw new Error("会话已切换。")
     const read = await client.jobs.read({ kind: "agent", jobId, runId }, { sessionId, maxChars: 1, signal: AbortSignal.timeout(10_000) })
     if (this.subscriptions.getOwnerSessionToken(owner.id, sessionId) !== token) throw new Error("会话已切换。")
@@ -137,7 +142,7 @@ export class DesktopSessionService {
     const token = this.subscriptions.getOwnerSessionToken(owner.id, sessionId)
     if (!token || this.subscriptions.getOwnerSessionId(owner.id) !== sessionId)
       throw new Error("请先打开所属会话。")
-    const client = await this.getClient()
+    const client = await this.agentClient()
     if (this.subscriptions.getOwnerSessionToken(owner.id, sessionId) !== token)
       throw new Error("会话已切换。")
     if (input.jobId !== undefined && !input.jobId.trim()) throw new Error("无效的编排 ID。")
@@ -157,7 +162,7 @@ export class DesktopSessionService {
       this.subscriptions.getOwnerSessionId(owner.id) !== sessionId
     )
       throw new Error("只能停止当前会话所属的编排。")
-    const client = await this.getClient()
+    const client = await this.agentClient()
     if (this.subscriptions.getOwnerSessionToken(owner.id, sessionId) !== token)
       throw new Error("会话已切换。")
     await client.jobs.cancel(target, { sessionId, reason: "用户在编排面板中停止了执行" })
@@ -183,7 +188,7 @@ export class DesktopSessionService {
   }
 
   async listSessions(): Promise<DesktopSessionLists> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     const allSessions = await client.sessions.list({ includeArchived: true, limit: 400 })
     return {
       sessions: sortSessions(
@@ -202,7 +207,7 @@ export class DesktopSessionService {
   async searchSessions(input: SearchSessionsOptions): Promise<DesktopSessionSearchResult[]> {
     const query = requireString(input?.query, "query")
     if (query.length > 256) throw new Error("搜索关键词不能超过 256 个字符")
-    const client = await this.getClient()
+    const client = await this.agentClient()
     const results = await client.sessions.search({ query, limit: 30 })
     return results.map((result) => ({ ...result, session: toDesktopSessionRecord(result.session) }))
   }
@@ -212,12 +217,13 @@ export class DesktopSessionService {
       configDir: getDataRoot(),
       workspacesDir: getWorkspacesDir(),
     })
-    const client = await this.getClient()
+    const client = await this.agentClient()
+    const transport = await this.daemonTransport(client)
     const [settings, providers, allSessions, projectRecords, capabilities] = await Promise.all([
-      client.system.getSettings(),
+      new SystemResource(transport).getSettings(),
       client.runtime.listModels(),
       client.sessions.list({ includeArchived: true, limit: 400 }),
-      client.projects.list(),
+      new ProjectResource(transport).list(),
       client.protocol.capabilities(),
     ])
     requireDesktopPluginCapabilities(capabilities)
@@ -290,34 +296,34 @@ export class DesktopSessionService {
   }
 
   async inspectProject(inputPath: string): Promise<DesktopProjectDetails> {
-    const client = await this.getClient()
+    const client = await this.projectInspectionClient()
     return await this.operations.inspectProject(client, inputPath)
   }
 
   async listCommands(cwdInput: string): Promise<DesktopCommandCatalogEntry[]> {
-    const client = await this.getClient()
+    const client = { system: new CommandCatalogResource(await this.daemonTransport()) }
     return await this.operations.listCommands(client, cwdInput)
   }
 
   async listContextPlugins(cwdInput: string) {
-    const client = await this.getClient()
+    const client = { system: new KnowledgeResource(await this.daemonTransport()) }
     return await this.operations.listContextPlugins(client, cwdInput)
   }
 
   async compactSession(input: CompactDesktopSessionInput): Promise<DesktopCompactSessionResult> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     return await this.operations.compactSession(client, input)
   }
 
   async getGoal(input: GetDesktopSessionGoalInput): Promise<SessionGoal | null> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     return await this.operations.getGoal(client, input)
   }
 
   async getMessagePart(
     input: import("../../../shared/session-types").GetDesktopMessagePartInput
   ): Promise<import("../../../shared/session-types").DesktopSessionPart> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     for (const value of [input.sessionId, input.messageId, input.partId]) {
       if (typeof value !== "string" || !value.trim())
         throw new Error("会话、消息和内容 ID 不能为空。")
@@ -340,61 +346,62 @@ export class DesktopSessionService {
   }
 
   async createGoal(input: CreateDesktopSessionGoalInput): Promise<SessionGoal> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     return await this.operations.createGoal(client, input)
   }
 
   async updateGoal(input: UpdateDesktopSessionGoalInput): Promise<SessionGoal> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     return await this.operations.updateGoal(client, input)
   }
 
   async goalAction(input: DesktopSessionGoalActionInput): Promise<SessionGoal> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     return await this.operations.goalAction(client, input)
   }
 
   async checkoutProjectBranch(
     input: CheckoutDesktopProjectBranchInput
   ): Promise<DesktopProjectDetails> {
-    const client = await this.getClient()
+    const client = await this.projectInspectionClient()
     return await this.operations.checkoutProjectBranch(client, input)
   }
 
   async createProjectBranch(
     input: CreateDesktopProjectBranchInput
   ): Promise<DesktopProjectDetails> {
-    const client = await this.getClient()
+    const client = await this.projectInspectionClient()
     return await this.operations.createProjectBranch(client, input)
   }
 
   async createSession(input: CreateDesktopSessionInput): Promise<DesktopSessionRecord> {
-    const client = await this.getClient()
-    return await this.operations.createSession(client, input)
+    const client = await this.agentClient()
+    const system = new SystemResource(await this.daemonTransport(client))
+    return await this.operations.createSession({ sessions: client.sessions, runtime: client.runtime, system }, input)
   }
 
   async renameProject(input: RenameDesktopProjectInput): Promise<DesktopProject> {
-    const client = await this.getClient()
+    const client = { projects: new ProjectResource(await this.daemonTransport()) }
     return await this.operations.renameProject(client, input)
   }
 
   async setProjectPinned(input: PinDesktopProjectInput): Promise<DesktopProject> {
-    const client = await this.getClient()
+    const client = { projects: new ProjectResource(await this.daemonTransport()) }
     return await this.operations.setProjectPinned(client, input)
   }
 
   async setProjectDefaultShell(input: SetDefaultDesktopProjectShellInput): Promise<DesktopProject> {
-    const client = await this.getClient()
+    const client = { projects: new ProjectResource(await this.daemonTransport()) }
     return await this.operations.setProjectDefaultShell(client, input)
   }
 
   async removeProject(projectId: string): Promise<void> {
-    const client = await this.getClient()
+    const client = { projects: new ProjectResource(await this.daemonTransport()) }
     await this.operations.removeProject(client, projectId)
   }
 
   async resolveProjectDirectory(projectIdInput: string): Promise<string> {
-    const client = await this.getClient()
+    const client = { projects: new ProjectResource(await this.daemonTransport()) }
     return await this.operations.resolveProjectDirectory(client, projectIdInput)
   }
 
@@ -412,20 +419,20 @@ export class DesktopSessionService {
       : await dialog.showOpenDialog(options)
     const path = result.filePaths[0]
     if (result.canceled || !path) return null
-    const client = await this.getClient()
+    const client = { projects: new ProjectResource(await this.daemonTransport()) }
     const project = await client.projects.rebind(requireString(projectIdInput, "Project ID"), path)
     return await toDesktopProject(project)
   }
 
   async openSession(webContents: WebContents, sessionIdInput: string): Promise<DesktopSessionView> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     return await this.subscriptions.openSession(client, webContents, sessionIdInput)
   }
 
   async checkPromptAccepted(input: { sessionId: string; inputId: string }): Promise<boolean> {
     const sessionId = requireString(input.sessionId, "会话 ID")
     const inputId = requireString(input.inputId, "输入 ID")
-    const client = await this.getClient()
+    const client = await this.agentClient()
     const snapshot = await client.sessions.getState(sessionId)
     return snapshot.inputs.some((value) => value.id === inputId)
   }
@@ -445,7 +452,7 @@ export class DesktopSessionService {
   }
 
   async openActivity(webContents: WebContents): Promise<DesktopActivityUpdate> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     return this.activitySubscriptions.open(client, webContents)
   }
 
@@ -457,7 +464,7 @@ export class DesktopSessionService {
     webContents: WebContents,
     input: OpenDesktopAuxSessionInput
   ): Promise<DesktopSessionView> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     return await this.subscriptions.openAuxSession(client, webContents, input)
   }
 
@@ -465,44 +472,44 @@ export class DesktopSessionService {
     this.subscriptions.closeAuxSession(webContentsId, input)
   }
 
-  async sendPrompt(input: SendDesktopPromptInput, pluginAppContexts?: import("@vykor/application-client").PluginAppConversationRequest[]): Promise<void> {
-    const client = await this.getClient()
+  async sendPrompt(input: SendDesktopPromptInput, pluginAppContexts?: PluginAppConversationRequest[]): Promise<void> {
+    const client = await this.agentClient()
     await this.operations.sendPrompt(client, input, pluginAppContexts)
   }
 
   async editLatestPrompt(input: EditLatestDesktopPromptInput): Promise<void> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     await this.operations.editLatestPrompt(client, input)
   }
 
   async promoteQueuedPrompt(input: PromoteDesktopQueuedPromptInput): Promise<void> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     await this.operations.promoteQueuedPrompt(client, input)
   }
 
   async cancelQueuedPrompt(input: CancelDesktopQueuedPromptInput): Promise<void> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     await this.operations.cancelQueuedPrompt(client, input)
   }
 
   async forkSession(input: ForkDesktopSessionInput): Promise<DesktopSessionRecord> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     return await this.operations.forkSession(client, input)
   }
 
   async interruptSession(input: InterruptDesktopSessionInput): Promise<void> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     await this.operations.interruptSession(client, input)
   }
 
   async replyPermission(input: ReplyDesktopPermissionInput): Promise<void> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     await this.operations.replyPermission(client, input)
   }
 
   async setDefaultModel(input: SetDefaultDesktopModelInput): Promise<DesktopBootstrapData> {
     const model = requireString(input.model, "模型")
-    const client = await this.getClient()
+    const client = await this.agentClient()
     const provider = await resolveProviderForModel(client, model, input.provider)
     if (input.effort !== undefined && typeof input.effort !== "string")
       throw new Error("推理强度必须是文本。")
@@ -513,7 +520,8 @@ export class DesktopSessionService {
       if (!known?.reasoningEfforts?.includes(input.effort))
         throw new Error("所选模型不支持这一推理强度。")
     }
-    await client.system.patchSettings({
+    const system = new SystemResource(await this.daemonTransport(client))
+    await system.patchSettings({
       model,
       modelDisabled: false,
       ...(input.effort !== undefined ? { effort: input.effort } : {}),
@@ -526,10 +534,10 @@ export class DesktopSessionService {
     input: SetDefaultDesktopPermissionModeInput
   ): Promise<DesktopBootstrapData> {
     const permissionMode = requirePermissionMode(input.permissionMode)
-    const client = await this.getClient()
-    const settings = await client.system.getSettings()
+    const system = new SystemResource(await this.daemonTransport())
+    const settings = await system.getSettings()
     const permission = settings["permission"]
-    await client.system.patchSettings({
+    await system.patchSettings({
       permission: {
         ...(permission && typeof permission === "object" && !Array.isArray(permission)
           ? permission
@@ -541,41 +549,41 @@ export class DesktopSessionService {
   }
 
   async updateSessionModel(input: UpdateDesktopSessionModelInput): Promise<DesktopSessionRecord> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     return await this.operations.updateSessionModel(client, input)
   }
 
   async updateSessionPermissionMode(
     input: UpdateDesktopSessionPermissionModeInput
   ): Promise<DesktopSessionRecord> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     return await this.operations.updateSessionPermissionMode(client, input)
   }
 
   async updateSessionEffort(input: UpdateDesktopSessionEffortInput): Promise<DesktopSessionRecord> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     return await this.operations.updateSessionEffort(client, input)
   }
 
   async updateSessionPluginSelection(
     input: UpdateDesktopSessionPluginSelectionInput
   ): Promise<DesktopSessionRecord> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     return await this.operations.updateSessionPluginSelection(client, input)
   }
 
   async getContextUsage(input: GetDesktopContextUsageInput): Promise<DesktopContextUsageSnapshot> {
-    const client = await this.getClient()
+    const client = { system: new KnowledgeResource(await this.daemonTransport()) }
     return await this.operations.getContextUsage(client, input)
   }
 
   async renameSession(input: RenameDesktopSessionInput): Promise<DesktopSessionRecord> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     return await this.operations.renameSession(client, input)
   }
 
   async setSessionPinned(input: PinDesktopSessionInput): Promise<DesktopSessionRecord> {
-    const client = await this.getClient()
+    const client = await this.agentClient()
     return await this.operations.setSessionPinned(client, input)
   }
 
@@ -587,7 +595,7 @@ export class DesktopSessionService {
     if (this.subscriptions.hasPrimary(webContentsId, sessionId)) {
       this.closeSession(webContentsId)
     }
-    const client = await this.getClient()
+    const client = await this.agentClient()
     const session = toDesktopSessionRecord(await client.sessions.archive(sessionId))
     const { gitSettingsService } = await import("../settings/git-settings-service")
     await gitSettingsService
@@ -604,7 +612,7 @@ export class DesktopSessionService {
     if (this.subscriptions.hasPrimary(webContentsId, sessionId)) {
       this.closeSession(webContentsId)
     }
-    const client = await this.getClient()
+    const client = await this.agentClient()
     return await client.sessions.delete(sessionId)
   }
 
@@ -615,18 +623,27 @@ export class DesktopSessionService {
     await browserAgentService.dispose()
   }
 
-  daemonClient(): Promise<VykorClient> {
-    return this.connection.getClient()
+  daemonTransport(client?: VykorClient): Promise<HttpTransport> {
+    return this.connection.getTransport?.(client) ?? Promise.reject(new Error("此连接未提供桌面管理功能。"))
+  }
+
+  private async projectInspectionClient() {
+    const transport = await this.daemonTransport()
+    return { projects: new ProjectResource(transport), development: new DevelopmentResource(transport) }
   }
   onDaemonInvalidated(listener: () => void): () => void {
     return this.connection.onInvalidated(listener)
   }
 
-  async refreshDaemonClient(): Promise<VykorClient> {
+  async refreshAgentClient(): Promise<VykorClient> {
     this.subscriptions.clearAll()
     const client = await this.connection.refreshClient()
     await this.activitySubscriptions.replaceClient(client)
     return client
+  }
+
+  async refreshDaemonTransport(): Promise<HttpTransport> {
+    return this.daemonTransport(await this.refreshAgentClient())
   }
 
   async restartDaemon(options: { stopActive?: boolean } = {}): Promise<void> {
@@ -645,7 +662,7 @@ export class DesktopSessionService {
     throw new Error("旧的只切换数据库入口已停用，请使用用户数据根迁移。")
   }
 
-  private getClient(): Promise<VykorClient> {
+  agentClient(): Promise<VykorClient> {
     return this.connection.getClient()
   }
 }

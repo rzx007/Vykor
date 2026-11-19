@@ -1,4 +1,4 @@
-import type { SessionModelRetryState } from "@vykor/application-client"
+import type { SessionModelRetryState } from "@rzx/client"
 import { useEffect, useState } from "react"
 
 /**

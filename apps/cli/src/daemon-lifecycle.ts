@@ -1,6 +1,6 @@
 import { networkInterfaces } from "node:os";
-import { CURRENT_PROTOCOL_VERSION } from "@vykor/application-client";
-import { Service } from "@vykor/application-client/service";
+import { CURRENT_PROTOCOL_VERSION } from "@rzx/client";
+import { Service } from "@rzx/client/service";
 import {
   daemonPidAlive,
   terminateDaemonProcess,

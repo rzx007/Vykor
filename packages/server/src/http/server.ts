@@ -56,7 +56,7 @@ import { createBrowserHostRoutes } from "./routes/browser-host.js";
 import { createChannelRoutes } from "./routes/channel.js";
 import { createChannelControlRoutes } from "./routes/channel-control.js";
 import { createScheduleRoutes } from "./routes/schedules.js";
-import { createNoteRoutes } from "./routes/notes.js";
+import { createRetiredNotesRoutes } from "./routes/notes.js";
 import { HttpEventHub } from "./routes/events.js";
 import { createGitRoutes } from "./routes/git.js";
 import { createJobRoutes } from "./routes/job.js";
@@ -129,10 +129,12 @@ export interface VykorServerOptions {
   channelConfigStore?: ChannelConfigStore;
   /** Test/embedding seam. Production daemon creation uses createDefaultNodeAgent directly. */
   createAgent?: CreateDaemonAgent;
-  /** Optional browser capability supplied by an embedding desktop application. */
+  /** Optional browser capability supplied by a trusted embedding host. */
   browserHost?: BrowserHost;
   /** Enable the private browser-host route for a registered, token-protected local daemon. */
   enableDesktopBrowser?: boolean;
+  /** Allow BrowserDeveloper for a trusted host that implements executeDeveloper. Defaults to false. */
+  enableBrowserDeveloper?: boolean;
   registeredDaemonControl?: RegisteredDaemonControl;
   deferBackgroundActivation?: boolean;
   services?: VykorServerServices;
@@ -206,6 +208,7 @@ export class VykorHttpServer {
         deferBackgroundActivation: options.deferBackgroundActivation,
         createAgent: options.createAgent,
         browserHost: options.browserHost ?? this.browserBridge,
+        enableBrowserDeveloper: options.enableBrowserDeveloper,
         ...(options.channelConfigStore
           ? { channelConfigStore: options.channelConfigStore }
           : {}),
@@ -459,7 +462,7 @@ export class VykorHttpServer {
       "/schedules",
       createScheduleRoutes({ schedules: this.application.schedules }),
     );
-    this.app.route("/notes", createNoteRoutes({ notes: this.application.notes }));
+    this.app.route("/notes", createRetiredNotesRoutes());
     this.app.route(
       "/background-shells",
       createBackgroundShellRoutes({

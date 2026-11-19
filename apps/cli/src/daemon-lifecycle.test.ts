@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { CURRENT_PROTOCOL_VERSION } from "@vykor/application-client";
+import { CURRENT_PROTOCOL_VERSION } from "@rzx/client";
 
 import type { DaemonRegistry } from "@vykor/server";
 
 const discover = vi.hoisted(() => vi.fn());
-vi.mock("@vykor/application-client/service", () => ({ Service: { discover } }));
+vi.mock("@rzx/client/service", () => ({ Service: { discover } }));
 
 import { probeDaemonRegistry, verifyDaemonProcess } from "./daemon-lifecycle.js";
 

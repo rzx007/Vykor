@@ -1,6 +1,18 @@
-import type { MaintenanceBackupManifest, CleanupPreview, CleanupResult, StorageReport, StorageRetentionPolicy, UsageFilter, UsagePrice, UsageReport, UsageSettings } from "@vykor/application-client"
-export type { CleanupPreview, CleanupResult, StorageReport, StorageRetentionPolicy, UsageFilter, UsagePrice, UsageReport, UsageSettings }
-export interface MaintenanceBackupResult { path: string; manifest: MaintenanceBackupManifest; totalBytes?: number; excludes?: string[]; settingsExcluded?: boolean; settingsSnapshotPath?: string }
+import type { MaintenanceBackupManifest, CleanupPreview, CleanupResult, StorageReport as DaemonStorageReport, StorageRetentionPolicy, UsageFilter, UsagePrice, UsageReport, UsageSettings } from "@vykor/protocol"
+export type { CleanupPreview, CleanupResult, StorageRetentionPolicy, UsageFilter, UsagePrice, UsageReport, UsageSettings }
+export type StorageReport = Omit<DaemonStorageReport, "backups"> & {
+  backups?: Array<NonNullable<DaemonStorageReport["backups"]>[number] & { desktopNotes?: boolean }>
+}
+export interface MaintenanceBackupResult {
+  path: string
+  manifest: MaintenanceBackupManifest
+  totalBytes?: number
+  excludes?: string[]
+  settingsExcluded?: boolean
+  settingsSnapshotPath?: string
+  desktopNotes?: boolean
+  historyRecorded?: false
+}
 export interface DiagnosticCheck { id: string; name: string; status: "success" | "warning" | "failed" | "unsupported" | "timeout" | "cancelled"; detail: string }
 export interface DiagnosticLog { time: number; level: string; module: string; event: string; runId?: string; sessionId?: string; traceId?: string; status?: string; durationMs?: number; requestId?: string; toolName?: string; method?: string }
 export interface DiagnosticReport { checkedAt: number; desktopVersion: string; platform: string; architecture: string; target: string | null; checks: DiagnosticCheck[]; logs: DiagnosticLog[]; missing: string[]; activeWork?: { runs: Array<{ id: string; sessionId: string; status: string }>; tasks: Array<{ id: string; sessionId: string; status: string }>; terminals: Array<{ id: string; status: string }> } }

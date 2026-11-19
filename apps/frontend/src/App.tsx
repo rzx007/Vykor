@@ -17,7 +17,7 @@ import { JobsPanel, type JobsPanelProps } from "./components/JobsPanel";
 import type { FrontendConfig } from "./types";
 import type { TuiAction } from "./hooks/sessionController";
 import { copySelectionToClipboard } from "./utils/selection";
-import { normalizeApprovalMode, type ApprovalMode } from "@vykor/application-client";
+import { normalizeApprovalMode, type ApprovalMode } from "@rzx/client";
 
 type JobsPanelCallbacks = Omit<JobsPanelProps, "state" | "detailState">;
 
@@ -392,7 +392,6 @@ function AppInner({ config }: { config: FrontendConfig }) {
     }
     if (key.ctrl && key.name === "p") {
       // 已有弹层（含后端 permission/question/select）时不顶掉：
-      // dialog.replace 会触发被顶层的 onClose（permission 会被当作拒绝）。
       if (dialog.isOpen) return;
       openCommandPalette();
     }

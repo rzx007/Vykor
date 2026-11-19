@@ -1,5 +1,5 @@
 import { importOtherLegacyBusinessData, recordLegacyBusinessScan } from "@renderer/lib/business-data"
-import { normalizeApprovalMode } from "@vykor/application-client"
+import { normalizeApprovalMode } from "@rzx/client"
 import type {
   DesktopBootstrapData,
   DesktopProject,

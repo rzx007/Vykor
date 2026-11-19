@@ -36,6 +36,7 @@
     "build": "node scripts/build.mjs",
     "prepack": "pnpm run build",
     "test:pack": "pnpm run verify:pack",
+    "test:pack:daemon": "node scripts/verify-pack.mjs --with-cli",
     "verify:pack": "node scripts/verify-pack.mjs",
     "check-types": "tsc --noEmit",
     "test": "node --test scripts/__test__/release.test.mjs && vitest run",

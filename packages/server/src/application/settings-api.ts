@@ -1,4 +1,4 @@
-import type { PluginUiInventory } from "@vykor/domain-contracts/plugin-apps/history";
+import type { PluginInfo } from "@vykor/domain-contracts/plugin-apps";
 import type { SkillMarketplaceEntry, SkillMarketplaceInstallInput, SkillMarketplaceSelection } from "@vykor/domain-contracts/skills";
 import type { MemoryEntryRecord, UpdateMemoryEntryInput, ClearMemoryInput } from "@vykor/domain-contracts/memory";
 export type { MemoryEntryRecord } from "@vykor/domain-contracts/memory";
@@ -225,60 +225,7 @@ export interface ProjectInitService {
   }): Promise<{ report: string }> | { report: string };
 }
 
-export type PluginRuntimeStatus =
-  | { state: "disabled"; message: string; action: "enable" }
-  | { state: "pending_reload"; message: string; action: "reload" }
-  | { state: "loaded"; message: string; action: "none" }
-  | {
-      state: "degraded";
-      code: string;
-      message: string;
-      action: "details" | "reimport" | "approve" | "disable";
-    }
-  | {
-      state: "failed";
-      code: string;
-      message: string;
-      action: "reimport" | "approve" | "disable" | "uninstall";
-    };
-
-export interface PluginInfo {
-  provenance?: import("@vykor/plugin-contracts/marketplace").MarketplaceProvenance;
-  identity: { id: string; name: string; version: string; displayName?: string };
-  presentation?: import("@vykor/plugin-contracts/presentation").PluginPresentation;
-  origin: "native" | "converted";
-  sourceFormat?: string;
-  scope: "user" | "managed";
-  enabled: boolean;
-  installation: "installed" | "missing" | "invalid";
-  activation: "inactive" | "active" | "partial" | "reload-required";
-  toolRuntime?: {
-    state:
-      | "inactive"
-      | "reload-required"
-      | "starting"
-      | "active"
-      | "degraded"
-      | "error";
-    declaredEntries: number;
-    activatableEntries: number;
-    hostCount: number;
-    registeredToolCount: number;
-    lastStartedAt?: string;
-    lastError?: string;
-  };
-  runtimeStatus: PluginRuntimeStatus;
-  inventory: Record<string, number>;
-  uiInventory?: PluginUiInventory;
-  permissions: { requested: string[]; approved: string[]; missing: string[] };
-  diagnostics: Array<{
-    severity: "info" | "warning" | "error";
-    phase: string;
-    code: string;
-    message: string;
-    path?: string;
-  }>;
-}
+export type { PluginInfo, PluginRuntimeStatus } from "@vykor/domain-contracts/plugin-apps";
 
 export interface PluginArchivePreview {
   replacementRequired?: boolean;

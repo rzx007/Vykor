@@ -1,4 +1,4 @@
-import { isSupersededModelPart } from "@vykor/application-client"
+import { isSupersededModelPart } from "@rzx/client"
 import type { DesktopSessionMessage, DesktopSessionPart } from "@shared/session-types"
 import { readBrowserAnnotationContext } from "@renderer/components/desktop/tools/browser/browser-annotation-context"
 

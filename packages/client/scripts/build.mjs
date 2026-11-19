@@ -39,7 +39,7 @@ for (const [name, source, platform] of [
   });
   const bundled = await readFile(join(dist, `${name}.js`), "utf8");
   for (const output of Object.values(result.metafile.outputs)) {
-    if (Object.entries(output.inputs).some(([file, value]) => value.bytesInOutput > 0 && /(?:application-client\/|client\/src\/(?:commands|resources\/(?:workspace|plugins))\/)/.test(file)))
+    if (Object.entries(output.inputs).some(([file, value]) => value.bytesInOutput > 0 && /(?:(?:application-client|daemon-admin)\/|client\/src\/(?:commands|resources\/(?:workspace|plugins))\/)/.test(file)))
       throw new Error(`${name}: application business code entered the SDK bundle`);
   }
   for (const input of Object.keys(result.metafile.inputs).filter(file => file.includes("node_modules"))) {

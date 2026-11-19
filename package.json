@@ -67,7 +67,7 @@
     "@vykor/prompts": "workspace:*",
     "@anthropic-ai/sdk": "catalog:",
     "openai": "catalog:",
-    "@vykor/application-client": "workspace:*"
+    "@vykor/daemon-admin": "workspace:*"
   },
   "packageManager": "pnpm@10.30.2"
 }

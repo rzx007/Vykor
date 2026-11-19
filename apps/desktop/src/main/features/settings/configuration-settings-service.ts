@@ -1,3 +1,4 @@
+import { SystemResource } from "@vykor/daemon-admin/configuration"
 import { dialog } from "electron"
 import { randomUUID } from "node:crypto"
 import { readFile, stat, writeFile } from "node:fs/promises"
@@ -15,7 +16,7 @@ const labels: Record<string, string> = {
 }
 export class ConfigurationSettingsService {
   async limits() {
-    const settings = await (await desktopSessionService.daemonClient()).system.getSettings()
+    const settings = await new SystemResource(await desktopSessionService.daemonTransport()).getSettings()
     if (!Number.isSafeInteger(settings.maxTurns) || Number(settings.maxTurns) < 0)
       throw new Error("后台未返回有效的任务轮数，请重新读取。")
     const editable = settings.maxTurnsEditable === true
@@ -36,9 +37,7 @@ export class ConfigurationSettingsService {
     if (!current.editable) throw new Error(current.reason ?? "当前任务轮数不可修改。")
     if (current.maxTurns !== input.expectedMaxTurns)
       throw new Error("任务轮数已被其他入口修改，请重新读取。")
-    await (
-      await desktopSessionService.daemonClient()
-    ).system.patchSettings({ maxTurns: input.maxTurns, expectedMaxTurns: input.expectedMaxTurns })
+    await new SystemResource(await desktopSessionService.daemonTransport()).patchSettings({ maxTurns: input.maxTurns, expectedMaxTurns: input.expectedMaxTurns })
     return this.limits()
   }
   private selections = new Map<
@@ -50,7 +49,7 @@ export class ConfigurationSettingsService {
     }
   >()
   async review() {
-    const settings = await (await desktopSessionService.daemonClient()).system.getSettings()
+    const settings = await new SystemResource(await desktopSessionService.daemonTransport()).getSettings()
     const mode = (settings.autoReview as { mode?: string } | undefined)?.mode
     return { mode: mode === "risk_based" ? ("risk_based" as const) : ("off" as const) }
   }
@@ -58,9 +57,7 @@ export class ConfigurationSettingsService {
     if (input.mode !== "off" && input.mode !== "risk_based") throw new Error("完成后检查选项无效。")
     if ((await this.review()).mode !== input.expected)
       throw new Error("完成后检查已被其他入口修改，请重新读取。")
-    await (
-      await desktopSessionService.daemonClient()
-    ).system.patchSettings({
+    await new SystemResource(await desktopSessionService.daemonTransport()).patchSettings({
       autoReview: { mode: input.mode },
       expectedAutoReviewMode: input.expected,
     })
@@ -120,11 +117,11 @@ export class ConfigurationSettingsService {
     const selection = this.selections.get(input.id)
     if (!selection || selection.expires < Date.now())
       throw new Error("导入预览已失效，请重新选择文件。")
-    const client = await desktopSessionService.daemonClient()
+    const client = await desktopSessionService.agentClient()
     const health = await client.protocol.health()
     if (health.activeRunCount || health.queuedRunCount)
       throw new Error("请等待任务结束后导入配置。")
-    await client.system.patchSettings({
+    await new SystemResource(await desktopSessionService.daemonTransport(client)).patchSettings({
       importConfiguration: {
         value: selection.value,
         categories: input.categories,

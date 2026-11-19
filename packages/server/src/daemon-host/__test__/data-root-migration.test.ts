@@ -10,6 +10,7 @@ import { SessionDatabase } from "../../../../services/src/database/session-datab
 import * as tables from "../../../../services/src/session-runtime/schema.js";
 import { getProjectDirectoryKey, readDataRootSelector } from "@vykor/host-config/paths";
 import { securePrivateDirectory, securePrivateFile } from "@vykor/host-config";
+import { importLegacyNotes, openDesktopNoteRepository, validateDesktopNotes } from "@vykor/services/notes";
 
 let root: string, source: string, target: string, home: string;
 const file = (path: string, data: string) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, data); };
@@ -41,6 +42,37 @@ it("copies only the final inventory, keeps original bytes/times and installs ind
   expect(copy.orm.select().from(tables.sessions).all()).toMatchObject([{ id: "session", cwd: join(target, "workspaces/chat") }]); copy.close();
   expect(readDataRootSelector(home)?.pendingMigration?.id).toBe(result.id);
   const journal = readFileSync(result.journalPath, "utf8"); for (const text of ["never-journal-secret", "never-journal-body", "never-journal-environment", "never-copy-active-token"]) expect(journal).not.toContain(text);
+});
+
+it.each(["intact", "damaged"])("validates the published native notes directory (%s) before moving the root", async mode => {
+  const original = join(source, "data", "desktop", "notes");
+  await importLegacyNotes({ databasePath: database(), destination: original });
+  const local = openDesktopNoteRepository(original);
+  try {
+    local.repository.create({ content: "original Markdown" }, { id: "kept", now: 42 });
+    local.repository.create({ content: "deleted Markdown" }, { id: "removed" });
+    local.repository.remove("removed");
+  } finally { local.close(); }
+  const body = join(original, "kept.md");
+  if (mode === "damaged") writeFileSync(body, "damaged before validation");
+  const originalDigests = [digest(body), digest(join(original, "notes.sqlite"))];
+
+  const result = await (await api()).migrateDataRoot(request(), stopped);
+  expect([digest(body), digest(join(original, "notes.sqlite"))]).toEqual(originalDigests);
+  if (mode === "damaged") {
+    expect(result.phase).toBe("failed");
+    expect(existsSync(target)).toBe(false);
+    return;
+  }
+
+  expect(result.phase).toBe("verified");
+  const installed = join(target, "data", "desktop", "notes");
+  validateDesktopNotes(installed);
+  const reopened = openDesktopNoteRepository(installed);
+  try {
+    expect(reopened.repository.get("kept")).toEqual({ id: "kept", content: "original Markdown", revision: 1, createdAt: 42, updatedAt: 42 });
+    expect(() => reopened.repository.create({ content: "retry deleted ID" }, { id: "removed" })).toThrow(/already exists/);
+  } finally { reopened.close(); }
 });
 
 it.each(["workspace", "channel", "legacy-documents", "recovery"])("keeps %s memory and rules readable without persistent session registrations", async kind => {

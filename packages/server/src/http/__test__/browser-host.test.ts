@@ -3,14 +3,17 @@ import { once } from "node:events";
 import { get, type IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createDefaultNodeAgent } from "@vykor/agent-runtime";
+import type { StreamingMessageClient } from "@vykor/agent-contracts";
 import { CURRENT_PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER } from "@vykor/protocol";
 import { expect, it, vi } from "vitest";
 import { BROWSER_BRIDGE_MAX_RESULT_BODY_BYTES, DesktopBrowserBridge } from "../../application/browser-tools/browser-bridge.js";
 import { parseBrowserBridgeEvent } from "../../application/browser-tools/browser-bridge-protocol.js";
+import type { BrowserHost } from "../../application/browser-tools/browser-host.js";
 import { createBrowserTool } from "../../application/browser-tools/browser-tool.js";
 import { createBrowserDeveloperTool } from "../../application/browser-tools/browser-developer-tool.js";
 import { createBrowserHostRoutes } from "../routes/browser-host.js";
-import { VykorHttpServer } from "../server.js";
+import { VykorHttpServer, type VykorServerOptions } from "../server.js";
 
 const headers = { [PROTOCOL_VERSION_HEADER]: String(CURRENT_PROTOCOL_VERSION), connection: "close" };
 const authorization = "Bearer desktop-token";
@@ -20,6 +23,91 @@ function openNative(url: string) {
     get(url, { headers: { ...headers, authorization } }, resolve).on("error", reject);
   });
 }
+
+const ordinaryHost: BrowserHost = {
+  async execute() { throw new Error("Unexpected browser call"); },
+};
+const developerHost: BrowserHost = {
+  ...ordinaryHost,
+  async executeDeveloper() { throw new Error("Unexpected browser developer call"); },
+};
+
+it.each([
+  { name: "without a host", browserTools: [], bridge: false },
+  { name: "with developer opt-in but no host", enableBrowserDeveloper: true, browserTools: [], bridge: false },
+  { name: "with an ordinary injected host", browserHost: ordinaryHost, enableBrowserDeveloper: true, browserTools: ["Browser"], bridge: false },
+  { name: "with a developer host but no opt-in", browserHost: developerHost, browserTools: ["Browser"], bridge: false },
+  { name: "with a trusted developer host and opt-in", browserHost: developerHost, enableBrowserDeveloper: true, browserTools: ["Browser", "BrowserDeveloper"], bridge: false },
+  { name: "with only the Desktop bridge", enableDesktopBrowser: true, browserTools: ["Browser"], bridge: true },
+  { name: "with the Desktop bridge and developer opt-in", enableDesktopBrowser: true, enableBrowserDeveloper: true, browserTools: ["Browser", "BrowserDeveloper"], bridge: true },
+])("advertises the assembled Browser tools to the model $name", async ({ name: _name, browserTools, bridge, ...options }) => {
+  const directory = await mkdtemp(join(tmpdir(), "vk-browser-tools-"));
+  const toolLists: string[][] = [];
+  const client: StreamingMessageClient = {
+    async *streamMessage(params) {
+      toolLists.push(params.tools?.map(tool => tool.name) ?? []);
+      yield { type: "text_delta", delta: "Ready" };
+      yield { type: "complete", stopReason: "end_turn" };
+    },
+  };
+  const createAgent = vi.fn<NonNullable<VykorServerOptions["createAgent"]>>(async ({ options }) => {
+    const agent = await createDefaultNodeAgent({ ...options, client });
+    return { agent, host: agent.host };
+  });
+  const server = new VykorHttpServer({
+    ...options,
+    token: "desktop-token",
+    storePath: join(directory, "sessions.db"),
+    settings: {
+      model: "test-model", apiFormat: "openai", maxTurns: 3,
+      permission: { mode: "ask" }, plugins: { enabled: false }, memory: { enabled: false }, sandbox: { enabled: false },
+    },
+    createAgent,
+    logger: () => {},
+  });
+  let stream: IncomingMessage | undefined;
+  try {
+    const { url } = await server.listen();
+    const authenticated = { ...headers, authorization };
+    const capabilities = await (await fetch(`${url}/capabilities`, { headers: authenticated })).json();
+    const endpoint = `${url}/browser-host/stream`;
+    expect(capabilities.features.browserBridge).toBe(bridge ? 1 : undefined);
+    if (!bridge) expect((await fetch(endpoint, { headers: authenticated })).status).toBe(404);
+
+    const sessionId = "browser-tools-session";
+    const post = (path: string, body: unknown) => fetch(url + path, {
+      method: "POST", headers: { ...authenticated, "content-type": "application/json" }, body: JSON.stringify(body),
+    });
+    const create = await post("/sessions", { id: sessionId, cwd: directory, model: "test-model" });
+    expect(create.status, await create.text()).toBe(201);
+    const runPrompt = async () => {
+      const response = await post(`/sessions/${sessionId}/prompts`, { items: [{ type: "text", text: "Read the available tools." }] });
+      const result = await response.json();
+      expect(response.status, JSON.stringify(result)).toBe(202);
+      const completed = await server.application.runControl.awaitRun(sessionId, result.run.id, { timeoutMs: 15_000 });
+      expect(completed.status, JSON.stringify(completed)).toBe("completed");
+      expect(toolLists.at(-1)).toContain("Read");
+      expect(toolLists.at(-1)?.filter(name => name === "Browser" || name === "BrowserDeveloper")).toEqual(browserTools);
+    };
+
+    await runPrompt();
+    if (bridge) {
+      stream = await openNative(endpoint);
+      expect(stream.statusCode).toBe(200);
+      expect(String((await once(stream, "data"))[0])).toContain('"type":"hello"');
+      await runPrompt();
+      const closed = once(stream, "close");
+      stream.destroy();
+      await closed;
+      await runPrompt();
+      expect(createAgent).toHaveBeenCalledTimes(1);
+    }
+  } finally {
+    stream?.destroy();
+    await server.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 40_000);
 
 it("opens only a native authenticated browser host stream on a managed loopback listener", async () => {
   const directory = await mkdtemp(join(tmpdir(), "vykor-browser-host-"));

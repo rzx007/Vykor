@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto"
 import { Notification } from "electron"
-import { parseGoalActionInput, type VykorClient } from "@vykor/application-client"
+import { parseGoalActionInput, type VykorClient } from "@rzx/client"
 import type { TrayNotificationOptions } from "../../../shared/ipc-channels"
 import { getDesktopPreferences, patchDesktopPreferences } from "../settings/desktop-preferences"
 import type { DesktopNotificationTarget } from "../settings/desktop-preferences-storage"

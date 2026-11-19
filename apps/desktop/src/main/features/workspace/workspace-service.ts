@@ -268,7 +268,7 @@ class WorkspaceService {
     const match = input.path.match(/^attachment:\/\/([^/]+)\//)
     if (!match) throw new Error("无效附件引用。")
     const assetId = decodeURIComponent(match[1]!)
-    const client = await desktopSessionService.daemonClient()
+    const client = await desktopSessionService.agentClient()
     const asset = await client.attachments.get(assetId)
     if (
       !documentFormat(asset.displayName) ||

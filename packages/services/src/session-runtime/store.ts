@@ -68,7 +68,8 @@ import {
   IncrementalOutput,
 } from "../conversations/index.js";
 import { RunRepository } from "../runs/run-repository.js";
-import { NoteRepository } from "../notes/note-repository.js";
+import { openLegacyNoteRepository } from "../notes/legacy-note-repository.js";
+import type { NoteRepository } from "../notes/note-repository.js";
 import { PluginAppRepository } from "../plugin-apps/index.js";
 import {
   type CreateSessionGoalStoreInput,
@@ -162,7 +163,6 @@ export class SessionStore {
   readonly path: string;
   readonly projects!: ProjectRepository;
   readonly schedules!: ScheduleRepository;
-  readonly notes!: NoteRepository;
   readonly pluginApps!: PluginAppRepository;
   readonly workflows!: WorkflowRepository;
   readonly channels!: ChannelRepository;
@@ -182,6 +182,7 @@ export class SessionStore {
   private readonly attachmentLimits: AttachmentLimits;
   private readonly taskListeners = new Map<string, Set<() => void>>();
   private activeOwnerLease?: ApplicationOwnerLease;
+  private legacyNotes?: NoteRepository;
 
   private get coordinator(): TransactionCoordinator {
     return this.storage?.coordinator ?? this._coordinator;
@@ -240,7 +241,6 @@ export class SessionStore {
       this.storage.temporaryControls = new TemporaryControlRecords(() => this.storage.rollback);
       this.projects = new ProjectRepository(this.storage, (input) => this.conversations.appendEvent(input));
       this.schedules = new ScheduleRepository(this.storage, (input) => this.conversations.appendEvent(input));
-      this.notes = new NoteRepository(this.storage);
       this.pluginApps = new PluginAppRepository(this.storage, app => {
         this.conversations.appendEventInMemory({ sessionId: app.sessionId, type: "session.plugin_app.updated", payload: { app } });
       });
@@ -326,7 +326,12 @@ export class SessionStore {
     return this.coordinator.atomic(work);
   }
 
-  async backupDatabase(destination: string): Promise<void> {
+  /** The old Markdown/SQLite layout is opened only for explicit compatibility work. */
+  openLegacyNotes(): NoteRepository {
+    return this.legacyNotes ??= openLegacyNoteRepository(this.storage);
+  }
+
+  async backupDatabase(destination: string, options: { includeLegacyNotes?: boolean } = {}): Promise<void> {
     if (this.activeOwnerLease)
       this.assertApplicationOwner(this.activeOwnerLease);
     this.incrementalOutput.flushMessagePartDeltas();
@@ -337,6 +342,13 @@ export class SessionStore {
     try {
       // owner 是当前进程的活租约，不能带进恢复目录；Run/Workflow 保留给启动恢复收束。
       drizzle(backup).delete(applicationOwners).run();
+      if (options.includeLegacyNotes === false) {
+        backup.transaction(() => {
+          backup.exec("DELETE FROM note_attachment; DELETE FROM note_file_index; DELETE FROM note;");
+        })();
+        // Rebuild only the copy so retired note contents cannot remain in free pages.
+        backup.exec("VACUUM");
+      }
     } finally {
       backup.close();
     }

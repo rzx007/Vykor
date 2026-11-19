@@ -1,4 +1,4 @@
-import type { VykorClient } from "@vykor/application-client"
+import { ScheduleResource } from "./schedule-resource"
 import type {
   CreateDesktopScheduledTaskInput,
   DesktopScheduledRun,
@@ -10,49 +10,47 @@ import type {
 
 import { desktopSessionService } from "../session/session-service"
 
-type ScheduleClient = Pick<VykorClient, "schedules">
-
 class DesktopScheduleService {
   status(): Promise<DesktopScheduledStatus> {
-    return withDaemonRetry((client) => client.schedules.getStatus())
+    return withDaemonRetry((client) => client.getStatus())
   }
 
   list(): Promise<DesktopScheduledTask[]> {
-    return withDaemonRetry((client) => client.schedules.listTasks())
+    return withDaemonRetry((client) => client.listTasks())
   }
 
   create(input: CreateDesktopScheduledTaskInput): Promise<DesktopScheduledTask> {
-    return withDaemonRetry((client) => client.schedules.createTask(input))
+    return withDaemonRetry((client) => client.createTask(input))
   }
 
   update(id: string, input: UpdateDesktopScheduledTaskInput): Promise<DesktopScheduledTask> {
-    return withDaemonRetry((client) => client.schedules.updateTask(id, input))
+    return withDaemonRetry((client) => client.updateTask(id, input))
   }
 
   async remove(id: string): Promise<void> {
-    await withDaemonRetry((client) => client.schedules.removeTask(id))
+    await withDaemonRetry((client) => client.removeTask(id))
   }
 
   runNow(id: string): Promise<DesktopScheduledRun> {
-    return withDaemonRetry((client) => client.schedules.triggerTask(id))
+    return withDaemonRetry((client) => client.triggerTask(id))
   }
 
   listRuns(input: ListDesktopScheduledRunsInput): Promise<DesktopScheduledRun[]> {
-    return withDaemonRetry((client) => client.schedules.listRuns(input))
+    return withDaemonRetry((client) => client.listRuns(input))
   }
 
   setRunUnread(id: string, unread: boolean): Promise<DesktopScheduledRun> {
-    return withDaemonRetry((client) => client.schedules.setRunUnread(id, unread))
+    return withDaemonRetry((client) => client.setRunUnread(id, unread))
   }
 }
 
 export const desktopScheduleService = new DesktopScheduleService()
 
 async function withDaemonRetry<T>(
-  operation: (client: ScheduleClient) => Promise<T>
+  operation: (client: ScheduleResource) => Promise<T>
 ): Promise<T> {
   try {
-    return await operation(await desktopSessionService.daemonClient())
+    return await operation(new ScheduleResource(await desktopSessionService.daemonTransport()))
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (
@@ -62,6 +60,6 @@ async function withDaemonRetry<T>(
     ) {
       throw error
     }
-    return await operation(await desktopSessionService.refreshDaemonClient())
+    return await operation(new ScheduleResource(await desktopSessionService.refreshDaemonTransport()))
   }
 }

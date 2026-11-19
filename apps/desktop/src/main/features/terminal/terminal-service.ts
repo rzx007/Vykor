@@ -1,13 +1,12 @@
 import type { WebContents } from "electron"
 import type {
-  VykorClient,
   TerminalCreateRequest,
   TerminalReadRequest,
   TerminalReadResult,
   TerminalResizeRequest,
   TerminalSessionInfo,
   TerminalWriteRequest,
-} from "@vykor/application-client"
+} from "@vykor/protocol"
 
 import { IpcEvents } from "../../../shared/ipc-channels"
 import { getDesktopPreferences } from "../settings/desktop-preferences"
@@ -16,7 +15,8 @@ import { desktopSessionService } from "../session/session-service"
 import { desktopRuntimeSettingsService } from "../settings/runtime-settings-service"
 import { desktopTerminalSettingsService, terminalShellFileError } from "../settings/terminal-settings-service"
 
-type TerminalClient = Pick<VykorClient, "terminals">
+import { TerminalResource } from "./terminal-resource"
+import { ProjectResource } from "../session/project-resource"
 
 interface TerminalSubscription {
   controller: AbortController
@@ -35,9 +35,9 @@ class DesktopTerminalService {
   ): Promise<TerminalSessionInfo> {
     this.ensureSubscription(webContents)
     const preferences = getDesktopPreferences()
-    const client = await desktopSessionService.daemonClient()
+    const client = await desktopSessionService.agentClient()
     const session = input.scope.kind === "session" ? await client.sessions.get(input.scope.sessionId) : null
-    const cwd = session?.cwd ?? (await client.projects.list()).find((project) => project.id === (input.scope.kind === "project" ? input.scope.projectId : ""))?.path
+    const cwd = session?.cwd ?? (await new ProjectResource(await desktopSessionService.daemonTransport(client)).list()).find((project) => project.id === (input.scope.kind === "project" ? input.scope.projectId : ""))?.path
     if (!cwd) throw new Error("终端项目目录不可用。")
     const desktopMetadata = session?.metadata?.desktop as { settingsRoot?: unknown } | undefined
     const settingsRoot = typeof desktopMetadata?.settingsRoot === "string" ? desktopMetadata.settingsRoot : cwd
@@ -60,32 +60,32 @@ class DesktopTerminalService {
       }
     }
     const next = { ...input, shell, shellArgs, env: { ...desktopTerminalSettingsService.launchEnvironment(), ...input.env } }
-    return await withDaemonRetry((client) => client.terminals.create(next))
+    return await withDaemonRetry((client) => client.create(next))
   }
 
   async write(webContents: WebContents, input: TerminalWriteRequest): Promise<void> {
     this.ensureSubscription(webContents)
-    await withDaemonRetry((client) => client.terminals.write(input))
+    await withDaemonRetry((client) => client.write(input))
   }
 
   async resize(webContents: WebContents, input: TerminalResizeRequest): Promise<void> {
     this.ensureSubscription(webContents)
-    await withDaemonRetry((client) => client.terminals.resize(input))
+    await withDaemonRetry((client) => client.resize(input))
   }
 
   async read(webContents: WebContents, input: TerminalReadRequest): Promise<TerminalReadResult> {
     this.ensureSubscription(webContents)
-    return await withDaemonRetry((client) => client.terminals.read(input.terminalId))
+    return await withDaemonRetry((client) => client.read(input.terminalId))
   }
 
   async kill(webContents: WebContents, terminalId: string): Promise<void> {
     this.ensureSubscription(webContents)
-    await withDaemonRetry((client) => client.terminals.close(terminalId))
+    await withDaemonRetry((client) => client.close(terminalId))
   }
 
   async list(webContents: WebContents): Promise<TerminalSessionInfo[]> {
     this.ensureSubscription(webContents)
-    return await withDaemonRetry((client) => client.terminals.list())
+    return await withDaemonRetry((client) => client.list())
   }
 
   async dispose(): Promise<void> {
@@ -106,8 +106,8 @@ class DesktopTerminalService {
 
   private async pumpEvents(webContents: WebContents, controller: AbortController): Promise<void> {
     try {
-      const client = await desktopSessionService.daemonClient()
-      for await (const event of client.terminals.streamEvents({ signal: controller.signal })) {
+      const client = new TerminalResource(await desktopSessionService.daemonTransport())
+      for await (const event of client.subscribeEvents({ signal: controller.signal })) {
         if (controller.signal.aborted || webContents.isDestroyed()) return
         if (event.type === "data") webContents.send(IpcEvents.terminalData, event)
         else if (event.type === "status") webContents.send(IpcEvents.terminalStatus, event)
@@ -129,13 +129,13 @@ class DesktopTerminalService {
 export const desktopTerminalService = new DesktopTerminalService()
 
 async function withDaemonRetry<T>(
-  operation: (client: TerminalClient) => Promise<T>
+  operation: (client: TerminalResource) => Promise<T>
 ): Promise<T> {
   try {
-    return await operation(await desktopSessionService.daemonClient())
+    return await operation(new TerminalResource(await desktopSessionService.daemonTransport()))
   } catch (error) {
     if (!shouldRefreshDaemonClient(error)) throw error
-    return await operation(await desktopSessionService.refreshDaemonClient())
+    return await operation(new TerminalResource(await desktopSessionService.refreshDaemonTransport()))
   }
 }
 

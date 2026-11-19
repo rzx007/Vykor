@@ -10,11 +10,13 @@ vi.mock("@vykor/server", () => ({
 }))
 vi.mock("../session/session-service", () => ({
   desktopSessionService: {
-    daemonClient: async () => ({
-      system: { getSettings: async () => state.settings, patchSettings: state.patch },
-    }),
+    daemonTransport: async () => ({})
   },
 }))
+vi.mock("@vykor/daemon-admin/configuration", () => ({ SystemResource: class {
+  getSettings = async () => state.settings
+  patchSettings = state.patch
+} }))
 import { ConfigurationSettingsService } from "./configuration-settings-service"
 beforeEach(() => {
   state.settings = { maxTurns: 50, maxTurnsEditable: true }

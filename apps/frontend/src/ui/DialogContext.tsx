@@ -10,12 +10,13 @@ import {
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { useTheme } from "../theme/ThemeContext";
 
-type DialogEntry = { node: UiNode; onClose?: () => void };
+type DialogOnClose = (reason?: "escape") => void;
+type DialogEntry = { node: UiNode; onClose?: DialogOnClose };
 
 export type DialogApi = {
-  push: (node: UiNode, onClose?: () => void) => void;
+  push: (node: UiNode, onClose?: DialogOnClose) => void;
   /** Close the whole stack and push a new entry (for mutually exclusive dialogs like command palette). */
-  replace: (node: UiNode, onClose?: () => void) => void;
+  replace: (node: UiNode, onClose?: DialogOnClose) => void;
   /** Update the top dialog node without firing onClose. Use this to refresh items in-place. */
   update: (node: UiNode) => void;
   close: () => void;
@@ -49,14 +50,14 @@ export function DialogProvider({
   const { width, height } = useTerminalDimensions();
 
   const push = useCallback(
-    (node: UiNode, onClose?: () => void) => {
+    (node: UiNode, onClose?: DialogOnClose) => {
       setStack((prev) => [...prev, { node, onClose }]);
     },
     [],
   );
 
   const replace = useCallback(
-    (node: UiNode, onClose?: () => void) => {
+    (node: UiNode, onClose?: DialogOnClose) => {
       setStack((prev) => {
         // Call onClose for all existing entries being removed
         for (const entry of prev) {
@@ -76,14 +77,16 @@ export function DialogProvider({
     });
   }, []);
 
-  const close = useCallback(() => {
+  const closeTop = useCallback((reason?: "escape") => {
     setStack((prev) => {
       if (prev.length === 0) return prev;
       const top = prev[prev.length - 1]!;
-      top.onClose?.();
+      if (reason) top.onClose?.(reason);
+      else top.onClose?.();
       return prev.slice(0, -1);
     });
   }, []);
+  const close = useCallback(() => closeTop(), [closeTop]);
 
   const closeAll = useCallback(() => {
     setStack((prev) => {
@@ -98,7 +101,7 @@ export function DialogProvider({
   // Uses a ref to avoid stale closure (stack.length captured at registration time).
   useKeyboard((key) => {
     if (key.name === "escape" && stackLenRef.current > 0) {
-      close();
+      closeTop("escape");
     }
   });
 

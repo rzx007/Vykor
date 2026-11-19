@@ -1,6 +1,6 @@
 # 会话与事件资源
 
-访问会话生命周期、附件及事件流。产品管理扩展由私有 [`@vykor/application-client`](../../../../application-client/README.md) 提供。
+访问会话生命周期、附件及事件流，CLI、TUI、Desktop 和第三方共享这些资源。 [产品接入](../../../../../docs/product-surface-integration.md)
 
 ## 主要文件
 
@@ -14,7 +14,7 @@
 
 `VykorClient` 将本目录的三个资源分别以 `sessions`、`attachments`、`events` 暴露，主要实现见上表。
 
-调用方创建和配置 Session、提交与排队 Input、控制 Run、查询 Goal 与历史/结果/用量，或上传和读取附件。资源接口构造 HTTP 请求并返回 daemon 的记录；`events` 提供历史查询和 SSE 订阅，状态模块负责快照与事件合并。附件存储扫描/修复/清理、Desktop worktree 绑定清理属于私有应用客户端。
+调用方创建和配置 Session、提交与排队 Input、控制 Run、查询 Goal 与历史/结果/用量，或上传和读取附件。资源接口构造 HTTP 请求并返回 daemon 的记录。`events` 提供历史查询和 SSE 订阅，状态模块负责快照与事件合并。Desktop 的附件维护与工作树清理由对应桌面功能负责。 [附件维护](../../../../../apps/desktop/src/main/features/attachment/attachment-storage-resource.ts) · [工作树绑定](../../../../../apps/desktop/src/main/features/settings/worktree-binding-resource.ts)
 
 提交、编辑和 resume 都只接受显式 `outputSchema`，发送前检查服务端 `structuredDelivery` 能力。metadata/runMetadata 中的同名字段是服务端记录快照，新请求使用时明确拒绝。resume 沿用原合同，显式字段只能重复原 schema。
 

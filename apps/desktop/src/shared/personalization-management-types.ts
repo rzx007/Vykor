@@ -1,4 +1,4 @@
-import type { MemoryEntryRecord, MemoryRevision } from "@vykor/application-client"
+import type { MemoryEntryRecord, MemoryRevision } from "@vykor/protocol"
 export interface PersonalizationMemoryPreferences {
   enabled: boolean
   autoExtractEnabled: boolean

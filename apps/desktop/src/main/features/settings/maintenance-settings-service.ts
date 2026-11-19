@@ -1,13 +1,15 @@
 import { app, dialog, Notification, shell } from "electron"
-import { open, readdir, writeFile } from "node:fs/promises"
+import { mkdir, open, readdir, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { readDaemonRegistry } from "@vykor/server/daemon-host"
-import { CURRENT_PROTOCOL_VERSION } from "@vykor/application-client"
+import { getDataDir, getDataRoot } from "@vykor/host-config/paths"
+import { CURRENT_PROTOCOL_VERSION } from "@rzx/client"
 import type { DiagnosticFilter, DiagnosticLog, DiagnosticReport, MaintenanceBackupResult, UsageFilter, UsagePrice, UsageReport, UsageSettings } from "../../../shared/maintenance-settings-types"
 import { desktopSessionService } from "../session/session-service"
 import { createDesktopDaemonAutoStartController } from "../daemon-autostart/daemon-autostart-service"
 import { getDesktopPreferences } from "./desktop-preferences"
 import { filterDiagnosticLogRecords } from "../../../shared/diagnostic-log-filter"
+import { DesktopBackupService } from "./desktop-backup-service"
 
 /** Export only explicit operational fields; arbitrary log/error payloads never cross this boundary. */
 export function redactDiagnosticLog(value: unknown): DiagnosticLog | null {
@@ -31,6 +33,17 @@ export function usageCsv(report: UsageReport): string {
 export class MaintenanceSettingsService {
   private budgetTimer: ReturnType<typeof setInterval> | null = null
   private lastBudgetNotice = ""
+  private readonly backups = new DesktopBackupService({
+    liveRoot: getDataRoot,
+    createDaemon: (input) => this.request<MaintenanceBackupResult>("/maintenance/backup", input, AbortSignal.timeout(600_000)),
+    verifyDaemon: (source) => this.request<MaintenanceBackupResult>("/maintenance/backup/verify", { source }, AbortSignal.timeout(600_000)),
+    restoreDaemon: (source, target) => this.request<MaintenanceBackupResult>("/maintenance/backup/restore", { source, target }, AbortSignal.timeout(600_000)),
+    flushDesktop: async () => (await import("../business-data/window-flush")).flushDesktopBusinessData(),
+    backupNotes: async (destination) => (await import("../notes/note-service")).desktopNoteService.backupTo(destination),
+    validateNotes: async (directory) => (await import("@vykor/services/notes")).validateDesktopNotes(directory),
+    importNotes: async (input) => (await import("@vykor/services/notes")).importLegacyNotes(input),
+    recordBackup: recordDesktopBackup,
+  })
   startBudgetMonitor() {
     if (this.budgetTimer) return
     this.budgetTimer = setInterval(() => { void this.checkBudget().catch(() => {}); void this.request("/maintenance/cleanup/policy/run", {}).catch(() => {}) }, 60_000)
@@ -51,8 +64,8 @@ export class MaintenanceSettingsService {
     if (Notification.isSupported() && getDesktopPreferences().notificationMode !== "never") new Notification({ title: "Vykor 用量提醒", body: "本月已知用量或估算费用达到所设阈值。统计可能不完整；任务不会因此停止。", silent: true }).show()
   }
   cleanupPreview(input: { kind: "session" | "log"; olderThan: number }) { return this.request<import("@vykor/server").CleanupPreview>("/maintenance/cleanup/preview", input) }
-  storagePolicy() { return this.request<import("@vykor/application-client").StorageRetentionPolicy>("/maintenance/cleanup/policy") }
-  updateStoragePolicy(input: { enabled: boolean; days: number; expected: { enabled: boolean; days: number } }) { return this.request<import("@vykor/application-client").StorageRetentionPolicy>("/maintenance/cleanup/policy", input) }
+  storagePolicy() { return this.request<import("@vykor/protocol").StorageRetentionPolicy>("/maintenance/cleanup/policy") }
+  updateStoragePolicy(input: { enabled: boolean; days: number; expected: { enabled: boolean; days: number } }) { return this.request<import("@vykor/protocol").StorageRetentionPolicy>("/maintenance/cleanup/policy", input) }
   cleanupExecute(input: { previewId: string; ids: string[] }) { return this.request<import("@vykor/server").CleanupResult>("/maintenance/cleanup/execute", input) }
   cleanupAudits() { return this.request<{ audits: Record<string, unknown>[] }>("/maintenance/cleanup/audits") }
   diagnosticDetails() { return this.request<{ expiresAt: number | null }>("/maintenance/diagnostics/details") }
@@ -73,11 +86,11 @@ export class MaintenanceSettingsService {
   storage() { return this.request<import("@vykor/server").StorageReport>("/maintenance/storage") }
   async openDirectory() { const registry = readDaemonRegistry(); if (!registry) throw new Error("后台服务未连接"); const error = await shell.openPath(dirname(registry.storePath)); if (error) throw new Error(error) }
   async chooseDirectory() { const choice = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] }); return choice.canceled ? null : choice.filePaths[0] ?? null }
-  backup(input: { destination: string; includeMemory: boolean; includeOutput: boolean }) { return this.request<MaintenanceBackupResult>("/maintenance/backup", input, AbortSignal.timeout(600_000)) }
-  verifyBackup(source: string) { return this.request<MaintenanceBackupResult>("/maintenance/backup/verify", { source }) }
-  restore(input: { source: string; target: string }) { return this.request<MaintenanceBackupResult>("/maintenance/backup/restore", input, AbortSignal.timeout(600_000)) }
+  backup(input: { destination: string; includeMemory: boolean; includeOutput: boolean }) { return this.backups.backup(input) }
+  verifyBackup(source: string) { return this.backups.verify(source) }
+  restore(input: { source: string; target: string }) { return this.backups.restore(input) }
   async switchData(_directory: string) { throw new Error("旧的只切换数据库入口已停用，请使用用户数据根迁移；所选目录必须是完整用户数据根。") }
-  async reconnect() { await desktopSessionService.refreshDaemonClient() }
+  async reconnect() { await desktopSessionService.refreshAgentClient() }
   async restart() { await desktopSessionService.restartDaemon({ stopActive: false }) }
   cancelDiagnosis(input?: { requestId: string }) {
     const requestId = readDiagnosisRequestId(input)
@@ -163,6 +176,16 @@ export class MaintenanceSettingsService {
   private async saveExport(name: string, content: string) { const choice = await dialog.showSaveDialog({ defaultPath: name }); if (choice.canceled || !choice.filePath) return null; await writeFile(choice.filePath, content, { encoding: "utf-8", mode: 0o600 }); return choice.filePath }
 }
 export const desktopMaintenanceSettingsService = new MaintenanceSettingsService()
+
+async function recordDesktopBackup(result: MaintenanceBackupResult): Promise<void> {
+  const { path, manifest, desktopNotes, totalBytes } = result
+  if (!/^[\w-]+$/.test(manifest.backupId)) throw new Error("无效的备份记录标识。")
+  const history = join(getDataDir(), "backup-audits")
+  await mkdir(history, { recursive: true })
+  await writeFile(join(history, `${manifest.backupId}.json`), JSON.stringify({
+    version: 1, path, createdAt: manifest.createdAt, manifest, desktopNotes, bytes: totalBytes ?? 0,
+  }), { flag: "wx", mode: 0o600 })
+}
 function withDiagnosticCancellation<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
   if (signal.aborted) { void work.catch(() => {}); return Promise.reject(signal.reason) }
   return new Promise((resolve, reject) => { const aborted = () => reject(signal.reason); signal.addEventListener("abort", aborted, { once: true }); work.then(resolve, reject).finally(() => signal.removeEventListener("abort", aborted)) })

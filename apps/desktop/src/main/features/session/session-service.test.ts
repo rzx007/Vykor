@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
+import { CURRENT_PROTOCOL_VERSION, VykorClient } from "@rzx/client"
 
 import type { DesktopModel } from "../../../shared/session-types"
 import {
@@ -104,6 +105,33 @@ describe("resolveDesktopRuntimeSnapshot", () => {
 })
 
 describe("DesktopSessionService.sendPrompt attachments", () => {
+  it("sends Desktop plugin context through the public prompt request with no product client", async () => {
+    const send = vi.fn(async (request: Request) => {
+      if (new URL(request.url).pathname === "/capabilities") {
+        return Response.json({ serverVersion: "fixture", protocol: { version: CURRENT_PROTOCOL_VERSION }, features: {} })
+      }
+      return Response.json({})
+    })
+    const client = new VykorClient({
+      baseUrl: "https://daemon.invalid",
+      token: "test-token",
+      fetch: (input, init) => send(new Request(input, init)),
+    })
+    const service = serviceWithClient(client)
+    const context = {
+      source: { sessionId: "session-1", appId: "app-1" },
+      lease: { token: "app-lease", backendGeneration: "backend-1" },
+      requestId: "context-1", expectedRevision: 1, text: "选中的片段", data: {},
+    }
+
+    await service.sendPrompt({ id: "input-1", sessionId: "session-1", items: [], attachments: [] }, [context])
+
+    const request = send.mock.calls.at(-1)?.[0]
+    expect(request?.url).toBe("https://daemon.invalid/sessions/session-1/prompts")
+    expect(request?.method).toBe("POST")
+    expect(await request?.json()).toMatchObject({ id: "input-1", pluginAppContexts: [context] })
+  })
+
   it("forwards a structured conversation reference", async () => {
     const admitPrompt = vi.fn(async () => undefined)
     const service = serviceWithClient({ sessions: { admitPrompt } })
@@ -289,14 +317,18 @@ describe("DesktopSessionService.listCommands", () => {
       { name: "/skills", kind: "session" as const, selection: "execute" as const, requiresEmptyComposer: true },
       { name: "/writing-plans", skillName: "writing-plans", kind: "template" as const, path: "D:/skills/writing-plans/SKILL.md" },
     ])
-    const service = serviceWithClient({ system: { listCommands } })
+    const path = vi.fn((value: string) => value)
+    const service = serviceWithClient({}, {
+      path,
+      request: async () => ({ commands: await listCommands() }),
+    })
 
     await expect(service.listCommands(process.cwd())).resolves.toEqual([
       expect.objectContaining({ name: "/compact", kind: "session" }),
       expect.objectContaining({ name: "/skills", kind: "session" }),
       expect.objectContaining({ name: "/writing-plans", kind: "template" }),
     ])
-    expect(listCommands).toHaveBeenCalledWith({ cwd: process.cwd() })
+    expect(path).toHaveBeenCalledWith("/commands", { cwd: process.cwd() })
   })
 
   it("runs compact through the native session API", async () => {
@@ -379,8 +411,9 @@ describe("DesktopSessionService.readAgentActivity", () => {
   })
 })
 
-function serviceWithClient(client: Record<string, unknown>): DesktopSessionService {
+function serviceWithClient(client: object, transport?: object): DesktopSessionService {
   const connection = new DaemonConnectionService()
   vi.spyOn(connection, "getClient").mockResolvedValue(client as never)
+  if (transport) vi.spyOn(connection, "getTransport").mockResolvedValue(transport as never)
   return new DesktopSessionService(connection)
 }

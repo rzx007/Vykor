@@ -2,9 +2,8 @@ import type {
   CreateScheduledTaskInput,
   ScheduledRunRecord,
   ScheduledTaskRecord,
-  ScheduledTaskStatusSummary,
   UpdateScheduledTaskInput,
-} from "@vykor/application-client"
+} from "@vykor/protocol"
 
 export type DesktopScheduledTask = ScheduledTaskRecord
 export type DesktopScheduledRun = ScheduledRunRecord
@@ -16,4 +15,13 @@ export interface ListDesktopScheduledRunsInput {
   taskId?: string
   unread?: boolean
   limit?: number
+}
+
+export interface ScheduledTaskStatusSummary {
+  running: true;
+  tasks: number;
+  active: number;
+  paused: number;
+  executing: number;
+  unread: number;
 }

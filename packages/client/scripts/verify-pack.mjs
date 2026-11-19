@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,12 +17,26 @@ const npmCli = [
 ].find(file => existsSync(file));
 if (!npmCli) throw new Error("Cannot locate npm beside Node.js; install a Node distribution that includes npm");
 const tsc = join(packageRoot, "node_modules/typescript/bin/tsc");
+const withCli = process.argv.includes("--with-cli");
+const runPnpm = (args, cwd) =>
+  execFileSync(pnpmCli.endsWith(".exe") ? pnpmCli : process.execPath, [
+    ...(pnpmCli.endsWith(".exe") ? [] : [pnpmCli]), ...args,
+  ], { cwd, stdio: "inherit" });
 
 try {
-  execFileSync(pnpmCli.endsWith(".exe") ? pnpmCli : process.execPath, [...(pnpmCli.endsWith(".exe") ? [] : [pnpmCli]), "pack", "--pack-destination", sandbox], { cwd: packageRoot, stdio: "pipe" });
-  const tarball = join(sandbox, readdirSync(sandbox).find(name => name.endsWith(".tgz")));
+  runPnpm(["pack", "--pack-destination", sandbox], packageRoot);
+  if (withCli) {
+    const cliRoot = resolve(packageRoot, "../../apps/cli");
+    runPnpm(["build"], cliRoot);
+    runPnpm(["pack", "--pack-destination", sandbox], cliRoot);
+  }
+  const tarballs = readdirSync(sandbox).filter(name => name.endsWith(".tgz")).map(name => join(sandbox, name));
+  assert.equal(tarballs.length, withCli ? 2 : 1);
   writeFileSync(join(sandbox, "package.json"), JSON.stringify({ private: true, type: "module" }));
-  execFileSync(process.execPath, [npmCli, "install", "--ignore-scripts", "--no-audit", "--no-fund", "--package-lock=false", tarball], { cwd: sandbox, stdio: "pipe" });
+  execFileSync(process.execPath, [
+    npmCli, "install", "--no-audit", "--no-fund", "--package-lock=false",
+    ...(withCli ? [] : ["--ignore-scripts"]), ...tarballs,
+  ], { cwd: sandbox, stdio: withCli ? "inherit" : "pipe", timeout: 240_000 });
   const installed = join(sandbox, "node_modules/@rzx/client");
   const manifest = JSON.parse(readFileSync(join(installed, "package.json"), "utf8"));
   assert.equal(Object.keys(manifest.dependencies ?? {}).length, 0, "SDK must not require unpublished workspace packages");
@@ -136,6 +150,11 @@ window.readSessionWorkspace = async (sessionId, signal) => Promise.all([
   });
   assert.ok(Object.keys(browser.metafile.inputs).every(name => !name.includes("service.js")), "Browser consumer imported local process management");
   console.log("packed browser consumer: ok");
+  if (withCli) {
+    const smoke = join(sandbox, "installed-daemon-smoke.mjs");
+    copyFileSync(new URL("./installed-daemon-smoke.mjs", import.meta.url), smoke);
+    execFileSync(process.execPath, [smoke], { cwd: sandbox, stdio: "inherit", timeout: 120_000 });
+  }
 } finally {
   rmSync(sandbox, { recursive: true, force: true });
 }

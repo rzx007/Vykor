@@ -188,6 +188,8 @@ await client.permissions.reply(requestId, { status: "approved", decision: "once"
 // 或 status: "denied"
 ```
 
+`AskUser` 也经权限资源送达。`toolName === "AskUser"` 且 `payload.input.kind === "question"` 时，显示 `question` 或 `questions` 并由用户作答。回复当前请求 ID，传入 `{ status: "approved", decision: "once", answer }`，其中 `answer` 是字符串。普通工具批准无需 `answer`。Goal 自己的暂停提问使用 `sessions.applyGoalAction` 的 `resume`、`questionId` 和 `response`。
+
 中断后台任务使用 `client.sessions.interrupt(sessionId, { expectedRunId: runId })`。给 HTTP 请求、`syncEvents` 或 `waitForRun` 传 `AbortSignal` 只取消本地请求或等待；后台任务可继续执行。
 
 非成功 HTTP 响应抛出 `VykorApiError`，携带 `status` 和 `body`。协议不匹配抛出 `IncompatibleProtocolError`，调用方应升级对应客户端或服务端。`syncEvents` 首次读取快照或全局历史回放失败时直接抛出错误，不自动重试。进入事件循环后，SSE、断流后的快照恢复或事件缺口补齐遇到网络错误、5xx、408/425/429 时退避重试；其他 4xx 会终止同步，并原样抛出该 `VykorApiError`，不丢失状态码和响应正文。取消与不支持的事件格式也会结束同步，`waitForRun` 沿用这些规则。完整状态规则见 [Client Sync Flow](./client-sync-flow.md)。
@@ -201,9 +203,12 @@ pnpm --filter @rzx/client build
 pnpm --filter @rzx/client check-types
 pnpm --filter @rzx/client test
 pnpm --filter @rzx/client test:pack
+pnpm --filter @rzx/client test:pack:daemon
 ```
 
 `test:pack` 会打包、在临时项目实际安装 tarball，验证 Node 调用、Node 服务入口、两种 TypeScript 模块解析方式和浏览器构建。它使用独立测试子进程，不操作用户已有 daemon。`pnpm pack` 的 prepack 自动构建，产物写入客户端包内的 `dist/`，该目录由构建生成，不进入版本库。
+
+`test:pack:daemon` 还将 CLI 候选包装入同一个临时 npm 项目，用隔离数据根启动 daemon。用本机模拟模型验证提交去重、断线接手、工具审批、`AskUser`、结果和指定 Run 的停止。CLI 构建使用 Bun，依赖安装使用系统 npm 的 registry 配置。
 
 ## 发布
 

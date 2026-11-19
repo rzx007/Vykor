@@ -1,4 +1,4 @@
-import { VykorApiError, type VykorClient } from "@vykor/application-client"
+import { VykorApiError, type VykorClient } from "@rzx/client"
 import type {
   DesktopSkillMarketplaceCatalog,
   DesktopSkillMarketplaceInstallInput,
@@ -11,7 +11,13 @@ import { app } from "electron"
 import { isLegacyOutsideProjectWorkspacePath } from "../session/outside-project-workspace"
 import { desktopSessionService } from "../session/session-service"
 
-type SkillClient = Pick<VykorClient, "runtime" | "development">
+import { SkillResource } from "./skill-resource"
+
+type SkillClient = Pick<VykorClient, "runtime"> & { development: SkillResource }
+
+async function skillClient(agent: VykorClient): Promise<SkillClient> {
+  return { runtime: agent.runtime, development: new SkillResource(await desktopSessionService.daemonTransport(agent)) }
+}
 
 export interface DesktopSkillServiceOptions {
   dataRoot?: string
@@ -32,7 +38,7 @@ export class DesktopSkillService {
   async installMarketplace(
     input: DesktopSkillMarketplaceInstallInput
   ): Promise<DesktopSkillSnapshot> {
-    const client = await desktopSessionService.daemonClient()
+    const client = await skillClient(await desktopSessionService.agentClient())
     const result = await client.development.installMarketplaceSkill(input)
     return filterOutsideProjectWorkspaces(result, this.dataRoot())
   }
@@ -63,7 +69,7 @@ export const desktopSkillService = new DesktopSkillService()
 
 async function withDaemonRetry<T>(operation: (client: SkillClient) => Promise<T>): Promise<T> {
   try {
-    return await operation(await desktopSessionService.daemonClient())
+    return await operation(await skillClient(await desktopSessionService.agentClient()))
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (
@@ -73,7 +79,7 @@ async function withDaemonRetry<T>(operation: (client: SkillClient) => Promise<T>
     ) {
       throw error
     }
-    return await operation(await desktopSessionService.refreshDaemonClient())
+    return await operation(await skillClient(await desktopSessionService.refreshAgentClient()))
   }
 }
 

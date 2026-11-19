@@ -1,4 +1,5 @@
 import { trackBusinessDataWindow, requestWindowBusinessDataFlush } from "../business-data/window-flush"
+import { desktopNoteService } from "../notes/note-service"
 import { app, BrowserWindow, nativeTheme, shell, type WebPreferences } from "electron"
 import { release } from "node:os"
 import { join } from "node:path"
@@ -208,7 +209,7 @@ function attachMainWindowBehavior(ctx: AppContext, win: BrowserWindow): void {
     if (isForceQuit()) return
 
     event.preventDefault()
-    closing ??= requestWindowBusinessDataFlush(win.webContents).then(() => {
+    closing ??= requestWindowBusinessDataFlush(win.webContents).then(() => desktopNoteService.flush()).then(() => {
       win.hide()
       showPetWindow(ctx)
     }).catch(() => { win.show() }).finally(() => { closing = null })

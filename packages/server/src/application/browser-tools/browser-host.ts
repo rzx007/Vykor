@@ -61,8 +61,8 @@ export interface BrowserHost {
     deadlineAt?: number;
   }): Promise<BrowserObservation>;
   /**
-   * Optional so CLI/standalone hosts without a Desktop browser remain valid.
-   * Absent means developer inspection is unavailable and must fail closed.
+   * The daemon offers developer inspection only when the host supplies this
+   * operation and its configuration explicitly enables it.
    */
   executeDeveloper?(input: BrowserDeveloperExecuteInput): Promise<BrowserDeveloperResult>;
 }

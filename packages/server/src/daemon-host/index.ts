@@ -26,6 +26,7 @@ export {
   getDaemonRegistryPath,
   getDefaultSessionStorePath,
   readDaemonRegistry,
+  sameDaemonRegistration,
   writeDaemonRegistry,
   type DaemonExecutionSurface,
   type DaemonRegistry,
@@ -45,8 +46,9 @@ export {
 export { BROWSER_BRIDGE_MAX_RESULT_BODY_BYTES, BROWSER_BRIDGE_RESULT_TOO_LARGE } from "../application/browser-tools/browser-bridge.js";
 
 export { isWindowsDaemonServiceEnabled, runRegisteredDaemon, type RegisteredDaemonControl } from "./registered-daemon.js";
-export { legacyDesktopDataLocation, readRegisteredDataLocation, readRegisteredDataSwitchResult } from "./data-location.js";
+export { legacyDesktopDataLocation, readLegacyDataLocation, readRegisteredDataLocation, readRegisteredDataSwitchResult } from "./data-location.js";
 export { acquireRegistryLease, withDaemonControlLock } from "./registry-lease.js";
+export { requestDaemon } from "../http/daemon-request.js";
 export { inspectDataRootMigration, type DataRootMigrationRequest, type DataRootMigrationPreview, type MigrationBlocker, type MigrationSourceEntry } from "./data-root-sources.js";
 export { relocateDataRootFiles, relocateProjectStorageKeys, type DataRootFileRelocationInput } from "./data-root-file-relocation.js";
 export { migrateDataRoot, recoverDataRootMigration, commitDataRootMigration, markDataRootMigrationWritersReleased, type DataRootMigrationCoordination, type DataRootMigrationResult, type MigrationPhase } from "./data-root-migration.js";

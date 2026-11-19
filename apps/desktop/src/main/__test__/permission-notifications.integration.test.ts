@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { BrowserWindow } from "electron"
 import {
   createInitialClientState,
-  type ScheduledRunRecord,
   type SessionEventRecord,
-} from "@vykor/application-client"
+} from "@rzx/client"
+import type { ScheduledRunRecord } from "@vykor/protocol"
 import { WindowManager } from "../core/services/window-manager"
 import { reduceActivityEvent } from "../features/activity/activity-reducer"
 import {

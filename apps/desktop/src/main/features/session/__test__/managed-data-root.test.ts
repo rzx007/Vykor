@@ -8,7 +8,7 @@ import { existsSync } from "node:fs"
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises"
 import { join, relative, win32, posix } from "node:path"
 import { describe, expect, it, vi } from "vitest"
-import { CURRENT_PROTOCOL_VERSION } from "@vykor/application-client"
+import { CURRENT_PROTOCOL_VERSION } from "@rzx/client"
 import { getDataRoot } from "@vykor/host-config/paths"
 
 vi.mock("electron", () => ({
@@ -174,6 +174,14 @@ describe("managed workspace data root", () => {
     }
     const connection = new DaemonConnectionService()
     vi.spyOn(connection, "getClient").mockResolvedValue(api as never)
+    vi.spyOn(connection, "getTransport").mockResolvedValue({
+      path: (path: string) => path,
+      request: async (path: string) => {
+        if (path === "/settings") return { settings: await api.system.getSettings() }
+        if (path === "/projects") return { projects: await api.projects.list() }
+        throw new Error("Unexpected daemon request: " + path)
+      },
+    } as never)
     const result = await new DesktopSessionService(connection).bootstrap()
     expect(result.outsideProjectWorkspaceRoot).toBe(join(root, "workspaces"))
     expect(result.projects.map((project) => project.path)).toEqual(realProjectPaths)

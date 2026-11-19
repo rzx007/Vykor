@@ -54,10 +54,12 @@ export default defineConfig({
         // workspace 包打进主进程 bundle，安装包就不必再拷整棵 monorepo 依赖树
         exclude: [
           "@electron-toolkit/utils",
-          "@vykor/application-client",
+          "@vykor/daemon-admin",
           "@vykor/host-config",
+          "@vykor/protocol",
           "@rzx/client",
           "@vykor/server",
+          "@vykor/services",
           "@vykor/terminal",
           "@vykor/terminal-node",
         ],

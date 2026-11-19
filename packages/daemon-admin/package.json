@@ -1,0 +1,46 @@
+{
+  "name": "@vykor/daemon-admin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./configuration": {
+      "types": "./src/configuration/index.ts",
+      "import": "./src/configuration/index.ts"
+    },
+    "./knowledge": {
+      "types": "./src/knowledge/index.ts",
+      "import": "./src/knowledge/index.ts"
+    },
+    "./workspace": {
+      "types": "./src/workspace/index.ts",
+      "import": "./src/workspace/index.ts"
+    },
+    "./channels": {
+      "types": "./src/channels/index.ts",
+      "import": "./src/channels/index.ts"
+    },
+    "./mcp": {
+      "types": "./src/mcp/index.ts",
+      "import": "./src/mcp/index.ts"
+    },
+    "./plugins": {
+      "types": "./src/plugins/index.ts",
+      "import": "./src/plugins/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "check-types": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@rzx/client": "workspace:*",
+    "@vykor/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "^5.7.3",
+    "vitest": "catalog:"
+  }
+}

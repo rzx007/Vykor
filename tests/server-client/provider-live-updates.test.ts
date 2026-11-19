@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { createSystemRoutes } from "../../packages/server/src/http/routes/system.js";
 import { createAuthRoutes } from "../../packages/server/src/http/routes/auth.js";
-import { VykorClient } from "@vykor/application-client";
+import { HttpTransport, VykorClient, type VykorClientOptions } from "@rzx/client";
+import { ProviderResource } from "@vykor/daemon-admin/configuration";
 
 function controls() {
   return {
@@ -50,11 +51,13 @@ describe("provider configuration during active runs", () => {
     const list = vi.fn(async () => []);
     const control = controls();
     const routes = createSystemRoutes({ control: control as never, modelService: { list } });
-    const client = new VykorClient({
+    const connection: VykorClientOptions = {
       baseUrl: "http://models.test",
       fetch: async (url, init) => routes.request(new Request(url, init)),
-    });
-    await client.providers.refreshModels();
+    };
+    const client = new VykorClient(connection);
+    const providers = new ProviderResource(new HttpTransport(connection));
+    await providers.refreshModels();
     expect(list).toHaveBeenLastCalledWith({ refresh: true });
     expect(control.invalidateRuntimes).toHaveBeenCalledOnce();
     await client.runtime.listModels();

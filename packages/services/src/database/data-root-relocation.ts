@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync } from "node:fs";
-import { dirname, isAbsolute, join, relative } from "node:path";
+import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import Database from "better-sqlite3";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -12,6 +12,7 @@ import { normalizeProjectPath } from "../projects/project-records.js";
 import { AttachmentBlobStore } from "../attachments/storage/attachment-blob-store.js";
 import { noteFilePath, readNoteFile, scanNoteIds } from "../notes/markdown-note-files.js";
 import { validateNoteOrganizationFiles } from "../notes/note-organization-repository.js";
+import { validateDesktopNotes } from "../notes/desktop-note-repository.js";
 
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 const report = (): PathRelocationReport => ({ changed: 0, unchangedExternal: 0, unsupported: [] });
@@ -224,15 +225,21 @@ export async function verifyDataRootCopy(databasePath: string): Promise<void> {
       finally { reader.releaseLock(); }
       if (hash.digest("hex") !== item.sha256) throw new Error("Attachment copy digest mismatch");
     }
-    const notes = join(dirname(databasePath), "notes"), indexed = db.select().from(schema.noteFileIndex).all();
-    if (existsSync(notes)) {
-      const ids = scanNoteIds(notes);
-      for (const id of ids) readNoteFile(noteFilePath(notes, id));
-      validateNoteOrganizationFiles(notes, ids);
-    }
-    for (const entry of indexed) if (entry.deletedAt === null) {
-      const note = readNoteFile(noteFilePath(notes, entry.id));
-      if (!note || createHash("sha256").update(note.content).digest("hex") !== entry.sha256) throw new Error("Note copy digest mismatch");
+    const runtime = dirname(databasePath);
+    const desktopNotes = join(dirname(runtime), "desktop", "notes");
+    if (basename(runtime) === "session-runtime" && lstatSync(desktopNotes, { throwIfNoEntry: false })) {
+      validateDesktopNotes(desktopNotes);
+    } else {
+      const notes = join(runtime, "notes");
+      if (existsSync(notes)) {
+        const ids = scanNoteIds(notes);
+        for (const id of ids) readNoteFile(noteFilePath(notes, id));
+        validateNoteOrganizationFiles(notes, ids);
+      }
+      for (const entry of db.select().from(schema.noteFileIndex).all()) if (entry.deletedAt === null) {
+        const note = readNoteFile(noteFilePath(notes, entry.id));
+        if (!note || createHash("sha256").update(note.content).digest("hex") !== entry.sha256) throw new Error("Note copy digest mismatch");
+      }
     }
     // Runtime leases refer to stopped owners. Durable asset/source identities stay intact.
     db.delete(schema.attachmentLeases).run();

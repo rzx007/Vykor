@@ -4,7 +4,9 @@
 
 ## 入口与流程
 
-`createApplicationBackup()` 收集数据库和附件等目录，生成带校验信息的清单；`restoreApplicationBackup()` 检查内容后恢复目标数据。
+`createApplicationBackup()` 收集数据库和附件等目录，生成标记为 `daemon-only` 的第 4 版清单。它从数据库副本移除旧便签正文、索引和附件行，当前数据库和旧便签文件保持原样。
+
+`verifyApplicationBackup()` 校验清单和文件。第 3 版的便签会在临时副本上核对 Markdown 正文、索引和组织文件。`restoreApplicationBackup()` 验证后发布恢复目标。恢复第 1、2 版时从旧 SQLite 重建 Markdown。第 3 版保留已验证的 Markdown 和组织文件，桌面导入可读取恢复目录中的旧便签。
 
 ## 状态归属
 

@@ -6,7 +6,7 @@ Vykor 终端 CLI：在终端里跑 AI Agent。默认进入交互式 TUI（需 [B
 
 `--data-root <绝对路径>` 必须放在命令和其他选项之前，例如 `vk --data-root D:\Vykor serve --register`。它优先于 `VYKOR_CONFIG_DIR`、用户 home 下的 `.vykor-root.json` 和默认 `~/.vykor`。启动错误会注明来源或需要恢复的记录；默认首次启动不会生成定位记录。
 
-产品操作与类型由私有工作区包 `@vykor/application-client` 提供，会话同步复用公开 SDK `@rzx/client`。构建会把私有包打进 CLI 与 TUI，安装发布包无需单独安装它。
+CLI 和 TUI 通过公开 SDK `@rzx/client` 连接 daemon、同步会话和处理审批。渠道、MCP 与插件等产品管理命令使用按职责导入的 `@vykor/daemon-admin`，由构建纳入发布包。 [Client SDK](../../packages/client/README.md) · [管理入口](../../packages/daemon-admin/README.md)
 
 ## 要求
 

@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from "vitest"
 import {
   IncompatibleProtocolError,
   VykorApiError,
-  type McpRuntimeSyncResult,
-} from "@vykor/application-client"
+} from "@rzx/client"
+import type { McpRuntimeSyncResult } from "@vykor/daemon-admin/mcp"
 import { createDesktopMcpRuntimeCoordinator } from "./mcp-runtime-coordinator"
 
 const identity = {

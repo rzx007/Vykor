@@ -44,9 +44,9 @@ describe("Markdown NoteRepository", () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-layout-only-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     try {
-      store.notes.create({ content: "a" }, { id: "a" });
-      store.notes.create({ content: "b" }, { id: "b" });
-      writeFileSync(join(store.notes.directory, "a.md"), "external edit");
+      store.openLegacyNotes().create({ content: "a" }, { id: "a" });
+      store.openLegacyNotes().create({ content: "b" }, { id: "b" });
+      writeFileSync(join(store.openLegacyNotes().directory, "a.md"), "external edit");
       const index = () =>
         Reflect.get(store, "storage")
           .database.connection.prepare(
@@ -56,8 +56,8 @@ describe("Markdown NoteRepository", () => {
       const before = index();
       const readBody = vi.spyOn(markdownFiles, "readNoteFile");
       try {
-        const snapshot = store.notes.organization();
-        await store.notes.saveOrganization(
+        const snapshot = store.openLegacyNotes().organization();
+        await store.openLegacyNotes().saveOrganization(
           {
             ...snapshot.organization,
             desktop: [...snapshot.organization.desktop].reverse(),
@@ -66,13 +66,13 @@ describe("Markdown NoteRepository", () => {
         );
         expect(readBody).not.toHaveBeenCalled();
         expect(index()).toEqual(before);
-        expect(readFileSync(join(store.notes.directory, "a.md"), "utf8")).toBe(
+        expect(readFileSync(join(store.openLegacyNotes().directory, "a.md"), "utf8")).toBe(
           "external edit",
         );
       } finally {
         readBody.mockRestore();
       }
-      expect(store.notes.get("a")?.revision).toBe(2);
+      expect(store.openLegacyNotes().get("a")?.revision).toBe(2);
     } finally {
       store.close();
       rmSync(directory, { recursive: true, force: true });
@@ -82,36 +82,36 @@ describe("Markdown NoteRepository", () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-layout-external-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     try {
-      store.notes.create({ content: "a" }, { id: "a" });
-      store.notes.create({ content: "b" }, { id: "b" });
-      store.notes.organization();
-      unlinkSync(join(store.notes.directory, "a.md"));
-      writeFileSync(join(store.notes.directory, "new.md"), "new");
-      const snapshot = store.notes.organization();
+      store.openLegacyNotes().create({ content: "a" }, { id: "a" });
+      store.openLegacyNotes().create({ content: "b" }, { id: "b" });
+      store.openLegacyNotes().organization();
+      unlinkSync(join(store.openLegacyNotes().directory, "a.md"));
+      writeFileSync(join(store.openLegacyNotes().directory, "new.md"), "new");
+      const snapshot = store.openLegacyNotes().organization();
       expect(snapshot.organization.desktop).toEqual([
         { type: "note", id: "b" },
         { type: "note", id: "new" },
       ]);
-      const deletion = store.notes.saveOrganization(
+      const deletion = store.openLegacyNotes().saveOrganization(
         snapshot.organization,
         snapshot.etag,
       );
-      unlinkSync(join(store.notes.directory, "b.md"));
+      unlinkSync(join(store.openLegacyNotes().directory, "b.md"));
       await expect(deletion).rejects.toThrow("不存在的便签");
-      const latest = store.notes.organization();
+      const latest = store.openLegacyNotes().organization();
       expect(latest.organization.desktop).toEqual([
         { type: "note", id: "new" },
       ]);
-      const addition = store.notes.saveOrganization(
+      const addition = store.openLegacyNotes().saveOrganization(
         latest.organization,
         latest.etag,
       );
-      writeFileSync(join(store.notes.directory, "other.md"), "other");
+      writeFileSync(join(store.openLegacyNotes().directory, "other.md"), "other");
       await expect(addition).rejects.toThrow("缺少现有便签");
       expect(
         JSON.parse(
           readFileSync(
-            join(store.notes.directory, "organization.json"),
+            join(store.openLegacyNotes().directory, "organization.json"),
             "utf8",
           ),
         ),
@@ -124,13 +124,13 @@ describe("Markdown NoteRepository", () => {
   it("migrates legacy notes on the first organization read and still enforces storage admission", () => {
     withStore((store, path) => {
       insertLegacy(store, "legacy", "old idea", 4);
-      expect(store.notes.organization().organization.desktop).toEqual([
+      expect(store.openLegacyNotes().organization().organization.desktop).toEqual([
         { type: "note", id: "legacy" },
       ]);
       expect(
         readFileSync(join(dirname(path), "notes", "legacy.md"), "utf8"),
       ).toBe("old idea");
-      expect(store.notes.get("legacy")?.revision).toBe(4);
+      expect(store.openLegacyNotes().get("legacy")?.revision).toBe(4);
       const storage = Reflect.get(store, "storage");
       const admission = vi
         .spyOn(storage, "assertWritable")
@@ -138,7 +138,7 @@ describe("Markdown NoteRepository", () => {
           throw new Error("storage blocked");
         });
       try {
-        expect(() => store.notes.organization()).toThrow("storage blocked");
+        expect(() => store.openLegacyNotes().organization()).toThrow("storage blocked");
       } finally {
         admission.mockRestore();
       }
@@ -148,10 +148,10 @@ describe("Markdown NoteRepository", () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-delete-organization-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     try {
-      store.notes.create({ content: "a" }, { id: "a" });
-      store.notes.create({ content: "b" }, { id: "b" });
-      const initial = store.notes.organization();
-      await store.notes.saveOrganization(
+      store.openLegacyNotes().create({ content: "a" }, { id: "a" });
+      store.openLegacyNotes().create({ content: "b" }, { id: "b" });
+      const initial = store.openLegacyNotes().organization();
+      await store.openLegacyNotes().saveOrganization(
         {
           version: 1,
           desktop: [{ type: "folder", id: "f" }],
@@ -162,32 +162,32 @@ describe("Markdown NoteRepository", () => {
       );
       expect(() =>
         store.transaction(() => {
-          store.notes.remove("a");
+          store.openLegacyNotes().remove("a");
           throw new Error("rollback deletion");
         }),
       ).toThrow("rollback deletion");
-      expect(store.notes.organization().organization.folderItems.f).toEqual([
+      expect(store.openLegacyNotes().organization().organization.folderItems.f).toEqual([
         "a",
         "b",
       ]);
-      expect(store.notes.remove("a")).toBe(true);
-      expect(store.notes.organization().organization.desktop).toEqual([
+      expect(store.openLegacyNotes().remove("a")).toBe(true);
+      expect(store.openLegacyNotes().organization().organization.desktop).toEqual([
         { type: "note", id: "b" },
       ]);
       writeFileSync(
-        join(store.notes.directory, "organization.previous.json"),
+        join(store.openLegacyNotes().directory, "organization.previous.json"),
         "blocked",
       );
-      const repository = Reflect.get(store.notes, "organizationRepository");
+      const repository = Reflect.get(store.openLegacyNotes(), "organizationRepository");
       const original = repository.read.bind(repository);
       repository.read = () => {
         throw new Error("layout write failed");
       };
-      expect(store.notes.remove("b")).toBe(true);
-      expect(existsSync(join(store.notes.directory, "b.md"))).toBe(false);
+      expect(store.openLegacyNotes().remove("b")).toBe(true);
+      expect(existsSync(join(store.openLegacyNotes().directory, "b.md"))).toBe(false);
       repository.read = original;
-      expect(store.notes.organization().warning).toContain("正文已删除");
-      expect(store.notes.organization().organization.desktop).toEqual([]);
+      expect(store.openLegacyNotes().organization().warning).toContain("正文已删除");
+      expect(store.openLegacyNotes().organization().organization.desktop).toEqual([]);
     } finally {
       store.close();
       rmSync(directory, { recursive: true, force: true });
@@ -197,7 +197,7 @@ describe("Markdown NoteRepository", () => {
     withStore((store, path) => {
       expect(() =>
         store.transaction(() => {
-          store.notes.create({ content: "committed idea" }, { id: "note" });
+          store.openLegacyNotes().create({ content: "committed idea" }, { id: "note" });
           Reflect.get(store, "storage").deferUntilCommit(() => {
             throw new Error("notification failed");
           });
@@ -206,7 +206,7 @@ describe("Markdown NoteRepository", () => {
       expect(
         readFileSync(join(dirname(path), "notes", "note.md"), "utf8"),
       ).toBe("committed idea");
-      expect(store.notes.get("note")).toMatchObject({
+      expect(store.openLegacyNotes().get("note")).toMatchObject({
         content: "committed idea",
         revision: 1,
       });
@@ -214,23 +214,23 @@ describe("Markdown NoteRepository", () => {
   });
   it("rolls back file creates, updates and deletes with an outer Store transaction", () => {
     withStore((store, path) => {
-      store.notes.create({ content: "before" }, { id: "note" });
+      store.openLegacyNotes().create({ content: "before" }, { id: "note" });
       const file = join(dirname(path), "notes", "note.md");
       expect(() =>
         store.transaction(() => {
-          store.notes.update("note", {
+          store.openLegacyNotes().update("note", {
             content: "middle",
             expectedRevision: 1,
           });
-          store.notes.update("note", { content: "after", expectedRevision: 2 });
-          store.notes.create({ content: "new idea" }, { id: "new" });
-          store.notes.remove("note");
+          store.openLegacyNotes().update("note", { content: "after", expectedRevision: 2 });
+          store.openLegacyNotes().create({ content: "new idea" }, { id: "new" });
+          store.openLegacyNotes().remove("note");
           throw new Error("outer rollback");
         }),
       ).toThrow("outer rollback");
       expect(readFileSync(file, "utf8")).toBe("before");
       expect(existsSync(join(dirname(path), "notes", "new.md"))).toBe(false);
-      expect(store.notes.get("note")).toMatchObject({
+      expect(store.openLegacyNotes().get("note")).toMatchObject({
         content: "before",
         revision: 1,
       });
@@ -250,15 +250,15 @@ describe("Markdown NoteRepository", () => {
       },
     });
     try {
-      store.notes.create({ content: "old content" }, { id: "note" });
+      store.openLegacyNotes().create({ content: "old content" }, { id: "note" });
       expect(() =>
-        store.notes.update("note", {
+        store.openLegacyNotes().update("note", {
           content: "new content",
           expectedRevision: 1,
         }),
       ).toThrow("commit failed");
       expect(readFileSync(file, "utf8")).toBe("old content");
-      expect(store.notes.get("note")).toMatchObject({
+      expect(store.openLegacyNotes().get("note")).toMatchObject({
         content: "old content",
         revision: 1,
       });
@@ -269,20 +269,20 @@ describe("Markdown NoteRepository", () => {
   });
   it("stores exact content in a standalone Markdown file and reads it after reopening", () => {
     withStore((store, path) => {
-      const note = store.notes.create(
+      const note = store.openLegacyNotes().create(
         { content: "  想法\nsecond line  " },
         { id: "note", now: 10 },
       );
       const file = join(dirname(path), "notes", "note.md");
       expect(readFileSync(file, "utf8")).toBe("  想法\nsecond line  ");
-      store.notes.update(
+      store.openLegacyNotes().update(
         note.id,
         { content: "updated", expectedRevision: 1 },
         20,
       );
       const reopened = new SessionStore({ path });
       try {
-        expect(reopened.notes.get(note.id)).toEqual({
+        expect(reopened.openLegacyNotes().get(note.id)).toEqual({
           id: "note",
           content: "updated",
           revision: 2,
@@ -298,14 +298,14 @@ describe("Markdown NoteRepository", () => {
 
   it("recognizes external edits and rejects a stale write without changing the file", () => {
     withStore((store, path) => {
-      const note = store.notes.create({ content: "original" }, { id: "note" });
+      const note = store.openLegacyNotes().create({ content: "original" }, { id: "note" });
       const file = join(dirname(path), "notes", "note.md");
       writeFileSync(file, "edited in another editor");
       expect(() =>
-        store.notes.update(note.id, { content: "stale", expectedRevision: 1 }),
+        store.openLegacyNotes().update(note.id, { content: "stale", expectedRevision: 1 }),
       ).toThrow("Note revision conflict");
       expect(readFileSync(file, "utf8")).toBe("edited in another editor");
-      expect(store.notes.get(note.id)).toMatchObject({
+      expect(store.openLegacyNotes().get(note.id)).toMatchObject({
         content: "edited in another editor",
         revision: 2,
       });
@@ -315,7 +315,7 @@ describe("Markdown NoteRepository", () => {
   it("imports existing database notes once without deleting their original records", () => {
     withStore((store, path) => {
       insertLegacy(store, "legacy", "old idea", 4);
-      expect(store.notes.list()).toEqual([
+      expect(store.openLegacyNotes().list()).toEqual([
         {
           id: "legacy",
           content: "old idea",
@@ -327,10 +327,10 @@ describe("Markdown NoteRepository", () => {
       expect(
         readFileSync(join(dirname(path), "notes", "legacy.md"), "utf8"),
       ).toBe("old idea");
-      expect(store.notes.remove("legacy")).toBe(true);
+      expect(store.openLegacyNotes().remove("legacy")).toBe(true);
       const reopened = new SessionStore({ path });
       try {
-        expect(reopened.notes.list()).toEqual([]);
+        expect(reopened.openLegacyNotes().list()).toEqual([]);
       } finally {
         reopened.close();
       }
@@ -347,12 +347,12 @@ describe("Markdown NoteRepository", () => {
   it("does not overwrite a pre-existing file during database import", () => {
     withStore((store, path) => {
       const directory = join(dirname(path), "notes");
-      store.notes.list();
+      store.openLegacyNotes().list();
       insertLegacy(store, "legacy", "old copy");
       writeFileSync(join(directory, "legacy.md"), "newer file");
       const reopened = new SessionStore({ path });
       try {
-        expect(reopened.notes.get("legacy")?.content).toBe("newer file");
+        expect(reopened.openLegacyNotes().get("legacy")?.content).toBe("newer file");
       } finally {
         reopened.close();
       }
@@ -364,13 +364,13 @@ describe("Markdown NoteRepository", () => {
 
   it("allows clearing an existing note and explicitly removes its file", () => {
     withStore((store, path) => {
-      const note = store.notes.create({ content: "idea" }, { id: "note" });
-      store.notes.update(note.id, { content: "", expectedRevision: 1 });
+      const note = store.openLegacyNotes().create({ content: "idea" }, { id: "note" });
+      store.openLegacyNotes().update(note.id, { content: "", expectedRevision: 1 });
       expect(
         readFileSync(join(dirname(path), "notes", "note.md"), "utf8"),
       ).toBe("");
-      expect(store.notes.remove(note.id)).toBe(true);
-      expect(store.notes.remove(note.id)).toBe(false);
+      expect(store.openLegacyNotes().remove(note.id)).toBe(true);
+      expect(store.openLegacyNotes().remove(note.id)).toBe(false);
       expect(existsSync(join(dirname(path), "notes", "note.md"))).toBe(false);
     });
   });
@@ -378,12 +378,12 @@ describe("Markdown NoteRepository", () => {
   it("refuses path traversal and leaves files unchanged on invalid writes", () => {
     withStore((store, path) => {
       expect(() =>
-        store.notes.create({ content: "escape" }, { id: "../escape" }),
+        store.openLegacyNotes().create({ content: "escape" }, { id: "../escape" }),
       ).toThrow();
       expect(existsSync(join(dirname(path), "escape.md"))).toBe(false);
-      store.notes.create({ content: "saved" }, { id: "note" });
+      store.openLegacyNotes().create({ content: "saved" }, { id: "note" });
       expect(() =>
-        store.notes.update("note", { content: "stale", expectedRevision: 3 }),
+        store.openLegacyNotes().update("note", { content: "stale", expectedRevision: 3 }),
       ).toThrow("Note revision conflict");
       expect(
         readFileSync(join(dirname(path), "notes", "note.md"), "utf8"),
@@ -398,11 +398,11 @@ describe("Markdown NoteRepository", () => {
 
   it("rejects a non-UTF-8 external file without overwriting its bytes", () => {
     withStore((store, path) => {
-      const note = store.notes.create({ content: "saved" }, { id: "note" });
+      const note = store.openLegacyNotes().create({ content: "saved" }, { id: "note" });
       const file = join(dirname(path), "notes", "note.md");
       const bytes = Buffer.from([0xff, 0xfe, 0x61, 0x00]);
       writeFileSync(file, bytes);
-      expect(() => store.notes.get(note.id)).toThrow("UTF-8");
+      expect(() => store.openLegacyNotes().get(note.id)).toThrow("UTF-8");
       expect(readFileSync(file)).toEqual(bytes);
     });
   });

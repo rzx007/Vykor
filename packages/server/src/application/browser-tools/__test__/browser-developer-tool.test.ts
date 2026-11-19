@@ -15,7 +15,7 @@ function context(overrides: Record<string, unknown> = {}) {
 }
 
 describe("createBrowserDeveloperTool", () => {
-  it("fails closed when no desktop browser host is connected", async () => {
+  it("fails closed without a browser host", async () => {
     const tool = createBrowserDeveloperTool(undefined);
     const result = await tool.execute({ action: "inspect_dom" }, context());
 

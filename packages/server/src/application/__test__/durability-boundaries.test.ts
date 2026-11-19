@@ -178,10 +178,11 @@ describe("durable application long-running boundaries", () => {
       store,
       destination: backup,
       sources: { memory, attachments },
-    });
+    }).finally(() => store.close());
     expect(createdManifest).toMatchObject({
-      version: 3,
-      directories: { attachments: true, notes: true },
+      version: 4,
+      scope: "daemon-only",
+      directories: { attachments: true, memory: true },
       attachments: {
         assets: 1,
         uniqueBlobs: 1,
@@ -189,6 +190,7 @@ describe("durable application long-running boundaries", () => {
         consistency: { errors: 0, warnings: 0, issueCounts: {} },
       },
     });
+    expect(createdManifest.directories).not.toHaveProperty("notes");
 
     const checksumsPath = join(backup, "checksums.json");
     const checksums = JSON.parse(
@@ -240,22 +242,24 @@ describe("durable application long-running boundaries", () => {
       readdirSync(dir).some((name) => name.includes(".restore-")),
     ).toBe(false);
     const restored = new SessionStore({ path: restoredPath });
-    expect(restored.sessions.get("session-1")).toBeDefined();
-    expect(existsSync(join(
-      restoredAttachments,
-      "blobs",
-      attachmentHash.slice(0, 2),
-      attachmentHash,
-    ))).toBe(true);
-    expect(
-      restored.acquireApplicationOwner({
-        ownerId: "restored",
-        pid: 2,
-        staleAfterMs: 10_000,
-      }),
-    ).toMatchObject({ generation: 1 });
-    restored.close();
-    store.close();
+    try {
+      expect(restored.sessions.get("session-1")).toBeDefined();
+      expect(existsSync(join(
+        restoredAttachments,
+        "blobs",
+        attachmentHash.slice(0, 2),
+        attachmentHash,
+      ))).toBe(true);
+      expect(
+        restored.acquireApplicationOwner({
+          ownerId: "restored",
+          pid: 2,
+          staleAfterMs: 10_000,
+        }),
+      ).toMatchObject({ generation: 1 });
+    } finally {
+      restored.close();
+    }
   });
 
   it("refuses to create an attachment backup when a ready blob is missing", async () => {

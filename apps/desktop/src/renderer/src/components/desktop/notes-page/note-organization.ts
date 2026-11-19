@@ -1,4 +1,4 @@
-import type { DesktopItem, NoteOrganizationV1Record } from "@vykor/application-client"
+import type { DesktopItem, NoteOrganizationV1Record } from "@vykor/protocol"
 import type { NoteView } from "./note-model"
 
 export function projectNoteDesktop(

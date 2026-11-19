@@ -505,11 +505,12 @@ export function StorageSettings() {
           {backup ? (
             <div className="text-xs text-muted-foreground">
               <p className="break-all">已校验清单：{backup.path}</p>
+              {backup.historyRecorded === false ? <p>备份已保存，历史记录写入失败。可按上面的路径重新校验。</p> : null}
               <p>
-                {new Date(backup.manifest.createdAt).toLocaleString()} · 格式{" "}
-                {backup.manifest.version} · 总大小{" "}
+                {new Date(backup.manifest.createdAt).toLocaleString()} ·{" "}
+                {backup.desktopNotes ? "桌面备份" : `备份格式 ${backup.manifest.version}`} · 总大小{" "}
                 {backup.totalBytes === undefined ? "未记录" : formatBytes(backup.totalBytes)} · 包含{" "}
-                {Object.entries(backup.manifest.directories)
+                {Object.entries({ ...backup.manifest.directories, ...(backup.desktopNotes ? { 桌面便签: true } : {}) })
                   .filter(([, included]) => included)
                   .map(([name]) => name)
                   .join("、")}
@@ -530,7 +531,7 @@ export function StorageSettings() {
                   {item.path}
                   <br />
                   包含{" "}
-                  {Object.entries(item.manifest.directories)
+                  {Object.entries({ ...item.manifest.directories, ...(item.desktopNotes ? { 桌面便签: true } : {}) })
                     .filter(([, included]) => included)
                     .map(([name]) => name)
                     .join("、")}
@@ -620,7 +621,7 @@ export function StorageSettings() {
             >
               恢复到新目录
             </Button>
-            {restored ? <p className="text-xs text-muted-foreground">恢复的数据库保持在所选目录中；请通过本机整根迁移将旧数据库位置作为来源导入。</p> : null}
+            {restored ? <p className="text-xs text-muted-foreground">数据已恢复到所选目录。可用该目录作为启动参数 --data-root，当前窗口仍使用原数据。</p> : null}
           </div>
           {restoredSettings ? (
             <p className="text-xs break-all text-muted-foreground">

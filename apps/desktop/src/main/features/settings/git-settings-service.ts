@@ -1,3 +1,5 @@
+import { ProjectResource } from "../session/project-resource"
+import { WorktreeBindingResource } from "./worktree-binding-resource"
 import { getDataRoot } from "@vykor/host-config/paths"
 import { execFile } from "node:child_process"
 import { randomUUID } from "node:crypto"
@@ -371,9 +373,9 @@ export class GitSettingsService {
         (typeof input.projectId !== "string" || !input.projectId.trim()))
     )
       throw new Error("请选择有效项目和 Git 环境。")
-    const client = await desktopSessionService.daemonClient()
+    const projects = new ProjectResource(await desktopSessionService.daemonTransport())
     const project = input.projectId
-      ? (await client.projects.list()).find((item) => item.id === input.projectId)
+      ? (await projects.list()).find((item) => item.id === input.projectId)
       : undefined
     if (input.projectId && !project) throw new Error("选定项目不存在。")
     const runtime = await desktopRuntimeSettingsService.snapshot({ cwd: project?.path })
@@ -394,7 +396,7 @@ export class GitSettingsService {
               env: agent.kind === "wsl" ? agent.env : undefined,
             }
           : agent
-    return { client, project, agent, environment, source: runtime.source }
+    return { project, agent, environment, source: runtime.source }
   }
   async snapshot(input: GitSettingsScope = {}): Promise<GitSettingsSnapshot> {
     const preferences = getGitPreferences()
@@ -469,7 +471,7 @@ export class GitSettingsService {
       if (!isAbsolute(input.preferences.worktreeRoot)) throw new Error("独立目录必须是绝对路径。")
       const root = await realpath(input.preferences.worktreeRoot)
       if (!(await stat(root)).isDirectory()) throw new Error("独立目录不是有效文件夹。")
-      const projects = await (await desktopSessionService.daemonClient()).projects.list()
+      const projects = await new ProjectResource(await desktopSessionService.daemonTransport()).list()
       for (const project of projects) {
         if (isInsideGitDirectory(await realpath(project.path), root))
           throw new Error("独立目录不能位于项目内容目录中。")
@@ -602,7 +604,7 @@ export class GitSettingsService {
     updateGitWorktrees((items) => items.filter((item) => item.id !== id))
   }
   async worktrees(): Promise<ManagedGitWorktree[]> {
-    const client = await desktopSessionService.daemonClient()
+    const client = await desktopSessionService.agentClient()
     const sessions = await client.sessions.list({ includeArchived: true, limit: 10_000 })
     return Promise.all(
       getGitSettings().worktrees.map(async (record) => {
@@ -724,7 +726,7 @@ export class GitSettingsService {
       if (!item?.cleanupAllowed) throw new Error(item?.reason ?? "这不是 Vykor 管理的工作目录。")
       const record = getGitSettings().worktrees.find((record) => record.id === item.id)!
       removed = item.directoryRemoved === true
-      const client = await desktopSessionService.daemonClient()
+      const client = await desktopSessionService.agentClient()
       if (
         record.sessionId &&
         ((await client.protocol.capabilities()).features.gitWorktreeBindings ?? 0) < 1
@@ -755,7 +757,7 @@ export class GitSettingsService {
       )
       if (record.sessionId) {
         try {
-          const updated = await client.sessions.clearWorktreeBinding(record.sessionId, {
+          const updated = await new WorktreeBindingResource(await desktopSessionService.daemonTransport(client)).clearWorktreeBinding(record.sessionId, {
             id: record.id,
             path: record.path,
             branch: record.branch,

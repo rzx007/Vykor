@@ -4,7 +4,7 @@ import type {
   UpdateNoteInput,
   NoteOrganizationSnapshotRecord,
   SaveNoteOrganizationInput,
-} from "@vykor/application-client"
+} from "@vykor/protocol"
 
 export type DesktopNote = NoteRecord
 export type CreateDesktopNoteInput = CreateNoteInput

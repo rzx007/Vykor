@@ -1,5 +1,7 @@
 # Agent 生命周期客户端边界
 
+> 状态：历史设计，保留当时的拆包约定。 [当前产品接入](../../product-surface-integration.md)
+
 用户已确认：`@rzx/client` 默认连接已有 daemon，提供完整 Agent 生命周期和同步恢复，纯业务接口、类型、逻辑移到内部应用层。
 
 ## 公开 SDK
@@ -15,7 +17,7 @@
 
 ## 私有应用客户端
 
-- 新增 `packages/application-client`，包名 `@vykor/application-client`，`private: true`。
+- 新增私有工作区包 `@vykor/application-client`。 [退役前的包定义](https://github.com/rzx007/Vykor/blob/9258ffcf5bffaa6cc683d76963c94acb0d277141/packages/application-client/package.json)
 - 内部 `VykorClient` 保持产品现有资源，复用公开 SDK 的传输、协议、会话同步和核心 Resource；不得复制 reducer、同步恢复或 Agent 执行逻辑。
 - 笔记、渠道、调度、插件与市场、插件应用/历史、全局配置/身份认证/提供商管理、Git/终端管理、业务展示策略、斜杠命令及其类型归此包。
 - Desktop、TUI、CLI 的产品功能从私有包导入。服务端兼容测试中的业务场景改用私有包，生命周期场景继续直接覆盖公开 SDK。

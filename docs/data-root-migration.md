@@ -8,8 +8,8 @@
 
 根下保留 `cache/`、`channels/`、`data/`、`local_rules/`、`output_styles/`、`plugins/`、`skills/`、`teams/`、`worktrees/`，并包含 `workspaces/`、`agents/`、`SOUL.md`、`USER.md`、`user_profile_pending/` 及凭据、设置等原有文件。未知文件原样保留。所有默认位置由 `@vykor/host-config/paths` 派生。
 
-- 正式会话数据库：`data/session-runtime/sessions.db`；同级保存附件、笔记、存储策略和用量设置。
-- 普通聊天草稿、未保存笔记和图片批注：`data/desktop/`。业务导出清单只保存来源摘要与处理状态。
+- 正式会话数据库：`data/session-runtime/sessions.db`。同级保存附件、存储策略和用量设置。升级前的 `data/session-runtime/notes/` 保留为恢复来源。
+- 普通聊天草稿、未保存笔记和图片批注：`data/desktop/`。便签正文、组织文件和独立 SQLite 索引放在 `data/desktop/notes/`，由 Electron 主进程读写。业务导出清单只保存来源摘要与处理状态。
 - 无项目聊天工作目录：`workspaces/`；渠道工作目录：`channels/`；受管任务 worktree：`worktrees/`。
 - 规则、记忆、运行环境密钥、记忆备份、导出和审计继续由同一个根派生。迁移后项目 ID 和内容来源保持。
 

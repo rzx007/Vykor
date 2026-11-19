@@ -6,7 +6,7 @@ import type {
   AttachmentStorageGcResult,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-} from "@vykor/application-client"
+} from "../../../shared/attachment-types"
 
 import {
   cleanupTemporaryDirectories,

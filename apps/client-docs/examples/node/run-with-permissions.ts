@@ -1,3 +1,5 @@
+import { createInterface } from "node:readline/promises";
+import { stripVTControlCharacters } from "node:util";
 import {
   VykorApiError,
   VykorClient,
@@ -24,6 +26,8 @@ const client = new VykorClient({
 const controller = new AbortController();
 const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(120_000)]);
 const cancel = () => controller.abort(new Error("用户取消了本地等待"));
+const terminal = process.stdin.isTTY ? createInterface({ input: process.stdin, output: process.stdout }) : undefined;
+terminal?.on("SIGINT", cancel);
 process.once("SIGINT", cancel);
 
 try {
@@ -36,7 +40,7 @@ try {
   console.log("新会话:", session.id);
 
   // 提交前就开始观察；首次快照也会补上流连接前产生的权限请求。
-  // 本示例只演示拒绝。实际产品应展示请求，让用户逐项决定是否批准。
+  // 本示例拒绝工具操作。AskUser 是业务提问，交给终端用户填写答案。
   const answeredPermissions = new Set<string>();
   const permissionTask = (async () => {
     for await (const update of syncEvents(client, { sessionId: session.id, signal })) {
@@ -45,8 +49,16 @@ try {
         // 回复事件可能晚于其他更新到达；发出请求前记住 ID，避免重复回复。
         answeredPermissions.add(request.id);
         try {
-          await client.permissions.reply(request.id, { status: "denied" }, { signal });
-          console.log("已拒绝权限请求:", request.id);
+          const input = request.payload.input;
+          if (terminal && request.toolName === "AskUser" && input && typeof input === "object" &&
+              "kind" in input && input.kind === "question" && "question" in input && typeof input.question === "string") {
+            const question = stripVTControlCharacters(input.question).replace(/[\u0000-\u001f\u007f-\u009f]/g, " ");
+            const answer = await terminal.question(`Agent 提问 · ${question} `, { signal });
+            await client.permissions.reply(request.id, { status: "approved", decision: "once", answer }, { signal });
+          } else {
+            await client.permissions.reply(request.id, { status: "denied" }, { signal });
+            console.log("已拒绝请求:", request.id);
+          }
         } catch (error) {
           // 其他客户端可能抢先回复；409 不代表观察或后台运行失败。
           if (!(error instanceof VykorApiError && error.status === 409)) throw error;
@@ -69,7 +81,12 @@ try {
     admissionAttempted = true;
     const admitted = await client.sessions.admitPrompt(session.id, {
       id: promptId,
-      items: [{ type: "text", text: "请用一句话介绍你的能力，不调用工具。" }],
+      items: [{
+        type: "text",
+        text: terminal
+          ? "请用 AskUser 的 question 字段询问我希望使用哪种语言，再用该语言写一句自我介绍。除此之外无需调用工具。"
+          : "请用一句话介绍你的能力，不调用工具。",
+      }],
     }, { signal });
     runId = admitted.run?.id;
     if (!runId) throw new Error("本次输入未创建 Run，请检查返回的 input 和 queue_state");
@@ -102,5 +119,6 @@ try {
     }
   }
 } finally {
+  terminal?.close();
   process.removeListener("SIGINT", cancel);
 }

@@ -10,7 +10,7 @@
 
 composer 的 `partial` 记录含 `unresolvedSessionIds` 和 `reason: session-not-found`。迁移预检应将未确认 partial 列为 `needs_desktop_export`。`acknowledgeUnresolvedComposer(sourceDigest)` 只对匹配摘要的现有 partial 标记 `retainedSourceAcknowledged: true`；不改正文、不删除旧副本。迁移界面需让用户明确选择保留旧副本后调用。
 
-`window-flush.ts` 只跟踪主业务窗口，且以 renderer 注册 flush listener 的 consumer-ready 通知作为参与起点；尚未加载、没有消费者的窗口直接完成。发送随机请求 ID 并核对 renderer 回执及 sender。`flushDesktopBusinessData()` 是关闭和未来根迁移的等待入口，必须在 IPC/renderer 被销毁前调用；失败不允许继续。它等待已有工作，不替代迁移协调者的停写锁。宠物和插件窗口不参与。
+`window-flush.ts` 只跟踪主业务窗口，且以 renderer 注册 flush listener 的 consumer-ready 通知作为参与起点；尚未加载、没有消费者的窗口直接完成。发送随机请求 ID 并核对 renderer 回执及 sender。`flushDesktopRecoveryDrafts()` 等待界面保存恢复稿，便签升级在关闭旧后台前使用它。`flushDesktopBusinessData()` 在恢复稿之外也等待本地便签队列，必须在 IPC/renderer 被销毁前调用；失败不允许继续。整根迁移在冻结期间同步并关闭便签索引，再释放旧根的桌面写入资格。宠物和插件窗口不参与。
 
 同职责的新校验和导入逻辑放本目录；跨进程类型和纯 schema 放 `src/shared`。测试放 `__test__/`，仅使用临时目录。
 

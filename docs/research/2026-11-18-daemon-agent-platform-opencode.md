@@ -1,6 +1,6 @@
 # Vykor daemon 如何成为可独立接入的 Agent 服务
 
-> 状态：调研与建议，供评审。调研日期 2026-11-18。
+> 状态：2026-11-18 的调研与实施建议。现状描述以当时的基线为准。 [实施计划](../superpowers/plans/2026-11-19-daemon-public-client-convergence.md) · [当前产品接入](../product-surface-integration.md)
 
 Vykor 已经能在没有 Electron 的情况下运行 Agent，也已经有独立发布的客户端 SDK。下一步应让这个能力成为一份完整、可验证的产品承诺：只安装 CLI 后台和公开 SDK，第三方就能选模型、创建会话、提交任务、处理审批与提问、跟上执行进度，并在断开后重新接手。Desktop、TUI 和未来客户端应看到同一份运行记录。
 
@@ -27,7 +27,7 @@ Vykor 可以沿用自己的同步能力。它已经用会话快照与游标（�
 
 ### 过去已经解决了什么
 
-2026 年 7 月的 OpenCode 对照已经把会话归属从 TUI 的 `BackendHost` 迁到后台，8 月补了消息片段、快照和游标，10 月又补了慢订阅者积压、作用域和运行可靠性。后来 `@rzx/client` 独立发布，与内部 `@vykor/application-client` 共享传输和同步。这些改造建立了共享的运行与状态读取方式。产品 API 移到私有客户端以后，默认 daemon 仍会装配对应服务。便签继续挂在它的会话存储上，已登记服务默认打开 Desktop Browser 桥接，Desktop 甚至要求这个桥接存在才接受连接。**目前最突出的差距在后台装配和能力的公开边界。** [七月 daemon 方案](../superpowers/plans/2026-07-31-daemon-session-runtime.md) · [八月事件模型](../superpowers/plans/2026-08-01-session-part-event-model.md) · [十月 P1](../superpowers/plans/2026-10-31-opencode-p1-reliability.md) · [十月 P2](../superpowers/plans/2026-10-31-opencode-p2-reliability.md) · [私有应用客户端](../../packages/application-client/README.md) · [Desktop 连接条件](../../apps/desktop/src/main/features/session/daemon-connection-service.ts#L239)
+2026 年 7 月的 OpenCode 对照已经把会话归属从 TUI 的 `BackendHost` 迁到后台，8 月补了消息片段、快照和游标，10 月又补了慢订阅者积压、作用域和运行可靠性。后来 `@rzx/client` 独立发布，与内部 `@vykor/application-client` 共享传输和同步。这些改造建立了共享的运行与状态读取方式。产品 API 移到私有客户端以后，默认 daemon 仍会装配对应服务。便签继续挂在它的会话存储上，已登记服务默认打开 Desktop Browser 桥接，Desktop 甚至要求这个桥接存在才接受连接。**当时最突出的差距在后台装配和能力的公开边界。** [七月 daemon 方案](../superpowers/plans/2026-07-31-daemon-session-runtime.md) · [八月事件模型](../superpowers/plans/2026-08-01-session-part-event-model.md) · [十月 P1](../superpowers/plans/2026-10-31-opencode-p1-reliability.md) · [十月 P2](../superpowers/plans/2026-10-31-opencode-p2-reliability.md) · [退役前的私有应用客户端](https://github.com/rzx007/Vykor/blob/9258ffcf5bffaa6cc683d76963c94acb0d277141/packages/application-client/README.md) · [当时的 Desktop 连接条件](https://github.com/rzx007/Vykor/blob/9258ffcf5bffaa6cc683d76963c94acb0d277141/apps/desktop/src/main/features/session/daemon-connection-service.ts#L239)
 
 ### 第三方接入的三类能力
 
@@ -54,11 +54,11 @@ Desktop 便签界面 ── 进程间调用 ──→ Electron 主进程 ──�
 
 ### 收窄 `@vykor/application-client` 的职责
 
-**以过渡层看待这个包。** 它复用了公开 SDK 的传输和同步，但自己又组装了一个同名 `VykorClient`，把会话、便签、设置、终端、插件应用和后台管理都挂到同一对象上。包根还重导出了公开 SDK，`/service` 原样转发公开服务入口。一个具体的重复是 `SessionResource.getState`：两边已经都支持 `partView: "summary"`，仍各自发同一个请求、解码同一个结果。CLI 的单次运行和 TUI 的会话同步仍从私有包进入，产品接入自然会继续选这个大入口。 [私有客户端构造](../../packages/application-client/src/application-client.ts) · [公开客户端构造](../../packages/client/src/transport/http-client.ts) · [私有快照方法](../../packages/application-client/src/resources/session/session-resource.ts#L13) · [公开快照方法](../../packages/client/src/resources/session/session-resource.ts#L177) · [CLI 入口](../../apps/cli/src/print-session.ts#L293) · [TUI 同步入口](../../apps/frontend/src/hooks/useServerSync.ts#L3)
+**以过渡层看待这个包。** 它复用了公开 SDK 的传输和同步，另组装了一个同名 `VykorClient`，把会话、便签、设置、终端、插件应用和后台管理都挂到同一对象上。包根还重导出了公开 SDK，`/service` 原样转发公开服务入口。两种 `SessionResource.getState` 发送同一请求并都支持摘要视图。公开解码器只保留生命周期顶层字段，私有解码器保留应用附加字段，迁移要核对下游读取。CLI 的单次运行和 TUI 的会话同步当时仍从私有包进入。 [退役前的私有客户端构造](https://github.com/rzx007/Vykor/blob/9258ffcf5bffaa6cc683d76963c94acb0d277141/packages/application-client/src/application-client.ts) · [当时的公开客户端构造](https://github.com/rzx007/Vykor/blob/9258ffcf5bffaa6cc683d76963c94acb0d277141/packages/client/src/transport/http-client.ts) · [当时的快照解码](https://github.com/rzx007/Vykor/blob/9258ffcf5bffaa6cc683d76963c94acb0d277141/packages/protocol/src/serialization/serialization.ts#L395) · [当时的 CLI 入口](https://github.com/rzx007/Vykor/blob/9258ffcf5bffaa6cc683d76963c94acb0d277141/apps/cli/src/print-session.ts#L293) · [当时的 TUI 同步入口](https://github.com/rzx007/Vykor/blob/9258ffcf5bffaa6cc683d76963c94acb0d277141/apps/frontend/src/hooks/useServerSync.ts#L3)
 
-- **共享的 Agent 调用由首方产品直接使用 `@rzx/client`。** 会话、输入、审批、附件读写、Jobs 和同步与第三方共用一条调用路径。本机启动直接使用 `@rzx/client/service`。CLI 单次运行可先迁移已经覆盖的调用，TUI 和 Desktop 按调用点处理仍依赖私有操作的部分。 [本机服务转发](../../packages/application-client/src/local-service/index.ts) · [公开资源](../../packages/client/README.md#公开资源)
+- **共享的 Agent 调用由首方产品直接使用 `@rzx/client`。** 会话、输入、审批、附件读写、Jobs 和同步与第三方共用一条调用路径。本机启动直接使用 `@rzx/client/service`。CLI 单次运行可先迁移已经覆盖的调用，TUI 和 Desktop 按调用点处理仍依赖私有操作的部分。 [退役前的本机服务转发](https://github.com/rzx007/Vykor/blob/9258ffcf5bffaa6cc683d76963c94acb0d277141/packages/application-client/src/local-service/index.ts) · [公开资源](../../packages/client/README.md#公开资源)
 - **桌面自己的功能由实际持有状态的模块提供。** 内置便签走 Electron IPC，窗口、草稿、展示和本地命令由产品管理。仍需要 daemon 参与的产品操作保持独立入口，例如插件页面的工具调用需要服务端核对租约和范围。不能因为它由 Desktop 发起就把授权逻辑移到桌面。 [桌面业务数据](../../apps/desktop/src/main/features/business-data/README.md) · [插件页面服务端操作](../../packages/server/src/http/routes/session-plugin-apps.ts)
-- **daemon 管理保留窄接口。** Provider 配置、凭据、全局设置、附件清理等操作仍由后台处理，可按具体职责复用小的内部调用模块。一部分可选后台能力仍有跨产品消费者，例如调度或渠道，可保留自己的客户端资源。逐个核对使用者，再决定哪些值得合用一个小包。拆分客户端入口后，管理授权仍由服务端负责。 [当前 Provider 调用](../../apps/desktop/src/main/features/provider/provider-service.ts#L24) · [附件维护资源](../../packages/application-client/src/resources/session/attachment-resource.ts) · [认证与权限边界](../security-and-trust-boundaries.md)
+- **daemon 管理保留窄接口。** Provider 配置、凭据、全局设置、附件清理等操作仍由后台处理，可按具体职责复用小的内部调用模块。一部分可选后台能力仍有跨产品消费者，例如调度或渠道，可保留自己的客户端资源。逐个核对使用者，再决定哪些值得合用一个小包。拆分客户端入口后，管理授权仍由服务端负责。 [Provider 调用](../../apps/desktop/src/main/features/provider/provider-service.ts) · [退役前的附件维护资源](https://github.com/rzx007/Vykor/blob/9258ffcf5bffaa6cc683d76963c94acb0d277141/packages/application-client/src/resources/session/attachment-resource.ts) · [认证与权限边界](../security-and-trust-boundaries.md)
 
 迁移时先让首方普通 Agent 路径直接走公开 SDK，退掉已经有公开等价实现的转发和重复方法。便签迁出、后台管理与可选能力拥有各自入口之后，再按剩余使用者决定是保留小型内部包还是退役 `@vykor/application-client`。验收看正常产品入口是否共用一套会话、权限和同步逻辑，以及剩余私有调用是否能说清由谁执行、状态放在哪里。
 
@@ -82,7 +82,7 @@ Desktop 便签界面 ── 进程间调用 ──→ Electron 主进程 ──�
 
 1. **做一个无 Electron 的消费者验收。** 用隔离数据目录启动现有 `vk serve`，独立 Node 项目只安装公开 `@rzx/client`。先复用现有接入示例，再让客户端 A 创建会话、以稳定 ID 提交，客户端 B 接续读取、处理一次工具审批和一次 `AskUser`、读到结果。验证断线补齐记录、提交重试不增加 Run、旧 Run ID 无法停止新的执行。同步补齐公开回复类型及示例。后续再从一个实际消费者需要的资源开始产出 OpenAPI 和协议一致性测试。 [现有公开示例](../../apps/client-docs/examples/node/run-with-permissions.ts) · [HTTP 集成用例](../../tests/server-client/http.test.ts)
 2. **先解开 Browser 的连接依赖。** 先让 Desktop 可以接入没有 `browserBridge` 的兼容实例，再修改后台装配。分别验证没有浏览器工具、现有桥接可用、注入最小 `BrowserHost` 的三种情况。普通文本和文件操作都能执行。浏览器能力验证覆盖审批拒绝、取消、无宿主和断线后的真实结果状态，开发者检查有单独开关。 [桌面连接](../../apps/desktop/src/main/features/session/daemon-connection-service.ts) · [浏览器桥接测试](../../packages/server/src/http/__test__/browser-host.test.ts)
-3. **迁出便签，再删除旧写入入口。** 用含旧 SQLite 正文、Markdown、新旧组织文件及未保存草稿的测试数据验证升级。检查重复迁移、旧备份导入、版本冲突、打开目录、聊天和代码选区创建以及 daemon 停止时独立读写。迁出完成后确认旧 `/notes` 退役，日常便签数据只由 Desktop 打开。 [现有便签服务](../../packages/server/src/application/notes/README.md) · [应用备份测试](../../packages/server/src/application/backup/__test__/application-backup.test.ts)
+3. **迁出便签，再删除旧写入入口。** 用含旧 SQLite 正文、Markdown、新旧组织文件及未保存草稿的测试数据验证升级。检查重复迁移、旧备份导入、版本冲突、打开目录、聊天和代码选区创建以及 daemon 停止时独立读写。迁出完成后确认旧 `/notes` 退役，日常便签数据只由 Desktop 打开。 [便签退役测试](../../packages/server/src/http/__test__/notes-retirement.test.ts) · [应用备份测试](../../packages/server/src/application/backup/__test__/application-backup.test.ts)
 4. **按需求补全开发者契约。** 把现有能力整理成「公开会话操作」「配置后可用」「管理员操作」清单。先选真实消费者需要的缺口，例如会话允许的工具发现、已安装能力选择或 Workflow 提交。保持同一执行队列、同一会话存储和同一权限决策，按能力标记和协议变更规则发布。 [公开客户端边界](../../packages/client/README.md) · [协议版本策略](../protocol-contract.md#版本匹配)
 
 首个里程碑应交付一个脱离 Desktop 安装的客户端闭环，同时让桌面可以连没有浏览器能力的 daemon。便签迁移有独立的数据与兼容工作，可以并行验证。在这三个条件落实后，开发者就能用 Vykor 现有 Agent 能力构建自己的应用，Vykor Desktop 也能独立决定自己的产品功能放在哪里。

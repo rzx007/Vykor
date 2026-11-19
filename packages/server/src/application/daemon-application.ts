@@ -1,7 +1,6 @@
 import { SessionFileError } from "@vykor/domain-contracts/files";
 import { SessionFileService } from "./files/session-file-service.js";
 import { bindToolDispatchCheck } from "./session/execution/tool-dispatch-check.js";
-import { createNoteApplicationService, type NoteApplicationService } from "./notes/note-application-service.js";
 import { createProjectFactsService, type ProjectFactsService } from "./personalization/project-facts-service.js";
 import { createMaintenanceApplicationService, type MaintenanceApplicationContext } from "./maintenance/maintenance-application-service.js";
 import { ToolResultService } from "./session/execution/tool-result-service.js";
@@ -167,8 +166,10 @@ export interface DaemonApplicationOptions {
   /** Complete channel workspace root. Product hosts pass the selected data root's channels directory. */
   channelsWorkspaceRoot?: string;
   createAgent?: CreateDaemonAgent;
-  /** Browser control is supplied by an embedding desktop host; the server builds the agent tool. */
+  /** Browser control supplied by the configured host. */
   browserHost?: BrowserHost;
+  /** Enable BrowserDeveloper when the configured host implements developer inspection. */
+  enableBrowserDeveloper?: boolean;
   /** 提供后 daemon 才构造渠道运行时与接入服务；未提供时渠道路由返回 503。 */
   channelConfigStore?: ChannelConfigStore;
   terminalProviderForSession?(session: SessionRecord): TerminalProvider;
@@ -192,7 +193,6 @@ export interface DurableAgentApplication {
   readonly pluginApps?: ReturnType<typeof assemblePluginApps>;
   readonly pluginAppConversation?: PluginAppConversationService;
   readonly store: SessionStore;
-  readonly notes: NoteApplicationService;
   readonly facts: ProjectFactsService;
   readonly attachments: AttachmentService;
   readonly interactions: SessionInteractionService;
@@ -246,7 +246,6 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly pluginApps: ReturnType<typeof assemblePluginApps>;
   readonly pluginAppConversation: PluginAppConversationService;
   readonly store: SessionStore;
-  readonly notes: NoteApplicationService;
   readonly facts: ProjectFactsService;
   readonly attachments: AttachmentService;
   readonly permissions: StorePermissionBroker;
@@ -304,7 +303,6 @@ export class DaemonApplication implements DurableAgentApplication {
     this.store = store;
     const executionOwner = options.executionOwner ?? new ExecutionRuntimeOwner();
     this.executionOwner = executionOwner;
-    this.notes = createNoteApplicationService({ notes: store.notes, readiness: () => this.diagnosticState });
     this.mcpRuntimes = new McpRuntimeConnectionCoordinator();
     this.mcpOAuth = new McpOAuthApplicationService({ coordinator: this.mcpRuntimes });
     this.mcpOAuthOperations = new McpOAuthOperationService({ application: this.mcpOAuth });
@@ -548,6 +546,8 @@ export class DaemonApplication implements DurableAgentApplication {
         accepting: () => this.readyState === "ready" && this.operationGate.accepting });
       const toolResults = new ToolResultService({ store, ownerLease: () => this.ownerLease,
         accepting: () => this.readyState === "ready" && this.operationGate.accepting });
+      const browserHost = options.browserHost;
+      const enableBrowserDeveloper = options.enableBrowserDeveloper === true && Boolean(browserHost?.executeDeveloper);
       const loadAgent = createDaemonAgentLoader({
         readAttachment: async (uri, context) => {
           const authorizationSessionId = context.sessionId
@@ -608,7 +608,7 @@ export class DaemonApplication implements DurableAgentApplication {
               : []),
             imageToTextTool,
             imageGenerationTool,
-            createBrowserTool(options.browserHost, async ({ bytes }) => {
+            ...(browserHost ? [createBrowserTool(browserHost, async ({ bytes }) => {
               const asset = await this.attachments.import({
                 displayName: `browser-${randomUUID()}.png`,
                 declaredMediaType: "image/png",
@@ -620,8 +620,8 @@ export class DaemonApplication implements DurableAgentApplication {
                 }),
               })
               return (await this.attachments.resolveReadyContentPath(asset.id)).path
-            }, () => this.modelCatalog.load()),
-            createBrowserDeveloperTool(options.browserHost),
+            }, () => this.modelCatalog.load())] : []),
+            ...(enableBrowserDeveloper ? [createBrowserDeveloperTool(browserHost)] : []),
           ]
         },
         toolDecorators: [{ name: "Read", decorate: base => {

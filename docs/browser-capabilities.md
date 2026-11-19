@@ -2,7 +2,11 @@
 
 > 状态：当前实现。
 
-Agent 浏览器工具由 Desktop 的内嵌浏览器执行。CLI 和 Desktop 共用同一个本机后台时，CLI 发起的会话也可以使用这些工具，前提是 Desktop 正连接该后台，并且会话在持有浏览器标签页的窗口中打开。没有可用的浏览器连接时，其它工具仍可运行。
+`Browser` 是 daemon 可选的 Agent 工具。`vk serve` 默认只启动独立 Agent 服务，使用 `--register` 登记本机地址时也一样。Desktop 按需启动后台或通过系统服务启动后台时，会显式启用本机浏览器桥接，由 Desktop 主进程接收操作。CLI 和 Desktop 连接同一个已启用桥接的后台时，CLI 发起的会话也可以使用 `Browser`，前提是该会话在持有浏览器面板的 Desktop 窗口中打开。
+
+Desktop 可以连接同协议、同数据目录的独立 daemon。手动开页、用户批注和 HTML/SVG 文件预览由 Desktop 主进程处理，在这种连接下也可使用。`/capabilities` 的 `browserBridge` 表示本机的桥接路由就绪，实际接收操作还需要 Desktop 连上桥接并打开对应会话。
+
+在自己的服务进程中嵌入 daemon 时，可以用 `startVykorDaemon({ browserHost })` 注入实现。`BrowserHost` 接收动作、会话 ID、工作目录、审批回调和取消信号，返回页面观察或截图。部署方负责按会话限制页面范围、处理审批结果并在超时或取消时结束操作。需要开发者检查时，宿主须实现 `executeDeveloper`，同时在启动时设置 `enableBrowserDeveloper: true`。工具目录按 daemon 启动时的装配决定，一次运行中的桥接断线和重连沿用原工具目录。 [启动入口](../packages/server/src/daemon/default-daemon.ts) · [宿主接口](../packages/server/src/application/browser-tools/browser-host.ts)
 
 ## 普通 Browser
 
@@ -19,7 +23,7 @@ Agent 首次访问一个站点时会请求当前会话的站点授权。点击�
 
 ## Developer mode
 
-在 Desktop 设置的“常规 → 权限 → 开发者模式”打开开关。它默认关闭，设置保存在当前设备。打开开关只是允许提出调试请求；检查当前站点前，Agent 仍须先取得普通站点授权，再取得本次 `BrowserDeveloper` 授权。授权卡会显示目标站点或本地文件、检查类别和数据风险。一次批准不会自动用于另一次检查、其他会话或子会话。
+使用 Desktop 桥接执行开发者检查时，在“设置 → 常规 → 权限 → 开发者模式”打开本机开关。它默认关闭，设置保存在当前设备。开关允许 Agent 提出调试请求。检查当前站点前，Agent 仍须先取得普通站点授权，再取得本次 `BrowserDeveloper` 授权。授权卡会显示目标站点或本地文件、检查类别和数据风险。一次批准不会自动用于另一次检查、其他会话或子会话。
 
 `BrowserDeveloper` 提供以下固定动作：
 
@@ -41,7 +45,9 @@ Developer mode 是四类受控检查能力，不提供任意 CDP 方法或脚本
 
 普通动作由 `packages/server/src/application/browser-tools/browser-tool.ts` 定义，Desktop 的 `apps/desktop/src/main/features/browser/browser-agent-service.ts` 负责选择标签页并执行。开发者动作由同目录的 `browser-developer-tool.ts` 定义；Desktop 的 `browser-developer-inspector.ts` 负责固定 CDP 检查、有限采集和清理。授权请求由 `packages/server/src/permissions/permission-broker.ts` 管理，Developer mode 的开关保存在 Desktop 本地偏好中。
 
-本机后台通过一条仅供 Desktop 主进程使用的事件流发送浏览器请求，Desktop 用登记文件里的 token 连接。站点授权和开发检查授权仍由发起工具的会话处理。Desktop 在操作排队时记录窗口会话订阅和页面版本，在审批返回和执行前再次核对。操作结果通过 HTTP 回到后台。截图最多 8 MiB，由后台存入原有的截图目录。整个回包最多 12 MiB，超限时只给当前工具调用返回错误，其他请求继续处理。断开连接会取消仍在等待的操作。若后台已经发出操作但收不到结果，会把该次执行标为结果未知，重连只接收新操作。
+启用桥接的本机后台通过一条仅供 Desktop 主进程使用的事件流发送浏览器请求，Desktop 用登记文件里的 token 连接。站点授权和开发检查授权仍由发起工具的会话处理。Desktop 在操作排队时记录窗口会话订阅和页面版本，在审批返回和执行前再次核对。操作结果通过 HTTP 回到后台。桥接传输的截图最多 8 MiB，由后台存入附件库。整个桥接回包最多 12 MiB，超限时只给当前工具调用返回错误，其他请求继续处理。
+
+桥接断开会取消仍在等待的操作。后台还没派发的操作标为 `not_started`。后台已派发但未收到结果时标为 `unknown`，表示页面动作可能已经发生。重连后只接收新操作，旧请求不会自动重放。
 
 ## 用户批注
 

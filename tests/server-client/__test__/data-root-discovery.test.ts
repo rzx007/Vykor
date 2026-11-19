@@ -1,7 +1,7 @@
 import { readFile, stat, utimes } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { VykorClient } from "@rzx/client";
+import { CURRENT_PROTOCOL_VERSION, VykorClient } from "@rzx/client";
 import { Service } from "../../../packages/client/src/service/index.js";
 import { readDataRootSelector, resolveManagedHistoryPath } from "@vykor/host-config/paths";
 import { cliInvocation, publishRoot, rootFixture, scriptedRootServer } from "../../helpers/data-root-fixture.js";
@@ -51,6 +51,13 @@ it("discovers the published root across two migrations and continues formal hist
     expect((await Service.discover({ env: environment }))?.pid).toBe(endpoint.pid);
     await fixture.diagnose("sdk-ready", { childPid: endpoint.pid });
     const connected = new VykorClient(Service.clientOptions(endpoint));
+    expect((await connected.protocol.capabilities()).features.browserBridge).toBeUndefined();
+    const browserHost = await fetch(`${endpoint.url}/browser-host/stream`, {
+      headers: { authorization: `Bearer ${endpoint.token}`, "x-vykor-protocol-version": String(CURRENT_PROTOCOL_VERSION) },
+      signal: AbortSignal.timeout(5_000),
+    });
+    await browserHost.body?.cancel();
+    expect(browserHost.status).toBe(404);
     expect((await connected.sessions.getState(formal.id)).parts.map(part => part.text).join("\n")).toContain(`formal history ${cwd}`);
     await expect(connected.sessions.getState(temporary.id)).rejects.toMatchObject({ status: 404 });
     const stoppedPid = endpoint.pid;

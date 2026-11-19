@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import type { MarketplaceEntry } from "@vykor/application-client"
+import type { MarketplaceEntry } from "@vykor/protocol"
 import { PluginDetailContent } from "./plugin-detail"
 
 const capabilityLabels: Record<string, string> = {

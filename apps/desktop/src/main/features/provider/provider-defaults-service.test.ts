@@ -4,10 +4,14 @@ const { state, patch, testConnection, fingerprint } = vi.hoisted(() => ({
   testConnection: vi.fn(), fingerprint: vi.fn(),
 }))
 vi.mock("@vykor/server", () => ({ testStoredProviderConnection: testConnection, storedProviderConnectionFingerprint: fingerprint }))
-vi.mock("../session/session-service", () => ({ desktopSessionService: { daemonClient: async () => ({
-  system: { getSettings: async () => state.settings, patchSettings: patch },
-  runtime: { listModels: async () => [{ name: "gateway", displayName: "Gateway", models: [{ id: "model-1", label: "Model", provider: "Gateway", providerName: "gateway", reasoningEfforts: ["low", "high"], contextWindow: 10000 }] }] },
-}) } }))
+vi.mock("../session/session-service", () => ({ desktopSessionService: {
+  daemonTransport: async () => ({}),
+  agentClient: async () => ({ runtime: { listModels: async () => [{ name: "gateway", displayName: "Gateway", models: [{ id: "model-1", label: "Model", provider: "Gateway", providerName: "gateway", reasoningEfforts: ["low", "high"], contextWindow: 10000 }] }] } }),
+} }))
+vi.mock("@vykor/daemon-admin/configuration", () => ({ SystemResource: class {
+  getSettings = async () => state.settings
+  patchSettings = patch
+} }))
 import { DesktopProviderDefaultsService } from "./provider-defaults-service"
 
 beforeEach(() => {

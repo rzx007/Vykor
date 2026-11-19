@@ -8,6 +8,7 @@ import {
   type NoteOrganizationV1Record,
 } from "@vykor/domain-contracts/notes";
 import {
+  assertNoteDirectory,
   ensureNoteDirectory,
   readUtf8File,
   replaceUtf8File,
@@ -216,7 +217,7 @@ export function validateNoteOrganizationFiles(
   noteIds: readonly string[],
   allowFuture = false,
 ): void {
-  ensureNoteDirectory(directory);
+  assertNoteDirectory(directory);
   for (const name of ["organization.json", "organization.previous.json"]) {
     const file = readUtf8File(join(directory, name));
     if (!file) continue;

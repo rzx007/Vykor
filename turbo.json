@@ -49,7 +49,7 @@
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/examples/plugins/text-inspector/**",
         "$TURBO_ROOT$/packages/client/src/**",
-        "$TURBO_ROOT$/packages/application-client/src/**",
+        "$TURBO_ROOT$/packages/daemon-admin/src/**",
         "$TURBO_ROOT$/packages/agent-runtime/test-helpers/**"
       ]
     },
@@ -63,7 +63,7 @@
         "$TURBO_ROOT$/packages/server/src/application/default-services/extensions/plugin-service.ts",
         "$TURBO_ROOT$/packages/server/src/http/routes/service.ts",
         "$TURBO_ROOT$/packages/client/src/**",
-        "$TURBO_ROOT$/packages/application-client/src/**"
+        "$TURBO_ROOT$/packages/daemon-admin/src/**"
       ]
     },
     "@vykor/plugins#check-types": {

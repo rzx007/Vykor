@@ -2,11 +2,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "currentPhase", "packages", "modules", "stageExceptions"],
+  "required": ["version", "currentPhase", "retiredWorkspaces", "packages", "modules", "stageExceptions"],
   "properties": {
     "$schema": { "type": "string" },
     "version": { "enum": [1] },
     "currentPhase": { "$ref": "#/$defs/phase" },
+    "retiredWorkspaces": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/retiredWorkspace" } },
     "packages": { "type": "object", "additionalProperties": { "$ref": "#/$defs/package" } },
     "modules": { "type": "array", "items": { "$ref": "#/$defs/module" } },
     "stageExceptions": { "type": "array", "items": { "$ref": "#/$defs/exception" } }
@@ -16,6 +17,14 @@
     "text": { "type": "string", "minLength": 1 },
     "list": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/text" } },
     "migration": { "type": "string", "pattern": "^M(?:0[1-9]|[123][0-9]|40)$" },
+    "retiredWorkspace": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "directory"],
+      "properties": {
+        "name": { "$ref": "#/$defs/text" },
+        "directory": { "type": "string", "pattern": "^(packages|apps)/[a-z0-9-]+$" }
+      }
+    },
     "package": {
       "type": "object", "additionalProperties": false,
       "required": ["directory", "allowed", "removeByPhase", "migrationId"],

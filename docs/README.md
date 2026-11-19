@@ -89,6 +89,7 @@
 
 本节描述目标与验收要求，不代表代码已经实现；不能从创建日期或文件名推断完成状态。
 
+- [Daemon 公开 Agent 契约与应用客户端退役实施计划](./superpowers/plans/2026-11-19-daemon-public-client-convergence.md)：逐项明确公开 SDK、Electron 和 daemon 管理的去向，以及迁移顺序、验收和删包关口。
 - [运行中补充设计](./superpowers/specs/2026-11-10-running-follow-up-design.md)与[六项实施计划](./superpowers/plans/2026-11-10-running-follow-up.md)：主聊与侧聊共用发送选择。完全访问默认补充，其他授权默认排队，可为本条切换。验收结果见[运行中补充实施记录](./superpowers/reviews/2026-11-16-running-follow-up.md)。
 - [有限客户端 UI 扩展设计](./superpowers/specs/2026-10-28-desktop-ui-extensions-design.md)：待评审；起始页视觉支持资源和脚本渲染，与独立宠物分开；明确会话视图和全局浮动 UI 的贡献、数据与生命周期。
 - [子代理与工作流生命周期调研及架构建议](./research/2026-10-27-agent-task-lifecycle-comparison.md)：对照五个参考项目，建议明确任务归属、稳定运行身份、分开执行额度与会话保留，并统一 Workflow 收尾；尚未修改生产代码。

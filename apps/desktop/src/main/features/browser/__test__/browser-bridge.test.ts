@@ -1,6 +1,6 @@
 import { EventEmitter, once } from "node:events"
 import { createServer, type ServerResponse } from "node:http"
-import { CURRENT_PROTOCOL_VERSION } from "@vykor/application-client"
+import { CURRENT_PROTOCOL_VERSION } from "@rzx/client"
 import { BROWSER_BRIDGE_MAX_RESULT_BODY_BYTES } from "@vykor/server/daemon-host"
 import { afterEach, expect, it, vi } from "vitest"
 

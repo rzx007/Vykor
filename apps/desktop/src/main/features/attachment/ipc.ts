@@ -23,10 +23,11 @@ import type {
   AttachmentStorageGcResult,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-} from "@vykor/application-client"
+} from "../../../shared/attachment-types"
 import { IpcChannels, IpcEvents } from "../../../shared/ipc-channels"
 import type { IpcContribution } from "../../core/ipc/types"
 import { desktopSessionService } from "../session/session-service"
+import { AttachmentStorageResource } from "./attachment-storage-resource"
 import { createAttachmentService } from "./attachment-service"
 
 export interface AttachmentIpcService {
@@ -236,13 +237,14 @@ async function getDefaultService(): Promise<AttachmentIpcService> {
 }
 
 async function createDefaultService(): Promise<AttachmentIpcService> {
-  const client = await desktopSessionService.daemonClient()
+  const client = await desktopSessionService.agentClient()
   const capabilities = await client.protocol.capabilities()
   const maxBytesPerFile = capabilities.attachments?.limits.maxBytesPerFile ?? 100 * 1024 * 1024
   const service = createAttachmentService({
     sourceTokenTtlMs: 5 * 60 * 1_000,
     maxBytesPerFile,
-    getClient: () => desktopSessionService.daemonClient(),
+    getClient: () => desktopSessionService.agentClient(),
+    getStorageClient: async () => new AttachmentStorageResource(await desktopSessionService.daemonTransport()),
     emit: defaultEventEmitter,
     temporaryRoot: app.getPath("temp"),
     openPath: (path) => shell.openPath(path),

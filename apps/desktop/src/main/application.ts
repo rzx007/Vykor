@@ -14,6 +14,7 @@ import { createMainWindow, showMainWindow } from "./features/main-window/window"
 import { createPetWindow } from "./features/pet/window"
 import { desktopSessionService } from "./features/session/session-service"
 import { desktopTerminalService } from "./features/terminal/terminal-service"
+import { desktopNoteService } from "./features/notes/note-service"
 import { createTray, destroyTray } from "./features/tray/tray"
 import { initializeNotificationActions } from "./features/tray/notification-actions"
 import { openNotificationSession } from "./features/tray/notification-navigation"
@@ -26,6 +27,7 @@ import icon from "../../resources/icon.png?asset"
 
 import { installPluginAppDocumentProtocol, desktopPluginAppDocuments } from "./features/plugin-apps/document-protocol"
 import { pluginAppMessageReady } from "./features/plugin-apps/message-ready"
+import { clientForPluginApps } from "./features/plugin-apps/plugin-app-client"
 import { DesktopPluginAppService } from "./features/plugin-apps/plugin-app-service"
 import { setDesktopPluginAppService, getDesktopPluginAppService } from "./features/plugin-apps/service-runtime"
 
@@ -53,7 +55,11 @@ function startDesktopApplication(): void {
     process.exit(0)
   }
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
+    // Import before a renderer can start the daemon. A refused drain stays retryable from Notes.
+    await desktopNoteService.initialize().catch((error) => {
+      console.warn("[notes] 本地便签尚未准备好", error)
+    })
     installDocumentPreviewProtocol(session.defaultSession, resolve(__dirname, "../document-preview"))
     installPluginAppDocumentProtocol(desktopPluginAppDocuments, session.defaultSession)
     electronApp.setAppUserModelId(is.dev ? "dev.vykor.desktop" : "app.vykor.desktop")
@@ -83,7 +89,10 @@ function startDesktopApplication(): void {
     const pluginApps = new DesktopPluginAppService({
       messageReady: pluginAppMessageReady,
       documents: desktopPluginAppDocuments,
-      getClient: () => desktopSessionService.daemonClient(),
+      getClient: async () => {
+        const agent = await desktopSessionService.agentClient()
+        return clientForPluginApps(agent, await desktopSessionService.daemonTransport(agent))
+      },
       getOwnerSessionToken: (id, sessionId) => desktopSessionService.subscriptions.getOwnerSessionToken(id, sessionId),
     })
     setDesktopPluginAppService(pluginApps)
@@ -98,7 +107,7 @@ function startDesktopApplication(): void {
 
     const appContext = ctx
     initializeNotificationActions(
-      () => desktopSessionService.daemonClient(),
+      () => desktopSessionService.agentClient(),
       (sessionId) => openNotificationSession(sessionId, () =>
         appContext.windowManager.getMain() ?? appContext.createMainWindow()
       )
@@ -139,6 +148,7 @@ function startDesktopApplication(): void {
     if (shutdown) return
     shutdown = (async () => {
       if (!isDataRootMigrationShutdown()) await flushDesktopBusinessData()
+      await desktopNoteService.close()
       await getDesktopPluginAppService()?.dispose()
       desktopPluginAppDocuments.clear()
       updaterRuntime?.service.dispose()

@@ -14,4 +14,5 @@
 
 ## 待实施任务
 
+- [Daemon 公开 Agent 契约与应用客户端退役](./plans/2026-11-19-daemon-public-client-convergence.md)：按调用迁移，独立验收公开客户端、后台选配和本地便签，最后移除私有应用客户端。
 - [运行中补充设计说明](./specs/2026-11-10-running-follow-up-design.md)与[六项实施计划](./plans/2026-11-10-running-follow-up.md)：按 Ponytail 审核删去重复状态、强制协议升级和偏好持久化；保留三个前置修复、两入口接线及全部 17 项验收场景，实施和验证结果见[验收记录](./reviews/2026-11-16-running-follow-up.md)。

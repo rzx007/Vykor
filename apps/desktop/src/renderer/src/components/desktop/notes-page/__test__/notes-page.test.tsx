@@ -5,7 +5,7 @@ import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 
-import { reconcileOrganization, type NoteOrganizationSnapshotRecord } from "@vykor/application-client"
+import { reconcileOrganization, type NoteOrganizationSnapshotRecord } from "@vykor/protocol"
 import type { DesktopNote } from "@shared/note-types"
 
 vi.mock("@renderer/components/ui/scroll-area", () => ({

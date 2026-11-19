@@ -1,4 +1,4 @@
-import { copyPluginAppJson, PLUGIN_APP_INPUT_LIMITS } from "@vykor/application-client"
+import { copyPluginAppJson, PLUGIN_APP_INPUT_LIMITS } from "@vykor/protocol"
 /** Only text is supported. Do not silently drop images/resources or reinterpret role. */
 export function pluginAppText(content: unknown, required = true): string {
   if (content === undefined && !required) return ""

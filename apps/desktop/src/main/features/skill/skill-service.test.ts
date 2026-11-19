@@ -24,15 +24,19 @@ const refreshedDaemon = vi.hoisted(() => ({
 }))
 
 const sessionService = vi.hoisted(() => ({
-  daemonClient: vi.fn(async () => daemon),
-  refreshDaemonClient: vi.fn(async () => refreshedDaemon),
+  agentClient: vi.fn(async () => daemon),
+  refreshAgentClient: vi.fn(async () => refreshedDaemon),
+  daemonTransport: async (agent: typeof daemon | typeof refreshedDaemon) => agent,
 }))
 
 vi.mock("../session/session-service", () => ({
   desktopSessionService: sessionService,
 }))
 
-import { VykorApiError } from "@vykor/application-client"
+vi.mock("./skill-resource", () => ({ SkillResource: class {
+  constructor(transport: typeof daemon | typeof refreshedDaemon) { return transport.development }
+} }))
+import { VykorApiError } from "@rzx/client"
 import { DesktopSkillService } from "./skill-service"
 
 const snapshot = {
@@ -139,7 +143,7 @@ describe("DesktopSkillService", () => {
     const service = new DesktopSkillService()
 
     await expect(service.marketplace()).resolves.toBeNull()
-    expect(sessionService.refreshDaemonClient).not.toHaveBeenCalled()
+    expect(sessionService.refreshAgentClient).not.toHaveBeenCalled()
   })
 
   it("preserves catalog failures reported by a daemon that supports the marketplace", async () => {
@@ -170,7 +174,7 @@ describe("DesktopSkillService", () => {
     })
     expect(daemon.runtime.listSkills).toHaveBeenCalledOnce()
     expect(daemon.runtime.listSkills).toHaveBeenCalledWith()
-    expect(sessionService.refreshDaemonClient).not.toHaveBeenCalled()
+    expect(sessionService.refreshAgentClient).not.toHaveBeenCalled()
   })
 
   it("does not require the current page project to be in the skill catalog", async () => {
@@ -228,7 +232,7 @@ describe("DesktopSkillService", () => {
 
       await expect(service.snapshot({ projectPath: "D:/code/Vykor" })).resolves.toEqual(snapshot)
       expect(daemon.runtime.listSkills).toHaveBeenCalledOnce()
-      expect(sessionService.refreshDaemonClient).toHaveBeenCalledOnce()
+      expect(sessionService.refreshAgentClient).toHaveBeenCalledOnce()
       expect(refreshedDaemon.runtime.listSkills).toHaveBeenCalledOnce()
     }
   )
@@ -245,7 +249,7 @@ describe("DesktopSkillService", () => {
         projectPath: "D:/code/Vykor",
       })
     ).rejects.toBe(error)
-    expect(sessionService.refreshDaemonClient).not.toHaveBeenCalled()
+    expect(sessionService.refreshAgentClient).not.toHaveBeenCalled()
     expect(refreshedDaemon.development.removeSkill).not.toHaveBeenCalled()
   })
 })

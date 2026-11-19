@@ -6,7 +6,7 @@ import type {
   DesktopSessionPart,
   DesktopSessionRun,
 } from "@shared/session-types"
-import { readPluginUiInstance, type PluginUiInstanceRecord } from "@vykor/application-client"
+import { readPluginUiInstance, type PluginUiInstanceRecord } from "@vykor/protocol"
 import { isToolGenerationPresentation } from "../activity/tool-generation-presentation"
 
 export type AssistantContentUnit =

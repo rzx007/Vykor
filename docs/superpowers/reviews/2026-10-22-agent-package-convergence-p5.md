@@ -74,6 +74,6 @@ AST 反例补充了经类型别名和 Pick 包装隐藏 Store 的情况。检查
 - [投影重放与子 Run](../../../packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts)
 - [维护重启](../../../packages/server/src/http/__test__/application-maintenance-restart.test.ts)
 - [事实请求](../../../packages/server/src/application/personalization/__test__/facts.routes.test.ts)
-- [便签请求](../../../packages/server/src/http/routes/__test__/notes.test.ts)
+- [旧便签请求退役后的回归测试](../../../packages/server/src/http/__test__/notes-retirement.test.ts)
 
 T09、T10 已完成，对应 B08、B09、B10 和本阶段 A06。P6 留待后续：清理剩余阶段例外与公开依赖面，完成最终 SDK、权威架构图和整体验收。未发布、部署或迁移真实用户数据。

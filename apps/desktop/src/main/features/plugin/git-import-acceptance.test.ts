@@ -12,7 +12,8 @@ vi.mock("electron", () => ({
   dialog: { showOpenDialog: vi.fn() },
 }))
 
-import { VykorClient } from "@vykor/application-client"
+import { HttpTransport } from "@rzx/client"
+import { DesktopPluginResource } from "./desktop-plugin-resource"
 import {
   discoverInstalledNativePlugins,
   loadNativePlugin,
@@ -123,11 +124,11 @@ function createDesktopService(): DesktopPluginService {
       },
     })
   )
-  const client = new VykorClient({
+  const transport = new HttpTransport({
     baseUrl: "http://desktop-git.test",
     fetch: async (input, init) => await routes.request(input, init),
   })
-  return new DesktopPluginService({ daemonClient: async () => client })
+  return new DesktopPluginService({ daemonClient: async () => ({ plugins: new DesktopPluginResource(transport) }) })
 }
 
 describe("Desktop Native Git import acceptance", () => {

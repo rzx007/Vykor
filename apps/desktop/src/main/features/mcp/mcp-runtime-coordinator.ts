@@ -1,9 +1,9 @@
 import {
   IncompatibleProtocolError,
   VykorApiError,
-  VykorClient,
-  type McpRuntimeSyncResult,
-} from "@vykor/application-client"
+  HttpTransport,
+} from "@rzx/client"
+import { McpResource, type McpRuntimeSyncResult } from "@vykor/daemon-admin/mcp"
 import { readDaemonRegistry } from "@vykor/server"
 
 interface McpRuntimeIdentity {
@@ -35,7 +35,7 @@ const unavailable = (): McpRuntimeSyncResult => ({
 /**
  * Desktop-side MCP Runtime coordinator.
  *
- * It calls the same daemon control plane through `@vykor/application-client` and the
+ * It calls the same daemon control plane through the local MCP management resource and the
  * daemon registry the main process already owns. A missing registry or an
  * unreachable daemon is `unavailable`; daemon auth, protocol and server errors
  * stay real sync failures so the page can show "saved, but reconnect failed".
@@ -49,7 +49,7 @@ export function createDesktopMcpRuntimeCoordinator(
 } {
   const readRegistry = options.readRegistry ?? (() => readDaemonRegistry())
   const createClient =
-    options.createClient ?? ((clientOptions) => new VykorClient(clientOptions))
+    options.createClient ?? ((clientOptions) => ({ mcp: new McpResource(new HttpTransport(clientOptions)) }))
 
   const invoke = async (
     identity: McpRuntimeIdentity,

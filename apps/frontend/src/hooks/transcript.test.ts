@@ -5,7 +5,7 @@ import type {
   SessionMessagePartRecord,
   SessionMessageRecord,
   SessionRecord,
-} from "@vykor/application-client";
+} from "@rzx/client";
 
 import { bucketToTranscript } from "./transcript";
 

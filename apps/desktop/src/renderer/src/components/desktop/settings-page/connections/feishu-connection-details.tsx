@@ -1,5 +1,5 @@
 import { useId, useState, type ReactNode } from "react"
-import type { FeishuChannelSnapshot } from "@vykor/application-client"
+import type { FeishuChannelSnapshot } from "@vykor/protocol"
 import {
   ChevronDown,
   Info,

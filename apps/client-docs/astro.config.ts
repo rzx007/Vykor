@@ -38,6 +38,7 @@ export default defineConfig({
         {label: '可选本机服务管理',slug: 'guides/local-service'},
       ]},
       {label: '参考说明',slug: 'reference/overview'},
+      {label: 'Agent HTTP API',slug: 'reference/agent-http'},
       typeDocSidebarGroup,
     ],
   }),{

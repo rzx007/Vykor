@@ -36,6 +36,8 @@ export async function runDesktopDaemonEntry(mode: DesktopDaemonMode): Promise<vo
     version: app.getVersion(),
     launcher: "desktop",
     supervised: mode === "service",
+    enableDesktopBrowser: true,
+    enableBrowserDeveloper: true,
     ...(mode === "service" && process.platform === "win32"
       ? { shouldStart: isWindowsDaemonServiceEnabled }
       : {}),

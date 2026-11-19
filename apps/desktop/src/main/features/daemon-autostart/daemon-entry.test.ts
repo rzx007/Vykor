@@ -22,7 +22,7 @@ import { resolveDesktopDaemonMode, runDesktopDaemonEntry } from "./daemon-entry"
 
 describe("desktop daemon entry", () => {
   it.each([["service", true], ["on-demand", false]] as const)(
-    "uses the same registered runtime for %s with the correct supervision",
+    "starts the registered %s daemon with the Desktop bridge and Developer tool enabled",
     async (mode, supervised) => {
       host.runRegisteredDaemon.mockClear()
       host.setHostResponseLocale.mockClear()
@@ -30,6 +30,7 @@ describe("desktop daemon entry", () => {
       expect(host.setHostResponseLocale).toHaveBeenCalledWith("zh-Hans-CN")
       expect(host.runRegisteredDaemon).toHaveBeenCalledWith(expect.objectContaining({
         launcher: "desktop", version: "1.0.0", supervised,
+        enableDesktopBrowser: true, enableBrowserDeveloper: true,
         outsideProjectWorkspaceRoot: join(process.env.VYKOR_CONFIG_DIR!, "workspaces"),
         channelsWorkspaceRoot: join(process.env.VYKOR_CONFIG_DIR!, "channels"),
         ...(mode === "service" && process.platform === "win32"

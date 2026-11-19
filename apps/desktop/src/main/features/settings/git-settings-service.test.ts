@@ -25,29 +25,34 @@ vi.mock("electron", () => ({
 }))
 vi.mock("../session/session-service", () => ({
   desktopSessionService: {
-    daemonClient: async () => ({
-      projects: { list: async () => [{ id: "project", name: "Project", path: host.projectPath }] },
+    daemonTransport: async () => ({}),
+    agentClient: async () => ({
       protocol: { capabilities: async () => ({ features: { gitWorktreeBindings: 1 } }) },
       sessions: {
         list: async () => [{ id: "session", title: "Task" }],
         getState: async () => host.state,
-        clearWorktreeBinding: async (
-          sessionId: string,
-          binding: { id: string; path: string; branch: string }
-        ) => {
-          host.bindingRequests.push({ sessionId, binding })
-          if (host.bindingFailure) throw new Error("Binding update unavailable")
-          const desktop = host.state.session.metadata.desktop as Record<string, unknown> | undefined
-          if (desktop) {
-            const { worktree: _worktree, ...rest } = desktop
-            host.state.session.metadata = { ...host.state.session.metadata, desktop: rest }
-          }
-          return host.state.session
-        },
       },
     }),
   },
 }))
+vi.mock("../session/project-resource", () => ({ ProjectResource: class {
+  async list() { return [{ id: "project", name: "Project", path: host.projectPath }] }
+} }))
+vi.mock("./worktree-binding-resource", () => ({ WorktreeBindingResource: class {
+  async clearWorktreeBinding(
+    sessionId: string,
+    binding: { id: string; path: string; branch: string }
+  ) {
+    host.bindingRequests.push({ sessionId, binding })
+    if (host.bindingFailure) throw new Error("Binding update unavailable")
+    const desktop = host.state.session.metadata.desktop as Record<string, unknown> | undefined
+    if (desktop) {
+      const { worktree: _worktree, ...rest } = desktop
+      host.state.session.metadata = { ...host.state.session.metadata, desktop: rest }
+    }
+    return host.state.session
+  }
+} }))
 vi.mock("./runtime-settings-service", () => ({
   desktopRuntimeSettingsService: {
     snapshot: async () => ({ effective: { kind: "native" }, source: "用户默认" }),

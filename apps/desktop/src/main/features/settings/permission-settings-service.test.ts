@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest"
-import type { VykorClient } from "@vykor/application-client"
 import { DesktopPermissionSettingsService } from "./permission-settings-service"
 
 function setup() {
@@ -23,7 +22,7 @@ function setup() {
         throw new Error("no approval")
       },
     },
-  } as unknown as Pick<VykorClient, "system" | "permissions">
+  }
   return {
     service: new DesktopPermissionSettingsService({
       daemonClient: async () => client,

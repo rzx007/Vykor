@@ -4,6 +4,7 @@
 
 - `__test__/session-write-generation.test.ts`：暂停 Write 参数流，检查界面先显示生成状态、此时尚未写文件；恢复后只执行和展示一次正式工具调用。
 - `__test__/data-root-migration.test.ts`：贯通真实旧数据集分类、renderer 草稿导入、主进程业务存储和同根失败恢复，检查临时正文过滤、原输入 ID、两次恢复、更新后的草稿及壳偏好保留。这里使用 jsdom 的 localStorage，不冒充真实 Electron profile 导出验收。
+- `__test__/notes-backup.test.ts`：用真实 SQLite 和 Markdown 校验桌面统一备份及旧版恢复，检查会话、便签修订与原备份哈希。
 - `vitest.config.ts`：沿用 Desktop 的别名、转换插件和隔离配置，React 从 Desktop 已声明的依赖解析，避免给根包增加界面依赖。
 
 运行 `pnpm test:desktop-integration`。根 `pnpm test` 已包含此命令，普通 CI 继续覆盖。测试使用离线流、临时 SQLite 与临时文件，不启动桌面应用或访问真实模型。

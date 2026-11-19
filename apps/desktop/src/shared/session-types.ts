@@ -6,11 +6,11 @@ import type {
   GoalActionInput,
   ApprovalMode,
   WorkMode,
-} from "@vykor/application-client"
+} from "@rzx/client"
 
-export type { SessionUserInputItem, SessionGoal } from "@vykor/application-client"
-export type { SearchSessionsOptions } from "@vykor/application-client"
-export type { PluginCatalogEntry as DesktopPluginCatalogEntry } from "@vykor/application-client"
+export type { SessionUserInputItem, SessionGoal } from "@rzx/client"
+export type { SearchSessionsOptions } from "@rzx/client"
+export type { PluginCatalogEntry as DesktopPluginCatalogEntry } from "@vykor/protocol"
 
 export interface GetDesktopSessionGoalInput {
   sessionId: string
@@ -130,7 +130,7 @@ interface DesktopSessionPartBase {
   toolName?: string
   input?: Record<string, unknown>
   output?: unknown
-  bodyView?: import("@vykor/application-client").SessionMessagePartRecord["bodyView"]
+  bodyView?: import("@rzx/client").SessionMessagePartRecord["bodyView"]
   isError?: boolean
   metadata: Record<string, unknown>
   createdAt: number

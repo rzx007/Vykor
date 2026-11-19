@@ -3,8 +3,8 @@ import { existsSync } from "node:fs"
 import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
 import { app, BrowserWindow } from "electron"
-import { VykorClient } from "@vykor/application-client"
-import { Service, type ServiceEndpoint } from "@vykor/application-client/service"
+import { HttpTransport, VykorClient } from "@rzx/client"
+import { Service, type ServiceEndpoint } from "@rzx/client/service"
 import {
   daemonPidAlive,
   getDaemonRegistryPath,
@@ -19,8 +19,10 @@ import {
 } from "@vykor/server/daemon-host"
 import { createDesktopDaemonSystemService } from "../daemon-autostart/daemon-autostart-service"
 import { isLoopbackDaemonUrl } from "../daemon-autostart/daemon-surface"
+import { TerminalResource } from "../terminal/terminal-resource"
 import { IpcEvents } from "../../../shared/ipc-channels"
 import type { DesktopDaemonStatus, DesktopDaemonStatusPhase } from "../../../shared/session-types"
+import { DaemonMaintenanceResource } from "./daemon-maintenance-resource"
 
 // The daemon's Windows capability check can spend 10 seconds in wsl.exe.
 const probeTimeoutMs = 15_000
@@ -33,7 +35,7 @@ export interface DaemonConnectionServiceOptions {
 export class DaemonConnectionService {
   private clientPromise: Promise<VykorClient> | null = null
   private connectionAbort?: AbortController
-  private endpoint?: ServiceEndpoint
+  private connection?: { endpoint: ServiceEndpoint; client: VykorClient; transport?: HttpTransport }
   private stopBrowserBridge?: () => void
   private readonly invalidationListeners = new Set<() => void>()
   private daemonStatus: DesktopDaemonStatus = {
@@ -50,6 +52,18 @@ export class DaemonConnectionService {
   getClient(): Promise<VykorClient> {
     if (this.restarting) return Promise.reject(new Error("后台服务正在重启或切换数据，请稍候。"))
     return this.getOrConnectClient()
+  }
+
+  async getTransport(client?: VykorClient): Promise<HttpTransport> {
+    const agent = client ?? await this.getClient()
+    if (this.restarting) throw new Error("后台服务正在重启或切换数据，请稍候。")
+    return this.connectedTransport(agent)
+  }
+
+  private connectedTransport(client: VykorClient): HttpTransport {
+    const connection = this.connection
+    if (connection?.client !== client) throw new Error("后台连接已变化，请重新连接后重试。")
+    return connection.transport ??= new HttpTransport(Service.clientOptions(connection.endpoint))
   }
 
   private getOrConnectClient(): Promise<VykorClient> {
@@ -81,14 +95,15 @@ export class DaemonConnectionService {
         this.invalidateClient()
         return await this.getOrConnectClient()
       }
-      const client = new VykorClient(Service.clientOptions(endpoint))
       const registry = this.requireLocalRegistry(endpoint)
       const supervised = registry.supervised ?? await shouldStartManagedDaemon()
       await withDaemonControlLock(async (signal) => {
         if (!sameRegistration(registry, readDaemonRegistry()))
           throw new Error("后台连接已变化，请重新连接后重试。")
-        if (options.stopActive) await this.stopActiveWork(client)
-        if ((await client.system.prepareRestart({
+        const clientOptions = Service.clientOptions(endpoint)
+        const transport = new HttpTransport(clientOptions)
+        if (options.stopActive) await this.stopActiveWork(new VykorClient(clientOptions), transport)
+        if ((await new DaemonMaintenanceResource(transport).prepareRestart({
           signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]),
         })).prepared !== true) throw new Error("后台未确认安全收尾。")
         if (!sameRegistration(registry, readDaemonRegistry()))
@@ -127,10 +142,11 @@ export class DaemonConnectionService {
       const registry = this.requireLocalRegistry()
       if (await shouldStartManagedDaemon())
         throw new Error("请先停用系统常驻服务，再切换数据目录。")
-      if (options.stopActive) await this.stopActiveWork(client)
+      const transport = this.connectedTransport(client)
+      if (options.stopActive) await this.stopActiveWork(client, transport)
       const id = randomUUID()
       try {
-        await client.system.requestDataSwitch({ id, directory: target, storePath }, { signal: AbortSignal.timeout(60_000) })
+        await new DaemonMaintenanceResource(transport).requestDataSwitch({ id, directory: target, storePath }, { signal: AbortSignal.timeout(60_000) })
       } catch (error) {
         // The response can be lost after the daemon has durably accepted the switch.
         if (!await readRegisteredDataSwitchResult(id).catch(() => undefined)) throw error
@@ -146,7 +162,7 @@ export class DaemonConnectionService {
         throw error
       }
       const next = await this.useEndpoint(endpoint)
-      const result = await next.system.getDataSwitchResult(id)
+      const result = await new DaemonMaintenanceResource(this.connectedTransport(next)).getDataSwitchResult(id)
       if (result.status !== "succeeded") {
         const detail = [result.error, result.rollbackError].filter(Boolean).join("；")
         throw new Error(detail || "数据切换未完成。")
@@ -180,7 +196,7 @@ export class DaemonConnectionService {
     this.restarting = true
   }
 
-  private requireLocalRegistry(endpoint = this.endpoint): DaemonRegistry {
+  private requireLocalRegistry(endpoint = this.connection?.endpoint): DaemonRegistry {
     const registry = readDaemonRegistry()
     if (!registry || !isLoopbackDaemonUrl(registry.url)) throw new Error("需要已登记的本机后台服务。")
     if (!endpoint || !sameRegistration(endpoint, registry))
@@ -188,13 +204,14 @@ export class DaemonConnectionService {
     return registry
   }
 
-  private async stopActiveWork(client: VykorClient): Promise<void> {
-    const preview = await client.system.getRestartPreview()
+  private async stopActiveWork(client: VykorClient, transport: HttpTransport): Promise<void> {
+    const preview = await new DaemonMaintenanceResource(transport).getRestartPreview()
     const sessions = new Set([...preview.runs, ...preview.tasks].map((item) => item.sessionId))
     for (const sessionId of sessions) await client.sessions.interrupt(sessionId, { source: "system" })
-    for (const terminal of await client.terminals.list()) {
+    const terminals = new TerminalResource(transport)
+    for (const terminal of await terminals.list()) {
       if (["pending", "running", "stopping"].includes(terminal.status))
-        await client.terminals.close(terminal.id)
+        await terminals.close(terminal.id)
     }
   }
 
@@ -203,7 +220,7 @@ export class DaemonConnectionService {
     this.connectionAbort = undefined
     this.stopBrowserBridge?.()
     this.stopBrowserBridge = undefined
-    this.endpoint = undefined
+    this.connection = undefined
     this.clientPromise = null
     for (const listener of this.invalidationListeners) listener()
   }
@@ -232,6 +249,9 @@ export class DaemonConnectionService {
     const command = app.isPackaged
       ? [process.execPath, "--daemon-on-demand"]
       : [process.execPath, app.getAppPath(), "--daemon-on-demand"]
+    // Electron resolves session data before loading JavaScript. Reuse the
+    // desktop profile when Windows cannot resolve the default roaming path.
+    if (process.platform === "win32") command.push(`--user-data-dir=${app.getPath("userData")}`)
     const logPath = join(dirname(dirname(file)), "logs", "daemon.log")
     return this.useEndpoint(await Service.ensure({ file, command, timeoutMs: startupTimeoutMs, signal, logPath }), signal)
   }
@@ -243,15 +263,15 @@ export class DaemonConnectionService {
     const capabilities = await client.protocol.capabilities({
       signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     })
-    if ((capabilities.features.browserBridge ?? 0) < 1)
-      throw new Error("当前后台缺少桌面所需能力，请先安全停止旧后台，再重新连接。")
     const expected = await readRegisteredDataLocation(undefined, join(app.getPath("userData"), "runtime-data-location.json"))
     if (expected && (!endpoint.storePath || relative(expected.storePath, endpoint.storePath)))
       throw new Error("当前后台使用其他数据目录。请先停止后台，再从桌面重新连接。")
     signal?.throwIfAborted()
     this.stopBrowserBridge?.()
-    this.stopBrowserBridge = this.options.onConnected?.(endpoint)
-    this.endpoint = endpoint
+    this.stopBrowserBridge = undefined
+    if ((capabilities.features.browserBridge ?? 0) >= 1)
+      this.stopBrowserBridge = this.options.onConnected?.(endpoint)
+    this.connection = { endpoint, client }
     this.setDaemonStatus("ready", "daemon 已连接", { url: endpoint.url })
     this.clientPromise = Promise.resolve(client)
     return client

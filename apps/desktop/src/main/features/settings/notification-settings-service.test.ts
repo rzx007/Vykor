@@ -16,7 +16,7 @@ vi.mock("electron", () => ({
     show() { shown(); this.listeners.get(mode.value)?.() }
   },
 }))
-vi.mock("../session/session-service", () => ({ desktopSessionService: { daemonClient: async () => ({ sessions: { get: sessionGet } }) } }))
+vi.mock("../session/session-service", () => ({ desktopSessionService: { agentClient: async () => ({ sessions: { get: sessionGet } }) } }))
 
 describe("notification settings", () => {
   beforeEach(async () => { directory = await mkdtemp(join(tmpdir(), "vykor-notifications-")); mode.value = "show"; shown.mockClear(); sessionGet.mockReset() })

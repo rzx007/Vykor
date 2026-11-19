@@ -177,7 +177,7 @@ pnpm --filter @vykor/agent-contracts --filter @vykor/core --filter @vykor/agent-
 **Files**
 
 - Modify: `packages/protocol/src/session/session-requests.ts`、`requests/requests.ts`。
-- Modify: `packages/client/src/types/index.ts`、`resources/session/session-resource.ts`；`packages/application-client/src/resources/session/session-resource.ts`。
+- Modify: `packages/client/src/types/index.ts`、`resources/session/session-resource.ts` 及当时的私有会话资源。 [退役前的私有会话资源](https://github.com/rzx007/Vykor/blob/9258ffcf5bffaa6cc683d76963c94acb0d277141/packages/application-client/src/resources/session/session-resource.ts)
 - Modify: Server 的 session-interaction-service、run-admission-work、run-admission-service、run-control-service、run-coordinator 既有接点。
 - Modify: `packages/server/src/http/routes/run-execution.ts`、`system.ts`；既有宿主 metadata 保护入口。
 - Modify: `packages/services/src/conversations/conversation-tree-operations.ts` 的既有 fork 字段清理。

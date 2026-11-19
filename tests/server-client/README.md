@@ -7,3 +7,4 @@
 运行 `pnpm test:server-client`；根 `pnpm test` 已包含它。测试不访问真实用户数据或付费模型。其它关键契约见[测试索引](../../docs/contract-test-index.md)。
 
 - [运行中补充](./__test__/running-follow-up.test.ts) 经过本机 HTTP、公开 SDK、第一方 Run 和脚本化模型，检查接纳与应用、队列提升、过期目标以及停止。
+- [公开 Agent 流程](./__test__/public-agent-lifecycle.test.ts) 用两个公开 SDK 客户端检查断线接手、提交幂等、工具审批、`AskUser` 回答、终态消息及按 Run ID 中断。

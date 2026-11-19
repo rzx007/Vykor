@@ -1,3 +1,4 @@
+import { SystemResource } from "@vykor/daemon-admin/configuration"
 import { testStoredProviderConnection, storedProviderConnectionFingerprint } from "@vykor/server"
 import type { ProviderDefaultsSnapshot, UpdateProviderDefaultEffortInput, ProviderConnectionTestResult } from "../../../shared/provider-defaults-types"
 import { desktopSessionService } from "../session/session-service"
@@ -8,8 +9,9 @@ export class DesktopProviderDefaultsService {
   private updating = false
 
   async snapshot(): Promise<ProviderDefaultsSnapshot> {
-    const client = await desktopSessionService.daemonClient()
-    const [settings, providers] = await Promise.all([client.system.getSettings(), client.runtime.listModels()])
+    const agent = await desktopSessionService.agentClient()
+    const system = new SystemResource(await desktopSessionService.daemonTransport(agent))
+    const [settings, providers] = await Promise.all([system.getSettings(), agent.runtime.listModels()])
     const models = providers.flatMap((provider) => provider.models)
     const runtime = resolveDesktopRuntimeSnapshot(models, settings)
     const verified: ProviderDefaultsSnapshot["verified"] = {}
@@ -32,8 +34,8 @@ export class DesktopProviderDefaultsService {
       const model = current.models.find((item) => item.providerName === current.provider && item.id === current.model)
       if (!model) throw new Error("请选择已配置供应商实际列出的模型。")
       if (input.effort !== null && !model.reasoningEfforts?.includes(input.effort)) throw new Error("所选模型不支持该推理强度；未知能力不发送推理参数。")
-      const client = await desktopSessionService.daemonClient()
-      await client.system.patchSettings({ effort: input.effort ?? "" })
+      const system = new SystemResource(await desktopSessionService.daemonTransport())
+      await system.patchSettings({ effort: input.effort ?? "" })
       return await this.snapshot()
     } finally { this.updating = false }
   }

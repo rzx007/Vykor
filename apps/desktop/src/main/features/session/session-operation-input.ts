@@ -1,7 +1,6 @@
 import { resolve } from "node:path"
-import { normalizeApprovalMode } from "@vykor/application-client"
+import { normalizeApprovalMode, type VykorClient } from "@rzx/client"
 import type { DesktopModel, DesktopPermissionMode, DesktopWorkMode, SendDesktopPromptInput, SessionUserInputItem } from "@shared/session-types"
-import type { SessionOperationsClient } from "./session-operations"
 
 export function resolveRequiredPath(value: unknown): string {
   return resolve(requireString(value, "项目路径"))
@@ -35,7 +34,7 @@ export function optionalProvider(value: unknown): string | undefined {
 }
 
 export async function resolveProviderForModel(
-  client: SessionOperationsClient,
+  client: Pick<VykorClient, "runtime">,
   model: string,
   requestedProvider: unknown
 ): Promise<string | undefined> {

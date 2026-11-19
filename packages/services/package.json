@@ -17,6 +17,10 @@
       "import": "./src/memory/memory-extract.ts",
       "types": "./src/memory/memory-extract.ts"
     },
+    "./notes": {
+      "import": "./src/notes/index.ts",
+      "types": "./src/notes/index.ts"
+    },
     "./workflows": {
       "import": "./src/workflows/index.ts",
       "types": "./src/workflows/index.ts"

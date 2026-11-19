@@ -1,7 +1,8 @@
 import { join, resolve } from "node:path";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { VykorClient, type PluginInfo } from "@vykor/application-client";
+import { HttpTransport } from "@rzx/client";
+import { PluginResource, type PluginInfo } from "@vykor/daemon-admin/plugins";
 import {
   requestedPluginPermissions,
   validateNativePlugin,
@@ -10,9 +11,9 @@ import { createBuiltinConverterRegistry, type ConversionPlan } from "@vykor/plug
 import { Command } from "commander";
 import { ensureLocalDaemon } from "../ensure-daemon.js";
 
-async function client(): Promise<VykorClient> {
+async function client(): Promise<PluginResource> {
   const daemon = await ensureLocalDaemon();
-  return new VykorClient({ baseUrl: daemon.url, token: daemon.token });
+  return new PluginResource(new HttpTransport({ baseUrl: daemon.url, token: daemon.token }));
 }
 const collect = (value: string, previous: string[]) => [...previous, value];
 
@@ -137,7 +138,7 @@ export function createPluginCommand(): Command {
     .option("--json", "print the complete machine-readable response")
     .action(async (options) => {
       const c = await client();
-      const result = await c.plugins.list({ cwd: resolve(options.cwd ?? process.cwd()) });
+      const result = await c.list({ cwd: resolve(options.cwd ?? process.cwd()) });
       console.log(
         options.json
           ? JSON.stringify(result, null, 2)
@@ -161,7 +162,7 @@ export function createPluginCommand(): Command {
         const missing = requested.filter((item) => !approved.includes(item));
         if (missing.length) throw new Error(`Explicit approval required: ${missing.join(", ")}`);
         const c = await client();
-        const result = await c.plugins.installLocal({
+        const result = await c.installLocal({
           cwd: resolve(options.cwd ?? process.cwd()), sourcePath, scope: "user",
           approvedPermissions: approved, link,
         });
@@ -170,15 +171,15 @@ export function createPluginCommand(): Command {
   }
   for (const action of ["enable", "disable"] as const) cmd.command(action).argument("<id>").option("--cwd <path>").action(async (id, options) => {
     const c = await client(); const input = { cwd: resolve(options.cwd ?? process.cwd()) };
-    console.log((action === "enable" ? await c.plugins.enable(id, input) : await c.plugins.disable(id, input)).message);
+    console.log((action === "enable" ? await c.enable(id, input) : await c.disable(id, input)).message);
   });
   cmd.command("uninstall").argument("<id>").option("--cwd <path>").action(async (id, options) => {
     const c = await client();
-    console.log((await c.plugins.uninstall(id, { cwd: resolve(options.cwd ?? process.cwd()) })).message);
+    console.log((await c.uninstall(id, { cwd: resolve(options.cwd ?? process.cwd()) })).message);
   });
   cmd.command("details").argument("<id>").option("--cwd <path>").action(async (id, options) => {
     const c = await client();
-    const listed = await c.plugins.list({ cwd: resolve(options.cwd ?? process.cwd()) });
+    const listed = await c.list({ cwd: resolve(options.cwd ?? process.cwd()) });
     const plugin = listed.plugins.find((item) => item.identity.id === id);
     if (!plugin) throw new Error(`Plugin not found: ${id}`);
     console.log(JSON.stringify(plugin, null, 2));
@@ -199,7 +200,7 @@ export function createPluginCommand(): Command {
         const missing = requested.filter((item) => !(options.approve as string[]).includes(item));
         if (missing.length) throw new Error(`Explicit permission approval required: ${missing.join(", ")}`);
         const c = await client();
-        const result = await c.plugins.installLocal({
+        const result = await c.installLocal({
           cwd: resolve(options.cwd ?? process.cwd()), sourcePath: output, scope: "user",
           approvedPermissions: requested,
         });

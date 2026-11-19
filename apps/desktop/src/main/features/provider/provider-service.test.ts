@@ -24,12 +24,19 @@ const daemon = vi.hoisted(() => ({
 }))
 
 const sessionService = vi.hoisted(() => ({
-  daemonClient: vi.fn(async () => daemon),
-  refreshDaemonClient: vi.fn(async () => daemon),
+  agentClient: vi.fn(async () => daemon),
+  refreshAgentClient: vi.fn(async () => daemon),
+  daemonTransport: async () => daemon,
 }))
 
 vi.mock("../session/session-service", () => ({
   desktopSessionService: sessionService,
+}))
+
+vi.mock("@vykor/daemon-admin/configuration", () => ({
+  ProviderResource: class { constructor() { return daemon.providers } },
+  AuthResource: class { constructor() { return daemon.auth } },
+  SystemResource: class { constructor() { return daemon.system } },
 }))
 
 import {

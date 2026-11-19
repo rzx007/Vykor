@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
+  chmodSync,
   cpSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   renameSync,
@@ -11,6 +13,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import {
   basename,
   dirname,
@@ -25,8 +28,8 @@ import {
   AttachmentIntegrityService,
   DEFAULT_RETENTION_POLICY,
   SessionStore,
-  validateNoteOrganizationFiles,
 } from "@vykor/services";
+import type { DaemonMaintenanceBackupManifest, MaintenanceBackupManifest } from "@vykor/domain-contracts/maintenance";
 
 export interface BackupSourceDirectories {
   artifacts?: string;
@@ -35,36 +38,13 @@ export interface BackupSourceDirectories {
   attachments?: string;
 }
 
-export interface ApplicationBackupManifest {
-  version: 1 | 2 | 3;
-  backupId: string;
-  createdAt: number;
-  database: "database.sqlite";
-  directories: Record<
-    "artifacts" | "memory" | "execution-output" | "attachments",
-    boolean
-  > & { notes?: boolean };
-  attachments?: {
-    assets: number;
-    uniqueBlobs: number;
-    physicalBytes: number;
-    consistency: {
-      errors: number;
-      warnings: number;
-      issueCounts: Record<string, number>;
-    };
-  };
-  recovery: {
-    reviveLiveProcesses: false;
-    closeActiveRecordsOnStartup: true;
-  };
-}
+export type ApplicationBackupManifest = MaintenanceBackupManifest;
 
 export async function createApplicationBackup(input: {
   store: SessionStore;
   destination: string;
   sources?: BackupSourceDirectories;
-}): Promise<ApplicationBackupManifest> {
+}): Promise<DaemonMaintenanceBackupManifest> {
   const destination = resolve(input.destination);
   assertDestinationOutsideSource(destination, dirname(input.store.path));
   if (existsSync(destination) && readdirSync(destination).length > 0) {
@@ -79,8 +59,6 @@ export async function createApplicationBackup(input: {
   }
   if (input.sources?.attachments)
     assertDestinationOutsideSource(destination, input.sources.attachments);
-  assertDestinationOutsideSource(destination, input.store.notes.directory);
-  input.store.notes.list();
   const attachmentStats = validateAttachmentFiles(
     input.store,
     input.sources?.attachments,
@@ -97,21 +75,8 @@ export async function createApplicationBackup(input: {
       )
     : { errors: 0, warnings: 0, issueCounts: {} };
   mkdirSync(destination, { recursive: true });
-  await input.store.backupDatabase(join(destination, "database.sqlite"));
-  input.store.notes.backupTo(join(destination, "notes"));
-  // Files are the body source of truth; align the copied index with the copied
-  // files if a note was saved while the asynchronous SQLite backup was running.
-  const copiedStore = new SessionStore({
-    path: join(destination, "database.sqlite"),
-  });
-  try {
-    copiedStore.notes.list();
-    copiedStore.notes.validateFiles(undefined, true);
-  } finally {
-    copiedStore.close();
-  }
+  await input.store.backupDatabase(join(destination, "database.sqlite"), { includeLegacyNotes: false });
   const directories = {
-    notes: true,
     artifacts: copyOptionalDirectory(
       input.sources?.artifacts,
       join(destination, "artifacts"),
@@ -129,8 +94,9 @@ export async function createApplicationBackup(input: {
       join(destination, "attachments"),
     ),
   };
-  const manifest: ApplicationBackupManifest = {
-    version: 3,
+  const manifest: DaemonMaintenanceBackupManifest = {
+    version: 4,
+    scope: "daemon-only",
     backupId: randomUUID(),
     createdAt: Date.now(),
     database: "database.sqlite",
@@ -141,6 +107,7 @@ export async function createApplicationBackup(input: {
       closeActiveRecordsOnStartup: true,
     },
   };
+  validateBackupAttachmentFiles(destination, manifest);
   writeFileSync(
     join(destination, "manifest.json"),
     JSON.stringify(manifest, null, 2) + "\n",
@@ -152,7 +119,6 @@ export async function createApplicationBackup(input: {
       "\n",
     "utf-8",
   );
-  validateBackupAttachmentFiles(destination, manifest, true);
   return manifest;
 }
 
@@ -162,25 +128,12 @@ export function restoreApplicationBackup(input: {
   destinations?: BackupSourceDirectories;
 }): ApplicationBackupManifest {
   const source = resolve(input.source);
-  const manifest = JSON.parse(
-    readFileSync(join(source, "manifest.json"), "utf-8"),
-  ) as ApplicationBackupManifest;
-  if (
-    ![1, 2, 3].includes(manifest.version) ||
-    manifest.database !== "database.sqlite"
-  ) {
-    throw new Error("Unsupported backup manifest");
-  }
-  if (!isDirectoryManifest(manifest.directories)) {
-    throw new Error("Invalid backup directory manifest");
-  }
-  if (manifest.version === 3 && typeof manifest.directories.notes !== "boolean")
-    throw new Error("Invalid note backup directory manifest");
+  const manifest = readBackupManifest(source);
   verifyChecksums(source);
   // Migration and repository validation run only on the staged copy. Opening
   // a legacy backup with SessionStore here would mutate its checksummed DB.
   const storePath = resolve(input.storePath);
-  const notesPath = join(dirname(storePath), "notes");
+  const notesPath = manifest.version === 4 ? undefined : join(dirname(storePath), "notes");
   if (existsSync(storePath))
     throw new Error(`Restore Store already exists: ${storePath}`);
   const restoreId = randomUUID();
@@ -222,18 +175,19 @@ export function restoreApplicationBackup(input: {
       input.destinations?.attachments,
       join(source, "attachments"),
     );
-    if (manifest.directories.notes) {
-      stageOptionalRestoreTarget(targets, notesPath, join(source, "notes"));
-    } else {
-      const noteTarget = targets.find(
-        (target) => target.finalPath === notesPath,
-      )!;
-      mkdirSync(noteTarget.stagePath, { recursive: true });
+    if (notesPath) {
+      if (manifest.directories.notes) {
+        stageOptionalRestoreTarget(targets, notesPath, join(source, "notes"));
+      } else {
+        const noteTarget = targets.find(target => target.finalPath === notesPath)!;
+        mkdirSync(noteTarget.stagePath, { recursive: true });
+      }
     }
     validateStagedRestore(
       targets,
       storePath,
       input.destinations?.attachments,
+      notesPath,
       manifest,
     );
     commitRestoreTargets(targets);
@@ -309,7 +263,7 @@ function optionalRestoreTargets(
   destinations: BackupSourceDirectories | undefined,
   manifest: ApplicationBackupManifest,
   restoreId: string,
-  notesPath: string,
+  notesPath: string | undefined,
 ): RestoreTarget[] {
   const entries: Array<[string | undefined, boolean | undefined]> = [
     [notesPath, true],
@@ -379,11 +333,18 @@ function validateRestoreTargetLayout(
 
 function stageRestoreTarget(target: RestoreTarget, source: string): void {
   mkdirSync(dirname(target.stagePath), { recursive: true });
-  cpSync(
-    source,
-    target.stagePath,
-    target.kind === "directory" ? { recursive: true } : undefined,
-  );
+  copyToWritableStage(source, target.stagePath, target.kind === "directory");
+}
+
+function copyToWritableStage(source: string, destination: string, recursive = false): void {
+  cpSync(source, destination, { recursive });
+  // Verification and restore may migrate SQLite. Keep archived permissions
+  // intact while allowing the staged files to be edited or removed.
+  const files = recursive ? walkFiles(destination) : [destination];
+  for (const file of files) {
+    const mode = statSync(file).mode;
+    if (!(mode & 0o200)) chmodSync(file, mode | 0o200);
+  }
 }
 
 function stageOptionalRestoreTarget(
@@ -402,6 +363,7 @@ function validateStagedRestore(
   targets: RestoreTarget[],
   storePath: string,
   attachmentsPath: string | undefined,
+  notesPath: string | undefined,
   manifest: ApplicationBackupManifest,
 ): void {
   const databaseTarget = targets.find(
@@ -412,15 +374,13 @@ function validateStagedRestore(
     : undefined;
   const database = new SessionStore({ path: databaseTarget.stagePath });
   try {
-    {
-      const noteTarget = targets.find(
-        (target) =>
-          target.finalPath === join(dirname(resolve(storePath)), "notes"),
-      );
+    if (notesPath) {
+      const noteTarget = targets.find(target => target.finalPath === notesPath);
       if (!noteTarget) throw new Error("Note restore is incomplete");
+      const notes = database.openLegacyNotes();
       if (!manifest.directories.notes)
-        database.notes.copyLegacyFilesTo(noteTarget.stagePath);
-      database.notes.validateFiles(noteTarget.stagePath);
+        notes.copyLegacyFilesTo(noteTarget.stagePath);
+      notes.validateFiles(noteTarget.stagePath);
     }
     const stats = validateAttachmentFiles(
       database,
@@ -515,26 +475,43 @@ export function verifyApplicationBackup(
   source: string,
 ): ApplicationBackupManifest {
   const root = resolve(source);
-  const manifest = JSON.parse(
-    readFileSync(join(root, "manifest.json"), "utf-8"),
-  ) as ApplicationBackupManifest;
+  const manifest = readBackupManifest(root);
+  verifyChecksums(root);
+  if (manifest.directories.notes) validateLegacyNoteBackup(root, manifest);
+  return manifest;
+}
+
+function readBackupManifest(root: string): ApplicationBackupManifest {
+  const manifest = JSON.parse(readFileSync(join(root, "manifest.json"), "utf-8")) as ApplicationBackupManifest;
   if (
-    ![1, 2, 3].includes(manifest.version) ||
-    manifest.database !== "database.sqlite" ||
-    !isDirectoryManifest(manifest.directories)
+    !manifest || ![1, 2, 3, 4].includes(manifest.version) || manifest.database !== "database.sqlite"
   )
     throw new Error("Unsupported backup manifest");
-  verifyChecksums(root);
-  if (manifest.directories.notes) {
-    const notesPath = join(root, "notes");
-    validateNoteOrganizationFiles(
-      notesPath,
-      readdirSync(notesPath)
-        .filter((name) => name.endsWith(".md"))
-        .map((name) => name.slice(0, -3)),
-    );
-  }
+  if (!isDirectoryManifest(manifest.directories)) throw new Error("Invalid backup directory manifest");
+  if (manifest.version === 3 && typeof manifest.directories.notes !== "boolean")
+    throw new Error("Invalid note backup directory manifest");
+  if (manifest.version === 4 && (manifest.scope !== "daemon-only" || typeof manifest.directories.attachments !== "boolean"
+    || Object.hasOwn(manifest.directories, "notes") || existsSync(join(root, "notes"))))
+    throw new Error("Invalid daemon-only backup manifest or unexpected Notes directory");
   return manifest;
+}
+
+function validateLegacyNoteBackup(root: string, manifest: ApplicationBackupManifest): void {
+  const stage = mkdtempSync(join(tmpdir(), "vk-backup-verify-"));
+  try {
+    const path = join(stage, manifest.database);
+    copyToWritableStage(join(root, manifest.database), path);
+    const notesPath = join(stage, "notes");
+    copyToWritableStage(join(root, "notes"), notesPath, true);
+    const database = new SessionStore({ path, fileMustExist: true });
+    try {
+      database.openLegacyNotes().validateFiles(notesPath);
+    } finally {
+      database.close();
+    }
+  } finally {
+    removeRestorePath(stage);
+  }
 }
 
 function verifyChecksums(root: string): void {
@@ -625,15 +602,9 @@ function validateAttachmentFiles(
 function validateBackupAttachmentFiles(
   source: string,
   manifest: ApplicationBackupManifest,
-  allowFutureOrganization = false,
 ): void {
   const database = new SessionStore({ path: join(source, manifest.database) });
   try {
-    if (manifest.directories.notes)
-      database.notes.validateFiles(
-        join(source, "notes"),
-        allowFutureOrganization,
-      );
     const stats = validateAttachmentFiles(
       database,
       manifest.directories.attachments

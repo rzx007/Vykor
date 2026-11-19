@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto"
 import type { WebContents } from "electron"
 import { desktopBusinessDataService } from "./business-data-service"
+import { desktopNoteService } from "../notes/note-service"
 import { getLegacyImportFilePath } from "@vykor/host-config/paths"
 import { readLegacyImportManifest } from "./legacy-import"
 import { desktopOperationGate, releaseDesktopRootWriter } from "../../core/ipc/operation-gate"
@@ -51,9 +52,14 @@ export function acknowledgeBusinessDataFlush(
   if (request?.senderId === senderId) request.finish(success === true)
 }
 /** Migration and shutdown must call this while renderer IPC is still alive. */
-export async function flushDesktopBusinessData(freeze = false): Promise<void> {
+export async function flushDesktopRecoveryDrafts(freeze = false): Promise<void> {
   await Promise.all([...windows].map(sender => requestWindowBusinessDataFlush(sender, freeze)))
   await desktopBusinessDataService.flush()
+}
+
+export async function flushDesktopBusinessData(freeze = false): Promise<void> {
+  await flushDesktopRecoveryDrafts(freeze)
+  await desktopNoteService.flush()
 }
 
 /** The migration host must freeze edits first and retain that freeze until restart/abort. */
@@ -75,10 +81,14 @@ export async function prepareDesktopBusinessDataExport(freeze = false): Promise<
 export async function prepareDesktopRootMigration(pauseConnections: () => Promise<void>) {
   await desktopOperationGate.freeze()
   let receipt: Awaited<ReturnType<typeof prepareDesktopBusinessDataExport>>
-  try { receipt = await prepareDesktopBusinessDataExport(true) }
+  try {
+    receipt = await prepareDesktopBusinessDataExport(true)
+    await desktopNoteService.reconcileBeforeMove()
+  }
   catch (error) { failedExport = true; throw error }
   failedExport = false
   await desktopOperationGate.seal()
+  await desktopNoteService.close()
   await pauseConnections()
   await releaseDesktopRootWriter()
   return { ...receipt, freshDesktopScanId: receipt.scanId }

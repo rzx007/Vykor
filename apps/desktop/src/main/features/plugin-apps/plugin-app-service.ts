@@ -1,7 +1,10 @@
 import { randomUUID } from "node:crypto"
 import type { WebContents } from "electron"
-import { VykorApiError, isPluginAppAdmissionRejection, copyPluginAppJson, getPluginAppToolPolicy, parseOpenPluginAppInput, parsePluginAppSource, parsePluginAppToolRequest,
-  parsePluginAppConversationRequest, type PluginAppConversationRequest, type PluginAppSubmissionReceipt, type VykorClient, type PluginAppResponse, type PluginAppToolRequest, type PluginAppActionResponse } from "@vykor/application-client"
+import { VykorApiError } from "@rzx/client"
+import { getPluginAppToolPolicy } from "./plugin-app-policy"
+import type { PluginAppClient } from "./plugin-app-client"
+import { isPluginAppAdmissionRejection, copyPluginAppJson, parseOpenPluginAppInput, parsePluginAppSource, parsePluginAppToolRequest,
+  parsePluginAppConversationRequest, type PluginAppConversationRequest, type PluginAppSubmissionReceipt, type PluginAppResponse, type PluginAppToolRequest, type PluginAppActionResponse } from "@vykor/protocol"
 import type { PluginAppHostState, PluginAppMount, PluginAppPreparedTool, PluginAppPreparedMessage, PluginAppModelContext } from "../../../shared/plugin-app-types"
 import { pluginAppText, pluginAppContextData } from "../../../shared/plugin-app-content"
 import type { DesktopSessionView } from "../../../shared/session-types"
@@ -10,19 +13,19 @@ import { appHtml, validateAppResource } from "./resources"
 import { WindowResourceFeed } from "./resource-feed"
 interface Owner { contents: WebContents; trustedUrl: string; epoch: number }
 export interface AppMountBinding {
-  ownerId: number; owner: Owner; epoch: number; client: VykorClient; response: PluginAppResponse;
+  ownerId: number; owner: Owner; epoch: number; client: PluginAppClient; response: PluginAppResponse;
   menuOpeningRevision?: number; modelReady?: boolean; mountId: string; url: string; admitted: boolean; online: boolean; closing?: boolean; sessionToken: object;
 }
 interface Operation { mount: AppMountBinding; identity: PluginAppResponse["app"]; request: PluginAppToolRequest; phase: "prepared" | "sent" | "settled"; cancelled: boolean }
-interface MessageOperation { mount: AppMountBinding; client: VykorClient; request: PluginAppConversationRequest; phase: "prepared" | "sent" | "settled"; cancelled: boolean }
+interface MessageOperation { mount: AppMountBinding; client: PluginAppClient; request: PluginAppConversationRequest; phase: "prepared" | "sent" | "settled"; cancelled: boolean }
 /** Main-only proof: this request received an identity-verified non-admission response. */
 export class PluginAppBusyError extends Error {
   constructor(readonly requestId: string) { super("plugin_app_busy") }
 }
 interface Dependencies {
-  messageReady?(client: VykorClient, sessionId: string): Promise<boolean>
+  messageReady?(client: PluginAppClient, sessionId: string): Promise<boolean>
   documents: PluginAppDocumentStore
-  getClient(): Promise<VykorClient>
+  getClient(): Promise<PluginAppClient>
   getOwnerSessionToken(ownerId: number, sessionId: string): object | undefined
 }
 const object = (value: unknown): Record<string, unknown> => {

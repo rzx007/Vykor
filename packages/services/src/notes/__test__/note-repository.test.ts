@@ -2,28 +2,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { CreateNoteInput, UpdateNoteInput } from "../commands.js";
-import type { NoteRecord } from "@vykor/domain-contracts/notes";
 import { describe, expect, it } from "vitest";
 
 import { SessionStore } from "../../session-runtime/store.js";
-
-interface NotesPort {
-  create(
-    input: CreateNoteInput,
-    options?: { id?: string; now?: number },
-  ): NoteRecord;
-  get(id: string): NoteRecord | undefined;
-  list(): NoteRecord[];
-  update(id: string, input: UpdateNoteInput, now?: number): NoteRecord;
-  remove(id: string): boolean;
-}
-
-function notesOf(store: SessionStore): NotesPort {
-  const notes = Reflect.get(store, "notes") as NotesPort | undefined;
-  expect(notes).toBeDefined();
-  return notes!;
-}
 
 describe("NoteRepository", () => {
   it("persists notes and returns the most recently updated first", () => {
@@ -33,7 +14,7 @@ describe("NoteRepository", () => {
     let second: SessionStore | undefined;
     try {
       first = new SessionStore({ path });
-      const firstNotes = notesOf(first);
+      const firstNotes = first.openLegacyNotes();
       const older = firstNotes.create(
         { content: "older" },
         { id: "older", now: 10 },
@@ -48,7 +29,7 @@ describe("NoteRepository", () => {
       first = undefined;
 
       second = new SessionStore({ path });
-      expect(notesOf(second).list()).toEqual([
+      expect(second.openLegacyNotes().list()).toEqual([
         {
           id: "older",
           content: "updated",
@@ -75,7 +56,7 @@ describe("NoteRepository", () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-notes-clear-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     try {
-      const notes = notesOf(store);
+      const notes = store.openLegacyNotes();
       const note = notes.create(
         { content: "content" },
         { id: "note", now: 10 },
@@ -100,7 +81,7 @@ describe("NoteRepository", () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-notes-conflict-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     try {
-      const notes = notesOf(store);
+      const notes = store.openLegacyNotes();
       const note = notes.create({ content: "v1" }, { id: "note", now: 10 });
       notes.update(note.id, { content: "v2", expectedRevision: 1 }, 20);
       expect(() =>
@@ -118,7 +99,7 @@ describe("NoteRepository", () => {
     const store = new SessionStore({ path: join(directory, "sessions.db") });
     try {
       expect(() =>
-        notesOf(store).update("missing", { content: "x", expectedRevision: 1 }),
+        store.openLegacyNotes().update("missing", { content: "x", expectedRevision: 1 }),
       ).toThrow("Note not found: missing");
     } finally {
       store.close();

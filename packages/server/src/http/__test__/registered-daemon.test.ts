@@ -50,7 +50,9 @@ function launch(overrides: Partial<RegisteredDaemonOptions> = {}) {
   const opened: string[] = [];
   const closed: string[] = [];
   const activated: string[] = [];
+  const runtimeOptions: Parameters<NonNullable<RegisteredDaemonOptions["start"]>>[0][] = [];
   const start: NonNullable<RegisteredDaemonOptions["start"]> = async (options) => {
+    runtimeOptions.push(options);
     control = options.registeredDaemonControl;
     const path = options.storePath!;
     opened.push(path);
@@ -73,7 +75,7 @@ function launch(overrides: Partial<RegisteredDaemonOptions> = {}) {
     ...overrides,
   });
   void run.catch(() => {});
-  return { control: () => control!, opened, closed, activated, start };
+  return { control: () => control!, opened, closed, activated, start, runtimeOptions };
 }
 
 function launchFixture(launcher: "desktop" | "cli") {
@@ -115,6 +117,19 @@ function launchFixture(launcher: "desktop" | "cli") {
 }
 
 describe("registered daemon", () => {
+  it.each([
+    { launcher: "cli", browser: false, developer: false },
+    { launcher: "desktop", browser: false, developer: false },
+    { launcher: "desktop", enableDesktopBrowser: true, browser: true, developer: false },
+    { launcher: "desktop", enableDesktopBrowser: true, enableBrowserDeveloper: true, browser: true, developer: true },
+  ] as const)("passes explicit browser options independently of the $launcher execution policy ($browser/$developer)", async ({ browser, developer, ...options }) => {
+    const { runtimeOptions } = launch(options);
+    await vi.waitFor(() => expect(readDaemonRegistry(registry)?.pid).toBe(process.pid));
+    expect(Boolean(runtimeOptions[0]?.enableDesktopBrowser)).toBe(browser);
+    expect(Boolean(runtimeOptions[0]?.enableBrowserDeveloper)).toBe(developer);
+    expect(runtimeOptions[0]?.executionSurface).toBe("desktop_managed");
+  });
+
   it("keeps the registry in the base directory after importing a custom database", async () => {
     const legacyDataLocationPath = join(root, "runtime-data-location.json");
     await writeFile(legacyDataLocationPath, JSON.stringify({

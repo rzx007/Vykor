@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import type { ServiceEndpoint } from "@vykor/application-client/service"
+import type { ServiceEndpoint } from "@rzx/client/service"
 
 const state = vi.hoisted(() => ({
   endpoint: undefined as ServiceEndpoint | undefined,
@@ -17,7 +17,7 @@ vi.mock("electron", () => ({
   app: { getPath: () => "D:/test" },
   BrowserWindow: { getAllWindows: () => [] },
 }))
-vi.mock("@vykor/application-client/service", () => ({ Service: {
+vi.mock("@rzx/client/service", () => ({ Service: {
   discover: async () => state.endpoint,
   clientOptions: (endpoint: ServiceEndpoint) => ({ baseUrl: endpoint.url, token: endpoint.token }),
 } }))
@@ -31,9 +31,15 @@ vi.mock("@vykor/server/daemon-host", () => ({
   shouldStartManagedDaemon: async () => false,
 }))
 vi.mock("../daemon-autostart/daemon-autostart-service", () => ({ createDesktopDaemonSystemService: vi.fn() }))
-vi.mock("@vykor/application-client", () => ({ VykorClient: class {
+vi.mock("@rzx/client", () => ({ VykorClient: class {
   protocol = { capabilities: async () => ({ features: { browserBridge: 1 } }) }
-  system = { prepareRestart: state.prepare, requestDataSwitch: state.requestSwitch, getDataSwitchResult: state.result }
+}, HttpTransport: class {
+  request(path: string, options?: { body?: unknown }) {
+    if (path === "/maintenance/prepare-restart") return state.prepare()
+    if (path === "/maintenance/data-switch") return state.requestSwitch(options?.body)
+    if (path.startsWith("/maintenance/data-switch/")) return state.result(path.split("/").at(-1))
+    throw new Error("Unexpected daemon request: " + path)
+  }
 } }))
 
 import { DaemonConnectionService } from "./daemon-connection-service"

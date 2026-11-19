@@ -52,7 +52,7 @@ export function createBusinessDataIpcContribution(lookup?: (ids: readonly string
       channel: BusinessDataChannels.classifySessions,
       handler: async (_event, ids) => {
         if (lookup) return lookup(ids as string[])
-        const client = await (await import("../session/session-service")).desktopSessionService.daemonClient()
+        const client = await (await import("../session/session-service")).desktopSessionService.agentClient()
         return classifyRecoverySessions(ids, (id) => client.sessions.get(id))
       },
     },

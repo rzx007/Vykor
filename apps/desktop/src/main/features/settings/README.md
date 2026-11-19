@@ -1,6 +1,6 @@
 # 桌面设置服务
 
-此目录负责桌面设置的读取、校验和保存，不持有智能体运行状态。`ipc.ts` 注册渲染页面的调用入口；`settings-service.ts` 将全局偏好交给应用客户端读写后台配置，将本机偏好交给 `desktop-preferences.ts` 保存，最后返回标准桌面快照。
+此目录负责桌面设置的读取、校验和保存，不持有智能体运行状态。`ipc.ts` 注册渲染页面的调用入口；`settings-service.ts` 经已认证连接读写后台配置，将本机偏好交给 `desktop-preferences.ts` 保存，最后返回标准桌面快照。`worktree-binding-resource.ts` 使用同一连接读写会话和 Git 工作目录之间的后台关联记录。
 
 
 其他设置服务分别处理权限、终端、Git、通知、配置迁移和数据维护。同类设置的输入校验与后台调用放在对应服务，纯桌面字段及调用类型放在 `src/shared`。新测试放在同级 `__test__`。
@@ -14,6 +14,8 @@
 `git-settings-storage.ts` 将 Git 偏好和 worktree 登记保存在数据根的 desktop 分类；只迁 JSON 记录，不更改实际 worktree 路径。旧 userData 文件经摘要核对后确认导入，默认保留。
 
 启用自动清理时，保存 Git 偏好的 IPC 会等待本次 worktree 清理和登记更新结束才返回；迁移冻结因此能排空已取得 daemon client 的异步 Git 操作，再 flush 和释放 Desktop 写资格。`__test__/git-cleanup-drain.test.ts` 覆盖这条实际调用链。
+
+备份从 `maintenance-settings-service.ts` 进入 `desktop-backup-service.ts`。先等窗口提交便签与恢复稿，再把 Electron 便签快照和 daemon 会话快照写入目标旁的暂存目录。两个组件都通过校验后，主进程才写成对的清单、发布目录并更新备份历史。恢复同样通过暂存目录发布。旧版清单先走后台备份验证并解包，再由 Electron 将旧便签导入 `data/desktop/notes/`。恢复内容保存在选定的空目录，正使用的数据和旧备份原件按原路径保留。
 
 `data-root-settings-service.ts` / `data-root-settings-ipc.ts` 提供整根维护，home、Documents、userData 均由宿主确定，renderer 只选择完整目标或迁移记录。迁移复用服务器协调器及最终业务 flush、新扫描和封门。封门后成功和回退都恢复原始外部环境来源、以首位目标参数重启 Desktop，不复用旧客户端、不再次 flush sealed renderer。未完成导出的失败仅在协调器确认原 source 身份、无 pending 且未封门时恢复交互，保留内存草稿允许重试；恢复失败保持冻结并提供本记录恢复重试。旧 switchData 与 session 只切库接口明确返回整根迁移提示，不再追加 sessions.db，备份页也不再提供旧切库按钮。
 

@@ -131,6 +131,8 @@ export interface ReplyPermissionInput {
   status: Extract<PermissionStatus, "approved" | "denied" | "expired">;
   decision?: "once" | "session";
   clientId?: string;
+  /** The user's answer to an AskUser request. */
+  answer?: string;
 }
 
 /** `POST /sessions/:id/prompts` 响应。 */

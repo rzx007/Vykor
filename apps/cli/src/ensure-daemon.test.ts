@@ -8,7 +8,7 @@ const host = vi.hoisted(() => ({
 const state = vi.hoisted(() => ({
   reconcile: vi.fn(), restart: vi.fn(), probe: vi.fn(),
 }));
-vi.mock("@vykor/application-client/service", () => ({ Service: sdk }));
+vi.mock("@rzx/client/service", () => ({ Service: sdk }));
 vi.mock("@vykor/server/daemon-host", () => host);
 vi.mock("./daemon-auto-start.js", () => ({ reconcileDaemonAutoStart: state.reconcile }));
 vi.mock("./daemon-lifecycle.js", () => ({ probeDaemonRegistry: state.probe }));

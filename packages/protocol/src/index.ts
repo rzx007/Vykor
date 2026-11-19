@@ -19,6 +19,7 @@ export * from "./permissions/auto-review.js";
 export * from "./workspace-changes.js";
 export * from "./files/session-files.js";
 export * from "./extensions/plugin-presentation.js";
+export type { PluginInfo, PluginRuntimeStatus, ReloadPluginsResponse } from "@vykor/domain-contracts/plugin-apps";
 export type { MarketplaceCatalog, MarketplaceSource, MarketplaceSourceView, MarketplaceEntry, MarketplaceSelection, MarketplacePreview, MarketplaceInstallInput, MarketplaceOperation, MarketplaceProvenance } from "@vykor/plugin-contracts/marketplace";
 export * from "./knowledge/notes.js";
 export * from "./knowledge/memory.js";

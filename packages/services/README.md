@@ -6,6 +6,8 @@
 
 数据根迁移使用独立的 `@vykor/services/data-root-relocation` 入口，先读取停写副本的登记路径，再按最终映射重定位；调用顺序与失败约定见 [database 说明](./src/database/README.md)。
 
+Desktop 主进程通过 `@vykor/services/notes` 打开、备份和迁移独立的便签存储。正文与 SQLite 索引均位于同一便签目录。 [便签说明](./src/notes/README.md)
+
 - **Scheduled recurrence**: 校验一次性时间和 RRULE，并按时区计算下一次运行时间
 - **Repository**: Projects、Schedules、Workflows、Channels、Sessions、Conversations、Runs、Goals、Permissions 和 Attachments 的当前读写入口
 - **Transaction**: prompt 准入、会话树操作、Goal、Attachment 等需要一起提交或一起回滚的操作

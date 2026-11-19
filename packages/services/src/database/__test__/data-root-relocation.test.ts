@@ -8,6 +8,7 @@ import { SessionDatabase } from "../session-database.js";
 import * as api from "../index.js";
 import * as tables from "../../session-runtime/schema.js";
 import { readNoteFile } from "../../notes/markdown-note-files.js";
+import { importLegacyNotes, openDesktopNoteRepository } from "../../notes/index.js";
 import { AttachmentBlobStore } from "../../attachments/storage/attachment-blob-store.js";
 
 let root: string, source: string, target: string, copy: string, oldCwd: string, newCwd: string;
@@ -52,6 +53,25 @@ beforeEach(() => {
   cpSync(source, join(root, "owned-copy"), { recursive: true });
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+it("validates the published Desktop notes index at the copied data-root path", async () => {
+  const data = join(root, "native-copy", "data");
+  const sessions = join(data, "session-runtime", "sessions.db");
+  const notes = join(data, "desktop", "notes");
+  const db = SessionDatabase.open({ path: sessions });
+  try {
+    db.orm.insert(tables.notes).values({ id: "embedded", content: "Legacy content", createdAt: 1, updatedAt: 2 }).run();
+  } finally { db.close(); }
+  expect(await importLegacyNotes({ databasePath: sessions, destination: notes })).toEqual({ status: "migrated" });
+  const local = openDesktopNoteRepository(notes);
+  try { local.repository.update("embedded", { content: "Native content", expectedRevision: 1 }); }
+  finally { local.close(); }
+
+  await expect(api.verifyDataRootCopy(sessions)).resolves.toBeUndefined();
+  writeFileSync(join(notes, "embedded.md"), "damaged during copy");
+  await expect(api.verifyDataRootCopy(sessions)).rejects.toThrow(/Desktop notes backup is incomplete or corrupt/);
+  expect(readFileSync(join(notes, "embedded.md"), "utf8")).toBe("damaged during copy");
+});
 
 it("relocates only structured fields in the owned SQLite copy and keeps identities, text, sources and files readable", async () => {
   const before = readFileSync(join(source, "sessions.db"));

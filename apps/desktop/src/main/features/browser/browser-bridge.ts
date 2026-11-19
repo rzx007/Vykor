@@ -1,7 +1,7 @@
 import { request } from "node:http"
 import { Readable } from "node:stream"
 import { setTimeout as delay } from "node:timers/promises"
-import { HttpTransport, SseTransport, VykorApiError } from "@vykor/application-client"
+import { HttpTransport, SseTransport, VykorApiError } from "@rzx/client"
 import {
   BROWSER_BRIDGE_MAX_RESULT_BODY_BYTES,
   BROWSER_BRIDGE_RESULT_TOO_LARGE,

@@ -34,7 +34,7 @@ vi.mock("../git-settings-storage", () => ({
   updateGitWorktrees: (update: (records: any[]) => any[]) => { state.records = update(state.records); state.events.push("records-write") },
 }))
 vi.mock("../../session/session-service", () => ({ desktopSessionService: {
-  daemonClient: async () => { state.events.push("client"); return {} },
+  agentClient: async () => { state.events.push("client"); return {} },
 } }))
 vi.mock("../runtime-settings-service", () => ({ desktopRuntimeSettingsService: {} }))
 vi.mock("../../business-data/business-data-service", () => ({ desktopBusinessDataService: {

@@ -14,8 +14,8 @@ export function createBrowserDeveloperTool(host: BrowserHost | undefined): ToolD
   return {
     name: DEVELOPER_TOOL_NAME,
     description: available
-      ? "Inspect the active desktop browser tab for troubleshooting when Desktop is connected and this session is open there: DOM structure, computed styles, and bounded console/network diagnostics. Each inspection requests operation permission under the current session approval policy; this tool cannot run arbitrary JavaScript or raw CDP commands."
-      : "Browser developer inspection is unavailable in this runtime because the desktop browser host does not support it. Do not call this tool.",
+      ? "Inspect the active browser page available to this session for troubleshooting: DOM structure, computed styles, and bounded console/network diagnostics. Each inspection requests operation permission under the current session approval policy; this tool cannot run arbitrary JavaScript or raw CDP commands."
+      : "Browser developer inspection is unavailable because this runtime has no host that supports it. Do not call this tool.",
     inputSchema: {
       type: "object",
       properties: {
@@ -37,11 +37,11 @@ export function createBrowserDeveloperTool(host: BrowserHost | undefined): ToolD
     async execute(input, context) {
       if (!host?.executeDeveloper) {
         return failed(
-          "Browser developer inspection is unavailable in this runtime because the desktop browser host does not support it.",
+          "Browser developer inspection is unavailable because this runtime has no host that supports it.",
         );
       }
       if (!context.sessionId) {
-        return failed("Browser developer inspection requires a desktop session.");
+        return failed("Browser developer inspection requires a session.");
       }
       const action = parseDeveloperAction(input);
       if (!action) {

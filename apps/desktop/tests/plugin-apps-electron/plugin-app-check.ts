@@ -4,7 +4,9 @@ import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { BrowserWindow, ipcMain } from "electron"
-import { VykorClient } from "@vykor/application-client"
+import { HttpTransport, VykorClient, type AdmitClientPromptInput } from "@rzx/client"
+import type { PluginAppListResponse } from "@vykor/protocol"
+import { clientForPluginApps } from "../../src/main/features/plugin-apps/plugin-app-client"
 import { DesktopPluginAppService } from "../../src/main/features/plugin-apps/plugin-app-service"
 import { pluginAppMessageReady } from "../../src/main/features/plugin-apps/message-ready"
 import { createPluginAppsIpcContribution } from "../../src/main/features/plugin-apps/ipc"
@@ -69,7 +71,11 @@ export async function checkResidentPluginApps(
       }
     })
   })
-  const client = new VykorClient({ baseUrl: ready.baseUrl, token: ready.token })
+  const options = { baseUrl: ready.baseUrl, token: ready.token }
+  const transport = new HttpTransport(options)
+  const client = clientForPluginApps(new VykorClient(options), transport)
+  const readApps = () =>
+    transport.request<PluginAppListResponse>(`/sessions/${encodeURIComponent(ready.sessionId)}/plugin-apps`)
   const page = join(
     root,
     ".superpowers/sdd/2026-10-20-mcp-apps-resident-panels/electron-build/renderer/tests/plugin-apps-electron/plugin-app-host.html"
@@ -221,13 +227,14 @@ export async function checkResidentPluginApps(
       )
       const ids = await evaluate(owner, "window.fixtureContextIds()")
       const contexts = await service.composerContext(owner.webContents.id, ready.sessionId, ids)
-      await client.sessions.admitPrompt(ready.sessionId, {
+      const prompt: AdmitClientPromptInput & { pluginAppContexts: typeof contexts } = {
         items: [
           { type: "text", text: "将选区改为 together" },
           { type: "capability", kind: "plugin", pluginId: ready.pluginId, displayName: "Notes" },
         ],
         pluginAppContexts: contexts,
-      })
+      }
+      await client.sessions.admitPrompt(ready.sessionId, prompt)
       await wait(
         async () =>
           await appEvaluate(frame, "document.querySelector('#draft').value==='together world'"),
@@ -347,7 +354,7 @@ export async function checkResidentPluginApps(
       const originalInvoke = client.pluginApps.invoke.bind(client.pluginApps)
       let invokes = 0,
         lostRequestId = ""
-      const noteSource = (await client.pluginApps.list(ready.sessionId)).apps.find(
+      const noteSource = (await readApps()).apps.find(
         (item) => item.app.resourceUri === "ui://notes/editor"
       )!.source
       client.pluginApps.invoke = async (...args) => {
@@ -581,7 +588,7 @@ export async function checkResidentPluginApps(
       assert.equal(sent.runs.length, 3)
       assert.equal(sent.inputs.length, 1)
       assert.equal(messageSubmits, 1, "lost message acknowledgement never resubmits")
-      assert.equal((await client.pluginApps.list(ready.sessionId)).apps[0]?.app.status, "open")
+      assert.equal((await readApps()).apps[0]?.app.status, "open")
       await evaluate(
         owner,
         "window.fixtureSavedWindow=document.querySelector('iframe').contentWindow;window.fixtureVisible(false)"
@@ -687,9 +694,9 @@ export async function checkResidentPluginApps(
     assert.equal(effects(), 1)
     const result = await appEvaluate(frame, "window.fixtureResult")
     if (kind === "mcp-server") assert.deepEqual(result._meta, { private: "page only" })
-    assert.equal((await client.pluginApps.list(ready.sessionId)).apps.length, 1)
+    assert.equal((await readApps()).apps.length, 1)
     activeSession = ready.sessionId
-    const app = (await client.pluginApps.list(ready.sessionId)).apps[0]!
+    const app = (await readApps()).apps[0]!
     await appEvaluate(
       frame,
       "window.fixtureError=undefined;document.querySelector('#save').click()"
@@ -719,6 +726,9 @@ export async function checkResidentPluginApps(
       "other viewer completed"
     )
     assert.ok(otherAction.receipt.runId)
+    const otherResult = await client.pluginApps.getAction(app.source, "other-window")
+    assert.equal(otherResult.receipt.status, "completed", JSON.stringify(otherResult))
+    assert.equal(effects(), 2, "the competing action executed before stale confirmation")
     await evaluate(
       owner,
       "Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='执行').click()"

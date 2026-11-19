@@ -4,7 +4,7 @@ import {
   type SessionEventRecord,
   type SessionGoal,
   type SyncEventUpdate,
-} from "@vykor/application-client"
+} from "@rzx/client"
 import type { DesktopActivityUpdate } from "../../../../shared/activity-types"
 import {
   applyActivityUpdate,
