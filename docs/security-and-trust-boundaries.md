@@ -66,6 +66,8 @@ Permission 决定“允许不允许做”，不保证操作成功，也不证明
 
 仅批准方式变化不增加运行实例版本，当前 Run 和旧批准因此继续有效；其他配置变更、取消与归档仍走原校验。模式状态保存在会话元数据，单次调用的捕获由 Node 执行层持有，不进入模型参数。实现与验证步骤见[运行中授权模式切换计划](./superpowers/plans/2026-11-13-live-approval-modes.md)。
 
+`SessionLookup` 只提供给符合条件的普通提示运行，沿用当前工具策略。需要审批时，批准仅适用于本次查询，同名工具的历史批准无法复用。后台以来源会话保存的工作目录限定查询范围，返回已保存的标题、运行状态和更新时间。具体目标的短时等待由 `observe-session` 首行在接纳时建立单轮授权。[跨会话观察边界](./superpowers/specs/2026-11-06-session-observation-design.md)
+
 ## 运行环境与 SRT Sandbox
 
 运行环境决定模型发起的文件和进程在 Native 还是 WSL 中执行；可选 SRT 为 Native 进程增加本机权限边界。Docker Agent Runtime 已移除，WSL 本身不等于安全沙箱。

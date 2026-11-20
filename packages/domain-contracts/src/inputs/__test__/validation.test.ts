@@ -16,6 +16,11 @@ describe("product input invariants", () => {
     expect(() => assertPromptMetadataAllowed({ runMetadata: { pluginAppAction: {} } })).toThrow(expect.objectContaining({ field: "runMetadata.pluginAppAction" }));
   });
 
+  it.each(["metadata", "runMetadata"])("reserves SessionLookup eligibility in %s", namespace => {
+    expect(() => assertPromptMetadataAllowed({ [namespace]: { sessionLookupAllowed: false } }))
+      .toThrow(expect.objectContaining({ field: `${namespace}.sessionLookupAllowed` }));
+  });
+
   it("requires the objective version for an answer and validates stored runtime data", () => {
     expect(() => parseGoalActionInput({ requestId: "r", expectedRevision: 0, action: "resume", questionId: "q" })).toThrow(expect.objectContaining({ field: "objectiveVersion" }));
     expect(() => readRuntimeMetadata({ runtime: { pluginAutoSelectionEnabled: "false" } })).toThrow(expect.objectContaining({ field: "metadata.runtime.pluginAutoSelectionEnabled" }));

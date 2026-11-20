@@ -115,8 +115,8 @@ export interface VykorAgentSubmitOptions extends KernelSubmitOptions {
 }
 export interface NodeAgentHost {
   readonly jobs: import("@vykor/jobs").AgentJobHost;
-  /** Check the policy ceiling for a host tool with its own per-Run authorization. */
-  permitsHostRunTool?(definition: ToolDefinition): Promise<boolean>;
+  /** Check whether the runtime rules deny a host contribution. */
+  permitsHostRunTool?(definition: ToolDefinition, input?: Record<string, unknown>): Promise<boolean>;
   /** Existing session host in this root's child registry; lookup never resumes an instance. */
   resolveSessionHost(sessionId: string): NodeAgentHost | undefined;
   plugins: {
@@ -282,9 +282,9 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
       );
     this.appRuntime = new PluginAppRuntime(this.id, assembled.pluginApps);
     this.host = Object.freeze({
-      permitsHostRunTool: async (definition: ToolDefinition) =>
+      permitsHostRunTool: async (definition: ToolDefinition, input: Record<string, unknown> = {}) =>
         isRuntimeToolPermitted(this.runtime.toolRegistry, definition) &&
-        (await this.runtime.permissionChecker.checkTool(definition.name, {}, definition.inputSchema)).action !== "deny",
+        (await this.runtime.permissionChecker.checkTool(definition.name, input, definition.inputSchema)).action !== "deny",
       resolveSessionHost: (sessionId: string): NodeAgentHost | undefined => {
         if (this.state === "closed") return undefined;
         if (sessionId === this.id) return this.host;

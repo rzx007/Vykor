@@ -27,6 +27,7 @@ import {
 import { isSessionPinned, useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import type { DesktopSessionRecord } from "@shared/session-types"
 import { toast } from "@renderer/lib/toast"
+import { isDesktopObservableSession, sessionObservationDirective } from "../shared/session-observation"
 
 export function SessionMoreMenu({
   session,
@@ -56,6 +57,7 @@ export function SessionMoreMenu({
   const startConversationFrom = useDesktopSessionStore((state) => state.startConversationFrom)
   const copyInFlight = useRef(false)
   const [copying, setCopying] = useState(false)
+  const canCopyObservation = !archived && isDesktopObservableSession(session)
 
   const copyText = (value: string): void => {
     if (copyInFlight.current) return
@@ -133,6 +135,14 @@ export function SessionMoreMenu({
               <DropdownMenuItem disabled={copying} onClick={() => copyText(session.id)}>
                 复制会话 ID
               </DropdownMenuItem>
+              {canCopyObservation ? (
+                <DropdownMenuItem
+                  disabled={copying}
+                  onClick={() => copyText(`${sessionObservationDirective(session.id)}\n`)}
+                >
+                  复制观察指令
+                </DropdownMenuItem>
+              ) : null}
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           {!archived ? (

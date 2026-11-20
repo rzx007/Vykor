@@ -17,7 +17,7 @@ export function assertPromptMetadataAllowed(input: {
       const field = `${namespace}.outputSchema`;
       throw new DomainValidationError(`${field} is a stored snapshot; use explicit outputSchema`, field);
     }
-    for (const name of ["pluginUi", "uiAction", "pluginUiSubmission", "pluginAppAction", "pluginAppSubmission", "pluginAppSource", "sessionObservationGrant", "appliedInputState", "steerTargetRunId", "promotion"]) {
+    for (const name of ["pluginUi", "uiAction", "pluginUiSubmission", "pluginAppAction", "pluginAppSubmission", "pluginAppSource", "sessionObservationGrant", "sessionLookupAllowed", "appliedInputState", "steerTargetRunId", "promotion"]) {
       if (Object.hasOwn(metadata, name)) {
         const field = `${namespace}.${name}`;
         throw new DomainValidationError(

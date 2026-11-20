@@ -12,6 +12,7 @@
 
 - [types.ts](types.ts)
 - [conversation-text-actions.ts](conversation-text-actions.ts)
+- [session-observation.ts](session-observation.ts) 供会话菜单和输入选择器共用观察指令格式及本地资格提示。
 - [use-show-reasoning.ts](use-show-reasoning.ts)
 
 ## 维护约定

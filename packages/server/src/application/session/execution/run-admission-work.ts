@@ -155,6 +155,7 @@ export async function admitPromptWork(
     before = options.events.checkpoint();
   }
   if (delivery === "queue" && options.runtimeQueue.hasRuntime) {
+    if (input.delivery !== "steer" && input.allowSessionLookup === true) runMetadata.sessionLookupAllowed = true;
     const admission = {
       prompt: {
         id: input.id,

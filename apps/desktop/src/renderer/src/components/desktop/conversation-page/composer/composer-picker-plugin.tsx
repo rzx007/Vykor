@@ -1,12 +1,16 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext"
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
+  $createRangeSelection,
   $createParagraphNode,
   $createTextNode,
   $getRoot,
   $getSelection,
+  $isLineBreakNode,
   $isRangeSelection,
   $isTextNode,
+  $setSelection,
+  HISTORY_PUSH_TAG,
   type LexicalEditor,
   type TextNode,
 } from "lexical"
@@ -30,6 +34,7 @@ import { ResourceMentionNode } from "./resource-mention-node"
 import { PluginMentionNode } from "./plugin-mention-node"
 import { $createSkillMentionNode, $isSkillMentionNode } from "./skill-mention-node"
 import type { ComposerSkill } from "./composer-types"
+import { leadingSessionObservationLine, sessionObservationDirective } from "../shared/session-observation"
 
 export function ComposerPickerPlugin({
   disabled,
@@ -58,67 +63,55 @@ export function ComposerPickerPlugin({
   const [trigger, setTrigger] = useState<ComposerTrigger | null>(null)
   const [dismissed, setDismissed] = useState<string | null>(null)
   const [manualContextOpen, setManualContextOpen] = useState(false)
+  const closePicker = useCallback(() => {
+    setManualContextOpen(false)
+    setDismissed(triggerKey(editor.getEditorState().read(triggerFromEditorState)))
+  }, [editor])
   const previousRequest = useRef(contextPickerRequest)
   useEffect(() => {
     if (contextPickerRequest === previousRequest.current) return
     previousRequest.current = contextPickerRequest
-    setManualContextOpen(contextPickerOpen)
-    if (!contextPickerOpen && trigger)
-      setDismissed(`${trigger.from}:${trigger.to}:${trigger.query}`)
-  }, [contextPickerOpen, contextPickerRequest])
+    if (contextPickerOpen) setManualContextOpen(true)
+    else closePicker()
+  }, [closePicker, contextPickerOpen, contextPickerRequest])
   useEffect(
     () =>
       editor.registerUpdateListener(({ editorState }) => {
         const next = editorState.read(triggerFromEditorState)
         setTrigger(next)
-        setDismissed((current) =>
-          next && current === `${next.from}:${next.to}:${next.query}` ? current : null
-        )
+        const nextKey = triggerKey(next)
+        setDismissed((current) => current === nextKey ? current : null)
       }),
     [editor]
   )
   useEffect(() => setTrigger(editor.getEditorState().read(triggerFromEditorState)), [editor])
-  const contextVisible = Boolean(
-    manualContextOpen ||
-    (trigger?.sigil === "@" && dismissed !== `${trigger.from}:${trigger.to}:${trigger.query}`)
-  )
+  const activeTrigger = dismissed === triggerKey(trigger) ? null : trigger
+  const contextVisible = manualContextOpen || activeTrigger?.sigil === "@"
   useEffect(
     () => onContextPickerOpenChange?.(contextVisible),
     [contextVisible, onContextPickerOpenChange]
   )
 
-  const visible =
-    manualContextOpen || (trigger && dismissed !== `${trigger.from}:${trigger.to}:${trigger.query}`)
-  if (disabled || !visible) return null
-  const skillItems: ComposerPickerItem[] = skills.map((skill) => ({
-    id: `skill:${skill.path}`,
-    kind: "skill",
-    label: skill.displayName,
-    description: skill.description,
-    sourceLabel: skill.sourceLabel,
-    skill,
-  }))
-  const contextMode = manualContextOpen || trigger?.sigil === "@"
-  if (contextMode) {
+  if (disabled) return null
+  if (contextVisible) {
+    const contextTrigger = trigger?.sigil === "@" ? trigger : undefined
     return (
       <ContextPicker
         items={contextItems}
-        query={manualContextOpen ? "" : (trigger?.query ?? "")}
-        onDismiss={() => {
-          setManualContextOpen(false)
-          if (trigger) setDismissed(`${trigger.from}:${trigger.to}:${trigger.query}`)
-        }}
+        query={manualContextOpen ? "" : (contextTrigger?.query ?? "")}
+        onDismiss={closePicker}
         onSelect={(item) => {
+          const { action } = item
+          if (action.kind === "observe-session") {
+            insertObservationDirective(editor, action.sessionId, manualContextOpen ? undefined : contextTrigger)
+            closePicker()
+            return
+          }
           setManualContextOpen(false)
-          if (item.action.kind === "conversation") {
-            insertContextMention(
-              editor,
-              item.action.sessionId,
-              item.action.displayName,
-              trigger?.sigil === "@" ? trigger : undefined
-            )
-          } else if (item.action.kind === "plugin") {
-            const { pluginId, displayName } = item.action
+          if (action.kind === "conversation") {
+            insertContextMention(editor, action.sessionId, action.displayName, contextTrigger)
+          } else if (action.kind === "plugin") {
+            const { pluginId, displayName } = action
             editor.update(
               () => {
                 const mention = new PluginMentionNode(
@@ -131,7 +124,7 @@ export function ComposerPickerPlugin({
                   undefined,
                   item.icon
                 )
-                if (trigger?.sigil === "@") replaceTriggerWithNode(trigger, mention)
+                if (contextTrigger) replaceTriggerWithNode(contextTrigger, mention)
                 else {
                   const selection = $getSelection()
                   if ($isRangeSelection(selection))
@@ -145,16 +138,25 @@ export function ComposerPickerPlugin({
               { discrete: true }
             )
           } else {
-            if (trigger?.sigil === "@") removeComposerTrigger(editor, trigger)
+            if (contextTrigger) removeComposerTrigger(editor, contextTrigger)
             onContextAction?.(item)
           }
         }}
       />
     )
   }
+  if (!activeTrigger) return null
+  const skillItems: ComposerPickerItem[] = skills.map((skill) => ({
+    id: `skill:${skill.path}`,
+    kind: "skill",
+    label: skill.displayName,
+    description: skill.description,
+    sourceLabel: skill.sourceLabel,
+    skill,
+  }))
   const items = pickerItems({
-    trigger: trigger!,
-    commands: editor.getEditorState().read(() => canExecuteComposerCommand(trigger))
+    trigger: activeTrigger,
+    commands: editor.getEditorState().read(() => canExecuteComposerCommand(activeTrigger))
       ? commands
       : [],
     skills: skillItems,
@@ -162,15 +164,12 @@ export function ComposerPickerPlugin({
   return (
     <ComposerPicker
       items={items}
-      label={trigger?.sigil === "$" ? "技能" : "命令和技能"}
+      label={activeTrigger.sigil === "$" ? "技能" : "命令和技能"}
       query=""
-      onDismiss={() => {
-        setManualContextOpen(false)
-        if (trigger) setDismissed(`${trigger.from}:${trigger.to}:${trigger.query}`)
-      }}
+      onDismiss={closePicker}
       onSelect={(item) => {
-        if (item.skill && trigger) {
-          insertSkillMention(editor, trigger, item.skill)
+        if (item.skill) {
+          insertSkillMention(editor, activeTrigger, item.skill)
           return
         }
         if (item.command) {
@@ -180,6 +179,10 @@ export function ComposerPickerPlugin({
       }}
     />
   )
+}
+
+function triggerKey(trigger: ComposerTrigger | null): string | null {
+  return trigger ? `${trigger.from}:${trigger.to}:${trigger.query}` : null
 }
 
 function insertContextMention(
@@ -209,16 +212,72 @@ function insertContextMention(
 }
 
 function removeComposerTrigger(editor: LexicalEditor, trigger: ComposerTrigger): void {
+  editor.update(() => $removeComposerTrigger(trigger), { discrete: true })
+}
+
+function $removeComposerTrigger(trigger: ComposerTrigger): void {
+  const leaves = textLeaves()
+  const start = leaves.find((leaf) => leaf.from <= trigger.from && leaf.to > trigger.from)
+  const end = leaves.find((leaf) => leaf.from < trigger.to && leaf.to >= trigger.to)
+  if (!$isTextNode(start?.node) || !$isTextNode(end?.node)) return
+  const selection = $createRangeSelection()
+  selection.setTextNodeRange(start.node, trigger.from - start.from, end.node, trigger.to - end.from)
+  $setSelection(selection)
+  selection.removeText()
+}
+
+function insertObservationDirective(editor: LexicalEditor, sessionId: string, trigger?: ComposerTrigger): void {
   editor.update(
     () => {
-      const leaf = textLeaves().find(
-        (item) => $isTextNode(item.node) && item.from <= trigger.from && item.to >= trigger.to
-      )
-      if (!leaf || !$isTextNode(leaf.node)) return
-      const fragments = leaf.node.splitText(trigger.from - leaf.from, trigger.to - leaf.from)
-      fragments[trigger.from === leaf.from ? 0 : 1]?.remove()
+      const root = $getRoot()
+      const directive = sessionObservationDirective(sessionId)
+      const firstItem = composerDocumentFromLexical().items[0]
+      const firstText = firstItem?.type === "text" ? firstItem.text : ""
+      const previousLine = leadingSessionObservationLine(firstText)
+      if (trigger && (!previousLine || trigger.from >= previousLine.length)) {
+        $removeComposerTrigger(trigger)
+      }
+      let moveCaret = false
+      if (previousLine) {
+        const newlineAt = firstText.indexOf("\n")
+        const leaves = textLeaves()
+        const lineBreak = leaves.find((leaf) => leaf.from === newlineAt && $isLineBreakNode(leaf.node))?.node
+        const firstParagraph = root.getFirstChild()
+        const selection = $getSelection()
+        moveCaret = $isRangeSelection(selection) && [selection.anchor, selection.focus].some((point) => {
+          if (point.type === "text") {
+            const leaf = leaves.find((leaf) => leaf.node.getKey() === point.key)
+            return leaf !== undefined && leaf.from + point.offset <= previousLine.length
+          }
+          return (point.key === root.getKey() && point.offset === 0) ||
+            (point.key === firstParagraph?.getKey() && (!lineBreak || point.offset <= lineBreak.getIndexWithinParent()))
+        })
+        for (const leaf of leaves) {
+          if (leaf.from >= previousLine.length) break
+          if ($isTextNode(leaf.node)) {
+            leaf.node.spliceText(
+              0,
+              Math.min(leaf.to, previousLine.length) - leaf.from,
+              leaf.from === 0 && newlineAt >= 0 ? directive : ""
+            )
+          }
+        }
+        if (newlineAt >= 0) {
+          if (moveCaret) {
+            if (lineBreak) lineBreak.selectNext(0, 0)
+            else firstParagraph?.getNextSibling()?.selectStart()
+          }
+          return
+        }
+      }
+      const paragraph = $createParagraphNode().append($createTextNode(directive))
+      const body = root.getFirstChild()
+      if (body) body.insertBefore(paragraph)
+      else root.append(paragraph, $createParagraphNode())
+      if (moveCaret) body?.selectStart()
+      else if (!$getSelection()) root.selectEnd()
     },
-    { discrete: true }
+    { discrete: true, tag: HISTORY_PUSH_TAG }
   )
 }
 

@@ -6,6 +6,7 @@ import {
   $getSelection,
   $isElementNode,
   $isRangeSelection,
+  $isTextNode,
   CUT_COMMAND,
   PASTE_COMMAND,
   REDO_COMMAND,
@@ -15,6 +16,7 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import { RichPromptInput, composerDocumentFromLexical } from "../rich-prompt-input"
+import type { ContextPickerItem } from "../context-picker"
 import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
 
 let container: HTMLDivElement
@@ -170,6 +172,121 @@ it.each(compositionKeys)("does not select a context with $name", async (key) => 
   expect(event.defaultPrevented).toBe(false)
   expect(editor.getEditorState().read(composerDocumentFromLexical).items).toEqual([
     { type: "text", text: "@历史" },
+  ])
+})
+
+const observationItems: ContextPickerItem[] = [
+  {
+    id: "build",
+    label: "构建桌面版",
+    description: "引用历史对话",
+    group: "历史对话",
+    observation: { priority: 1, workspace: "D:/build", status: "执行中", updatedAt: 1 },
+    action: { kind: "conversation", sessionId: "build", displayName: "构建桌面版" },
+  },
+  {
+    id: "observe-mode",
+    label: "观察进度",
+    description: "选择要观察的会话",
+    group: "添加",
+    action: { kind: "observe-mode" },
+  },
+]
+
+it("inserts the directive before a draft beginning with a history reference and undoes it as one edit", async () => {
+  const items: ComposerDocument["items"] = [
+    { type: "context", kind: "conversation", id: "previous", displayName: "历史对话" },
+    { type: "text", text: " 请看看 @构建" },
+  ]
+  const onSubmit = vi.fn()
+  const { textbox, editor } = await renderInput("", {
+    value: { version: 1, items },
+    contextItems: observationItems,
+    onSubmit,
+  })
+  const key = (key: string, options: KeyboardEventInit = {}) =>
+    act(async () => textbox.dispatchEvent(new KeyboardEvent("keydown", {
+      key, bubbles: true, cancelable: true, ...options,
+    })))
+  await key("ArrowUp")
+  expect(container.querySelector('[aria-selected="true"]')?.textContent).toContain("观察进度")
+  await key("Enter", { isComposing: true })
+  expect(container.querySelector('[aria-selected="true"]')?.textContent).toContain("观察进度")
+  expect(editor.getEditorState().read(composerDocumentFromLexical).items).toEqual(items)
+
+  await key("Enter")
+  expect(container.querySelector('[aria-selected="true"]')?.textContent).toContain("构建桌面版")
+  await key("Enter")
+  expect(onSubmit).not.toHaveBeenCalled()
+  expect(editor.getEditorState().read(composerDocumentFromLexical).items).toEqual([
+    { type: "text", text: "observe-session build\n" },
+    items[0],
+    { type: "text", text: " 请看看 " },
+  ])
+  await act(async () => editor.dispatchCommand(UNDO_COMMAND, undefined))
+  expect(editor.getEditorState().read(composerDocumentFromLexical).items).toEqual(items)
+})
+
+it("keeps an existing directive when dismissing and replaces it when selecting a new target", async () => {
+  const original = "observe-session previous\n继续 @构建"
+  const { textbox, editor } = await renderInput(original, { contextItems: observationItems })
+  const option = (label: string) => [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+    .find((button) => button.textContent?.includes(label))
+  await act(async () => option("观察进度")?.click())
+  await act(async () => textbox.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })))
+  expect(editor.getEditorState().read(composerDocumentFromLexical).items).toEqual([{ type: "text", text: original }])
+
+  await act(async () => editor.update(() => {
+    const text = $getRoot().getLastDescendant()
+    text?.selectEnd()
+    $getSelection()?.insertText("桌面")
+  }, { discrete: true }))
+  expect(option("构建桌面版")?.textContent).toContain("引用历史对话")
+  await act(async () => option("观察进度")?.click())
+  await act(async () => option("构建桌面版")?.click())
+  expect(editor.getEditorState().read(composerDocumentFromLexical).items).toEqual([
+    { type: "text", text: "observe-session build\n继续 " },
+  ])
+})
+
+it("keeps the default @ action as a structured history reference", async () => {
+  const { textbox, editor } = await renderInput("@构建", { contextItems: observationItems })
+  await act(async () => textbox.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })))
+  expect(editor.getEditorState().read(composerDocumentFromLexical).items).toEqual([
+    { type: "context", kind: "conversation", id: "build", displayName: "构建桌面版" },
+    { type: "text", text: " " },
+  ])
+})
+
+it("preserves a dismissed @ query when observing from + and leaves the picker closed", async () => {
+  const props = { contextItems: observationItems }
+  const text = "看看 @构建"
+  const { textbox, editor } = await renderInput(text, props)
+  await act(async () => textbox.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })))
+  await renderInput(text, { ...props, contextPickerRequest: 1, contextPickerOpen: true })
+  const options = () => [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+  await act(async () => options().at(-1)?.click())
+  await act(async () => options()[0]?.click())
+  expect(editor.getEditorState().read(composerDocumentFromLexical).items).toEqual([
+    { type: "text", text: "observe-session build\n看看 @构建" },
+  ])
+  expect(container.querySelector('[role="listbox"]')).toBeNull()
+})
+
+it("puts the caret at the start of the body when replacing the directive under it", async () => {
+  const text = "observe-session long-previous-target\n看看结果"
+  const { editor } = await renderInput(text, { contextItems: observationItems })
+  await act(async () => editor.update(() => {
+    const first = $getRoot().getFirstDescendant()
+    if ($isTextNode(first)) first.select(30, 30)
+  }, { discrete: true }))
+  await renderInput(text, { contextItems: observationItems, contextPickerRequest: 1, contextPickerOpen: true })
+  const options = () => [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+  await act(async () => options().at(-1)?.click())
+  await act(async () => options()[0]?.click())
+  await act(async () => editor.update(() => $getSelection()?.insertText("先"), { discrete: true }))
+  expect(editor.getEditorState().read(composerDocumentFromLexical).items).toEqual([
+    { type: "text", text: "observe-session build\n先看看结果" },
   ])
 })
 

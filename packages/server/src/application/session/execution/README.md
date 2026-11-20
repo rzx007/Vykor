@@ -10,7 +10,11 @@
 
 插件界面操作通过引擎的 `enqueueHostWork` 加入同一个队列，共用排序、取消和等待；它不接收补充输入，也不执行模型或结算 Goal。`SessionOperationRunner` 仍单独串行处理准入时的状态操作，不持有长任务队列。两者的职责不合并。
 
-普通提示显式选择另一会话时，接纳服务把目标和当时选中的 Run 写入新运行。执行器为该运行注入 `SessionObserve`。工具从现有运行和审批记录构造状态，并使用事件流等待变化。用户入口见[跨会话进度观察](../../../../../../docs/product-surface-integration.md#在当前对话观察另一条会话)。
+普通提示的首行以 `observe-session` 指定目标会话时，接纳服务将目标会话 ID 和当时选中的运行 ID 写入当前消息新建的运行记录。工具规则允许时，执行器向这一轮提供 `SessionObserve`，并在调用和返回前检查当前规则。用户入口见[跨会话进度观察](../../../../../../docs/product-surface-integration.md#在当前对话观察另一条会话)。
+
+工具从已有运行和审批记录读取状态，按固定的运行 ID 查找直接关联的待审批和待回答请求。默认立即返回状态摘要。请求等待时，通过现有事件流接收变化，最长等待 30 秒。目标启动下一轮时，状态摘要仍指向接纳时选中的那一轮。
+
+普通 HTTP 提示新建的合格排队 Run 还可通过 `SessionLookup` 按标题查询状态。接纳时在本轮记录中保存查询标记。执行器凭标记调用工具工厂，由工厂核对实际会话和输入资格，调用继续经过普通工具审批。查询从来源会话保存的工作目录查找可用持久根会话，返回标题、运行状态和更新时间。查询结果是当时的状态，精确等待仍需单独指定观察目标。
 
 ### 普通任务收尾验收
 
@@ -40,6 +44,7 @@ Agent 准备交付时，后台按当前会话的 Shell 权限在同一次运行�
 | [run-auto-review.ts](./run-auto-review.ts) | `captureAutoReviewBaseline`、`reviewAutoReview`、`settleUnreviewedAutoReview` |
 | [run-control-service.ts](./run-control-service.ts) | `RunControlDurableSessions`、`RunControlDurableRuns`、`RunControlDurableInputs`、`RunControlRuntime` 等 |
 | [run-stall-watchdog.ts](./run-stall-watchdog.ts) | `RunStallWatchdogOptions`、`RunStallWatchdog` |
+| [session-discovery-tool.ts](./session-discovery-tool.ts) | 按工作目录和已保存标题查询会话状态 |
 | [session-observation-grant.ts](./session-observation-grant.ts) | 首行指令、目标选择和每轮授权 |
 | [session-observation-tool.ts](./session-observation-tool.ts) | 只读状态、人工待办和短时等待 |
 | [session-run-assembly.ts](./session-run-assembly.ts) | `SessionRunAssemblyOptions`、`assembleSessionRunServices` |
