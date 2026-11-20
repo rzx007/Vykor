@@ -19,6 +19,7 @@ import {
 import { isRecord, jsonEqual, withoutTraceId } from "../../support.js";
 import { SessionApplicationError } from "../session-application-error.js";
 import { inputItems, validateOutputSchemaRequest, readStoredOutputSchema } from "../execution/run-admission-work.js";
+import { readCompletionCheckCommand } from "../execution/completion-check-command.js";
 import { isObservableSession } from "../execution/session-observation-grant.js";
 import { materializeSessionInput } from "./session-input-materializer.js";
 import { conversationContextCatalog } from "../transcript/session-conversation-context.js";
@@ -212,6 +213,7 @@ export class SessionInteractionService {
     input: AdmitPromptInput,
   ): Promise<AdmitPromptResult> {
     assertPromptMetadataAllowed(input);
+    if (input.delivery === "steer") readCompletionCheckCommand(inputItems(input), "steer");
     if (input.expectedActiveRunId !== undefined && this.context.liveChildren.has(sessionId)) {
       throw new SessionApplicationError(409, "active_run_changed");
     }
@@ -401,6 +403,9 @@ export class SessionInteractionService {
           sessionId,
         ),
       ).instruction;
+    }
+    if (this.context.liveChildren.has(sessionId)) {
+      readCompletionCheckCommand(items, "live-child");
     }
     const live =
       hasAttachments || capability.pluginId || input.pluginAppContexts?.length

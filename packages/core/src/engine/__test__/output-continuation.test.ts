@@ -1,26 +1,36 @@
 import { describe, expect, it } from "vitest";
-import type { AgentExecutionContext, StreamEvent, StreamMessageParams, UsageSnapshot } from "@vykor/agent-contracts";
+import type { AgentExecutionContext, StreamEvent, StreamMessageParams, StreamingMessageClient, UsageSnapshot } from "@vykor/agent-contracts";
 import { QueryEngine } from "../query-engine.js";
 import { ToolRegistry } from "../tools/tool-registry.js";
 
 const usage: UsageSnapshot = { inputTokens: 10, outputTokens: 2, metering: {
   knownInputTokens: 10, knownOutputTokens: 2, completeness: "complete", inputIncludesCache: true, raw: {},
 } };
-function fixture(stops: string[], extra: { maxTurns?: number; tool?: boolean } = {}) {
+function fixture(stops: string[], extra: { maxTurns?: number; tool?: boolean; check?: () => number; currentMaxTurns?: () => number } = {}) {
   const requests: StreamMessageParams[] = [];
   const executed: string[] = [];
   const registry = new ToolRegistry();
   registry.register({ name: "Read", description: "read", inputSchema: {}, execute: async () => {
     executed.push("Read"); return { content: [] };
   } });
-  const engine = new QueryEngine({ async *streamMessage(request) {
+  if (extra.check) registry.register({ name: "Shell", description: "check", inputSchema: { type: "object" }, execute: async () => {
+    const exitCode = extra.check!();
+    executed.push("Shell");
+    return { content: [], executionState: "completed", isError: exitCode !== 0,
+      ...(exitCode !== 0 ? { failureKind: "command" } : {}), metadata: { exitCode } };
+  } }, { kind: "builtin" });
+  const client: StreamingMessageClient = { async *streamMessage(request) {
     requests.push(request);
     yield { type: "text_delta", delta: `part${requests.length}` };
     if (extra.tool && requests.length === 1) yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "partial", name: "Read", input: {}, inputError: { reason: "invalid_json", argumentLength: 4, stopReason: "length" } } };
     yield { type: "usage", usage };
     yield { type: "complete", stopReason: stops[requests.length - 1] ?? "end_turn" };
-  } }, registry, { checkTool: async () => ({ action: "allow" }) },
-  { execute: async () => ({ blocked: false }) } as never, { trajectoryTrackerFactory: false, maxTurns: extra.maxTurns });
+  } };
+  const engine = new QueryEngine(client, registry, { checkTool: async () => ({ action: "allow" }) },
+    { execute: async () => ({ blocked: false }) } as never, {
+      trajectoryTrackerFactory: false, maxTurns: extra.maxTurns,
+      ...(extra.currentMaxTurns ? { resolveRequestConfiguration: async () => ({ revision: 0, client, model: "test", maxTurns: extra.currentMaxTurns!() }) } : {}),
+    });
   return { engine, requests, executed };
 }
 function execution(extra: Partial<AgentExecutionContext> = {}): AgentExecutionContext {
@@ -67,6 +77,63 @@ describe("bounded output continuation", () => {
     expect(closeFlags.slice(0, 3)).toEqual([false, false, false]);
     expect(f.requests[2]?.messages.at(-1)).toEqual({ type: "user", content: "change direction" });
     expect(f.requests[2]?.system ?? "").not.toMatch(/Continue the previous/i);
+  });
+
+  it("discards a checked draft and restores both continuation slots when the user steers before the check", async () => {
+    const f = fixture(["length", "end_turn", "length", "length", "end_turn"], { check: () => 0 });
+    let boundaries = 0;
+    const events = await drain(f.engine, { execution: execution({
+      contribution: { completionCheckCommand: "check" },
+      takeSteeredInputs: async () => ++boundaries === 2 ? [{ content: "change direction" }] : [],
+    }) });
+    expect(f.requests).toHaveLength(5);
+    expect(f.requests[1]?.messages.at(-1)).toMatchObject({ content: "part1" });
+    expect(f.requests[2]?.messages).toEqual([{ type: "user", content: "start" }, { type: "user", content: "change direction" }]);
+    expect(f.requests[2]?.system ?? "").not.toMatch(/Continue the previous/i);
+    expect(events.filter(event => event.type === "text_delta").map(event => event.delta)).toEqual(["part3part4part5"]);
+    expect(f.executed).toEqual(["Shell"]);
+  });
+
+  it("uses a raised turn cap for the repair after the shell check fails", async () => {
+    let maxTurns = 1;
+    const f = fixture(["end_turn", "end_turn"], { currentMaxTurns: () => maxTurns, check: () => { maxTurns = 0; return 1; } });
+    await expect(drain(f.engine, { execution: execution({ contribution: { completionCheckCommand: "check" } }) }))
+      .rejects.toThrow("返工期间没有新的成功工具结果");
+    expect(f.requests).toHaveLength(2);
+    expect(f.executed).toEqual(["Shell"]);
+  });
+
+  it("respects a lowered turn cap when steering arrives during a passing shell check", async () => {
+    let maxTurns = 0;
+    const f = fixture(["end_turn"], { currentMaxTurns: () => maxTurns, check: () => { maxTurns = 1; return 0; } });
+    let boundaries = 0;
+    await drain(f.engine, { execution: execution({
+      contribution: { completionCheckCommand: "check" },
+      takeSteeredInputs: async () => ++boundaries === 2 ? [{ content: "change direction" }] : [],
+    }) });
+    expect(f.requests).toHaveLength(1);
+    expect(f.executed).toEqual(["Shell"]);
+  });
+
+  it("does not accept steering while waiting for a child after the turn cap is reached", async () => {
+    let maxTurns = 2;
+    const f = fixture(["end_turn"], { currentMaxTurns: () => maxTurns, check: () => 0 });
+    let accepted = false;
+    await expect(drain(f.engine, { execution: execution({
+      contribution: { completionCheckCommand: "check" },
+      childResults: {
+        hasPending: () => f.requests.length === 1,
+        collect: async ({ wait }) => { if (wait) maxTurns = 1; return []; },
+      },
+      takeSteeredInputs: async () => {
+        if (accepted) return [];
+        accepted = true;
+        return [{ content: "new request" }];
+      },
+    }) })).rejects.toMatchObject({ name: "MaxTurnsExceeded", maxTurns: 1 });
+    expect(accepted).toBe(false);
+    expect(f.requests).toHaveLength(1);
+    expect(f.executed).toEqual([]);
   });
 
   it("does not execute tool calls from a truncated response", async () => {

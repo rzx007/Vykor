@@ -39,6 +39,7 @@ import {
 import { streamBufferedModelWithRetry } from "./model/buffered-model-retry";
 import { sanitizeMessageHistory } from "../utils/message-history";
 import { executeCheckedTools } from "./tools/checked-tool-execution";
+import { completionCheckFailure, createCompletionCheckCall } from "./tools/shell-completion-check";
 import { withToolInputReuseHint } from "./tools/tool-input-reuse";
 import {
   attemptFinishedEvent,
@@ -68,6 +69,7 @@ import {
 } from "./trajectory/tracker";
 
 const MAX_COMPACT_OUTPUT_TOKENS = 20_000;
+const COMPLETION_REPAIR_TURNS = 4;
 const COMPACT_SUMMARIZER_SYSTEM_PROMPT = "You are a conversation summarizer.";
 const RECOVERY_FINALIZATION_PROMPT =
   "Stop using tools for this response. Explain the blocker, summarize what was attempted, and state what input or external change is needed to continue.";
@@ -318,6 +320,7 @@ export class QueryEngine implements IQueryEngine {
       }
     }
     const contribution = options.execution?.contribution;
+    const completionCheckCommand = contribution?.completionCheckCommand;
     const runToolRegistry = runToolRegistryForRun(
       this.toolRegistry,
       this.allowedTools,
@@ -343,8 +346,13 @@ export class QueryEngine implements IQueryEngine {
         )
         .map((item) => item.definition) ?? [],
     );
+    if (completionCheckCommand && endRunDefinitions.size > 0) {
+      throw new Error("验收命令不能与结构化交付同时开启");
+    }
 
     let turnCount = 0;
+    let repairTurnLimit: number | undefined;
+    let repairToolSucceeded = false;
     const failedToolCalls = new ToolFailureMemory();
     const trajectoryTracker =
       this.options.trajectoryTrackerFactory === false
@@ -357,7 +365,11 @@ export class QueryEngine implements IQueryEngine {
     let forceFinalResponse = false;
     let childFinalizing = false;
     let outputContinuations = 0;
-    let continuingOutput = false;
+    let unverifiedOutput = "";
+    const resetOutputContinuation = () => {
+      outputContinuations = 0;
+      unverifiedOutput = "";
+    };
     let preparedNextRequestConfiguration: QueryRequestConfiguration | undefined;
     let acceptedChildFollowUpTurnFloor = 0;
 
@@ -367,9 +379,13 @@ export class QueryEngine implements IQueryEngine {
     const hardMaxTurns = options.execution?.hardMaxTurns;
     const maxTurnsLimit = (): number => {
       const configuredLimit = this.maxTurns === 0 ? Infinity : Math.max(this.maxTurns, acceptedChildFollowUpTurnFloor);
-      return hardMaxTurns === undefined
-        ? configuredLimit
-        : Math.min(configuredLimit, hardMaxTurns);
+      return Math.min(configuredLimit, hardMaxTurns ?? Infinity, repairTurnLimit ?? Infinity);
+    };
+    const refreshTurnLimit = async () => {
+      if (!this.options.resolveRequestConfiguration) return;
+      const configuration = await this.resolveRequestConfiguration(options);
+      this.applyRequestMaxTurns(configuration.maxTurns);
+      return configuration;
     };
 
     // 执行会话开始时的钩子函数
@@ -395,9 +411,11 @@ export class QueryEngine implements IQueryEngine {
         const wait = !followingInput && (forceFinalResponse || turnCount + 1 >= maxTurnsLimit());
         const reports = await childResults.collect({ wait });
         this.messages.push(...reports.map(input => ({ type: "user" as const, content: input.content })));
+        if (completionCheckCommand && reports.length) resetOutputContinuation();
         if (wait && childResults.hasPending()) {
           const followUp = await this.consumeFollowUps(options);
           if (followUp.accepted) {
+            if (completionCheckCommand) resetOutputContinuation();
             followingInput = true;
             requestConfiguration = followUp.requestConfiguration ?? requestConfiguration;
           }
@@ -426,7 +444,7 @@ export class QueryEngine implements IQueryEngine {
         childFinalizing = true;
       }
       const forcedFinalTurn = forceFinalResponse || childFinalizing;
-      const deferText = childResults?.hasPending() ?? false;
+      const deferText = Boolean(completionCheckCommand || childResults?.hasPending());
       const requestToolRegistry =
         toolDiscovery?.requestRegistry(
           trajectoryControl.hiddenTools,
@@ -487,19 +505,25 @@ export class QueryEngine implements IQueryEngine {
       const trajectorySystem = trajectoryControl.guidance
         ? appendSystemGuidance(recoverySystem, trajectoryControl.guidance)
         : recoverySystem;
-      const system = continuingOutput && !forcedFinalTurn
+      const continuingOutput = outputContinuations > 0 && !forcedFinalTurn;
+      const system = continuingOutput
         ? appendSystemGuidance(trajectorySystem, OUTPUT_CONTINUATION_PROMPT)
         : trajectorySystem;
+      const continuedDraft: Message | undefined = continuingOutput && unverifiedOutput
+        ? { type: "assistant", phase: "final_answer", content: unverifiedOutput }
+        : undefined;
+      const requestHistory = () => continuedDraft ? [...this.messages, continuedDraft] : this.messages;
       // 历史以外的输入也占用上下文：使用本轮实际系统提示和可见工具定义。
       const inputTokenOverhead = this.compactService.estimateTokens([
         { type: "system", content: system ?? "" },
         { type: "system", content: tools.length ? JSON.stringify(tools.map(tool => ({
           name: tool.name, description: tool.description, inputSchema: tool.inputSchema,
         }))) : "" },
+        ...(continuedDraft ? [continuedDraft] : []),
       ]);
       const buildRequest = () => createTurnRequest({
         model: requestConfiguration.model,
-        messages: this.messages,
+        messages: requestHistory(),
         system,
         tools,
         maxOutputTokens: requestConfiguration.maxOutputTokens,
@@ -507,7 +531,7 @@ export class QueryEngine implements IQueryEngine {
         supportsImageInput: requestConfiguration.supportsImageInput,
       });
       const measuredInputTokens = this.contextInputMeasurement.estimate(
-        buildRequest(), requestConfiguration, this.messages,
+        buildRequest(), requestConfiguration, requestHistory(),
         messages => this.compactService.estimateTokens(messages),
       );
       await this.compactHistory(requestConfiguration, options, "auto", inputTokenOverhead, measuredInputTokens);
@@ -539,10 +563,11 @@ export class QueryEngine implements IQueryEngine {
 
       let assistantText = "";
       let toolUses: ToolUseBlock[] = [];
+      let checkingCompletion = false;
       let stopReason = "end_turn";
 
       let request = buildRequest();
-      let inputBoundary = this.contextInputMeasurement.capture(request, requestConfiguration, this.messages);
+      let inputBoundary = this.contextInputMeasurement.capture(request, requestConfiguration, requestHistory());
 
       // 网络重试冻结请求；接口明确报超长时，仅允许压缩后重建请求一次。
       // 工具执行和整个 Run 不重跑。
@@ -587,7 +612,7 @@ export class QueryEngine implements IQueryEngine {
             await this.compactHistory(requestConfiguration, options, "reactive", inputTokenOverhead);
             if (this.compactService.estimateTokens(this.messages) < before) {
               request = buildRequest();
-              inputBoundary = this.contextInputMeasurement.capture(request, requestConfiguration, this.messages);
+              inputBoundary = this.contextInputMeasurement.capture(request, requestConfiguration, requestHistory());
               attempt++;
               continue;
             }
@@ -659,15 +684,45 @@ export class QueryEngine implements IQueryEngine {
           [...endRunDefinitions].some(definition => definition.name === call.name)))) {
           const reports = await childResults!.collect({ wait: true });
           this.messages.push(...reports.map(input => ({ type: "user" as const, content: input.content })));
-          const followUp = await this.consumeFollowUps(options);
-          if (reports.length || followUp.accepted) {
+          if (completionCheckCommand) await refreshTurnLimit();
+          const canContinue = !completionCheckCommand || turnCount + 1 < maxTurnsLimit();
+          if (!canContinue && (reports.length || childResults!.hasPending())) {
+            throw new MaxTurnsExceeded(maxTurnsLimit());
+          }
+          const followUp = canContinue ? await this.consumeFollowUps(options) : undefined;
+          if (reports.length || followUp?.accepted) {
+            if (completionCheckCommand) resetOutputContinuation();
             turnCount++;
-            preparedNextRequestConfiguration = this.preserveAcceptedFollowUp(followUp.requestConfiguration, turnCount);
+            preparedNextRequestConfiguration = this.preserveAcceptedFollowUp(followUp?.requestConfiguration, turnCount);
             this.applyRequestMaxTurns(preparedNextRequestConfiguration?.maxTurns);
             continue turns;
           }
         }
-        if (deferText && assistantText) yield { type: "text_delta", delta: assistantText, ...(assistantPhase ? { phase: assistantPhase } : {}) };
+        const pendingCheckCommand = toolUses.length === 0 ? completionCheckCommand : undefined;
+        if (pendingCheckCommand && !isTruncatedStopReason(stopReason)) {
+          if (forcedFinalTurn) throw new Error("运行已到达停止限制，未完成验收");
+          if (!["stop", "end_turn", "stop_sequence"].includes(stopReason)) {
+            throw new Error(`模型未正常结束（${stopReason}），未完成验收`);
+          }
+          await refreshTurnLimit();
+          if (turnCount + 1 < maxTurnsLimit()) {
+            const followUp = await this.consumeFollowUps(options);
+            if (followUp.accepted) {
+              resetOutputContinuation();
+              turnCount++;
+              preparedNextRequestConfiguration = this.preserveAcceptedFollowUp(followUp.requestConfiguration, turnCount);
+              continue turns;
+            }
+          }
+          if (repairTurnLimit !== undefined && !repairToolSucceeded) {
+            throw new Error("验收未通过，返工期间没有新的成功工具结果");
+          }
+          checkingCompletion = true;
+          toolUses = [createCompletionCheckCall(requestToolRegistry, pendingCheckCommand)];
+        }
+        const holdReply = Boolean(pendingCheckCommand || (completionCheckCommand && assistantPhase === "final_answer"));
+        const committedText = holdReply ? "" : assistantText;
+        if (deferText && committedText) yield { type: "text_delta", delta: committedText, ...(assistantPhase ? { phase: assistantPhase } : {}) };
 
         for (const progress of modelAttempt.progress) yield progress;
         for (const toolUse of toolUses) {
@@ -675,13 +730,13 @@ export class QueryEngine implements IQueryEngine {
         }
 
         // 如果助手有文本、思考内容或工具调用，则将其添加到消息历史中
-        if (assistantText || toolUses.length > 0 || assistantReasoning) {
+        if (committedText || toolUses.length > 0 || (!holdReply && assistantReasoning)) {
           this.messages.push({
             type: "assistant",
-            content: assistantText,
+            content: committedText,
             phase:
-              assistantPhase ??
-              (toolUses.length > 0 ? "commentary" : "final_answer"),
+              holdReply ? "commentary" :
+                (assistantPhase ?? (toolUses.length > 0 ? "commentary" : "final_answer")),
             toolUses: toolUses.length > 0 ? toolUses : undefined,
             ...(assistantReasoning ? { reasoning: assistantReasoning } : {}),
             ...(assistantReasoningReplay
@@ -701,8 +756,7 @@ export class QueryEngine implements IQueryEngine {
       }
 
       if (toolUses.length > 0) {
-        continuingOutput = false;
-        outputContinuations = 0;
+        if (!checkingCompletion) resetOutputContinuation();
         // 执行所有请求的工具调用，并将结果作为工具结果消息加入历史记录
         const recoveringAtTurnStart = recoveryToolTurnsRemaining !== null;
         const { results, fatalFailure, discoveryBlockedCalls } =
@@ -719,7 +773,7 @@ export class QueryEngine implements IQueryEngine {
                 ? { apiFormat: requestConfiguration.apiFormat }
                 : {}),
             },
-            failedToolCalls,
+            checkingCompletion ? undefined : failedToolCalls,
             requestToolRegistry,
             internalTools,
             toolDiscovery,
@@ -761,6 +815,7 @@ export class QueryEngine implements IQueryEngine {
           const awaitingDefinition = discoveryBlockedCalls.has(toolUse.id);
           const awaitingProjectRules = ruleProgress.has(result.toolUseId);
           if (
+            !checkingCompletion &&
             !awaitingDefinition &&
             !awaitingProjectRules &&
             result.isError &&
@@ -800,6 +855,35 @@ export class QueryEngine implements IQueryEngine {
         // Cancellation still owes every committed call its full result, in model order.
         options.signal?.throwIfAborted();
         options.execution?.scope?.signal.throwIfAborted();
+        if (checkingCompletion) {
+          const failure = completionCheckFailure(results[0]!);
+          await refreshTurnLimit();
+          const canContinue = turnCount + 1 < maxTurnsLimit();
+          if (failure) {
+            if (!failure.repairable || repairTurnLimit !== undefined || !canContinue) {
+              throw new Error(failure.message);
+            }
+            repairTurnLimit = turnCount + 1 + COMPLETION_REPAIR_TURNS;
+          }
+          const followUp = canContinue ? await this.consumeFollowUps(options, !failure) : undefined;
+          if (failure || followUp?.accepted) {
+            resetOutputContinuation();
+            turnCount++;
+            preparedNextRequestConfiguration = this.preserveAcceptedFollowUp(followUp?.requestConfiguration, turnCount);
+            continue;
+          }
+          options.execution?.closeSteering();
+          const finalText = unverifiedOutput + assistantText;
+          if (finalText) {
+            this.messages.push({ type: "assistant", phase: "final_answer", content: finalText });
+            yield { type: "text_delta", phase: "final_answer", delta: finalText };
+          }
+          yield { type: "complete", stopReason };
+          return;
+        }
+        if (repairTurnLimit !== undefined && results.some(result => !result.isError && result.executionState === "completed")) {
+          repairToolSucceeded = true;
+        }
         if (
           [...endRunDefinitions].some(
             (definition) =>
@@ -841,11 +925,7 @@ export class QueryEngine implements IQueryEngine {
         recoveryToolTurnsRemaining = recovery.recoveryToolTurnsRemaining;
         if (recovery.forceFinalResponse) forceFinalResponse = true;
         turnCount++;
-        if (this.options.resolveRequestConfiguration) {
-          preparedNextRequestConfiguration =
-            await this.resolveRequestConfiguration(options);
-          this.applyRequestMaxTurns(preparedNextRequestConfiguration.maxTurns);
-        }
+        if (this.options.resolveRequestConfiguration) await refreshTurnLimit();
         if (turnCount >= maxTurnsLimit()) {
           options.execution?.closeSteering();
           throw new MaxTurnsExceeded(
@@ -862,12 +942,11 @@ export class QueryEngine implements IQueryEngine {
 
       // 无工具调用：若 turn 边界有 follow-up，则继续同一 submitMessage
       if (this.options.resolveRequestConfiguration) {
-        preparedNextRequestConfiguration =
-          await this.resolveRequestConfiguration(options);
-        this.applyRequestMaxTurns(preparedNextRequestConfiguration.maxTurns);
+        preparedNextRequestConfiguration = await refreshTurnLimit();
       }
       if (turnCount + 1 >= maxTurnsLimit()) {
         options.execution?.closeSteering();
+        if (completionCheckCommand) throw new Error("回复在验收前被截断，未完成验收");
         if (isTruncatedStopReason(stopReason)) {
           const notice = this.appendOutputTruncationNotice();
           assistantText += notice;
@@ -891,8 +970,7 @@ export class QueryEngine implements IQueryEngine {
       const followUp = await this.consumeFollowUps(options, !canContinueOutput);
       if (followUp.accepted) {
         yield { type: "complete", stopReason };
-        outputContinuations = 0;
-        continuingOutput = false;
+        resetOutputContinuation();
         turnCount++;
         preparedNextRequestConfiguration = this.preserveAcceptedFollowUp(
           followUp.requestConfiguration,
@@ -901,15 +979,16 @@ export class QueryEngine implements IQueryEngine {
         continue;
       }
       if (canContinueOutput) {
+        if (completionCheckCommand) unverifiedOutput += assistantText;
         yield { type: "complete", stopReason };
         options.signal?.throwIfAborted();
         options.execution?.scope.signal.throwIfAborted();
         outputContinuations++;
-        continuingOutput = true;
         turnCount++;
         continue;
       }
       if (isTruncatedStopReason(stopReason)) {
+        if (completionCheckCommand) throw new Error("回复在验收前被截断，未完成验收");
         yield { type: "text_delta", delta: this.appendOutputTruncationNotice() };
       }
       yield { type: "complete", stopReason };

@@ -69,6 +69,8 @@ export interface AgentRunToolContribution {
 export interface AgentRunContribution {
   readonly systemGuidance?: string;
   readonly tools?: readonly AgentRunToolContribution[];
+  /** User-selected Shell command captured by the host for this Run's final check. */
+  readonly completionCheckCommand?: string;
   /** Include actual tool result IDs as model-visible reference data. */
   readonly exposeToolResultIds?: true;
 }

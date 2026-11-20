@@ -327,6 +327,7 @@ describe("createBashTool", () => {
       content: [{ type: "text", text: "hello" }],
       isError: false,
       executionState: "completed",
+      metadata: { exitCode: 0 },
       compactSummary: "Shell completed: exitCode=0",
     });
   });
@@ -385,6 +386,7 @@ describe("createBashTool", () => {
       content: [{ type: "text", text: "done" }],
       isError: false,
       executionState: "completed",
+      metadata: { exitCode: 0 },
       compactSummary: "Shell completed: exitCode=0",
     });
   });

@@ -169,6 +169,7 @@ export function createShellTool(
         content: blocks(formatOutput(rawOutput, spec.maxOutputChars)),
         isError: result.status === "failed" || result.exitCode === null,
         executionState: result.failureKind === "policy" ? "not_started" : result.exitCode === null || result.status === "failed" && result.failureKind !== "command" ? "unknown" : "completed",
+        ...(result.exitCode === null ? {} : { metadata: { exitCode: result.exitCode } }),
         ...(result.status === "failed" || result.exitCode === null ? { failureKind: result.failureKind === "policy" ? "policy" as const : result.failureKind === "command" && result.exitCode !== null ? "command" as const : "unknown_outcome" as const } : {}),
         ...(result.status === "failed" && result.failureKind === "command" && result.exitCode !== null ? { recoveryHint: `命令退出码 ${result.exitCode}；检查输出后诊断原因。` } : {}),
         ...(result.status === "completed" && result.exitCode !== null ? { compactSummary: `Shell completed: exitCode=${result.exitCode}` } : {}),

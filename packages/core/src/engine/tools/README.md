@@ -17,6 +17,7 @@
 | `tool-execution-context.ts` | 为工具组装当前执行环境与可见工具集合 |
 | `tool-permission-request.ts` | 工具内部具体操作的统一权限入口，按当前运行绑定检查并决定是否需要宿主审批 |
 | `checked-tool-execution.ts` | `executeCheckedTools()` 串联准备、授权、分组执行和结果交付 |
+| `shell-completion-check.ts` | 生成收尾验收的内置 Shell 调用，并根据退出码判断是否通过或可返工 |
 | `tool-failure-memory.ts` | 记录失败输入和证据版本，识别未发生变化的重复失败 |
 | `tool-batch-recovery.ts` | 完整批次交付后，计算纠错次数、恢复额度和是否要求模型收尾；额度耗尽时抛出现有错误 |
 | `tool-result-feedback.ts` | 将执行结果、失败提示和文件事实整理成模型可读取的内容 |

@@ -368,6 +368,22 @@ describe("RunControlService", () => {
     expect(options.runtime.promoteQueuedRun).not.toHaveBeenCalled();
   });
 
+  it("keeps prompts with an explicit completion check queued when promotion is requested", async () => {
+    const { options, runs, inputs, activeRuns, queuedRuns } = createMockControlOptions();
+    const content = "验收命令：pnpm test\r\n修复问题";
+    inputs.set("inp-1", { id: "inp-1", sessionId: "s1", seq: 1, content, items: [{ type: "text", text: content }],
+      delivery: "queue", attachments: [], metadata: {}, createdAt: 1 });
+    runs.set("r-q1", { id: "r-q1", sessionId: "s1", inputId: "inp-1", status: "pending", metadata: {}, createdAt: 1, updatedAt: 1 });
+    runs.set("r-act", { id: "r-act", sessionId: "s1", status: "running", metadata: {}, createdAt: 1, updatedAt: 1 });
+    activeRuns.set("s1", "r-act"); queuedRuns.set("s1", ["r-q1"]);
+
+    await expect(promoteQueuedRun(new RunControlService(options), "s1", "inp-1", "r-q1", "r-act"))
+      .rejects.toMatchObject({ status: 409, message: expect.stringContaining("请选择排队") });
+    expect(options.runtime.promoteQueuedRun).not.toHaveBeenCalled();
+    expect(options.durableRuns.updateRun).not.toHaveBeenCalled();
+    expect(queuedRuns.get("s1")).toEqual(["r-q1"]);
+  });
+
   it.each(["P", "Q", undefined])("only promotes an inherited plugin prompt into the same plugin run (%s)", async activePluginId => {
     const { options, runs, inputs, activeRuns, queuedRuns } = createMockControlOptions();
     inputs.set("inp-1", { id: "inp-1", sessionId: "s1", items: [{ type: "text", text: "continue" }],

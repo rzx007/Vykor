@@ -121,6 +121,21 @@ function createService(options: {
 }
 
 describe("SessionInteractionService", () => {
+  it("rejects an immediate completion check before forwarding to a live child", async () => {
+    const { service, liveChildren } = createService({ live: true });
+    await expect(service.admitPrompt("s1", { delivery: "steer", content: "验收命令: pnpm test\n修复问题" }))
+      .rejects.toMatchObject({ status: 409, message: expect.stringContaining("请选择排队") });
+    expect(liveChildren.send).not.toHaveBeenCalled();
+  });
+
+  it("rejects a queued completion check before forwarding to a live child", async () => {
+    const { service, liveChildren, runEngine } = createService({ live: true });
+    await expect(service.admitPrompt("s1", { content: "验收命令: pnpm test\n修复问题" }))
+      .rejects.toMatchObject({ status: 409, message: expect.stringContaining("普通对话") });
+    expect(liveChildren.send).not.toHaveBeenCalled();
+    expect(runEngine.preparePrompt).not.toHaveBeenCalled();
+  });
+
   it("delivers Stop through the session lane while a steered input waits for consumption", async () => {
     const active = { id: "r1", sessionId: "s1", status: "running", metadata: {} };
     const consumed = Promise.withResolvers<{ runId: string }>();

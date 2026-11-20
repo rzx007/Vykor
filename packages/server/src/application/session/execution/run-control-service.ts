@@ -9,6 +9,8 @@ import { isRecord, jsonEqual, normalizeTraceId } from "../../support.js";
 import { SessionApplicationError } from "../session-application-error.js";
 import { isCommittedPublicTextPart } from "../../../session/transcript-text.js";
 import { readInputPluginScope, type RunPluginSelection } from "../plugins/session-plugin-selection.js";
+import { readCompletionCheckCommand } from "./completion-check-command.js";
+import { inputItems } from "./run-admission-work.js";
 
 export interface RunControlDurableSessions {
   getSession(sessionId: string): { id: string; cwd?: string; status?: string; metadata?: Record<string, unknown> } | undefined;
@@ -324,6 +326,7 @@ export class RunControlService {
     if (input.delivery !== "queue" || queuedRun.inputId !== inputId || queuedRun.status !== "pending") {
       throw new SessionApplicationError(409, "The selected prompt is no longer waiting in the queue");
     }
+    readCompletionCheckCommand(inputItems(input), "steer");
     if (this.options.runtime.activeRunId(sessionId) !== expectedActiveRunId) {
       throw new SessionApplicationError(409, "The active run changed before the prompt could be promoted");
     }

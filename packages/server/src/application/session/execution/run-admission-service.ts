@@ -11,6 +11,7 @@ import {
 } from "@vykor/services";
 import { jsonEqual, normalizeTraceId, withoutTraceId } from "../../support.js";
 import { admitPromptWork, inputItems, validateOutputSchemaRequest, outputSchemaMetadata, readStoredOutputSchema } from "./run-admission-work.js";
+import { readCompletionCheckCommand } from "./completion-check-command.js";
 import { SessionApplicationError } from "../session-application-error.js";
 
 import type { SessionObservationGrant } from "./session-observation-grant.js";
@@ -550,6 +551,7 @@ export class RunAdmissionService {
   preparePrompt(sessionId: string, input: AdmitPromptInput): Promise<AdmitPromptResult | { completion: Promise<AdmitPromptResult> }> {
     assertPromptMetadataAllowed(input);
     input = validateOutputSchemaRequest(input);
+    if (input.delivery === "steer") readCompletionCheckCommand(inputItems(input), "steer");
     if (input.expectedActiveRunId !== undefined && (!input.expectedActiveRunId.trim() || input.delivery !== "steer")) {
       throw new SessionApplicationError(400, "expectedActiveRunId requires steer delivery");
     }

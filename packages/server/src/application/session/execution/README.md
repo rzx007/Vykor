@@ -12,6 +12,17 @@
 
 普通提示显式选择另一会话时，接纳服务把目标和当时选中的 Run 写入新运行。执行器为该运行注入 `SessionObserve`。工具从现有运行和审批记录构造状态，并使用事件流等待变化。用户入口见[跨会话进度观察](../../../../../../docs/product-surface-integration.md#在当前对话观察另一条会话)。
 
+### 普通任务收尾验收
+
+在一条新的普通消息首行填写 `验收命令:`，后面写一条可在当前工作区运行的命令。下一行写任务要求。当前会话忙时请选择「排队」，让这条消息单独执行。如果正在查看活动子 Agent 的对话，请在普通对话发送验收任务。
+
+```text
+验收命令: pnpm --filter @vykor/core check-types
+修复查询引擎的类型错误。
+```
+
+Agent 准备交付时，后台按当前会话的 Shell 权限在同一次运行中执行命令。退出码为 0 后才交付最终回复。命令返回非零退出码时，Agent 可以根据输出返工一次，最多使用四个模型回合。返工产生新工具结果后可以再次验收。每次命令执行最多 60 秒，检查无法正常退出时可查看对应 Shell 结果。
+
 ## 状态归属
 
 输入和运行结果通过存储保存；活跃 Agent、取消信号与计时器由注入的运行资源及本目录服务持有。
@@ -23,6 +34,7 @@
 | 文件 | 主要接口或用途 |
 | --- | --- |
 | [background-shell-service.ts](./background-shell-service.ts) | `BackgroundShellSessionQueries`、`BackgroundShellTaskOperations`、`BackgroundShellStore`、`BackgroundShellError` 等 |
+| [completion-check-command.ts](./completion-check-command.ts) | 识别并校验首行的验收命令，要求该任务在普通对话单独运行 |
 | [run-admission-service.ts](./run-admission-service.ts) | `AdmitPromptInput`、`AdmitPromptResult`、`RunAdmissionSessionQueries`、`RunAdmissionConversationTransactions` 等 |
 | [run-admission-work.ts](./run-admission-work.ts) | `inputItems`、`admitPromptWork` |
 | [run-auto-review.ts](./run-auto-review.ts) | `captureAutoReviewBaseline`、`reviewAutoReview`、`settleUnreviewedAutoReview` |

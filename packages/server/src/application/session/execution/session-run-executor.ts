@@ -28,6 +28,7 @@ import type { AgentPool } from "../../agent/agent-pool.js";
 import type { SessionAutoReviewService } from "../../auto-review/session-auto-review-service.js";
 import { RunStallWatchdog } from "./run-stall-watchdog.js";
 import { readStoredOutputSchema } from "./run-admission-work.js";
+import { readCompletionCheckCommand } from "./completion-check-command.js";
 import { readSessionObservationGrant, type SessionObservationGrant } from "./session-observation-grant.js";
 import type { SessionPostRunMaintenance } from "../maintenance/session-post-run-maintenance.js";
 import type { SessionEventPublisher } from "../transcript/session-event-publisher.js";
@@ -458,6 +459,11 @@ export class SessionRunExecutor {
       );
 
       let contribution = goalBinding ? await createGoalRunContribution(goalBinding) : undefined;
+      const completionCheckCommand = goalBinding ? undefined : readCompletionCheckCommand(admitted.items);
+      if (completionCheckCommand !== undefined) {
+        contribution = { completionCheckCommand,
+          systemGuidance: "本轮已设置用户指定的验收命令，宿主会在你准备交付时执行。交付前说明已做的工作，勿提前声称验收通过。收到验收失败的 Shell 结果时，依据实际输出修复，再准备交付。" };
+      }
       let preparedCapabilities = capabilityView;
       const observationGrant = readSessionObservationGrant(storedRun);
       const observationTool = observationGrant && this.context.createSessionObservationTool?.(input, observationGrant);
