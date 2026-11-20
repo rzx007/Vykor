@@ -41,7 +41,7 @@ TUI、Web、Desktop 和 IDE 共用 `@rzx/client` 的会话同步；CLI、TUI、D
 
 ## 在当前对话观察另一条会话
 
-在 Desktop 目标会话的「更多 → 复制」菜单复制会话 ID。回到当前会话，把下面两行作为一条普通排队消息发送。TUI、CLI 和 HTTP Client SDK（`@rzx/client`）也可以提交同样的文本。
+在 Desktop 目标会话的「更多 → 复制」菜单选择「复制观察指令」。回到当前会话，把指令粘贴到空白输入框，在下一行写下要做的事，再排队发送。TUI、CLI 和 HTTP Client SDK（`@rzx/client`）也可以提交以下格式的文本。
 
 ```text
 observe-session <目标会话 ID>

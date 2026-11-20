@@ -33,11 +33,12 @@ function item(label: string) {
 async function open() {
   await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="更多操作"]')!.click())
 }
-async function render(onFork = vi.fn()) {
+async function render(onFork = vi.fn(), session = source, archived = false) {
   await act(async () =>
     root.render(
       <SessionMoreMenu
-        session={source}
+        session={session}
+        archived={archived}
         onFork={onFork}
         onRename={vi.fn()}
         onArchive={vi.fn()}
@@ -83,4 +84,26 @@ it("reports copy success and failure and disables repeated copying while pending
   await act(async () => item("复制工作目录").click())
   expect(error).toHaveBeenCalledWith("复制失败", "请重试。")
   expect(writeText).toHaveBeenCalledTimes(2)
+})
+
+it("copies an observation instruction for the selected conversation", async () => {
+  const writeText = vi.fn(() => Promise.resolve())
+  vi.stubGlobal("desktop", { clipboard: { writeText } })
+  await render()
+  await open()
+  await act(async () => item("复制").click())
+  await act(async () => item("复制观察指令").click())
+  expect(writeText).toHaveBeenCalledExactlyOnceWith("observe-session source\n")
+})
+
+it.each([
+  ["archived", source, true],
+  ["temporary", { ...source, storage: "memory" }, false],
+  ["channel", { ...source, metadata: { source: "channel" } }, false],
+  ["non-token ID", { ...source, id: "source\nother" }, false],
+] as const)("hides the observation instruction for a %s conversation", async (_kind, session, archived) => {
+  await render(vi.fn(), session, archived)
+  await open()
+  await act(async () => item("复制").click())
+  expect(item("复制观察指令")).toBeUndefined()
 })
