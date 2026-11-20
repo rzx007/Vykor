@@ -32,7 +32,7 @@ type TerminalRuntime = "local" | "environment";
 - `environment`：默认值。daemon 从受信任的 session/project scope 取得 cwd，再向当前 `ExecutionEnvironment` 请求 PTY target。
 - `local`：保留给明确的宿主终端入口，不是 Desktop 会话终端的默认路径。
 
-`environment` 终端要求所连接的 daemon 以 `desktop_managed` 模式启动。Desktop 启动时只复用这种 daemon；如果 registry 里是 CLI 启动的 daemon，会先停掉并按需重启或将系统服务切换为桌面入口，否则环境终端不可用。
+`environment` 终端要求后台具备会话运行环境能力。Desktop 和 CLI 的默认本机后台启用这项能力，两端可以复用同一个实例。
 
 Native：
 

@@ -1,10 +1,4 @@
-import {
-  useLayoutEffect,
-  useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction,
-} from "react"
+import { useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from "react"
 
 import { useCodePreviewDrafts } from "@renderer/components/desktop/tools/editor/code-preview-drafts"
 import { saveCodePreviewDraft } from "@renderer/components/desktop/tools/editor/code-preview-save"
@@ -43,6 +37,12 @@ type CloseOptions = {
   closeOrdinaryTabs: (action: CloseOrdinaryTabsAction) => UtilityPanelRuntimeState
   persistFileTabs: (paths: string[], activePath: string | null) => void
   closeTerminals: (terminalIds: string[]) => void
+  beforeClose?: (
+    tabIds: string[],
+    preferredActiveTabId: string | undefined,
+    commit: () => void,
+    blocked: () => void
+  ) => void
 }
 
 /** 只协调一次界面关闭请求；页面和编辑内容仍由原有模块持有。 */
@@ -108,7 +108,7 @@ export function useUtilityPanelClose(options: CloseOptions) {
     update(value)
     return true
   }
-  const finishOrdinary = (value: CloseRequest) => {
+  const commitOrdinary = (value: CloseRequest) => {
     if (!isCurrent(value) || needsFileConfirmation(value)) return
     const api = latest.current
     const closing = api.tabs.filter((tab) => value.tabIds.includes(tab.id))
@@ -126,12 +126,15 @@ export function useUtilityPanelClose(options: CloseOptions) {
       })
       if (closing.some((tab) => tab.filePath)) {
         const files = next.fileTabs.filter(
-          (file) => file.projectPath === value.instance.selectedProjectPath &&
+          (file) =>
+            file.projectPath === value.instance.selectedProjectPath &&
             file.preview.scope !== "extra-root"
         )
         api.persistFileTabs(
           files.map((file) => file.preview.path),
-          files.some((file) => file.preview.path === next.activeFilePath) ? next.activeFilePath : null
+          files.some((file) => file.preview.path === next.activeFilePath)
+            ? next.activeFilePath
+            : null
         )
       }
       const terminalIds = closing.map((tab) => tab.terminalId).filter((id): id is string => !!id)
@@ -146,6 +149,20 @@ export function useUtilityPanelClose(options: CloseOptions) {
       value.busy = false
       update(value)
     } else cancel()
+  }
+  const finishOrdinary = (value: CloseRequest) => {
+    if (!isCurrent(value) || needsFileConfirmation(value)) return
+    const beforeClose = latest.current.beforeClose
+    if (beforeClose)
+      beforeClose(
+        value.tabIds,
+        value.preferredActiveTabId,
+        () => commitOrdinary(value),
+        () => {
+          if (isCurrent(value)) cancel()
+        }
+      )
+    else commitOrdinary(value)
   }
   const afterFiles = (value: CloseRequest) => {
     if (!isCurrent(value) || needsFileConfirmation(value)) return
@@ -173,8 +190,8 @@ export function useUtilityPanelClose(options: CloseOptions) {
     current.current = value
     const drafts = useCodePreviewDrafts.getState().drafts
     const hasDirtyFiles = latest.current.tabs.some((tab) => {
-      const draft = tab.filePath && value.tabIds.includes(tab.id)
-        ? drafts[draftKey(tab, instance)] : null
+      const draft =
+        tab.filePath && value.tabIds.includes(tab.id) ? drafts[draftKey(tab, instance)] : null
       return draft && (draft.saving || draft.content !== draft.originalContent)
     })
     if (hasDirtyFiles) update(value)
@@ -201,10 +218,13 @@ export function useUtilityPanelClose(options: CloseOptions) {
           const result = await saveCodePreviewDraft(key, tab.projectPath, tab.filePath!)
           if (!isCurrent(value)) return
           if (result) {
-            latest.current.setFileTabs((files) => files.map((file) =>
-              file.projectPath === tab.projectPath && file.preview.path === tab.filePath
-                ? { ...file, preview: result } : file
-            ))
+            latest.current.setFileTabs((files) =>
+              files.map((file) =>
+                file.projectPath === tab.projectPath && file.preview.path === tab.filePath
+                  ? { ...file, preview: result }
+                  : file
+              )
+            )
           }
           const draft = useCodePreviewDrafts.getState().drafts[key]
           if (draft && draft.content !== draft.originalContent)

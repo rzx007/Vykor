@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest"
+import { businessDataFixture, resetBusinessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { createNoteRecoveryPort, readRecoveryDrafts } from "../note-recovery"
 
 type RecoveryDraft = {
@@ -31,7 +32,7 @@ async function recovery() {
   const path = "../note-recovery"
   const module = (await import(/* @vite-ignore */ path).catch(() => null)) as null | {
     NOTE_RECOVERY_STORAGE_KEY: string
-    readRecoveryDrafts(storage: Storage): RecoveryDraft[]
+    readRecoveryDrafts(storage: Storage): Promise<RecoveryDraft[]>
     writeRecoveryDraft(storage: Storage, draft: RecoveryDraft): void
     removeRecoveryDraft(storage: Storage, draftId: string): void
     readSelectedNoteId(storage: Storage): string | null
@@ -46,9 +47,11 @@ describe("note recovery", () => {
 
   beforeEach(() => {
     storage = memoryStorage()
+    resetBusinessDataFixture()
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture } })
   })
 
-  it("keeps the main and quick-window drafts for the same note independent", () => {
+  it("keeps the main and quick-window drafts for the same note independent", async () => {
     const main = createNoteRecoveryPort(storage)
     const quick = createNoteRecoveryPort(storage, "quick")
     const original = {
@@ -58,12 +61,12 @@ describe("note recovery", () => {
       content: "main text",
       updatedAt: 1,
     }
-    main.write(original)
-    quick.write({ ...original, content: "quick text" })
-    expect(readRecoveryDrafts(storage)[0]?.content).toBe("main text")
-    expect(readRecoveryDrafts(storage, "quick")[0]?.content).toBe("quick text")
-    main.remove(original.draftId)
-    expect(readRecoveryDrafts(storage, "quick")[0]?.content).toBe("quick text")
+    await main.write(original)
+    await quick.write({ ...original, content: "quick text" })
+    expect((await readRecoveryDrafts(storage))[0]?.content).toBe("main text")
+    expect((await readRecoveryDrafts(storage, "quick"))[0]?.content).toBe("quick text")
+    await main.remove(original.draftId)
+    expect((await readRecoveryDrafts(storage, "quick"))[0]?.content).toBe("quick text")
   })
 
   it("keeps drafts separately and removes only the confirmed draft", async () => {
@@ -82,22 +85,22 @@ describe("note recovery", () => {
       content: "two",
       updatedAt: 2,
     }
-    api.writeRecoveryDraft(storage, draftA)
-    api.writeRecoveryDraft(storage, draftB)
-    expect(api.readRecoveryDrafts(storage)).toEqual([draftA, draftB])
-    api.removeRecoveryDraft(storage, "a")
-    expect(api.readRecoveryDrafts(storage)).toEqual([draftB])
+    await api.writeRecoveryDraft(storage, draftA)
+    await api.writeRecoveryDraft(storage, draftB)
+    expect(await api.readRecoveryDrafts(storage)).toEqual([draftA, draftB])
+    await api.removeRecoveryDraft(storage, "a")
+    expect(await api.readRecoveryDrafts(storage)).toEqual([draftB])
   })
 
-  it("repairs malformed or untrusted stored values to an empty collection", async () => {
+  it("reports invalid legacy values without replacing or deleting the source", async () => {
     const api = await recovery()
     storage.setItem(api.NOTE_RECOVERY_STORAGE_KEY, "broken")
-    expect(api.readRecoveryDrafts(storage)).toEqual([])
+    await expect(api.readRecoveryDrafts(storage)).rejects.toThrow(/INVALID_/)
     storage.setItem(
       api.NOTE_RECOVERY_STORAGE_KEY,
       JSON.stringify({ version: 1, drafts: [{ draftId: "", content: 42 }] })
     )
-    expect(api.readRecoveryDrafts(storage)).toEqual([])
+    await expect(api.readRecoveryDrafts(storage)).rejects.toThrow(/INVALID_/)
   })
 
   it("persists only a nonempty selected note id", async () => {

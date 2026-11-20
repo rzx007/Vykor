@@ -1,10 +1,11 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { join, basename, dirname, resolve, sep } from "node:path";
 import { homedir } from "node:os";
-import { BUNDLED_SKILLS } from "./bundled.js";
+import { getSkillsDir } from "@vykor/host-config/paths";
+import { createBundledSkills } from "./bundled.js";
 import { parseSkillMarkdown } from "./parse-skill-markdown.js";
 
-export { BUNDLED_SKILLS } from "./bundled.js";
+export { BUNDLED_SKILLS, createBundledSkills } from "./bundled.js";
 export { parseSkillMarkdown };
 export type { ParsedSkillMeta } from "./parse-skill-markdown.js";
 
@@ -87,7 +88,7 @@ export class SkillRegistry {
    * 之后 user / project 技能用 register() 按名覆盖（后注册者赢）。
    */
   registerBundled(): void {
-    for (const skill of BUNDLED_SKILLS) {
+    for (const skill of createBundledSkills(getSkillsDir())) {
       this.register(skill);
     }
   }
@@ -467,12 +468,10 @@ export async function findProjectSkillDirs(cwd: string): Promise<string[]> {
 
 /** 与 user 源加载路径对齐；这些目录绝不能再被标成 project。 */
 function personalSkillDirectories(): Set<string> {
-  const configDir =
-    process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor");
   const home = homedir();
   return new Set(
     [
-      join(configDir, "skills"),
+      getSkillsDir(),
       join(home, ".agents", "skills"),
       join(home, ".config", "agents", "skills"),
     ].map(normalizePathKey),

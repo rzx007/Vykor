@@ -179,12 +179,12 @@ export function useNotesController(): NotesController {
     const activeCoordinators = coordinators.current
     void window.desktop.notes
       .list()
-      .then((records) => {
+      .then(async (records) => {
         if (disposed) return
-        const quickRecovery = readRecoveryDrafts(window.localStorage, "quick")
+        const quickRecovery = await readRecoveryDrafts(window.localStorage, "quick")
         const remainingRecovery = new Map(
           [
-            ...readRecoveryDrafts(),
+            ...(await readRecoveryDrafts()),
             ...quickRecovery.map((draft) => ({ ...draft, draftId: `quick-${draft.draftId}` })),
           ].map((draft) => [draft.draftId, draft])
         )
@@ -230,14 +230,14 @@ export function useNotesController(): NotesController {
         commitSelection(selected.draftId)
         // Move old quick-window recovery only after its body is present in the
         // main recovery cache. The retired window's text must not disappear.
-        const mainRecovery = readRecoveryDrafts()
+        const mainRecovery = await readRecoveryDrafts()
         for (const draft of quickRecovery) {
           if (
             mainRecovery.some(
               (item) => item.draftId === `quick-${draft.draftId}` && item.content === draft.content
             )
           )
-            removeRecoveryDraft(window.localStorage, draft.draftId, "quick")
+            await removeRecoveryDraft(window.localStorage, draft.draftId, "quick")
         }
       })
       .catch((cause) => {
@@ -295,7 +295,7 @@ export function useNotesController(): NotesController {
         return
       coordinator?.dispose()
       coordinators.current.delete(draftId)
-      removeRecoveryDraft(window.localStorage, draftId)
+      void removeRecoveryDraft(window.localStorage, draftId).catch(() => setError("便签草稿未能保存，请重试。"))
       commitNotes((items) => items.filter((item) => item.draftId !== draftId))
       if (selectedKeyRef.current === draftId) commitSelection(null)
     },
@@ -340,7 +340,7 @@ export function useNotesController(): NotesController {
       setError(`Note not found: ${current.noteId}`)
       return
     }
-    removeRecoveryDraft(window.localStorage, draftId)
+    await removeRecoveryDraft(window.localStorage, draftId)
     coordinators.current.get(draftId)?.dispose()
     const view = { ...noteViewFromRecord(record), draftId }
     installCoordinator(view, record)
@@ -379,7 +379,7 @@ export function useNotesController(): NotesController {
         delete nextAppearances[draftId]
         if (persistedId) delete nextAppearances[persistedId]
         commitAppearances(nextAppearances)
-        removeRecoveryDraft(window.localStorage, draftId)
+        await removeRecoveryDraft(window.localStorage, draftId)
         coordinator?.dispose()
         coordinators.current.delete(draftId)
         const remaining = notesRef.current.filter((note) => note.draftId !== draftId)

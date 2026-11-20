@@ -10,11 +10,11 @@ import { requiresPermissionReply } from "@renderer/components/desktop/conversati
 import { AskUserCard } from "../../conversation-page/message/blocks/ask-user-card"
 import { isAskUserPermission } from "../../conversation-page/message/blocks/ask-user-payload"
 import { ConversationTranscript } from "../../conversation-page/transcript/transcript"
-import { mergeOptimisticTranscript } from "../../conversation-page/transcript/optimistic-transcript"
+import { mergeSessionOptimisticTranscript } from "../../conversation-page/transcript/optimistic-transcript"
 import { resolveScrollerAgentStatus } from "../../conversation-page/transcript/scroller-agent-status"
 import { useShowReasoning } from "../../conversation-page/shared/use-show-reasoning"
 import { openConversationTextMenu } from "../../conversation-page/shared/conversation-text-actions"
-import { resolveModelLabel } from "../../conversation-page/shared/utils"
+import { resolveModelLabel, stopChatOnEscape } from "../../conversation-page/shared/utils"
 import { Alert, AlertDescription } from "@renderer/components/ui/alert"
 import {
   Empty,
@@ -37,6 +37,7 @@ import {
   ConversationScrollerContent as MessageScrollerContent,
   ConversationScrollerButton as MessageScrollerButton,
 } from "../../conversation-page/transcript/conversation-scroller"
+import { followUpFeedback, PendingPromptQueue, queuedPrompts } from "../../conversation-page/transcript/pending-prompt-queue"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
@@ -53,6 +54,7 @@ import {
 import {
   sessionProvider,
   sessionPermissionMode,
+  latestSessionRecord,
   sessionWorkMode,
   sessionEffort,
 } from "@renderer/stores/desktop-session/helpers"
@@ -351,11 +353,7 @@ export function SideChatPanel({
   const storedTarget = verifiedTargetId
     ? sessions.find((item) => item.id === verifiedTargetId)
     : undefined
-  // Equal timestamps keep immediate RPC feedback; a newer accepted view wins.
-  const session =
-    storedTarget && (!view || storedTarget.updatedAt >= view.session.updatedAt)
-      ? storedTarget
-      : (view?.session ?? source)
+  const session = latestSessionRecord(storedTarget, view?.session) ?? source
   const cwd = session?.cwd
   const showReasoning = useShowReasoning()
   const model = (!targetId ? preferences.model?.id : undefined) ?? session?.model ?? null
@@ -373,6 +371,7 @@ export function SideChatPanel({
   const running = Boolean(
     view?.runs.some((run) => run.status === "running" || run.status === "pending")
   )
+  const activeRun = view?.runs.find(run => run.status === "running")
   const archived = view?.session.status === "archived"
   const permissions = view?.permissions.filter(requiresPermissionReply) ?? []
   const submissions = Object.values(runtime.pendingPromptSubmissions)
@@ -380,7 +379,7 @@ export function SideChatPanel({
     .filter((operation) => operation.phase === "failed" && operation.kind !== "reply-permission")
     .at(-1)?.error
   const unavailable = Boolean(targetId && (!verifiedTargetId || loadError || draftConflict))
-  const transcript = mergeOptimisticTranscript(view?.messages ?? [], view?.parts ?? [], submissions)
+  const transcript = mergeSessionOptimisticTranscript(view, submissions, runtime.queuedPromptActions)
   const status = resolveScrollerAgentStatus({
     running,
     parts: view?.parts ?? [],
@@ -587,7 +586,7 @@ export function SideChatPanel({
 
   const isCurrentTarget = (id: string): boolean =>
     sideChatTargets.get(sourceId) === id && !closingSources.has(sourceId)
-  const submit = async (): Promise<void> => {
+  const submit = async (delivery?: "queue" | "steer"): Promise<void> => {
     if (
       useDesktopSessionStore.getState().composerDraftsByScope[scope]?.attachmentPreparation?.pending
         .length
@@ -599,6 +598,7 @@ export function SideChatPanel({
       submitPending.current ||
       modeChangePending ||
       sending ||
+      interrupting ||
       archived ||
       unavailable
     )
@@ -608,7 +608,7 @@ export function SideChatPanel({
       !areDesktopAttachmentsSendable(attachments)
     )
       return
-    submitPending.current = true
+    if (!targetId) submitPending.current = true
     setError(null)
     const submittedSelections = textSelections
     try {
@@ -647,9 +647,12 @@ export function SideChatPanel({
       if (state.composerDraftsByScope[preforkScope])
         state.migrateComposerDraft(preforkScope, sessionComposerScope(id))
       await state.sendMessage(selectComposerDocumentText(draft), {
+        delivery,
+        ...(delivery === "steer" ? { expectedActiveRunId: activeRun?.id } : {}),
         document: draft,
         attachments,
         target: { sessionId: id, view: acceptedView.current },
+        draftTextSelectionIds: submittedSelections.map(selection => selection.id),
         contextItems: [
           { type: "context", kind: "conversation", id: sourceId, displayName: "主聊天" },
           ...submittedSelections.map((selection) => ({
@@ -661,29 +664,15 @@ export function SideChatPanel({
           })),
         ],
       })
-      const submittedIds = new Set(submittedSelections.map((selection) => selection.id))
-      useDesktopSessionStore.setState((current) => {
-        const targetScope = sessionComposerScope(id)
-        const currentDraft = current.composerDraftsByScope[targetScope]
-        if (!currentDraft?.textSelections?.some((selection) => submittedIds.has(selection.id)))
-          return current
-        return {
-          composerDraftsByScope: {
-            ...current.composerDraftsByScope,
-            [targetScope]: {
-              ...currentDraft,
-              textSelections: currentDraft.textSelections.filter(
-                (selection) => !submittedIds.has(selection.id)
-              ),
-            },
-          },
-        }
-      })
     } catch (cause) {
-      if (mounted.current) setError(cause instanceof Error ? cause.message : String(cause))
+      if (mounted.current && (!targetId || isCurrentTarget(targetId))) {
+        setError(cause instanceof Error ? cause.message : String(cause))
+      }
     } finally {
-      submitPending.current = false
-      if (mounted.current) setCreating(false)
+      if (!targetId) {
+        submitPending.current = false
+        if (mounted.current) setCreating(false)
+      }
     }
   }
   const update = (operation: Promise<void>): void => {
@@ -718,6 +707,21 @@ export function SideChatPanel({
     <section
       ref={sectionRef}
       aria-label="侧边聊天"
+      onKeyDown={(event) => {
+        if (
+          active &&
+          activeRun &&
+          verifiedTargetId &&
+          !archived &&
+          !interrupting &&
+          !unavailable &&
+          isCurrentTarget(verifiedTargetId)
+        ) {
+          stopChatOnEscape(event, () =>
+            update(actions.interrupt({ sessionId: verifiedTargetId, view }))
+          )
+        }
+      }}
       className={cn(
         "conversation-surface size-full min-h-0 flex-col bg-conversation",
         active ? "flex" : "hidden"
@@ -828,7 +832,28 @@ export function SideChatPanel({
           </Alert>
         ) : (
           <>
+            {verifiedTargetId ? <PendingPromptQueue
+              key={`queue:${verifiedTargetId}`}
+              prompts={queuedPrompts(view, runtime.queuedPromptActions)}
+              activeRunId={activeRun?.id}
+              handoffRunId={transcript.handoffRunId}
+              localSubmissions={followUpFeedback(view, submissions)}
+              onPromote={(inputId, queuedRunId) => {
+                if (activeRun && isCurrentTarget(verifiedTargetId)) {
+                  void actions.promoteQueuedPrompt(inputId, queuedRunId, activeRun.id, verifiedTargetId)
+                }
+              }}
+              onCancel={(inputId, queuedRunId) => {
+                if (isCurrentTarget(verifiedTargetId)) {
+                  void actions.cancelQueuedPrompt(inputId, queuedRunId, verifiedTargetId)
+                }
+              }}
+              onRetryLocal={inputId => void actions.retryPromptSubmission(inputId, verifiedTargetId).catch(() => undefined)}
+              onRestoreLocal={inputId => actions.restoreFollowUp(inputId, { sessionId: verifiedTargetId, view })}
+              onDismissLocal={inputId => actions.dismissPromptSubmission(inputId, verifiedTargetId)}
+            /> : null}
             <Composer
+              key={scope}
               composerScope={scope}
               imageCanFeedback={() => canUseSideChatImageScope(sourceId, scope)}
               id={`side-chat-composer-${sourceId}`}
@@ -895,7 +920,9 @@ export function SideChatPanel({
               }
               draft={draft}
               sending={sending || creating}
-              running={running}
+              running={Boolean(activeRun)}
+              followUpRunId={activeRun?.id}
+              lastAcceptedInputId={view?.inputs.at(-1)?.id}
               interrupting={interrupting}
               models={models}
               selectedModel={model}
@@ -924,7 +951,7 @@ export function SideChatPanel({
                 setError(null)
                 actions.setComposerDraftDocument(scope, next)
               }}
-              onSubmit={() => void submit()}
+              onSubmit={delivery => void submit(delivery)}
               onInterrupt={() =>
                 targetId && update(actions.interrupt({ sessionId: targetId, view }))
               }

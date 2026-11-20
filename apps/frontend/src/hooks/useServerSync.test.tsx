@@ -10,8 +10,8 @@ import { testRender } from "@opentui/react/test-utils";
 
 import { useServerSync } from "./useServerSync";
 import type { TuiSessionController } from "./sessionController";
-import type { SessionEventRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRecord } from "@vykor/application-client";
-import { CURRENT_PROTOCOL_VERSION } from "@vykor/application-client";
+import type { SessionEventRecord, SessionMessagePartRecord, SessionMessageRecord, SessionRecord } from "@rzx/client";
+import { CURRENT_PROTOCOL_VERSION } from "@rzx/client";
 
 const originalFetch = globalThis.fetch;
 
@@ -227,7 +227,12 @@ const server = new VykorHttpServer({
             signal: new AbortController().signal,
           });
           await publish({ type: "permission.resolved", data: { requestId, decision } }, context);
-          const output = decision.status === "approved" ? "edit approved" : "edit denied";
+          const answer = decision.status === "approved" ? await agentOptions.effects.askUserPrompt("What should I write?", {
+            ...context,
+            cwd: session.cwd,
+            signal: new AbortController().signal,
+          }) : "";
+          const output = decision.status === "approved" ? \`edit approved: \${answer}\` : "edit denied";
           await publish({ type: "output.text.delta", data: { delta: output } }, context);
           await publish({ type: "run.completed", data: { output } }, context);
           return { status: "completed", output, history: [], usage: { inputTokens: 0, outputTokens: 0 } };
@@ -319,7 +324,7 @@ console.log(JSON.stringify({ url: listen.url, token: ${JSON.stringify(token)} })
 test("useServerSync hydrates daemon state and sends prompt/permission replies", async () => {
   const session: SessionRecord = {
     id: "s1",
-    cwd: process.cwd(),
+    cwd: "/remote/project with spaces",
     title: "TUI",
     model: "m",
     status: "idle",
@@ -460,6 +465,7 @@ test("useServerSync hydrates daemon state and sends prompt/permission replies", 
   let listedCreatedSession = false;
   const archivedSessionIds = new Set<string>();
   let holdNextContext = false;
+  let rejectInit = false;
   let releaseHeldContext: ((response: Response) => void) | undefined;
   globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
     calls.push({ url: String(url), init: init ?? {} });
@@ -771,6 +777,7 @@ test("useServerSync hydrates daemon state and sends prompt/permission replies", 
       });
     }
     if (pathname === "/project/init" && init?.method === "POST") {
+      if (rejectInit) return Response.json({ error: "Remote project is read-only" }, { status: 403 });
       return jsonResponse({ report: "Project initialized successfully." });
     }
     if (pathname === "/plugins/demo/enable" && init?.method === "POST") {
@@ -938,6 +945,9 @@ test("useServerSync hydrates daemon state and sends prompt/permission replies", 
       return jsonResponse({ output: " M README.md\n" });
     }
     if (pathname === "/git/commit" && init?.method === "POST") {
+      if (JSON.parse(String(init.body)).message === "blocked") {
+        return Response.json({ error: "Remote pre-commit hook rejected the change" }, { status: 409 });
+      }
       return jsonResponse({ output: "[main abc123] fix auth" });
     }
     if (pathname === "/sessions/s1/state") {
@@ -1094,6 +1104,10 @@ test("useServerSync hydrates daemon state and sends prompt/permission replies", 
   }
 
   expect(captured?.ready).toBe(true);
+  for (const path of ["/commands", "/sessions"]) {
+    const request = calls.map(call => new URL(call.url)).find(url => url.pathname === path);
+    expect(request?.searchParams.get("cwd")).toBe(session.cwd);
+  }
   expect(captured?.transcript.map((item) => item.text)).toContain("hello from daemon");
   expect(captured?.transcript).toContainEqual(
     expect.objectContaining({
@@ -1453,6 +1467,23 @@ test("useServerSync hydrates daemon state and sends prompt/permission replies", 
   expect(captured?.displayRequest?.title).toBe("Commit");
   expect(captured?.displayRequest?.content).toContain("M README.md");
   expect(captured?.transcript.some((item) => item.role === "system" && item.text.includes("[main abc123] fix auth"))).toBe(true);
+  for (const path of ["/git/diff", "/git/branch", "/git/status"]) {
+    const request = calls.map(call => new URL(call.url)).find(url => url.pathname === path);
+    expect(request?.searchParams.get("cwd")).toBe(session.cwd);
+  }
+  for (const [path, body] of [["/project/init", { cwd: session.cwd }], ["/git/commit", { cwd: session.cwd, message: "fix auth" }]] as const) {
+    const request = calls.find(call => new URL(call.url).pathname === path && call.init.method === "POST");
+    expect(JSON.parse(String(request?.init.body))).toEqual(body);
+  }
+
+  rejectInit = true;
+  await act(async () => {
+    captured?.sendRequest({ type: "submit_line", line: "/init" });
+    captured?.sendRequest({ type: "submit_line", line: "/commit blocked" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+  expect(errors).toContain("Remote project is read-only");
+  expect(errors).toContain("Remote pre-commit hook rejected the change");
 
   const createCallsBeforeImmediateNew = calls.filter((call) => call.url === "http://daemon.test/sessions" && call.init.method === "POST").length;
   const oldPromptCallsBeforeImmediateNew = calls.filter((call) => call.url === "http://daemon.test/sessions/s1/prompts").length;
@@ -1643,12 +1674,21 @@ test("useServerSync starts on the new-session home when the latest session uses 
   renderer.destroy();
 });
 
-test("useServerSync drives a real daemon session through prompt, permission, and SSE", async () => {
+test("useServerSync replies to a real pending AskUser separately from tool approval", async () => {
   const fixture = await startDaemonFixture();
   try {
+    let failReplyPath: string | undefined;
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      if (failReplyPath === new URL(String(url)).pathname) {
+        failReplyPath = undefined;
+        throw new TypeError("Temporary AskUser reply failure");
+      }
+      return originalFetch(url, init);
+    }) as typeof fetch;
     let captured: TuiSessionController | undefined;
     const errors: string[] = [];
-    const hasApprovedOutput = () => captured?.assistantBuffer === "edit approved" || captured?.transcript.some((item) => item.role === "assistant" && item.text === "edit approved") === true;
+    const expectedOutput = "edit approved: continue";
+    const hasApprovedOutput = () => captured?.assistantBuffer === expectedOutput || captured?.transcript.some((item) => item.role === "assistant" && item.text === expectedOutput) === true;
 
     function Harness() {
       captured = useServerSync(
@@ -1707,6 +1747,39 @@ test("useServerSync drives a real daemon session through prompt, permission, and
           allowed: true,
           scope: "once",
         });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+
+      for (let i = 0; i < 60 && captured?.modal?.kind !== "question"; i += 1) {
+        await act(async () => {
+          await renderOnce();
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        });
+      }
+      expect(captured?.modal).toMatchObject({
+        kind: "question", tool_name: "AskUser", question: "What should I write?",
+      });
+      const questionId = String(captured?.modal?.request_id);
+      await act(async () => {
+        captured?.sendRequest({ type: "question_response", request_id: requestId, answer: "stale" });
+        captured?.sendRequest({ type: "permission_response", request_id: questionId, allowed: true, scope: "session" });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      expect(captured?.modal?.request_id).toBe(questionId);
+      expect(hasApprovedOutput()).toBe(false);
+
+      const beforeRetry = captured?.modal;
+      failReplyPath = `/permissions/${questionId}/reply`;
+      await act(async () => {
+        captured?.sendRequest({ type: "question_response", request_id: questionId, answer: "continue" });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      expect(errors).toContain("Temporary AskUser reply failure");
+      expect(captured?.modal?.request_id).toBe(questionId);
+      expect(captured?.modal).not.toBe(beforeRetry);
+
+      await act(async () => {
+        captured?.sendRequest({ type: "question_response", request_id: questionId, answer: "continue" });
         await new Promise((resolve) => setTimeout(resolve, 20));
       });
 

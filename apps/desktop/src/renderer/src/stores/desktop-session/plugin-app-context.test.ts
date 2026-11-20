@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 import type { SendDesktopPromptInput } from "@shared/session-types"
 import { afterEach, expect, it, vi } from "vitest"
 import { pluginAppModelContexts } from "@renderer/components/desktop/shell/plugin-apps/plugin-app-model-context"
@@ -23,7 +24,7 @@ it("keeps draft and visible selection on rejected source; removing it restores o
   const sendPrompt = vi.fn<(input: SendDesktopPromptInput) => Promise<void>>(async () => {
     throw new Error("plugin_app_context_expired")
   })
-  vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+  vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
   await expect(
     useDesktopSessionStore.getState().sendMessage("already typed", { document: draft })
   ).rejects.toThrow("context_expired")

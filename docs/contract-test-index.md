@@ -10,6 +10,8 @@
 
 ## 环境相关测试
 
+数据根迁移的实际平台限制、命令退出码和最终验收状态单独记录在[用户数据根验收](./data-root-verification.md)，操作入口见[迁移与恢复](./data-root-migration.md)。
+
 `pnpm test` 按宿主平台运行工作区和跨包测试。补齐环境后应实际重跑，不能把平台跳过计为通过，也不能用模拟结果代替真实进程、文件系统或沙箱。
 
 - Windows 的[WSL 脚本边界测试](../packages/sandbox/src/environment/__test__/wsl-process-boundary.test.ts)和[文件操作测试](../packages/tools/src/file/__test__/operations.test.ts)通过[公共测试帮助代码](../tests/helpers/README.md)查找 Git 中实际可执行的 `sh`，支持非默认盘符安装，不要求复制到 C 盘。
@@ -17,6 +19,14 @@
 - [办公入口](../packages/plugins/src/__test__/office-work-entry.test.ts)和[研究写作插件](../packages/agent-runtime/src/node/plugins/native-tools/__test__/knowledge-work.test.ts)兼容性检查需要真实的独立 `vykor-plugins` 源码。运行前显式设置已有的 `VYKOR_OFFICIAL_PLUGINS_DIR` 指向该仓库的 `plugins` 目录，再执行 `pnpm test`。Turbo 传入该变量；这两个包的测试不缓存外部源码结果，不自动发现相邻目录或用户安装。
 - [Hooks 引号与注入安全](../packages/hooks/src/__test__/index.test.ts)的两项 POSIX 用例，以及[文件操作](../packages/tools/src/file/__test__/operations.test.ts)的可执行权限位用例，需要在 Linux 或 macOS 的 Node 中运行。Windows 的 `cmd` 和文件权限模型无法验证同一行为。在独立 Linux 检出中按锁文件安装依赖后，分别运行 `pnpm --filter @vykor/hooks exec vitest run src/__test__/index.test.ts` 和 `pnpm --filter @vykor/tools exec vitest run src/file/__test__/operations.test.ts`。
 - [SRT 端到端测试](../packages/sandbox/__test__/e2e/srt.e2e.test.ts)运行真实受限命令。在 Linux 或 WSL 的 Linux Node 中安装 `@anthropic-ai/sandbox-runtime`，并提供它实际使用的 `bubblewrap` 和 `socat`，再运行 `pnpm --filter @vykor/sandbox e2e:srt`；原生 Windows 不支持这一沙箱。缺少运行器时应阻止执行的 Hooks 测试显式指定不存在的运行器，避免与这项正常运行测试的环境前提冲突。
+
+## 统一数据根验收（A01–A28）
+
+- A01–A03、A27：路径派生与根选择见[路径](../packages/host-config/src/storage/__test__/user-data-paths.test.ts)、[启动选择](../packages/host-config/src/storage/__test__/data-root-selection.test.ts)、[SDK 连续迁移发现](../tests/server-client/__test__/data-root-discovery.test.ts)。独立安装与浏览器隔离由 `pnpm --filter @rzx/client verify:pack` 和 `pnpm test:client-browser` 验证。
+- A04–A08、A14–A16、A19：来源边界与外部路径见[来源预检](../packages/server/src/daemon-host/__test__/data-root-sources.test.ts)、[真实数据库改写](../packages/services/src/database/__test__/data-root-relocation.test.ts)、[文件改写](../packages/server/src/daemon-host/__test__/data-root-file-relocation.test.ts)、[复制与权限](../packages/server/src/daemon-host/__test__/data-root-migration.test.ts)。
+- A09–A13、A26：[草稿与同根恢复贯通](../tests/desktop-integration/__test__/data-root-migration.test.ts)、[实际源分类](../packages/server/src/daemon-host/__test__/legacy-desktop-export.test.ts)、[业务导出收据](../apps/desktop/src/main/features/business-data/__test__/desktop-export.test.ts)、[保存失败](../apps/desktop/src/main/features/business-data/__test__/write-failure.test.ts)。临时聊天还由[正式会话继续与临时正文检查](../tests/server-client/__test__/data-root-discovery.test.ts)覆盖；jsdom 验证不当作真实 Electron profile 实测。
+- A17–A18：[真实 Git 修复与回退](../packages/server/src/daemon-host/__test__/data-root-git-migration.test.ts)、[桌面历史文件打开](../apps/desktop/src/main/features/workspace/__test__/history-paths.test.ts)，以及连续两次迁移的历史路径映射链。
+- A20–A25、A28：[后台停写与真实验证进程](../packages/server/src/daemon-host/__test__/data-root-coordination.test.ts)、[逐阶段恢复](../packages/server/src/daemon-host/__test__/data-root-migration-recovery.test.ts)、[服务定义](../packages/server/src/daemon-host/__test__/system-service-migration.test.ts)、[桌面实际迁移入口](../apps/desktop/src/main/features/settings/__test__/data-root-settings-migration.test.ts)与[有界死亡锁恢复](../packages/host-config/src/storage/__test__/data-root-lock-recovery.test.ts)。
 
 ## 生命周期契约编号
 
@@ -69,7 +79,7 @@
 | 每次实际请求先准入，拒绝零 Provider 调用，结算失败不重试 | [model-attempt-gate.test.ts](../packages/core/src/engine/model/__test__/model-attempt-gate.test.ts) |
 | Goal 按真实 Run 记账，重复与未发出结算保持原规则 | [goal-model-attempt-service.test.ts](../packages/server/src/application/goals/__test__/goal-model-attempt-service.test.ts) |
 | 事件重放不写 Goal 用量，child 归属保留 | [daemon-agent-event-projector.test.ts](../packages/server/src/application/agent/__test__/daemon-agent-event-projector.test.ts) |
-| 应用 ready、重启释放凭证、事实归属和便签冲突 | [maintenance-restart.test.ts](../packages/server/src/http/__test__/application-maintenance-restart.test.ts)、[facts.routes.test.ts](../packages/server/src/application/personalization/__test__/facts.routes.test.ts)、[notes.test.ts](../packages/server/src/http/routes/__test__/notes.test.ts) |
+| 应用 ready、重启释放凭证、事实归属和旧便签接口退役 | [maintenance-restart.test.ts](../packages/server/src/http/__test__/application-maintenance-restart.test.ts)、[facts.routes.test.ts](../packages/server/src/application/personalization/__test__/facts.routes.test.ts)、[notes-retirement.test.ts](../packages/server/src/http/__test__/notes-retirement.test.ts) |
 
 ### 模型网络重试（2026-09-26）
 
@@ -164,7 +174,7 @@
 | B07 owner 与团队隔离 | [团队树隔离](../packages/agent-runtime/src/node/children/__test__/team-root-isolation.test.ts)、[Workflow 关闭](../packages/agent-runtime/src/node/workflow/__test__/agent-workflow-close.test.ts) | `pnpm test` |
 | B08 请求前准入与零调用拒绝 | [Engine gate](../packages/core/src/engine/model/__test__/model-attempt-gate.test.ts)、[Node gate](../packages/agent-runtime/src/node/runtime/__test__/model-attempt-gate.test.ts) | `pnpm test` |
 | B09 用量、重复与恢复 | [Goal 准入结算](../packages/server/src/application/goals/__test__/goal-model-attempt-service.test.ts)、[持久 Goal 用量](../packages/services/src/goals/__test__/goal-usage.test.ts) | `pnpm test` |
-| B10 管理用例与 lease | [维护](../packages/server/src/http/__test__/application-maintenance-restart.test.ts)、[事实](../packages/server/src/application/personalization/__test__/project-facts-service.test.ts)、[便签](../packages/server/src/application/notes/__test__/note-application-service.test.ts) | `pnpm test` |
+| B10 管理用例与 lease | [维护](../packages/server/src/http/__test__/application-maintenance-restart.test.ts)、[事实](../packages/server/src/application/personalization/__test__/project-facts-service.test.ts)、[旧便签接口](../packages/server/src/http/__test__/notes-retirement.test.ts)、[本地便签存储](../packages/services/src/notes/__test__/desktop-note-repository.test.ts) | `pnpm test` |
 | B11 SDK 与浏览器 | [独立消费者](../packages/agent-runtime/scripts/verify-pack.mjs)、[浏览器入口](../tests/browser-client/vite.config.ts) | `pnpm --filter @vykor/agent-runtime test:pack`、`pnpm test:client-browser` |
 
 ## 常用命令
@@ -192,7 +202,8 @@ P7–P13 实现与集中验收完成，当前策略的 `stageExceptions` 为零�
 | 插件 HTTP 按结构化错误分类，拒绝输入不受文案和 Runtime bundle 影响，保持接纳与运行错误语义 | [HTTP 错误](../packages/server/src/http/routes/__test__/session-plugin-apps.errors.test.ts)、[真实资源入口](../packages/server/src/http/__test__/session-plugin-apps.test.ts)、[插件 parser](../packages/protocol/src/extensions/__test__/plugin-apps.test.ts)、[Native 后端](../packages/agent-runtime/src/node/plugin-apps/__test__/native-plugin-app-backend.test.ts)、[宿主策略](../packages/agent-runtime/src/node/plugin-apps/__test__/plugin-app-policy.test.ts) | 对应文件的定向 Vitest |
 | 领域输入在非 HTTP 入口也验证，附件默认值只有一个来源 | [领域输入](../packages/domain-contracts/src/inputs/__test__/validation.test.ts)、[附件策略](../packages/services/src/attachments/__test__/attachment-policy.test.ts)、[HTTP 转换](../packages/server/src/http/mappers/__test__/boundary.test.ts) | 对应包定向 Vitest |
 | Job/Terminal 数据与宿主分开，owner 与等待/取消行为保持 | [Jobs](../packages/jobs/src/__test__/index.test.ts)、[定点路由](../packages/jobs/src/__test__/routed-agent-job-host.test.ts)、[Terminal](../packages/terminal-node/src/providers/__test__/local-terminal-provider.test.ts) | Jobs 与 terminal-node 的相关文件 |
-| Client 公开集合、辅助函数及浏览器消费保持原行为 | [公开 API](../packages/client/src/__test__/public-api.test.ts)、[类型消费者](../tests/client-public-api/consumer.ts)、[私有应用策略显示](../packages/application-client/src/resources/plugins/__test__/plugin-app-policy.test.ts) | `pnpm check:client-api`、`pnpm test:client-browser` |
+| Client 公开集合、辅助函数及浏览器消费保持原行为 | [公开 API](../packages/client/src/__test__/public-api.test.ts)、[类型消费者](../tests/client-public-api/consumer.ts) | `pnpm check:client-api`、`pnpm test:client-browser` |
+| 插件应用显示沿用保守默认值、读取服务端策略并拒绝无效策略 | [Desktop 应用策略测试](../apps/desktop/src/main/features/plugin-apps/__test__/plugin-app-policy.test.ts) | `pnpm --filter @vykor/desktop exec vitest run src/main/features/plugin-apps/__test__/plugin-app-policy.test.ts` |
 | Kernel 不可达三个新数据包，Node/Kernel/Workflow 独立声明与运行完整 | [Kernel 反例](../packages/agent-runtime/scripts/__test__/kernel-boundary.test.mjs)、[独立消费者](../packages/agent-runtime/scripts/verify-pack.mjs) | `node --test packages/agent-runtime/scripts/__test__/kernel-boundary.test.mjs`、Runtime `test:pack` |
 
 ## 日常续做与交付闭环
@@ -221,3 +232,5 @@ P7–P13 实现与集中验收完成，当前策略的 `stageExceptions` 为零�
 | 唯一 coordinator deadline/宽限、实际停止前不重试、旧 attempt 进度隔离、未知停止错误 | [调度器](../packages/coordinator/src/workflow/__test__/scheduler.test.ts) |
 | 普通/Workflow/system inherit 环境前解析、同 tick send/suspend 串行、历史和实例保留 | [子运行](../packages/agent-runtime/src/node/children/__test__/child-agent.test.ts)、[配置](../packages/agent-runtime/src/node/children/__test__/child-agent-options.test.ts) |
 | 删除 adapter、process 回退、重复 timer 与 daemon 生命周期分支 | [架构边界](../scripts/architecture-boundaries.test.mjs) |
+
+运行中补充使用[跨层验收](../tests/server-client/__test__/running-follow-up.test.ts)，各层定向回归和结果见[实施记录](./superpowers/reviews/2026-11-16-running-follow-up.md)。

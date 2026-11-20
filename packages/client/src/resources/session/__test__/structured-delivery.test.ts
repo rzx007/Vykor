@@ -3,6 +3,31 @@ import { SessionResource } from "../session-resource.js";
 import { HttpTransport } from "../../../transport/http-transport.js";
 import { CURRENT_PROTOCOL_VERSION } from "@vykor/protocol";
 
+it.each([1, 2])("checks steer capability %s before posting a bound follow-up", async steer => {
+  const posted: unknown[] = [];
+  const resource = new SessionResource(new HttpTransport({
+    baseUrl: "http://localhost:9000",
+    fetch: async (_url, init) => {
+      if (init?.method === "POST") {
+        posted.push(JSON.parse(String(init.body)));
+        return Response.json({ input: { id: "input" } });
+      }
+      return Response.json({ serverVersion: "test", protocol: { version: CURRENT_PROTOCOL_VERSION }, features: { steer } });
+    },
+  }));
+  const bound = { id: "input", items: [{ type: "text" as const, text: "clarify" }], delivery: "steer" as const, expectedActiveRunId: "running" };
+  if (steer === 2) {
+    await resource.admitPrompt("session", bound);
+    expect(posted).toEqual([bound]);
+  } else {
+    await expect(resource.admitPrompt("session", bound)).rejects.toThrow("targeting an active Run");
+    expect(posted).toEqual([]);
+    const { expectedActiveRunId: _target, ...legacy } = bound;
+    await resource.admitPrompt("session", legacy);
+    expect(posted).toEqual([legacy]);
+  }
+});
+
 describe("structured prompt delivery", () => {
   it.each([["edit", false], ["edit", true], ["resume", false], ["resume", true]] as const)("gates explicit schema in %s (supported=%s)", async (method, supported) => {
     const posted: unknown[] = [], outputSchema = { type: "string" };

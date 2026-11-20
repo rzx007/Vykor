@@ -12,4 +12,4 @@
 
 daemon 保存持久记录，类型只约定请求及返回形状；本地会话视图由 state 模块构造。metadata、工具输入与输出保留通用扩展数据。
 
-笔记、渠道、调度、插件、Office 和管理配置等业务类型位于 [私有应用客户端](../../../application-client/README.md)。公开 `AdmitClientPromptInput` 不含 `pluginAppContexts`，该字段由私有客户端扩展。新增类型按所属资源放置，跨分类公开契约用本包根层 `__test__/` 验证。
+新增类型按所属资源放置，跨分类公开契约用本包根层 `__test__/` 验证。共享管理类型随管理模块导入。Desktop 由会话提交模块构造 `pluginAppContexts`，同时保留公开资源的输入 ID 与协议校验。 [管理入口](../../../daemon-admin/README.md) · [桌面会话提交](../../../../apps/desktop/src/main/features/session/session-operations.ts)

@@ -12,6 +12,10 @@
     "./permission-modes": {
       "import": "./src/permissions/permission-modes.ts",
       "types": "./src/permissions/permission-modes.ts"
+    },
+    "./paths": {
+      "import": "./src/storage/paths.ts",
+      "types": "./src/storage/paths.ts"
     }
   },
   "scripts": {

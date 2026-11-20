@@ -18,7 +18,7 @@
 
 `VykorClient` 只组装资源，第一次请求才握手；会话写入和执行都交给 daemon。`syncEvents` 先读快照再订阅事件，reducer 更新本地视图，选择函数返回可展示记录。`waitForRun` 复用该同步流程等待指定运行终态。
 
-持久状态归 daemon；客户端保存同步视图、连接及取消信号，界面保存草稿和选择。产品命令、业务资源及业务类型位于 [私有应用客户端](../../application-client/README.md)，不进入公开根导出。
+持久状态归 daemon，客户端保存同步视图、连接及取消信号，界面保存草稿和选择。产品命令由各应用处理，共享的 daemon 管理操作使用按职责划分的私有入口。 [产品接入](../../../docs/product-surface-integration.md) · [管理入口](../../daemon-admin/README.md)
 
 新增实现放对应分类，跨分类测试放本层 [`__test__/`](./__test__)，单分类测试放该分类的 `__test__/`。
 

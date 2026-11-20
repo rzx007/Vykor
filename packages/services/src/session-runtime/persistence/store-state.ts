@@ -23,6 +23,7 @@ export interface SessionState {
 
 export interface SessionStoreOptions {
   path: string;
+  fileMustExist?: boolean;
   deltaFlushIntervalMs?: number;
   deltaFlushBytes?: number;
   /** Dedicated extension point for tests or plugins that own additional event contracts. */

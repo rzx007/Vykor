@@ -1,3 +1,4 @@
+import { BusinessDataChannels, type BusinessDataIpcMap } from "./business-data-types"
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
 import type { DesktopWindowThemeSource } from "./window-theme-types"
 import { TerminalSettingsChannels, type TerminalSettingsIpcMap } from "./terminal-settings-types"
@@ -152,6 +153,8 @@ import type {
   DesktopSkillRemoveInput,
   DesktopSkillSnapshot,
   DesktopSkillSnapshotInput,
+  DesktopSkillMarketplaceCatalog,
+  DesktopSkillMarketplaceInstallInput,
 } from "./skill-types"
 import type {
   DesktopSettingsSnapshot,
@@ -182,7 +185,7 @@ import type {
   AttachmentStorageGcResult,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-} from "@vykor/application-client"
+} from "@shared/attachment-types"
 import type { DesktopUpdateState } from "./update-types"
 import type {
   DesktopMcpAddInput,
@@ -198,7 +201,7 @@ import type {
   DesktopMcpSnapshot,
   DesktopMcpUpdateInput,
 } from "./mcp-types"
-import type { ChannelRuntimeStatus, FeishuChannelSnapshot } from "@vykor/application-client"
+import type { ChannelRuntimeStatus, FeishuChannelSnapshot } from "@vykor/protocol"
 import type {
   DesktopConnectionsSnapshot,
   DesktopFeishuAllowInput,
@@ -440,6 +443,8 @@ export const IpcChannels = {
   pluginCancelGit: "plugin:cancel-git",
 
   skillSnapshot: "skill:snapshot",
+  skillMarketplace: "skill:marketplace",
+  skillMarketplaceInstall: "skill:marketplace-install",
   skillRemove: "skill:remove",
 
   settingsSnapshot: "settings:snapshot",
@@ -486,6 +491,7 @@ export const IpcEvents = {
 } as const
 
 export type IpcChannel =
+  | (typeof BusinessDataChannels)[keyof typeof BusinessDataChannels]
   | (typeof IpcChannels)[keyof typeof IpcChannels]
   | (typeof TerminalSettingsChannels)[keyof typeof TerminalSettingsChannels]
   | (typeof GitSettingsChannels)[keyof typeof GitSettingsChannels]
@@ -535,6 +541,7 @@ export interface PetState {
 
 export interface IpcInvokeMap
   extends
+    BusinessDataIpcMap,
     TerminalSettingsIpcMap,
     GitSettingsIpcMap,
     MaintenanceSettingsIpcMap,
@@ -1170,15 +1177,15 @@ export interface IpcInvokeMap
     args: [input: DesktopPluginArchiveCancelInput]
     result: void
   }
-  [IpcChannels.marketplaceCatalog]: { args: [input: { cwd: string; refresh?: boolean }]; result: import("@vykor/application-client").MarketplaceCatalog }
-  [IpcChannels.marketplaceSources]: { args: [input: Record<string, never>]; result: { sources: import("@vykor/application-client").MarketplaceSource[] } }
-  [IpcChannels.marketplaceAddSource]: { args: [input: { url: string }]; result: { sources: import("@vykor/application-client").MarketplaceSource[] } }
-  [IpcChannels.marketplaceSetSourceEnabled]: { args: [input: { sourceId: string; enabled: boolean }]; result: { sources: import("@vykor/application-client").MarketplaceSource[] } }
-  [IpcChannels.marketplaceRemoveSource]: { args: [input: { sourceId: string }]; result: { sources: import("@vykor/application-client").MarketplaceSource[] } }
-  [IpcChannels.marketplacePreview]: { args: [input: import("@vykor/application-client").MarketplaceSelection]; result: import("./plugin-types").DesktopMarketplacePreview }
-  [IpcChannels.marketplaceConfirm]: { args: [input: { cwd: string; selectionId: string }]; result: import("@vykor/application-client").MarketplaceOperation }
+  [IpcChannels.marketplaceCatalog]: { args: [input: { cwd: string; refresh?: boolean }]; result: import("@vykor/protocol").MarketplaceCatalog }
+  [IpcChannels.marketplaceSources]: { args: [input: Record<string, never>]; result: { sources: import("@vykor/protocol").MarketplaceSource[] } }
+  [IpcChannels.marketplaceAddSource]: { args: [input: { url: string }]; result: { sources: import("@vykor/protocol").MarketplaceSource[] } }
+  [IpcChannels.marketplaceSetSourceEnabled]: { args: [input: { sourceId: string; enabled: boolean }]; result: { sources: import("@vykor/protocol").MarketplaceSource[] } }
+  [IpcChannels.marketplaceRemoveSource]: { args: [input: { sourceId: string }]; result: { sources: import("@vykor/protocol").MarketplaceSource[] } }
+  [IpcChannels.marketplacePreview]: { args: [input: import("@vykor/protocol").MarketplaceSelection]; result: import("./plugin-types").DesktopMarketplacePreview }
+  [IpcChannels.marketplaceConfirm]: { args: [input: { cwd: string; selectionId: string }]; result: import("@vykor/protocol").MarketplaceOperation }
   [IpcChannels.marketplaceCancel]: { args: [input: { selectionId: string }]; result: void }
-  [IpcChannels.marketplaceOperation]: { args: [input: { cwd: string; operationId: string }]; result: import("@vykor/application-client").MarketplaceOperation }
+  [IpcChannels.marketplaceOperation]: { args: [input: { cwd: string; operationId: string }]; result: import("@vykor/protocol").MarketplaceOperation }
   [IpcChannels.pluginImportGit]: {
     args: [input: DesktopPluginGitImportInput]
     result: DesktopPluginGitImportResult
@@ -1193,6 +1200,14 @@ export interface IpcInvokeMap
   }
   [IpcChannels.skillSnapshot]: {
     args: [input: DesktopSkillSnapshotInput]
+    result: DesktopSkillSnapshot
+  }
+  [IpcChannels.skillMarketplace]: {
+    args: []
+    result: DesktopSkillMarketplaceCatalog
+  }
+  [IpcChannels.skillMarketplaceInstall]: {
+    args: [input: DesktopSkillMarketplaceInstallInput]
     result: DesktopSkillSnapshot
   }
   [IpcChannels.skillRemove]: {

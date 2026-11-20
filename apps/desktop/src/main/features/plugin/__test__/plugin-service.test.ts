@@ -1,6 +1,6 @@
 import { resolve } from "node:path"
 
-import type { PluginInfo } from "@vykor/application-client"
+import type { PluginInfo } from "@vykor/protocol"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 const daemon = vi.hoisted(() => {
@@ -23,10 +23,14 @@ const electron = vi.hoisted(() => ({
   dialog: { showOpenDialog: vi.fn() },
 }))
 
+vi.mock("../desktop-plugin-resource", () => ({ DesktopPluginResource: class {
+  constructor() { return daemon.plugins }
+} }))
+
 vi.mock("../../session/session-service", () => ({
   desktopSessionService: {
-    daemonClient: vi.fn(async () => daemon),
-    refreshDaemonClient: vi.fn(async () => daemon),
+    daemonTransport: vi.fn(async () => daemon),
+    refreshDaemonTransport: vi.fn(async () => daemon),
   },
 }))
 

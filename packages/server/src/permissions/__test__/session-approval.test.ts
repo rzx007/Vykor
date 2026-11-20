@@ -14,13 +14,14 @@ import { sessionPermissionRequest } from "../session-approval.js";
 function fixture(toolName = "Shell", source = "builtin", confirmation?: "once", reason?: string) {
   const session = { id: "s", status: "idle", metadata: { runtimeRevision: 1, runtime: { model: "offline", approvalMode: "auto_review", workMode: "execute" } } };
   const abort = new AbortController();
-  const context: AgentEffectContext = { agentId: "a", sessionId: "s", runId: "r", inputId: "i", cwd: process.cwd(), traceId: "t", signal: abort.signal };
+  const appliedInputState = { revision: 1, inputIds: ["i"] };
+  const context: AgentEffectContext = { agentId: "a", sessionId: "s", runId: "r", inputId: "i", cwd: process.cwd(), traceId: "t", signal: abort.signal, appliedInputState };
   const inputs = [{ id: "i", sessionId: "s", seq: 1, content: "Edit a.ts", metadata: {} }] as SessionInputRecord[];
   const messages = [{ id: "m", sessionId: "s", seq: 3, role: "user", inputId: "i", createdAt: 3, metadata: {} }] as SessionMessageRecord[];
   const parts: SessionMessagePartRecord[] = [];
   const approvals: PermissionRequestRecord[] = [];
   const results: Array<{ id: string; sessionId: string; runId: string; toolName: string; sourceKind: string; text: string; totalChars: number; createdAt: number }> = [];
-  const runs = [{ id: "r", inputId: "i", sessionId: "s", status: "running", metadata: {} }] as SessionRunRecord[];
+  const runs = [{ id: "r", inputId: "i", sessionId: "s", status: "running", metadata: { appliedInputState } }] as SessionRunRecord[];
   const store = { sessions: { get: () => session }, runs: { getRun: (id: string) => runs.find(run => run.id === id) }, conversations: {
     getInput: (id: string) => inputs.find(input => input.id === id), listInputs: () => inputs, listMessages: () => messages, listMessageParts: () => parts,
   }, permissions: { list: () => approvals }, toolResults: { list: () => results, readText: (id: string) => results.find(result => result.id === id)!.text } } as unknown as SessionStore;
@@ -30,7 +31,10 @@ function fixture(toolName = "Shell", source = "builtin", confirmation?: "once", 
   const request = { id: "q", sessionId: "s", runId: "r", createdAt: 100, status: "pending", toolName, payload: { input: structuredClone(original.input), ...(reason !== undefined ? { reason } : {}) } } as unknown as PermissionRequestRecord;
   return { session, abort, input, request, original, inputs, messages, parts, approvals, results, runs };
 }
-afterEach(() => setHostResponseLocale(undefined));
+afterEach(() => {
+  setHostResponseLocale(undefined);
+  vi.mocked(createConfiguredApprovalReviewer).mockReset();
+});
 
 describe("session approval fallback language", () => {
   it.each(["en-US", "zh-CN"])("localizes unverifiable source and secret-bearing input fallbacks in %s", async locale => {
@@ -49,6 +53,41 @@ describe("session approval fallback language", () => {
   });
 });
 describe("session authorization host boundary", () => {
+  it.each([
+    { action: "navigate", url: "http://localhost:3001/login" },
+    { action: "inspect" },
+    { action: "scroll", direction: "down" },
+  ])("reviews a host-registered Browser $action instead of requiring a manual reply", async args => {
+    const sample = fixture("Browser", "agent");
+    sample.inputs[0]!.content = "内置浏览器打开本地项目";
+    const review = vi.fn(async () => ({ decision: "approve" as const, risk: "low" as const, authorization: "task_implied" as const, reason: "用户要求的页面检查" }));
+    vi.mocked(createConfiguredApprovalReviewer).mockResolvedValueOnce({ review });
+
+    await expect(sample.input.review!({ request: sample.request, input: { ...sample.input, input: args } })).resolves.toMatchObject({ decision: "approve" });
+    expect(review).toHaveBeenCalledWith(expect.objectContaining({
+      tool: { name: "Browser", source: "agent", description: "Registered tool" }, input: args,
+      evidence: expect.objectContaining({ userInstruction: "内置浏览器打开本地项目" }),
+    }), undefined);
+  });
+
+  it("preserves the reviewer's request to confirm a sensitive host Browser operation", async () => {
+    const sample = fixture("Browser", "agent", "once", "Confirm clicking Delete all records?");
+    const outcome = { decision: "ask_user" as const, risk: "high" as const, authorization: "missing" as const, reason: "用户没有授权删除数据" };
+    const review = vi.fn(async () => outcome);
+    vi.mocked(createConfiguredApprovalReviewer).mockResolvedValueOnce({ review });
+
+    await expect(sample.input.review!({ request: sample.request, input: sample.input })).resolves.toEqual(outcome);
+    expect(review).toHaveBeenCalledOnce();
+    expect(sample.input.confirmation).toBe("once");
+  });
+
+  it.each(["plugin", "mcp", "extension", "runtime", "unknown"])("does not trust a Browser name from %s registration", async source => {
+    const sample = fixture("Browser", source);
+    const callsBefore = vi.mocked(createConfiguredApprovalReviewer).mock.calls.length;
+    await expect(sample.input.review!({ request: sample.request, input: sample.input })).resolves.toMatchObject({ decision: "ask_user" });
+    expect(vi.mocked(createConfiguredApprovalReviewer).mock.calls).toHaveLength(callsBefore);
+  });
+
   it("provides the proposal answered by a short reply and previous exact operations as references", async () => {
     const sample = fixture("BackgroundShellCreate");
     Object.assign(sample.inputs[0]!, { seq: 2, content: "好" });
@@ -88,10 +127,11 @@ describe("session authorization host boundary", () => {
       } });
       const copiedHuman = store.conversations.listInputs("second").find(input => input.content === "检查项目配置")!;
       const current = store.conversationTransactions.admitPromptWithRun({ prompt: { sessionId: "second", content: "好" } });
-      store.runs.updateRun(current.run.id, { status: "running" });
+      const appliedInputState = { revision: 1, inputIds: [current.input.id] };
+      store.runs.updateRun(current.run.id, { status: "running", metadata: { appliedInputState } });
       store.conversations.createMessage({ sessionId: "second", role: "user", inputId: current.input.id });
       const context: AgentEffectContext = { agentId: "a", sessionId: "second", runId: current.run.id,
-        inputId: current.input.id, cwd: directory, traceId: "t", signal: new AbortController().signal };
+        inputId: current.input.id, cwd: directory, traceId: "t", signal: new AbortController().signal, appliedInputState };
       const input = sessionPermissionRequest({ store, context,
         settings: { permission: { mode: "auto_review" }, sandbox: { enabled: false } } as Settings,
         request: { toolName: "Shell", toolSource: "builtin", input: { command: "git status" } },
@@ -193,6 +233,12 @@ describe("session authorization host boundary", () => {
   });
   it("invalidates a cancelled run", () => {
     const sample = fixture(); sample.abort.abort(); expect(sample.input.isCurrent!()).toBe(false);
+  });
+  it("invalidates an approval after a follow-up joins the Run", () => {
+    const sample = fixture();
+    expect(sample.input.isCurrent?.()).toBe(true);
+    sample.runs[0]!.metadata.appliedInputState = { revision: 2, inputIds: ["i", "follow-up"] };
+    expect(sample.input.isCurrent?.()).toBe(false);
   });
   it.each(["Shell", "TerminalOpen"])("reviews a routine %s command without requiring system isolation first", async toolName => {
     const sample = fixture(toolName);

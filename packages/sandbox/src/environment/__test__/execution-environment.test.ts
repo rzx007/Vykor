@@ -7,6 +7,33 @@ import { createExecutionEnvironment } from "../execution-environment.js";
 import { resolveShellDescriptor } from "../../process/shell.js";
 
 describe("createExecutionEnvironment", () => {
+  it("copies full access for new processes and restores the original sandbox", async () => {
+    const cwd = process.cwd();
+    const policies: unknown[] = [];
+    const handle = await createExecutionEnvironment({
+      config: { mode: "local", kind: "local", failClosed: false, cwd, sandbox: {} as any },
+      settings: { ...settings(), sandbox: { enabled: true, network: { mode: "none" } } },
+      binding: createWorkspaceBinding({ kind: "local", hostRoot: cwd, executionRoot: cwd }),
+      sessionId: "switch-policy", userSkillsRoot: cwd,
+    }, {
+      createShellProcess: async (_command, options) => { policies.push(structuredClone(options.settings!.sandbox)); return childProcess(); },
+      createProcess: async (_argv, options) => { policies.push(structuredClone(options.settings!.sandbox)); return childProcess(); },
+    });
+    const full = handle.withFullAccess?.(true) ?? handle;
+    await full.process.execShell("echo full");
+    const restored = full.withFullAccess?.(false) ?? full;
+    await restored.process.execProcess(["echo", "ordinary"]);
+    await full.process.execShell("echo previously-captured");
+    await handle.process.execShell("echo original");
+    expect(policies).toEqual([
+      { enabled: false, network: { mode: "host" } },
+      { enabled: true, network: { mode: "none" } },
+      { enabled: false, network: { mode: "host" } },
+      { enabled: true, network: { mode: "none" } },
+    ]);
+    await handle.release();
+  });
+
   it("cancels native canonicalization before and after filesystem access", async () => {
     const cwd = process.cwd();
     const handle = await createExecutionEnvironment({

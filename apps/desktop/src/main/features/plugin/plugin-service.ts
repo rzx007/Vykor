@@ -2,7 +2,7 @@ import { MarketplaceService } from "./marketplace-service"
 import { randomUUID } from "node:crypto"
 import { extname, resolve } from "node:path"
 
-import type { VykorClient, PluginResource } from "@vykor/application-client"
+import { DesktopPluginResource, type DesktopPluginClient } from "./desktop-plugin-resource"
 import { BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from "electron"
 
 import type {
@@ -24,7 +24,7 @@ import { desktopSessionService } from "../session/session-service"
 import { PluginArchiveSelectionStore, PluginGitSelectionStore } from "./selection-store"
 import { PluginIconLoader } from "./icon-loader"
 
-type PluginClient = Pick<VykorClient, "plugins">
+type PluginClient = DesktopPluginClient
 
 const SELECTION_TTL_MS = 10 * 60 * 1_000
 
@@ -32,8 +32,8 @@ export interface DesktopPluginServiceOptions {
   chooseArchive?: (sender: WebContents) => Promise<string | null>
   now?: () => number
   createSelectionId?: () => string
-  daemonClient?: () => Promise<VykorClient>
-  refreshDaemonClient?: () => Promise<VykorClient>
+  daemonClient?: () => Promise<DesktopPluginClient>
+  refreshDaemonClient?: () => Promise<DesktopPluginClient>
 }
 
 export class DesktopPluginService {
@@ -42,8 +42,8 @@ export class DesktopPluginService {
   private readonly chooseArchive: (sender: WebContents) => Promise<string | null>
   private readonly now: () => number
   private readonly createSelectionId: () => string
-  private readonly daemonClient: () => Promise<VykorClient>
-  private readonly refreshDaemonClient: () => Promise<VykorClient>
+  private readonly daemonClient: () => Promise<DesktopPluginClient>
+  private readonly refreshDaemonClient: () => Promise<DesktopPluginClient>
   private readonly selections: PluginArchiveSelectionStore
   private readonly gitSelections: PluginGitSelectionStore
 
@@ -52,9 +52,9 @@ export class DesktopPluginService {
     this.chooseArchive = options.chooseArchive ?? pickPluginArchive
     this.now = options.now ?? Date.now
     this.createSelectionId = options.createSelectionId ?? randomUUID
-    this.daemonClient = options.daemonClient ?? (() => desktopSessionService.daemonClient())
+    this.daemonClient = options.daemonClient ?? (async () => ({ plugins: new DesktopPluginResource(await desktopSessionService.daemonTransport()) }))
     this.refreshDaemonClient =
-      options.refreshDaemonClient ?? (() => desktopSessionService.refreshDaemonClient())
+      options.refreshDaemonClient ?? (async () => ({ plugins: new DesktopPluginResource(await desktopSessionService.refreshDaemonTransport()) }))
     this.selections = new PluginArchiveSelectionStore(this.now)
     this.gitSelections = new PluginGitSelectionStore(this.now)
   }
@@ -119,7 +119,7 @@ export class DesktopPluginService {
       ])
     }
 
-    let preview: Awaited<ReturnType<PluginResource["previewArchive"]>>
+    let preview: Awaited<ReturnType<DesktopPluginResource["previewArchive"]>>
     try {
       preview = await this.withDaemonRetry((client) =>
         client.plugins.previewArchive({ cwd, archivePath })
@@ -195,7 +195,7 @@ export class DesktopPluginService {
       return archiveFailure("请输入 Git 地址。", [{ code: "plugin_git_url_required" }])
     }
 
-    let preview: Awaited<ReturnType<PluginResource["previewGit"]>>
+    let preview: Awaited<ReturnType<DesktopPluginResource["previewGit"]>>
     try {
       preview = await this.withDaemonRetry((client) =>
         client.plugins.previewGit({ cwd, url, ...(ref ? { ref } : {}) })

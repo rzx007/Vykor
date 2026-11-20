@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { useDesktopSessionStore } from "./store"
@@ -22,7 +23,7 @@ afterEach(() => {
 describe("desktop session store provider refresh", () => {
   beforeEach(() => {
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           bootstrap: vi.fn(async () => refreshedBootstrap),
         },
@@ -98,7 +99,7 @@ describe("desktop session store project order", () => {
     const project = { id: "project-rebind", name: "Rebind", path: "D:\\old", lastOpenedAt: 1, available: true }
     const rebound = { ...project, path: "D:\\new" }
     const oldSession = { id: "s1", projectId: project.id, cwd: "D:\\old\\sub", title: "test", model: "test", status: "idle" as const, metadata: {}, createdAt: 1, updatedAt: 1 }
-    vi.stubGlobal("window", { desktop: { sessions: {
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: {
       rebindProject: async () => rebound,
       bootstrap: async () => ({ ...refreshedBootstrap, projects: [rebound], sessions: [{ ...oldSession, cwd: "D:\\new\\sub" }] }),
     } } })
@@ -132,7 +133,7 @@ describe("desktop session store project order", () => {
     ]
     const inspectedProject = { ...projects[1], lastOpenedAt: 400 }
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           inspectProject: vi.fn(async () => ({
             project: inspectedProject,
@@ -171,7 +172,7 @@ describe("desktop session store project order", () => {
       available: true,
     }
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           inspectProject: vi.fn(async () => {
             throw new Error("project unavailable")
@@ -208,7 +209,7 @@ describe("desktop session store project order", () => {
       .mockRejectedValueOnce(new Error("inspect unavailable"))
       .mockResolvedValueOnce(projectDetails(project, "main"))
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           inspectProject,
           checkoutBranch: vi.fn(async () => {
@@ -247,7 +248,7 @@ describe("desktop session store project order", () => {
       available: true,
     }
     vi.stubGlobal("window", {
-      desktop: { sessions: { removeProject: vi.fn(async () => undefined) } },
+      desktop: { businessData: businessDataFixture, sessions: { removeProject: vi.fn(async () => undefined) } },
     })
     useDesktopSessionStore.setState({
       projects: [project],
@@ -278,7 +279,7 @@ describe("desktop session store project order", () => {
     let resolveA!: (value: ReturnType<typeof projectDetails>) => void
     let resolveB!: (value: ReturnType<typeof projectDetails>) => void
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           inspectProject: vi.fn(
             (path: string) =>
@@ -328,7 +329,7 @@ describe("desktop session store project order", () => {
       }
       let resolveBranch!: (value: ReturnType<typeof projectDetails>) => void
       vi.stubGlobal("window", {
-        desktop: {
+        desktop: { businessData: businessDataFixture,
           sessions: {
             inspectProject: vi.fn(async () => projectDetails(projectB, "branch-b")),
             [ipcMethod]: vi.fn(
@@ -377,7 +378,7 @@ describe("desktop session store project order", () => {
         })
     )
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           inspectProject,
           checkoutBranch: vi.fn(async () => projectDetails(project, "feature/new")),
@@ -417,7 +418,7 @@ describe("desktop session store project order", () => {
     }
     let rejectRefresh!: (error: Error) => void
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           inspectProject: vi.fn(
             () =>
@@ -462,7 +463,7 @@ describe("desktop session store project order", () => {
     }
     let rejectCheckout!: (error: Error) => void
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           checkoutBranch: vi.fn(
             () =>
@@ -514,7 +515,7 @@ describe("desktop session store project order", () => {
     }
     let resolveChoose!: (value: ReturnType<typeof projectDetails>) => void
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           chooseProject: vi.fn(
             () =>
@@ -548,7 +549,7 @@ describe("desktop session store project order", () => {
     }
     const resolvers: Array<(value: ReturnType<typeof projectDetails>) => void> = []
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           inspectProject: vi.fn(
             () =>
@@ -588,7 +589,7 @@ describe("desktop session store project order", () => {
 describe("desktop session store bootstrap operations", () => {
   it("records a refresh bootstrap failure in app operations", async () => {
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           bootstrap: vi.fn(async () => {
             throw new Error("bootstrap refresh unavailable")
@@ -611,11 +612,11 @@ describe("desktop session store bootstrap operations", () => {
     const restoredSession = emptySessionView("restored-session").session
     const openSession = useDesktopSessionStore.getState().openSession
     vi.stubGlobal("localStorage", {
-      getItem: vi.fn(() => restoredSession.id),
+      getItem: vi.fn((key: string) => key === "vykor.desktop.active-session.v1" ? restoredSession.id : null),
       removeItem: vi.fn(),
     })
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           daemonStatus: vi.fn(async () => ({ phase: "ready", message: "ready", updatedAt: 1 })),
           bootstrap: vi.fn(async () => ({ ...refreshedBootstrap, sessions: [restoredSession] })),
@@ -664,7 +665,7 @@ describe("desktop session store git state refresh", () => {
       branches: ["main"],
     }))
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           inspectProject,
         },
@@ -711,7 +712,7 @@ describe("desktop session store git state refresh", () => {
       branches: ["main"],
     }))
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           inspectProject,
         },

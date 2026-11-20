@@ -1,5 +1,6 @@
 import type {
   DesktopAttachmentCandidate,
+  DesktopAttachmentDraft,
   DesktopAttachmentError,
   DesktopAttachmentUploadEvent,
   UploadDesktopAttachmentMemoryInput,
@@ -9,6 +10,7 @@ import {
   addCandidates,
   applyUploadEvent,
   beginUpload,
+  expandPastedTextAttachment,
   findUploadEventScope,
   migrateComposerScope,
   removeDraftAttachment,
@@ -23,6 +25,51 @@ import { emptyComposerDocument, composerDocument, type ComposerDocument } from "
 
 export function createAttachmentActions(context: DesktopStoreContext): AttachmentActions {
   const { get, set } = context
+
+  const uploadClipboardAttachment = async (
+    scope: string,
+    input: Omit<UploadDesktopAttachmentMemoryInput, "draftId" | "taskId">,
+    pastedText?: string
+  ): Promise<void> => {
+    if (!get().attachmentSupport?.interactionEnabled) return
+    const draftId = crypto.randomUUID()
+    const taskId = crypto.randomUUID()
+    const candidate = {
+      draftId,
+      sourceToken: "",
+      displayName: input.displayName,
+      declaredMediaType: input.mediaType,
+      sizeBytes: input.bytes.byteLength,
+      pastedText,
+    }
+    set((state) => beginUpload(addCandidates(state, scope, [candidate]), scope, draftId, taskId))
+    try {
+      await window.desktop.attachments.uploadClipboardImage({ ...input, draftId, taskId })
+    } catch (cause) {
+      set((state) =>
+        applyUploadEvent(state, findUploadEventScope(state, draftId, taskId) ?? scope, {
+          type: "failed",
+          draftId,
+          taskId,
+          error: actionError(cause),
+        })
+      )
+    }
+  }
+
+  const discardAttachment = async (attachment: DesktopAttachmentDraft): Promise<void> => {
+    try {
+      if (attachment.status === "uploading") {
+        await window.desktop.attachments.cancelUpload({ taskId: attachment.taskId })
+      } else if (attachment.status === "ready" && attachment.assetId) {
+        await window.desktop.attachments.deleteUnreferenced({ assetId: attachment.assetId })
+      } else {
+        await window.desktop.attachments.discardDraft({ draftId: attachment.draftId })
+      }
+    } catch {
+      // 清理失败不恢复卡片；daemon 的附件 GC 会兜底。
+    }
+  }
 
   // Keep intake feedback with the draft so switching chats cannot clear the send guard.
   const prepare = async (
@@ -202,31 +249,23 @@ export function createAttachmentActions(context: DesktopStoreContext): Attachmen
       })
     },
 
-    async addClipboardAttachment(scope, input) {
-      if (!get().attachmentSupport?.interactionEnabled) return
-      const draftId = crypto.randomUUID()
-      const taskId = crypto.randomUUID()
-      const candidate: DesktopAttachmentCandidate = {
-        draftId,
-        sourceToken: "",
-        displayName: input.displayName,
-        declaredMediaType: input.mediaType,
-        sizeBytes: input.bytes.byteLength,
-      }
-      set((state) => beginUpload(addCandidates(state, scope, [candidate]), scope, draftId, taskId))
-      const uploadInput: UploadDesktopAttachmentMemoryInput = { ...input, draftId, taskId }
-      try {
-        await window.desktop.attachments.uploadClipboardImage(uploadInput)
-      } catch (cause) {
-        set((state) =>
-          applyUploadEvent(state, findUploadEventScope(state, draftId, taskId) ?? scope, {
-            type: "failed",
-            draftId,
-            taskId,
-            error: actionError(cause),
-          })
-        )
-      }
+    addClipboardAttachment: uploadClipboardAttachment,
+
+    addPastedTextAttachment(scope, text) {
+      return uploadClipboardAttachment(scope, {
+        bytes: new TextEncoder().encode(text).buffer as ArrayBuffer,
+        displayName: "pasted-text.txt",
+        mediaType: "text/plain",
+      }, text)
+    },
+
+    async showPastedTextAttachment(scope, draftId) {
+      const attachment = selectDraftAttachments(get(), scope).find(
+        (item) => item.draftId === draftId
+      )
+      if (attachment?.pastedText === undefined) return
+      set((state) => expandPastedTextAttachment(state, scope, draftId))
+      await discardAttachment(attachment)
     },
 
     async cancelAttachment(scope, draftId) {
@@ -271,17 +310,7 @@ export function createAttachmentActions(context: DesktopStoreContext): Attachmen
       )
       if (!attachment) return
       set((state) => removeDraftAttachment(state, scope, draftId))
-      try {
-        if (attachment.status === "uploading") {
-          await window.desktop.attachments.cancelUpload({ taskId: attachment.taskId })
-        } else if (attachment.status === "ready" && attachment.assetId) {
-          await window.desktop.attachments.deleteUnreferenced({ assetId: attachment.assetId })
-        } else {
-          await window.desktop.attachments.discardDraft({ draftId })
-        }
-      } catch {
-        // 清理失败不恢复卡片；daemon 的附件 GC 会兜底。
-      }
+      await discardAttachment(attachment)
     },
 
     migrateComposerDraft(fromScope, toScope) {

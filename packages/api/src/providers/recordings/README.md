@@ -41,3 +41,5 @@ node --import ./apps/cli/node_modules/tsx/dist/loader.mjs packages/api/src/provi
 ```
 
 新增录制或检查放本分类，不扩展客户端的运行时职责。只有供应商实际支持的传输方式才加入真实覆盖清单。
+
+手动 `capture-probe.ts` 从统一路径入口取得产品 settings 与 credentials 文件；Codex 分支仍只读外部 `$CODEX_HOME/auth.json`。探针不会搬迁或更新其他工具的凭据。

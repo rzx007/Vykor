@@ -17,6 +17,8 @@ export interface ToolContext {
   cwd: string;
   /** Effective execution environment. Runtime-owned contexts always provide it. */
   environment?: ExecutionEnvironmentHandle;
+  /** Host-captured network policy of the actual calling session, including inherited tools. */
+  canUseNetwork?: boolean;
   sessionId?: string;
   /** Stable model-issued tool call identity. Retries of the same call reuse this value. */
   toolCallId?: string;

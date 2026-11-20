@@ -1,154 +1,70 @@
-import { app, BrowserWindow, Menu, session } from "electron"
-import { resolve } from "node:path"
-import { registerDocumentPreviewScheme, installDocumentPreviewProtocol } from "./features/workspace/document-preview-protocol"
-import { electronApp, optimizer, is } from "@electron-toolkit/utils"
-
-import { createAppContext, type AppContext } from "./core/app-context"
+import { app, dialog } from "electron"
+import { join, resolve } from "node:path"
+import { existsSync } from "node:fs"
 import { configureLinuxInputMethod } from "./core/linux-input-method"
-import { IpcRegistry } from "./core/ipc/registry"
-import { quitApp } from "./core/services/lifecycle"
-import { WindowManager } from "./core/services/window-manager"
-import { allIpcContributions } from "./features"
-import { createMainWindow, showMainWindow } from "./features/main-window/window"
-import { createPetWindow } from "./features/pet/window"
-import { desktopSessionService } from "./features/session/session-service"
-import { desktopTerminalService } from "./features/terminal/terminal-service"
-import { createTray, destroyTray } from "./features/tray/tray"
-import { initializeNotificationActions } from "./features/tray/notification-actions"
-import { openNotificationSession } from "./features/tray/notification-navigation"
-import { startDesktopUpdater } from "./features/updater/start"
-import {
-  resolveDesktopDaemonMode,
-  runDesktopDaemonEntry,
-} from "./features/daemon-autostart/daemon-entry"
-import icon from "../../resources/icon.png?asset"
+import { registerDocumentPreviewScheme } from "./features/workspace/document-preview-protocol"
+import { registerPluginAppScheme } from "./features/plugin-apps/document-protocol"
+import { acquireDataRootWriter, assertNoLegacyDirectoryOverrides, dataRootHome, getInitializedDataRootInputs, initializeDataRoot, parseDataRootArgument, readDataRootSelector, resolveUserDataPaths } from "@vykor/host-config/paths"
 
-import { registerPluginAppScheme, installPluginAppDocumentProtocol, desktopPluginAppDocuments } from "./features/plugin-apps/document-protocol"
-import { pluginAppMessageReady } from "./features/plugin-apps/message-ready"
-import { DesktopPluginAppService } from "./features/plugin-apps/plugin-app-service"
-import { setDesktopPluginAppService, getDesktopPluginAppService } from "./features/plugin-apps/service-runtime"
-
-let ctx: AppContext | null = null
-let ipcRegistry: IpcRegistry | null = null
-let updaterRuntime: ReturnType<typeof startDesktopUpdater> | null = null
-
-const daemonMode = resolveDesktopDaemonMode(process.argv)
-if (daemonMode) {
-  void app
-    .whenReady()
-    .then(() => runDesktopDaemonEntry(daemonMode))
-    .catch((error: unknown) => {
-      console.error("[daemon] Desktop service failed", error)
-      app.exit(1)
-    })
-} else {
-  startDesktopApplication()
-}
-
-function startDesktopApplication(): void {
+// Electron reads schemes and Chromium switches before ready. These modules only
+// hold in-memory document maps; persistent product stores are loaded below.
+if (!process.argv.some(arg => ["--daemon-service", "--daemon-watchdog", "--daemon-on-demand"].includes(arg))) {
   configureLinuxInputMethod(app.commandLine, process.platform)
   registerDocumentPreviewScheme()
   registerPluginAppScheme()
-  if (process.platform === "linux") {
-    app.commandLine.appendSwitch("enable-transparent-visuals")
-  }
-
-  if (!app.requestSingleInstanceLock()) {
-    app.quit()
-    process.exit(0)
-  }
-
-  app.whenReady().then(() => {
-    installDocumentPreviewProtocol(session.defaultSession, resolve(__dirname, "../document-preview"))
-    installPluginAppDocumentProtocol(desktopPluginAppDocuments, session.defaultSession)
-    electronApp.setAppUserModelId(is.dev ? "dev.vykor.desktop" : "app.vykor.desktop")
-    app.setName("Vykor")
-    Menu.setApplicationMenu(null)
-
-    app.on("browser-window-created", (_, window) => {
-      optimizer.watchWindowShortcuts(window)
-      window.webContents.on("before-input-event", (event, input) => {
-        if (input.type !== "keyDown" || input.key !== "F12") return
-        if (input.control || input.meta || input.alt) return
-
-        event.preventDefault()
-        window.webContents.toggleDevTools()
-      })
-    })
-
-    const windowManager = new WindowManager()
-    ctx = createAppContext({
-      mainDirname: __dirname,
-      rendererUrl: is.dev ? process.env["ELECTRON_RENDERER_URL"] : undefined,
-      iconPath: icon,
-      windowManager,
-      createMainWindow: () => createMainWindow(requireContext()),
-    })
-
-    const pluginApps = new DesktopPluginAppService({
-      messageReady: pluginAppMessageReady,
-      documents: desktopPluginAppDocuments,
-      getClient: () => desktopSessionService.daemonClient(),
-      getOwnerSessionToken: (id, sessionId) => desktopSessionService.subscriptions.getOwnerSessionToken(id, sessionId),
-    })
-    setDesktopPluginAppService(pluginApps)
-    desktopSessionService.connection.onInvalidated(() => pluginApps.invalidateConnection())
-    desktopSessionService.subscriptions.onOwnerSnapshot((id, view) => pluginApps.observeSession(id, view))
-
-    ipcRegistry = new IpcRegistry(ctx)
-    updaterRuntime = startDesktopUpdater()
-    for (const contribution of [...allIpcContributions, updaterRuntime.contribution]) {
-      ipcRegistry.register(contribution)
-    }
-
-    const appContext = ctx
-    initializeNotificationActions(
-      () => desktopSessionService.daemonClient(),
-      (sessionId) => openNotificationSession(sessionId, () =>
-        appContext.windowManager.getMain() ?? appContext.createMainWindow()
-      )
-    )
-
-    const mainWindow = ctx.windowManager.getMain() ?? createMainWindow(ctx)
-    createTray(ctx)
-    createPetWindow(ctx)
-    showMainWindow(mainWindow)
-    updaterRuntime.service.startAfterWindowShown()
-  })
-
-  app.on("activate", () => {
-    if (!ctx) return
-    const appContext = requireContext()
-    const mainWindow = appContext.windowManager.getMain() ?? createMainWindow(appContext)
-    showMainWindow(mainWindow)
-  })
-
-  app.on("second-instance", () => {
-    if (!ctx) return
-    const appContext = requireContext()
-    const mainWindow = appContext.windowManager.getMain() ?? createMainWindow(appContext)
-    showMainWindow(mainWindow)
-  })
-
-  app.on("window-all-closed", () => {
-    if (process.platform !== "darwin" && BrowserWindow.getAllWindows().length === 0) {
-      quitApp()
-    }
-  })
-
-  app.on("before-quit", () => {
-    getDesktopPluginAppService()?.dispose()
-    desktopPluginAppDocuments.clear()
-    updaterRuntime?.service.dispose()
-    updaterRuntime = null
-    ipcRegistry?.dispose()
-    destroyTray()
-    void desktopTerminalService.dispose()
-    void desktopSessionService.dispose()
-  })
+  if (process.platform === "linux") app.commandLine.appendSwitch("enable-transparent-visuals")
 }
 
-function requireContext(): AppContext {
-  if (!ctx) throw new Error("AppContext is not initialized")
-  return ctx
+async function main(): Promise<void> {
+  const hostArgOffset = app.isPackaged ? 1 : 2
+  if (process.argv[hostArgOffset] === "--internal-data-root-validation") {
+    await (await import("@vykor/server/migration-validation")).runMigrationValidationEntry(); return
+  }
+  const parsed = parseDataRootArgument(process.argv.slice(hostArgOffset))
+  if (parsed.argv[0] === "data-root" && parsed.argv[1] === "recover") {
+    await (await import("./data-root-recovery-entry")).runDesktopDataRootRecovery(parsed.argv.slice(2)); return
+  }
+  const selected = await initializeDataRoot({ explicitRoot: parsed.explicitRoot })
+  const daemon = parsed.argv.some(arg => ["--daemon-service", "--daemon-watchdog", "--daemon-on-demand"].includes(arg))
+  let maintenance = parsed.argv[0] === "data-root"
+  try { assertNoLegacyDirectoryOverrides(selected.dataRoot) }
+  catch (error) { if (daemon) throw error; maintenance = true }
+  if (!daemon && !maintenance) {
+    const { readRegisteredDataLocation } = await import("@vykor/server/daemon-host")
+    const saved = await readRegisteredDataLocation(join(selected.dataRoot, "data"), join(app.getPath("userData"), "runtime-data-location.json"))
+    if (saved && resolve(saved.storePath) !== resolve(join(selected.dataRoot, "data/session-runtime/sessions.db"))) maintenance = true
+    const { readLegacyImportManifest } = await import("./features/business-data/legacy-import")
+    const paths = resolveUserDataPaths(selected.dataRoot), receipt = readLegacyImportManifest(paths.legacyImportFilePath).legacySources
+    const original = getInitializedDataRootInputs()?.environment ?? {}
+    if (receipt?.status === "pending" && (!existsSync(paths.sessionsDatabasePath)
+      || (receipt.environment.VYKOR_CHANNELS_DIR && original.VYKOR_CHANNELS_DIR === undefined)
+      || (receipt.environment.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR && original.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR === undefined))) maintenance = true
+  }
+  if (maintenance) {
+    process.argv = [...process.argv.slice(0, hostArgOffset), ...parsed.argv]
+    await (await import("./data-root-maintenance")).startDataRootMaintenance(); return
+  }
+  const writer = await acquireDataRootWriter({ homeDir: dataRootHome(), dataRoot: selected.dataRoot, kind: daemon ? "daemon" : "desktop" })
+  if (!daemon) (await import("./core/ipc/operation-gate")).setDesktopRootWriter(writer)
+  process.argv = [...process.argv.slice(0, hostArgOffset), ...parsed.argv]
+  console.info(`[data-root] ${selected.dataRoot} (source: ${selected.source})`)
+  await import("./application")
 }
+
+void main().catch(async (error: unknown) => {
+  console.error("[data-root] Desktop startup stopped", error)
+  if (!process.argv.some(arg => ["--daemon-service", "--daemon-watchdog", "--daemon-on-demand", "--internal-data-root-validation"].includes(arg))) {
+    let journal: string | undefined
+    try { journal = readDataRootSelector(dataRootHome())?.pendingMigration?.journalPath } catch { /* Preserve malformed selectors. */ }
+    await app.whenReady()
+    if (journal) {
+      const choice = await dialog.showMessageBox({ type: "warning", title: "用户数据根需要恢复", buttons: ["按本次记录恢复", "关闭"], defaultId: 1, cancelId: 1,
+        message: `普通启动已停止，没有创建新数据库。\n迁移记录：${journal}\n可运行 Vykor data-root recover --journal "${journal}"。` })
+      if (choice.response === 0) {
+        try { await (await import("./data-root-recovery-entry")).runDesktopDataRootRecovery(["--journal", journal]); return }
+        catch { dialog.showErrorBox("恢复未完成", `保留所有副本后重试同一迁移记录：${journal}`) }
+      }
+    } else dialog.showErrorBox("用户数据根启动已停止", "请核对本机预检与根定位记录；若仅为已死亡的启动锁，运行 Vykor data-root recover --startup-lock。活锁与无法核对的锁不会被解除。")
+  }
+  app.exit(1)
+})

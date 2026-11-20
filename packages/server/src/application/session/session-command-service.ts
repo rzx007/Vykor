@@ -107,6 +107,7 @@ const LIVE_REQUEST_CONFIGURATION_KEYS = new Set([
   "model", "provider", "baseUrl", "apiFormat", "effort",
   "maxTurns",
   "systemPrompt",
+  "approvalMode", "permissionMode",
 ]);
 const MODEL_REQUEST_CONFIGURATION_KEYS = new Set([
   "model",
@@ -121,8 +122,8 @@ function isLiveRequestConfigurationChange(
   metadata: Record<string, unknown> | undefined,
 ): boolean {
   if (!metadata) return false;
-  const before = readSessionRuntimeConfig(session);
-  const after = readSessionRuntimeConfig({ ...session, metadata });
+  const before = readSessionRuntimeConfig(session, { workMode: "execute" });
+  const after = readSessionRuntimeConfig({ ...session, metadata }, { workMode: "execute" });
   const changed = changedSessionRuntimeKeys(before, after);
   return (
     changed.length > 0 &&
@@ -447,10 +448,16 @@ export class SessionCommandService {
     }
     const runtimeMetadataChanged =
       mergedMetadata && runtimeSessionMetadataChanged(existing.metadata, mergedMetadata);
+    const approvalModeOnlyChange = Boolean(runtimeMetadataChanged && input.agent === undefined
+      && changedSessionRuntimeKeys(
+        readSessionRuntimeConfig(existing, { workMode: "execute" }),
+        readSessionRuntimeConfig({ ...existing, metadata: mergedMetadata! }, { workMode: "execute" }),
+      ).every(key => key === "approvalMode" || key === "permissionMode"));
     const metadata = runtimeMetadataChanged
       ? {
           ...mergedMetadata!,
-          runtimeRevision: readSessionRuntimeRevision(existing.metadata) + 1,
+          // Mode switches do not invalidate the active Run or its pending approvals.
+          runtimeRevision: readSessionRuntimeRevision(existing.metadata) + (approvalModeOnlyChange ? 0 : 1),
         }
       : mergedMetadata;
     const runtimeConfigurationChanged = Boolean(

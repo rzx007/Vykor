@@ -2,18 +2,18 @@ import {
   VykorClient,
   applySessionSnapshot,
   createPromptRequestId,
-  hasActiveRun,
   normalizeDaemonBaseUrl,
   patchSessionRuntimeMetadata,
   readSessionModelUsage,
   readSessionModelRetryState,
+  selectSessionRuns,
   selectVisibleSessionMessagesWithParts,
   syncEvents,
   type VykorClientState,
   type SessionEventRecord,
   type SessionMessagePartRecord,
   type SessionStateSnapshot,
-} from "@vykor/application-client";
+} from "@rzx/client";
 import type { Settings } from "@vykor/host-config";
 import { isCoordinatorMode } from "@vykor/coordinator";
 
@@ -88,11 +88,12 @@ function runTerminalStatus(
   sessionId: string,
   runId: string | undefined,
 ): "active" | "completed" | "failed" | "unknown" {
-  if (!runId) {
-    return hasActiveRun(state, sessionId) ? "active" : "unknown";
+  const bucket = state.buckets[sessionId];
+  const run = runId ? bucket?.runs[runId] : undefined;
+  if (!run) {
+    const active = selectSessionRuns(bucket).some(item => item.status === "pending" || item.status === "running");
+    return active ? "active" : "unknown";
   }
-  const run = state.buckets[sessionId]?.runs[runId];
-  if (!run) return hasActiveRun(state, sessionId) ? "active" : "unknown";
   if (run.status === "pending" || run.status === "running") return "active";
   if (run.status === "failed") return "failed";
   return "completed";
@@ -110,6 +111,12 @@ async function autoReplyPermissions(
   for (const request of Object.values(bucket.permissions)) {
     if (request.status !== "pending" || seen.has(request.id)) continue;
     seen.add(request.id);
+    const input = request.payload.input;
+    if (request.toolName === "AskUser" && input && typeof input === "object" && "kind" in input && input.kind === "question") {
+      await client.permissions.reply(request.id, { status: "denied", decision: "once" });
+      process.stderr.write("[print] declined an AskUser request that needs an interactive user\n");
+      continue;
+    }
     const status = approve ? "approved" : "denied";
     await client.permissions.reply(request.id, { status, decision: "once" });
     process.stderr.write(

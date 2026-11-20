@@ -62,11 +62,8 @@ import {
   emptyGoalComposer,
   selectGoalObjective,
 } from "@renderer/stores/desktop-session/goal-actions"
-import { PendingPromptQueue } from "./transcript/pending-prompt-queue"
-import {
-  derivePendingHandoffSubmission,
-  mergeOptimisticTranscript,
-} from "./transcript/optimistic-transcript"
+import { followUpFeedback, PendingPromptQueue, queuedPrompts } from "./transcript/pending-prompt-queue"
+import { mergeSessionOptimisticTranscript } from "./transcript/optimistic-transcript"
 import type { ComposerPickerCommand } from "./composer/composer-picker"
 import { toComposerCommands } from "./composer/composer-command-catalog"
 import { toComposerSkills } from "./composer/composer-picker-model"
@@ -92,7 +89,7 @@ import { useTaskLocation } from "./session/use-task-location"
 import { openConversationTextMenu } from "./shared/conversation-text-actions"
 import type { AddToComposerEventDetail, ConversationPaneProps } from "./shared/types"
 import { resolveScrollerAgentStatus } from "./transcript/scroller-agent-status"
-import { resolveModelLabel } from "./shared/utils"
+import { resolveModelLabel, stopChatOnEscape } from "./shared/utils"
 
 function ConversationPane({
   panelOpen,
@@ -207,7 +204,7 @@ function ConversationPane({
   const setComposerDraftDocument = useDesktopSessionStore((state) => state.setComposerDraftDocument)
   const pickAttachmentFiles = useDesktopSessionStore((state) => state.pickAttachmentFiles)
   const addDroppedAttachments = useDesktopSessionStore((state) => state.addDroppedAttachments)
-  const addClipboardAttachment = useDesktopSessionStore((state) => state.addClipboardAttachment)
+  const addPastedTextAttachment = useDesktopSessionStore((state) => state.addPastedTextAttachment)
   const cancelAttachment = useDesktopSessionStore((state) => state.cancelAttachment)
   const retryAttachment = useDesktopSessionStore((state) => state.retryAttachment)
   const removeAttachment = useDesktopSessionStore((state) => state.removeAttachment)
@@ -250,7 +247,7 @@ function ConversationPane({
   const sessionActions = useSessionActionDialogs()
   const beginFork = sessionActions.beginFork
 
-  const submitDraft = async (): Promise<void> => {
+  const submitDraft = async (delivery?: "queue" | "steer"): Promise<void> => {
     const content = selectComposerDocumentText(draft)
     if (useDesktopSessionStore.getState().composerDraftsByScope[composerScope]?.attachmentPreparation?.pending.length) return
     const ready = areDesktopAttachmentsSendable(attachments)
@@ -261,7 +258,7 @@ function ConversationPane({
         attachmentCount: attachments.length,
         annotationCount,
         ready,
-        blocked: sending || modeChangePending || Boolean(archived),
+        blocked: sending || interrupting || modeChangePending || Boolean(archived),
         goalMode,
       },
       async () => {
@@ -272,7 +269,10 @@ function ConversationPane({
             return
           }
           if (hasSession) {
-            await sendMessage(content, { document: draft, attachments })
+            await sendMessage(content, {
+              document: draft, attachments, delivery,
+              ...(delivery === "steer" ? { expectedActiveRunId: activeRun?.id } : {}),
+            })
           } else {
             await startSession(content, {
               document: draft,
@@ -314,42 +314,17 @@ function ConversationPane({
           (!run.metadata.goalRunKind || run.metadata.goalRunKind === "user")
       )
     )
-  const pendingPrompts = (sessionView?.runs ?? [])
-    .filter((run) => run.status === "pending" && run.inputId)
-    .sort((left, right) => left.createdAt - right.createdAt)
-    .flatMap((run) => {
-      const input = sessionView?.inputs.find((candidate) => candidate.id === run.inputId)
-      const action = queuedPromptActions[`${run.sessionId}:${run.id}`]
-      return input ? [{ input, run, ...(action ? { action } : {}) }] : []
-    })
+  const pendingPrompts = queuedPrompts(sessionView, queuedPromptActions)
   const pendingPermissions = sessionView?.permissions.filter(requiresPermissionReply) ?? []
   const singleAskUserPrompt =
     pendingPermissions.length === 1 && isAskUserPermission(pendingPermissions[0]!)
   const localPromptSubmissions = Object.values(pendingPromptSubmissions)
     .filter((submission) => submission.sessionId === activeSessionId)
     .sort((left, right) => left.createdAt - right.createdAt)
-  const pendingHandoffSubmission = derivePendingHandoffSubmission(
-    sessionView?.messages ?? [],
-    sessionView?.inputs ?? [],
-    sessionView?.runs ?? [],
-    new Set(
-      Object.values(queuedPromptActions)
-        .filter((action) => action.phase !== "failed")
-        .map((action) => action.runId)
-    )
-  )
-  const transcriptSubmissions =
-    pendingHandoffSubmission &&
-    !localPromptSubmissions.some(
-      (submission) =>
-        submission.id === pendingHandoffSubmission.id && submission.placement === "transcript"
-    )
-      ? [...localPromptSubmissions, pendingHandoffSubmission]
-      : localPromptSubmissions
-  const transcript = mergeOptimisticTranscript(
-    sessionView?.messages ?? [],
-    sessionView?.parts ?? [],
-    transcriptSubmissions
+  const transcript = mergeSessionOptimisticTranscript(
+    sessionView,
+    localPromptSubmissions,
+    queuedPromptActions
   )
   const scrollerAgentStatus = resolveScrollerAgentStatus({
     running,
@@ -383,7 +358,8 @@ function ConversationPane({
       : null
   const appContextEntries = useSyncExternalStore(
     pluginAppModelContexts.subscribe,
-    pluginAppModelContexts.snapshot
+    pluginAppModelContexts.snapshot,
+    pluginAppModelContexts.serverSnapshot
   )
   const canSubmit =
     areDesktopAttachmentsSendable(attachments) &&
@@ -399,11 +375,7 @@ function ConversationPane({
   }
 
   const pasteTextAttachment = (text: string): Promise<void> => {
-    return addClipboardAttachment(composerScope, {
-      bytes: new TextEncoder().encode(text).buffer as ArrayBuffer,
-      displayName: "pasted-text.txt",
-      mediaType: "text/plain",
-    })
+    return addPastedTextAttachment(composerScope, text)
   }
 
   const copyAssistantMessage = useCallback(async (content: string): Promise<void> => {
@@ -563,7 +535,19 @@ function ConversationPane({
 
   return (
     <MessagePluginCatalog.Provider value={pluginCatalog}>
-      <section className="conversation-surface flex h-full min-w-0 flex-1 flex-col overflow-x-hidden bg-conversation">
+      <section
+        className="conversation-surface flex h-full min-w-0 flex-1 flex-col overflow-x-hidden bg-conversation"
+        onKeyDown={(event) => {
+          if (
+            activeRun && activeSessionId && sessionView?.session.id === activeSessionId &&
+            !archived && !interrupting
+          ) {
+            stopChatOnEscape(event, () =>
+              void interrupt({ sessionId: activeSessionId, view: sessionView })
+            )
+          }
+        }}
+      >
         {hasSession ? (
           <header className="flex h-12 shrink-0 items-center border-b bg-background px-3">
             <div className="flex min-w-0 items-center gap-2">
@@ -829,9 +813,11 @@ function ConversationPane({
                   error={composerValidationError ?? activeSessionError ?? pluginCatalogError}
                 />
                 <PendingPromptQueue
+                  key={`queue:${composerScope}`}
                   prompts={pendingPrompts}
                   activeRunId={activeRun?.id}
-                  localSubmissions={localPromptSubmissions}
+                  handoffRunId={transcript.handoffRunId}
+                  localSubmissions={followUpFeedback(sessionView, localPromptSubmissions)}
                   onPromote={(inputId, queuedRunId) => {
                     if (activeRun) void promoteQueuedPrompt(inputId, queuedRunId, activeRun.id)
                   }}
@@ -839,6 +825,7 @@ function ConversationPane({
                   onRetryLocal={(inputId) => {
                     void retryPromptSubmission(inputId).catch(() => undefined)
                   }}
+                  onRestoreLocal={(inputId) => useDesktopSessionStore.getState().restoreFollowUp(inputId)}
                   onDismissLocal={dismissPromptSubmission}
                 />
                 {!hasSession && selectedProject && !goalMode ? (
@@ -880,6 +867,8 @@ function ConversationPane({
                   draft={draft}
                   sending={sending}
                   running={Boolean(activeRun)}
+                  followUpRunId={activeRun?.id}
+                  lastAcceptedInputId={sessionView?.inputs.at(-1)?.id}
                   interrupting={interrupting}
                   models={models}
                   selectedModel={currentModel}
@@ -919,7 +908,7 @@ function ConversationPane({
                   attachmentPreparation={attachmentPreparation}
                   attachmentInteractionEnabled={attachmentSupport.interactionEnabled}
                   onDraftChange={setDraft}
-                  onSubmit={() => void submitDraft()}
+                  onSubmit={(delivery) => void submitDraft(delivery)}
                   onCommand={executeComposerCommand}
                   onPickFiles={() => pickAttachmentFiles(composerScope)}
                   onDropFiles={(files) => addDroppedAttachments(composerScope, files)}

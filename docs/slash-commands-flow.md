@@ -1,7 +1,7 @@
 # Slash Commands Flow
 
 > 状态：当前 daemon/TUI 主线。斜杠命令**不是**通用 `runCommand`；按三层分流。
-> 呈现/派发层在 `@rzx/client`（`dispatchSessionCommand`），TUI/Web/Desktop 共用。
+> TUI 的 `dispatchSessionCommand` 负责命令的呈现和派发。它用 `@rzx/client` 操作会话和作业，用 `@vykor/daemon-admin` 的对应入口发送管理请求。
 > 命令清单参考 [slash-commands.md](./slash-commands.md)；daemon 协议见 [daemon-application-architecture.md](./daemon-application-architecture.md)、[client-sync-flow.md](./client-sync-flow.md)。
 
 ## 目标
@@ -17,7 +17,7 @@
 
 - Server **不**托管旧 REPL `slash-commands.ts` registry。
 - Server catalog（`GET /commands`）只提供元数据；状态变更走资源 API。
-- 呈现层（拼系统消息、调 `VykorClient`）放在 `@rzx/client`，不绑 TUI React。
+- TUI 的命令模块生成系统消息，通过宿主提供的资源执行请求。命令模块可脱离 React 测试。
 
 ## 分层
 
@@ -30,7 +30,7 @@
                              │ slash line
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  @rzx/client  dispatchSessionCommand(host)               │
+│  TUI 命令模块  dispatchSessionCommand(host)                      │
 │  · parseSlashLine / mergeCommandDetails / LOCAL_COMMAND_*        │
 │  · /config /memory /jobs list|show|cancel /background … 呈现 + API│
 │  · emit(text) 把系统消息交回宿主                                  │
@@ -67,8 +67,8 @@
 | Skill input materializer | `packages/server/src/application/session/interactions/session-input-materializer.ts` | 校验结构化 Skill 输入，并在执行前生成“先调用 Skill 工具”的 Agent 输入 |
 | Native Skill tool | `packages/tools/src/meta/skill.ts` | 按注册表读取实际 `SKILL.md`，返回 Skill 文件、根目录和正文 |
 | Application services | `packages/server/src/application/default-application-services.ts` | settings/memory/git/plugins 等命令依赖 |
-| Shared dispatch | `packages/application-client/src/commands/session-commands.ts` | 呈现层 + 资源 API 调用 |
-| TUI adapter | `apps/frontend/src/hooks/sessionSlashCommands.ts` | React ctx → `SessionCommandHost` |
+| TUI 命令派发 | `apps/frontend/src/hooks/commands/session-commands.ts` | 生成文案，按命令调用公开会话或后台管理资源 |
+| TUI adapter | `apps/frontend/src/hooks/commands/sessionSlashCommands.ts` | React ctx → `SessionCommandHost` |
 | TUI sync | `apps/frontend/src/hooks/useServerSync.ts` | `/new` `/resume`、template busy、admitPrompt |
 | TUI App | `apps/frontend/src/App.tsx` | 本地 UI 命令（theme/sessions/permissions…） |
 | Helpers（非执行器） | `apps/cli/src/commands/slash-helpers.ts` | prompt/profile 格式化，供 daemon-services |
@@ -117,11 +117,11 @@
 
 Web/Desktop 应复用同一语义：session 命令仍由宿主或共享 dispatcher 处理；Skill 则统一提交普通 prompt 和结构化 items。Desktop 中从 `/` 或 `$` 菜单选中 Skill 时只插入行内 Skill 引用，不立即发送；用户发送后才调用 `admitPrompt`。消息列表根据 text part 的 `metadata.items` 显示 Skill 名称，不显示绝对路径或 `SKILL.md` 正文。
 
-## SessionCommandHost（共享契约）
+## TUI 的 SessionCommandHost
 
 ```ts
 type SessionCommandHost = {
-  client: VykorClient;
+  client: SessionCommandClient;
   sessionId?: string;
   cwd: string;
   model?: string;

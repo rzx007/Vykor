@@ -22,6 +22,24 @@ function fixture(acquireEnvironment?: (...args: any[]) => Promise<any>) {
 }
 
 describe("BackgroundShellService admission adapter", () => {
+  it("refreshes the session owner while retaining a tool's captured settings", async () => {
+    const observed: unknown[] = [];
+    const f = fixture(async (owner, effective) => {
+      observed.push({ mode: owner.metadata.runtime?.approvalMode, enabled: effective.sandbox.enabled });
+      return { workspace: { executionRoot: owner.cwd }, paths: { resolve: async () => ({ mountPurpose: "workspace", executionPath: owner.cwd }) },
+        process: {}, release: async () => {} };
+    });
+    try {
+      f.store.sessions.update("session", { metadata: { runtime: { model: "offline", approvalMode: "full_access" } } });
+      const ports = f.service.admissionForSession(f.store.sessions.get("session")!);
+      f.store.sessions.update("session", { metadata: { runtime: { model: "offline", approvalMode: "ask" } } });
+      const environment = await ports.acquireEnvironment({ id: "captured", cwd: f.cwd, sessionId: "session", requestNamespace: "tool", command: "echo old",
+        settings: { ...settings, permission: { mode: "ask" }, sandbox: { enabled: true } } });
+      await environment.release();
+      expect(observed).toEqual([{ mode: "ask", enabled: true }]);
+    } finally { await f.close(); }
+  });
+
   it("combines a delayed WSL startup retry with real durable ownership and executionCwd", async () => {
     const dir = mkdtempSync(join(tmpdir(), "oh-wsl-start-cwd-"));
     const store = new SessionStore({ path: join(dir, "store.db") });

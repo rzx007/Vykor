@@ -1,14 +1,13 @@
+import type { AttachmentAssetRecord, UploadAttachmentInput } from "@rzx/client"
 import { mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import type {
-  AttachmentAssetRecord,
   AttachmentStorageGcResult,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-  UploadAttachmentInput,
-} from "@vykor/application-client"
+} from "../../../../shared/attachment-types"
 import { vi } from "vitest"
 
 import { createSolidPng } from "../../image-preview/safe-image-test-bytes"
@@ -64,10 +63,12 @@ export function createService(
         get: overrides.getAttachment ?? vi.fn(),
         download: overrides.downloadAttachment ?? vi.fn(),
         delete: overrides.deleteAttachment ?? vi.fn(),
-        scanStorage: overrides.scanStorage ?? vi.fn(),
-        repairStorage: overrides.repairStorage ?? vi.fn(),
-        gcStorage: overrides.gcStorage ?? vi.fn(),
       },
+    }),
+    getStorageClient: async () => ({
+      scanStorage: overrides.scanStorage ?? vi.fn(),
+      repairStorage: overrides.repairStorage ?? vi.fn(),
+      gcStorage: overrides.gcStorage ?? vi.fn(),
     }),
     onOpenSource: overrides.onOpenSource,
     now: overrides.now,

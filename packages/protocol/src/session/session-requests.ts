@@ -40,6 +40,8 @@ export interface AdmitPromptInput {
   id?: string;
   sessionId: string;
   delivery?: InputDelivery;
+  /** Bind a steer to the running turn the caller observed. */
+  expectedActiveRunId?: string;
   /** Validated structured delivery required for this queued Run. */
   outputSchema?: Record<string, unknown>;
   items: SessionUserInputItem[];

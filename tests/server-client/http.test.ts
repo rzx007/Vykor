@@ -684,13 +684,13 @@ describe("VykorHttpServer", () => {
       },
       maintenance: {},
       schedules: {},
-      control: { runtimeSnapshot },
+      control: { runtimeSnapshot, healthSnapshot: () => ({ startedAt: 1, uptimeMs: 1, sessionCount: 0, activeRunCount: 0, queuedRunCount: 0 }) },
     } as any;
     const server = new VykorHttpServer({ application, logger: () => {} });
 
     const response = await server.app.request("/health");
     expect(response.status).toBe(200);
-    expect(runtimeSnapshot).toHaveBeenCalledOnce();
+    expect(runtimeSnapshot).not.toHaveBeenCalled();
     await server.close();
     expect(close).not.toHaveBeenCalled();
   });
@@ -3253,6 +3253,7 @@ describe("VykorHttpServer", () => {
         acquireGlobalMutation: vi.fn(() => ({ release })),
         closeAllRuntimes,
         invalidateRuntimes,
+        healthSnapshot: () => ({ startedAt: 0, uptimeMs: 0, sessionCount: 0, activeRunCount: 0, queuedRunCount: 0 }),
         runtimeSnapshot: () => ({
           startedAt: 0,
           uptimeMs: 0,
@@ -5592,15 +5593,23 @@ describe("VykorHttpServer", () => {
   });
 
   it("promotes a durable queued prompt into the active run without executing it twice", async () => {
+    const apply = deferred();
     const release = deferred();
     let executionCount = 0;
     let steeredContent = "";
     const runtimeFactory: TestAgentProgramFactory = {
       async createRuntime() {
         return {
-          async runPrompt(input) {
+          async runPrompt(input, run) {
             executionCount += 1;
-            steeredContent = (await input.waitForSteer()).content;
+            await run.emit({ type: "input.applied", data: { revision: 1, inputIds: ["active-input"] } });
+            const followUp = await input.waitForSteer();
+            steeredContent = followUp.content;
+            await apply.promise;
+            await run.emit({
+              type: "input.applied",
+              data: { revision: 2, inputIds: ["active-input", followUp.id] },
+            });
             await release.promise;
           },
           async close() {},
@@ -5609,7 +5618,7 @@ describe("VykorHttpServer", () => {
     };
 
     await withServer(
-      async ({ baseUrl, token }) => {
+      async ({ baseUrl, token, server }) => {
         const headers = { ...auth(token), "content-type": "application/json" };
         await fetch(`${baseUrl}/sessions`, {
           method: "POST",
@@ -5620,7 +5629,7 @@ describe("VykorHttpServer", () => {
           await fetch(`${baseUrl}/sessions/s1/prompts`, {
             method: "POST",
             headers,
-            body: JSON.stringify({ content: "active" }),
+            body: JSON.stringify({ id: "active-input", content: "active" }),
           })
         ).json()) as { run: { id: string } };
         await waitForEvent(
@@ -5660,32 +5669,46 @@ describe("VykorHttpServer", () => {
           };
           active_run: { id: string };
         };
-        expect(response.status).toBe(200);
-        expect(promoted).toMatchObject({
-          queued_run: {
-            id: queued.run.id,
-            status: "interrupted",
-            metadata: {
-              promotion: { kind: "steered", activeRunId: active.run.id },
+        try {
+          expect(response.status).toBe(200);
+          expect(promoted).toMatchObject({
+            queued_run: {
+              id: queued.run.id,
+              status: "pending",
+              metadata: {
+                promotion: { kind: "steering", activeRunId: active.run.id, accepted: true },
+              },
             },
-          },
-          active_run: { id: active.run.id },
-        });
-        expect(steeredContent).toBe("adjust now");
-        expect(executionCount).toBe(1);
-
-        release.resolve();
-        await waitForEvent(
-          baseUrl,
-          token,
-          (event) =>
-            event.type === "session.run.updated" &&
-            (event.payload?.run as { id?: string; status?: string } | undefined)
-              ?.id === active.run.id &&
-            (event.payload?.run as { status?: string } | undefined)?.status ===
-              "completed",
-        );
-        expect(executionCount).toBe(1);
+            active_run: { id: active.run.id },
+          });
+          const hasFollowUpMessage = () => server.store.conversations.listMessages("s1")
+            .some(message => message.inputId === queued.input.id && message.runId === active.run.id);
+          expect(hasFollowUpMessage()).toBe(false);
+          apply.resolve();
+          await vi.waitFor(() => {
+            expect(server.store.runs.getRun(queued.run.id)).toMatchObject({
+              status: "interrupted",
+              metadata: { promotion: { kind: "steered", activeRunId: active.run.id } },
+            });
+          });
+          expect(hasFollowUpMessage()).toBe(true);
+          expect(steeredContent).toBe("adjust now");
+          release.resolve();
+          await waitForEvent(
+            baseUrl,
+            token,
+            (event) =>
+              event.type === "session.run.updated" &&
+              (event.payload?.run as { id?: string; status?: string } | undefined)
+                ?.id === active.run.id &&
+              (event.payload?.run as { status?: string } | undefined)?.status ===
+                "completed",
+          );
+          expect(executionCount).toBe(1);
+        } finally {
+          apply.resolve();
+          release.resolve();
+        }
       },
       { runtimeFactory },
     );

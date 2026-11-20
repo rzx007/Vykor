@@ -199,7 +199,6 @@ describe("FileViewer image rendering", () => {
           searchQuery={searchQuery}
           searchMatchIndex={-1}
           searchMatches={[]}
-          onOpenHtmlInBrowser={vi.fn()}
         />
       )
     })

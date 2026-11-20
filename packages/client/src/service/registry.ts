@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
+import { resolveDataRootSelection, resolveUserDataPaths } from "@vykor/host-config/paths";
 import { normalizeDaemonBaseUrl } from "../transport/http-transport.js";
 
 /** Identifies one registered local daemon instance, including its credential. */
@@ -15,8 +15,16 @@ export interface ServiceEndpoint {
 }
 
 export function registryFile(env: Record<string, string | undefined> = process.env): string {
-  const config = env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor");
-  return resolve(env.VYKOR_DATA_DIR ?? join(config, "data"), "daemon", "registry.json");
+  const selection = resolveDataRootSelection({ env });
+  return registryFileForRoot(selection.dataRoot, env);
+}
+
+/** A previously guarded selection avoids a second selection race during startup. */
+export function registryFileForRoot(dataRoot: string, env: Record<string, string | undefined>): string {
+  // Retain the legacy data override until the migration preflight owns it.
+  return env.VYKOR_DATA_DIR === undefined
+    ? resolveUserDataPaths(dataRoot).daemonRegistryFilePath
+    : resolve(env.VYKOR_DATA_DIR, "daemon", "registry.json");
 }
 
 export function pidAlive(pid: number): boolean {

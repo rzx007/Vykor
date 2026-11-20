@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type SetStateAction 
 import {
   VykorClient,
   SessionSyncController,
+  VykorApiError,
   createPromptRequestId,
   createInitialClientState,
   readSessionRuntimeConfig,
@@ -9,12 +10,11 @@ import {
   isWorkMode,
   readSessionModelUsage,
   selectSessionModelRetry,
-  type CommandCatalogEntry,
   type ModelProviderInfo,
   type VykorClientState,
-  type PresentationReadRequest,
   type SessionRecord,
-} from "@vykor/application-client";
+} from "@rzx/client";
+import type { CommandCatalogEntry } from "@vykor/daemon-admin/workspace";
 
 import type { FrontendConfig, McpServerSnapshot, TranscriptItem } from "../types";
 import {
@@ -28,14 +28,12 @@ import {
 } from "../jobs/job-remote-state";
 import type { TuiAction, TuiSessionController } from "./sessionController";
 import { bucketToTranscript, splitStreamingAssistant } from "./transcript";
+import { hasActiveRun, mergeCommandDetails, type PresentationReadRequest } from "./commands/session-commands";
 import {
-  hasActiveRun,
-  mergeCommandDetails,
-} from "./sessionSlashCommands";
-import {
-  createDaemonClient,
+  createDaemonConnection,
   executeTuiAction,
   firstPendingPermission,
+  isAskUserRequest,
   mcpServerSnapshot,
   permissionToModal,
   recoverableInterruptedRuns,
@@ -45,6 +43,7 @@ import {
   statusSessionMode,
   stringSetting,
   type DefaultRuntimeSettings,
+  type TuiDaemonAdmin,
 } from "./sync-submodules";
 
 export { sessionRuntimeMetadata, shouldAutoActivateSession } from "./sync-submodules";
@@ -91,6 +90,8 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
   const [mcpServers, setMcpServers] = useState<McpServerSnapshot[]>([]);
 
   const clientRef = useRef<VykorClient | null>(null);
+  const adminRef = useRef<(() => TuiDaemonAdmin) | null>(null);
+  const observedStateRef = useRef(clientState);
   const activeSessionIdRef = useRef<string | undefined>(undefined);
   const commandCatalogRef = useRef<CommandCatalogEntry[]>([]);
   const defaultRuntimeRef = useRef<DefaultRuntimeSettings>({
@@ -121,6 +122,16 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
   const mcpAbortRef = useRef<AbortController | null>(null);
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
+
+  const getPendingInteraction = useCallback(() => {
+    const currentSession = activeSessionIdRef.current;
+    const pending = firstPendingPermission(observedStateRef.current, currentSession);
+    return pending?.sessionId === currentSession ? pending : undefined;
+  }, []);
+
+  useEffect(() => {
+    observedStateRef.current = createInitialClientState();
+  }, [daemon?.url, daemon?.token]);
 
   useEffect(() => {
     activeSessionIdRef.current = activeSessionId;
@@ -355,9 +366,9 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
   }, []);
 
   const refreshSettings = useCallback(async (): Promise<void> => {
-    const client = clientRef.current;
-    if (!client) return;
-    const settings = await client.system.getSettings();
+    const admin = adminRef.current?.();
+    if (!admin) return;
+    const settings = await admin.system.getSettings();
     setShowReasoning(settings.showReasoning === true);
   }, []);
 
@@ -412,6 +423,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
 
   const commitClientState = useCallback(
     (state: VykorClientState, coalesce: boolean) => {
+      observedStateRef.current = state;
       if (!coalesce) {
         clearPendingClientState();
         setClientState(state);
@@ -485,18 +497,21 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
       return;
     }
     let cancelled = false;
-    const client = createDaemonClient(daemon);
-    if (!client) return;
+    const connection = createDaemonConnection(daemon);
+    if (!connection) return;
+    const { client, getAdmin } = connection;
     clientRef.current = client;
+    adminRef.current = getAdmin;
 
     void (async () => {
       try {
         await client.protocol.health();
         const cwd = daemon.cwd ?? process.cwd();
+        const { catalog, system } = getAdmin();
         const [settings, sessions, commands] = await Promise.all([
-          client.system.getSettings().catch(() => ({}) as Record<string, unknown>),
+          system.getSettings().catch(() => ({}) as Record<string, unknown>),
           client.sessions.list({ cwd, limit: 20 }),
-          client.system.listCommands({ cwd }).catch(() => [] as CommandCatalogEntry[]),
+          catalog.listCommands({ cwd }).catch(() => [] as CommandCatalogEntry[]),
         ]);
         const model = daemon.model ?? stringSetting(settings.model) ?? "default";
         setShowReasoning(settings.showReasoning === true);
@@ -546,6 +561,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
     return () => {
       cancelled = true;
       clientRef.current = null;
+      adminRef.current = null;
     };
   }, [activateSession, daemon?.cwd, daemon?.maxTurns, daemon?.model, daemon?.approvalMode, daemon?.workMode, daemon?.permissionMode, daemon?.pluginsEnabled, daemon?.sessionMode, daemon?.token, daemon?.url, reportError]);
 
@@ -640,7 +656,7 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
     const pending = firstPendingPermission(clientState, activeSessionId);
     if (!pending) {
       shownPermissionIdRef.current = undefined;
-      if (modal?.kind === "permission") setModal(null);
+      if (modal?.kind === "permission" || modal?.kind === "question") setModal(null);
       return;
     }
     if (shownPermissionIdRef.current === pending.id) return;
@@ -718,8 +734,11 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
 
   const sendRequest = useCallback(
     (action: TuiAction): void => {
+      const sendingClient = clientRef.current;
       executeTuiAction(action, {
         clientRef,
+        getAdmin: () => adminRef.current?.(),
+        getPendingInteraction,
         activeSessionIdRef,
         clientState,
         setClientState,
@@ -735,7 +754,6 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
         localBusy,
         setLocalBusy,
         setSubmittedRun,
-        setModal,
         setSelectRequest,
         clearDisplayRequest,
         showDisplayRequest,
@@ -756,10 +774,17 @@ export function useServerSync(config: FrontendConfig, onError?: (message: string
         jobDetailGenerationRef,
         jobControlAbortRef,
       }).catch((error) => {
+        if (action.type === "question_response" && clientRef.current === sendingClient) {
+          const pending = getPendingInteraction();
+          const alreadySettled = error instanceof VykorApiError && (error.status === 404 || error.status === 409);
+          if (!alreadySettled && pending?.id === action.request_id && isAskUserRequest(pending)) {
+            setModal(current => current?.request_id === pending.id ? permissionToModal(pending) : current);
+          }
+        }
         reportError(error instanceof Error ? error.message : String(error));
       });
     },
-    [activateSession, cacheFirstRead, clearDisplayRequest, clientState, createAndSwitchSession, daemon, loadJobDetail, localBusy, pushSystem, refreshJobs, refreshSettings, reportAuxiliaryError, reportError, returnToHome, setStatusAndDefault, showDisplayRequest],
+    [activateSession, cacheFirstRead, clearDisplayRequest, clientState, createAndSwitchSession, daemon, getPendingInteraction, loadJobDetail, localBusy, pushSystem, refreshJobs, refreshSettings, reportAuxiliaryError, reportError, returnToHome, setStatusAndDefault, showDisplayRequest],
   );
 
   const bucket = activeSessionId ? clientState.buckets[activeSessionId] : undefined;

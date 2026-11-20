@@ -4,7 +4,7 @@ import type {
   UpdateNoteInput,
   NoteOrganizationSnapshotRecord,
   SaveNoteOrganizationInput,
-} from "@vykor/application-client"
+} from "@vykor/protocol"
 import { IpcChannels } from "../../../shared/ipc-channels"
 import { describe, expect, it, vi } from "vitest"
 

@@ -6,6 +6,8 @@
 
 Protocol 只负责 HTTP/SSE 通信格式、公开 DTO、请求解码、序列化、错误和协议版本。相同的规范数据可以被明确再导出；能力宿主、存储命令、配置默认值和执行策略不从 Protocol 暴露。当前协议 7 移除 S1 操作人工核对 API，使用新结果引用格式；沿用既有错误格式与持久结构。
 
+公开 Agent HTTP 操作见 [OpenAPI 3.1 JSON](../apps/client-docs/public/agent-openapi.json) 和 [HTTP 接入说明](../apps/client-docs/src/content/docs/reference/agent-http.mdx)。操作 ID 与公开 SDK 资源方法对应。测试对照 SDK 实际请求和 daemon 已装配路由。
+
 | 规范来源 | 正式入口与职责 |
 | --- | --- |
 | `@vykor/json-data/json` | `JsonValue`、JSON 对象检查、确定性序列化和显式有界复制；没有包根入口 |
@@ -40,7 +42,7 @@ GET /capabilities
   "serverVersion": "0.1.0",
   "protocol": { "version": 7 },
   "features": {
-    "steer": 1,
+    "steer": 2,
     "runAttempts": 1,
     "toolAttempts": 1,
     "jobs": 3,
@@ -71,11 +73,15 @@ Feature 用于同一基本协议下的能力选择。例如客户端使用 Workf
 
 ## 请求解码
 
+运行中补充使用 `features.steer >= 2`。向 `POST /sessions/:id/prompts` 发送 `delivery: "steer"`、稳定的 Input ID 和 `expectedActiveRunId`，只能把输入交给该会话的指定 Run。目标过期返回 409。带附件、插件能力、插件应用上下文、观察授权或结构化输出要求的输入走排队。旧客户端省略目标时仍走原有补充合同。Client SDK 在发送带目标的请求前检查能力版本。
+
 结构化交付使用附加能力 `features.structuredDelivery = 1`。`POST /sessions/:id/prompts` 可指定纯数据 `outputSchema`，仅对新排队 Run 生效；Server 在保存输入前拒绝未支持的 Schema 约束、超过 64 KiB 的 Schema、`steer` 更换合同和活跃子运行更换合同。相同输入 ID 必须保持同一 Schema，重放沿用原合同。
 
 Client 提交 `outputSchema` 前检查该附加能力，不支持时不发送 Prompt，避免旧服务忽略格式要求。业务核验函数只在可信 SDK 宿主中配置，不能通过 HTTP 传入。完成结果见 Run 的 `metadata.delivery`，含 `status`、`summary`、`data`、`validation`、`verification`；格式有效且没有宿主业务核验时保持 `not_requested`，不能等同于业务验收或 Goal 完成。支持的格式子集见 [Kernel 交付](../packages/agent-runtime/src/kernel/delivery/README.md)。
 
 会话授权管理是同一基础协议下的附加能力，`features.permissionApprovals = 1`。`GET /permissions/approvals` 返回当前可复用的会话工具授权；`POST /permissions/:requestId/revoke` 撤销所选当前授权，返回持久撤销记录。撤销保留原批准记录，后续调用重新询问；单次批准不能通过此入口撤销为另一种决定。
+
+`AskUser` 与普通审批共用请求列表、`permission.asked` 与 `permission.replied` 事件和 `POST /permissions/:id/reply`。客户端用 `toolName: "AskUser"` 与 `payload.input.kind: "question"` 识别提问，按请求 ID 用 `status: "approved"`、`decision: "once"` 和字符串 `answer` 提交用户回复。会话级工具批准无法代答后续提问。Goal 等待用户的回答走 Goal action，提交当前 `questionId`、目标版本和 `response`。
 
 已清理工作目录的绑定维护使用附加能力 `features.gitWorktreeBindings = 1`。`POST /sessions/:sessionId/worktree-cleared` 仅接收原绑定 `{id, path, branch}`，要求会话已归档、绑定匹配且目录确实不存在（`ENOENT`）。它只移除 `metadata.desktop.worktree`，保留 `settingsRoot` 和其余元数据，持久保存并发布会话更新；已无绑定时幂等。普通归档会话编辑仍被禁止。客户端检查返回的会话身份、归档状态和绑定已移除；目录已删但更新失败时保留待刷新记录，重试只更新绑定。
 

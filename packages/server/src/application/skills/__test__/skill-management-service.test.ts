@@ -22,6 +22,15 @@ afterEach(async () => {
 });
 
 describe("SkillManagementService", () => {
+  it("renders builtin create instructions with its explicit personal skills directory", async () => {
+    const root = await temp();
+    const configDir = join(root, "embedded-config");
+    const service = createSkillManagementService({ projects: { list: () => [] }, configDir, standardSkillsDirs: [] });
+    const snapshot = await service.list();
+    const create = required(snapshot.skills, "create-skill");
+    expect(create.content).toContain(`${join(configDir, "skills").replaceAll("\\", "/")}/<skill-name>/`);
+    expect(create.description).not.toContain("~/.vykor/skills");
+  });
   it("quietly skips removed project directories without hiding available skills", async () => {
     const root = await temp();
     const project = join(root, "valid");

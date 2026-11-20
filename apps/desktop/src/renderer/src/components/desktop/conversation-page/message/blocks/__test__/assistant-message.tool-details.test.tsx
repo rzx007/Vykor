@@ -1176,6 +1176,32 @@ describe("tool parameter and result display", () => {
     expect(container.textContent).not.toContain("结果")
   })
 
+  it.each([
+    ["completed", 0, "命令已退出 · 退出码 0"],
+    ["failed", 7, "命令失败 · 退出码 7"],
+    ["timed_out", 1, undefined],
+    ["interrupted", 1, undefined],
+    ["completed", null, undefined],
+  ])("uses Shell result metadata for %s with exit code %s", (status, exitCode, label) => {
+    render([
+      part("Shell", { command: "check" }, {
+        status: "running",
+      }),
+      part("Shell", {}, {
+        id: "result-1",
+        seq: 2,
+        type: "tool_result",
+        isError: status !== "completed",
+        metadata: { status, exitCode },
+        output: "FAIL: original diagnostic",
+      }),
+    ])
+    click("运行命令")
+    expect(container.querySelector("[data-shell-output]")?.textContent).toBe("FAIL: original diagnostic")
+    if (label) expect(container.textContent).toContain(label)
+    else expect(container.textContent).not.toContain("退出码")
+  })
+
   it("shows the completed-file summary when a legacy edit's result has arrived", () => {
     render([
       part(

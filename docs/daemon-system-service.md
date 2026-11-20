@@ -4,11 +4,11 @@
 
 ## 一句话结论
 
-`~/.vykor/settings.json` 中的 `daemon.autoStart` 决定主 daemon 是否交给操作系统常驻。开启后，Vykor 会在当前用户登录时启动主 daemon；daemon 意外退出时，Windows 计划任务、macOS LaunchAgent 或 Linux systemd user service 会重新启动它。
+`dataRoot/settings.json`（默认 `~/.vykor/settings.json`）中的 `daemon.autoStart` 决定主 daemon 是否交给操作系统常驻。开启后，Vykor 会在当前用户登录时启动主 daemon；daemon 意外退出时，Windows 计划任务、macOS LaunchAgent 或 Linux systemd user service 会重新启动它。服务命令显式携带同一个数据根，不依赖操作系统服务进程猜测当前目录。
 
-TUI、Web、Desktop、Scheduled Tasks 和 Agent 仍然连接同一个主 daemon。
+TUI、Web 和 Desktop 可以连接同一个本机 daemon。已安排任务和 Agent 在该进程内执行。
 
-Desktop 的「设置 → 常规 → 后台持续运行」使用同一配置和系统服务。CLI 与 Desktop 都通过 `@vykor/server/daemon-host` 的 controller 协调配置期望、系统服务真实状态、失败恢复和最终复核。打包后的 Desktop 自身提供无界面的 `--daemon-service` 入口；Windows 计划任务通过 `--daemon-watchdog` 做单次健康检查，macOS 和 Linux 的用户服务直接托管 `--daemon-service`。这些入口不会创建窗口、托盘、桌面宠物或更新器。
+Desktop 的「设置 → 常规 → 后台持续运行」使用同一配置和系统服务。CLI 与 Desktop 都通过 `@vykor/server/daemon-host` 的 controller 协调配置期望、系统服务真实状态、失败恢复和最终复核。打包后的 Desktop 自身提供无界面的 `--daemon-service` 入口；Windows 计划任务通过 `--daemon-watchdog` 做单次健康检查，macOS 和 Linux 的用户服务直接托管 `--daemon-service`。按需启动使用 `--daemon-on-demand`。这些入口不会创建窗口、托盘、桌面宠物或更新器。
 
 ## 配置
 
@@ -21,7 +21,7 @@ Desktop 的「设置 → 常规 → 后台持续运行」使用同一配置和�
 ```
 
 - `true`：登录后自动启动，异常退出后自动恢复。
-- `false`：不注册系统启动项。TUI、print 或 Desktop 需要本地 daemon 时仍会按需启动，但操作系统不会在登录或崩溃后恢复它；无人打开应用时，已安排任务也不会执行。
+- `false`：不注册系统启动项。TUI、print 或 Desktop 需要本地 daemon 时仍会按需启动，但操作系统不会在登录或崩溃后恢复它。已经启动的按需后台可以继续运行，直到被明确停止或用户退出登录。
 - 默认值是 `false`。
 - 这是机器级设置，只读取用户目录的 `settings.json`；项目目录里的 `.vykor/settings.json` 不能覆盖它。
 
@@ -72,7 +72,7 @@ flowchart TD
     Health --> Ready["TUI / Web / Desktop 可以连接"]
 ```
 
-macOS 和 Linux 会把普通输出追加到 `~/.vykor/data/logs/daemon.log`。Windows 的每次计划任务只做一次健康检查：daemon 正常就立即退出，不正常才启动 daemon。Windows 通过系统自带的无窗口脚本宿主运行检查，因此每分钟执行时不会弹出终端窗口。服务端自己的结构化日志仍使用原来的日志目录。
+macOS 和 Linux 会把普通输出追加到 `dataRoot/data/logs/daemon.log`。Windows 的每次计划任务只做一次健康检查：daemon 正常就立即退出，不正常才启动 daemon；无窗口启动器位于 `dataRoot/data/daemon/daemon-watchdog.vbs`，检查与普通后台使用同一根。服务端自己的结构化日志仍使用根内日志目录。
 
 ## TUI 自动连接时怎么处理
 
@@ -86,30 +86,20 @@ ensureLocalDaemon
   -> 不正常且关闭：按需启动后台 daemon
 ```
 
-如果当前 CLI 比正在运行的 daemon 更新，已安装系统服务会先刷新自己的启动命令，再启动新 daemon。这样不会出现“系统服务一份、TUI 又偷偷启动一份”的情况。
+CLI 先检查已运行后台的协议和鉴权。后台版本与 CLI 版本可以不同。遇到旧版且协议不兼容的后台时，先安全停掉旧实例再连接。
 
-## 启动模式与桌面接管
+## 登记、复用和数据切换
 
-daemon 写入的 `registry.json` 会记录它是被谁、以什么模式启动的：
+Desktop 和 CLI 的默认本机后台共用登记位置。登记记录包含实际地址、进程 ID、数据库路径、访问 token 和启动归属。后台在打开会话库前取得该位置的独占权，停机后清理自己的记录。桌面用实际协议与浏览器能力判断是否复用。CLI 也会验证已登记后台的协议与 token。
 
-- `executionSurface: "desktop_managed"`：Desktop 内置 daemon 和 Desktop 系统服务 daemon。支持沙箱执行环境与「环境终端」。
-- `executionSurface: "cli_advanced"`：CLI 的 `vk serve`（以及 `vk`、`vk daemon start`、`vk channels serve` 按需拉起的 daemon）。只支持本机终端。
+同一后台运行时可以由系统服务或客户端按需启动。桌面无需在发现兼容 CLI 后台时重启它。若登记进程仍存活但后台暂时不可达，连接报告可重试状态。显式远程监听和自定义 CLI 数据库沿用各自的启动参数。
 
-连接规则：
-
-- CLI 各入口继续「有 ready daemon 就复用」，不因启动模式不同而重启。
-- Desktop 只复用 `desktop_managed` 的 daemon。若注册的是 CLI daemon：
-  - `daemon.autoStart` 关闭：停掉该 daemon（SIGTERM → 5 秒 → 强制结束），清空 registry，启动内置桌面 daemon。
-  - `daemon.autoStart` 开启：卸载当前系统服务，停掉残留进程，安装桌面入口的系统服务（Windows `--daemon-watchdog`，macOS/Linux `--daemon-service`），等桌面托管 daemon 就绪后连接。
-
-Desktop 服务/watchdog 的健康检查同样要求 registry 是 `desktop_managed`，否则视为不可复用；接管前会先停掉存活的 CLI daemon，避免两个 daemon 争抢同一会话库。
-
-只在 registry 指向本机（loopback）地址时才执行停止操作；远程或无法确认的地址直接报错。
+整根迁移由[本机迁移协调器](./data-root-migration.md)先私有备份服务原定义，再暂停常驻并等待已核对身份的后台退出。目标服务定义携带目标根，独立验证通过后才提交和启动新进程；父进程不原地换库。原本未安装或未启用的服务不会被迁移顺带启用。目标写入一旦放行，启动失败只做向前修复，不能自动切回旧副本；源在恢复中放行后也遵守相同的新写入保护。
 
 ## 崩溃和正常停止
 
 - daemon 崩溃：macOS 和 Linux 会在几秒内重启；Windows 会在下一次每分钟健康检查时启动。
-- `vk daemon stop`：通过系统管理器停止，不会立即被当作崩溃拉起。
+- `vk daemon stop` 停止系统启动项及后台进程。CLI 在发出进程停止信号前，用登记 token 核对后台自己报告的 PID。如果 Windows 后台还在启动且尚未登记，命令会报告后台正忙。旧后台若无法提供身份，请通过操作系统停止。
 - `vk daemon start`：重新交给系统管理器启动。
 - `vk daemon uninstall`：停止并删除启动配置。
 - daemon 重启后：SessionStore 会把上次未结束的 run、task、permission 和 Scheduled Task 运行记录收口为已中断，再恢复可继续的持久化状态。

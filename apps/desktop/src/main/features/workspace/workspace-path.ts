@@ -1,5 +1,6 @@
 import { realpath, stat } from "node:fs/promises"
 import { join, posix, sep, win32 } from "node:path"
+import { resolveManagedHistoryPath } from "@vykor/host-config/paths"
 
 export type WorkspaceFileScope = "project" | "extra-root"
 
@@ -17,6 +18,7 @@ export type WorkspaceAllowedRoots = {
   skillsDir: string
   userProfilePath: string
   outsideProjectRoot: string
+  managedWorkspaceRoots?: string[]
 }
 
 export type PathFlavor = {
@@ -57,11 +59,16 @@ export async function resolveWorkspaceOpenTarget(
 ): Promise<{ path: string; isDirectory: boolean }> {
   if (typeof path !== "string" || !path.trim()) throw new Error("路径不能为空。")
   if (typeof rootPath !== "string" || !rootPath.trim()) throw new Error("项目路径不能为空。")
+  path = await resolveManagedHistoryPath(stripLocationSuffix(path), roots.configDir)
 
-  const classification = classifyWorkspacePath(path, { ...roots, projectRoot: rootPath }, {
-    win32,
-    posix,
-  })
+  const classification = classifyWorkspacePath(
+    path,
+    { ...roots, projectRoot: rootPath },
+    {
+      win32,
+      posix,
+    }
+  )
   if (!classification) throw new Error("文件必须位于当前项目目录内。")
 
   const candidate =
@@ -76,7 +83,12 @@ export async function resolveWorkspaceOpenTarget(
   }
 
   const rootsWithProject = { ...roots, projectRoot: rootPath }
-  if (!stillInsideAllowedRoot(absolutePath, classification, rootPath, rootsWithProject, { win32, posix })) {
+  if (
+    !stillInsideAllowedRoot(absolutePath, classification, rootPath, rootsWithProject, {
+      win32,
+      posix,
+    })
+  ) {
     throw new Error("文件必须位于当前项目目录内。")
   }
 
@@ -98,11 +110,8 @@ export function stillInsideAllowedRoot(
         ? classification.relativePath === "USER.md"
           ? roots.userProfilePath
           : roots.skillsDir
-        : roots.outsideProjectRoot
-  return (
-    isPathInside(absolutePath, checkRoot, pathOps.win32) ||
-    isPathInside(absolutePath, checkRoot, pathOps.posix)
-  )
+        : classification.rootPath
+  return isInsideAny(absolutePath, checkRoot, pathOps)
 }
 
 export function classifyWorkspacePath(
@@ -119,9 +128,10 @@ export function classifyWorkspacePath(
     if (matched) return matched
   }
 
-  if (isWindowsAbsolutePath(toForwardSlashes(stripExtendedPrefix(cleaned)))) return null
+  // 绝对路径必须命中允许根，不能剥去根前缀后当作项目相对路径。
+  if (candidates.length > 0) return null
 
-  const relativePath = toForwardSlashes(cleaned).replace(/^\.\//, "").replace(/^\//, "")
+  const relativePath = toForwardSlashes(cleaned).replace(/^\.\//, "")
   if (!relativePath || relativePath === ".." || relativePath.startsWith("../")) return null
 
   return {
@@ -149,7 +159,7 @@ function collectAbsoluteCandidates(
     candidates.push(pathOps.posix.normalize(posixForm))
     for (const root of extraMappingRoots(roots)) {
       if (!root) continue
-      const drive = pathOps.win32.parse(pathOps.win32.resolve(root)).root
+      const drive = pathOps.win32.parse(root).root
       if (!isWindowsDriveRoot(drive)) continue
       candidates.push(pathOps.win32.resolve(drive, posixForm.replace(/^\//, "")))
     }
@@ -159,7 +169,13 @@ function collectAbsoluteCandidates(
 }
 
 function extraMappingRoots(roots: WorkspaceAllowedRoots): string[] {
-  return [roots.projectRoot, roots.skillsDir, roots.configDir, roots.outsideProjectRoot]
+  return [
+    roots.projectRoot,
+    roots.skillsDir,
+    roots.configDir,
+    roots.outsideProjectRoot,
+    ...(roots.managedWorkspaceRoots ?? []),
+  ]
 }
 
 function matchAllowedRoot(
@@ -192,15 +208,10 @@ function matchAllowedRoot(
     }
   }
 
-  if (roots.outsideProjectRoot && isInsideAny(candidate, roots.outsideProjectRoot, pathOps)) {
-    return classification(
-      "extra-root",
-      roots.outsideProjectRoot,
-      candidate,
-      roots.outsideProjectRoot,
-      "项目外工作区",
-      pathOps
-    )
+  for (const root of [roots.outsideProjectRoot, ...(roots.managedWorkspaceRoots ?? [])]) {
+    if (root && isInsideAny(candidate, root, pathOps)) {
+      return classification("extra-root", root, candidate, root, "项目外工作区", pathOps)
+    }
   }
 
   return null
@@ -225,21 +236,22 @@ function classification(
 }
 
 function toPosixRelative(root: string, candidate: string, pathOps: WorkspacePathOps): string {
-  const flavor = looksWindowsAbsolute(candidate) || looksWindowsAbsolute(root) ? pathOps.win32 : pathOps.posix
+  const flavor =
+    looksWindowsAbsolute(candidate) || looksWindowsAbsolute(root) ? pathOps.win32 : pathOps.posix
   return toForwardSlashes(flavor.relative(flavor.resolve(root), flavor.resolve(candidate)))
 }
 
 function isInsideAny(candidate: string, root: string, pathOps: WorkspacePathOps): boolean {
-  if (!root) return false
-  return isPathInside(candidate, root, pathOps.win32) || isPathInside(candidate, root, pathOps.posix)
+  if (!root || looksWindowsAbsolute(candidate) !== looksWindowsAbsolute(root)) return false
+  return looksWindowsAbsolute(root)
+    ? isPathInside(candidate, root, pathOps.win32)
+    : isPathInside(candidate, root, pathOps.posix)
 }
 
 function isSameFile(left: string, right: string, pathOps: WorkspacePathOps): boolean {
-  if (!right) return false
-  return (
-    normalizeComparable(left, pathOps.win32) === normalizeComparable(right, pathOps.win32) ||
-    normalizeComparable(left, pathOps.posix) === normalizeComparable(right, pathOps.posix)
-  )
+  if (!right || looksWindowsAbsolute(left) !== looksWindowsAbsolute(right)) return false
+  const flavor = looksWindowsAbsolute(right) ? pathOps.win32 : pathOps.posix
+  return normalizeComparable(left, flavor) === normalizeComparable(right, flavor)
 }
 
 function normalizeComparable(path: string, pathApi: PathFlavor): string {

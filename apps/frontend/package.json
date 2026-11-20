@@ -7,16 +7,18 @@
     "dev": "bun --watch src/index.tsx",
     "build": "bun run build.ts",
     "check-types": "tsc --noEmit",
-    "test": "bun test src",
+    "test": "bun test --preload ./src/__test__/setup-isolated-host.ts src",
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@vykor/application-client": "workspace:*",
+    "@rzx/client": "workspace:*",
+    "@vykor/daemon-admin": "workspace:*",
     "@vykor/themes": "workspace:*",
     "@opentui/core": "catalog:",
     "@opentui/react": "catalog:",
     "diff": "catalog:",
-    "react": "catalog:"
+    "react": "catalog:",
+    "@vykor/host-config": "workspace:*"
   },
   "devDependencies": {
     "@vykor/server": "workspace:*",

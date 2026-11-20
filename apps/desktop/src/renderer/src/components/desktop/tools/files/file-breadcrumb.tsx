@@ -38,7 +38,7 @@ export function FileBreadcrumb({
                   title={label}
                   className="text-ui-small font-semibold text-ui-foreground"
                 >
-                  {label}
+                  <span className="min-w-0 truncate">{label}</span>
                 </BreadcrumbPage>
               ) : (
                 <BreadcrumbLink

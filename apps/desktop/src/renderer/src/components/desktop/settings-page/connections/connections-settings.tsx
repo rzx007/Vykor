@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react"
-import type { ChannelDenialNotice } from "@vykor/application-client"
+import type { ChannelDenialNotice } from "@vykor/protocol"
 import {
   CircleCheck,
   CircleHelp,

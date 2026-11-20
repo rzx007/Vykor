@@ -1,5 +1,9 @@
 import type { DesktopCustomProviderInput, DesktopInputSupport } from "@shared/provider-types"
-import { headersFromRows, type RequestHeaderRow } from "./request-header-form"
+import {
+  headersFromRows,
+  type RequestHeaderError,
+  type RequestHeaderRow,
+} from "./request-header-form"
 
 export interface CustomProviderModelRow {
   key: string
@@ -25,7 +29,14 @@ export interface CustomProviderFormState {
 
 export type CustomProviderFormValidation =
   | { ok: true; value: DesktopCustomProviderInput }
-  | { ok: false; field: "id" | "displayName" | "baseUrl" | "models" | "headers"; message: string }
+  | {
+      ok: false
+      field: "id" | "displayName" | "baseUrl" | "models" | "headers"
+      message: string
+      rowKey?: string
+      modelField?: "id" | "contextWindow" | "maxOutputTokens"
+      headerError?: RequestHeaderError
+    }
 
 type ModelLimitParse = { kind: "blank" } | { kind: "ok"; value: number } | { kind: "invalid" }
 
@@ -41,6 +52,8 @@ function parseModelLimit(raw: string): ModelLimitParse {
 export function validateCustomProviderForm(
   form: CustomProviderFormState
 ): CustomProviderFormValidation {
+  const displayName = form.displayName.trim()
+  if (!displayName) return { ok: false, field: "displayName", message: "请输入显示名称。" }
   const id = form.id.trim().toLowerCase()
   if (!/^[a-z0-9][a-z0-9_-]*$/.test(id)) {
     return {
@@ -49,8 +62,6 @@ export function validateCustomProviderForm(
       message: "供应商 ID 只能包含小写字母、数字、连字符或下划线。",
     }
   }
-  const displayName = form.displayName.trim()
-  if (!displayName) return { ok: false, field: "displayName", message: "请输入显示名称。" }
   const baseUrl = form.baseUrl.trim()
   try {
     const url = new URL(baseUrl)
@@ -72,26 +83,52 @@ export function validateCustomProviderForm(
     contextWindow: parseModelLimit(model.contextWindow),
     maxOutputTokens: parseModelLimit(model.maxOutputTokens),
   }))
-  if (models.some((model) => !model.id)) {
-    return { ok: false, field: "models", message: "模型 ID 不能为空。" }
-  }
-  if (new Set(models.map((model) => model.id)).size !== models.length) {
-    return { ok: false, field: "models", message: "模型 ID 不能重复。" }
-  }
-  if (
-    models.some(
-      (model) => model.contextWindow.kind === "invalid" || model.maxOutputTokens.kind === "invalid"
-    )
-  ) {
+  const emptyModel = models.findIndex((model) => !model.id)
+  if (emptyModel !== -1) {
     return {
       ok: false,
       field: "models",
+      rowKey: form.models[emptyModel].key,
+      modelField: "id",
+      message: "模型 ID 不能为空。",
+    }
+  }
+  const ids = new Set<string>()
+  for (const [index, model] of models.entries()) {
+    if (ids.has(model.id)) {
+      return {
+        ok: false,
+        field: "models",
+        rowKey: form.models[index].key,
+        modelField: "id",
+        message: "模型 ID 不能重复。",
+      }
+    }
+    ids.add(model.id)
+  }
+  const invalidLimits = models.findIndex(
+    (model) => model.contextWindow.kind === "invalid" || model.maxOutputTokens.kind === "invalid"
+  )
+  if (invalidLimits !== -1) {
+    return {
+      ok: false,
+      field: "models",
+      rowKey: form.models[invalidLimits].key,
+      modelField:
+        models[invalidLimits].contextWindow.kind === "invalid"
+          ? "contextWindow"
+          : "maxOutputTokens",
       message: "上下文窗口和最大输出要填大于 0 的整数，留空表示自动匹配。",
     }
   }
   const headersResult = headersFromRows(form.headers, form.secretHeaderNames)
   if (!headersResult.ok) {
-    return { ok: false, field: "headers", message: headersResult.message }
+    return {
+      ok: false,
+      field: "headers",
+      message: headersResult.message,
+      headerError: headersResult,
+    }
   }
   const apiKey = form.apiKey.trim()
   return {

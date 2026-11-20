@@ -32,6 +32,9 @@ function runtimeSnapshot() {
 function daemonControl(overrides: Record<string, unknown> = {}) {
   return {
     runtimeSnapshot,
+    healthSnapshot: () => ({
+      startedAt: 100, uptimeMs: 25, sessionCount: 2, activeRunCount: 1, queuedRunCount: 3,
+    }),
     acquireGlobalMutation: () => ({ release() {} }),
     acquireCwdMutation: () => ({ release() {} }),
     closeAllRuntimes: async () => {},
@@ -184,10 +187,10 @@ describe("system routes", () => {
     expect(gcAttachments).toHaveBeenCalledOnce();
   });
 
-  it("serves health from the runtime snapshot", async () => {
+  it("serves health without generating the diagnostic snapshot", async () => {
     const app = createSystemRoutes({
       version: "1.2.3",
-      control: daemonControl(),
+      control: daemonControl({ runtimeSnapshot: () => { throw new Error("Diagnostic scan is too expensive for health"); } }),
     });
 
     const response = await app.request("/health");

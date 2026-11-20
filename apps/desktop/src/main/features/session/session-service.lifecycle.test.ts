@@ -4,31 +4,16 @@ vi.mock("electron", () => ({ app: { getPath: () => "D:/test", getVersion: () => 
 vi.mock("../browser/browser-agent-service", () => ({ browserAgentService: {} }))
 import { DesktopSessionService } from "./session-service"
 import { DaemonConnectionService } from "./daemon-connection-service"
-import { IpcEvents } from "../../../shared/ipc-channels"
 beforeEach(() => vi.clearAllMocks())
-describe("safe settings data switch subscriptions", () => {
-  it("preserves current subscriptions when switch validation fails", async () => {
+describe("retired database-only switch", () => {
+  it("rejects old parameters before invalidating subscriptions or reaching the backend", async () => {
     const { service, connection } = serviceWithConnection()
     const clear = vi.spyOn(service.subscriptions, "clearAll")
-    vi.spyOn(connection, "switchDataDirectory").mockRejectedValue(new Error("active work"))
-    await expect(service.switchDataDirectory("D:/target")).rejects.toThrow("active work")
+    const backend = vi.spyOn(connection, "switchDataDirectory")
+    await expect(service.switchDataDirectory("D:/target", { storePath: "D:/target/sessions.db" })).rejects.toThrow(/用户数据根.*迁移/)
     expect(clear).not.toHaveBeenCalled()
+    expect(backend).not.toHaveBeenCalled()
     expect(send).not.toHaveBeenCalled()
-  })
-  it("resubscribes the original data after a failed switch rolls back", async () => {
-    const { service, connection, invalidate } = serviceWithConnection()
-    const replacement = {} as never
-    const replace = vi.spyOn(service.activitySubscriptions, "replaceClient").mockResolvedValue(undefined)
-    vi.spyOn(connection, "getClient").mockResolvedValue(replacement)
-    vi.spyOn(connection, "getDaemonStatus").mockReturnValue({ phase: "ready", message: "recovered", updatedAt: 1 })
-    vi.spyOn(connection, "switchDataDirectory").mockImplementation(async () => {
-      invalidate()
-      throw new Error("recovered original data")
-    })
-    await expect(service.switchDataDirectory("D:/target")).rejects.toThrow("recovered original data")
-    expect(replace).toHaveBeenCalledWith(replacement)
-    expect(send).toHaveBeenCalledWith(IpcEvents.sessionDaemonRestarted)
-    expect(send).not.toHaveBeenCalledWith(IpcEvents.sessionDataDirectoryChanged)
   })
 })
 

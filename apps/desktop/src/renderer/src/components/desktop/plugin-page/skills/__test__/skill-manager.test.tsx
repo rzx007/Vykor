@@ -2,6 +2,7 @@
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import type { DesktopSkillMarketplaceCatalog } from "@shared/skill-types"
 import { SkillManager, type SkillManagerProps } from "../skill-manager"
 
 vi.mock("streamdown", () => ({
@@ -85,7 +86,28 @@ let props: SkillManagerProps
 const api = {
   snapshot: vi.fn(async () => filteredSnapshot()),
   remove: vi.fn(async () => filteredSnapshot()),
+  marketplace: vi.fn<() => Promise<DesktopSkillMarketplaceCatalog>>(async () => [
+    {
+      id: "market-sample",
+      name: "market-sample",
+      displayName: "市场示例",
+      description: "测试技能",
+      version: "1.0.0",
+      license: "MIT",
+      artifact: { sha256: "a".repeat(64), size: 100, url: "https://example.com/sample.zip" },
+      source: {
+        repository: "https://github.com/example/skills",
+        commit: "a".repeat(40),
+        path: ".",
+      },
+    },
+  ]),
+  installMarketplace: vi.fn(async () => filteredSnapshot()),
 }
+const restartDaemon = vi.fn(async () => {})
+const openExternal = vi.fn(async () => {})
+const revealPath = vi.fn(async () => {})
+const trySkill = vi.fn(async () => {})
 const actEnvironment = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
 
 async function render(): Promise<void> {
@@ -102,6 +124,48 @@ async function click(node: Element | null | undefined): Promise<void> {
     node!.dispatchEvent(new MouseEvent("click", { bubbles: true }))
   })
 }
+
+it("passes the selected personal or current project scope to the skill installer", async () => {
+  await render()
+  await click(host.querySelector('[role="tab"][aria-label="浏览市场"]'))
+  const section = host.querySelector('[aria-label="技能市场"]')!
+  const install = () => section.querySelector('[aria-label="安装 市场示例"]')
+  await click(install())
+  expect(api.installMarketplace).toHaveBeenLastCalledWith({
+    id: "market-sample",
+    version: "1.0.0",
+    sha256: "a".repeat(64),
+    scope: "personal",
+  })
+  await click(section.querySelector('[aria-label="当前项目 · Vykor"]'))
+  expect(section.textContent).toContain(props.projectPath)
+  await click(install())
+  expect(api.installMarketplace).toHaveBeenLastCalledWith({
+    id: "market-sample",
+    version: "1.0.0",
+    sha256: "a".repeat(64),
+    scope: "project",
+    projectPath: props.projectPath,
+  })
+})
+
+it("lets the user safely restart an older daemon and reloads the official catalog", async () => {
+  api.marketplace.mockResolvedValueOnce(null)
+  await render()
+  await click(host.querySelector('[role="tab"][aria-label="浏览市场"]'))
+  expect(host.textContent).toContain("当前后台暂不支持技能市场")
+  expect(host.querySelector('[aria-label="安装范围"]')).toBeNull()
+  expect(restartDaemon).not.toHaveBeenCalled()
+
+  await click(
+    Array.from(host.querySelectorAll("button")).find(
+      (node) => node.textContent === "安全重启并重试"
+    )
+  )
+  expect(restartDaemon).toHaveBeenCalledOnce()
+  expect(api.marketplace).toHaveBeenCalledTimes(2)
+  expect(host.textContent).toContain("市场示例")
+})
 
 beforeEach(() => {
   actEnvironment.IS_REACT_ACT_ENVIRONMENT = true
@@ -122,7 +186,12 @@ beforeEach(() => {
   }))
   Object.defineProperty(window, "desktop", {
     configurable: true,
-    value: { skills: api },
+    value: {
+      skills: api,
+      maintenance: { restart: restartDaemon },
+      window: { openExternal },
+      workspace: { revealPath },
+    },
   })
   vi.clearAllMocks()
   api.snapshot.mockImplementation(async () => filteredSnapshot())
@@ -135,6 +204,7 @@ beforeEach(() => {
     refreshRequest: 0,
     projectPath: "D:/Vykor",
     notify: vi.fn(),
+    onTry: trySkill,
   }
 })
 afterEach(() => {
@@ -145,6 +215,38 @@ afterEach(() => {
 })
 
 describe("SkillManager filesystem management", () => {
+  it("opens the installed entry, reveals its location and starts a trial from the detail", async () => {
+    await render()
+    await click(host.querySelector('[aria-label*="release"]'))
+    const detail = document.querySelector('[role="dialog"]')!
+    expect(detail.querySelector('[aria-label="release 技能说明"]')?.textContent).toContain(
+      "# Release"
+    )
+    const more = detail.querySelector('[aria-label="release 更多操作"]')
+    await click(more)
+    await click(
+      [...document.querySelectorAll('[role="menuitem"]')].find(
+        (item) => item.textContent === "打开"
+      )
+    )
+    expect(openExternal).toHaveBeenCalledWith("file:///D:/Client/.vykor/skills/release/SKILL.md")
+    await click(more)
+    await click(
+      [...document.querySelectorAll('[role="menuitem"]')].find(
+        (item) => item.textContent === "在文件资源管理器中显示"
+      )
+    )
+    expect(revealPath).toHaveBeenCalledWith({
+      rootPath: "D:/Client/.vykor/skills/release/",
+      path: "SKILL.md",
+    })
+    await click(
+      [...detail.querySelectorAll("button")].find((item) => item.textContent === "立即试用")
+    )
+    expect(trySkill).toHaveBeenCalledWith(snapshot.skills[2])
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+  })
+
   it("loads all real sources and offers standard separately from personal", async () => {
     await render()
     expect(api.snapshot).toHaveBeenCalledWith({ projectPath: "D:/Vykor" })
@@ -152,7 +254,9 @@ describe("SkillManager filesystem management", () => {
     expect(host.querySelector('[aria-label="已安装技能"]')?.textContent).toContain("docs")
     expect(host.querySelector('[aria-label="已安装技能"]')?.textContent).toContain("archify")
     expect(
-      [...host.querySelectorAll('[role="tab"]')].map((node) => node.getAttribute("title"))
+      [...host.querySelectorAll('[aria-label="技能来源"] [role="tab"]')].map((node) =>
+        node.getAttribute("title")
+      )
     ).toEqual(["Vykor", "通用", "个人", "Client"])
     expect(host.textContent).not.toContain("系统")
     expect(host.textContent).not.toContain("推荐")
@@ -163,27 +267,28 @@ describe("SkillManager filesystem management", () => {
 
   it("filters project and VK global skills into their real categories", async () => {
     await render()
+    const sourcePanel = () => host.querySelector('[role="tabpanel"] [role="tabpanel"]')
     await click(
       [...host.querySelectorAll('[role="tab"]')].find(
         (node) => node.getAttribute("title") === "Client"
       )
     )
-    expect(host.querySelector('[role="tabpanel"]')?.textContent).toContain("release")
-    expect(host.querySelector('[role="tabpanel"]')?.textContent).not.toContain("docs")
+    expect(sourcePanel()?.textContent).toContain("release")
+    expect(sourcePanel()?.textContent).not.toContain("docs")
     await click(
       [...host.querySelectorAll('[role="tab"]')].find(
         (node) => node.getAttribute("title") === "个人"
       )
     )
-    expect(host.querySelector('[role="tabpanel"]')?.textContent).toContain("docs")
-    expect(host.querySelector('[role="tabpanel"]')?.textContent).not.toContain("archify")
+    expect(sourcePanel()?.textContent).toContain("docs")
+    expect(sourcePanel()?.textContent).not.toContain("archify")
     await click(
       [...host.querySelectorAll('[role="tab"]')].find(
         (node) => node.getAttribute("title") === "通用"
       )
     )
-    expect(host.querySelector('[role="tabpanel"]')?.textContent).toContain("archify")
-    expect(host.querySelector('[role="tabpanel"]')?.textContent).not.toContain("docs")
+    expect(sourcePanel()?.textContent).toContain("archify")
+    expect(sourcePanel()?.textContent).not.toContain("docs")
   })
 
   it("shows standard skills as read-only in details", async () => {

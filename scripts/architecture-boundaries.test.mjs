@@ -484,6 +484,41 @@ function policyFixture(files, run) {
   }
 }
 
+test("retired application client cannot return through code, a dependency, config, or the workspace tree", () => {
+  policyFixture({
+    "apps/tool/package.json": JSON.stringify({ name: "tool", devDependencies: { "@vykor/application-client": "workspace:*" } }),
+    "apps/tool/src/index.ts": 'import("@vykor/application-client/service");',
+    "packages/server/test-helpers/legacy.ts": 'export * from "../../application-client/src/index.js";',
+    "tests/server-client/tsconfig.json": JSON.stringify({ compilerOptions: { paths: { old: ["../../packages/application-client/src/index.ts"] } } }),
+    "package.json": JSON.stringify({ pnpm: { overrides: { alias: "npm:@vykor/application-client@0.1.0" } } }),
+    "pnpm-lock.yaml": "version: link:../../packages/application-client\n",
+    "turbo.json": JSON.stringify({ tasks: { "@vykor/application-client#build": {} } }),
+    "vitest.e2e.config.ts": 'export default { alias: "./packages/application-client/src/index.ts" };',
+    ".github/workflows/check.yml": "run: pnpm --filter @vykor/application-client test\n",
+    "packages/legacy-bridge.mts": 'export * from "./application-client/src/index.js";',
+    "apps/tool/src/similarly-named.ts": 'import("@vykor/application-client-tools");',
+    "apps/tool/README.md": "Historical `@vykor/application-client` details.",
+    "apps/tool/dist/index.js": 'require("@vykor/application-client");',
+    "scripts/retired-native-ui-allowlist.json": JSON.stringify({ old: "packages/application-client" }),
+  }, (directory, write) => {
+    const errors = () => collectArchitecturePolicyErrors(directory, strictPolicy()).errors;
+    const messages = errors();
+    for (const file of [
+      "apps/tool/package.json", "apps/tool/src/index.ts", "packages/server/test-helpers/legacy.ts", "tests/server-client/tsconfig.json",
+      "package.json", "pnpm-lock.yaml", "turbo.json", "vitest.e2e.config.ts", ".github/workflows/check.yml", "packages/legacy-bridge.mts",
+    ]) {
+      assert.ok(messages.some(message => message.startsWith(`${file}:`) && message.includes("retired workspace")), messages.join("\n"));
+    }
+    assert.equal(messages.length, 10);
+    write("packages/application-client/.turbo/generated.js", "module.exports = {};");
+    write("packages/application-client/node_modules/cache/package.json", "{}");
+    write("packages/application-client/dist/index.js", "module.exports = {};");
+    assert.deepEqual(errors(), messages);
+    write("packages/application-client/src/index.ts", "export const old = true;");
+    assert.ok(errors().some(message => message.startsWith("packages/application-client:") && message.includes("retired workspace")));
+  });
+});
+
 test("declaration origins expose renamed/star/local-import barrels and wrapped storage types", () => {
   for (const bridge of [
     'export { SessionStore as Hidden } from "@vykor/services";',
@@ -597,6 +632,15 @@ test("P2 execution resources have no storage or engine dependency and retired im
   assert.ok(targetPolicy.stageExceptions.every(item => !["P1", "P2"].includes(item.removeByPhase)));
 });
 
+test("database relocation alone may call the pure workflow relocation leaf", () => {
+  const permitted = { fromFile: "packages/services/src/database/data-root-relocation.ts", specifier: "@vykor/coordinator/workflow-relocation", resolvedFile: "packages/coordinator/src/workflow/path-relocation.ts", importedNames: ["relocateWorkflowSnapshotPaths"] };
+  assert.deepEqual(checkModuleDependency(permitted, strictPolicy()), []);
+  for (const fromFile of ["packages/services/src/database/session-database.ts", "packages/services/src/workflows/workflow-repository.ts", "packages/services/src/memory/session-memory.ts"])
+    assert.ok(checkModuleDependency({ ...permitted, fromFile }, strictPolicy()).length > 0);
+  for (const [specifier, resolvedFile] of [["@vykor/coordinator", "packages/coordinator/src/index.ts"], ["@vykor/coordinator/workflow", "packages/coordinator/src/workflow/index.ts"], ["@vykor/coordinator/unknown", undefined]])
+    assert.ok(checkModuleDependency({ ...permitted, specifier, resolvedFile }, strictPolicy()).length > 0);
+});
+
 test("P3 tools cannot import host implementations and coordinator entries stay pure", () => {
   const policy = strictPolicy();
   for (const specifier of ["@vykor/services", "@vykor/auth", "@vykor/mcp", "@vykor/skills", "@vykor/agent-runtime"]) {
@@ -621,13 +665,13 @@ test("portable code permits Vitest only in test files",()=>{
 });
 
 
-test("P0-P6 exceptions stay retired and Client directly depends only on Protocol", () => {
+test("P0-P6 exceptions stay retired and Client only adds the guarded Node root path entry", () => {
   assert.equal(targetPolicy.currentPhase, "P13");
   assert.deepEqual(targetPolicy.stageExceptions, []);
   assert.ok(targetPolicy.stageExceptions.every(item => Number(item.migrationId.slice(1)) >= 31 && Number(item.removeByPhase.slice(1)) > 7));
   assert.ok(targetPolicy.stageExceptions.every(item => /^package:(?:@vykor\/protocol(?:#|\/)|packages\/protocol\/)/.test(item.target)
     || item.target.startsWith("server-application-protocol:")), "P7 exceptions cannot reopen an unrelated old boundary");
-  assert.deepEqual(targetPolicy.packages["@rzx/client"].allowed, ["@vykor/protocol"]);
+  assert.deepEqual(targetPolicy.packages["@rzx/client"].allowed, ["@vykor/protocol", "@vykor/host-config"]);
   const fromFile = "packages/client/src/resource.ts";
   for (const input of [
     { specifier: "@vykor/agent-contracts", importedNames: ["McpCallResultData"], typeOnly: true },

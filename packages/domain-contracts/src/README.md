@@ -15,6 +15,7 @@
 | [memory](memory/README.md) | `@vykor/domain-contracts/memory` | 记忆条目和版本约束 |
 | [approvals](approvals/README.md) | `@vykor/domain-contracts/approvals` | 权限审批与自动评审记录 |
 | [plugin-apps](plugin-apps/README.md) | `@vykor/domain-contracts/plugin-apps` | 插件应用数据、请求校验与只读历史数据 |
+| [skills](skills/README.md) | `@vykor/domain-contracts/skills` | 技能市场条目、版本和安装范围 |
 | [workspace-changes](workspace-changes/README.md) | `@vykor/domain-contracts/workspace-changes` | 工作目录变更摘要与只读解析 |
 | [usage](usage/README.md) | `@vykor/domain-contracts/usage` | 模型价格与用量预算设置 |
 | [maintenance](maintenance/README.md) | `@vykor/domain-contracts/maintenance` | 保留策略与备份清单 |

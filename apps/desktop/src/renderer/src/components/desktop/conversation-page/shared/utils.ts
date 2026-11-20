@@ -1,5 +1,31 @@
+import type { KeyboardEvent } from "react"
 import type { DesktopModel, DesktopPermissionMode } from "@shared/session-types"
 import { permissionModeOptions } from "../composer/controls"
+
+export function stopChatOnEscape(event: KeyboardEvent<HTMLElement>, stop: () => void): void {
+  if (
+    event.key !== "Escape" ||
+    event.defaultPrevented ||
+    event.repeat ||
+    event.nativeEvent.isComposing ||
+    event.nativeEvent.keyCode === 229 ||
+    event.altKey ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.shiftKey ||
+    !(event.target instanceof Element) ||
+    !event.currentTarget.contains(event.target) ||
+    event.target.closest(
+      '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], [aria-haspopup][aria-expanded="true"]'
+    )
+  ) {
+    return
+  }
+
+  event.preventDefault()
+  event.stopPropagation()
+  stop()
+}
 
 export function resolveModelLabel(
   models: DesktopModel[],

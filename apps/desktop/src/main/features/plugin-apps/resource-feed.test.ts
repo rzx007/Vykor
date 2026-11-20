@@ -1,11 +1,13 @@
 import { expect, it, vi } from "vitest"
-import { VykorClient, CURRENT_PROTOCOL_VERSION } from "@vykor/application-client"
+import { HttpTransport, VykorClient, CURRENT_PROTOCOL_VERSION, type VykorClientOptions } from "@rzx/client"
+import { clientForPluginApps } from "./plugin-app-client"
 import { WindowResourceFeed } from "./resource-feed"
 import type { AppMountBinding } from "./plugin-app-service"
 
 it("shares one window stream, filters exact notices, and replaces old leases and clients", async () => {
   const streams: Array<{ signal: AbortSignal; watches: Array<{ leaseGeneration: number }>; emit(value: unknown): void }> = []
-  const makeClient = () => new VykorClient({ baseUrl: "http://localhost", token: "secret", fetch: async (url, init) => {
+  const makeClient = () => {
+    const options: VykorClientOptions = { baseUrl: "http://localhost", token: "secret", fetch: async (url, init) => {
     if (new URL(String(url)).pathname === "/capabilities") return Response.json({ serverVersion: "test", protocol: { version: CURRENT_PROTOCOL_VERSION }, features: { pluginApps: 1 } })
     expect(new Headers(init?.headers).get("authorization")).toBe("Bearer secret")
     return new Response(new ReadableStream({ start(controller) {
@@ -13,7 +15,9 @@ it("shares one window stream, filters exact notices, and replaces old leases and
         emit: value => controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(value)}\n\n`)) })
       init!.signal!.addEventListener("abort", () => controller.close(), { once: true })
     } }), { headers: { "content-type": "text/event-stream" } })
-  } })
+  } }
+    return clientForPluginApps(new VykorClient(options), new HttpTransport(options))
+  }
   const client = makeClient(), emit = vi.fn(), feed = new WindowResourceFeed(emit)
   const mount = (id: string) => ({ mountId: id, admitted: true, online: true, client,
     response: { source: { sessionId: "s", appId: id }, app: { backendKind: "mcp-server" }, lease: { token: id, backendGeneration: "g" } } }) as AppMountBinding

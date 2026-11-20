@@ -143,9 +143,17 @@ export async function requestPermissionDecision(
 ): Promise<AgentPermissionDecision> {
   if (!execution) return { status: "denied", reason: "No permission effect configured" };
   execution.scope.signal.throwIfAborted();
+  const appliedInputState = execution.getAppliedInputState?.();
   const requestId = `permission_${randomUUID()}`;
   await execution.emit({ type: "permission.requested", data: { requestId, request } });
-  const decision = await execution.effects.requestPermission(request, execution.scope);
+  const reviewed = await execution.effects.requestPermission(request, {
+    ...execution.scope,
+    ...(appliedInputState ? { appliedInputState } : {}),
+  });
+  const decision: AgentPermissionDecision =
+    appliedInputState && execution.getAppliedInputState?.().revision !== appliedInputState.revision
+      ? { status: "expired", reason: "approval_input_revision_changed" }
+      : reviewed;
   execution.scope.signal.throwIfAborted();
   await execution.emit({ type: "permission.resolved", data: { requestId, decision } });
   return decision;

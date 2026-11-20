@@ -1,4 +1,5 @@
 import { SessionStore } from "@vykor/services";
+import { assertCanonicalDataLocation } from "../daemon-host/data-location.js";
 
 import { getDefaultSessionStorePath } from "../daemon/paths.js";
 import {
@@ -10,6 +11,7 @@ export interface DefaultNodeApplicationOptions
   extends Omit<DaemonApplicationOptions, "store" | "ownsStore"> {
   store?: SessionStore;
   storePath?: string;
+  storeFileMustExist?: boolean;
   /** 外部传入 Store 时默认由外部关闭；需要 Application 关闭它时明确设为 true。 */
   ownsStore?: boolean;
 }
@@ -21,10 +23,12 @@ export interface DefaultNodeApplicationOptions
 export function createDefaultNodeApplication(
   options: DefaultNodeApplicationOptions,
 ): DaemonApplication {
+  if (!options.store && options.storePath === undefined) assertCanonicalDataLocation();
   const store =
     options.store ??
     new SessionStore({
       path: options.storePath ?? getDefaultSessionStorePath(),
+      fileMustExist: options.storeFileMustExist,
       attachmentLimits: options.attachmentLimits,
     });
   const ownsStore = options.ownsStore ?? !options.store;

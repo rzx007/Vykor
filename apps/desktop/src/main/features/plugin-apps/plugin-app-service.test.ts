@@ -1,6 +1,8 @@
 import { EventEmitter } from "node:events"
 import { expect, it, vi } from "vitest"
-import { VykorApiError, VykorClient, CURRENT_PROTOCOL_VERSION, type PluginAppResponse } from "@vykor/application-client"
+import { HttpTransport, VykorApiError, VykorClient, CURRENT_PROTOCOL_VERSION, type VykorClientOptions } from "@rzx/client"
+import type { PluginAppResponse } from "@vykor/protocol"
+import { clientForPluginApps, type PluginAppClient } from "./plugin-app-client"
 import { DesktopPluginAppService } from "./plugin-app-service"
 import { PluginAppDocumentStore } from "./document-store"
 const source = { sessionId: "session", appId: "app" }
@@ -11,7 +13,7 @@ const initial: PluginAppResponse = { source, app: { id: "app", sessionId: "sessi
 function fixture() {
   let state = structuredClone(initial), active = "session"
   const requests: unknown[] = [], close = vi.fn()
-  const client = new VykorClient({ baseUrl: "http://localhost", fetch: async (url, options) => {
+  const options: VykorClientOptions = { baseUrl: "http://localhost", fetch: async (url, options) => {
     const path = new URL(String(url)).pathname
     let body: unknown = state
     if (path === "/capabilities") body = { serverVersion: "test", protocol: { version: CURRENT_PROTOCOL_VERSION }, features: { pluginApps: 1 } }
@@ -22,7 +24,8 @@ function fixture() {
         runId: "run", status: "completed", executionState: "completed" }, result: { content: [], _meta: { private: true } } }
     } else if (path.endsWith("/close")) { close(); body = { app: { ...state.app, status: "closed" } } }
     return new Response(JSON.stringify(body), { headers: { "Content-Type": "application/json" } })
-  } })
+  } }
+  const client = clientForPluginApps(new VykorClient(options), new HttpTransport(options))
   let currentClient = client
   const token = {}, documents = new PluginAppDocumentStore()
   const messageReady = vi.fn(async () => true)
@@ -34,7 +37,7 @@ function fixture() {
     documents.authorizeRequest({ ownerId, url: mounted.url, resourceType: "subFrame", method: "GET", frameTreeNodeId: ownerId + 1, parentFrameTreeNodeId: 1, mainFrameTreeNodeId: 1 })
     documents.respond(new Request(mounted.url)); return mounted
   }
-  return { service, owner, mount, requests, messageReady, close, client, reconnect: () => { currentClient = Object.create(client) as VykorClient }, state: () => state, setState: (next: PluginAppResponse) => { state = next }, switchSession: () => { active = "other" } }
+  return { service, owner, mount, requests, messageReady, close, client, reconnect: () => { currentClient = Object.create(client) as PluginAppClient }, state: () => state, setState: (next: PluginAppResponse) => { state = next }, switchSession: () => { active = "other" } }
 }
 it("returns only the refreshed host tool policy and admits its declared argument budget", async () => {
   const f = fixture(), { mountId } = await f.mount()

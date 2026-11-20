@@ -32,9 +32,6 @@
       "@rzx/client": [
         "../../packages/client/src/index.ts"
       ],
-      "@vykor/application-client": [
-        "../../packages/application-client/src/index.ts"
-      ],
       "@vykor/commands": [
         "../../packages/commands/src/index.ts"
       ],
@@ -230,6 +227,7 @@
     }
   },
   "include": [
-    "*.test.ts"
+    "*.test.ts",
+    "__test__/**/*.test.ts"
   ]
 }

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { afterEach, describe, expect, it, vi } from "vitest"
+import { shell } from "electron"
 
 vi.mock("electron", () => ({
   clipboard: { writeText: vi.fn() },
@@ -24,6 +25,23 @@ import { maxImagePreviewBytes, workspaceService } from "./workspace-service"
 import { MAX_DOCUMENT_PREVIEW_BYTES } from "../../../shared/document-preview"
 
 const temporaryDirectories: string[] = []
+
+it("opens an explicitly linked external directory while protecting the configuration directory", async () => {
+  const rootPath = await createTemporaryDirectory()
+  const outside = await createTemporaryDirectory()
+  const configDir = await createTemporaryDirectory()
+  workspaceService.configureAllowedRoots({ configDir, workspacesDir: join(outside, "workspaces") })
+  vi.mocked(shell.openPath).mockResolvedValue("")
+  await workspaceService.revealPath({ rootPath, path: outside })
+  expect(shell.openPath).toHaveBeenCalledWith(outside)
+  await expect(workspaceService.revealPath({ rootPath, path: configDir })).rejects.toThrow()
+  const configLink = join(outside, "config-link")
+  await symlink(configDir, configLink, "junction")
+  await expect(workspaceService.revealPath({ rootPath, path: configLink })).rejects.toThrow()
+  const outsideFile = join(outside, "outside.txt")
+  await writeFile(outsideFile, "outside")
+  await expect(workspaceService.revealPath({ rootPath, path: outsideFile })).rejects.toThrow()
+})
 
 afterEach(async () => {
   await Promise.all(
@@ -240,11 +258,11 @@ describe("WorkspaceService.readFile extra-root", () => {
   it("reads a personal skill from an extra root", async () => {
     const project = await createTemporaryDirectory()
     const configDir = await createTemporaryDirectory()
-    const documentsPath = await createTemporaryDirectory()
+    const workspacesDir = await createTemporaryDirectory()
     const skillPath = join(configDir, "skills", "show-me", "SKILL.md")
     await mkdir(join(configDir, "skills", "show-me"), { recursive: true })
     await writeFile(skillPath, "# skill\n")
-    workspaceService.configureAllowedRoots({ configDir, documentsPath })
+    workspaceService.configureAllowedRoots({ configDir, workspacesDir })
 
     const result = await workspaceService.readFile({
       rootPath: project,
@@ -265,12 +283,12 @@ describe("WorkspaceService.readFile extra-root", () => {
   it("returns safe image bytes from an extra root", async () => {
     const project = await createTemporaryDirectory()
     const configDir = await createTemporaryDirectory()
-    const documentsPath = await createTemporaryDirectory()
+    const workspacesDir = await createTemporaryDirectory()
     const imagePath = join(configDir, "skills", "show-me", "preview.png")
     await mkdir(join(configDir, "skills", "show-me"), { recursive: true })
     const bytes = await createSolidPng(1, 1)
     await writeFile(imagePath, bytes)
-    workspaceService.configureAllowedRoots({ configDir, documentsPath })
+    workspaceService.configureAllowedRoots({ configDir, workspacesDir })
 
     const result = await workspaceService.readFile({
       rootPath: project,
@@ -289,7 +307,7 @@ describe("WorkspaceService.readFile extra-root", () => {
   it("does not follow a symlink that escapes the allowed root", async () => {
     const project = await createTemporaryDirectory()
     const configDir = await createTemporaryDirectory()
-    const documentsPath = await createTemporaryDirectory()
+    const workspacesDir = await createTemporaryDirectory()
     const outside = await createTemporaryDirectory()
     const target = join(outside, "secret.txt")
     await writeFile(target, "secret")
@@ -300,7 +318,7 @@ describe("WorkspaceService.readFile extra-root", () => {
     } catch {
       return
     }
-    workspaceService.configureAllowedRoots({ configDir, documentsPath })
+    workspaceService.configureAllowedRoots({ configDir, workspacesDir })
 
     await expect(workspaceService.readFile({ rootPath: project, path: link })).rejects.toThrow(
       "文件必须位于当前项目目录内。"
@@ -313,7 +331,7 @@ describe("WorkspaceService.readFile extra-root", () => {
     await writeFile(join(configDir, "credentials.json"), '{"token":"x"}')
     workspaceService.configureAllowedRoots({
       configDir,
-      documentsPath: await createTemporaryDirectory(),
+      workspacesDir: await createTemporaryDirectory(),
     })
 
     await expect(

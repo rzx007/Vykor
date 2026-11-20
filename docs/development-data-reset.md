@@ -6,18 +6,18 @@
 
 ## 1. 先确定精确叶子
 
-不要把 `VYKOR_CONFIG_DIR` 指向的整个目录直接列为删除目标。把实际使用的路径填进清单，并且每行只写一个 Vykor 独占叶子：
+先从当前应用确认实际 `dataRoot`，不要仅凭环境变量或默认 home 猜测。根也可能由 `.vykor-root.json` 定位记录选择。该记录和锁是启动元数据；完整根含会话、凭据和草稿，不能视为缓存或直接列为删除目标。整根迁移见[迁移与恢复](./data-root-migration.md)。把实际使用的路径填进清单，并且每行只写一个 Vykor 独占叶子：
 
 | 类别 | 精确叶子（按实际路径填写） | 建议允许根 | 可恢复性 |
 |---|---|---|---|
-| override config | `<VYKOR_CONFIG_DIR>\settings.json` | `VYKOR_CONFIG_DIR` | 删除后不可恢复；配置会回到默认值 |
-| override credentials | `<VYKOR_CONFIG_DIR>\credentials.json` | `VYKOR_CONFIG_DIR` | 删除后不可恢复；需要重新登录 |
-| channel config & secret | `<VYKOR_CONFIG_DIR>\channel-credentials.json` | `VYKOR_CONFIG_DIR` | 含渠道配置与密钥；删除后不可恢复，需要重新 `vk channels add feishu` |
-| override profile | `<VYKOR_CONFIG_DIR>\USER.md` | `VYKOR_CONFIG_DIR` | 删除后不可恢复 |
-| override runtime data | `<VYKOR_CONFIG_DIR>\data` | `VYKOR_CONFIG_DIR` | Session、Run、日志和任务不可恢复 |
-| override plugins | `<VYKOR_CONFIG_DIR>\plugins` | `VYKOR_CONFIG_DIR` | 安装状态与 cache 不可恢复 |
-| override skills | `<VYKOR_CONFIG_DIR>\skills` | `VYKOR_CONFIG_DIR` | 用户 Skill 不可恢复 |
-| override model cache | `<VYKOR_CONFIG_DIR>\cache\models-dev.json` | `VYKOR_CONFIG_DIR` | 可重新生成 |
+| override config | `<dataRoot>\settings.json` | 已确认的 `dataRoot` | 删除后不可恢复；配置会回到默认值 |
+| override credentials | `<dataRoot>\credentials.json` | 已确认的 `dataRoot` | 删除后不可恢复；需要重新登录 |
+| channel config & secret | `<dataRoot>\channel-credentials.json` | 已确认的 `dataRoot` | 含渠道配置与密钥；删除后不可恢复，需要重新 `vk channels add feishu` |
+| override profile | `<dataRoot>\USER.md` | 已确认的 `dataRoot` | 删除后不可恢复 |
+| override runtime data | `<dataRoot>\data` | 已确认的 `dataRoot` | Session、Run、日志和任务不可恢复 |
+| override plugins | `<dataRoot>\plugins` | 已确认的 `dataRoot` | 安装状态与 cache 不可恢复 |
+| override skills | `<dataRoot>\skills` | 已确认的 `dataRoot` | 用户 Skill 不可恢复 |
+| override model cache | `<dataRoot>\cache\models-dev.json` | 已确认的 `dataRoot` | 可重新生成 |
 | default config | `<HOME>\.vykor` 下与上面相同的精确叶子 | `<HOME>\.vykor` | 同上；不要把 HOME 列为目标 |
 | project | `<PROJECT>\.vykor` | 已确认的 `<PROJECT>` | 项目设置、memory 和局部数据不可恢复 |
 | Desktop preferences | `<Desktop userData>\desktop-preferences.json` | 精确的 Desktop userData | 删除后回到默认值 |
@@ -33,27 +33,27 @@
 
 ```powershell
 $WorkspaceRoot = 'D:\code\personal-project\Vykor'
-$ConfigRoot = if ($env:VYKOR_CONFIG_DIR) { $env:VYKOR_CONFIG_DIR } else { Join-Path $HOME '.vykor' }
+$DataRoot = '<填写当前应用实际选中的用户数据根绝对路径>'
 $ProjectRoot = '<填写项目根的精确绝对路径>'
 $DesktopUserDataRoot = '<填写 Electron 实际 userData 绝对路径>'
 $DesktopCacheRoot = '<填写 Electron 实际 cache 绝对路径>'
 
 $AllowedRoots = @(
-  $ConfigRoot,
+  $DataRoot,
   $ProjectRoot,
   $DesktopUserDataRoot,
   $DesktopCacheRoot
 ) | ForEach-Object { [IO.Path]::GetFullPath($_) }
 
 $Candidates = @(
-  @{ Name = 'settings'; InputPath = (Join-Path $ConfigRoot 'settings.json'); AllowedRoot = $ConfigRoot; Recoverable = $false },
-  @{ Name = 'credentials'; InputPath = (Join-Path $ConfigRoot 'credentials.json'); AllowedRoot = $ConfigRoot; Recoverable = $false },
-  @{ Name = 'channel-credentials'; InputPath = (Join-Path $ConfigRoot 'channel-credentials.json'); AllowedRoot = $ConfigRoot; Recoverable = $false },
-  @{ Name = 'profile'; InputPath = (Join-Path $ConfigRoot 'USER.md'); AllowedRoot = $ConfigRoot; Recoverable = $false },
-  @{ Name = 'runtime-data'; InputPath = (Join-Path $ConfigRoot 'data'); AllowedRoot = $ConfigRoot; Recoverable = $false },
-  @{ Name = 'plugins'; InputPath = (Join-Path $ConfigRoot 'plugins'); AllowedRoot = $ConfigRoot; Recoverable = $false },
-  @{ Name = 'skills'; InputPath = (Join-Path $ConfigRoot 'skills'); AllowedRoot = $ConfigRoot; Recoverable = $false },
-  @{ Name = 'model-cache'; InputPath = (Join-Path $ConfigRoot 'cache\models-dev.json'); AllowedRoot = $ConfigRoot; Recoverable = $true },
+  @{ Name = 'settings'; InputPath = (Join-Path $DataRoot 'settings.json'); AllowedRoot = $DataRoot; Recoverable = $false },
+  @{ Name = 'credentials'; InputPath = (Join-Path $DataRoot 'credentials.json'); AllowedRoot = $DataRoot; Recoverable = $false },
+  @{ Name = 'channel-credentials'; InputPath = (Join-Path $DataRoot 'channel-credentials.json'); AllowedRoot = $DataRoot; Recoverable = $false },
+  @{ Name = 'profile'; InputPath = (Join-Path $DataRoot 'USER.md'); AllowedRoot = $DataRoot; Recoverable = $false },
+  @{ Name = 'runtime-data'; InputPath = (Join-Path $DataRoot 'data'); AllowedRoot = $DataRoot; Recoverable = $false },
+  @{ Name = 'plugins'; InputPath = (Join-Path $DataRoot 'plugins'); AllowedRoot = $DataRoot; Recoverable = $false },
+  @{ Name = 'skills'; InputPath = (Join-Path $DataRoot 'skills'); AllowedRoot = $DataRoot; Recoverable = $false },
+  @{ Name = 'model-cache'; InputPath = (Join-Path $DataRoot 'cache\models-dev.json'); AllowedRoot = $DataRoot; Recoverable = $true },
   @{ Name = 'project-state'; InputPath = (Join-Path $ProjectRoot '.vykor'); AllowedRoot = $ProjectRoot; Recoverable = $false },
   @{ Name = 'desktop-preferences'; InputPath = (Join-Path $DesktopUserDataRoot 'desktop-preferences.json'); AllowedRoot = $DesktopUserDataRoot; Recoverable = $false },
   @{ Name = 'desktop-pet'; InputPath = (Join-Path $DesktopUserDataRoot 'desktop-pet.json'); AllowedRoot = $DesktopUserDataRoot; Recoverable = $false },

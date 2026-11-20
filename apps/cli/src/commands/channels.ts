@@ -1,6 +1,6 @@
 import { Command } from "commander";
 
-import type { ChannelRuntimeStatus } from "@vykor/application-client";
+import type { ChannelRuntimeStatus } from "@vykor/daemon-admin/channels";
 import { runChannelsAddFeishu, runChannelsAllow } from "./channels-onboarding.js";
 
 /**
@@ -127,8 +127,10 @@ function messageOf(error: unknown): string {
 async function createDefaultRuntimeClient(): Promise<ChannelsRuntimeClientLike> {
   const { ensureLocalDaemon } = await import("../ensure-daemon.js");
   const daemon = await ensureLocalDaemon();
-  const { VykorClient } = await import("@vykor/application-client");
-  return new VykorClient({ baseUrl: daemon.url, token: daemon.token });
+  const [{ HttpTransport }, { ChannelResource }] = await Promise.all([
+    import("@rzx/client"), import("@vykor/daemon-admin/channels"),
+  ]);
+  return { channels: new ChannelResource(new HttpTransport({ baseUrl: daemon.url, token: daemon.token })) };
 }
 
 async function runChannelsServe(): Promise<void> {
@@ -171,12 +173,15 @@ async function runChannelsStatus(): Promise<void> {
     console.log("daemon: not running；无法读取渠道配置");
     return;
   }
-  const { VykorClient } = await import("@vykor/application-client");
-  const client = new VykorClient({ baseUrl: daemon.url, token: daemon.token });
+  const [{ HttpTransport, ProtocolClient }, { ChannelResource }] = await Promise.all([
+    import("@rzx/client"), import("@vykor/daemon-admin/channels"),
+  ]);
+  const transport = new HttpTransport({ baseUrl: daemon.url, token: daemon.token });
+  const channels = new ChannelResource(transport);
   try {
-    await client.protocol.health();
-    const feishu = await client.channels.getFeishu();
-    const runtime = await client.channels.runtimeStatus();
+    await new ProtocolClient(transport).health();
+    const feishu = await channels.getFeishu();
+    const runtime = await channels.runtimeStatus();
     const connector = runtime.connectors.find((item) => item.connector === "feishu");
     const acl =
       feishu.allowFrom.length === 0
@@ -189,7 +194,7 @@ async function runChannelsStatus(): Promise<void> {
       `runtime: ${connector?.state ?? "unknown"}${connector?.lastError ? ` (${connector.lastError})` : ""}`,
     );
     if (feishu.botName) console.log(`bot: ${feishu.botName}`);
-    const status = await client.channels.getStatus({ connector: "feishu", limit: 10 });
+    const status = await channels.getStatus({ connector: "feishu", limit: 10 });
     console.log(
       `daemon: ready (${daemon.url}); conversations: ${status.conversations.length}; recent deliveries: ${status.deliveries.length}`,
     );

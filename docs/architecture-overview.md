@@ -6,7 +6,7 @@
 
 ## 一句话说明
 
-Vykor 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、Web、Desktop、Bot 和 Workflow 是不同入口，共用 Agent 生命周期客户端、Daemon Application、Session Runtime 存储和 Agent Runtime，不各自维护一套 Run 或会话真相。产品业务接口由私有应用客户端补充。
+Vykor 是一套可长期保存运行状态的 Agent 应用。CLI、TUI、Web、Desktop、Bot 和 Workflow 是不同入口，共用 Agent 生命周期客户端、Daemon Application、Session Runtime 存储和 Agent Runtime。运行与会话状态由 daemon 保存，产品通过各自的界面读取。
 
 ```text
 CLI / TUI / Web / Desktop / Bot / Workflow
@@ -42,7 +42,7 @@ await client.sessions.admitPrompt(sessionId, {
 await client.permissions.reply(requestId, { status: "approved", decision: "once" });
 ```
 
-公开实例只有 `protocol`、`runtime`、`sessions`、`permissions`、`attachments`、`jobs`、`events`、`files`。`runtime` 只查询已有模型、Agent persona、技能和会话 MCP 能力；`files` 按会话提供只读工作区访问。Client transport 负责 HTTP、SSE、鉴权、协议 header 和错误转换；Resource 负责把生命周期动作映射到 endpoint。Client state 先应用 snapshot，再按 SSE cursor 合并增量；`waitForRun` 复用这套流程等待指定 Run。首次快照或全局历史回放失败直接抛出；进入事件循环后，网络错误、5xx、408/425/429 触发退避重试，其他 4xx 会原样抛出并终止同步。产品业务通过私有 `@vykor/application-client` 接入，复用公开 SDK 的传输、资源和同步；执行授权仍由 Server 和 Node 判断。
+公开实例只有 `protocol`、`runtime`、`sessions`、`permissions`、`attachments`、`jobs`、`events`、`files`。`runtime` 只查询已有模型、Agent persona、技能和会话 MCP 能力；`files` 按会话提供只读工作区访问。Client transport 负责 HTTP、SSE、鉴权、协议 header 和错误转换；Resource 负责把生命周期动作映射到 endpoint。Client state 先应用 snapshot，再按 SSE cursor 合并增量；`waitForRun` 复用这套流程等待指定 Run。首次快照或全局历史回放失败直接抛出；进入事件循环后，网络错误、5xx、408/425/429 触发退避重试，其他 4xx 会原样抛出并终止同步。产品需要共享的 daemon 管理操作时，使用 `@vykor/daemon-admin` 对应入口。状态仍由 daemon 保存，操作授权由 Server 和 Node 判断。 [产品接入](./product-surface-integration.md)
 
 ### 2. Daemon Application
 
@@ -107,6 +107,7 @@ Runtime 不读取 daemon 数据库，不开 HTTP 服务，也不知道界面来�
 | --- | --- | --- |
 | live history、当前模型回合、root/child handle | Agent Runtime | Application 通过事件和 Handle 观察、控制 |
 | Session、Input、Run、Attempt、Message、Permission、Goal、Workflow | Repository / Transaction + SQLite | Application 编排；Client 通过 snapshot/SSE 读取 |
+| Desktop 便签正文、整理与修订 | Desktop 主进程的 Markdown 与独立 SQLite 索引 | Desktop 窗口通过 IPC 读写 |
 | 同 session 串行、operation lease、checkpoint/publish | `SessionOperationRunner` | Query/Command/Interaction 共用 |
 | 当前选中项、面板、草稿、连接展示 | 产品入口 | 不写成服务端业务真相 |
 | provider、文件、进程、Git、MCP、Sandbox | Node 宿主能力 | Runtime 通过明确接口调用 |
@@ -128,7 +129,8 @@ Runtime 不读取 daemon 数据库，不开 HTTP 服务，也不知道界面来�
 | `@vykor/agent-runtime` | Kernel 运行 Run/Child；Node 负责默认能力和资源生命周期 |
 | `@vykor/server` | Daemon Application、HTTP routes、运行编排、投影、恢复和运维 |
 | `@rzx/client` | 协议握手、HTTP/SSE transport、生命周期 Resources、reducer、同步控制器和指定 Run 等待 |
-| `@vykor/application-client` | 私有产品入口；笔记、渠道、调度、插件及市场、插件应用、Office、全局设置、提供商与登录、开发/终端管理和命令 |
+| `@vykor/daemon-admin` | 首方共享的私有 HTTP 子入口，按配置、知识、工作区、渠道、MCP 和插件划分 |
+| `@vykor/services/notes` | Desktop 便签的独立存储、旧库导入和只读备份校验 |
 | `@vykor/coordinator` / `@vykor/jobs` | Workflow 调度以及统一 Job 观察与控制 |
 | `apps/*` | CLI、TUI、Desktop、Website 等产品入口 |
 
@@ -136,7 +138,7 @@ Runtime 不读取 daemon 数据库，不开 HTTP 服务，也不知道界面来�
 
 ```text
 公开 Client / Server HTTP -> Protocol -> 领域、插件、JSON、Job/Terminal 纯数据子入口
-私有应用 Client -> 公开 Client + Protocol
+daemon-admin / Desktop HTTP 适配器 -> 公开 Client transport + Protocol
 Server application -> domain-contracts + Services + Node 宿主
 Services -> domain-contracts + 自己的存储命令
 Node -> plugin-contracts + Job/Terminal contracts + 执行/配置/权限模块

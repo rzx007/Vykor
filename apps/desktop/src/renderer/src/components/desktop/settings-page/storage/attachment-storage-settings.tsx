@@ -5,7 +5,7 @@ import type {
   AttachmentStorageGcResult,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-} from "@vykor/application-client"
+} from "@shared/attachment-types"
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "@renderer/components/ui/alert"
 import {
   AlertDialog,

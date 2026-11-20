@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { SessionGoal } from "@shared/session-types"
 import type { DesktopAttachmentDraft } from "@shared/attachment-types"
@@ -83,7 +84,7 @@ describe("goal actions", () => {
     resetDesktopSessionStore()
     useDesktopSessionStore.setState({ selectedModel: "test", workspaceMode: "outside_project" })
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           getGoal: vi.fn().mockResolvedValue(null),
           create: vi.fn().mockResolvedValue(emptySessionView("s1").session),

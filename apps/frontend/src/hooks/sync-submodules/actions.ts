@@ -2,12 +2,13 @@ import {
   createPromptRequestId,
   patchSessionRuntimeMetadata,
   normalizeApprovalMode,
-  type CommandCatalogEntry,
   type JobResource,
+  type PermissionRequestRecord,
   type VykorClient,
   type VykorClientState,
   type SessionRecord,
-} from "@vykor/application-client";
+} from "@rzx/client";
+import type { CommandCatalogEntry } from "@vykor/daemon-admin/workspace";
 
 import type { FrontendConfig } from "../../types";
 import {
@@ -22,10 +23,8 @@ import {
   type JobRemoteState,
 } from "../../jobs/job-remote-state";
 import type { TuiAction, TuiSessionController } from "../sessionController";
-import {
-  dispatchSessionSlashCommand,
-  parseSlashLine,
-} from "../sessionSlashCommands";
+import { dispatchSessionSlashCommand } from "../commands/sessionSlashCommands";
+import { parseSlashLine, type PresentationReadRequest } from "../commands/session-commands";
 import {
   archiveClientSession,
   listTopLevelSessions,
@@ -33,7 +32,8 @@ import {
   sessionRuntimeMetadata,
   sessionSelectOptions,
 } from "./view-model";
-import { normalizeSessionMode, statusSessionMode } from "./connection";
+import { normalizeSessionMode, statusSessionMode, type TuiDaemonAdmin } from "./connection";
+import { isAskUserRequest } from "./permissions";
 
 export const JOBS_AUXILIARY_SLASH_COMMANDS = new Set([
   "/agents",
@@ -45,12 +45,13 @@ export const JOBS_AUXILIARY_SLASH_COMMANDS = new Set([
 
 type ActionClient = Pick<
   VykorClient,
-  | "protocol" | "runtime" | "system" | "providers" | "auth" | "projects"
-  | "plugins" | "development" | "sessions" | "jobs" | "permissions"
+  "protocol" | "runtime" | "sessions" | "jobs" | "permissions"
 >;
 
 export interface ActionDispatcherContext {
   clientRef: { current: ActionClient | null };
+  getAdmin: () => TuiDaemonAdmin | undefined;
+  getPendingInteraction: () => PermissionRequestRecord | undefined;
   activeSessionIdRef: { current: string | undefined };
   clientState: VykorClientState;
   setClientState: React.Dispatch<React.SetStateAction<VykorClientState>>;
@@ -66,7 +67,6 @@ export interface ActionDispatcherContext {
   localBusy: boolean;
   setLocalBusy: (busy: boolean) => void;
   setSubmittedRun: (run: { sessionId: string; runId: string } | null) => void;
-  setModal: (modal: Record<string, unknown> | null) => void;
   setSelectRequest: React.Dispatch<React.SetStateAction<TuiSessionController["selectRequest"]>>;
   clearDisplayRequest: () => void;
   showDisplayRequest: (request: NonNullable<TuiSessionController["displayRequest"]>) => void;
@@ -79,7 +79,7 @@ export interface ActionDispatcherContext {
   refreshSettings?: () => void | Promise<void>;
   loadJobDetail: (client: Pick<VykorClient, "jobs">, sessionId: string, jobId: string) => Promise<void>;
   createAndSwitchSession: (title?: string) => Promise<SessionRecord | undefined>;
-  cacheFirstRead: (request: import("@vykor/application-client").PresentationReadRequest) => void;
+  cacheFirstRead: (request: PresentationReadRequest) => void;
   jobStateRef: { current: JobRemoteState };
   setJobState: React.Dispatch<React.SetStateAction<JobRemoteState>>;
   jobDetailStateRef: { current: JobDetailRemoteState };
@@ -118,7 +118,7 @@ export async function executeTuiAction(
       } else {
         const settingsPatch: Record<string, unknown> = { model };
         if (provider) settingsPatch.provider = provider;
-        await client.system.patchSettings(settingsPatch);
+        await ctx.getAdmin()?.system.patchSettings(settingsPatch);
         ctx.defaultRuntimeRef.current = {
           ...ctx.defaultRuntimeRef.current,
           model,
@@ -197,10 +197,11 @@ export async function executeTuiAction(
         return;
       }
 
-      let slashResult: Awaited<ReturnType<typeof dispatchSessionSlashCommand>>;
+      let slashResult: Awaited<ReturnType<typeof dispatchSessionSlashCommand>> = "unhandled";
       try {
-        slashResult = await dispatchSessionSlashCommand(slash, {
-          client,
+        const admin = slash && ctx.getAdmin();
+        if (admin) slashResult = await dispatchSessionSlashCommand(slash, {
+          client: { protocol: client.protocol, runtime: client.runtime, sessions: client.sessions, jobs: client.jobs, ...admin },
           sessionId,
           pushSystem: ctx.pushSystem,
           presentSystem: (title, content) => ctx.showDisplayRequest({ title, content }),
@@ -323,13 +324,14 @@ export async function executeTuiAction(
     case "permission_response": {
       if (!client) return;
       const requestId = action.request_id;
+      const pending = ctx.getPendingInteraction();
+      if (pending?.id !== requestId || isAskUserRequest(pending)) return;
       const allowed = action.allowed;
       await client.permissions.reply(requestId, {
         status: allowed ? "approved" : "denied",
         decision: action.scope === "session" ? "session" : "once",
         clientId: "tui",
       });
-      ctx.setModal(null);
       return;
     }
 
@@ -378,7 +380,11 @@ export async function executeTuiAction(
 
     case "question_response": {
       if (!client) return;
-      ctx.reportError("Interactive question responses are not available through the daemon client.");
+      const pending = ctx.getPendingInteraction();
+      if (pending?.id !== action.request_id || !isAskUserRequest(pending) || typeof action.answer !== "string") return;
+      await client.permissions.reply(pending.id, {
+        status: "approved", decision: "once", clientId: "tui", answer: action.answer,
+      });
       return;
     }
 

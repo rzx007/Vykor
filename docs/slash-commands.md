@@ -5,8 +5,8 @@
 > 交互主线是 daemon TUI：`GET /commands` catalog + client-local UI +
 > Skill 普通 prompt metadata。**流程权威文档**：[slash-commands-flow.md](./slash-commands-flow.md)。
 > 运行时以 TUI `/help` 与 `packages/server/src/commands/default-command-catalog.ts` 为准；
-> 共享呈现层在 `@rzx/client` `dispatchSessionCommand`；TUI 适配层
-> `apps/frontend/src/hooks/sessionSlashCommands.ts`。`slash-helpers.ts` 仅
+> 命令呈现和派发位于 TUI 的 `dispatchSessionCommand`，调用入口是
+> `apps/frontend/src/hooks/commands/sessionSlashCommands.ts`。`slash-helpers.ts` 仅
 > formatters。工具以 `ToolRegistry.getAll()` 为准。
 
 ## 斜杠命令（daemon / TUI 清单）

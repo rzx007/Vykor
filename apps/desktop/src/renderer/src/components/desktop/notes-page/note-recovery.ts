@@ -1,6 +1,7 @@
+import { recoveryRecord, trackBusinessDataTask } from "@renderer/lib/business-data"
+import { noteRecoverySchema } from "@shared/business-data-schema"
 export const NOTE_RECOVERY_STORAGE_KEY = "vykor.desktop.note-recovery-v1"
 export const NOTE_SELECTED_STORAGE_KEY = "vykor.desktop.notes-selected-id-v1"
-
 export interface NoteRecoveryDraft {
   draftId: string
   noteId: string | null
@@ -8,67 +9,84 @@ export interface NoteRecoveryDraft {
   content: string
   updatedAt: number
 }
-
 export interface NoteRecoveryPort {
-  write(draft: NoteRecoveryDraft): void
-  remove(draftId: string): void
+  write(draft: NoteRecoveryDraft): Promise<void> | void
+  remove(draftId: string): Promise<void> | void
 }
-
-function recoveryKey(scope: "main" | "quick"): string {
-  return scope === "main" ? NOTE_RECOVERY_STORAGE_KEY : `${NOTE_RECOVERY_STORAGE_KEY}:quick`
+function record(scope: "main" | "quick") {
+  return recoveryRecord({ kind: scope === "main" ? "notes" : "quick-notes" })
 }
-
-export function readRecoveryDrafts(
+export async function readRecoveryDrafts(
   storage: Storage = window.localStorage,
   scope: "main" | "quick" = "main"
-): NoteRecoveryDraft[] {
-  try {
-    const value: unknown = JSON.parse(storage.getItem(recoveryKey(scope)) ?? "null")
-    if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.drafts)) return []
-    if (!value.drafts.every(isRecoveryDraft)) return []
-    return value.drafts
-  } catch {
-    return []
+): Promise<NoteRecoveryDraft[]> {
+  const target = record(scope)
+  const raw = storage.getItem(
+    scope === "main" ? NOTE_RECOVERY_STORAGE_KEY : `${NOTE_RECOVERY_STORAGE_KEY}:quick`
+  )
+  if (raw) {
+    let value: unknown
+    try {
+      value = JSON.parse(raw)
+    } catch {
+      throw new Error("business-data notes import INVALID_JSON")
+    }
+    await target.importLegacy(raw, value)
   }
+  const saved = await target.read()
+  if (!saved) return []
+  const parsed = noteRecoverySchema.safeParse(saved.value)
+  if (!parsed.success) throw new Error("business-data notes read INVALID_VALUE")
+  return parsed.data.drafts
 }
-
 export function writeRecoveryDraft(
   storage: Storage,
   draft: NoteRecoveryDraft,
   scope: "main" | "quick" = "main"
-): void {
-  const drafts = new Map(readRecoveryDrafts(storage, scope).map((item) => [item.draftId, item]))
-  drafts.set(draft.draftId, draft)
-  writeDrafts(storage, [...drafts.values()], scope)
+): Promise<void> {
+  return trackBusinessDataTask(
+    `notes:${scope}`,
+    (async () => {
+      await readRecoveryDrafts(storage, scope)
+      await record(scope).update((value) => {
+        const drafts = new Map(
+          noteRecoverySchema
+            .parse(value ?? { version: 1, drafts: [] })
+            .drafts.map((item) => [item.draftId, item])
+        )
+        drafts.set(draft.draftId, draft)
+        return { version: 1, drafts: [...drafts.values()] }
+      })
+    })()
+  )
 }
-
 export function removeRecoveryDraft(
   storage: Storage,
   draftId: string,
   scope: "main" | "quick" = "main"
-): void {
-  const drafts = readRecoveryDrafts(storage, scope).filter((draft) => draft.draftId !== draftId)
-  if (drafts.length === 0) {
-    try {
-      storage.removeItem(recoveryKey(scope))
-    } catch {
-      // Saved Markdown files remain available when recovery storage is unavailable.
-    }
-    return
-  }
-  writeDrafts(storage, drafts, scope)
+): Promise<void> {
+  return trackBusinessDataTask(
+    `notes:${scope}`,
+    (async () => {
+      await readRecoveryDrafts(storage, scope)
+      await record(scope).update((value) => ({
+        version: 1,
+        drafts: noteRecoverySchema
+          .parse(value ?? { version: 1, drafts: [] })
+          .drafts.filter((draft) => draft.draftId !== draftId),
+      }))
+    })()
+  )
 }
-
 export function createNoteRecoveryPort(
   storage: Storage = window.localStorage,
   scope: "main" | "quick" = "main"
 ): NoteRecoveryPort {
   return {
     write: (draft) => writeRecoveryDraft(storage, draft, scope),
-    remove: (draftId) => removeRecoveryDraft(storage, draftId, scope),
+    remove: (id) => removeRecoveryDraft(storage, id, scope),
   }
 }
-
 export function readSelectedNoteId(storage: Storage = window.localStorage): string | null {
   try {
     return nonemptyString(storage.getItem(NOTE_SELECTED_STORAGE_KEY))
@@ -84,32 +102,6 @@ export function writeSelectedNoteId(storage: Storage, noteId: string | null): vo
   } catch {
     // Selection persistence is optional UI state.
   }
-}
-
-function writeDrafts(storage: Storage, drafts: NoteRecoveryDraft[], scope: "main" | "quick"): void {
-  try {
-    storage.setItem(recoveryKey(scope), JSON.stringify({ version: 1, drafts }))
-  } catch {
-    // A failed recovery cache must not stop the Markdown file save attempt.
-  }
-}
-
-function isRecoveryDraft(value: unknown): value is NoteRecoveryDraft {
-  if (!isRecord(value)) return false
-  const noteId = value.noteId
-  const revision = value.baseRevision
-  return (
-    nonemptyString(value.draftId) !== null &&
-    (noteId === null || nonemptyString(noteId) !== null) &&
-    (revision === null || (Number.isSafeInteger(revision) && Number(revision) >= 1)) &&
-    typeof value.content === "string" &&
-    typeof value.updatedAt === "number" &&
-    Number.isFinite(value.updatedAt)
-  )
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value)
 }
 
 function nonemptyString(value: unknown): string | null {

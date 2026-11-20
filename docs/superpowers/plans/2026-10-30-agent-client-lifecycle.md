@@ -1,5 +1,7 @@
 # Agent 生命周期客户端实施计划
 
+> 状态：历史实施记录。 [当前产品接入](../../product-surface-integration.md)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 将公开 SDK 收敛为连接已有 daemon 的完整 Agent 生命周期客户端，产品业务归入私有应用层。
@@ -31,7 +33,7 @@
 
 ## Task 2: 私有业务客户端
 
-**Files:** 新增 `packages/application-client/{package.json,tsconfig.json,README.md,src}`；迁移 `packages/client/src/{commands,resources/{configuration,workspace,plugins},types}` 中的业务实现和对应测试。
+**Files:** 新增内部应用包，迁移 `packages/client/src/{commands,resources/{configuration,workspace,plugins},types}` 中的业务实现和对应测试。 [退役前的私有包目录](https://github.com/rzx007/Vykor/tree/9258ffcf5bffaa6cc683d76963c94acb0d277141/packages/application-client)
 
 **Interfaces:** 私有包继续导出产品所用的 `VykorClient`、原业务类和类型，并从公开 SDK 复用核心 API。
 

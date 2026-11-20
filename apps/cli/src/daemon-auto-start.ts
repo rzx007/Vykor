@@ -1,5 +1,5 @@
 import {
-  reconcileDaemonSystemService,
+  reconcileDaemonSystemServiceForConnection,
   saveDaemonAutoStartPreference,
   shouldStartManagedDaemon,
   type DaemonAutoStartAction,
@@ -15,6 +15,7 @@ export type { DaemonAutoStartAction } from "@vykor/server/daemon-host";
 
 export interface DaemonAutoStartReconciliation {
   service: DaemonSystemService;
+  autoStart: boolean;
   state: DaemonSystemServiceState;
   action: DaemonAutoStartAction;
 }
@@ -27,11 +28,11 @@ export async function saveDaemonAutoStart(autoStart: boolean): Promise<void> {
   await saveDaemonAutoStartPreference(autoStart);
 }
 
-export function reconcileDaemonAutoStart(
+export async function reconcileDaemonAutoStart(
   entry: string,
-  autoStart: boolean,
+  autoStart?: boolean,
   serveArgs?: string[],
-): DaemonAutoStartReconciliation {
+): Promise<DaemonAutoStartReconciliation> {
   const service = createDaemonSystemService(entry, serveArgs);
-  return { service, ...reconcileDaemonSystemService(service, autoStart) };
+  return { service, ...await reconcileDaemonSystemServiceForConnection(service, autoStart) };
 }

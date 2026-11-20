@@ -21,7 +21,7 @@
 
 ## 调用与状态归属
 
-入口是 `NotesPage -> NoteBoard -> useNoteOrganization -> window.desktop.notes`。正文和恢复稿继续由 `useNotesController`、`NoteSaveCoordinator` 管理；整理操作通过私有应用客户端 `@vykor/application-client` 中的纯函数生成新快照，沿 IPC 和 HTTP 保存到便签目录的 `organization.json`。正文更新时间不参与桌面排序。
+入口是 `NotesPage -> NoteBoard -> useNoteOrganization -> window.desktop.notes`。`useNotesController` 和 `NoteSaveCoordinator` 管理正文编辑和恢复稿。整理操作通过 `@vykor/protocol` 中的纯函数生成新快照，经 IPC 交给 Electron 主进程保存到 `data/desktop/notes/organization.json`。正文更新时间不参与桌面排序。
 
 拖拽前的布局、来源和文件夹开合状态保存在 `NoteBoard` 内存中。`note-drag-state` 统一保存悬停目标、截止时间和当前意图，并提供下一次计时的剩余时间；`NoteBoard` 只安排计时器、检查 DOM 命中和展示合并目标，不重复维护完整意图。移动达到 6 px 才拿起；便签连续悬停 250 ms 才合并，文件夹连续悬停 400 ms 才展开；越过展开层边界 24 px 后收起。滚动或切换目标清零计时，松手才保存，Escape 恢复原布局。系统减少动态效果只关闭动画，不改变这些阈值。
 
@@ -34,3 +34,5 @@
 ## 维护约定
 
 新增独立子功能时同步补充 README 和父级导航。移动文件时更新导入、动态导入与测试 mock，不保留旧路径转发文件。完整规则见 [Desktop 协作约定](../AGENTS.md)。
+
+`note-recovery.ts` 异步加载主/quick 恢复记录，`note-save-coordinator.ts` 先等待草稿写入再提交 Markdown 文件。选中笔记 ID 仍属于 localStorage 界面偏好。旧恢复键保留作恢复副本。

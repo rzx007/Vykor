@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import {
   addCandidates,
@@ -70,7 +71,7 @@ it("does not downgrade a ready attachment when cancellation replies late", () =>
 })
 it("stops retrying an expired attachment source without clearing the document", async () => {
   const retryUpload = vi.fn().mockRejectedValue(new Error("attachment_retry_unavailable"))
-  vi.stubGlobal("window", { desktop: { attachments: { retryUpload } } })
+  vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, attachments: { retryUpload } } })
   useDesktopSessionStore.setState({
     composerDraftsByScope: {
       [scope]: {
@@ -104,7 +105,7 @@ it("keeps preparation with a moved draft and uploads only after all reads finish
     resolve = done
   })
   const uploadClipboardImage = vi.fn().mockResolvedValue(undefined)
-  vi.stubGlobal("window", { desktop: { attachments: { uploadClipboardImage } } })
+  vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, attachments: { uploadClipboardImage } } })
   useDesktopSessionStore.setState({ attachmentSupport: { interactionEnabled: true } as never })
   useDesktopSessionStore.getState().setComposerDraftText(scope, "正文草稿")
   const pending = useDesktopSessionStore
@@ -128,7 +129,7 @@ it("keeps preparation with a moved draft and uploads only after all reads finish
 })
 it("reports failed reads, does not partially upload the batch, and preserves the draft", async () => {
   const uploadClipboardImage = vi.fn()
-  vi.stubGlobal("window", { desktop: { attachments: { uploadClipboardImage } } })
+  vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, attachments: { uploadClipboardImage } } })
   useDesktopSessionStore.setState({ attachmentSupport: { interactionEnabled: true } as never })
   useDesktopSessionStore.getState().setComposerDraftText(scope, "正文草稿")
   await useDesktopSessionStore.getState().addClipboardFiles(scope, [
@@ -158,7 +159,7 @@ it("does not recreate a discarded draft after a pending picker returns", async (
     resolve = done
   })
   const startUpload = vi.fn()
-  vi.stubGlobal("window", { desktop: { attachments: { pickFiles: () => selected, startUpload } } })
+  vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, attachments: { pickFiles: () => selected, startUpload } } })
   useDesktopSessionStore.setState({ attachmentSupport: { interactionEnabled: true } as never })
   const pending = useDesktopSessionStore.getState().pickAttachmentFiles(scope)
   useDesktopSessionStore.getState().resetComposerDraft(scope)
@@ -173,7 +174,7 @@ it("routes a local upload failure to its moved draft", async () => {
   const uploading = new Promise<void>((_done, fail) => {
     reject = fail
   })
-  vi.stubGlobal("window", { desktop: { attachments: { uploadClipboardImage: () => uploading } } })
+  vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, attachments: { uploadClipboardImage: () => uploading } } })
   useDesktopSessionStore.setState({ attachmentSupport: { interactionEnabled: true } as never })
   const pending = useDesktopSessionStore.getState().addClipboardAttachment(scope, {
     bytes: new ArrayBuffer(1),
@@ -198,7 +199,7 @@ it("keeps preparing until concurrent picks finish and carries failure feedback t
     reject = fail
   })
   const pickFiles = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
-  vi.stubGlobal("window", { desktop: { attachments: { pickFiles } } })
+  vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, attachments: { pickFiles } } })
   useDesktopSessionStore.setState({ attachmentSupport: { interactionEnabled: true } as never })
   const a = useDesktopSessionStore.getState().pickAttachmentFiles(scope)
   const b = useDesktopSessionStore.getState().pickAttachmentFiles(scope)

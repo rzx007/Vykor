@@ -297,6 +297,10 @@ export function parseAdmitPromptRequest(value: unknown): AdmitPromptRequest {
   assertPromptMetadataAllowed(body);
   const id = optionalString(body, "id");
   const delivery = optionalEnum(body, "delivery", ["queue", "steer"] as const);
+  const expectedActiveRunId = optionalString(body, "expectedActiveRunId");
+  if (expectedActiveRunId !== undefined && (!expectedActiveRunId.trim() || delivery !== "steer")) {
+    throw new ProtocolValidationError("expectedActiveRunId requires a non-empty Run ID and steer delivery", "expectedActiveRunId");
+  }
   const outputSchema = optionalRecord(body, "outputSchema");
   const metadata = optionalRecord(body, "metadata");
   const attachments = parsePromptAttachments(body.attachments);
@@ -306,6 +310,7 @@ export function parseAdmitPromptRequest(value: unknown): AdmitPromptRequest {
     attachments,
     ...(id !== undefined ? { id } : {}),
     ...(delivery !== undefined ? { delivery } : {}),
+    ...(expectedActiveRunId !== undefined ? { expectedActiveRunId } : {}),
     ...(outputSchema !== undefined ? { outputSchema } : {}),
     ...(metadata !== undefined ? { metadata } : {}),
   };

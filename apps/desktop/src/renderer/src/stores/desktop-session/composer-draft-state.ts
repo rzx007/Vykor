@@ -119,7 +119,7 @@ export function clearBrowserAnnotations(state: ComposerDraftState, scope: string
 export function addCandidates(
   state: ComposerDraftState,
   scope: string,
-  candidates: readonly DesktopAttachmentCandidate[]
+  candidates: readonly (DesktopAttachmentCandidate & Pick<DesktopAttachmentDraft, "pastedText">)[]
 ): ComposerDraftState {
   if (candidates.length === 0) return state
   const current = draftForScope(state, scope)
@@ -132,10 +132,29 @@ export function addCandidates(
     status: "uploading",
     bytesUploaded: 0,
     progress: candidate.sizeBytes > 0 ? 0 : null,
+    ...(candidate.pastedText !== undefined ? { pastedText: candidate.pastedText } : {}),
   }))
   return replaceScope(state, scope, {
     ...current,
     attachments: [...current.attachments, ...additions],
+  })
+}
+
+export function expandPastedTextAttachment(
+  state: ComposerDraftState,
+  scope: string,
+  draftId: string
+): ComposerDraftState {
+  const current = state.composerDraftsByScope[scope]
+  const attachment = current?.attachments.find((item) => item.draftId === draftId)
+  if (!current || attachment?.pastedText === undefined) return state
+  return replaceScope(state, scope, {
+    ...current,
+    document: composerDocument([
+      ...current.document.items,
+      { type: "text", text: (current.document.items.length ? "\n\n" : "") + attachment.pastedText },
+    ]),
+    attachments: current.attachments.filter((item) => item.draftId !== draftId),
   })
 }
 
@@ -291,9 +310,11 @@ export function clearSubmittedDraft(
   const sentDocument = pending.draftDocument ?? composerDocument(pending.items)
   const assets = new Set(pending.attachments.map((value) => value.assetId))
   const draftIds = pending.draftAttachmentIds ? new Set(pending.draftAttachmentIds) : null
+  const sentSelections = new Set(pending.draftTextSelectionIds)
   const sentAnnotations = readBrowserAnnotationContext(pending.browserAnnotationContext ?? "")?.annotations ?? []
   const updated: DesktopComposerDraft = {
     ...current,
+    ...(current.textSelections ? { textSelections: current.textSelections.filter(selection => !sentSelections.has(selection.id)) } : {}),
     ...(current.browserAnnotations ? {
       browserAnnotations: current.browserAnnotations.filter(record => !sentAnnotations.some(sent =>
         sent.id === record.id && sent.pageUrl === record.pageUrl && sent.comment === record.comment &&
@@ -325,7 +346,7 @@ export function reconcileSubmittedDrafts(
   for (const pending of Object.values(
     state.sessionRuntimes[view.session.id]?.pendingPromptSubmissions ?? {}
   )) {
-    if (ids.has(pending.id)) result = clearSubmittedDraft(result, pending)
+    if (pending.phase !== "accepted" && ids.has(pending.id)) result = clearSubmittedDraft(result, pending)
   }
   return { composerDraftsByScope: result.composerDraftsByScope }
 }

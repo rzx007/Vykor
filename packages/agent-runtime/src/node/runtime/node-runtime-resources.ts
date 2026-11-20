@@ -94,6 +94,11 @@ export class NodeRuntimeResources {
     pluginId?: string | readonly string[],
   ) => RunCapabilityView;
   resolveRequestConfiguration?: QueryEngineOptions["resolveRequestConfiguration"];
+  /** Captured invocation selection, or the latest host selection outside a tool. */
+  getApprovalMode?: () => import("@vykor/agent-contracts").ApprovalMode;
+  /** Approval selected by the host or agent configuration for the current invocation. */
+  getExplicitApprovalMode?: () => import("@vykor/agent-contracts").ApprovalMode | undefined;
+  processExecutor?: import("@vykor/environment").EnvironmentProcessExecutor;
   /** Exact host-validated builtin replacements; source remains agent for identity checks. */
   trustedToolOverrides?: ReadonlyMap<
     string,

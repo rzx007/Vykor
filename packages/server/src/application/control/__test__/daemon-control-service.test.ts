@@ -80,6 +80,27 @@ acquireSession: vi.fn(async () => agent),
 }
 
 describe("DaemonControlService", () => {
+  it("serves current health without reading historical runs or message contents", async () => {
+    const { control, store, runEngine } = createControl();
+    const rejectHistoryRead = () => { throw new Error("Health must not scan history"); };
+    store.runs.listRuns.mockImplementation(rejectHistoryRead);
+    store.runs.listRunAttempts.mockImplementation(rejectHistoryRead);
+    store.listSessionTasks.mockImplementation(rejectHistoryRead);
+    store.permissions.list.mockImplementation(rejectHistoryRead);
+    store.listProjectionSettlements.mockImplementation(rejectHistoryRead);
+    store.conversations.listMessageParts.mockImplementation(rejectHistoryRead);
+    expect(control.healthSnapshot()).toMatchObject({
+      sessionCount: 2, activeRunCount: 1, queuedRunCount: 1,
+    });
+
+    runEngine.activeRunId.mockReturnValue(undefined);
+    runEngine.queuedRunIds.mockReturnValue([]);
+    store.sessions.list.mockReturnValue([]);
+    expect(control.healthSnapshot()).toMatchObject({
+      sessionCount: 0, activeRunCount: 0, queuedRunCount: 0,
+    });
+  });
+
   it("cancels a normal run admitted after the initial shutdown cancellation scan", async () => {
     const directory = mkdtempSync(join(tmpdir(), "vk-shutdown-late-admission-"));
     const store = new SessionStore({ path: join(directory, "sessions.db") });
@@ -123,7 +144,7 @@ describe("DaemonControlService", () => {
     const runner = new SessionOperationRunner({ sessions: store.sessions, operationGate, events });
     // Observe the actual first drain to reproduce the empty cancellation snapshot deterministically.
     const drain = vi.spyOn(services.control, "stopAndDrain");
-    const admission = runner.run(session.id, () => services.admission.admitPromptAndMaybeRun(session.id, {
+    const admission = runner.run(session.id, () => services.admission.preparePrompt(session.id, {
       id: "late-skill-input", delivery: "steer",
       items: [{ type: "skill", name: "review", path: join(directory, "SKILL.md") }],
     }));
@@ -135,7 +156,8 @@ describe("DaemonControlService", () => {
       await drain.mock.results[0]!.value;
       expect(operationGate.accepting).toBe(false);
       finishMaterialization("prepared skill");
-      const admitted = await admission;
+      const prepared = await admission;
+      const admitted = "completion" in prepared ? await prepared.completion : prepared;
       await shutdown;
       expect(activeWhenPoolClosed).toBe(false);
       expect(services.engine.runtimeBridge.activeRunId(session.id)).toBeUndefined();

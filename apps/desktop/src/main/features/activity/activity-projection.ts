@@ -1,9 +1,9 @@
 import type {
   VykorClientState,
-  ScheduledRunRecord,
   SessionBucket,
   SessionGoal,
-} from "@vykor/application-client"
+} from "@rzx/client"
+import type { ScheduledRunRecord } from "@vykor/protocol"
 import type {
   DesktopExecutionState,
   DesktopScheduledActivity,

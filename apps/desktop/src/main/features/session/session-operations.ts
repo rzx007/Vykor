@@ -1,11 +1,18 @@
+import { getWorkspacesDir } from "@vykor/host-config/paths"
 import { stat } from "node:fs/promises"
 
 import {
+  type AdmitClientPromptInput,
   type VykorClient,
   parseCreateSessionGoalInput,
   parseUpdateSessionGoalInput,
   parseGoalActionInput,
-} from "@vykor/application-client"
+} from "@rzx/client"
+import type { PluginAppConversationRequest } from "@vykor/protocol"
+import type { SystemResource } from "@vykor/daemon-admin/configuration"
+import type { KnowledgeResource } from "@vykor/daemon-admin/knowledge"
+import type { CommandCatalogResource, DevelopmentResource } from "@vykor/daemon-admin/workspace"
+import type { ProjectResource } from "./project-resource"
 
 import type {
   CheckoutDesktopProjectBranchInput,
@@ -64,10 +71,14 @@ import {
 import { app } from "electron"
 import { getGitPreferences } from "../settings/git-settings-storage"
 
-export type SessionOperationsClient = Pick<
-  VykorClient,
-  "projects" | "development" | "system" | "sessions" | "permissions" | "runtime"
->
+type ProjectClient = { projects: ProjectResource }
+type ProjectInspectionClient = ProjectClient & { development: Pick<DevelopmentResource, "getGitBranch"> }
+type SystemClient = { system: Pick<SystemResource, "getSettings"> }
+type SessionsClient = Pick<VykorClient, "sessions">
+
+type DesktopPromptInput = AdmitClientPromptInput & {
+  pluginAppContexts?: PluginAppConversationRequest[]
+}
 
 export { toDesktopProject } from "./project-operations-support"
 export {
@@ -83,7 +94,7 @@ const DESKTOP_SESSION_COMMAND_NAMES = new Set(["/compact", "/goal", "/status", "
 
 export class SessionOperations {
   async inspectProject(
-    client: SessionOperationsClient,
+    client: ProjectInspectionClient,
     inputPath: string
   ): Promise<DesktopProjectDetails> {
     const path = resolveRequiredPath(inputPath)
@@ -117,7 +128,7 @@ export class SessionOperations {
   }
 
   async listCommands(
-    client: SessionOperationsClient,
+    client: { system: Pick<CommandCatalogResource, "listCommands"> },
     cwdInput: string
   ): Promise<DesktopCommandCatalogEntry[]> {
     const cwd = resolveRequiredPath(cwdInput)
@@ -133,12 +144,12 @@ export class SessionOperations {
     })
   }
 
-  async listContextPlugins(client: SessionOperationsClient, cwdInput: string) {
+  async listContextPlugins(client: { system: Pick<KnowledgeResource, "listContextPlugins"> }, cwdInput: string) {
     return client.system.listContextPlugins({ cwd: resolveRequiredPath(cwdInput) })
   }
 
   async compactSession(
-    client: SessionOperationsClient,
+    client: SessionsClient,
     input: CompactDesktopSessionInput
   ): Promise<DesktopCompactSessionResult> {
     const sessionId = requireString(input.sessionId, "会话 ID")
@@ -147,14 +158,14 @@ export class SessionOperations {
   }
 
   async getGoal(
-    client: SessionOperationsClient,
+    client: SessionsClient,
     input: GetDesktopSessionGoalInput
   ): Promise<SessionGoal | null> {
     return await client.sessions.getGoal(requireString(input.sessionId, "会话 ID"))
   }
 
   async createGoal(
-    client: SessionOperationsClient,
+    client: SessionsClient,
     input: CreateDesktopSessionGoalInput
   ): Promise<SessionGoal> {
     const { sessionId, ...body } = input
@@ -165,7 +176,7 @@ export class SessionOperations {
   }
 
   async updateGoal(
-    client: SessionOperationsClient,
+    client: SessionsClient,
     input: UpdateDesktopSessionGoalInput
   ): Promise<SessionGoal> {
     const { sessionId, goalId, ...body } = input
@@ -177,7 +188,7 @@ export class SessionOperations {
   }
 
   async goalAction(
-    client: SessionOperationsClient,
+    client: SessionsClient,
     input: DesktopSessionGoalActionInput
   ): Promise<SessionGoal> {
     const { sessionId, goalId, ...body } = input
@@ -189,7 +200,7 @@ export class SessionOperations {
   }
 
   async checkoutProjectBranch(
-    client: SessionOperationsClient,
+    client: ProjectInspectionClient,
     input: CheckoutDesktopProjectBranchInput
   ): Promise<DesktopProjectDetails> {
     const path = resolveRequiredPath(input.path)
@@ -199,7 +210,7 @@ export class SessionOperations {
   }
 
   async createProjectBranch(
-    client: SessionOperationsClient,
+    client: ProjectInspectionClient,
     input: CreateDesktopProjectBranchInput
   ): Promise<DesktopProjectDetails> {
     const path = resolveRequiredPath(input.path)
@@ -211,7 +222,7 @@ export class SessionOperations {
   }
 
   async createSession(
-    client: SessionOperationsClient,
+    client: SessionsClient & Pick<VykorClient, "runtime"> & SystemClient,
     input: CreateDesktopSessionInput
   ): Promise<DesktopSessionRecord> {
     const model = requireString(input.model, "模型")
@@ -229,7 +240,7 @@ export class SessionOperations {
     if (!projectId && location === "worktree") throw new Error("独立工作目录需要一个 Git 项目。")
     let cwd = projectId
       ? resolveRequiredPath(input.cwd)
-      : await allocateOutsideProjectWorkspace(app.getPath("documents"))
+      : await allocateOutsideProjectWorkspace(getWorkspacesDir())
     const settingsRoot = cwd
     const gitSettingsService = projectId && location === "worktree"
       ? (await import("../settings/git-settings-service")).gitSettingsService : null
@@ -272,7 +283,7 @@ export class SessionOperations {
   }
 
   async renameProject(
-    client: SessionOperationsClient,
+    client: ProjectClient,
     input: RenameDesktopProjectInput
   ): Promise<DesktopProject> {
     const name = requireString(input.name, "项目名称")
@@ -280,14 +291,14 @@ export class SessionOperations {
   }
 
   async setProjectPinned(
-    client: SessionOperationsClient,
+    client: ProjectClient,
     input: PinDesktopProjectInput
   ): Promise<DesktopProject> {
     return await toDesktopProject(await client.projects.setPinned(input.projectId, input.pinned))
   }
 
   async setProjectDefaultShell(
-    client: SessionOperationsClient,
+    client: ProjectClient,
     input: SetDefaultDesktopProjectShellInput
   ): Promise<DesktopProject> {
     return await toDesktopProject(
@@ -295,12 +306,12 @@ export class SessionOperations {
     )
   }
 
-  async removeProject(client: SessionOperationsClient, projectId: string): Promise<void> {
+  async removeProject(client: ProjectClient, projectId: string): Promise<void> {
     await client.projects.archive(requireString(projectId, "Project ID"))
   }
 
   async resolveProjectDirectory(
-    client: SessionOperationsClient,
+    client: ProjectClient,
     projectIdInput: string
   ): Promise<string> {
     const projectId = requireString(projectIdInput, "Project ID")
@@ -312,20 +323,25 @@ export class SessionOperations {
     return project.path
   }
 
-  async sendPrompt(client: SessionOperationsClient, input: SendDesktopPromptInput, pluginAppContexts?: import("@vykor/application-client").PluginAppConversationRequest[]): Promise<void> {
+  async sendPrompt(client: SessionsClient, input: SendDesktopPromptInput, pluginAppContexts?: PluginAppConversationRequest[]): Promise<void> {
     const id = requireString(input.id, "输入 ID")
     const sessionId = requireString(input.sessionId, "会话 ID")
+    if (input.delivery !== undefined && input.delivery !== "queue" && input.delivery !== "steer")
+      throw new Error("消息发送方式无效。")
+    if (input.delivery === "steer") requireString(input.expectedActiveRunId, "当前 Run ID")
+    else if (input.expectedActiveRunId !== undefined) throw new Error("排队消息无需指定当前 Run。")
     const items = requirePromptItems(input.items)
     const attachments = normalizePromptAttachments(input.attachments, true)
     if (!hasPromptItems(items) && attachments.length === 0 && !pluginAppContexts?.length) {
       throw new Error("消息内容和附件不能同时为空。")
     }
-    await client.sessions.admitPrompt(sessionId, {
+    const request: DesktopPromptInput = {
       ...(pluginAppContexts?.length ? { pluginAppContexts } : {}),
       id,
       items,
       attachments,
-      delivery: "queue",
+      delivery: input.delivery ?? "queue",
+      ...(input.expectedActiveRunId === undefined ? {} : { expectedActiveRunId: input.expectedActiveRunId }),
       metadata: {
         origin: {
           client: "desktop",
@@ -333,11 +349,12 @@ export class SessionOperations {
           action: "append_prompt",
         },
       },
-    })
+    }
+    await client.sessions.admitPrompt(sessionId, request)
   }
 
   async editLatestPrompt(
-    client: SessionOperationsClient,
+    client: SessionsClient,
     input: EditLatestDesktopPromptInput
   ): Promise<void> {
     const id = requireString(input.id, "编辑请求 ID")
@@ -364,7 +381,7 @@ export class SessionOperations {
   }
 
   async promoteQueuedPrompt(
-    client: SessionOperationsClient,
+    client: SessionsClient,
     input: PromoteDesktopQueuedPromptInput
   ): Promise<void> {
     const sessionId = requireString(input.sessionId, "会话 ID")
@@ -378,7 +395,7 @@ export class SessionOperations {
   }
 
   async cancelQueuedPrompt(
-    client: SessionOperationsClient,
+    client: SessionsClient,
     input: CancelDesktopQueuedPromptInput
   ): Promise<void> {
     const sessionId = requireString(input.sessionId, "会话 ID")
@@ -388,7 +405,7 @@ export class SessionOperations {
   }
 
   async forkSession(
-    client: SessionOperationsClient,
+    client: SessionsClient,
     input: ForkDesktopSessionInput
   ): Promise<DesktopSessionRecord> {
     const sessionId = requireString(input.sessionId, "会话 ID")
@@ -403,7 +420,7 @@ export class SessionOperations {
   }
 
   async interruptSession(
-    client: SessionOperationsClient,
+    client: SessionsClient,
     input: InterruptDesktopSessionInput
   ): Promise<void> {
     const sessionId = requireString(input.sessionId, "会话 ID")
@@ -417,7 +434,7 @@ export class SessionOperations {
   }
 
   async replyPermission(
-    client: SessionOperationsClient,
+    client: Pick<VykorClient, "permissions">,
     input: ReplyDesktopPermissionInput
   ): Promise<void> {
     const permissionId = requireString(input.permissionId, "权限请求 ID")
@@ -430,7 +447,7 @@ export class SessionOperations {
   }
 
   async updateSessionModel(
-    client: SessionOperationsClient,
+    client: SessionsClient & Pick<VykorClient, "runtime">,
     input: UpdateDesktopSessionModelInput
   ): Promise<DesktopSessionRecord> {
     const sessionId = requireString(input.sessionId, "会话 ID")
@@ -449,7 +466,7 @@ export class SessionOperations {
   }
 
   async updateSessionPermissionMode(
-    client: SessionOperationsClient,
+    client: SessionsClient,
     input: UpdateDesktopSessionPermissionModeInput
   ): Promise<DesktopSessionRecord> {
     const sessionId = requireString(input.sessionId, "会话 ID")
@@ -467,7 +484,7 @@ export class SessionOperations {
   }
 
   async updateSessionEffort(
-    client: SessionOperationsClient,
+    client: SessionsClient,
     input: UpdateDesktopSessionEffortInput
   ): Promise<DesktopSessionRecord> {
     const sessionId = requireString(input.sessionId, "会话 ID")
@@ -480,7 +497,7 @@ export class SessionOperations {
   }
 
   async updateSessionPluginSelection(
-    client: SessionOperationsClient,
+    client: SessionsClient,
     input: UpdateDesktopSessionPluginSelectionInput
   ): Promise<DesktopSessionRecord> {
     const sessionId = requireString(input.sessionId, "会话 ID")
@@ -502,7 +519,7 @@ export class SessionOperations {
   }
 
   async getContextUsage(
-    client: SessionOperationsClient,
+    client: { system: Pick<KnowledgeResource, "getContextUsage"> },
     input: GetDesktopContextUsageInput
   ): Promise<DesktopContextUsageSnapshot> {
     const cwd = requireString(input.cwd, "工作目录")
@@ -522,7 +539,7 @@ export class SessionOperations {
   }
 
   async renameSession(
-    client: SessionOperationsClient,
+    client: SessionsClient,
     input: RenameDesktopSessionInput
   ): Promise<DesktopSessionRecord> {
     const sessionId = requireString(input.sessionId, "会话 ID")
@@ -531,7 +548,7 @@ export class SessionOperations {
   }
 
   async setSessionPinned(
-    client: SessionOperationsClient,
+    client: SessionsClient,
     input: PinDesktopSessionInput
   ): Promise<DesktopSessionRecord> {
     const sessionId = requireString(input.sessionId, "会话 ID")

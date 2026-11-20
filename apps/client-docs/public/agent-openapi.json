@@ -1,0 +1,3094 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Vykor Agent HTTP API",
+    "version": "7",
+    "description": "协议 7 的公开 Agent 操作。路径从 daemon 的 HTTP 地址开始。先访问 /capabilities，再按实例返回的功能版本决定是否使用可选能力。"
+  },
+  "x-vykor-protocol-version": 7,
+  "security": [{"bearerAuth":[]}],
+  "tags": [
+    {"name":"protocol","description":"协议与健康"},
+    {"name":"runtime","description":"运行环境发现"},
+    {"name":"sessions","description":"会话、运行与 Goal"},
+    {"name":"permissions","description":"审批与回答"},
+    {"name":"attachments","description":"附件字节与记录"},
+    {"name":"jobs","description":"后台任务"},
+    {"name":"events","description":"历史与实时事件"},
+    {"name":"files","description":"只读工作区文件"}
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["protocol"],
+        "operationId": "protocol.health",
+        "summary": "检查 daemon 是否就绪",
+        "security": [],
+        "responses": {
+          "200": {"description":"请求成功。","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Health"}}}},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/capabilities": {
+      "get": {
+        "tags": ["protocol"],
+        "operationId": "protocol.capabilities",
+        "summary": "读取协议版本和已启用能力",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Capabilities"}}}
+          },
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/models": {
+      "get": {
+        "tags": ["runtime"],
+        "operationId": "runtime.listModels",
+        "summary": "读取可用模型",
+        "parameters": [{"$ref":"#/components/parameters/ProtocolVersion"}],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"providers":{"type":"array","items":{"$ref":"#/components/schemas/ModelProvider"}}},
+                  "required": ["providers"]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {"description":"后台处理失败。","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}},
+          "501": {
+            "description": "此实例未配置该读取服务。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          },
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/agent-personas": {
+      "get": {
+        "tags": ["runtime"],
+        "operationId": "runtime.listAgentPersonas",
+        "summary": "读取可用 Agent 定义",
+        "parameters": [{"$ref":"#/components/parameters/ProtocolVersion"}],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"agents":{"type":"array","items":{"$ref":"#/components/schemas/AgentPersona"}}},
+                  "required": ["agents"]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {"description":"后台处理失败。","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}},
+          "501": {
+            "description": "此实例未配置该读取服务。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          },
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/skills": {
+      "get": {
+        "tags": ["runtime"],
+        "operationId": "runtime.listSkills",
+        "summary": "读取已配置的 Skill",
+        "parameters": [{"$ref":"#/components/parameters/ProtocolVersion"}],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "skills": {"type":"array","items":{"$ref":"#/components/schemas/Skill"}},
+                    "projects": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {"path":{"type":"string"},"name":{"type":"string"}},
+                        "required": ["path","name"]
+                      }
+                    },
+                    "warnings": {"type":"array","items":{"type":"string"}}
+                  },
+                  "required": ["skills","projects","warnings"]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {"description":"后台处理失败。","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}},
+          "501": {
+            "description": "此实例未配置该读取服务。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          },
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/mcp": {
+      "get": {
+        "tags": ["runtime"],
+        "operationId": "runtime.getSessionMcp",
+        "summary": "读取会话的 MCP 状态",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"servers":{"type":"array","items":{"$ref":"#/components/schemas/McpServer"}}},
+                  "required": ["servers"]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {"description":"后台处理失败。","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions": {
+      "get": {
+        "tags": ["sessions"],
+        "operationId": "sessions.list",
+        "summary": "列出会话",
+        "parameters": [
+          {"name":"cwd","in":"query","schema":{"type":"string"}},
+          {"name":"includeArchived","in":"query","schema":{"type":"boolean"}},
+          {"name":"includeChildren","in":"query","schema":{"type":"boolean"}},
+          {"$ref":"#/components/parameters/Limit"},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"sessions":{"type":"array","items":{"$ref":"#/components/schemas/Session"}}},
+                  "required": ["sessions"]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      },
+      "post": {
+        "tags": ["sessions"],
+        "operationId": "sessions.create",
+        "summary": "创建会话",
+        "parameters": [{"$ref":"#/components/parameters/ProtocolVersion"}],
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CreateSession"}}}},
+        "responses": {
+          "201": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"session":{"$ref":"#/components/schemas/Session"}},
+                  "required": ["session"]
+                }
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/search": {
+      "get": {
+        "tags": ["sessions"],
+        "operationId": "sessions.search",
+        "summary": "搜索已保存的会话文本",
+        "parameters": [
+          {"name":"query","in":"query","required":true,"schema":{"type":"string","maxLength":256}},
+          {"$ref":"#/components/parameters/Limit"},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"results":{"type":"array","items":{"$ref":"#/components/schemas/SessionSearchResult"}}},
+                  "required": ["results"]
+                }
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}": {
+      "get": {
+        "tags": ["sessions"],
+        "operationId": "sessions.get",
+        "summary": "读取会话并准备运行环境",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"session":{"$ref":"#/components/schemas/Session"}},
+                  "required": ["session"]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      },
+      "patch": {
+        "tags": ["sessions"],
+        "operationId": "sessions.update",
+        "summary": "更新会话配置",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/UpdateSession"}}}},
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"session":{"$ref":"#/components/schemas/Session"}},
+                  "required": ["session"]
+                }
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      },
+      "delete": {
+        "tags": ["sessions"],
+        "operationId": "sessions.archive",
+        "summary": "归档会话及其子会话",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"session":{"$ref":"#/components/schemas/Session"}},
+                  "required": ["session"]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/fork": {
+      "post": {
+        "tags": ["sessions"],
+        "operationId": "sessions.fork",
+        "summary": "从现有会话分叉",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ForkSession"}}}},
+        "responses": {
+          "201": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"session":{"$ref":"#/components/schemas/Session"}},
+                  "required": ["session"]
+                }
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/hard": {
+      "delete": {
+        "tags": ["sessions"],
+        "operationId": "sessions.delete",
+        "summary": "永久删除会话及其子会话",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"deletedSessionIds":{"type":"array","items":{"type":"string"}}},
+                  "required": ["deletedSessionIds"]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/state": {
+      "get": {
+        "tags": ["sessions"],
+        "operationId": "sessions.getState",
+        "summary": "原子读取会话状态与事件游标",
+        "description": "cursor 与快照来自同一次读取，供之后建立 SSE。公开消费者仅依赖此处列出的生命周期字段。",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/PartView"},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/SessionSnapshot"}}}
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/messages": {
+      "get": {
+        "tags": ["sessions"],
+        "operationId": "sessions.listMessages",
+        "summary": "分页读取会话消息",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/Cursor"},
+          {"$ref":"#/components/parameters/AfterSeq"},
+          {"$ref":"#/components/parameters/Limit"},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"messages":{"type":"array","items":{"$ref":"#/components/schemas/SessionMessage"}}},
+                  "required": ["messages"]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/parts": {
+      "get": {
+        "tags": ["sessions"],
+        "operationId": "sessions.listMessageParts",
+        "summary": "分页读取会话消息片段",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/Cursor"},
+          {"$ref":"#/components/parameters/AfterSeq"},
+          {"$ref":"#/components/parameters/Limit"},
+          {"name":"messageId","in":"query","schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/PartView"},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"parts":{"type":"array","items":{"$ref":"#/components/schemas/MessagePart"}}},
+                  "required": ["parts"]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/messages/{messageId}/parts/{partId}": {
+      "get": {
+        "tags": ["sessions"],
+        "operationId": "sessions.getMessagePart",
+        "summary": "读取指定消息片段",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"messageId","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"partId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"part":{"$ref":"#/components/schemas/MessagePart"}},
+                  "required": ["part"]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/prompts": {
+      "post": {
+        "tags": ["sessions"],
+        "operationId": "sessions.admitPrompt",
+        "summary": "持久受理一次输入",
+        "description": "重试使用原 ID 和相同内容。expectedActiveRunId 需要 steer >= 2 并选择有效的活动 Run。outputSchema 需要 structuredDelivery >= 1，并用于排队执行。",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/Prompt"}}}},
+        "responses": {
+          "202": {
+            "description": "输入已受理。随后按 Run ID 观察执行状态。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/PromptReceipt"}}}
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "413": {"$ref":"#/components/responses/RequestTooLarge"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/prompts/latest/edit": {
+      "post": {
+        "tags": ["sessions"],
+        "operationId": "sessions.editLatestPrompt",
+        "summary": "编辑最后一条可编辑输入",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/EditPrompt"}}}},
+        "responses": {
+          "202": {
+            "description": "请求成功。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/PromptReceipt"}}}
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "413": {"$ref":"#/components/responses/RequestTooLarge"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/prompts/{inputId}/promote": {
+      "post": {
+        "tags": ["sessions"],
+        "operationId": "sessions.promoteQueuedPrompt",
+        "summary": "将指定排队输入合入活动 Run",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"inputId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {"queuedRunId":{"type":"string"},"expectedActiveRunId":{"type":"string"}},
+                "required": ["queuedRunId","expectedActiveRunId"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "input": {"$ref":"#/components/schemas/SessionInput"},
+                    "queued_run": {"$ref":"#/components/schemas/SessionRun"},
+                    "active_run": {"$ref":"#/components/schemas/SessionRun"}
+                  },
+                  "required": ["input","queued_run","active_run"]
+                }
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/prompts/{inputId}/cancel": {
+      "post": {
+        "tags": ["sessions"],
+        "operationId": "sessions.cancelQueuedPrompt",
+        "summary": "取消指定排队输入",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"inputId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {"schema":{"type":"object","properties":{"queuedRunId":{"type":"string"}},"required":["queuedRunId"]}}
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "input": {"$ref":"#/components/schemas/SessionInput"},
+                    "run": {"$ref":"#/components/schemas/SessionRun"}
+                  },
+                  "required": ["input","run"]
+                }
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/runs/{runId}/resume": {
+      "post": {
+        "tags": ["sessions"],
+        "operationId": "sessions.resumeInterruptedRun",
+        "summary": "重新受理已中断 Run 的原输入",
+        "description": "创建有恢复来源的新 Run。提供 outputSchema 时必须与原输入一致。",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"runId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/ResumePrompt"}}}},
+        "responses": {
+          "202": {
+            "description": "请求成功。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/ResumeReceipt"}}}
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "413": {"$ref":"#/components/responses/RequestTooLarge"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/interrupt": {
+      "post": {
+        "tags": ["sessions"],
+        "operationId": "sessions.interrupt",
+        "summary": "中断会话执行",
+        "description": "带 expectedRunId 只尝试停止该 Run。已经结束的旧 Run ID 返回 interrupted: false，不会停止新 Run。",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {"expectedRunId":{"type":"string"},"source":{"type":"string","enum":["user","system"]}}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "activeRunId": {"type":"string"},
+                    "queuedRunIds": {"type":"array","items":{"type":"string"}},
+                    "interrupted": {"type":"boolean"}
+                  },
+                  "required": ["queuedRunIds","interrupted"]
+                }
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {"description":"后台处理失败。","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/compact": {
+      "post": {
+        "tags": ["sessions"],
+        "operationId": "sessions.compact",
+        "summary": "压缩会话上下文",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "messageCount": {"type":"integer","minimum":0},
+                    "messages": {"type":"array","items":{"$ref":"#/components/schemas/SessionMessage"}},
+                    "parts": {"type":"array","items":{"$ref":"#/components/schemas/MessagePart"}}
+                  },
+                  "required": ["messageCount","messages","parts"]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {"description":"后台处理失败。","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/rewind": {
+      "post": {
+        "tags": ["sessions"],
+        "operationId": "sessions.rewind",
+        "summary": "回退指定数量的会话轮次",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {"schema":{"type":"object","properties":{"count":{"type":"integer","minimum":1,"default":1}}}}
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "turns": {"type":"integer","minimum":0},
+                    "removed": {"type":"integer","minimum":0},
+                    "messages": {"type":"array","items":{"$ref":"#/components/schemas/SessionMessage"}},
+                    "parts": {"type":"array","items":{"$ref":"#/components/schemas/MessagePart"}}
+                  },
+                  "required": ["turns","removed","messages","parts"]
+                }
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {"description":"后台处理失败。","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/remember": {
+      "post": {
+        "tags": ["sessions"],
+        "operationId": "sessions.remember",
+        "summary": "从会话中提取长期记忆",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "skipped": {"type":"boolean"},
+                    "reason": {"type":"string"},
+                    "writtenIds": {"type":"array","items":{"type":"string"}},
+                    "titles": {"type":"array","items":{"type":"string"}}
+                  },
+                  "required": ["skipped","writtenIds","titles"]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {"description":"后台处理失败。","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/export": {
+      "post": {
+        "tags": ["sessions"],
+        "operationId": "sessions.export",
+        "summary": "导出会话记录到 daemon 宿主",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "json": {"type":"boolean"},
+                  "format": {"type":"string","enum":["md","json"]},
+                  "filename": {"type":"string"}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "format": {"type":"string","enum":["md","json"]},
+                    "filepath": {"type":"string"},
+                    "messageCount": {"type":"integer","minimum":0}
+                  },
+                  "required": ["format","filepath","messageCount"]
+                }
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/usage": {
+      "get": {
+        "tags": ["sessions"],
+        "operationId": "sessions.getUsage",
+        "summary": "读取会话用量",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "model": {"type":"string"},
+                    "inputTokens": {"type":"integer","minimum":0},
+                    "outputTokens": {"type":"integer","minimum":0},
+                    "cacheCreationTokens": {"type":"integer","minimum":0},
+                    "cacheReadTokens": {"type":"integer","minimum":0},
+                    "messageCount": {"type":"integer","minimum":0},
+                    "estimatedCost": {"type":"string"}
+                  },
+                  "required": [
+                    "model",
+                    "inputTokens",
+                    "outputTokens",
+                    "cacheCreationTokens",
+                    "cacheReadTokens",
+                    "messageCount",
+                    "estimatedCost"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {"description":"后台处理失败。","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/goal": {
+      "get": {
+        "tags": ["sessions"],
+        "operationId": "sessions.getGoal",
+        "summary": "读取会话当前 Goal",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"goal":{"anyOf":[{"$ref":"#/components/schemas/Goal"},{"type":"null"}]}},
+                  "required": ["goal"]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/goals": {
+      "post": {
+        "tags": ["sessions"],
+        "operationId": "sessions.createGoal",
+        "summary": "创建会话 Goal",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/CreateGoal"}}}},
+        "responses": {
+          "201": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {"type":"object","properties":{"goal":{"$ref":"#/components/schemas/Goal"}},"required":["goal"]}
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/goals/{goalId}": {
+      "patch": {
+        "tags": ["sessions"],
+        "operationId": "sessions.updateGoal",
+        "summary": "按版本更新 Goal",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"goalId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/UpdateGoal"}}}},
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {"type":"object","properties":{"goal":{"$ref":"#/components/schemas/Goal"}},"required":["goal"]}
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/goals/{goalId}/actions": {
+      "post": {
+        "tags": ["sessions"],
+        "operationId": "sessions.applyGoalAction",
+        "summary": "操作 Goal 或回答 Goal 问题",
+        "description": "以 resume action 和匹配的 questionId、objectiveVersion、expectedRevision 及 response 回答 Goal 自身的问题。工具 AskUser 经权限回复接口处理。",
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"goalId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/GoalAction"}}}},
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {"type":"object","properties":{"goal":{"$ref":"#/components/schemas/Goal"}},"required":["goal"]}
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/permissions": {
+      "get": {
+        "tags": ["permissions"],
+        "operationId": "permissions.list",
+        "summary": "列出权限请求",
+        "parameters": [
+          {"name":"sessionId","in":"query","schema":{"type":"string"}},
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {"type":"string","enum":["pending","approved","denied","expired"]}
+          },
+          {"name":"toolName","in":"query","schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/Limit"},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"requests":{"type":"array","items":{"$ref":"#/components/schemas/PermissionRequest"}}},
+                  "required": ["requests"]
+                }
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/permissions/approvals": {
+      "get": {
+        "tags": ["permissions"],
+        "operationId": "permissions.listApprovals",
+        "summary": "列出有效的会话批准",
+        "x-vykor-feature": {"name":"permissionApprovals","minimum":1},
+        "parameters": [{"$ref":"#/components/parameters/ProtocolVersion"}],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"requests":{"type":"array","items":{"$ref":"#/components/schemas/PermissionRequest"}}},
+                  "required": ["requests"]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "501": {
+            "description": "实例未配置批准查询。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          },
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/permissions/{requestId}/reply": {
+      "post": {
+        "tags": ["permissions"],
+        "operationId": "permissions.reply",
+        "summary": "回复工具审批或 AskUser",
+        "description": "普通工具审批提交独立授权决定。toolName 为 AskUser 且 payload.input.kind 为 question 时，将答案传为 answer。重复或过期时重新读取服务器状态。",
+        "parameters": [
+          {"name":"requestId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {"required":true,"content":{"application/json":{"schema":{"$ref":"#/components/schemas/PermissionReply"}}}},
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"request":{"$ref":"#/components/schemas/PermissionRequest"}},
+                  "required": ["request"]
+                }
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/permissions/{requestId}/revoke": {
+      "post": {
+        "tags": ["permissions"],
+        "operationId": "permissions.revokeApproval",
+        "summary": "撤销指定会话批准",
+        "x-vykor-feature": {"name":"permissionApprovals","minimum":1},
+        "parameters": [
+          {"name":"requestId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"request":{"$ref":"#/components/schemas/PermissionRequest"}},
+                  "required": ["request"]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "501": {
+            "description": "实例未配置批准撤销。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          },
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/attachments": {
+      "post": {
+        "tags": ["attachments"],
+        "operationId": "attachments.upload",
+        "summary": "用单请求上传附件字节",
+        "description": "请求体为原始字节。可通过 Content-Type 声明媒体类型，大小上限见 capabilities.attachments.limits。",
+        "x-vykor-feature": {"name":"attachments","minimum":1},
+        "parameters": [
+          {
+            "name": "x-vykor-filename",
+            "in": "header",
+            "required": true,
+            "schema": {"type":"string"},
+            "description": "经过百分号编码的附件显示名。"
+          },
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {"required":true,"content":{"*/*":{"schema":{"type":"string","format":"binary"}}}},
+        "responses": {
+          "201": {
+            "description": "请求成功。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Attachment"}}}
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "408": {
+            "description": "附件传输已取消。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          },
+          "413": {"$ref":"#/components/responses/RequestTooLarge"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {"description":"后台处理失败。","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/attachments/{assetId}": {
+      "get": {
+        "tags": ["attachments"],
+        "operationId": "attachments.get",
+        "summary": "读取附件记录",
+        "x-vykor-feature": {"name":"attachments","minimum":1},
+        "parameters": [
+          {"name":"assetId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Attachment"}}}
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {"description":"后台处理失败。","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      },
+      "delete": {
+        "tags": ["attachments"],
+        "operationId": "attachments.delete",
+        "summary": "删除指定附件",
+        "x-vykor-feature": {"name":"attachments","minimum":1},
+        "parameters": [
+          {"name":"assetId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Attachment"}}}
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {"description":"后台处理失败。","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/attachments/{assetId}/content": {
+      "get": {
+        "tags": ["attachments"],
+        "operationId": "attachments.download",
+        "summary": "下载附件字节或单个字节范围",
+        "x-vykor-feature": {"name":"attachments","minimum":1},
+        "parameters": [
+          {"name":"assetId","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"Range","in":"header","schema":{"type":"string"},"description":"单个字节范围，例如 bytes=0-1023。"},
+          {"name":"If-None-Match","in":"header","schema":{"type":"string"},"description":"与附件的 ETag 完全匹配时返回 304。"},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "返回完整内容，媒体类型由附件记录确定。",
+            "content": {"*/*":{"schema":{"type":"string","format":"binary"}}},
+            "headers": {
+              "ETag": {"schema":{"type":"string"}},
+              "Accept-Ranges": {"schema":{"const":"bytes"}},
+              "Content-Disposition": {"schema":{"type":"string"}},
+              "Content-Length": {"schema":{"type":"integer","minimum":0}}
+            }
+          },
+          "206": {
+            "description": "返回单个字节范围。",
+            "content": {"*/*":{"schema":{"type":"string","format":"binary"}}},
+            "headers": {
+              "ETag": {"schema":{"type":"string"}},
+              "Accept-Ranges": {"schema":{"const":"bytes"}},
+              "Content-Disposition": {"schema":{"type":"string"}},
+              "Content-Length": {"schema":{"type":"integer","minimum":0}},
+              "Content-Range": {"schema":{"type":"string"}}
+            }
+          },
+          "304": {"description":"ETag 匹配，无响应体。","headers":{"ETag":{"schema":{"type":"string"}}}},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "416": {
+            "description": "字节范围无效或不存在，无响应体。",
+            "headers": {"Accept-Ranges":{"schema":{"const":"bytes"}},"Content-Range":{"schema":{"type":"string"}}}
+          },
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {"description":"后台处理失败。","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/jobs": {
+      "get": {
+        "tags": ["jobs"],
+        "operationId": "jobs.list",
+        "summary": "列出会话 Job",
+        "x-vykor-feature": {"name":"jobs","minimum":3},
+        "parameters": [
+          {"name":"sessionId","in":"query","required":true,"schema":{"type":"string"}},
+          {
+            "name": "kinds",
+            "in": "query",
+            "schema": {"type":"array","items":{"type":"string","enum":["terminal","shell","agent","dream","workflow"]}},
+            "style": "form",
+            "explode": false
+          },
+          {
+            "name": "statuses",
+            "in": "query",
+            "schema": {"type":"array","items":{"type":"string","enum":["running","stopping","completed","killed","failed"]}},
+            "style": "form",
+            "explode": false
+          },
+          {"name":"startedAfter","in":"query","schema":{"type":"number"}},
+          {"name":"startedBefore","in":"query","schema":{"type":"number"}},
+          {"name":"updatedAfter","in":"query","schema":{"type":"number"}},
+          {"name":"updatedBefore","in":"query","schema":{"type":"number"}},
+          {"name":"includeFinished","in":"query","schema":{"type":"boolean"}},
+          {"$ref":"#/components/parameters/Limit"},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jobs": {"type":"array","items":{"$ref":"#/components/schemas/JobSnapshot"}},
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "kind": {"type":"string","enum":["terminal","shell","agent","dream","workflow"]},
+                          "message": {"type":"string"}
+                        },
+                        "required": ["kind","message"]
+                      }
+                    }
+                  },
+                  "required": ["jobs","errors"]
+                }
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "403": {
+            "description": "当前会话或权限规则禁止此操作。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          },
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/background-shells": {
+      "post": {
+        "tags": ["jobs"],
+        "operationId": "jobs.createBackgroundShell",
+        "summary": "启动 daemon 工作区的后台 Shell",
+        "x-vykor-feature": {"name":"jobs","minimum":3},
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {"type":"string"},
+            "description": "当存在时优先于 requestId，用于同一次创建的重试。"
+          },
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "requestId": {"type":"string"},
+                  "sessionId": {"type":"string"},
+                  "command": {"type":"string"},
+                  "cwd": {"type":"string"},
+                  "description": {"type":"string"}
+                },
+                "required": ["sessionId","command"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"jobId":{"type":"string"},"snapshot":{"$ref":"#/components/schemas/JobSnapshot"}},
+                  "required": ["jobId","snapshot"]
+                }
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "403": {
+            "description": "当前会话或权限规则禁止此操作。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          },
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {"description":"后台处理失败。","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/jobs/{jobId}": {
+      "get": {
+        "tags": ["jobs"],
+        "operationId": "jobs.read",
+        "summary": "读取指定 Job 的输出",
+        "x-vykor-feature": {"name":"jobs","minimum":3},
+        "parameters": [
+          {"name":"jobId","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"sessionId","in":"query","required":true,"schema":{"type":"string"}},
+          {
+            "name": "kind",
+            "in": "query",
+            "required": true,
+            "schema": {"type":"string","enum":["terminal","shell","agent","dream","workflow"]}
+          },
+          {"name":"runId","in":"query","schema":{"type":"string"},"description":"kind 为 agent 时必填。"},
+          {"name":"after","in":"query","schema":{"type":"number"}},
+          {"name":"maxChars","in":"query","schema":{"type":"number"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {"description":"请求成功。","content":{"application/json":{"schema":{"$ref":"#/components/schemas/JobRead"}}}},
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "403": {
+            "description": "当前会话或权限规则禁止此操作。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          },
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/jobs/{jobId}/wait": {
+      "post": {
+        "tags": ["jobs"],
+        "operationId": "jobs.wait",
+        "summary": "等待指定 Job 并读取输出",
+        "x-vykor-feature": {"name":"jobs","minimum":3},
+        "parameters": [
+          {"name":"jobId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sessionId": {"type":"string"},
+                  "target": {"$ref":"#/components/schemas/JobTarget","description":"jobId 必须与 URL 一致。agent 目标需要精确的 Run ID。"},
+                  "timeoutMs": {"type":"number","default":30000},
+                  "after": {"type":"number"},
+                  "maxChars": {"type":"number"}
+                },
+                "required": ["sessionId","target"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {"$ref":"#/components/schemas/JobRead"},
+                    {"type":"object","properties":{"timedOut":{"type":"boolean"}},"required":["timedOut"]}
+                  ]
+                }
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "403": {
+            "description": "当前会话或权限规则禁止此操作。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          },
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/jobs/{jobId}/input": {
+      "post": {
+        "tags": ["jobs"],
+        "operationId": "jobs.send",
+        "summary": "向指定 Job 发送输入",
+        "x-vykor-feature": {"name":"jobs","minimum":3},
+        "parameters": [
+          {"name":"jobId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sessionId": {"type":"string"},
+                  "target": {"$ref":"#/components/schemas/JobTarget","description":"jobId 必须与 URL 一致。agent 目标需要精确的 Run ID。"},
+                  "data": {"type":"string"}
+                },
+                "required": ["sessionId","target","data"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"sent":{"const":true},"receipt":{"$ref":"#/components/schemas/JobReceipt"}},
+                  "required": ["sent"]
+                }
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "403": {
+            "description": "当前会话或权限规则禁止此操作。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          },
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/jobs/{jobId}/cancel": {
+      "post": {
+        "tags": ["jobs"],
+        "operationId": "jobs.cancel",
+        "summary": "取消指定 Job",
+        "x-vykor-feature": {"name":"jobs","minimum":3},
+        "parameters": [
+          {"name":"jobId","in":"path","required":true,"schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sessionId": {"type":"string"},
+                  "target": {"$ref":"#/components/schemas/JobTarget","description":"jobId 必须与 URL 一致。agent 目标需要精确的 Run ID。"},
+                  "reason": {"type":"string"}
+                },
+                "required": ["sessionId","target"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"snapshot":{"$ref":"#/components/schemas/JobSnapshot"}},
+                  "required": ["snapshot"]
+                }
+              }
+            }
+          },
+          "400": {"$ref":"#/components/responses/InvalidRequest"},
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "403": {
+            "description": "当前会话或权限规则禁止此操作。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          },
+          "404": {"$ref":"#/components/responses/NotFound"},
+          "409": {"$ref":"#/components/responses/Conflict"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/events": {
+      "get": {
+        "tags": ["events"],
+        "operationId": "events.list",
+        "summary": "按游标读取持久事件",
+        "parameters": [
+          {"$ref":"#/components/parameters/Cursor"},
+          {"$ref":"#/components/parameters/AfterSeq"},
+          {"$ref":"#/components/parameters/Limit"},
+          {"name":"sessionId","in":"query","schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/PartView"},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {"events":{"type":"array","items":{"$ref":"#/components/schemas/Event"}}},
+                  "required": ["events"]
+                }
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/events/stream": {
+      "get": {
+        "tags": ["events"],
+        "operationId": "events.stream",
+        "summary": "重放持久事件并订阅实时事件",
+        "description": "断开连接只结束本次观察。临时文本增量和工具进度无法依赖历史补齐，重连会话时重取会话快照。",
+        "parameters": [
+          {"$ref":"#/components/parameters/Cursor"},
+          {"$ref":"#/components/parameters/AfterSeq"},
+          {"name":"sessionId","in":"query","schema":{"type":"string"}},
+          {"$ref":"#/components/parameters/PartView"},
+          {
+            "name": "Last-Event-ID",
+            "in": "header",
+            "schema": {"type":"string"},
+            "description": "续订时发送最后应用的事件序号。有效的 cursor 或 afterSeq 查询值优先于该头。"
+          },
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE 帧用 id 表示事件序号，event 表示事件类型，data 是单条 Event 的 JSON。注释帧报告连接和心跳。",
+            "content": {
+              "text/event-stream": {
+                "schema": {"type":"string"},
+                "example": "id: 104\nevent: permission.asked\ndata: {\"id\":\"event-104\",\"seq\":104,\"type\":\"permission.asked\",\"schemaVersion\":1,\"sessionId\":\"session-1\",\"payload\":{},\"createdAt\":1760000000000}\n\n"
+              }
+            }
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/files": {
+      "get": {
+        "tags": ["files"],
+        "operationId": "files.list",
+        "summary": "列出会话工作区目录",
+        "x-vykor-feature": {"name":"sessionFiles","minimum":1},
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"path","in":"query","schema":{"type":"string"},"description":"相对于会话工作区的路径。"},
+          {"$ref":"#/components/parameters/Limit"},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "path": {"type":"string"},
+                    "entries": {"type":"array","items":{"$ref":"#/components/schemas/FileInfo"}},
+                    "truncated": {"type":"boolean"}
+                  },
+                  "required": ["path","entries","truncated"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "无效文件查询。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "403": {
+            "description": "路径或会话未经授权。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "404": {
+            "description": "路径未找到。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "408": {
+            "description": "读取超时或取消。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {
+            "description": "文件操作失败。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "501": {
+            "description": "此实例不提供会话文件服务。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "503": {
+            "description": "会话文件暂不可用。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/files/stat": {
+      "get": {
+        "tags": ["files"],
+        "operationId": "files.stat",
+        "summary": "读取工作区文件信息",
+        "x-vykor-feature": {"name":"sessionFiles","minimum":1},
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"path","in":"query","required":true,"schema":{"type":"string"},"description":"相对于会话工作区的路径。"},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileInfo"}}}
+          },
+          "400": {
+            "description": "无效文件查询。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "403": {
+            "description": "路径或会话未经授权。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "404": {
+            "description": "路径未找到。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "408": {
+            "description": "读取超时或取消。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {
+            "description": "文件操作失败。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "501": {
+            "description": "此实例不提供会话文件服务。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "503": {
+            "description": "会话文件暂不可用。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/files/text": {
+      "get": {
+        "tags": ["files"],
+        "operationId": "files.readText",
+        "summary": "读取工作区的 UTF-8 文本",
+        "x-vykor-feature": {"name":"sessionFiles","minimum":1},
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"path","in":"query","required":true,"schema":{"type":"string"},"description":"相对于会话工作区的路径。"},
+          {"name":"maxBytes","in":"query","schema":{"type":"integer","minimum":1}},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "path": {"type":"string"},
+                    "content": {"type":"string"},
+                    "encoding": {"const":"utf-8"},
+                    "truncated": {"type":"boolean"}
+                  },
+                  "required": ["path","content","encoding","truncated"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "无效文件查询。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "403": {
+            "description": "路径或会话未经授权。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "404": {
+            "description": "路径未找到。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "408": {
+            "description": "读取超时或取消。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "415": {
+            "description": "文件不是可读文本。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {
+            "description": "文件操作失败。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "501": {
+            "description": "此实例不提供会话文件服务。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "503": {
+            "description": "会话文件暂不可用。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/files/find": {
+      "get": {
+        "tags": ["files"],
+        "operationId": "files.find",
+        "summary": "按路径模式查找工作区文件",
+        "x-vykor-feature": {"name":"sessionFiles","minimum":1},
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"pattern","in":"query","required":true,"schema":{"type":"string"}},
+          {"name":"path","in":"query","schema":{"type":"string"},"description":"相对于会话工作区的路径。"},
+          {"$ref":"#/components/parameters/Limit"},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "path": {"type":"string"},
+                    "files": {"type":"array","items":{"type":"string"}},
+                    "truncated": {"type":"boolean"}
+                  },
+                  "required": ["path","files","truncated"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "无效文件查询。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "403": {
+            "description": "路径或会话未经授权。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "404": {
+            "description": "路径未找到。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "408": {
+            "description": "读取超时或取消。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {
+            "description": "文件操作失败。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "501": {
+            "description": "此实例不提供会话文件服务。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "503": {
+            "description": "会话文件暂不可用。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    },
+    "/sessions/{sessionId}/files/search": {
+      "get": {
+        "tags": ["files"],
+        "operationId": "files.search",
+        "summary": "搜索工作区文件内容",
+        "x-vykor-feature": {"name":"sessionFiles","minimum":1},
+        "parameters": [
+          {"name":"sessionId","in":"path","required":true,"schema":{"type":"string"}},
+          {"name":"query","in":"query","required":true,"schema":{"type":"string"}},
+          {"name":"path","in":"query","schema":{"type":"string"},"description":"相对于会话工作区的路径。"},
+          {"name":"include","in":"query","schema":{"type":"string"}},
+          {"name":"caseSensitive","in":"query","schema":{"type":"boolean"}},
+          {"$ref":"#/components/parameters/Limit"},
+          {"$ref":"#/components/parameters/ProtocolVersion"}
+        ],
+        "responses": {
+          "200": {
+            "description": "请求成功。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "path": {"type":"string"},
+                    "matches": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {"path":{"type":"string"},"line":{"type":"integer","minimum":1},"text":{"type":"string"}},
+                        "required": ["path","line","text"]
+                      }
+                    },
+                    "truncated": {"type":"boolean"}
+                  },
+                  "required": ["path","matches","truncated"]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "无效文件查询。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "401": {"$ref":"#/components/responses/Unauthorized"},
+          "403": {
+            "description": "路径或会话未经授权。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "404": {
+            "description": "路径未找到。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "408": {
+            "description": "读取超时或取消。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "426": {"$ref":"#/components/responses/ProtocolMismatch"},
+          "500": {
+            "description": "文件操作失败。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "501": {
+            "description": "此实例不提供会话文件服务。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "503": {
+            "description": "会话文件暂不可用。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/FileError"}}}
+          },
+          "default": {
+            "description": "其他 HTTP 错误。",
+            "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {"type":"http","scheme":"bearer","description":"daemon 配置 token 时，使用该实例的 Bearer token。健康和能力探测不发送 token。"}
+    },
+    "parameters": {
+      "ProtocolVersion": {"name":"x-vykor-protocol-version","in":"header","required":true,"schema":{"type":"string","const":"7"}},
+      "Cursor": {"name":"cursor","in":"query","schema":{"type":"integer","minimum":0},"description":"读取此序号之后的数据。"},
+      "AfterSeq": {"name":"afterSeq","in":"query","schema":{"type":"integer","minimum":0},"description":"cursor 的兼容别名。"},
+      "Limit": {"name":"limit","in":"query","schema":{"type":"integer","minimum":1}},
+      "PartView": {
+        "name": "partView",
+        "in": "query",
+        "schema": {"type":"string","enum":["summary"]},
+        "description": "返回摘要正文。需要完整内容时读取单个消息片段。"
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "实例需要有效的 Bearer token。",
+        "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+      },
+      "ProtocolMismatch": {
+        "description": "缺少协议头或版本不匹配。",
+        "content": {"application/json":{"schema":{"$ref":"#/components/schemas/ProtocolMismatch"}}}
+      },
+      "InvalidRequest": {
+        "description": "参数、请求体或资源范围无效。",
+        "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+      },
+      "NotFound": {"description":"找不到请求的资源。","content":{"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}},
+      "Conflict": {
+        "description": "请求标识、版本、权限状态或当前执行已变化。",
+        "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+      },
+      "RequestTooLarge": {
+        "description": "请求超过服务端大小限制。",
+        "content": {"application/json":{"schema":{"$ref":"#/components/schemas/Error"}}}
+      }
+    },
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "properties": {
+          "ok": {"const":true},
+          "ready": {"type":"boolean"},
+          "restartPrepared": {"type":"boolean"},
+          "version": {"type":"string"},
+          "startedAt": {"type":"integer","minimum":0},
+          "uptimeMs": {"type":"integer","minimum":0},
+          "sessionCount": {"type":"integer","minimum":0},
+          "activeRunCount": {"type":"integer","minimum":0},
+          "queuedRunCount": {"type":"integer","minimum":0}
+        },
+        "required": ["ok","startedAt","uptimeMs","sessionCount","activeRunCount","queuedRunCount"]
+      },
+      "Capabilities": {
+        "type": "object",
+        "properties": {
+          "serverVersion": {"type":"string"},
+          "protocol": {
+            "type": "object",
+            "properties": {"version":{"type":"integer","minimum":1,"description":"当前契约读取版本 7。客户端必须在业务请求前确认版本一致。"}},
+            "required": ["version"]
+          },
+          "features": {
+            "type": "object",
+            "additionalProperties": {"type":"integer","minimum":1},
+            "properties": {
+              "steer": {"type":"integer","minimum":1,"description":"1 支持补充输入。2 支持 expectedActiveRunId 绑定。"},
+              "runAttempts": {"type":"integer","minimum":1,"description":"公开快照包含持久化运行尝试记录。"},
+              "toolAttempts": {"type":"integer","minimum":1,"description":"会话事件包含工具尝试的投影。"},
+              "jobs": {"type":"integer","minimum":1,"description":"按 JobTarget 查找、读取、等待、输入和取消。3 为当前能力版本。"},
+              "permissionApprovals": {"type":"integer","minimum":1,"description":"读取和撤销已有会话批准。"},
+              "attachments": {"type":"integer","minimum":1,"description":"附件上传和读取。"},
+              "pluginCapabilities": {"type":"integer","minimum":1,"description":"提示词可以包含公开的插件能力引用。"},
+              "structuredDelivery": {"type":"integer","minimum":1,"description":"接受公开 prompt 的 outputSchema。"},
+              "sessionFiles": {"type":"integer","minimum":1,"description":"实例配置了只读会话文件服务。"}
+            }
+          },
+          "attachments": {
+            "type": "object",
+            "properties": {
+              "limits": {
+                "type": "object",
+                "properties": {
+                  "maxFilesPerPrompt": {"type":"integer","minimum":1},
+                  "maxBytesPerFile": {"type":"integer","minimum":1},
+                  "maxBytesPerPrompt": {"type":"integer","minimum":1},
+                  "maxSessionReferencedBytes": {"type":"integer","minimum":1},
+                  "resumableThresholdBytes": {"type":"integer","minimum":1},
+                  "uploadSessionTtlMs": {"type":"integer","minimum":1},
+                  "stagingTtlMs": {"type":"integer","minimum":1}
+                },
+                "required": [
+                  "maxFilesPerPrompt",
+                  "maxBytesPerFile",
+                  "maxBytesPerPrompt",
+                  "maxSessionReferencedBytes",
+                  "resumableThresholdBytes",
+                  "uploadSessionTtlMs",
+                  "stagingTtlMs"
+                ]
+              },
+              "uploadModes": {"description":"当前公开上传接口使用 single。","oneOf":[{"const":["single"]},{"const":["single","resumable"]}]}
+            },
+            "required": ["limits","uploadModes"]
+          },
+          "agentEnvironments": {
+            "type": "object",
+            "properties": {
+              "native": {"const":true},
+              "wsl": {"type":"boolean"},
+              "activeDefault": {
+                "type": "object",
+                "properties": {
+                  "kind": {"type":"string","enum":["native","wsl"]},
+                  "distribution": {"type":"string"},
+                  "fingerprint": {"type":"string"}
+                },
+                "required": ["kind","fingerprint"]
+              }
+            },
+            "required": ["native","wsl"]
+          }
+        },
+        "required": ["serverVersion","protocol","features"]
+      },
+      "Error": {
+        "oneOf": [
+          {"type":"object","properties":{"error":{"type":"string"}},"required":["error"]},
+          {
+            "type": "object",
+            "properties": {
+              "code": {"type":"string"},
+              "message": {"type":"string"},
+              "retryable": {"type":"boolean"},
+              "details": {"type":"object","additionalProperties":true},
+              "traceId": {"type":"string"}
+            },
+            "required": ["code","message"]
+          }
+        ]
+      },
+      "ProtocolMismatch": {
+        "type": "object",
+        "properties": {
+          "error": {"const":"protocol_version_mismatch"},
+          "expected": {"type":"integer","minimum":1},
+          "received": {"type":["integer","string","null"]}
+        },
+        "required": ["error","expected","received"]
+      },
+      "FileError": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "file_invalid_request",
+              "file_forbidden",
+              "file_not_found",
+              "file_not_text",
+              "file_not_ready",
+              "file_not_supported",
+              "file_timeout",
+              "file_cancelled",
+              "file_operation_failed"
+            ]
+          },
+          "message": {"type":"string"}
+        },
+        "required": ["code","message"]
+      },
+      "Session": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string"},
+          "cwd": {"type":"string"},
+          "cwdRelative": {"type":"string"},
+          "title": {"type":"string"},
+          "model": {"type":"string"},
+          "agent": {"type":"string"},
+          "parentId": {"type":"string"},
+          "projectId": {"type":"string"},
+          "storage": {"type":"string","enum":["sqlite","memory"]},
+          "status": {"type":"string","enum":["idle","running","closing","archived","error"]},
+          "metadata": {"type":"object","additionalProperties":true},
+          "archivedAt": {"type":"integer","minimum":0},
+          "createdAt": {"type":"integer","minimum":0},
+          "updatedAt": {"type":"integer","minimum":0}
+        },
+        "required": ["id","cwd","title","model","status","metadata","createdAt","updatedAt"]
+      },
+      "CreateSession": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string"},
+          "storage": {"type":"string","enum":["sqlite","memory"]},
+          "parentId": {"type":"string"},
+          "projectId": {"type":"string"},
+          "cwd": {"type":"string"},
+          "title": {"type":"string"},
+          "model": {"type":"string"},
+          "agent": {"type":"string"},
+          "metadata": {"type":"object","additionalProperties":true}
+        },
+        "required": ["cwd","model"]
+      },
+      "ForkSession": {
+        "type": "object",
+        "properties": {
+          "storage": {"type":"string","enum":["sqlite","memory"]},
+          "copyHistory": {"type":"boolean"},
+          "beforeMessageId": {"type":"string"},
+          "afterMessageId": {"type":"string"}
+        }
+      },
+      "UpdateSession": {
+        "type": "object",
+        "properties": {
+          "title": {"type":"string"},
+          "agent": {"anyOf":[{"type":"string"},{"type":"null"}]},
+          "metadata": {"type":"object","additionalProperties":true}
+        }
+      },
+      "SessionSearchResult": {
+        "type": "object",
+        "properties": {
+          "session": {"$ref":"#/components/schemas/Session"},
+          "messageId": {"type":"string"},
+          "snippet": {"type":"string"}
+        },
+        "required": ["session","messageId","snippet"]
+      },
+      "SessionInputItem": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {"type":{"const":"text"},"text":{"type":"string"}},
+            "required": ["type","text"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {"const":"skill"},
+              "name": {"type":"string"},
+              "path": {"type":"string"},
+              "displayName": {"type":"string"},
+              "source": {"type":"string","enum":["bundled","user","project","plugin"]}
+            },
+            "required": ["type","name","path"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {"const":"mention"},
+              "name": {"type":"string"},
+              "path": {"type":"string"},
+              "displayName": {"type":"string"}
+            },
+            "required": ["type","name","path"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {"const":"context"},
+              "kind": {"const":"conversation"},
+              "id": {"type":"string"},
+              "displayName": {"type":"string"}
+            },
+            "required": ["type","kind","id","displayName"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {"const":"capability"},
+              "kind": {"const":"plugin"},
+              "pluginId": {"type":"string"},
+              "displayName": {"type":"string"}
+            },
+            "required": ["type","kind","pluginId","displayName"]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {"const":"capability"},
+              "kind": {"const":"plugin_agent"},
+              "pluginId": {"type":"string"},
+              "agentId": {"type":"string"},
+              "displayName": {"type":"string"}
+            },
+            "required": ["type","kind","pluginId","agentId","displayName"]
+          }
+        ]
+      },
+      "PromptAttachment": {
+        "type": "object",
+        "properties": {
+          "assetId": {"type":"string"},
+          "intent": {"type":"string","enum":["auto","vision","ocr","document","tool_resource","workspace_reference"]},
+          "displayName": {"type":"string"}
+        },
+        "required": ["assetId"]
+      },
+      "InputAttachment": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string"},
+          "sessionId": {"type":"string"},
+          "inputId": {"type":"string"},
+          "assetId": {"type":"string"},
+          "seq": {"type":"integer","minimum":0},
+          "intent": {"type":"string","enum":["auto","vision","ocr","document","tool_resource","workspace_reference"]},
+          "displayName": {"type":"string"},
+          "mediaType": {"type":"string"},
+          "sizeBytes": {"type":"integer","minimum":0},
+          "metadata": {"type":"object","additionalProperties":true},
+          "createdAt": {"type":"integer","minimum":0}
+        },
+        "required": [
+          "id",
+          "sessionId",
+          "inputId",
+          "assetId",
+          "seq",
+          "intent",
+          "displayName",
+          "mediaType",
+          "sizeBytes",
+          "metadata",
+          "createdAt"
+        ]
+      },
+      "SessionInput": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string"},
+          "sessionId": {"type":"string"},
+          "seq": {"type":"integer","minimum":0},
+          "delivery": {"type":"string","enum":["queue","steer"]},
+          "items": {"type":"array","items":{"$ref":"#/components/schemas/SessionInputItem"}},
+          "content": {"type":"string"},
+          "attachments": {"type":"array","items":{"$ref":"#/components/schemas/InputAttachment"}},
+          "promotedMessageId": {"type":"string"},
+          "metadata": {"type":"object","additionalProperties":true},
+          "createdAt": {"type":"integer","minimum":0}
+        },
+        "required": ["id","sessionId","seq","delivery","items","content","attachments","metadata","createdAt"]
+      },
+      "SessionMessage": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string"},
+          "sessionId": {"type":"string"},
+          "seq": {"type":"integer","minimum":0},
+          "role": {"type":"string","enum":["system","user","assistant"]},
+          "runId": {"type":"string"},
+          "inputId": {"type":"string"},
+          "metadata": {"type":"object","additionalProperties":true},
+          "createdAt": {"type":"integer","minimum":0},
+          "updatedAt": {"type":"integer","minimum":0}
+        },
+        "required": ["id","sessionId","seq","role","metadata","createdAt","updatedAt"]
+      },
+      "MessagePart": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string"},
+          "sessionId": {"type":"string"},
+          "messageId": {"type":"string"},
+          "seq": {"type":"integer","minimum":0},
+          "type": {
+            "type": "string",
+            "enum": ["text","attachment","transformation","reasoning","tool","tool_result","error","log"]
+          },
+          "status": {"type":"string","enum":["pending","running","completed","failed","interrupted"]},
+          "text": {"type":"string"},
+          "toolUseId": {"type":"string"},
+          "toolName": {"type":"string"},
+          "input": {"type":"object","additionalProperties":true},
+          "output": {},
+          "isError": {"type":"boolean"},
+          "bodyView": {
+            "type": "object",
+            "properties": {
+              "input": {"type":"string","enum":["full","preview","unavailable"]},
+              "output": {"type":"string","enum":["full","preview","unavailable"]},
+              "outputReferences": {"type":"array","items":{"type":"string"}}
+            },
+            "required": ["input","output"]
+          },
+          "assetId": {"type":"string"},
+          "intent": {"type":"string","enum":["auto","vision","ocr","document","tool_resource","workspace_reference"]},
+          "displayName": {"type":"string"},
+          "mediaType": {"type":"string"},
+          "sizeBytes": {"type":"integer","minimum":0},
+          "kind": {"type":"string","enum":["direct","document_extract","tool_mount"]},
+          "representationId": {"type":"string"},
+          "processor": {"type":"string"},
+          "transformationError": {"type":"string"},
+          "metadata": {"type":"object","additionalProperties":true},
+          "createdAt": {"type":"integer","minimum":0},
+          "updatedAt": {"type":"integer","minimum":0}
+        },
+        "required": ["id","sessionId","messageId","seq","type","status","metadata","createdAt","updatedAt"]
+      },
+      "SessionRun": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string"},
+          "sessionId": {"type":"string"},
+          "inputId": {"type":"string"},
+          "status": {"type":"string","enum":["pending","running","completed","failed","interrupted"]},
+          "startedAt": {"type":"integer","minimum":0},
+          "finishedAt": {"type":"integer","minimum":0},
+          "error": {"type":"string"},
+          "metadata": {"type":"object","additionalProperties":true},
+          "createdAt": {"type":"integer","minimum":0},
+          "updatedAt": {"type":"integer","minimum":0}
+        },
+        "required": ["id","sessionId","status","metadata","createdAt","updatedAt"]
+      },
+      "RunAttempt": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string"},
+          "runId": {"type":"string"},
+          "sequence": {"type":"integer","minimum":0},
+          "status": {"type":"string","enum":["pending","running","completed","failed","cancelled"]},
+          "provider": {"type":"string"},
+          "model": {"type":"string"},
+          "retryReason": {"type":"string"},
+          "errorKind": {"type":"string"},
+          "error": {"type":"string"},
+          "inputTokens": {"type":"integer","minimum":0},
+          "outputTokens": {"type":"integer","minimum":0},
+          "startedAt": {"type":"integer","minimum":0},
+          "finishedAt": {"type":"integer","minimum":0},
+          "createdAt": {"type":"integer","minimum":0},
+          "updatedAt": {"type":"integer","minimum":0}
+        },
+        "required": ["id","runId","sequence","status","createdAt","updatedAt"]
+      },
+      "SessionTask": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string"},
+          "sessionId": {"type":"string"},
+          "requestNamespace": {"type":"string"},
+          "requestId": {"type":"string"},
+          "childSessionId": {"type":"string"},
+          "runId": {"type":"string"},
+          "type": {"type":"string"},
+          "status": {"type":"string","enum":["pending","running","completed","failed","stopped","interrupted"]},
+          "description": {"type":"string"},
+          "cwd": {"type":"string"},
+          "output": {"type":"string"},
+          "error": {"type":"string"},
+          "metadata": {"type":"object","additionalProperties":true},
+          "startedAt": {"type":"integer","minimum":0},
+          "finishedAt": {"type":"integer","minimum":0},
+          "createdAt": {"type":"integer","minimum":0},
+          "updatedAt": {"type":"integer","minimum":0}
+        },
+        "required": ["id","sessionId","type","status","description","cwd","metadata","createdAt","updatedAt"]
+      },
+      "PermissionRequest": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string"},
+          "sessionId": {"type":"string"},
+          "runId": {"type":"string"},
+          "toolName": {"type":"string"},
+          "payload": {"type":"object","additionalProperties":true},
+          "status": {"type":"string","enum":["pending","approved","denied","expired"]},
+          "decision": {"type":"string"},
+          "decidedByClientId": {"type":"string"},
+          "createdAt": {"type":"integer","minimum":0},
+          "updatedAt": {"type":"integer","minimum":0}
+        },
+        "required": ["id","sessionId","toolName","payload","status","createdAt","updatedAt"]
+      },
+      "PermissionReply": {
+        "type": "object",
+        "properties": {
+          "status": {"type":"string","enum":["approved","denied","expired"]},
+          "decision": {"type":"string","enum":["once","session"]},
+          "clientId": {"type":"string"},
+          "answer": {"type":"string","description":"AskUser 的回答。给待处理请求发送 approved、once 和答案文本。"}
+        },
+        "required": ["status"]
+      },
+      "SessionSnapshot": {
+        "type": "object",
+        "properties": {
+          "cursor": {"type":"integer","minimum":0},
+          "session": {"$ref":"#/components/schemas/Session"},
+          "inputs": {"type":"array","items":{"$ref":"#/components/schemas/SessionInput"}},
+          "messages": {"type":"array","items":{"$ref":"#/components/schemas/SessionMessage"}},
+          "parts": {"type":"array","items":{"$ref":"#/components/schemas/MessagePart"}},
+          "runs": {"type":"array","items":{"$ref":"#/components/schemas/SessionRun"}},
+          "attempts": {"type":"array","items":{"$ref":"#/components/schemas/RunAttempt"}},
+          "tasks": {"type":"array","items":{"$ref":"#/components/schemas/SessionTask"}},
+          "permissions": {"type":"array","items":{"$ref":"#/components/schemas/PermissionRequest"}}
+        },
+        "required": ["cursor","session","inputs","messages","parts","runs","attempts","permissions"]
+      },
+      "Prompt": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string","description":"用稳定输入 ID 重试同一次提交。相同 ID 的不同内容会发生冲突。"},
+          "items": {"type":"array","items":{"$ref":"#/components/schemas/SessionInputItem"}},
+          "delivery": {"type":"string","enum":["queue","steer"]},
+          "expectedActiveRunId": {"type":"string"},
+          "outputSchema": {"type":"object","additionalProperties":true},
+          "attachments": {"type":"array","items":{"$ref":"#/components/schemas/PromptAttachment"}},
+          "metadata": {"type":"object","additionalProperties":true}
+        },
+        "required": ["items"]
+      },
+      "EditPrompt": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string"},
+          "sourceMessageId": {"type":"string"},
+          "items": {"type":"array","items":{"$ref":"#/components/schemas/SessionInputItem"}},
+          "outputSchema": {"type":"object","additionalProperties":true},
+          "attachments": {"type":"array","items":{"$ref":"#/components/schemas/PromptAttachment"}},
+          "metadata": {"type":"object","additionalProperties":true}
+        },
+        "required": ["id","sourceMessageId","items"]
+      },
+      "PromptReceipt": {
+        "type": "object",
+        "properties": {
+          "input": {"$ref":"#/components/schemas/SessionInput"},
+          "run": {"$ref":"#/components/schemas/SessionRun"},
+          "queue_state": {"type":"string","enum":["running","queued"]}
+        },
+        "required": ["input"]
+      },
+      "ResumePrompt": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string"},
+          "metadata": {"type":"object","additionalProperties":true},
+          "outputSchema": {"type":"object","additionalProperties":true}
+        }
+      },
+      "ResumeReceipt": {
+        "allOf": [
+          {"$ref":"#/components/schemas/PromptReceipt"},
+          {
+            "type": "object",
+            "properties": {"source_run":{"$ref":"#/components/schemas/SessionRun"}},
+            "required": ["source_run"]
+          }
+        ]
+      },
+      "Event": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string"},
+          "seq": {"type":"integer","minimum":0},
+          "type": {"type":"string"},
+          "schemaVersion": {"type":"integer","minimum":1},
+          "sessionId": {"type":"string"},
+          "payload": {"type":"object","additionalProperties":true},
+          "createdAt": {"type":"integer","minimum":0}
+        },
+        "required": ["id","seq","type","schemaVersion","payload","createdAt"]
+      },
+      "Attachment": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string"},
+          "displayName": {"type":"string"},
+          "declaredMediaType": {"type":"string"},
+          "mediaType": {"type":"string"},
+          "sizeBytes": {"type":"integer","minimum":0},
+          "sha256": {"type":"string"},
+          "status": {"type":"string","enum":["importing","ready","failed","deleted"]},
+          "failureCode": {"type":"string"},
+          "deletedAt": {"type":"integer","minimum":0},
+          "chatSources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "storage": {"type":"string","enum":["sqlite","memory"]},
+                "sessionId": {"type":"string"},
+                "sourceSessionId": {"type":"string"},
+                "inputId": {"type":"string"},
+                "runId": {"type":"string"}
+              },
+              "required": ["storage","sessionId"]
+            }
+          },
+          "createdAt": {"type":"integer","minimum":0},
+          "updatedAt": {"type":"integer","minimum":0}
+        },
+        "required": ["id","displayName","status","createdAt","updatedAt"]
+      },
+      "Goal": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string"},
+          "sessionId": {"type":"string"},
+          "objective": {"type":"string"},
+          "objectiveVersion": {"type":"integer","minimum":1},
+          "revision": {"type":"integer","minimum":0},
+          "pluginId": {"type":"string"},
+          "status": {"type":"string","enum":["active","waiting_user","blocked","paused","completed","cancelled"]},
+          "maxAutoTurns": {"type":"integer","minimum":1},
+          "tokenBudget": {"type":"integer","minimum":1},
+          "autoTurnsUsed": {"type":"integer","minimum":0},
+          "currentRunId": {"type":"string"},
+          "queuedResume": {"type":"object","properties":{"requestId":{"type":"string"}},"required":["requestId"]},
+          "reason": {"type":"string"},
+          "stopReason": {
+            "type": "object",
+            "properties": {
+              "code": {"type":"string"},
+              "at": {"type":"integer","minimum":0},
+              "runId": {"type":"string"},
+              "detail": {"type":"string"}
+            },
+            "required": ["code","at"]
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "knownTokens": {"type":"integer","minimum":0},
+              "incomplete": {"type":"boolean"},
+              "unknownAttempts": {"type":"integer","minimum":0},
+              "partialAttempts": {"type":"integer","minimum":0},
+              "inFlightAttempts": {"type":"integer","minimum":0},
+              "runTimeMs": {"type":"integer","minimum":0},
+              "seq": {"type":"integer","minimum":0},
+              "updatedAt": {"type":"integer","minimum":0}
+            },
+            "required": [
+              "knownTokens",
+              "incomplete",
+              "unknownAttempts",
+              "partialAttempts",
+              "inFlightAttempts",
+              "runTimeMs",
+              "seq",
+              "updatedAt"
+            ]
+          },
+          "wait": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {"const":"user"},
+                  "questionId": {"type":"string"},
+                  "question": {"type":"string"},
+                  "objectiveVersion": {"type":"integer","minimum":1},
+                  "replyInputId": {"type":"string"},
+                  "response": {"type":"string"}
+                },
+                "required": ["kind","questionId","question","objectiveVersion"]
+              },
+              {
+                "type": "object",
+                "properties": {"kind":{"const":"approval"},"permissionRequestId":{"type":"string"}},
+                "required": ["kind","permissionRequestId"]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {"const":"external"},
+                  "targetRunId": {"type":"string"},
+                  "ownerRunId": {"type":"string"},
+                  "goalId": {"type":"string"},
+                  "objectiveVersion": {"type":"integer","minimum":1},
+                  "deadlineAt": {"type":"integer","minimum":0},
+                  "observedStatus": {"type":"string","enum":["pending","running","completed","failed","interrupted"]}
+                },
+                "required": ["kind","targetRunId","ownerRunId","goalId","objectiveVersion","deadlineAt"]
+              }
+            ]
+          },
+          "createdAt": {"type":"integer","minimum":0},
+          "updatedAt": {"type":"integer","minimum":0}
+        },
+        "required": [
+          "id",
+          "sessionId",
+          "objective",
+          "objectiveVersion",
+          "revision",
+          "status",
+          "maxAutoTurns",
+          "usage",
+          "autoTurnsUsed",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "CreateGoal": {
+        "type": "object",
+        "properties": {
+          "requestId": {"type":"string"},
+          "objective": {"type":"string"},
+          "maxAutoTurns": {"type":"integer","minimum":1},
+          "tokenBudget": {"type":"integer","minimum":1},
+          "items": {"type":"array","items":{"$ref":"#/components/schemas/SessionInputItem"}},
+          "attachments": {"type":"array","items":{"$ref":"#/components/schemas/PromptAttachment"}}
+        },
+        "required": ["requestId","objective"]
+      },
+      "UpdateGoal": {
+        "type": "object",
+        "properties": {
+          "requestId": {"type":"string"},
+          "expectedRevision": {"type":"integer","minimum":0},
+          "objective": {"type":"string"},
+          "items": {"type":"array","items":{"$ref":"#/components/schemas/SessionInputItem"}},
+          "attachments": {"type":"array","items":{"$ref":"#/components/schemas/PromptAttachment"}}
+        },
+        "required": ["requestId","expectedRevision","objective"]
+      },
+      "GoalAction": {
+        "type": "object",
+        "properties": {
+          "requestId": {"type":"string"},
+          "expectedRevision": {"type":"integer","minimum":0},
+          "action": {"type":"string","enum":["pause","resume","cancel","budget","cancel_resume"]},
+          "tokenBudget": {"anyOf":[{"type":"integer","minimum":1},{"type":"null"}]},
+          "additionalAutoTurns": {"type":"integer","minimum":1},
+          "questionId": {"type":"string"},
+          "response": {"type":"string"},
+          "objectiveVersion": {"type":"integer","minimum":1}
+        },
+        "required": ["requestId","expectedRevision","action"]
+      },
+      "ModelProvider": {
+        "type": "object",
+        "properties": {
+          "name": {"type":"string"},
+          "displayName": {"type":"string"},
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {"type":"string"},
+                "label": {"type":"string"},
+                "provider": {"type":"string"},
+                "providerName": {"type":"string"},
+                "hint": {"type":"string"},
+                "contextWindow": {"type":"integer","minimum":1},
+                "outputLimit": {"type":"integer","minimum":1},
+                "reasoning": {"type":"boolean"},
+                "reasoningEfforts": {"type":"array","items":{"type":"string"}},
+                "vision": {"type":"boolean"},
+                "inputModalities": {"type":"array","items":{"type":"string"}},
+                "inputCapabilities": {
+                  "type": "object",
+                  "properties": {"image":{"type":"string","enum":["native","unsupported","unknown"]}},
+                  "required": ["image"]
+                },
+                "toolCalling": {"type":"boolean"},
+                "status": {"type":"string","enum":["active","beta"]}
+              },
+              "required": ["id","label","provider","providerName"]
+            }
+          }
+        },
+        "required": ["name","displayName","models"]
+      },
+      "AgentPersona": {
+        "type": "object",
+        "properties": {
+          "name": {"type":"string"},
+          "description": {"type":"string"},
+          "source": {"type":"string"},
+          "model": {"type":"string"}
+        },
+        "required": ["name","description"]
+      },
+      "Skill": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string"},
+          "name": {"type":"string"},
+          "description": {"type":"string"},
+          "content": {"type":"string"},
+          "path": {"type":"string"},
+          "source": {"type":"string","enum":["bundled","agent","project","personal","standard"]},
+          "readOnly": {"type":"boolean"},
+          "projectPath": {"type":"string"},
+          "projectName": {"type":"string"},
+          "marketplace": {"type":"object","additionalProperties":true}
+        },
+        "required": ["id","name","description","content","path","source","readOnly"]
+      },
+      "McpServer": {
+        "type": "object",
+        "properties": {
+          "name": {"type":"string"},
+          "status": {"type":"string"},
+          "toolCount": {"type":"integer","minimum":0},
+          "resourceCount": {"type":"integer","minimum":0},
+          "command": {"type":"string"},
+          "error": {"type":"string"}
+        },
+        "required": ["name","status","toolCount","resourceCount"]
+      },
+      "JobTarget": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {"kind":{"const":"agent"},"jobId":{"type":"string"},"runId":{"type":"string"}},
+            "required": ["kind","jobId","runId"]
+          },
+          {
+            "type": "object",
+            "properties": {"kind":{"type":"string","enum":["shell","terminal","workflow","dream"]},"jobId":{"type":"string"}},
+            "required": ["kind","jobId"]
+          }
+        ]
+      },
+      "JobSnapshot": {
+        "type": "object",
+        "properties": {
+          "id": {"type":"string"},
+          "kind": {"type":"string","enum":["terminal","shell","agent","dream","workflow"]},
+          "target": {"$ref":"#/components/schemas/JobTarget"},
+          "label": {"type":"string"},
+          "ownerSession": {"type":"string"},
+          "status": {"type":"string","enum":["running","stopping","completed","killed","failed"]},
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "read": {"type":"boolean"},
+              "wait": {"type":"boolean"},
+              "send": {"type":"boolean"},
+              "cancel": {"type":"boolean"}
+            },
+            "required": ["read","wait","send","cancel"]
+          },
+          "cwd": {"type":"string"},
+          "startedAt": {"type":"integer","minimum":0},
+          "updatedAt": {"type":"integer","minimum":0},
+          "finishedAt": {"type":"integer","minimum":0},
+          "exitCode": {"anyOf":[{"type":"integer"},{"type":"null"}]},
+          "detail": {"type":"string"},
+          "metadata": {"type":"object","additionalProperties":true}
+        },
+        "required": ["id","kind","target","label","ownerSession","status","capabilities","cwd","startedAt","updatedAt"]
+      },
+      "JobRead": {
+        "type": "object",
+        "properties": {
+          "text": {"type":"string"},
+          "cursor": {"type":"integer","minimum":0},
+          "truncated": {"type":"boolean"},
+          "snapshot": {"$ref":"#/components/schemas/JobSnapshot"},
+          "details": {"type":"object","additionalProperties":true}
+        },
+        "required": ["text","cursor","truncated","snapshot"]
+      },
+      "JobReceipt": {
+        "type": "object",
+        "properties": {"sessionId":{"type":"string"},"inputId":{"type":"string"},"runId":{"type":"string"}},
+        "required": ["sessionId","inputId","runId"]
+      },
+      "FileInfo": {
+        "type": "object",
+        "properties": {
+          "path": {"type":"string"},
+          "name": {"type":"string"},
+          "kind": {"type":"string","enum":["file","directory","symlink","other"]},
+          "sizeBytes": {"type":"integer","minimum":0},
+          "modifiedAt": {"type":"integer"}
+        },
+        "required": ["path","name","kind"]
+      }
+    }
+  }
+}

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { afterEach, expect, it, vi } from "vitest";
 import { pluginAppHarness } from "../../../test-helpers/plugin-app-harness.js";
 import { CURRENT_PROTOCOL_VERSION, readPluginUiAction } from "@vykor/protocol";
-import type { PluginUiInstanceRecord, PluginUiActionRunMetadata } from "@vykor/protocol";
+import type { PluginUiActionResponse, PluginUiActionRunMetadata, PluginUiConversationReceipt, PluginUiInstanceRecord } from "@vykor/protocol";
 const cleanup: Array<() => Promise<void>> = [];
 afterEach(async () => { for (const close of cleanup.splice(0)) await close(); vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
@@ -10,6 +10,13 @@ it("retains original history across restart, refuses every old admission and bot
   const h = await pluginAppHarness("native-tools"); cleanup.push(h.close);
   let store = h.store(); const sessionId = h.session.id;
   const instanceId = "10000000-0000-4000-8000-000000000001", requestId = "20000000-0000-4000-8000-000000000001";
+  const historyPath = `/sessions/${sessionId}/plugin-ui/${instanceId}`;
+  const transport = h.transport();
+  const readAction = (id: string) => transport.request<PluginUiActionResponse>(`${historyPath}/actions/${id}`);
+  const readSubmission = async (id: string) => {
+    const { receipt } = await transport.request<{ receipt: PluginUiConversationReceipt }>(`${historyPath}/conversation/submissions/${id}`);
+    return receipt;
+  };
   const runId = "ui_run_" + createHash("sha256").update(JSON.stringify([sessionId, instanceId, requestId])).digest("hex");
   const input = store.conversationTransactions.admitPrompt({ sessionId, content: "original input" });
   store.runs.createRun({ id: "old-source", sessionId, inputId: input.id, metadata: { pluginId: "legacy.plugin" } });
@@ -47,15 +54,15 @@ it("retains original history across restart, refuses every old admission and bot
   expect(store.runs.getRun(pendingId)?.status).toBe("interrupted");
   expect(readPluginUiAction(store.runs.getRun(pendingId)?.metadata)).toEqual(pending);
   expect(store.runs.getRun(completeId)?.status).toBe("completed");
-  expect((await h.client().pluginUiHistory.getAction(sessionId, instanceId, complete.requestId)).result).toEqual(originalResult);
+  expect((await readAction(complete.requestId)).result).toEqual(originalResult);
   expect(store.runs.getRun(runId)?.status).toBe("interrupted");
   expect(readPluginUiAction(store.runs.getRun(runId)?.metadata)).toEqual(action);
   expect(store.runs.getRun(missingId)?.status).toBe("interrupted");
   expect(readPluginUiAction(store.runs.getRun(missingId)?.metadata)).toEqual({ ...missing, executionState: "unknown" });
-  const receipt = await h.client().pluginUiHistory.getAction(sessionId, instanceId, requestId);
+  const receipt = await readAction(requestId);
   expect(receipt.receipt).toMatchObject({ runId, requestId, instanceId, status: "interrupted" });
   for (const suffix of ["", "/document", "/actions", "/dismiss", "/conversation/prepare", "/conversation/submissions"]) {
-    const response = await h.raw(`/sessions/${sessionId}/plugin-ui/${instanceId}${suffix}`, suffix === "/document" || suffix === "" ? undefined : {});
+    const response = await h.raw(`${historyPath}${suffix}`, suffix === "/document" || suffix === "" ? undefined : {});
     expect(response.status).toBe(410); expect(await response.json()).toMatchObject({ code: "plugin_ui_retired" });
   }
   await expect(h.client().sessions.resumeInterruptedRun(sessionId, runId)).rejects.toMatchObject({ status: 409 });
@@ -71,39 +78,39 @@ it("retains original history across restart, refuses every old admission and bot
     inputId: input.id, runId: "old-source", pluginDigest: instance.pluginDigest, componentDigest: instance.componentDigest, acceptedAt: 1 };
   store.conversations.upsertMessagePart({ ...current, metadata: { ...current.metadata,
     pluginUi: { ...(current.metadata.pluginUi as PluginUiInstanceRecord), status: "resolved" }, pluginUiSubmission: submission } });
-  const submitted = await h.client().pluginUiHistory.getConversationSubmission(sessionId, instanceId, submissionId);
-  expect(submitted).toMatchObject({ inputId: input.id, runId: "old-source", requestId: submissionId, status: "completed" });
-  const unauthorized = await h.server().app.request(`/sessions/${sessionId}/plugin-ui/${instanceId}/actions/${requestId}`,
+  const submitted = await readSubmission(submissionId);
+  expect(submitted).toMatchObject({ mode: "submit", instanceId, inputId: input.id, runId: "old-source", requestId: submissionId, status: "completed" });
+  const unauthorized = await h.server().app.request(`${historyPath}/actions/${requestId}`,
     { headers: { "x-vykor-protocol-version": String(CURRENT_PROTOCOL_VERSION) } });
   expect(unauthorized.status).toBe(401);
   const prior = store.conversations.listMessageParts(sessionId).find(part => part.id === "source-part");
   await h.restart();
-  expect(await h.client().pluginUiHistory.getAction(sessionId, instanceId, requestId)).toEqual(receipt);
-  expect(await h.client().pluginUiHistory.getConversationSubmission(sessionId, instanceId, submissionId)).toEqual(submitted);
+  expect(await readAction(requestId)).toEqual(receipt);
+  expect(await readSubmission(submissionId)).toEqual(submitted);
   expect(h.store().conversations.listMessageParts(sessionId).find(part => part.id === "source-part")).toEqual(prior);
-  await expect(h.client().pluginUiHistory.getAction("foreign", instanceId, requestId)).rejects.toMatchObject({ status: 404 });
+  await expect(transport.request(`/sessions/foreign/plugin-ui/${instanceId}/actions/${requestId}`)).rejects.toMatchObject({ status: 404 });
   expect(h.effects()).toBe(0); expect(h.modelCalls()).toBe(0);
   console.info(JSON.stringify({ scenario: "retired-startup-no-replay", sourcePartId: prior!.id, originalInputId: input.id,
     runIdsPreserved: [pendingId, runId, completeId, missingId].every(id => h.store().runs.getRun(id)?.id === id),
     states: [pendingId, runId, completeId, missingId].map(id => ({ id, status: h.store().runs.getRun(id)?.status,
       executionState: readPluginUiAction(h.store().runs.getRun(id)?.metadata)?.executionState })),
     originalFingerprintPreserved: readPluginUiAction(h.store().runs.getRun(runId)?.metadata)?.requestFingerprint === action.requestFingerprint,
-    originalResultPreserved: JSON.stringify((await h.client().pluginUiHistory.getAction(sessionId, instanceId, complete.requestId)).result) === JSON.stringify(originalResult),
+    originalResultPreserved: JSON.stringify((await readAction(complete.requestId)).result) === JSON.stringify(originalResult),
     toolExecutions: h.effects(), modelCalls: h.modelCalls() }));
 }, 30_000);
 
 it("turns Apps off without activating legacy UI or replaying receipts and retains normal tool text", async () => {
   const h = await pluginAppHarness("native-tools", true); cleanup.push(h.close);
-  const first = await h.client().pluginApps.invoke(h.request); await h.wait(first.receipt.runId);
+  const first = await h.pluginApps.invoke(h.request); await h.wait(first.receipt.runId);
   const response = await h.server().app.request("/settings", { method: "PATCH", headers: { authorization: "Bearer app-token", "x-vykor-protocol-version": String(CURRENT_PROTOCOL_VERSION), "content-type": "application/json" }, body: JSON.stringify({ plugins: { uiEnabled: false } }) });
   // Use the same public version negotiated by the Client for all protocol requests.
   if (response.status === 426) throw new Error("fixture protocol version must match CURRENT_PROTOCOL_VERSION");
   expect(response.status).toBe(200);
   expect((await h.client().protocol.capabilities()).features).not.toHaveProperty("pluginUi");
-  expect((await h.client().pluginApps.catalog(h.session.id)).backends).toEqual([]);
-  expect((await h.client().pluginApps.getAction(h.opened.source, h.request.requestId)).receipt.runId).toBe(first.receipt.runId);
-  await expect(h.client().pluginApps.invoke({ ...h.request, requestId: "off" })).rejects.toMatchObject({ status: 409 });
-  const submitted = await h.server().application.interactions.admitPrompt(h.session.id, { items: [{ type: "text", text: "save normally" }, { type: "capability", kind: "plugin", pluginId: h.pluginId, displayName: "App" }] });
+  expect((await h.pluginApps.catalog(h.session.id)).backends).toEqual([]);
+  expect((await h.pluginApps.getAction(h.opened.source, h.request.requestId)).receipt.runId).toBe(first.receipt.runId);
+  await expect(h.pluginApps.invoke({ ...h.request, requestId: "off" })).rejects.toMatchObject({ status: 409 });
+  const submitted = await h.client().sessions.admitPrompt(h.session.id, { items: [{ type: "text", text: "save normally" }, { type: "capability", kind: "plugin", pluginId: h.pluginId, displayName: "App" }] });
   await h.wait(submitted.run!.id);
   expect(h.store().runs.getRun(submitted.run!.id)).toMatchObject({ status: "completed" });
   const messageIds = new Set(h.store().conversations.listMessages(h.session.id)

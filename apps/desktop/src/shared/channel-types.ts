@@ -3,7 +3,7 @@ import type {
   ChannelRuntimeStatus,
   FeishuChannelSnapshot,
   FeishuRegistrationSnapshot,
-} from "@vykor/application-client"
+} from "@vykor/protocol"
 
 export type ChannelDomain = "feishu" | "lark"
 

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="author" content="OpenHarness">
+<meta name="description" content="Vykor 近期功能与 Kami 技能健康检查">
+<meta name="generator" content="Kami 1.14.0">
+<title>Vykor 近期进展 · 2026-11</title>
+<style>
+@page { size: A4; margin: 18mm 20mm 20mm; background: #f5f4ed; }
+* { box-sizing: border-box; }
+:root {
+  --paper:#f5f4ed; --ivory:#faf9f5; --ink:#141413; --secondary:#3d3d3a;
+  --olive:#504e49; --stone:#6b6a64; --blue:#1B365D; --line:#e8e6dc;
+  --tag:#E4ECF5; --warning-bg:#f0e0d8; --warning:#8b4513;
+  --serif:"TsangerJinKai02","Source Han Serif SC","Noto Serif CJK SC","Songti SC","STSong","SimSun",Georgia,serif;
+  --mono:"JetBrains Mono",Consolas,"TsangerJinKai02","Source Han Serif SC",monospace;
+}
+html, body { margin:0; background:var(--paper); color:var(--ink); }
+body { font-family:var(--serif); font-size:10pt; line-height:1.52; letter-spacing:.15pt; }
+@media screen { body { max-width:210mm; margin:24px auto; padding:18mm 20mm; box-shadow:0 12px 40px rgba(20,20,19,.08); } }
+header { display:grid; grid-template-columns:1fr auto; gap:20pt; align-items:end; padding-bottom:13pt; border-bottom:.5pt solid var(--line); }
+.eyebrow { color:var(--blue); font-size:9pt; letter-spacing:1.4pt; margin-bottom:7pt; }
+h1 { font-size:27pt; line-height:1.12; font-weight:500; margin:0 0 7pt; }
+.lead { max-width:132mm; color:var(--olive); font-size:11pt; margin:0; }
+.date { color:var(--stone); white-space:nowrap; font-variant-numeric:tabular-nums; }
+.summary { display:grid; grid-template-columns:1.55fr .75fr .75fr; gap:12pt; margin:18pt 0 22pt; }
+.summary > div { padding:12pt 14pt; background:var(--ivory); border-radius:4pt; }
+.summary strong { display:block; color:var(--blue); font-size:22pt; line-height:1.1; font-weight:500; margin-bottom:4pt; }
+.summary span { color:var(--olive); font-size:9pt; }
+h2 { font-size:15pt; line-height:1.25; font-weight:500; margin:20pt 0 9pt; }
+.spine { position:relative; margin-left:5pt; padding-left:20pt; }
+.spine::before { content:""; position:absolute; left:3pt; top:8pt; bottom:9pt; width:.6pt; background:var(--line); }
+.item { position:relative; break-inside:avoid; margin:0 0 14pt; }
+.item::before { content:""; position:absolute; left:-20.5pt; top:6pt; width:7pt; height:7pt; border-radius:50%; background:var(--paper); border:1.5pt solid var(--blue); }
+.item h3 { font-size:12pt; font-weight:500; margin:0 0 3pt; }
+.item p { color:var(--olive); margin:0; }
+.tag { display:inline-block; background:var(--tag); color:var(--blue); border-radius:3pt; padding:1pt 5pt; font-size:8.5pt; margin-right:5pt; }
+.flow { display:grid; grid-template-columns:repeat(4,1fr); gap:8pt; margin:10pt 0 0; }
+.flow div { min-height:42pt; padding:9pt; background:var(--ivory); border-radius:4pt; color:var(--secondary); font-size:9pt; position:relative; }
+.flow div:not(:last-child)::after { content:"→"; color:var(--blue); position:absolute; right:-7pt; top:14pt; z-index:2; }
+.page-break { break-before:page; }
+.audit-head { display:grid; grid-template-columns:1fr auto; gap:16pt; align-items:end; padding-bottom:12pt; border-bottom:.5pt solid var(--line); }
+.status { color:var(--warning); border-bottom:.5pt solid var(--warning); padding:2pt 0; font-size:9pt; }
+.version-line { display:flex; align-items:center; gap:10pt; margin:18pt 0; }
+.version { flex:1; background:var(--ivory); border-radius:4pt; padding:13pt; }
+.version small { display:block; color:var(--stone); margin-bottom:3pt; }
+.version strong { font-size:20pt; color:var(--blue); font-weight:500; }
+.arrow { color:var(--blue); font-size:18pt; }
+.findings { margin:0; padding-left:18pt; }
+.findings li { margin-bottom:9pt; padding-left:3pt; break-inside:avoid; }
+.findings strong { font-weight:500; }
+.code { font-family:var(--mono); font-size:8.6pt; background:#f0eee6; padding:1pt 4pt; border-radius:2pt; }
+.recommendation { margin-top:18pt; padding:14pt 16pt; background:var(--ivory); border-radius:4pt; }
+.recommendation h3 { color:var(--blue); font-size:12pt; font-weight:500; margin:0 0 7pt; }
+.recommendation p { margin:0 0 6pt; color:var(--olive); }
+.recommendation p:last-child { margin-bottom:0; }
+footer { margin-top:20pt; padding-top:8pt; border-top:.3pt dotted var(--line); color:var(--stone); font-size:8.5pt; display:flex; justify-content:space-between; }
+@media (max-width:720px) {
+  body { margin:0; padding:28px 22px; box-shadow:none; }
+  header, .audit-head { grid-template-columns:1fr; }
+  .date { white-space:normal; }
+  .summary { grid-template-columns:1fr; }
+  .flow { grid-template-columns:1fr 1fr; }
+  .flow div::after { display:none; }
+  .version-line { align-items:stretch; flex-direction:column; }
+  .arrow { transform:rotate(90deg); align-self:center; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="eyebrow">VYKOR · 近期进展</div>
+    <h1>从多个入口，走向一个持续运行的系统</h1>
+    <p class="lead">最近一轮更新的重点不是堆叠界面按钮，而是让 Desktop、CLI、浏览器和 Agent 共享后台、会话与运行状态。</p>
+  </div>
+  <div class="date">2026.10.31—11.07</div>
+</header>
+
+<section class="summary" aria-label="更新摘要">
+  <div><strong>1 个后台</strong><span>Desktop 与 CLI 复用同一 daemon</span></div>
+  <div><strong>跨会话</strong><span>授权观察另一条会话进度</span></div>
+  <div><strong>更稳</strong><span>取消、超时、附件与大结果隔离</span></div>
+</section>
+
+<h2>用户能感知的六项变化</h2>
+<div class="spine">
+  <article class="item"><h3><span class="tag">基础设施</span>Desktop 与 CLI 共用后台</h3><p>会话、任务和 Agent 由同一个本机 daemon 持有；支持按需启动、登录自启、异常恢复，以及完整的 daemon 管理命令。</p></article>
+  <article class="item"><h3><span class="tag">协作</span>授权的跨会话观察</h3><p>当前 Agent 可以固定观察另一条持久会话的一轮运行，读取状态，或短时等待其完成、请求审批或提出问题。</p></article>
+  <article class="item"><h3><span class="tag">浏览器</span>CLI 会话复用 Desktop 浏览器</h3><p>当 Desktop 连接同一后台且目标会话已打开，CLI 发起的 Agent 也能使用内嵌浏览器；无浏览器连接时不影响其他工具。</p></article>
+  <article class="item"><h3><span class="tag">反馈</span>网页元素批注随消息发送</h3><p>用户可选中页面元素、填写意见并统一管理批注包；Agent 收到批注、有限选择器和页面上下文，不需要猜测反馈指向。</p></article>
+  <article class="item"><h3><span class="tag">桌面体验</span>系统通知与链接打开方式</h3><p>Desktop 增加原生通知交互；消息链接可选择在内嵌浏览器中打开，减少应用之间来回切换。</p></article>
+  <article class="item"><h3><span class="tag">数据可靠性</span>附件与子 Agent 状态更完整</h3><p>更多附件可安全保存到工作区；会话压缩和重建后仍恢复引用，子 Agent 的等待、完成和失败状态也统一展示。</p></article>
+</div>
+
+<h2>新的运行主线</h2>
+<div class="flow" aria-label="运行流程">
+  <div><strong>入口</strong><br>Desktop / CLI / TUI</div>
+  <div><strong>共享后台</strong><br>登记、鉴权、健康检查</div>
+  <div><strong>持续状态</strong><br>Session / Run / Job</div>
+  <div><strong>结果返回</strong><br>消息、通知、浏览器操作</div>
+</div>
+<footer><span>依据仓库近期提交与当前文档整理</span><span>OpenHarness · Kami</span></footer>
+
+<section class="page-break">
+  <div class="audit-head">
+    <div>
+      <div class="eyebrow">KAMI · 技能健康检查</div>
+      <h1>需要更新，而且旧版检查器在 Windows 上有兼容问题</h1>
+    </div>
+    <div class="status">建议升级</div>
+  </div>
+
+  <div class="version-line" aria-label="版本比较">
+    <div class="version"><small>当前安装</small><strong>1.14.0</strong></div>
+    <div class="arrow">→</div>
+    <div class="version"><small>GitHub 最新 Release</small><strong>1.20.0</strong></div>
+  </div>
+
+  <h2>检查结论</h2>
+  <ol class="findings">
+    <li><strong>版本落后六个次版本：</strong>GitHub Release 显示最新版本为 <span class="code">V1.20.0</span>，发布时间为 2026-10-29；当前本地 <span class="code">VERSION</span> 为 <span class="code">1.14.0</span>。</li>
+    <li><strong>自动更新检查未成功：</strong>技能要求启动任务时运行 <span class="code">bash scripts/check-update.sh</span>，但 Windows PowerShell 将 Windows 路径直接交给 WSL Bash 时无法定位脚本。</li>
+    <li><strong>脚本行尾不兼容：</strong>转换为 <span class="code">/mnt/c/...</span> 后，脚本仍因 CRLF 行尾出现 <span class="code">set: -\r: invalid option</span>，所以旧版无法可靠提醒更新。</li>
+    <li><strong>内容能力本身完整：</strong>当前副本已包含中文 changelog 模板、内容 Schema、样式检查、占位符检查、PDF 渲染和视觉 QA 路径，可以完成本次交付。</li>
+  </ol>
+
+  <div class="recommendation">
+    <h3>建议动作</h3>
+    <p>先升级到最新 Kami，再复测 Windows 下的每日更新检查。技能给出的通用更新命令是：</p>
+    <p><span class="code">npx skills add tw93/kami -a claude-code codex cursor -g -y</span></p>
+    <p>如果新版仍只提供 Bash 脚本，建议上游增加 PowerShell 入口，或确保发布包统一使用 LF 行尾，并在技能说明中给出 Windows 路径转换方式。</p>
+  </div>
+
+  <h2>稳定性加固</h2>
+  <div class="spine">
+    <article class="item"><h3>浏览器大结果隔离</h3><p>超限回包只让当前工具调用报错，不再拖累其他浏览器请求或整个后台。</p></article>
+    <article class="item"><h3>取消和断线收束</h3><p>浏览器操作取消、Desktop 断线以及后台重连时，迟到结果与等待队列得到更明确的处理。</p></article>
+    <article class="item"><h3>进程输出读取有时间边界</h3><p>子进程退出后不再无限等待输出流排空，减少命令已经结束但会话仍卡住的情况。</p></article>
+  </div>
+  <footer><span>Kami 审查范围：版本、更新脚本、模板与验证能力</span><span>检查日期 2026-11-07</span></footer>
+</section>
+</body>
+</html>

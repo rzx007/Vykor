@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { parseSkillMarketplaceInstall } from "@vykor/protocol";
 import { createMarketplaceRoutes } from "./marketplace.js";
 
 import { errorResponse, jsonResponse, readJson } from "../support.js";
@@ -408,6 +409,38 @@ export function createServiceRoutes(context: ServiceRoutesContext): Hono {
           500,
           error instanceof Error ? error.message : String(error),
         );
+      }
+    })
+    .get("/skills/marketplace", async () => {
+      if (!context.skillService?.listMarketplace)
+        return errorResponse(501, "Skill marketplace is not configured");
+      try {
+        return jsonResponse(await context.skillService.listMarketplace());
+      } catch (error) {
+        return errorResponse(502, error instanceof Error ? error.message : String(error));
+      }
+    })
+    .post("/skills/marketplace/install", async (c) => {
+      const skillService = context.skillService;
+      if (!skillService?.prepareMarketplaceInstall)
+        return errorResponse(501, "Skill marketplace is not configured");
+      try {
+        const input = parseSkillMarketplaceInstall(await readJson(c));
+        const prepared = await skillService.prepareMarketplaceInstall(input);
+        try {
+          const lease = context.control.acquireGlobalMutation();
+          if (!lease) return errorResponse(409, "请等当前对话运行结束后再安装技能。");
+          try {
+            if (await prepared.commit()) await context.control.closeAllRuntimes();
+          } finally {
+            lease.release();
+          }
+        } finally {
+          await prepared.cleanup();
+        }
+        return jsonResponse(await skillService.list());
+      } catch (error) {
+        return errorResponse(400, error instanceof Error ? error.message : String(error));
       }
     })
     .delete("/skills/:id", async (c) => {

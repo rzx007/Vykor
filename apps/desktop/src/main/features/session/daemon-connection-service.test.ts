@@ -1,176 +1,232 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { DaemonRegistry } from "@vykor/server/daemon-host"
+import type { ServiceEndpoint } from "@rzx/client/service"
 
-const clientState = vi.hoisted(() => ({ fail: false, hang: false }))
-
-const daemonHost = vi.hoisted(() => ({
-  readDaemonRegistry: vi.fn(),
-  writeDaemonRegistry: vi.fn(),
-  clearDaemonRegistry: vi.fn(),
-  createBearerToken: vi.fn(() => "token"),
-  createDaemonRegistryEntry: vi.fn((input: unknown) => input),
-  startVykorDaemon: vi.fn(),
-  shouldStartManagedDaemon: vi.fn(async () => false),
+const sdk = vi.hoisted(() => ({
+  discover: vi.fn(),
+  ensure: vi.fn(),
+  clientOptions: (endpoint: { url: string; token: string }) => ({ baseUrl: endpoint.url, token: endpoint.token }),
 }))
-
+const host = vi.hoisted(() => ({
+  readDaemonRegistry: vi.fn(),
+  readRegisteredDataLocation: vi.fn(),
+  shouldStartManagedDaemon: vi.fn(),
+  daemonPidAlive: vi.fn(),
+  stopDaemonProcess: vi.fn(),
+  reconcileDaemonSystemServiceForConnection: vi.fn(),
+  withDaemonControlLock: (action: (signal: AbortSignal) => unknown) => action(new AbortController().signal),
+  getDaemonRegistryPath: () => "registry.json",
+}))
+const systemService = vi.hoisted(() => ({
+  status: () => ({ platform: "win32", state: "running", detail: "ready" }),
+  start: vi.fn(),
+}))
+const state = vi.hoisted(() => ({ capabilities: vi.fn(), transportCreated: vi.fn() }))
 vi.mock("electron", () => ({
-  app: { getVersion: () => "1.0.0", getPath: () => "D:/documents" },
+  app: { isPackaged: true, getPath: () => "D:/test profile" },
   BrowserWindow: { getAllWindows: () => [] },
 }))
-
-vi.mock("@vykor/server/daemon-host", () => daemonHost)
-
-vi.mock("../daemon-autostart/daemon-surface", () => ({
-  isDesktopManagedRegistry: (r: { executionSurface?: string }) =>
-    r.executionSurface === "desktop_managed",
-}))
-vi.mock("../daemon-autostart/daemon-takeover", () => ({
-  stopNonDesktopDaemon: vi.fn(async () => undefined),
-  reconcileDesktopManagedService: vi.fn(async () => undefined),
-}))
-
-vi.mock("@vykor/application-client", () => ({
+vi.mock("@rzx/client/service", () => ({ Service: sdk }))
+vi.mock("@vykor/server/daemon-host", () => host)
+vi.mock("../daemon-autostart/daemon-autostart-service", () => ({ createDesktopDaemonSystemService: () => systemService }))
+vi.mock("@rzx/client", () => ({
   VykorClient: class {
-    protocol = {
-      health: async () => {
-        if (clientState.hang) return await new Promise(() => {})
-        if (clientState.fail) throw new Error("boom")
-      },
-    }
-    projects = {
-      list: async () => {
-        if (clientState.hang) return await new Promise(() => {})
-        if (clientState.fail) throw new Error("boom")
-      },
-    }
+    constructor(readonly options: { baseUrl: string; token: string }) {}
+    protocol = { capabilities: state.capabilities }
+    sessions = { list: async () => [] }
+  },
+  HttpTransport: class {
+    constructor(readonly options: { baseUrl: string; token: string }) { state.transportCreated(options) }
   },
 }))
 
 import { DaemonConnectionService } from "./daemon-connection-service"
 
-function registry(overrides: Partial<DaemonRegistry> = {}): DaemonRegistry {
-  return {
-    url: "http://127.0.0.1:5555",
-    pid: 4242,
-    token: "tok",
-    storePath: "D:/db",
-    startedAt: 1,
-    version: "1.0.0",
-    executionSurface: "desktop_managed",
-    ...overrides,
-  }
-}
-
-const embedded = {
-  server: { store: { path: "D:/db" }, close: vi.fn() },
-  listen: { url: "http://127.0.0.1:6666" },
+const endpoint: ServiceEndpoint = {
+  file: "registry.json", url: "http://127.0.0.1:5555", pid: 4242,
+  token: "token", storePath: "D:/db", version: "1.0.0", startedAt: 1,
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
-  clientState.fail = false
-  clientState.hang = false
+  vi.resetAllMocks()
+  sdk.ensure.mockResolvedValue(endpoint)
+  host.shouldStartManagedDaemon.mockResolvedValue(false)
+  state.capabilities.mockResolvedValue({ features: { browserBridge: 1 } })
 })
 
-describe("DaemonConnectionService ownership safety", () => {
-  it("keeps the registry and does NOT start an embedded daemon when the registered daemon process is still alive", async () => {
-    daemonHost.readDaemonRegistry.mockReturnValue(registry())
-    clientState.fail = true
-
-    const service = new DaemonConnectionService({ pidAlive: () => true })
-
-    await expect(service.getClient()).rejects.toThrow(/pid 4242.*unreachable/i)
-    expect(daemonHost.clearDaemonRegistry).not.toHaveBeenCalled()
-    expect(daemonHost.startVykorDaemon).not.toHaveBeenCalled()
-  })
-
-  it("reclaims the registry and starts an embedded daemon when the registered daemon process is dead", async () => {
-    daemonHost.readDaemonRegistry.mockReturnValue(registry())
-    daemonHost.startVykorDaemon.mockResolvedValue(embedded)
-    clientState.fail = true
-
-    const service = new DaemonConnectionService({ pidAlive: () => false })
-
+describe("desktop daemon connection", () => {
+  it("reuses a compatible CLI daemon and leaves it running on desktop exit", async () => {
+    sdk.discover.mockResolvedValue(endpoint)
+    host.readDaemonRegistry.mockReturnValue({ ...endpoint, launcher: "cli" })
+    const service = new DaemonConnectionService()
     await expect(service.getClient()).resolves.toBeDefined()
-    expect(daemonHost.clearDaemonRegistry).toHaveBeenCalledTimes(1)
-    expect(daemonHost.startVykorDaemon).toHaveBeenCalledTimes(1)
-    expect(daemonHost.writeDaemonRegistry).toHaveBeenCalledTimes(1)
+    await service.dispose()
+    expect(state.transportCreated).not.toHaveBeenCalled()
+    expect(sdk.ensure).not.toHaveBeenCalled()
+    expect(host.stopDaemonProcess).not.toHaveBeenCalled()
   })
 
-  it("connects to a healthy desktop-managed daemon without starting an embedded one", async () => {
-    daemonHost.readDaemonRegistry.mockReturnValue(registry())
+  it("shares the management transport and rejects an earlier connection after refresh", async () => {
+    sdk.discover.mockResolvedValue(endpoint)
+    const service = new DaemonConnectionService()
+    const client = await service.getClient()
+    const transport = await service.getTransport(client)
+    await expect(service.getTransport()).resolves.toBe(transport)
+    expect(state.transportCreated).toHaveBeenCalledExactlyOnceWith({ baseUrl: endpoint.url, token: endpoint.token })
 
-    const service = new DaemonConnectionService({ pidAlive: () => true })
+    const replacement = { ...endpoint, token: "new-token" }
+    sdk.discover.mockResolvedValue(replacement)
+    const next = await service.refreshClient()
+    await expect(service.getTransport(client)).rejects.toThrow(/连接已变化/)
+    await expect(service.getTransport(next)).resolves.not.toBe(transport)
+    expect(state.transportCreated).toHaveBeenLastCalledWith({ baseUrl: replacement.url, token: replacement.token })
+  })
 
+  it("passes the desktop profile to the Windows Electron daemon when no daemon is registered", async () => {
+    const service = new DaemonConnectionService()
     await expect(service.getClient()).resolves.toBeDefined()
-    expect(daemonHost.startVykorDaemon).not.toHaveBeenCalled()
+    expect(sdk.ensure).toHaveBeenCalledWith(expect.objectContaining({
+      command: [
+        process.execPath,
+        "--daemon-on-demand",
+        ...(process.platform === "win32" ? ["--user-data-dir=D:/test profile"] : []),
+      ],
+    }))
   })
 
-  it("starts an embedded daemon when no registry exists", async () => {
-    daemonHost.readDaemonRegistry.mockReturnValue(undefined)
-    daemonHost.startVykorDaemon.mockResolvedValue(embedded)
+  it("asks the shared startup policy to kick the idle Windows task before waiting", async () => {
+    host.shouldStartManagedDaemon.mockResolvedValue(true)
+    host.reconcileDaemonSystemServiceForConnection.mockImplementation(async () => {
+      systemService.start()
+      return { autoStart: true, state: "running", action: "started" }
+    })
+    sdk.discover.mockResolvedValueOnce(undefined).mockResolvedValueOnce(endpoint)
+
+    await expect(new DaemonConnectionService().getClient()).resolves.toBeDefined()
+    expect(systemService.start).toHaveBeenCalledOnce()
+    expect(host.reconcileDaemonSystemServiceForConnection).toHaveBeenCalledWith(systemService)
+    expect(sdk.ensure).not.toHaveBeenCalled()
+  })
+
+  it("uses on-demand startup if the setting changed before managed startup", async () => {
+    host.shouldStartManagedDaemon.mockResolvedValue(true)
+    host.reconcileDaemonSystemServiceForConnection.mockResolvedValue({
+      autoStart: false, state: "not-installed", action: "none",
+    })
+
+    await expect(new DaemonConnectionService().getClient()).resolves.toBeDefined()
+    expect(systemService.start).not.toHaveBeenCalled()
+    expect(sdk.ensure).toHaveBeenCalledOnce()
+  })
+
+  it("connects to a managed daemon whose first capability probe takes more than one second", async () => {
+    vi.useFakeTimers()
+    const service = new DaemonConnectionService()
+    let connection: Promise<string> | undefined
+    try {
+      host.shouldStartManagedDaemon.mockResolvedValue(true)
+      host.reconcileDaemonSystemServiceForConnection.mockResolvedValue({ autoStart: true })
+      sdk.discover.mockResolvedValueOnce(undefined).mockImplementation(({ timeoutMs, signal }) =>
+        new Promise((resolve) => {
+          const finish = (value: ServiceEndpoint | undefined) => {
+            clearTimeout(timer)
+            signal.removeEventListener("abort", abort)
+            resolve(value)
+          }
+          const abort = () => finish(undefined)
+          const timer = setTimeout(() => finish(timeoutMs >= 1_200 ? endpoint : undefined), Math.min(timeoutMs, 1_200))
+          signal.addEventListener("abort", abort, { once: true })
+        })
+      )
+      connection = service.getClient().then(() => "ready", () => "failed")
+      await vi.advanceTimersByTimeAsync(1_500)
+      expect(await Promise.race([connection, Promise.resolve("pending")])).toBe("ready")
+    } finally {
+      await service.dispose()
+      await connection
+      vi.useRealTimers()
+    }
+  })
+
+  it("connects to an existing daemon after a cold Windows capability check", async () => {
+    host.readDaemonRegistry.mockReturnValue(endpoint)
+    host.daemonPidAlive.mockReturnValue(true)
+    // WSL discovery can spend 10 seconds in wsl.exe before the daemon sends its response.
+    sdk.discover.mockImplementation(async ({ timeoutMs }) =>
+      timeoutMs > 10_200 ? endpoint : undefined,
+    )
 
     const service = new DaemonConnectionService()
-
     await expect(service.getClient()).resolves.toBeDefined()
-    expect(daemonHost.startVykorDaemon).toHaveBeenCalledTimes(1)
+    expect(service.getDaemonStatus().phase).toBe("ready")
   })
 
-  it("allows a later retry after a transient connect failure instead of caching the rejection", async () => {
-    daemonHost.readDaemonRegistry.mockReturnValue(registry())
-    clientState.fail = true
-
-    const service = new DaemonConnectionService({ pidAlive: () => true })
-    await expect(service.getClient()).rejects.toThrow()
-    expect(daemonHost.startVykorDaemon).not.toHaveBeenCalled()
-
-    clientState.fail = false
+  it("keeps a live unreachable registration and allows a later retry", async () => {
+    host.readDaemonRegistry.mockReturnValue(endpoint)
+    host.daemonPidAlive.mockReturnValue(true)
+    const service = new DaemonConnectionService()
+    await expect(service.getClient()).rejects.toThrow(/暂时不可达/)
+    expect(sdk.ensure).not.toHaveBeenCalled()
+    sdk.discover.mockResolvedValue(endpoint)
     await expect(service.getClient()).resolves.toBeDefined()
   })
 
-  it("honors the configured verification timeout instead of hanging", async () => {
-    daemonHost.readDaemonRegistry.mockReturnValue(registry())
-    clientState.hang = true
+  it("reads sessions from a compatible daemon with no browser bridge", async () => {
+    sdk.discover.mockResolvedValue(endpoint)
+    host.readDaemonRegistry.mockReturnValue({ ...endpoint, launcher: "cli" })
+    host.readRegisteredDataLocation.mockResolvedValue({ directory: "D:/", storePath: endpoint.storePath })
+    state.capabilities.mockResolvedValue({ features: {} })
+    const onConnected = vi.fn()
+    const service = new DaemonConnectionService({ onConnected })
 
-    const service = new DaemonConnectionService({ pidAlive: () => true, verifyTimeoutMs: 20 })
-
-    await expect(service.getClient()).rejects.toThrow(/timed out/i)
-    expect(daemonHost.startVykorDaemon).not.toHaveBeenCalled()
+    const client = await service.getClient()
+    await expect(client.sessions.list()).resolves.toEqual([])
+    expect(service.getDaemonStatus().phase).toBe("ready")
+    expect(onConnected).not.toHaveBeenCalled()
+    expect(sdk.ensure).not.toHaveBeenCalled()
+    expect(host.stopDaemonProcess).not.toHaveBeenCalled()
   })
 
-  it("restarts an ephemeral CLI daemon when autoStart is off", async () => {
-    daemonHost.readDaemonRegistry.mockReturnValue(registry({ executionSurface: "cli_advanced" }))
-    daemonHost.startVykorDaemon.mockResolvedValue(embedded)
-    const stop = vi.fn(async () => undefined)
+  it("releases the old bridge and starts a new one only for a daemon advertising it", async () => {
+    const headless = { ...endpoint, token: "headless" }
+    const replacement = { ...endpoint, token: "replacement" }
+    sdk.discover.mockResolvedValueOnce(endpoint).mockResolvedValueOnce(headless).mockResolvedValueOnce(replacement)
+    state.capabilities.mockResolvedValueOnce({ features: { browserBridge: 1 } })
+      .mockResolvedValueOnce({ features: {} })
+      .mockResolvedValueOnce({ features: { browserBridge: 1 } })
+    const firstStop = vi.fn()
+    const replacementStop = vi.fn()
+    const onConnected = vi.fn().mockReturnValueOnce(firstStop).mockReturnValueOnce(replacementStop)
+    const service = new DaemonConnectionService({ onConnected })
 
-    const service = new DaemonConnectionService({
-      pidAlive: () => true,
-      shouldAutoStart: async () => false,
-      stopNonDesktopDaemon: stop,
-    })
-
-    await expect(service.getClient()).resolves.toBeDefined()
-    expect(stop).toHaveBeenCalledOnce()
-    expect(daemonHost.startVykorDaemon).toHaveBeenCalledOnce()
-    expect(daemonHost.writeDaemonRegistry).toHaveBeenCalledWith(
-      expect.objectContaining({ executionSurface: "desktop_managed" })
-    )
+    await service.getClient()
+    expect(onConnected).toHaveBeenCalledExactlyOnceWith(endpoint)
+    await service.refreshClient()
+    expect(firstStop).toHaveBeenCalledOnce()
+    expect(onConnected).toHaveBeenCalledTimes(1)
+    await service.refreshClient()
+    expect(onConnected).toHaveBeenNthCalledWith(2, replacement)
+    await service.dispose()
+    expect(firstStop).toHaveBeenCalledOnce()
+    expect(replacementStop).toHaveBeenCalledOnce()
   })
 
-  it("reconciles the OS service when autoStart is on", async () => {
-    const reconcile = vi.fn(async () => undefined)
-    daemonHost.readDaemonRegistry
-      .mockReturnValueOnce(registry({ executionSurface: "cli_advanced" }))
-      .mockReturnValue(registry())
+  it("keeps rejecting a daemon when protocol negotiation fails", async () => {
+    sdk.discover.mockResolvedValue(endpoint)
+    const error = new Error("incompatible protocol")
+    state.capabilities.mockRejectedValue(error)
+    const onConnected = vi.fn()
+    const service = new DaemonConnectionService({ onConnected })
 
-    const service = new DaemonConnectionService({
-      pidAlive: () => true,
-      shouldAutoStart: async () => true,
-      reconcileDesktopService: reconcile,
-    })
+    await expect(service.getClient()).rejects.toBe(error)
+    expect(onConnected).not.toHaveBeenCalled()
+    expect(service.getDaemonStatus().phase).toBe("error")
+  })
 
-    await expect(service.getClient()).resolves.toBeDefined()
-    expect(reconcile).toHaveBeenCalledOnce()
-    expect(daemonHost.startVykorDaemon).not.toHaveBeenCalled()
+  it("reports a legacy data location mismatch instead of opening the wrong database", async () => {
+    sdk.discover.mockResolvedValue(endpoint)
+    host.readRegisteredDataLocation.mockResolvedValue({ directory: "D:/new", storePath: "D:/new/sessions.db" })
+    const onConnected = vi.fn()
+    await expect(new DaemonConnectionService({ onConnected }).getClient()).rejects.toThrow(/数据/)
+    expect(onConnected).not.toHaveBeenCalled()
   })
 })

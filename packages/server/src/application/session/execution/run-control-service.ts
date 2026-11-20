@@ -5,7 +5,7 @@ import type { SessionGoal } from "@vykor/domain-contracts/goals";
 import { readRuntimeMetadata } from "@vykor/domain-contracts/sessions";
 import { sessionUserInputText } from "@vykor/domain-contracts/inputs";
 import { AttachmentError } from "@vykor/services";
-import { normalizeTraceId } from "../../support.js";
+import { isRecord, jsonEqual, normalizeTraceId } from "../../support.js";
 import { SessionApplicationError } from "../session-application-error.js";
 import { isCommittedPublicTextPart } from "../../../session/transcript-text.js";
 import { readInputPluginScope, type RunPluginSelection } from "../plugins/session-plugin-selection.js";
@@ -155,12 +155,7 @@ export class RunControlService {
     const result = this.options.runtime.interruptSession(sessionId, reason);
     if (result.interrupted) {
       this.options.durableRuns.transaction(() => {
-        for (const runId of result.queuedRunIds) {
-          this.options.durableRuns.updateRun(runId, {
-            status: "interrupted",
-            error: reason ?? "Queued run interrupted",
-          });
-        }
+        this.recordInterruptedQueuedRuns(result.queuedRunIds, reason, result.activeRunId);
         this.options.durableRuns.appendEvent({
           type: "session.run.interrupt_requested",
           sessionId,
@@ -196,12 +191,7 @@ export class RunControlService {
     const result = this.options.runtime.interruptRun(sessionId, runId, reason);
     if (result.interrupted) {
       this.options.durableRuns.transaction(() => {
-        for (const queuedRunId of result.queuedRunIds) {
-          this.options.durableRuns.updateRun(queuedRunId, {
-            status: "interrupted",
-            error: reason ?? "Queued run interrupted",
-          });
-        }
+        this.recordInterruptedQueuedRuns(result.queuedRunIds, reason, result.activeRunId === runId ? runId : undefined);
         this.options.durableRuns.appendEvent({
           type: "session.run.interrupt_requested",
           sessionId,
@@ -217,6 +207,23 @@ export class RunControlService {
     }
     if (pauseError) throw new SessionApplicationError(500, "已尝试中断，但目标暂停未保存，请重试：" + (pauseError instanceof Error ? pauseError.message : String(pauseError)));
     return result;
+  }
+
+  private recordInterruptedQueuedRuns(runIds: string[], reason?: string, stoppedActiveRunId?: string): void {
+    for (const runId of runIds) {
+      const queuedRun = stoppedActiveRunId ? this.options.durableRuns.getRun(runId) : undefined;
+      const promotion = queuedRun?.metadata.promotion;
+      // Stopping the target makes an unapplied promotion recoverable as a draft.
+      const failedPromotion = queuedRun?.status === "pending" && isRecord(promotion) &&
+        promotion.kind === "steering" && promotion.activeRunId === stoppedActiveRunId
+        ? { ...promotion, kind: "failed" }
+        : undefined;
+      this.options.durableRuns.updateRun(runId, {
+        status: "interrupted",
+        error: reason ?? "Queued run interrupted",
+        ...(failedPromotion ? { metadata: { promotion: failedPromotion } } : {}),
+      });
+    }
   }
 
   interruptQueuedRun(
@@ -268,12 +275,12 @@ export class RunControlService {
     return ids;
   }
 
-  async promoteQueuedRun(
+  async prepareQueuedRunPromotion(
     sessionId: string,
     inputId: string,
     queuedRunId: string,
     expectedActiveRunId: string,
-  ): Promise<PromoteQueuedRunResult | undefined> {
+  ): Promise<PromoteQueuedRunResult | { completion: Promise<PromoteQueuedRunResult> } | undefined> {
     if (!this.accepting) throw new Error("Session run engine is stopping");
     const input = this.options.durableInputs.getInput(inputId);
     const queuedRun = this.options.durableRuns.getRun(queuedRunId);
@@ -294,6 +301,9 @@ export class RunControlService {
     if (!queuedRun || queuedRun.sessionId !== sessionId) {
       throw new SessionApplicationError(404, `Session run not found: ${queuedRunId}`);
     }
+    if (input.metadata.outputSchema !== undefined || queuedRun.metadata.outputSchema !== undefined) {
+      throw new SessionApplicationError(409, "outputSchema requires a queued Run");
+    }
     if (readSessionObservationGrant(queuedRun)) {
       throw new SessionApplicationError(409, "observe-session requires a queued Run and cannot be promoted");
     }
@@ -306,7 +316,7 @@ export class RunControlService {
       "activeRunId" in promotion && typeof promotion.activeRunId === "string"
     ) {
       const promotedActiveRun = this.options.durableRuns.getRun(promotion.activeRunId);
-      if (!promotedActiveRun) {
+      if (promotedActiveRun?.sessionId !== sessionId) {
         throw new SessionApplicationError(409, "The promoted prompt no longer has its target run");
       }
       return { input, queued_run: queuedRun, active_run: promotedActiveRun };
@@ -353,6 +363,14 @@ export class RunControlService {
       throw new SessionApplicationError(409, "session_capability_requires_queued_run");
     }
     const content = await this.materializeSteerInput(sessionId, input.items);
+    const currentQueuedRun = this.options.durableRuns.getRun(queuedRunId);
+    const previousPromotion = currentQueuedRun?.metadata.promotion;
+    if (currentQueuedRun?.status !== "pending" ||
+        (previousPromotion && typeof previousPromotion === "object" &&
+          "kind" in previousPromotion && previousPromotion.kind === "steering")) {
+      throw new SessionApplicationError(409, "The selected prompt is no longer waiting in the queue");
+    }
+    const reservation = { kind: "steering", queuedRunId, inputId, activeRunId: expectedActiveRunId };
     const promoted = this.options.runtime.promoteQueuedRun(
       sessionId,
       queuedRunId,
@@ -376,25 +394,30 @@ export class RunControlService {
     if (!promoted.promoted) {
       throw new SessionApplicationError(409, "The prompt or active run changed before promotion completed");
     }
-    await promoted.delivery;
-
     const before = this.options.events.checkpoint();
-    const promotedAt = Date.now();
-    const updatedQueuedRun = this.options.durableRuns.updateRun(queuedRunId, {
-      status: "interrupted",
-      error: "Queued prompt was promoted into the active run",
-      metadata: {
-        promotion: {
-          kind: "steered",
-          inputId,
-          queuedRunId,
-          activeRunId: expectedActiveRunId,
-          promotedAt,
-        },
-      },
-    });
+    this.options.durableRuns.updateRun(queuedRunId, { metadata: { promotion: reservation } });
     this.options.events.publishSince(before);
-    return { input, queued_run: updatedQueuedRun, active_run: activeRun };
+    const completion = promoted.delivery.then(() => {
+      const current = this.options.durableRuns.getRun(queuedRunId);
+      const currentPromotion = current?.metadata.promotion;
+      if (!current || !currentPromotion || typeof currentPromotion !== "object" ||
+          !("kind" in currentPromotion) ||
+          (current.status !== "pending" && currentPromotion.kind !== "steered")) {
+        throw new SessionApplicationError(409, "The queued run was cancelled before promotion completed");
+      }
+      return { input, queued_run: current, active_run: this.options.durableRuns.getRun(expectedActiveRunId) ?? activeRun };
+    }, error => {
+      const current = this.options.durableRuns.getRun(queuedRunId);
+      const currentPromotion = current?.metadata.promotion;
+      if (current?.status === "pending" && jsonEqual(currentPromotion, reservation)) {
+        const before = this.options.events.checkpoint();
+        this.options.durableRuns.updateRun(queuedRunId, { metadata: { promotion: previousPromotion ?? null } });
+        this.options.events.publishSince(before);
+      }
+      throw error;
+    });
+    void completion.catch(() => {});
+    return { completion };
   }
 
   async awaitRun(

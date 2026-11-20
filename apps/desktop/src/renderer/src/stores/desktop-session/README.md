@@ -76,6 +76,8 @@
 
 附件和文字共用一个 composer scope。新会话固定使用 `new-conversation`，已有会话使用 `session:<sessionId>`，因此来回切换页面时不会把 A 会话的文字或卡片带到 B 会话。
 
+`addPastedTextAttachment` 为自动折叠的长文本保留 `pastedText` 原文，随附件卡片迁移和本机恢复；原文不作为额外字段传给上传接口。`showPastedTextAttachment` 在一次状态写入中把原文追加到结构化正文并移除卡片，随后复用附件取消或清理流程。重复点击和迟到上传事件不会恢复卡片，手动上传的文本文件没有此入口。
+
 1. **入口。** 文件选择、图片选择和拖放先由 preload 把文件交给 Electron Main；剪贴板图片以二进制交给 Main。Renderer 只收到安全展示名、大小、媒体类型、`draftId` 和一次性的 `sourceToken`，拿不到真实路径。文件夹入口保留在菜单里，但当前禁用。
 2. **状态位置。** `attachment-actions.ts` 把候选项写入 `composerDraftsByScope[scope].attachments`，随后生成 `taskId` 并开始上传。卡片顺序就是用户加入顺序；即使 daemon 对相同内容复用了同一个 asset，多个 UI 卡片也不会自动合并。
 3. **上传事件返回。** Main 持有文件流、并发队列和取消控制，通过 `attachments.onUploadEvent` 返回 progress/success/failed/cancelled。`store.ts` 只注册一份引用计数监听；事件必须同时匹配 `scope + draftId + 当前 taskId` 才能改状态，所以重试后的旧事件会被忽略。
@@ -85,7 +87,7 @@
 7. **历史展示。** 权威消息中的 `attachment`/`transformation` part 直接进入 transcript。安全位图缩略图从 daemon 副本读取，并校验媒体类型和真实文件头；SVG、HTML 或伪装内容只显示文件图标。打开和另存为都走专用附件 IPC，不生成 `file://` 或裸下载 URL。
 8. **编辑。** 最近一条用户消息可以只改文字。附件卡片只读，提交时从权威 input 重新取得原有 ordered refs，不从页面反推、不重新上传。
 
-草稿按 scope 保存在 `localStorage` 的 `vykor.desktop.composer-recovery.v1` 中，输入变化延迟 250ms 保存，页面关闭时立即保存；发送记录在 IPC 调用前立即保存原输入 ID、正文和有序附件快照。重启不自动发送，上传完成的附件保留资产引用，上传未完成或已失败的卡片提示移除后重新选择文件。临时会话不写入；删除会话和切换数据目录时清理对应记录。草稿保存失败会提示复制重要内容；发送记录保存失败会停止提交，保留原 ID 和草稿，避免重启后以新 ID 重复执行。已经发送的附件由 daemon 资产和会话引用恢复。支持图片的模型直接接收原生图片；不支持或图片能力未知的模型收到受控附件资源提示，由主 Agent 按需调用 `ImageToText` 做纯本地 OCR。OCR 只能提取可见文字，不能描述图片。PDF/Word/文本提取、工具挂载、分片上传、文件夹遍历和 Blob GC 仍属于后续阶段。
+草稿按 scope 保存在数据根 `data/desktop/composer-recovery.json` 中，输入变化延迟 250ms 异步保存，窗口关闭握手会等待保存回执；发送记录在 IPC 调用前等待原输入 ID、正文和有序附件快照写盘成功。重启不自动发送，上传完成的附件保留资产引用，上传未完成或已失败的卡片提示移除后重新选择文件。临时会话不写入；删除会话和切换数据目录时清理对应记录。草稿保存失败会提示复制重要内容；发送记录保存失败会停止提交，保留原 ID 和草稿，避免重启后以新 ID 重复执行。已经发送的附件由 daemon 资产和会话引用恢复。支持图片的模型直接接收原生图片；不支持或图片能力未知的模型收到受控附件资源提示，由主 Agent 按需调用 `ImageToText` 做纯本地 OCR。OCR 只能提取可见文字，不能描述图片。PDF/Word/文本提取、工具挂载、分片上传、文件夹遍历和 Blob GC 仍属于后续阶段。
 
 ## 发送失败恢复
 
@@ -222,3 +224,11 @@ operation 的阶段是 `pending`、`acknowledged`、`failed`。
 `interrupt` 复用现有运行操作保存停止中状态，同一会话、同一运行的 pending 停止请求只发送一次。带 `expectedRunId` 的请求收到 RPC 应答后仍等待会话更新确认该运行终止，由已有运行态收尾逻辑清除；迟到应答不改变新运行。主聊天与侧聊分别通过各自会话的 selector 读取停止状态。
 
 `refreshContextUsage` 保留最近成功快照，并向显式打开用量面板的调用方返回 true（已更新）或 false（读取失败、不可用或格式无效）。同会话被后台刷新接替时，旧调用等待最新读取结果；会话已切换时返回 undefined。后台刷新仍可忽略结果，面板自身负责短期加载与重试反馈，不增加一份全局加载状态。
+
+普通草稿和待提交身份由 `composer-recovery.ts` 异步读写 `window.desktop.businessData`，bootstrap 完成分类与恢复后才设为 ready。发送原 inputId 成功持久化后才发请求；失败保留正文和原身份。临时及 linked-chat 草稿在导出前过滤。
+
+## 运行中补充
+
+`sendMessage` 为本次提交固定投递方式和目标 Run，恢复时以同一 Input ID 核对。侧聊使用显式会话目标发送、提升、取消和恢复草稿。队列显示从目标 Run 已应用的输入列表判断何时结束等待。
+
+完全访问下直接补充的消息先显示在对话流里，接收后标记为「等候进入当前回复」。目标 Run 实际应用输入后，服务端消息按同一 Input ID 替换临时显示。补充失败时，待处理区提示原因并提供恢复草稿或重试入口。

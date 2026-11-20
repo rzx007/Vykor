@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { copyFileSync, readdirSync, unlinkSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { eq, sql } from "drizzle-orm";
+import { join } from "node:path";
 import type { CreateNoteInput, UpdateNoteInput } from "./commands.js";
 import type {
   NoteRecord,
@@ -12,8 +11,7 @@ import {
   parseCreateNoteInput,
   parseUpdateNoteInput,
 } from "@vykor/domain-contracts/notes";
-import type { StorageContext } from "../database/storage-context.js";
-import { notes, noteFileIndex } from "../session-runtime/schema.js";
+import type { EmbeddedNote, NoteIndex } from "./note-index.js";
 import {
   ensureNoteDirectory,
   noteFilePath,
@@ -38,38 +36,26 @@ export class NoteRevisionConflictError extends Error {
   }
 }
 
-type Entry = typeof noteFileIndex.$inferSelect;
-const digest = (content: string): string =>
+export const noteContentDigest = (content: string): string =>
   createHash("sha256").update(content).digest("hex");
 
 export class NoteRepository {
-  readonly directory: string;
   private initialized = false;
   private readonly organizationRepository: NoteOrganizationRepository;
   private organizationWarning: string | undefined;
-  constructor(private readonly storage: StorageContext) {
-    this.directory = join(dirname(storage.database.path), "notes");
-    this.organizationRepository = new NoteOrganizationRepository(
-      this.directory,
-    );
-  }
-  private get database() {
-    return this.storage.database.orm;
-  }
-  private lockWriter(): void {
-    // Take SQLite's existing writer lock before touching Markdown files.
-    this.database.run(
-      sql`UPDATE note_file_index SET revision = revision WHERE 0`,
-    );
+  constructor(
+    readonly directory: string,
+    private readonly index: NoteIndex,
+    private readonly embeddedNotes?: () => EmbeddedNote[],
+  ) {
+    this.organizationRepository = new NoteOrganizationRepository(directory);
   }
   private read<T>(work: () => T): T {
     try {
-      return this.storage.atomic(() => {
-        this.storage.coordinator?.deferUntilRollback(() => {
+      return this.index.atomic(() => {
+        this.index.deferUntilRollback(() => {
           this.initialized = false;
         });
-        this.storage.assertWritable();
-        this.lockWriter();
         this.initialize();
         return work();
       });
@@ -82,7 +68,7 @@ export class NoteRepository {
   private writeFile(path: string, content: string): void {
     const before = readNoteFile(path);
     replaceNoteFile(path, content);
-    this.storage.coordinator?.deferUntilRollback(() => {
+    this.index.deferUntilRollback(() => {
       if (readNoteFile(path)?.content !== content) return;
       if (before) replaceNoteFile(path, before.content);
       else unlinkSync(path);
@@ -92,53 +78,33 @@ export class NoteRepository {
   private initialize(): void {
     ensureNoteDirectory(this.directory);
     if (this.initialized) return;
-    for (const legacy of this.database.select().from(notes).all()) {
-      noteFilePath(this.directory, legacy.id);
-      if (this.entry(legacy.id)) continue;
-      const deletedAt = legacy.properties?.deletedAt ?? null;
+    for (const legacy of this.embeddedNotes?.() ?? []) {
       const path = noteFilePath(this.directory, legacy.id);
+      if (this.index.get(legacy.id)) continue;
       const existing = readNoteFile(path);
-      if (deletedAt === null && !existing) this.writeFile(path, legacy.content);
+      if (legacy.deletedAt === null && !existing) this.writeFile(path, legacy.content);
       const content = existing?.content ?? legacy.content;
-      this.database
-        .insert(noteFileIndex)
-        .values({
-          id: legacy.id,
-          revision: legacy.revision + (content === legacy.content ? 0 : 1),
-          createdAt: legacy.createdAt,
-          updatedAt:
-            content === legacy.content
-              ? legacy.updatedAt
-              : existing!.modifiedAt,
-          sha256: digest(content),
-          deletedAt,
-        })
-        .run();
+      this.index.save({
+        id: legacy.id,
+        revision: legacy.revision + (content === legacy.content ? 0 : 1),
+        createdAt: legacy.createdAt,
+        updatedAt: content === legacy.content ? legacy.updatedAt : existing!.modifiedAt,
+        sha256: noteContentDigest(content),
+        deletedAt: legacy.deletedAt,
+      });
     }
     this.initialized = true;
   }
 
-  private entry(id: string): Entry | undefined {
-    return this.database
-      .select()
-      .from(noteFileIndex)
-      .where(eq(noteFileIndex.id, id))
-      .get();
-  }
-
   private readAndSync(id: string): NoteRecord | undefined {
     const file = readNoteFile(noteFilePath(this.directory, id));
-    let entry = this.entry(id);
+    let entry = this.index.get(id);
     if (!file) {
       if (entry && entry.deletedAt === null)
-        this.database
-          .update(noteFileIndex)
-          .set({ deletedAt: Date.now() })
-          .where(eq(noteFileIndex.id, id))
-          .run();
+        this.index.save({ ...entry, deletedAt: Date.now() });
       return undefined;
     }
-    const hash = digest(file.content);
+    const hash = noteContentDigest(file.content);
     if (!entry) {
       entry = {
         id,
@@ -148,7 +114,7 @@ export class NoteRepository {
         sha256: hash,
         deletedAt: null,
       };
-      this.database.insert(noteFileIndex).values(entry).run();
+      this.index.save(entry);
     } else if (entry.sha256 !== hash || entry.deletedAt !== null) {
       entry = {
         ...entry,
@@ -157,11 +123,7 @@ export class NoteRepository {
         updatedAt: file.modifiedAt,
         deletedAt: null,
       };
-      this.database
-        .update(noteFileIndex)
-        .set(entry)
-        .where(eq(noteFileIndex.id, id))
-        .run();
+      this.index.save(entry);
     }
     return {
       id,
@@ -185,16 +147,13 @@ export class NoteRepository {
         const record = this.readAndSync(id);
         if (record) result.push(record);
       }
-      for (const entry of this.database.select().from(noteFileIndex).all()) {
+      const activeIds = new Set(result.map(record => record.id));
+      for (const entry of this.index.entries()) {
         if (
           entry.deletedAt === null &&
-          !result.some((record) => record.id === entry.id)
+          !activeIds.has(entry.id)
         )
-          this.database
-            .update(noteFileIndex)
-            .set({ deletedAt: Date.now() })
-            .where(eq(noteFileIndex.id, entry.id))
-            .run();
+          this.index.save({ ...entry, deletedAt: Date.now() });
       }
       return result.sort(
         (a, b) => b.updatedAt - a.updatedAt || b.createdAt - a.createdAt,
@@ -210,21 +169,11 @@ export class NoteRepository {
     const id = options.id ?? randomUUID();
     const path = noteFilePath(this.directory, id);
     return this.read(() => {
-      if (this.entry(id) || readNoteFile(path))
+      if (this.index.get(id) || readNoteFile(path))
         throw new Error(`Note already exists: ${id}`);
       const now = options.now ?? Date.now();
       this.writeFile(path, input.content);
-      this.database
-        .insert(noteFileIndex)
-        .values({
-          id,
-          revision: 1,
-          createdAt: now,
-          updatedAt: now,
-          sha256: digest(input.content),
-          deletedAt: null,
-        })
-        .run();
+      this.index.save({ id, revision: 1, createdAt: now, updatedAt: now, sha256: noteContentDigest(input.content), deletedAt: null });
       return {
         id,
         content: input.content,
@@ -249,11 +198,7 @@ export class NoteRepository {
         throw new NoteRevisionConflictError(id, input.expectedRevision);
       this.writeFile(path, input.content);
       const revision = input.expectedRevision + 1;
-      this.database
-        .update(noteFileIndex)
-        .set({ revision, updatedAt: now, sha256: digest(input.content) })
-        .where(eq(noteFileIndex.id, id))
-        .run();
+      this.index.save({ id, revision, createdAt: latest.createdAt, updatedAt: now, sha256: noteContentDigest(input.content), deletedAt: null });
       return {
         id,
         content: input.content,
@@ -270,14 +215,10 @@ export class NoteRepository {
     const path = noteFilePath(this.directory, id);
     const removed = this.read(() => {
       unlinkSync(path);
-      this.storage.coordinator?.deferUntilRollback(() => {
+      this.index.deferUntilRollback(() => {
         if (!readNoteFile(path)) replaceNoteFile(path, before.content);
       });
-      this.database
-        .update(noteFileIndex)
-        .set({ deletedAt: Date.now() })
-        .where(eq(noteFileIndex.id, id))
-        .run();
+      this.index.save({ ...this.index.get(id)!, deletedAt: Date.now() });
       return true;
     });
     // A layout failure must not undo an already completed Markdown deletion.
@@ -291,9 +232,7 @@ export class NoteRepository {
     };
     // An outer transaction can still roll back the deletion. Reconcile only
     // after that transaction commits, so its folder membership is not lost.
-    if (this.storage.coordinator)
-      this.storage.coordinator.deferUntilCommit(reconcileDeletedNote);
-    else reconcileDeletedNote();
+    this.index.deferUntilCommit(reconcileDeletedNote);
     return removed;
   }
 
@@ -341,14 +280,10 @@ export class NoteRepository {
 
   copyLegacyFilesTo(destination: string): void {
     ensureNoteDirectory(destination);
-    const indexed = this.database.all<{ name: string }>(
-      sql`SELECT name FROM sqlite_master WHERE type='table' AND name='note_file_index'`,
-    );
-    const hasIndex = indexed.length > 0;
-    for (const legacy of this.database.select().from(notes).all()) {
+    const indexed = new Set(this.index.entries().map(entry => entry.id));
+    for (const legacy of this.embeddedNotes?.() ?? []) {
       if (
-        legacy.properties?.deletedAt != null ||
-        (hasIndex && this.entry(legacy.id))
+        legacy.deletedAt !== null || indexed.has(legacy.id)
       )
         continue;
       const path = noteFilePath(destination, legacy.id);
@@ -369,14 +304,10 @@ export class NoteRepository {
         return id;
       });
     validateNoteOrganizationFiles(directory, noteIds, allowFutureOrganization);
-    const indexed = this.database.all<{ name: string }>(
-      sql`SELECT name FROM sqlite_master WHERE type='table' AND name='note_file_index'`,
-    );
-    if (indexed.length === 0) return;
-    for (const entry of this.database.select().from(noteFileIndex).all()) {
+    for (const entry of this.index.entries()) {
       if (entry.deletedAt !== null) continue;
       const file = readNoteFile(noteFilePath(directory, entry.id));
-      if (!file || digest(file.content) !== entry.sha256)
+      if (!file || noteContentDigest(file.content) !== entry.sha256)
         throw new Error(`Note backup is incomplete or corrupt: ${entry.id}`);
     }
   }

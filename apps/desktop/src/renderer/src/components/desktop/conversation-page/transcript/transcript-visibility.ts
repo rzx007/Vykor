@@ -1,5 +1,5 @@
 import type { DesktopSessionPart } from "@shared/session-types"
-import { isSupersededModelPart } from "@vykor/application-client"
+import { isSupersededModelPart } from "@rzx/client"
 
 export function visibleTranscriptParts(
   parts: DesktopSessionPart[],

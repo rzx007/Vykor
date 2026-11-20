@@ -69,7 +69,11 @@ export function createRunExecutionRoutes(
       let outputSchema;
       try {
         body = await readJson(c);
-        ({ attachments, items, outputSchema } = parseAdmitPromptRequest(body));
+        const parsed = parseAdmitPromptRequest(body);
+        if (parsed.expectedActiveRunId !== undefined) {
+          throw new ProtocolValidationError("Editing requires a queued Run", "expectedActiveRunId");
+        }
+        ({ attachments, items, outputSchema } = parsed);
       } catch (error) {
         return protocolValidationErrorResponse(error);
       }

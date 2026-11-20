@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -46,11 +46,73 @@ function constructionFailure(options: DefaultNodeApplicationOptions): unknown {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   for (const store of stores) store.close();
   stores.clear();
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+describe("default database selection", () => {
+  function selectedLegacyStore(source = "registered") {
+    const base = mkdtempSync(join(tmpdir(), "vykor-selected-store-"));
+    directories.push(base);
+    const root = join(base, source === "desktop" ? ".vykor" : "root"), data = join(root, "data");
+    const oldStore = new SessionStore({ path: join(base, "legacy", "sessions.db") });
+    const oldPath = oldStore.path;
+    oldStore.close();
+    const original = readFileSync(oldPath);
+    vi.stubEnv("HOME", base); vi.stubEnv("USERPROFILE", base);
+    vi.stubEnv("APPDATA", join(base, "AppData", "Roaming"));
+    vi.stubEnv("XDG_CONFIG_HOME", join(base, ".config"));
+    const profile = process.platform === "win32" ? join(base, "AppData", "Roaming")
+      : process.platform === "darwin" ? join(base, "Library", "Application Support") : join(base, ".config");
+    const locationFile = source === "desktop" ? join(profile, "Vykor", "runtime-data-location.json") : join(data, "daemon", "data-location.json");
+    mkdirSync(source === "desktop" ? join(profile, "Vykor") : join(data, "daemon"), { recursive: true });
+    writeFileSync(locationFile, JSON.stringify({ version: 1,
+      location: { directory: join(base, "legacy"), storePath: oldPath } }));
+    vi.stubEnv("VYKOR_CONFIG_DIR", root);
+    vi.stubEnv("VYKOR_DATA_DIR", source === "desktop" ? undefined : data);
+    return { data, oldPath, original };
+  }
+
+  it.each(["registered", "desktop"])("refuses an external %s selection before a default Store can create an empty database", source => {
+    const { data, oldPath, original } = selectedLegacyStore(source);
+    failAttachmentAssembly(new Error("default Store was already created"));
+    expect(() => createDefaultNodeApplication({ settings, log: () => {} })).toThrow(/data-root migrate/);
+    expect(existsSync(join(data, "session-runtime", "sessions.db"))).toBe(false);
+    expect(readFileSync(oldPath)).toEqual(original);
+  });
+
+  it("keeps an explicitly supplied embedded Store independent of legacy product selection", () => {
+    selectedLegacyStore();
+    const store = createStore(), expected = new Error("embedded application reached");
+    failAttachmentAssembly(expected);
+    expect(constructionFailure({ store, settings, log: () => {} })).toBe(expected);
+    expect(store.sessions.list()).toEqual([]);
+  });
+
+  it("keeps an explicitly supplied database path independent of legacy product selection", () => {
+    selectedLegacyStore();
+    const expected = new Error("embedded application reached");
+    failAttachmentAssembly(expected);
+    expect(constructionFailure({ storePath: tempStorePath(), settings, log: () => {} })).toBe(expected);
+  });
+
+  it("accepts the current canonical record before a retained Desktop legacy selection", () => {
+    const { data, oldPath, original } = selectedLegacyStore("desktop");
+    const current = new SessionStore({ path: join(data, "session-runtime", "sessions.db") });
+    current.close();
+    mkdirSync(join(data, "daemon"), { recursive: true });
+    writeFileSync(join(data, "daemon", "data-location.json"), JSON.stringify({ version: 1,
+      location: { directory: data, storePath: join(data, "session-runtime", "sessions.db") } }));
+    const expected = new Error("canonical application reached");
+    failAttachmentAssembly(expected);
+    expect(constructionFailure({ settings, log: () => {} })).toBe(expected);
+    expect(existsSync(join(data, "session-runtime", "sessions.db"))).toBe(true);
+    expect(readFileSync(oldPath)).toEqual(original);
+  });
 });
 
 describe("createDefaultNodeApplication Store ownership", () => {

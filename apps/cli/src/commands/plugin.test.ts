@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { fileURLToPath } from "node:url";
-import type { PluginInfo } from "@vykor/application-client";
+import type { PluginInfo } from "@vykor/daemon-admin/plugins";
 
 const clientMocks = vi.hoisted(() => ({
   list: vi.fn(),
@@ -9,9 +9,9 @@ const clientMocks = vi.hoisted(() => ({
 vi.mock("../ensure-daemon.js", () => ({
   ensureLocalDaemon: vi.fn(async () => ({ url: "http://127.0.0.1:4000", token: "test-token" })),
 }));
-vi.mock("@vykor/application-client", () => ({
-  VykorClient: class {
-    plugins = { list: clientMocks.list };
+vi.mock("@vykor/daemon-admin/plugins", () => ({
+  PluginResource: class {
+    list = clientMocks.list;
   },
 }));
 
@@ -39,6 +39,7 @@ function plugin(partial: Partial<PluginInfo> = {}): PluginInfo {
       registeredToolCount: 2,
     },
     inventory: { commands: 1, tools: 2 },
+    runtimeStatus: { state: "loaded", message: "Loaded", action: "none" },
     permissions: { requested: ["network"], approved: ["network"], missing: [] },
     diagnostics: [],
     ...partial,

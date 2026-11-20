@@ -1,0 +1,29 @@
+---
+title: Agent HTTP API
+description: 公开 Agent 操作的 OpenAPI 3.1 契约，以及直接连接 daemon 时需要的认证、协议和事件规则。
+---
+
+<a href={`${import.meta.env.BASE_URL}agent-openapi.json`} download>下载 OpenAPI 3.1 JSON</a>
+
+契约覆盖 `@rzx/client` 的八个资源。每条操作的 `operationId` 对应一个资源方法，例如 `sessions.admitPrompt`。JSON 的路径从 daemon 的 HTTP 地址开始。TypeScript 应用可直接使用[生成的 SDK 参考](../../api/index/)。
+
+## 连接与错误
+
+1. 请求 `GET /capabilities`，比较返回的 `protocol.version`。当前版本是 `7`，`features` 中的值表示功能版本，缺失表示实例未声明。先确认所需能力，例如 `steer >= 2` 支持把补充输入绑定到指定活动 Run，`structuredDelivery >= 1` 支持 `outputSchema`，`sessionFiles >= 1` 表示可读取会话工作区。附件的单请求上传上限在 `attachments.limits`。
+2. `GET /health` 与能力查询无需凭据和协议头。其他操作发送 `x-vykor-protocol-version: 7`。实例配置了 token 时，同时发送 `Authorization: Bearer <token>`。
+3. 协议版本缺失或不匹配返回 `426`，包括 `expected` 和 `received`。凭据不符返回 `401`。操作错误可能包含 `error`，也可能使用 `code`、`message` 和可选的 `details`，例如请求字段校验。`409` 提示重新读取当前资源，再决定是否重试。
+
+## 会话与人机交互
+
+`POST /sessions/{sessionId}/prompts` 返回 `202` 和输入受理回执。客户端使用稳定的输入 ID 重试同一次提交。收到 Run ID 后，从会话状态、消息和事件读取执行结果。退出观察只取消客户端请求。中断指定的 Run 使用 `expectedRunId`，已经结束的旧 Run ID 返回 `interrupted: false`，后续 Run 继续执行。
+
+常规审批用 `POST /permissions/{requestId}/reply` 提交明确授权决定。`toolName` 为 `AskUser` 且 `payload.input.kind` 为 `question` 时，回复一次批准并把答案写入 `answer`。Goal 自己等待的用户问题通过 Goal 操作回复，附上相应的 `questionId`、`objectiveVersion` 和 `expectedRevision`。
+
+## SSE 游标和续订
+
+`GET /events` 读取持久事件。`GET /events/stream` 从指定游标之后重放持久事件，接着推送实时事件。两者均可用 `sessionId` 限定会话。
+
+- 每个数据帧用 `id` 表示事件序号，`event` 表示事件名，`data` 携带完整事件 JSON。可观察的事件包括 `session.input.admitted`、`session.run.updated`、`permission.asked` 和 `permission.replied`。事件含 `schemaVersion`，解析与处理须检查相应版本。以 `:` 开头的连接、心跳帧没有业务事件。
+- 游标表示已处理的序号，续订从它之后开始。SSE 使用 `cursor` 查询参数。也接受 `afterSeq` 别名，或通过 `Last-Event-ID` 请求头续订。有效的查询游标优先于该请求头。会话过滤后的序号可跳过其他会话的事件。
+- 单会话先读 `GET /sessions/{sessionId}/state`，再用同次读取返回的 `cursor` 建立流。断开后刷新快照再续订。实时文字增量和工具进度可能未进入历史，恢复时以持久快照为准。
+- `syncEvents` 和 `SessionSyncController` 已实现快照、重放、实时事件与退避。需要持续恢复时见[快照与事件同步](../../guides/sync-recovery/)。

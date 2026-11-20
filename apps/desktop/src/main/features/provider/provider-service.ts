@@ -1,4 +1,5 @@
-import type { AuthStatus, ModelProviderInfo, VykorClient, ProviderInfo } from "@vykor/application-client"
+import type { ModelProviderInfo, VykorClient } from "@rzx/client"
+import { AuthResource, ProviderResource, SystemResource, type AuthStatus, type ProviderInfo } from "@vykor/daemon-admin/configuration"
 
 import type {
   ActivateDesktopProviderInput,
@@ -15,7 +16,16 @@ import type {
 import { desktopSessionService } from "../session/session-service"
 import { resolveDesktopRuntimeSnapshot } from "../session/runtime-selection"
 
-type ProviderClient = Pick<VykorClient, "runtime" | "providers" | "auth" | "system">
+type ProviderClient = Pick<VykorClient, "runtime"> & {
+  providers: ProviderResource
+  auth: AuthResource
+  system: SystemResource
+}
+
+async function providerClient(agent: VykorClient): Promise<ProviderClient> {
+  const transport = await desktopSessionService.daemonTransport(agent)
+  return { runtime: agent.runtime, providers: new ProviderResource(transport), auth: new AuthResource(transport), system: new SystemResource(transport) }
+}
 
 export class DesktopProviderService {
   snapshot(options: { refresh?: boolean } = {}): Promise<DesktopProviderSnapshot> {
@@ -387,7 +397,7 @@ async function rollbackDefaultRemoval(
 
 async function withDaemonRetry<T>(operation: (client: ProviderClient) => Promise<T>): Promise<T> {
   try {
-    return await operation(await desktopSessionService.daemonClient())
+    return await operation(await providerClient(await desktopSessionService.agentClient()))
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     if (
@@ -397,6 +407,6 @@ async function withDaemonRetry<T>(operation: (client: ProviderClient) => Promise
     ) {
       throw error
     }
-    return await operation(await desktopSessionService.refreshDaemonClient())
+    return await operation(await providerClient(await desktopSessionService.refreshAgentClient()))
   }
 }

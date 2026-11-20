@@ -68,7 +68,7 @@ export function ImageViewer({
     height: number
   ) => Promise<void>
   onOpenOriginal?: () => Promise<unknown>
-  navigationGuardRef?: RefObject<((keyboard?: boolean) => boolean) | null>
+  navigationGuardRef?: RefObject<((keyboard?: boolean) => boolean | Promise<boolean>) | null>
 }) {
   const [drawing, setDrawing] = useState(false)
   const [commentsOpen, setCommentsOpen] = useState(false)
@@ -99,7 +99,7 @@ export function ImageViewer({
 
   useLayoutEffect(() => {
     if (!navigationGuardRef) return
-    const guard = (keyboard = false): boolean => {
+    const guard = async (keyboard = false): Promise<boolean> => {
       if (busyRef.current) {
         setActionError(BUSY_NAVIGATION_ERROR)
         return false
@@ -112,7 +112,7 @@ export function ImageViewer({
           document.activeElement?.closest("textarea,input,[contenteditable=true]"))
       )
         return false
-      if (!annotation.flushDraft()) return false
+      if (!(await annotation.flushDraft())) return false
       annotation.cancelSelection()
       setDrawing(false)
       return true
@@ -465,7 +465,7 @@ export function ImageViewer({
               className="size-9"
               aria-label="关闭图片查看器"
               title="关闭"
-              onClick={onClose}
+              onClick={async () => { if (await annotation.flushDraft()) onClose?.() }}
             >
               <X />
             </Button>

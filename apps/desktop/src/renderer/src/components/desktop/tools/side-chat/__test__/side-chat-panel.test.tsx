@@ -9,6 +9,7 @@ import {
 } from "@renderer/stores/desktop-session/store-test-fixtures"
 import { composerDocument } from "@renderer/stores/desktop-session/composer-document"
 import { selectDraftText } from "@renderer/stores/desktop-session/composer-draft-state"
+import { ConversationPane } from "../../../conversation-page"
 import { MainLayoutContext } from "../../../layout/main-layout/main-layout-context"
 import type {
   DesktopAuxSessionUpdate,
@@ -144,6 +145,7 @@ beforeEach(() => {
       },
       clipboard: { writeText: async () => {} },
       settings: { snapshot: async () => ({ showReasoning: false }), onUpdated: () => () => {} },
+      workspace: { listOpeners: async () => [] },
     },
   })
   resetDesktopSessionStore()
@@ -255,6 +257,292 @@ it("opening and quoting uses the side draft without creating a session or changi
   expect(selectDraftText(useDesktopSessionStore.getState(), "session:main")).toBe("main draft")
   expect(fork).not.toHaveBeenCalled()
   expect(sendPrompt).not.toHaveBeenCalled()
+})
+
+it.each([
+  ["full_access", "execute", "steer"],
+  ["ask", "execute", undefined],
+  ["auto_review", "plan", undefined],
+] as const)("sends the side chat default for %s / %s", async (permissionMode, workMode, delivery) => {
+  sideChatTargets.set("main", "side-main")
+  const view = sideView()
+  view.session.metadata = { runtime: { approvalMode: permissionMode, workMode } }
+  view.runs = [{
+    id: "side-run", sessionId: view.session.id, status: "running",
+    createdAt: 1, updatedAt: 1, metadata: {},
+  }]
+  openAux.mockResolvedValueOnce(view)
+  const store = useDesktopSessionStore.getState()
+  store.setComposerDraftText("session:main", "main draft")
+  store.setComposerDraftText("session:side-main", "side follow-up")
+  await mount()
+  const choice = container.querySelector('[aria-label="本条消息的发送方式"]')
+  if (permissionMode === "full_access") expect(choice).toBeNull()
+  else expect(choice?.textContent).toContain("排队")
+  expect(container.querySelector('[aria-label="停止生成"]')).toBeNull()
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="发送"]')!.click())
+  const request = sendPrompt.mock.calls[0]?.[0] as SendDesktopPromptInput
+  expect(request.sessionId).toBe(view.session.id)
+  expect(request.delivery).toBe(delivery)
+  expect(request.expectedActiveRunId).toBe(delivery === "steer" ? "side-run" : undefined)
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:main")).toBe("main draft")
+})
+
+it("uses a manual side-chat choice once and restores the default on admission", async () => {
+  sideChatTargets.set("main", "side-main")
+  const view = sideView()
+  view.session.metadata = { runtime: { approvalMode: "ask", workMode: "plan" } }
+  view.runs = [{
+    id: "side-run", sessionId: view.session.id, status: "running",
+    createdAt: 1, updatedAt: 1, metadata: {},
+  }]
+  openAux.mockResolvedValueOnce(view)
+  useDesktopSessionStore.getState().setComposerDraftText("session:side-main", "send this now")
+  await mount()
+  const choice = () => container.querySelector<HTMLButtonElement>('[aria-label="本条消息的发送方式"]')!
+  expect(choice().textContent).toContain("排队")
+  await act(async () => choice().click())
+  const steerOption = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+    .find(button => button.textContent?.trim() === "现在补充")
+  expect(steerOption).toBeDefined()
+  await act(async () => steerOption!.click())
+  expect(choice().textContent).toContain("现在补充")
+  await submit()
+  const sent = sendPrompt.mock.calls[0]?.[0] as SendDesktopPromptInput
+  expect(sent).toMatchObject({ sessionId: "side-main", delivery: "steer", expectedActiveRunId: "side-run" })
+  await emit({ ...view, cursor: 1, inputs: [{
+    id: sent.id, sessionId: "side-main", seq: 1, delivery: "steer", items: sent.items,
+    content: "send this now", attachments: [], createdAt: 1, metadata: { steerTargetRunId: "side-run" },
+  }] })
+  expect(choice().textContent).toContain("排队")
+})
+
+it.each(["applied", "failed"] as const)("keeps a full-access follow-up visible until the side Run reports it %s", async (outcome) => {
+  sideChatTargets.set("main", "side-main")
+  const view = sideView()
+  const run = { id: "side-run", sessionId: view.session.id, status: "running" as const,
+    createdAt: 1, updatedAt: 1, metadata: {} }
+  view.session.metadata = { runtime: { approvalMode: outcome === "applied" ? "ask" : "full_access" } }
+  view.runs = [run]
+  openAux.mockResolvedValueOnce(view)
+  const reply = Promise.withResolvers<void>()
+  sendPrompt.mockReturnValueOnce(reply.promise)
+  const text = "direct side follow-up"
+  useDesktopSessionStore.getState().setComposerDraftText("session:side-main", text)
+  await mount()
+  if (outcome === "applied") {
+    // The mode change's reply can update the session record before its stream snapshot arrives.
+    await act(async () => useDesktopSessionStore.setState(state => ({
+      sessions: [...state.sessions.filter(session => session.id !== view.session.id), {
+        ...view.session, metadata: { runtime: { approvalMode: "full_access" } },
+      }],
+    })))
+  }
+  expect(container.querySelector('[aria-label="本条消息的发送方式"]')).toBeNull()
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="发送"]')!.click())
+  const request = sendPrompt.mock.calls[0]![0] as SendDesktopPromptInput
+  const message = () => container.querySelector(`[data-message-id="${request.id}"]`)
+  const queue = () => container.querySelector('[aria-label="待处理消息"]')
+  const input = { id: request.id, sessionId: view.session.id, seq: 1, delivery: "steer" as const,
+    items: request.items, content: text, attachments: [], createdAt: 2, metadata: { steerTargetRunId: run.id } }
+  expect(message()?.textContent).toContain(text)
+  expect(queue()).toBeNull()
+
+  await act(async () => reply.resolve())
+  expect(message()?.textContent).toContain(text)
+  await emit({ ...view, cursor: 1, inputs: [input] })
+  expect(message()?.textContent).toContain("等候进入当前回复")
+  expect(queue()).toBeNull()
+
+  if (outcome === "applied") {
+    await emit({ ...view, cursor: 2, inputs: [input],
+      runs: [{ ...run, metadata: { appliedInputState: { revision: 1, inputIds: [input.id] } } }],
+      messages: [{ id: "applied-user", sessionId: view.session.id, seq: 2, role: "user", inputId: input.id, runId: run.id,
+        metadata: {}, createdAt: 2, updatedAt: 2 }],
+      parts: [{ id: "applied-text", sessionId: view.session.id, messageId: "applied-user", seq: 1, type: "text",
+        status: "completed", text, metadata: {}, createdAt: 2, updatedAt: 2 }],
+    })
+    expect(container.querySelectorAll(`[data-message-id="${request.id}"]`)).toHaveLength(1)
+    expect(message()?.textContent).toContain(text)
+    expect(message()?.textContent).not.toContain("等候进入当前回复")
+    expect(queue()).toBeNull()
+  } else {
+    await emit({ ...view, cursor: 2, inputs: [input], runs: [{ ...run, status: "interrupted" }] })
+    expect(message()).toBeNull()
+    expect(queue()?.textContent).toContain("这条补充未进入当前回复")
+    const restore = [...queue()!.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "恢复到草稿")!
+    await act(async () => restore.click())
+    expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toBe(text)
+    expect(queue()).toBeNull()
+  }
+})
+
+it("moves the next queued side message into the transcript before its run starts", async () => {
+  sideChatTargets.set("main", "side-main")
+  const view = sideView()
+  const input = { id: "queued-side-input", sessionId: view.session.id, seq: 1, delivery: "queue" as const,
+    content: "side message ready to start", items: [{ type: "text" as const, text: "side message ready to start" }],
+    attachments: [], createdAt: 2, metadata: {} }
+  const activeRun = { id: "active", sessionId: view.session.id, status: "running" as const,
+    createdAt: 1, updatedAt: 1, metadata: {} }
+  const nextRun = { ...activeRun, id: "next", status: "pending" as const, inputId: input.id, createdAt: 2 }
+  view.inputs = [input]
+  view.runs = [activeRun, nextRun]
+  openAux.mockResolvedValueOnce(view)
+  await mount()
+  const messages = () => container.querySelectorAll(`[data-message-id="${input.id}"]`)
+  const queue = () => container.querySelector('[aria-label="待处理消息"]')
+  expect(queue()?.textContent).toContain(input.content)
+  expect(messages()).toHaveLength(0)
+
+  const ended = { ...activeRun, status: "completed" as const }
+  await emit({ ...view, cursor: 1, runs: [ended, nextRun] })
+  expect(queue()).toBeNull()
+  expect(messages()).toHaveLength(1)
+  expect(messages()[0]?.textContent).toContain(input.content)
+
+  await emit({ ...view, cursor: 2, runs: [ended, { ...nextRun, status: "running" }],
+    messages: [{ id: "side-user", sessionId: view.session.id, inputId: input.id, runId: nextRun.id,
+      seq: 2, role: "user", metadata: {}, createdAt: 2, updatedAt: 2 }],
+    parts: [{ id: "side-text", sessionId: view.session.id, messageId: "side-user", seq: 1,
+      type: "text", status: "completed", text: input.content, metadata: {}, createdAt: 2, updatedAt: 2 }],
+  })
+  expect(messages()).toHaveLength(1)
+  expect(messages()[0]?.textContent).toContain(input.content)
+  expect(sendPrompt).not.toHaveBeenCalled()
+})
+
+it("stops only the focused chat on Escape when both chats are running and keeps both drafts", async () => {
+  sideChatTargets.set("main", "side-main")
+  const view = sideView()
+  view.runs = [{ id: "side-active", sessionId: view.session.id, status: "running", createdAt: 1, updatedAt: 1, metadata: {} }]
+  const main = emptySessionView("main")
+  main.runs = [{ ...view.runs[0]!, id: "main-active", sessionId: main.session.id }]
+  openAux.mockResolvedValueOnce(view)
+  useDesktopSessionStore.setState({ sessionView: main })
+  useDesktopSessionStore.getState().setComposerDraftText("session:side-main", "side draft")
+  useDesktopSessionStore.getState().setComposerDraftText("session:main", "main draft")
+  await act(async () => root.render(
+    <MainLayoutContext.Provider value={{
+      conversationWorkspace: null, startNewConversation() {}, openSideChat() {},
+    }}>
+      <ConversationPane {...callbacks} panelOpen onTogglePanel={vi.fn()} onOpenAgents={vi.fn()} />
+      <SideChatPanel sourceId="main" active {...callbacks} />
+    </MainLayoutContext.Provider>
+  ))
+  const side = container.querySelector('[aria-label="侧边聊天"]')!
+  const editor = side.querySelector<HTMLElement>("#side-chat-composer-main")!
+  const escape = (target: HTMLElement, init: KeyboardEventInit = {}) => act(async () => {
+    target.focus()
+    target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true, ...init }))
+  })
+  await escape(document.body)
+  await escape(editor, { isComposing: true })
+  await escape(editor, { repeat: true })
+  expect(interrupt).not.toHaveBeenCalled()
+
+  const context = side.querySelector<HTMLButtonElement>('[aria-label="添加上下文"]')!
+  await act(async () => context.click())
+  expect(side.querySelector('[role="listbox"][aria-label="添加上下文"]')).not.toBeNull()
+  await escape(editor)
+  expect(interrupt).not.toHaveBeenCalled()
+  expect(side.querySelector('[role="listbox"][aria-label="添加上下文"]')).toBeNull()
+
+  await escape(editor)
+  expect(interrupt).toHaveBeenCalledExactlyOnceWith({ sessionId: "side-main", expectedRunId: "side-active" })
+  await escape(container.querySelector<HTMLElement>("#message-composer")!)
+  expect(interrupt).toHaveBeenCalledTimes(2)
+  expect(interrupt).toHaveBeenLastCalledWith({ sessionId: "main", expectedRunId: "main-active" })
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toBe("side draft")
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:main")).toBe("main draft")
+})
+
+it("keeps queued side messages visible once while a stopped promotion settles", async () => {
+  sideChatTargets.set("main", "side-main")
+  const view = sideView()
+  const sessionId = view.session.id
+  const active = { id: "active", sessionId, status: "running" as const,
+    createdAt: 1, updatedAt: 1, metadata: {} }
+  const queued = (id: string, seq: number) => ({
+    id, sessionId, seq, delivery: "queue" as const, content: id,
+    items: [{ type: "text" as const, text: id }], attachments: [], createdAt: seq, metadata: {},
+  })
+  const first = queued("first queued message", 2)
+  const second = queued("second queued message", 3)
+  const firstRun = { ...active, id: "first", status: "pending" as const, inputId: first.id, createdAt: 2 }
+  const secondRun = { ...firstRun, id: "second", inputId: second.id, createdAt: 3 }
+  view.inputs = [first, second]
+  view.runs = [active, firstRun, secondRun]
+  openAux.mockResolvedValueOnce(view)
+  const reply = Promise.withResolvers<void>()
+  const promoteQueuedPrompt = vi.fn(() => reply.promise)
+  Object.assign(window.desktop.sessions, { promoteQueuedPrompt })
+  await mount()
+  const queue = () => container.querySelector('[aria-label="待处理消息"]')!
+  const transcriptMessages = () =>
+    container.querySelectorAll(`[data-message-id="${first.id}"], [data-message-id="${second.id}"]`)
+  const promote = Array.from(queue().querySelectorAll("button"))
+    .find((button) => button.textContent?.trim() === "补充到当前回复")!
+  await act(async () => promote.click())
+  expect(promoteQueuedPrompt).toHaveBeenCalledWith({
+    sessionId, inputId: first.id, queuedRunId: firstRun.id, expectedActiveRunId: active.id,
+  })
+
+  const stopped = { ...active, status: "interrupted" as const }
+  await emit({ ...view, cursor: 1, runs: [stopped, firstRun, secondRun] })
+  expect(queue().textContent).toContain(first.content)
+  expect(queue().textContent).toContain(second.content)
+  expect(transcriptMessages()).toHaveLength(0)
+
+  const failed = { ...firstRun, status: "interrupted" as const, metadata: {
+    promotion: { kind: "failed", queuedRunId: firstRun.id, inputId: first.id, activeRunId: active.id },
+  } }
+  await emit({ ...view, cursor: 2, runs: [stopped, failed, secondRun] })
+  await act(async () => reply.reject(new Error("promotion interrupted")))
+  expect(queue().textContent).toContain(first.content)
+  expect(queue().textContent).not.toContain(second.content)
+  expect(transcriptMessages()).toHaveLength(1)
+  expect(transcriptMessages()[0]?.textContent).toContain(second.content)
+
+  const restore = Array.from(queue().querySelectorAll("button"))
+    .find((button) => button.textContent?.trim() === "恢复到草稿")!
+  await act(async () => restore.click())
+  expect(selectDraftText(useDesktopSessionStore.getState(), "session:side-main")).toBe(first.content)
+  expect(transcriptMessages()).toHaveLength(1)
+})
+
+it("routes queue promotion and cancellation only to the side view", async () => {
+  sideChatTargets.set("main", "side-main")
+  const view = sideView()
+  view.inputs = [{
+    id: "queued-input", sessionId: "side-main", seq: 1, delivery: "queue",
+    content: "queued for side", items: [{ type: "text", text: "queued for side" }],
+    attachments: [], createdAt: 1, metadata: {},
+  }]
+  view.runs = [{
+    id: "side-run", sessionId: "side-main", status: "running", createdAt: 1, updatedAt: 1, metadata: {},
+  }, {
+    id: "side-queued", sessionId: "side-main", inputId: "queued-input",
+    status: "pending", createdAt: 2, updatedAt: 2, metadata: {},
+  }]
+  openAux.mockResolvedValueOnce(view)
+  let finishPromotion!: () => void
+  const promote = vi.fn(() => new Promise<void>(resolve => { finishPromotion = resolve }))
+  const cancel = vi.fn(async () => {})
+  Object.assign(window.desktop.sessions, { promoteQueuedPrompt: promote, cancelQueuedPrompt: cancel })
+  await mount()
+  const button = Array.from(container.querySelectorAll("button"))
+    .find(candidate => candidate.textContent?.trim() === "补充到当前回复")!
+  await act(async () => button.click())
+  expect(promote).toHaveBeenCalledWith({
+    sessionId: "side-main", inputId: "queued-input", queuedRunId: "side-queued", expectedActiveRunId: "side-run",
+  })
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="删除待处理消息"]')!.click())
+  expect(cancel).toHaveBeenCalledWith({ sessionId: "side-main", inputId: "queued-input", queuedRunId: "side-queued" })
+  await act(async () => finishPromotion())
+  expect(useDesktopSessionStore.getState().sessionRuntimes["side-main"]?.queuedPromptActions["side-main:side-queued"])
+    .toMatchObject({ kind: "cancel", phase: "acknowledged" })
+  expect(useDesktopSessionStore.getState().activeSessionId).toBe("main")
 })
 
 it("sends an annotation-only side draft and consumes only that scope's package", async () => {

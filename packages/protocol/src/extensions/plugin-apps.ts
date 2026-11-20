@@ -1,4 +1,5 @@
 import type { PluginAppRuntimeLease, PluginAppToolDescriptor } from "@vykor/plugin-contracts/runtime";
+import type { PluginAppSurfaceDefinition } from "@vykor/plugin-contracts/manifest";
 import { ProtocolValidationError } from "../requests/requests.js";
 import { validatePluginAppConversationInput, validatePluginAppSource, validateOpenPluginAppInput, validateClosePluginAppInput,
   validatePluginAppToolInput, validatePluginAppComposerContexts, type PluginAppToolInput, type PluginAppConversationInput,
@@ -25,6 +26,17 @@ export interface PluginAppAvailability {
 }
 export interface PluginAppResponse { source: PluginAppSource; app: PluginAppRecord; availability: PluginAppAvailability; lease?: PluginAppRuntimeLease; tools?: PluginAppToolDescriptor[] }
 export interface PluginAppListResponse { apps: PluginAppResponse[] }
+export interface PluginAppCatalogResponse {
+  backends: Array<{
+    pluginId: string;
+    pluginVersion: string;
+    pluginDigest: string;
+    definitionDigest: string;
+    backendId: string;
+    backendKind: PluginAppRecord["backendKind"];
+    surfaces: PluginAppSurfaceDefinition[];
+  }>;
+}
 export interface PluginAppActionResponse {
   receipt: PluginAppActionReceipt;
   result?: import("@vykor/agent-contracts/tool-data").McpCallResultData;

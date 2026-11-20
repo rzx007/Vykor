@@ -4,7 +4,9 @@ import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { BrowserWindow, ipcMain } from "electron"
-import { VykorApiError, VykorClient } from "@vykor/application-client"
+import { VykorApiError, HttpTransport, VykorClient } from "@rzx/client"
+import type { PluginAppListResponse } from "@vykor/protocol"
+import { clientForPluginApps } from "../../src/main/features/plugin-apps/plugin-app-client"
 import { DesktopPluginAppService } from "../../src/main/features/plugin-apps/plugin-app-service"
 import { createPluginAppsIpcContribution } from "../../src/main/features/plugin-apps/ipc"
 import { pluginAppMessageReady } from "../../src/main/features/plugin-apps/message-ready"
@@ -30,7 +32,10 @@ export async function checkExcalidrawApp(root: string, documents: PluginAppDocum
     child.once("exit", code => { clearTimeout(timer); reject(new Error(`Excalidraw backend exited ${code}: ${stderr}`)) })
     child.on("message", value => { if (value && typeof value === "object" && "baseUrl" in value) { clearTimeout(timer); resolve(value as Ready) } })
   })
-  const client = new VykorClient({ baseUrl: ready.baseUrl, token: ready.token })
+  const options = { baseUrl: ready.baseUrl, token: ready.token }
+  const transport = new HttpTransport(options)
+  const client = clientForPluginApps(new VykorClient(options), transport)
+  const readApps = () => transport.request<PluginAppListResponse>(`/sessions/${encodeURIComponent(ready.sessionId)}/plugin-apps`)
   const traceCalls = process.env.VYKOR_UI_TEST_EXCALIDRAW_TRACE === "1"
   const startedAt = Date.now(), timings: Array<{ method: string; label: string; startedMs: number; durationMs?: number }> = []
   let activeCalls = 0, peakCalls = 0
@@ -109,7 +114,7 @@ export async function checkExcalidrawApp(root: string, documents: PluginAppDocum
     await wait(async () => appEvaluate("window.__excalidrawPanel?.state().document?.id==='electron-diagram' && !!window.__excalidrawPanel.api"), "real Excalidraw scene loaded")
     await evaluate("window.fixtureSavedWindow=document.querySelector('iframe').contentWindow;window.excalidrawConfirmations=0;new MutationObserver(()=>{const showing=!!document.querySelector('[role=alertdialog]');if(showing&&!window.excalidrawDialogVisible)window.excalidrawConfirmations++;window.excalidrawDialogVisible=showing}).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['role']});void 0")
     await appEvaluate("window.excalidrawDocumentToken='original-document';void 0")
-    const app = (await client.pluginApps.list(ready.sessionId)).apps.find(item => item.app.pluginId === ready.pluginId)!
+    const app = (await readApps()).apps.find(item => item.app.pluginId === ready.pluginId)!
     assert.ok(app)
     const savedActions = async () => (await client.sessions.getState(ready.sessionId)).runs
       .filter(run => run.status === "completed" && (run.metadata.pluginAppAction as { toolName?: string } | undefined)?.toolName === "commit_scene")

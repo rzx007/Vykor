@@ -4,7 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
 import { SessionStore } from "@vykor/services";
-import { VykorClient, CURRENT_PROTOCOL_VERSION } from "@vykor/application-client";
+import { HttpTransport, VykorClient, CURRENT_PROTOCOL_VERSION, type VykorClientOptions } from "@rzx/client";
+import { PluginAppResource } from "../../apps/desktop/src/main/features/plugin-apps/plugin-app-resource.js";
+import { SystemResource } from "@vykor/daemon-admin/configuration";
 import { SessionPluginAppService } from "../../packages/server/src/application/session/plugins/session-plugin-app-service.js";
 import { DesktopPluginAppService } from "../../apps/desktop/src/main/features/plugin-apps/plugin-app-service.js";
 import { PluginAppDocumentStore } from "../../apps/desktop/src/main/features/plugin-apps/document-store.js";
@@ -24,7 +26,7 @@ function fixture() {
   });
   let beforeClose: (() => void | Promise<void>) | undefined, beforeRead: (() => void | Promise<void>) | undefined;
   const closes: unknown[] = [];
-  const client = new VykorClient({ baseUrl: "http://localhost", fetch: async (url, options) => {
+  const connection: VykorClientOptions = { baseUrl: "http://localhost", fetch: async (url, options) => {
     const path = new URL(String(url)).pathname;
     const body = options?.body ? JSON.parse(String(options.body)) : {};
     let result: unknown;
@@ -40,7 +42,11 @@ function fixture() {
       }
       return new Response(JSON.stringify(result), { headers: { "content-type": "application/json" } });
     } catch (error) { return new Response(JSON.stringify({ error: String(error) }), { status: 409, headers: { "content-type": "application/json" } }); }
-  } });
+  } };
+  const agent = new VykorClient(connection);
+  const transport = new HttpTransport(connection);
+  const client = { protocol: agent.protocol, sessions: agent.sessions, runtime: agent.runtime,
+    system: new SystemResource(transport), pluginApps: new PluginAppResource(transport) };
   const token = {}, main = new DesktopPluginAppService({ documents: new PluginAppDocumentStore(), getClient: async () => client, getOwnerSessionToken: () => token });
   for (const id of [42, 43]) main.registerOwner(Object.assign(new EventEmitter(), { id, isDestroyed: () => false, getURL: () => "file:///trusted.html" }) as never, "file:///trusted.html");
   cleanups.push(() => { main.dispose(); store.close(); rmSync(root, { recursive: true, force: true }); });

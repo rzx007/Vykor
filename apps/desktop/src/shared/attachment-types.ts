@@ -1,5 +1,5 @@
-import type { ServerCapabilities } from "@vykor/application-client"
-import { officeFormat } from "@vykor/application-client"
+import type { ServerCapabilities } from "@rzx/client"
+import { officeFormat } from "@vykor/protocol"
 
 type DesktopAttachmentLimits = NonNullable<ServerCapabilities["attachments"]>["limits"]
 
@@ -50,6 +50,8 @@ export interface DesktopAttachmentDraft {
   assetId?: string
   mediaType?: string
   error?: DesktopAttachmentError
+  /** 自动折叠的粘贴原文，仅用于恢复输入框草稿。 */
+  pastedText?: string
 }
 
 export interface DesktopAttachmentCompatibility {
@@ -212,4 +214,63 @@ export function normalizeDesktopAttachmentSupport(
   support: DesktopAttachmentSupport | null | undefined
 ): DesktopAttachmentSupport {
   return support ?? disabledDesktopAttachmentSupport
+}
+
+export interface AttachmentStorageIssue {
+  code:
+    | "missing_blob"
+    | "size_mismatch"
+    | "orphan_blob"
+    | "stale_lease"
+    | "deleted_asset_retained";
+  severity: "warning" | "error";
+  assetId?: string;
+  sha256?: string;
+  expectedSizeBytes?: number;
+  actualSizeBytes?: number;
+  collectible?: boolean;
+}
+
+export interface AttachmentStorageReport {
+  summary: {
+    assets: Record<"importing" | "ready" | "failed" | "deleted", number>;
+    uniqueBlobs: number;
+    physicalBytes: number;
+    logicalBytes: number;
+    deduplicatedBytes: number;
+    activeLeases: number;
+    expiredLeases: number;
+    reclaimableBytes: number;
+  };
+  issues: AttachmentStorageIssue[];
+  latestGcAudit?: {
+    id: string;
+    policy: string;
+    result: unknown;
+    createdAt: number;
+  };
+}
+
+export interface AttachmentStorageRepairResult {
+  expiredLeases: number;
+  deletedOrphanBlobs: number;
+  releasedBytes: number;
+}
+
+export interface AttachmentStorageGcResult {
+  scannedAssets: number;
+  expiredLeases: number;
+  deletedAssets: number;
+  deletedBlobs: number;
+  releasedBytes: number;
+  skipped: Record<
+    | "notDeleted"
+    | "gracePeriod"
+    | "missingHash"
+    | "referenced"
+    | "activeLease"
+    | "sharedBlob",
+    number
+  >;
+  errors: Array<{ assetId: string; code: "blob_delete_failed" }>;
 }

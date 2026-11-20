@@ -9,6 +9,7 @@ import { applySessionMigrations } from "./migrations.js";
 
 export interface SessionDatabaseOptions {
   path: string;
+  fileMustExist?: boolean;
 }
 
 export class SessionDatabase {
@@ -22,10 +23,10 @@ export class SessionDatabase {
     this.orm = drizzle(connection, { schema });
   }
 
-  static open(options: SessionDatabaseOptions): SessionDatabase {
-    const path = resolve(options.path);
-    mkdirSync(dirname(path), { recursive: true });
-    const connection = new Database(path);
+  static open({ path: filename, fileMustExist = false }: SessionDatabaseOptions): SessionDatabase {
+    const path = resolve(filename);
+    if (!fileMustExist) mkdirSync(dirname(path), { recursive: true });
+    const connection = new Database(path, { fileMustExist });
     try {
       connection.pragma("journal_mode = WAL");
       connection.pragma("foreign_keys = ON");

@@ -126,6 +126,7 @@ export interface AgentSerializedError {
 }
 
 export type AgentEventInput =
+  | { type: "input.applied"; data: { inputIds: string[]; revision: number } }
   | {
       type: "input.accepted";
       data: {
@@ -135,7 +136,7 @@ export type AgentEventInput =
         metadata?: Record<string, unknown>;
       };
     }
-  | { type: "run.started"; data: Record<string, never> }
+  | { type: "run.started"; data: { tracksAppliedInputs?: true } }
   | { type: "run.completed"; data: { output: string; stopReason?: string; delivery?: import("./delivery.js").DeliveryReceipt } }
   | {
       type: "run.failed";

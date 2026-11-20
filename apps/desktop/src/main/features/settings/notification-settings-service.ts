@@ -70,7 +70,7 @@ export const desktopNotificationSettingsService = {
   },
   async resolveSession(sessionId: string): Promise<DesktopSessionRecord | null> {
     if (typeof sessionId !== "string" || !sessionId.trim()) throw new Error("会话标识无效。")
-    try { return await (await desktopSessionService.daemonClient()).sessions.get(sessionId) as DesktopSessionRecord }
+    try { return await (await desktopSessionService.agentClient()).sessions.get(sessionId) as DesktopSessionRecord }
     catch (error) {
       const value = error as { status?: number; message?: string }
       if (value.status === 404 || /session.*not found|session.*does not exist|会话.*不存在|\b404\b/i.test(value.message ?? "")) return null

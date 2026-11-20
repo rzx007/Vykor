@@ -205,6 +205,8 @@ it("checks mapped daemon and child dispatch against host cwd while tools keep ex
           },
         }],
         client: { async *streamMessage({ messages }) {
+          messages = messages.filter(message => message.type !== "user" ||
+            typeof message.content !== "string" || !message.content.startsWith("<subagent_results>"));
           const userIndex = messages.map(message => message.type).lastIndexOf("user");
           if (messages.slice(userIndex + 1).some(message => message.type === "tool_result")) {
             yield { type: "complete", stopReason: "end_turn" };

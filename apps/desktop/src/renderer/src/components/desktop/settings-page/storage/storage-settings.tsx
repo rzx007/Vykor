@@ -28,6 +28,7 @@ import { Badge } from "@renderer/components/ui/badge"
 import { Input } from "@renderer/components/ui/input"
 import { SettingsRow } from "../shared/settings-group"
 import { StorageSpaceOverview, StorageRestoreSteps } from "./storage-visuals"
+import { DataRootSettings } from "./data-root-settings"
 
 export function StorageSettings() {
   const [report, setReport] = useState<StorageReport | null>(null)
@@ -94,6 +95,7 @@ export function StorageSettings() {
   }, [])
   return (
     <div className="flex flex-col gap-10">
+      <DataRootSettings />
       <section id="storage-attachments" aria-label="附件存储">
         <AttachmentStorageSettings />
       </section>
@@ -503,11 +505,12 @@ export function StorageSettings() {
           {backup ? (
             <div className="text-xs text-muted-foreground">
               <p className="break-all">已校验清单：{backup.path}</p>
+              {backup.historyRecorded === false ? <p>备份已保存，历史记录写入失败。可按上面的路径重新校验。</p> : null}
               <p>
-                {new Date(backup.manifest.createdAt).toLocaleString()} · 格式{" "}
-                {backup.manifest.version} · 总大小{" "}
+                {new Date(backup.manifest.createdAt).toLocaleString()} ·{" "}
+                {backup.desktopNotes ? "桌面备份" : `备份格式 ${backup.manifest.version}`} · 总大小{" "}
                 {backup.totalBytes === undefined ? "未记录" : formatBytes(backup.totalBytes)} · 包含{" "}
-                {Object.entries(backup.manifest.directories)
+                {Object.entries({ ...backup.manifest.directories, ...(backup.desktopNotes ? { 桌面便签: true } : {}) })
                   .filter(([, included]) => included)
                   .map(([name]) => name)
                   .join("、")}
@@ -528,7 +531,7 @@ export function StorageSettings() {
                   {item.path}
                   <br />
                   包含{" "}
-                  {Object.entries(item.manifest.directories)
+                  {Object.entries({ ...item.manifest.directories, ...(item.desktopNotes ? { 桌面便签: true } : {}) })
                     .filter(([, included]) => included)
                     .map(([name]) => name)
                     .join("、")}
@@ -554,12 +557,12 @@ export function StorageSettings() {
       </details>
       <details id="storage-restore" className="group border-t pt-5">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-sm text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring">
-          <span className="flex-1">恢复与切换</span>
+          <span className="flex-1">恢复备份</span>
           <Badge variant="outline">{restored ? "可切换" : "恢复到新目录"}</Badge>
         </summary>
         <div className="mt-5 flex flex-col gap-4">
           <p className="text-xs text-muted-foreground">
-            不覆盖当前数据，不续跑旧任务；切换失败自动回退。
+            恢复只写入所选空目录，不覆盖当前数据，不续跑旧任务。
           </p>
           <StorageRestoreSteps source={source} target={target} restored={restored} />
           {source || target || restored ? (
@@ -618,32 +621,7 @@ export function StorageSettings() {
             >
               恢复到新目录
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={busy || !restored}
-              onClick={() =>
-                setConfirmation({
-                  title: "切换到恢复数据？",
-                  detail: `后台将安全关闭并改用 ${restored}。原数据保留；活动任务或终端尚未收尾时拒绝切换。系统常驻服务请先停用。`,
-                  apply: async () => {
-                    await maintenanceApi().switchData(restored)
-                    try {
-                      setReport(await maintenanceApi().storage())
-                      const nextPolicy = await maintenanceApi().storagePolicy()
-                      setPolicy(nextPolicy)
-                      setDays(String(nextPolicy.days))
-                    } catch (error) {
-                      throw new Error(
-                        `数据已切换，但维护状态刷新失败：${errorMessage(error)}。仍显示上次扫描结果。`
-                      )
-                    }
-                  },
-                })
-              }
-            >
-              切换到恢复数据
-            </Button>
+            {restored ? <p className="text-xs text-muted-foreground">数据已恢复到所选目录。可用该目录作为启动参数 --data-root，当前窗口仍使用原数据。</p> : null}
           </div>
           {restoredSettings ? (
             <p className="text-xs break-all text-muted-foreground">

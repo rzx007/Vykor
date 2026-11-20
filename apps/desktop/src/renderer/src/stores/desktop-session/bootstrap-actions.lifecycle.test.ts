@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { attachDesktopDaemonStatusEvents } from "./bootstrap-actions"
@@ -8,7 +9,7 @@ afterEach(() => { resetDesktopSessionStore(); vi.unstubAllGlobals() })
 function attach() {
   const callbacks: Record<string, () => void> = {}
   const detach = vi.fn()
-  vi.stubGlobal("window", { desktop: { sessions: {
+  vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: {
     onDaemonStatusChanged: () => detach,
     onDataDirectoryChanged: (cb: () => void) => { callbacks.data = cb; return detach },
     onDaemonRestarted: (cb: () => void) => { callbacks.restart = cb; return detach },

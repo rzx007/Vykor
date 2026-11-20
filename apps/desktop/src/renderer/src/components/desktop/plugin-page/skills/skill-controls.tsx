@@ -2,12 +2,16 @@ import {
   BookOpen,
   Bug,
   ClipboardCheck,
+  CodeXml,
   FileText,
   GitPullRequest,
+  PencilLine,
+  Presentation,
   ScanEye,
   Sparkles,
 } from "lucide-react"
 import { Button } from "@renderer/components/ui/button"
+import { cn } from "@renderer/lib/utils"
 import {
   Dialog,
   DialogContent,
@@ -17,19 +21,34 @@ import {
   DialogTitle,
 } from "@renderer/components/ui/dialog"
 
-export function SkillIcon({ name }: { name: string }): React.JSX.Element {
+export function SkillIcon({
+  name,
+  className,
+}: {
+  name: string
+  className?: string
+}): React.JSX.Element {
   const Icon =
     {
       "code-review": GitPullRequest,
       "debug-checklist": Bug,
+      "debugging-and-error-recovery": Bug,
       "test-plan": ClipboardCheck,
       "docs-writer": BookOpen,
       "release-notes": FileText,
       "accessibility-review": ScanEye,
+      "vercel-react-best-practices": CodeXml,
+      vue: CodeXml,
+      "humanizer-zh": PencilLine,
+      "stop-slop": PencilLine,
+      "html-ppt": Presentation,
     }[name] ?? Sparkles
   return (
     <span
-      className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground"
+      className={cn(
+        "flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground",
+        className
+      )}
       aria-hidden="true"
     >
       <Icon className="size-5" />

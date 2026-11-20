@@ -85,6 +85,7 @@ function vykor { vk @args }
 | [packages/prompts](packages/prompts/README.md)、[memory](packages/memory/README.md)、[skills](packages/skills/README.md) | 提示词、长期记忆与 Skill |
 | [packages/channels](packages/channels/README.md) | 外部聊天渠道和消息桥接 |
 | [scripts](scripts/README.md) | 跨包检查、构建准备和发布脚本 |
+| [examples](examples/README.md) | 独立浏览器演示与 Native Plugin 示例 |
 | [docs](docs/README.md) | 当前手册、提案及历史资料索引 |
 
 其余包的职责和内部目录见各包 README；跨包调用方向见[架构总览](docs/architecture-overview.md)。

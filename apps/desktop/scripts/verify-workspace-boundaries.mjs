@@ -4,12 +4,30 @@ import { fileURLToPath } from "node:url"
 
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const sourceRoot = join(desktopRoot, "src")
-const allowedImports = new Set([
-  "@vykor/application-client",
+const adminImports = ["configuration", "knowledge", "workspace", "channels", "mcp", "plugins"]
+  .map((name) => `@vykor/daemon-admin/${name}`)
+const mainOnlyImports = new Set([
+  ...adminImports,
+  "@rzx/client/service",
   "@vykor/server",
   "@vykor/server/daemon-host",
+  "@vykor/server/migration-validation",
+  "@vykor/services/notes",
+  "@vykor/host-config/paths",
 ])
-const allowedPackageDependencies = new Set(["@vykor/application-client", "@vykor/server"])
+const allowedImports = new Set([
+  ...mainOnlyImports,
+  "@rzx/client",
+  "@vykor/protocol",
+])
+const allowedPackageDependencies = new Set([
+  "@rzx/client",
+  "@vykor/daemon-admin",
+  "@vykor/host-config",
+  "@vykor/protocol",
+  "@vykor/server",
+  "@vykor/services",
+])
 const importPattern =
   /(?:from\s*|import\s*(?:\(\s*)?|require\s*\(\s*)["'](@vykor\/[^"']+|@rzx\/client(?:\/[^"']*)?)["']/g
 
@@ -18,18 +36,17 @@ export function validateDesktopWorkspaceImport(file, specifier) {
     return `Desktop workspace import is not allowed: ${specifier} (${file})`
   }
   const normalized = file.replaceAll("\\", "/")
-  if (specifier.startsWith("@vykor/server") && !normalized.startsWith("src/main/")) {
-    return `Desktop server import is only allowed in main: ${specifier} (${file})`
+  if (mainOnlyImports.has(specifier) && !normalized.startsWith("src/main/")) {
+    return `Desktop local service import is only allowed in main: ${specifier} (${file})`
   }
   return null
 }
 
 const failures = []
-if (validateDesktopWorkspaceImport("src/renderer/demo.ts", "@vykor/application-client")) {
-  failures.push("Boundary verifier must allow the application client in renderer")
-}
-if (!validateDesktopWorkspaceImport("src/renderer/demo.ts", "@vykor/application-client/internal")) {
-  failures.push("Boundary verifier must reject unknown application client subpaths")
+for (const specifier of ["@vykor/application-client", "@vykor/application-client/service"]) {
+  if (!validateDesktopWorkspaceImport("src/main/demo.ts", specifier) || allowedPackageDependencies.has(specifier)) {
+    failures.push(`Boundary verifier must reject the retired application client: ${specifier}`)
+  }
 }
 const clientInternalImport = [...'import { x } from "@rzx/client/internal"'.matchAll(importPattern)][0]
 if (!clientInternalImport || !validateDesktopWorkspaceImport("src/renderer/demo.ts", clientInternalImport[1])) {

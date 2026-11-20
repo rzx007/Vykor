@@ -7,7 +7,7 @@ import {
   renameFolder,
   reorderInContainer,
   type NoteOrganizationV1Record,
-} from "@vykor/application-client"
+} from "@vykor/protocol"
 import type { DesktopNoteOrganizationSnapshot } from "@shared/note-types"
 import { describeNote, type NoteView } from "./note-model"
 

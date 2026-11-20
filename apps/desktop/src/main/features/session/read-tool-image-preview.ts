@@ -1,5 +1,6 @@
 import { open } from "node:fs/promises"
 import { isAbsolute } from "node:path"
+import { resolveManagedHistoryPath } from "@vykor/host-config/paths"
 import type { DesktopAttachmentPreview } from "@shared/attachment-types"
 import type { DesktopSessionPart } from "@shared/session-types"
 import { safeImageMediaTypeFromName } from "@shared/safe-image-preview"
@@ -17,9 +18,9 @@ export async function readToolImagePreview(part: DesktopSessionPart): Promise<De
   const content = Array.isArray(output.content) ? output.content : []
   const image = content.map(record).find(block => block.type === "image")
   const source = record(image?.source)
-  const path = source.path
-  if (source.type !== "file" || typeof path !== "string" || !isAbsolute(path))
+  if (source.type !== "file" || typeof source.path !== "string" || !isAbsolute(source.path))
     throw new Error("这条读取记录没有可预览的图片")
+  const path = await resolveManagedHistoryPath(source.path)
   const mediaType = safeImageMediaTypeFromName(path)
   if (!mediaType || source.mediaType !== mediaType) throw new Error("暂不支持这种图片格式")
   const file = await open(path, "r").catch(() => { throw new Error("图片文件不存在或无法读取") })

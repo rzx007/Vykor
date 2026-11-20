@@ -28,11 +28,14 @@ import type { ProjectDetailsCoordinator } from "./project-details-coordinator"
 export type LoadStatus = "idle" | "loading" | "ready" | "error"
 
 export interface SubmitPromptOptions {
+  delivery?: "queue" | "steer"
+  expectedActiveRunId?: string
   taskLocation?: "current" | "worktree"
   document?: ComposerDocument
   attachments?: readonly DesktopAttachmentDraft[]
   target?: { sessionId: string; view: DesktopSessionView | null }
   contextItems?: readonly SessionUserInputItem[]
+  draftTextSelectionIds?: string[]
 }
 
 export interface PendingPromptAttachmentSnapshot extends DesktopPromptAttachmentInput {
@@ -41,9 +44,12 @@ export interface PendingPromptAttachmentSnapshot extends DesktopPromptAttachment
 }
 
 export interface PendingPromptSubmission {
+  delivery?: "queue" | "steer"
+  expectedActiveRunId?: string
   /** Serialized feedback shown in the composer; retries reuse the same snapshot. */
   browserAnnotationContext?: string | null
   draftAttachmentIds?: string[]
+  draftTextSelectionIds?: string[]
   dismissed?: boolean
   draftDocument?: ComposerDocument
   pluginAppContextIds?: string[]
@@ -222,7 +228,8 @@ export interface GoalActions {
 export interface PromptActions {
   submitPromptSubmission: (submission: PendingPromptSubmission, mode?: "retry") => Promise<void>
   retryPromptSubmission: (inputId: string, targetSessionId?: string) => Promise<void>
-  dismissPromptSubmission: (inputId: string) => void
+  restoreFollowUp: (inputId: string, target?: SubmitPromptOptions["target"]) => Promise<boolean>
+  dismissPromptSubmission: (inputId: string, targetSessionId?: string) => void
   sendMessage: (content: string, options?: SubmitPromptOptions) => Promise<void>
   editLatestMessage: (
     sourceMessageId: string,
@@ -243,9 +250,10 @@ export interface QueuedPromptActions {
   promoteQueuedPrompt: (
     inputId: string,
     queuedRunId: string,
-    expectedActiveRunId: string
+    expectedActiveRunId: string,
+    targetSessionId?: string
   ) => Promise<void>
-  cancelQueuedPrompt: (inputId: string, queuedRunId: string) => Promise<void>
+  cancelQueuedPrompt: (inputId: string, queuedRunId: string, targetSessionId?: string) => Promise<void>
 }
 
 export interface BrowserAnnotationDraftActions {
@@ -275,6 +283,8 @@ export interface AttachmentActions {
     scope: string,
     input: Omit<UploadDesktopAttachmentMemoryInput, "draftId" | "taskId">
   ) => Promise<void>
+  addPastedTextAttachment: (scope: string, text: string) => Promise<void>
+  showPastedTextAttachment: (scope: string, draftId: string) => Promise<void>
   cancelAttachment: (scope: string, draftId: string) => Promise<void>
   retryAttachment: (scope: string, draftId: string) => Promise<void>
   removeAttachment: (scope: string, draftId: string) => Promise<void>

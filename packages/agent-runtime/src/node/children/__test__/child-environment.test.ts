@@ -10,7 +10,7 @@ vi.mock("@vykor/host-config", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@vykor/host-config")>();
   return {
     ...actual,
-    getConfigDir: () => runtimePaths.configDir,
+    getDataRoot: () => runtimePaths.configDir,
     resolveGitRepository: (cwd: string) => ({
       root: cwd,
       gitDir: join(cwd, ".git"),

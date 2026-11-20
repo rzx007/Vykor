@@ -1,7 +1,9 @@
 import { shell, type WebContents } from "electron"
 import { randomUUID } from "node:crypto"
-import type { VykorClient } from "@vykor/application-client"
-import { VykorApiError } from "@vykor/application-client"
+import { VykorApiError, type VykorClient } from "@rzx/client"
+import { McpResource } from "@vykor/daemon-admin/mcp"
+
+type McpClient = Pick<VykorClient, "protocol"> & { mcp: McpResource }
 import {
   McpConfigApplicationService,
   type McpConfigOperationResult,
@@ -31,12 +33,12 @@ type McpConfigApplication = Pick<
 export interface DesktopMcpServiceOptions {
   config?: McpConfigApplication
   openExternal?: (url: string) => Promise<void>
-  daemonClient?: () => Promise<Pick<VykorClient, "protocol" | "mcp">>
+  daemonClient?: () => Promise<McpClient>
 }
 
-type OperationView = Awaited<ReturnType<VykorClient["mcp"]["getLogin"]>>
+type OperationView = Awaited<ReturnType<McpResource["getLogin"]>>
 type ActiveLogin = {
-  client: Pick<VykorClient, "protocol" | "mcp">
+  client: McpClient
   instanceId: string
   state: DesktopMcpLoginState
   opened: boolean
@@ -49,14 +51,17 @@ type ActiveLogin = {
 export class DesktopMcpService {
   private readonly config: McpConfigApplication
   private readonly openExternal: (url: string) => Promise<void>
-  private readonly daemonClient: () => Promise<Pick<VykorClient, "protocol" | "mcp">>
+  private readonly daemonClient: () => Promise<McpClient>
   private readonly activeLogins = new Map<string, ActiveLogin>()
 
   constructor(options: DesktopMcpServiceOptions = {}) {
     const coordinator = createDesktopMcpRuntimeCoordinator()
     this.config = options.config ?? new McpConfigApplicationService({ coordinator })
     this.openExternal = options.openExternal ?? ((url) => shell.openExternal(url))
-    this.daemonClient = options.daemonClient ?? (() => desktopSessionService.daemonClient())
+    this.daemonClient = options.daemonClient ?? (async () => {
+      const agent = await desktopSessionService.agentClient()
+      return { protocol: agent.protocol, mcp: new McpResource(await desktopSessionService.daemonTransport(agent)) }
+    })
   }
 
   /** Secret-free list snapshot with enabled state, safe summary and split auth/runtime status. */

@@ -19,6 +19,7 @@ export * from "./permissions/auto-review.js";
 export * from "./workspace-changes.js";
 export * from "./files/session-files.js";
 export * from "./extensions/plugin-presentation.js";
+export type { PluginInfo, PluginRuntimeStatus, ReloadPluginsResponse } from "@vykor/domain-contracts/plugin-apps";
 export type { MarketplaceCatalog, MarketplaceSource, MarketplaceSourceView, MarketplaceEntry, MarketplaceSelection, MarketplacePreview, MarketplaceInstallInput, MarketplaceOperation, MarketplaceProvenance } from "@vykor/plugin-contracts/marketplace";
 export * from "./knowledge/notes.js";
 export * from "./knowledge/memory.js";
@@ -36,3 +37,4 @@ export { parseMcpCallResultData, type McpCallResultData } from "@vykor/agent-con
 export { PLUGIN_APP_MANIFEST_LIMITS, PLUGIN_APP_RESOURCE_LIMITS, PLUGIN_APP_DATA_LIMITS } from "@vykor/plugin-contracts/limits";
 export { PLUGIN_APP_INPUT_LIMITS } from "@vykor/domain-contracts/plugin-apps";
 export { MCP_APP_HTML_MIME_TYPE } from "@vykor/agent-contracts/tool-data";
+export * from "./extensions/skill-marketplace.js";

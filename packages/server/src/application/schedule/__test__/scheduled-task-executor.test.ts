@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ScheduledTaskExecutor } from "../scheduled-task-executor.js";
 
@@ -83,6 +83,25 @@ describe("ScheduledTaskExecutor", () => {
     expect(result).toEqual({ runId: "r1", summary: "done" });
     expect(existsSync(createSession.mock.calls[0]![0].cwd)).toBe(true);
     expect(admitPrompt).toHaveBeenCalledOnce();
+  });
+
+  it("defaults standalone runs to the shared data root and retains existing cwd on a duplicate allocation", async () => {
+    const createSession = vi.fn((input) => ({ id: "s1", status: "idle", ...input }));
+    const executor = new ScheduledTaskExecutor({
+      settings: { model: "test" } as any,
+      sessionQueries: { getSession: vi.fn() },
+      sessionCommands: { createSession },
+      sessionInteractions: { admitPrompt: vi.fn(async () => ({ run: { id: "r1" } })) },
+      runControl: { awaitRun: vi.fn(async () => ({ status: "completed", output: "done" })) },
+    });
+    const task = { id: "task-1", name: "Daily", prompt: "work", projectPaths: [], destination: "standalone",
+      executionMode: "direct", model: "test", skillNames: [], pluginNames: [], permissionProfile: { mode: "workspace_write" } } as any;
+    const run = { id: "root-default", scheduledFor: 1 } as any;
+    await executor.execute(task, run, vi.fn());
+    const cwd = createSession.mock.calls[0]![0].cwd;
+    expect(relative(process.env.VYKOR_CONFIG_DIR!, cwd).replace(/\\/g, "/")).toMatch(/^workspaces\/\d{4}-\d{2}-\d{2}\/scheduled-root-default$/);
+    await expect(executor.execute(task, run, vi.fn())).rejects.toMatchObject({ code: "EEXIST" });
+    expect(existsSync(cwd)).toBe(true);
   });
 
   it("forwards a non-enum reasoning effort into the standalone runtime", async () => {

@@ -1,4 +1,5 @@
-import { type ProtocolClient, type SystemResource } from "@vykor/application-client"
+import type { ProtocolClient, VykorClient } from "@rzx/client"
+import { SystemResource } from "@vykor/daemon-admin/configuration"
 
 import {
   buildDesktopSettingsSnapshot,
@@ -42,9 +43,13 @@ export interface DesktopSettingsServiceDependencies {
   patchPreferences: typeof patchDesktopPreferences
 }
 
+async function settingsClient(agent: VykorClient): Promise<SettingsClient> {
+  return { protocol: agent.protocol, system: new SystemResource(await desktopSessionService.daemonTransport(agent)) }
+}
+
 const defaultDependencies: DesktopSettingsServiceDependencies = {
-  daemonClient: () => desktopSessionService.daemonClient(),
-  refreshDaemonClient: () => desktopSessionService.refreshDaemonClient(),
+  daemonClient: async () => settingsClient(await desktopSessionService.agentClient()),
+  refreshDaemonClient: async () => settingsClient(await desktopSessionService.refreshAgentClient()),
   getPreferences: getDesktopPreferences,
   patchPreferences: patchDesktopPreferences,
 }

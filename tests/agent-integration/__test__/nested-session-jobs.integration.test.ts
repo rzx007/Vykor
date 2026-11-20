@@ -17,7 +17,7 @@ async function spawnNested(f: LifecycleFixture, prompt: string, grandchildPrompt
     receipt = await execution.children.spawnChildAgent({ prompt, description: prompt, agent: "general-purpose", cwd: execution.scope.cwd, allowedTools: ["Read", "Agent", "JobList", "JobRead", "JobWait", "JobSend", "JobCancel"] });
   });
   const parent = f.agent.children.get(receipt.id)!;
-  await parent.waitRun(receipt.runId);
+  await vi.waitFor(() => expect(reports).toHaveLength(1));
   expect(reports).toHaveLength(1);
   expect(reports[0]!.isError).not.toBe(true);
   const target = decodeJobTarget(body(reports[0]!).target);
@@ -116,6 +116,7 @@ it("reads a suspended child's archive without recreating its instance", async ()
     const { parent, parentTarget, child, target } = await spawnNested(f, "nested-archived", "nested-archived-result");
     await child.waitRun(target.runId);
     await child.close();
+    await parent.waitRun(parentTarget.runId);
     expect(await parent.requestSuspend(parentTarget.runId)).toBe(true);
     expect(parent.state).toBe("suspended");
     expect(f.agent.host.resolveSessionHost(parent.sessionId)).toBeUndefined();
@@ -146,6 +147,8 @@ it("keeps the actual child host available until a closing descendant's invocatio
     void closing.catch(() => {});
     await vi.waitFor(() => expect(child.readRun(target.runId).stopping).toBe(true));
     expect(parent.state).toBe("closing");
+    // Parent cancellation can set stopping before close reaches the descendant.
+    await vi.waitFor(() => expect(child.state).toBe("closing"));
     const input = { sessionId: parent.sessionId, target };
     expect((await f.application!.jobs.read(input)).snapshot.status).toBe("stopping");
     const waiting = f.application!.jobs.wait({ ...input, timeoutMs: 5_000 });

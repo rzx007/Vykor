@@ -5,8 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 import { SessionStore } from "@vykor/services";
-import { VykorClient } from "@vykor/application-client";
-import { CURRENT_PROTOCOL_VERSION } from "@vykor/protocol";
+import { PluginAppResource } from "../../apps/desktop/src/main/features/plugin-apps/plugin-app-resource.js";
+import { HttpTransport, VykorClient, type AdmitClientPromptInput } from "@rzx/client";
+import { CURRENT_PROTOCOL_VERSION, decodeSessionStateSnapshot, type PluginAppConversationRequest } from "@vykor/protocol";
 import { installNotesAppFixture } from "../../packages/agent-runtime/test-helpers/notes-app-fixture.js";
 import { VykorHttpServer } from "../../packages/server/src/http/server.js";
 import { createDefaultPluginService } from "../../packages/server/src/application/default-services/extensions/plugin-service.js";
@@ -35,42 +36,69 @@ it("real model origin, app-only policy, raw result privacy, shared invalidations
     await server.application.ready();
     const session = store.sessions.create({ id: "notes-session", cwd: root, model: "never", metadata: { runtime: { provider: "fixture", model: "never", approvalMode: "full_access" } } });
     const address = await server.listen({ port: 0 });
-    const client = new VykorClient({ baseUrl: address.url, token: "secret" });
-    const opened = await client.pluginApps.open(session.id, { pluginId: fixture.pluginId, surfaceId: "notes" });
+    const connection = { baseUrl: address.url, token: "secret" };
+    const transport = new HttpTransport(connection);
+    const pluginApps = new PluginAppResource(transport);
+    const agentClient = new VykorClient(connection);
+    const opened = await pluginApps.open(session.id, { pluginId: fixture.pluginId, surfaceId: "notes" });
     expect(opened.tools!.map(tool => tool.name)).toContain("save_note_draft");
     expect(opened.tools!.map(tool => tool.name)).not.toContain("read_note");
-    const submit = await server.application.interactions.admitPrompt(session.id, { items: [{ type: "text", text: "read note" }, { type: "capability", kind: "plugin", pluginId: fixture.pluginId, displayName: "Notes" }] });
+    const context: PluginAppConversationRequest = {
+      source: opened.source, lease: opened.lease!, requestId: "note-selection",
+      expectedRevision: opened.app.controlRevision, text: "Selected note text", data: { selected: 1 },
+    };
+    const prompt: AdmitClientPromptInput & { pluginAppContexts: PluginAppConversationRequest[] } = {
+      id: "read-note",
+      items: [{ type: "text", text: "read note" }, { type: "capability", kind: "plugin", pluginId: fixture.pluginId, displayName: "Notes" }],
+      pluginAppContexts: [context],
+    };
+    const stalePrompt: typeof prompt = {
+      ...prompt, id: "read-with-stale-selection",
+      pluginAppContexts: [{ ...context, expectedRevision: context.expectedRevision + 1 }],
+    };
+    await expect(agentClient.sessions.admitPrompt(session.id, stalePrompt)).rejects.toMatchObject({ status: 409 });
+    expect(store.conversations.listInputs(session.id)).toEqual([]);
+    const submit = await agentClient.sessions.admitPrompt(session.id, prompt);
+    expect(submit.input.content).toContain(context.text);
+    expect(submit.input.content).toContain('"selected":1');
     await server.application.runControl.waitForRuns([submit.run!.id]);
     const part = store.conversations.listMessageParts(session.id).find(part => part.toolUseId === "model-read")!;
     expect(part?.metadata.pluginAppSource).toMatchObject({ pluginId: fixture.pluginId, toolName: "mcp__notes__read_note" });
-    const viaResult = await client.pluginApps.openToolResult(session.id, part.id); expect(viaResult.app.id).toBe(opened.app.id);
-    const raw = await client.pluginApps.initialResult(viaResult.source, viaResult.lease!, part.id); expect(raw.result._meta).toEqual({ editor: "notes-app" });
-    const transcript = await client.sessions.getState(session.id);
-    expect(transcript.parts.some(item => item.id === part.id)).toBe(true);
+    const viaResult = await pluginApps.openToolResult(session.id, part.id); expect(viaResult.app.id).toBe(opened.app.id);
+    const raw = await pluginApps.initialResult(viaResult.source, viaResult.lease!, part.id); expect(raw.result._meta).toEqual({ editor: "notes-app" });
+    const applicationSnapshot = decodeSessionStateSnapshot(
+      await transport.request(`/sessions/${encodeURIComponent(session.id)}/state`),
+    );
+    expect(applicationSnapshot.pluginApps).toContainEqual(expect.objectContaining({ id: opened.app.id }));
+    const transcript = await agentClient.sessions.getState(session.id);
+    expect(transcript).not.toHaveProperty("pluginApps");
+    expect(transcript.parts).toEqual(applicationSnapshot.parts);
+    expect(transcript.parts.find(item => item.id === part.id)?.metadata.pluginAppSource)
+      .toEqual(part.metadata.pluginAppSource);
     expect(JSON.stringify(transcript)).not.toContain('"editor":"notes-app"');
     const unauthorized = await fetch(address.url + "/sessions/plugin-app-notifications/stream", { method: "POST", headers: { "content-type": "application/json", "x-vykor-protocol-version": String(CURRENT_PROTOCOL_VERSION) }, body: JSON.stringify({ watches: [] }) });
     expect(unauthorized.status).toBe(401);
     const watches = [{ source: viaResult.source, lease: viaResult.lease!, leaseGeneration: 7, uris: ["ui://notes/editor", "notes://welcome"] }];
-    const stream = client.pluginApps.notifications(watches, abort.signal)[Symbol.asyncIterator]();
+    const stream = pluginApps.notifications(watches, abort.signal)[Symbol.asyncIterator]();
     expect((await stream.next()).value).toMatchObject({ kind: "resync" });
     const pending = stream.next();
-    const action = await client.pluginApps.invoke({ source: viaResult.source, lease: viaResult.lease!, requestId: "save", expectedRevision: viaResult.app.controlRevision,
+    const action = await pluginApps.invoke({ source: viaResult.source, lease: viaResult.lease!, requestId: "save", expectedRevision: viaResult.app.controlRevision,
       toolName: "save_note_draft", args: { operationId: "manual", expectedRevision: 0, text: "saved manually" } });
     await server.application.runControl.waitForRuns([action.receipt.runId]);
     expect((await pending).value).toMatchObject({ kind: "resource-updated", appId: opened.app.id, uri: "notes://welcome", leaseGeneration: 7 });
-    const result = await client.pluginApps.getAction(viaResult.source, "save"); expect(result.result?.structuredContent).toMatchObject({ revision: 1, text: "saved manually" });
+    const result = await pluginApps.getAction(viaResult.source, "save"); expect(result.result?.structuredContent).toMatchObject({ revision: 1, text: "saved manually" });
     expect(existsSync(fixture.effectFile)).toBe(true);
     const secondSession = store.sessions.create({ id: "notes-second-session", cwd: root, model: "never", metadata: { runtime: { provider: "fixture", model: "never", approvalMode: "full_access" } } });
-    const second = await client.pluginApps.open(secondSession.id, { pluginId: fixture.pluginId, surfaceId: "notes" });
-    const secondData = await client.pluginApps.readResource(second.source, second.lease, "notes://welcome");
+    const second = await pluginApps.open(secondSession.id, { pluginId: fixture.pluginId, surfaceId: "notes" });
+    const secondData = await pluginApps.readResource(second.source, second.lease, "notes://welcome");
     expect(secondData.contents[0]).toMatchObject({ text: expect.stringContaining('"revision":0') });
     expect(store.conversations.listEvents({ sessionId: session.id }).some(event => String(event.type).includes("resource-updated"))).toBe(false);
     const foreign = { ...viaResult.source, sessionId: "other" };
-    await expect(client.pluginApps.initialResult(foreign, viaResult.lease!, part.id)).rejects.toThrow();
-    await expect(client.pluginApps.initialResult(viaResult.source, { ...viaResult.lease!, token: "forged" }, part.id)).rejects.toThrow();
+    await expect(pluginApps.initialResult(foreign, viaResult.lease!, part.id)).rejects.toThrow();
+    await expect(pluginApps.initialResult(viaResult.source, { ...viaResult.lease!, token: "forged" }, part.id)).rejects.toThrow();
     const forged = store.conversations.upsertMessagePart({ id: "forged", sessionId: session.id, messageId: part.messageId, type: "tool", toolName: part.toolName,
       toolUseId: "forged", status: "completed", output: part.output, metadata: { ui: {}, pluginAppSource: part.metadata.pluginAppSource } });
-    await expect(client.pluginApps.openToolResult(session.id, forged.id)).rejects.toThrow();
+    await expect(pluginApps.openToolResult(session.id, forged.id)).rejects.toThrow();
     abort.abort(); await stream.return?.();
   } finally { abort.abort(); await server.close(); store.close(); vi.unstubAllEnvs(); rmSync(root, { recursive: true, force: true }); }
 }, 45_000);

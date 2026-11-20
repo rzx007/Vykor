@@ -53,11 +53,13 @@ node service.ts --stop
 const endpoint = await Service.ensure({
   cwd: applicationDirectory,
   timeoutMs: 15_000,
-  env: { VYKOR_DATA_DIR: isolatedDataDirectory },
+  env: { VYKOR_CONFIG_DIR: isolatedDataRoot },
 });
 ```
 
-登记路径按顺序使用 `VYKOR_DATA_DIR/daemon/registry.json`、`VYKOR_CONFIG_DIR/data/daemon/registry.json`、用户目录下的 `.vykor/data/daemon/registry.json`。可用 `file` 显式指定；自定义启动命令必须把实例写到这个文件，或通过 `env.VYKOR_DATA_DIR` 选择匹配位置。
+默认登记位于统一选定的 `dataRoot/data/daemon/registry.json`。Node SDK 按 `VYKOR_CONFIG_DIR`、home 的 `.vykor-root.json` 定位记录、默认 `~/.vykor` 选择整个用户根，与 CLI、桌面和系统后台一致。根外旧 `VYKOR_DATA_DIR` 仅作迁移来源，正式启动前须归并。
+
+可用 `file` 显式指定调用者管理的独立登记文件；自定义命令必须把实例写到该位置。默认 CLI 使用 `env.VYKOR_CONFIG_DIR` 选择匹配用户根。显式 file 恰为默认登记且省略 command 时，仍可走默认启动路径。迁移待完成或旧根已搬走时不会创建空副本。
 
 `version` 可约束 CLI 应用版本，省略时仍强制检查通信协议。`timeoutMs` 默认是启动等待 10 秒、单次探测 1 秒、停止等待 5 秒。
 

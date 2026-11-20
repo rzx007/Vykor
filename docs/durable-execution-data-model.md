@@ -149,3 +149,7 @@ cursor + session + inputs + messages + parts + runs + attempts + tasks + permiss
 | 投影恢复 | `packages/server/src/application/agent/projection-settlement-recovery.ts` |
 | Store 契约测试 | `packages/services/src/session-runtime/__test__/store.test.ts` |
 | 完整生命周期契约 | [Agent Lifecycle Contract](./agent-lifecycle-contract.md) |
+
+## 运行中补充
+
+宿主在 Input 的 `metadata.steerTargetRunId` 保存投递目标。在发送模型请求前，宿主把已经进入历史的输入 ID 顺序和版本保存到目标 Run 的 `metadata.appliedInputState`。有目标的补充只有成功应用后才写入聊天正文，避免重启或派生会话把失败补充作为历史发给模型。队列项提升期间沿用原 Run 的 `metadata.promotion`，应用成功时和目标版本在同一事务内结算。重启中断旧 Run，保留应用事实，并终结已接纳但没有应用的输入。

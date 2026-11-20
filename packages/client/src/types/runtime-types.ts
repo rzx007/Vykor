@@ -43,6 +43,7 @@ export interface SkillInfo {
   readOnly: boolean;
   projectPath?: string;
   projectName?: string;
+  marketplace?: import("@vykor/protocol").SkillMarketplaceSelection;
 }
 
 export interface SkillProject {

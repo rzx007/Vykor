@@ -1,6 +1,7 @@
 import type { IpcMainInvokeEvent } from 'electron'
 
 import type { IpcHandler } from './types'
+import { desktopOperationGate } from './operation-gate'
 
 export function wrapIpcHandler(
   contributionId: string,
@@ -9,7 +10,7 @@ export function wrapIpcHandler(
 ): IpcHandler {
   return (event: IpcMainInvokeEvent, ...args: unknown[]) => {
     try {
-      const result = handler(event, ...args)
+      const result = desktopOperationGate.run(channel, () => handler(event, ...args))
       return Promise.resolve(result).catch((error: unknown) => {
         logIpcError(contributionId, channel, error)
         throw normalizeError(error)

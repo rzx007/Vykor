@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 // @vitest-environment jsdom
 import { act, useState } from "react"
 import { createRoot, type Root } from "react-dom/client"
@@ -160,7 +161,7 @@ it("uses the existing interrupt action, targets the current run and disables dup
   let finish!: () => void
   const requests: InterruptDesktopSessionInput[] = []
   Object.assign(window, {
-    desktop: {
+    desktop: { businessData: businessDataFixture,
       sessions: {
         interrupt: (input: InterruptDesktopSessionInput) => {
           requests.push(input)

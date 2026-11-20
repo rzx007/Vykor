@@ -24,10 +24,12 @@
 | Project Memory | `$VYKOR_CONFIG_DIR/data/memory/<project>-<hash>/` | `/memory add`、`/remember`、自动 memory extraction 写入 | 运行时由 `QueryEngine` 按当前用户输入检索，作为临时 `system-reminder` 注入；`/context` preview 也会展示 `# Project Memory` | 记录项目级长期语义事实，例如决策、约定、偏好、不可从代码推导的信息 |
 | Session Memory checkpoint | `$VYKOR_CONFIG_DIR/data/session-memory/<project>-<hash>/<sessionId>.md` | root Run 成功收尾后，`SessionPostRunMaintenance` 从 durable transcript 调用 `updateSessionMemoryFile()` | compact/autocompact 时通过 `sessionMemoryToCompactText()` 注入摘要 prompt | 保留显式 Goal（若有）和近期工作 |
 | Session runtime history | `$VYKOR_CONFIG_DIR/data/session-runtime/sessions.db` | daemon session 收到输入、消息、part、run、permission、task 事件时写入 | `/sessions`、`/resume`、daemon restart recovery 读取；不是普通 system prompt 记忆 | 会话恢复和重放历史，不等同长期记忆 |
-| Output styles | `~/.vykor/output_styles/*.md` | 用户手动添加 | 输出样式服务读取，不作为事实记忆注入 | 改变回答呈现风格 |
+| Output styles | `dataRoot/output_styles/*.md`，默认 `~/.vykor/output_styles/*.md` | 用户手动添加 | 输出样式服务读取，不作为事实记忆注入 | 改变回答呈现风格 |
 | Credentials | `$VYKOR_CONFIG_DIR/credentials.json` | `/auth login`、provider API key 保存 | provider/auth resolution 读取；不得注入 prompt | 保存供应商凭据 |
 
-`VYKOR_CONFIG_DIR` 未设置时默认为 `~/.vykor`。`data/*` 都在这个目录下面。
+上表的 `$VYKOR_CONFIG_DIR` 表示统一选定的 `dataRoot`，不是要求必须设置环境变量。显式启动参数、环境变量、home 定位记录和默认 `~/.vykor` 按顺序选根；`data/*` 都由它派生。项目真实目录与共享技能保持原位置，迁移只改受管结构化路径和项目目录对应的规则/记忆键，ID、来源与正文保持。操作见[用户数据根与迁移恢复](./data-root-migration.md)。
+
+临时会话的消息、普通 Run、权限、目标和事件仍只在内存，不进入 SQLite、业务草稿或迁移记录。附件、工作流及用户显式记住的内容继续按原生命周期持久化；自动记忆抽取仍跳过临时聊天。
 
 ## Prompt 注入顺序
 

@@ -2,8 +2,8 @@
 import {executeToolFixture} from "./../../../test-helpers/tool-host-fixture.js";
 
 import type { ToolContext } from "@vykor/agent-contracts";
-import type { ShellDescriptor } from "@vykor/environment";
-import { createProcess, resolveSandboxPolicy } from "@vykor/sandbox";
+import { createWorkspaceBinding, type ShellDescriptor } from "@vykor/environment";
+import { createExecutionEnvironment, createProcess, resolveExecutionEnvironmentConfig, resolveSandboxPolicy } from "@vykor/sandbox";
 import { describe, expect, it, vi } from "vitest";
 import { createBackgroundShellTool } from "../../background-shell/background-shell-tools.js";
 import { createShellTool } from "../shell.js";
@@ -128,6 +128,36 @@ describe("Shell interpreter and startup boundaries", () => {
     expect(result).toMatchObject({ isError: false, executionState: "completed" });
     expect(result.content[0]).toMatchObject({ text: "42" });
   });
+
+  it.skipIf(process.platform !== "win32").each([
+    { name: "default", args: [] },
+    { name: "custom", args: ["-NoProfile", "-ExecutionPolicy", "RemoteSigned", "-c"] },
+  ])("returns a PowerShell prompt error with $name launch arguments", async ({ args }) => {
+    const cwd = process.cwd();
+    const settings = {
+      sandbox: { enabled: false },
+      agentEnvironment: { kind: "native" as const, shell: { executable: powershell.executable, args } },
+    };
+    const environment = await createExecutionEnvironment({
+      config: resolveExecutionEnvironmentConfig({ surface: "desktop_managed", settings, cwd }),
+      settings, binding: createWorkspaceBinding({ kind: "local", hostRoot: cwd, executionRoot: cwd }),
+      sessionId: "shell-prompt", userSkillsRoot: cwd,
+    });
+    try {
+      const result = await executeToolFixture(
+        host => createShellTool(environment.info.shellDescriptor, undefined, undefined, host),
+        { command: "Read-Host 'Enter a value'", timeout: 10_000 },
+        { cwd, environment },
+      );
+      expect(result).toMatchObject({
+        isError: true, failureKind: "command", executionState: "completed",
+        metadata: { exitCode: 1, status: "failed" },
+      });
+      expect(result.content[0]).toMatchObject({ text: expect.stringMatching(/PSInvalidOperationException|NonInteractive/) });
+    } finally {
+      await environment.release();
+    }
+  }, 20_000);
 });
 
 function processResult(output: string, exitCode = 0) {

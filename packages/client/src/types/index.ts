@@ -18,6 +18,8 @@ export interface VykorClientOptions {
 }
 
 export interface VykorServerHealth {
+  ready?: boolean;
+  restartPrepared?: boolean;
   ok: true;
   version?: string;
   startedAt: number;
@@ -74,6 +76,7 @@ export interface AdmitClientPromptInput {
   id?: string;
   items: SessionUserInputItem[];
   delivery?: InputDelivery;
+  expectedActiveRunId?: string;
   outputSchema?: Record<string, unknown>;
   attachments?: AdmitPromptAttachmentInput[];
   metadata?: Record<string, unknown>;
@@ -128,6 +131,8 @@ export interface ReplyPermissionInput {
   status: Extract<PermissionStatus, "approved" | "denied" | "expired">;
   decision?: "once" | "session";
   clientId?: string;
+  /** The user's answer to an AskUser request. */
+  answer?: string;
 }
 
 /** `POST /sessions/:id/prompts` 响应。 */

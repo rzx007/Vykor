@@ -13,6 +13,12 @@ import {
   type RunAdmissionServiceOptions,
 } from "../run-admission-service.js";
 
+function admitPrompt(service: RunAdmissionService, sessionId: string, input: AdmitPromptInput) {
+  return service.preparePrompt(sessionId, input).then(result =>
+    "completion" in result ? result.completion : result
+  );
+}
+
 function createMockOptions() {
   const inputs = new Map<string, SessionInputRecord>();
   const runs = new Map<string, SessionRunRecord>();
@@ -172,14 +178,14 @@ function createStoredAdmission() {
 describe("RunAdmissionService synchronous queued persistence", () => {
   it.each(["metadata", "runMetadata"])("rejects an implicit output schema in %s before creating records", async field => {
     const f = createStoredAdmission();
-    await expect(async () => f.service.admitPromptAndMaybeRun("s1", {
+    await expect(async () => admitPrompt(f.service, "s1", {
       id: "implicit", items: [{ type: "text", text: "report" }], [field]: { outputSchema: { type: "string" } },
     })).rejects.toThrow(/outputSchema/);
     expect(f.store.conversations.getInput("implicit")).toBeUndefined();
   });
   it("checks explicit replay schemas before creating a Run", async () => {
     const f = createStoredAdmission(), schema = { type: "string" };
-    const original = await f.service.admitPromptAndMaybeRun("s1", { items: [{ type: "text", text: "report" }], outputSchema: schema });
+    const original = await admitPrompt(f.service, "s1", { items: [{ type: "text", text: "report" }], outputSchema: schema });
     f.store.runs.updateRun(original.run!.id, { status: "interrupted" });
     expect(() => f.service.replayInput(original.input.id, { id: "conflict", outputSchema: { type: "object" } })).toThrow(/schema|contract/i);
     expect(f.store.runs.getRun("conflict")).toBeUndefined();
@@ -197,12 +203,12 @@ describe("RunAdmissionService synchronous queued persistence", () => {
   });
   it("keeps the original output contract on replay and cannot add one through replay metadata", async () => {
     const f = createStoredAdmission();
-    const first = await f.service.admitPromptAndMaybeRun("s1", { id: "plain", items: [{ type: "text", text: "report" }] });
+    const first = await admitPrompt(f.service, "s1", { id: "plain", items: [{ type: "text", text: "report" }] });
     f.store.runs.updateRun(first.run!.id, { status: "interrupted" });
     expect(() => f.service.replayInput(first.input.id, { id: "changed", metadata: { outputSchema: { type: "string" } } })).toThrow(/schema|contract/i);
     expect(f.store.runs.getRun("changed")).toBeUndefined();
     const schema = { type: "string" };
-    const structured = await f.service.admitPromptAndMaybeRun("s1", { id: "typed", items: [{ type: "text", text: "report" }], outputSchema: schema });
+    const structured = await admitPrompt(f.service, "s1", { id: "typed", items: [{ type: "text", text: "report" }], outputSchema: schema });
     f.store.runs.updateRun(structured.run!.id, { status: "interrupted" });
     expect(f.service.replayInput(structured.input.id, { id: "replayed" }).run?.metadata.outputSchema).toEqual(schema);
   });
@@ -210,16 +216,16 @@ describe("RunAdmissionService synchronous queued persistence", () => {
     const f = createStoredAdmission();
     const outputSchema = { type: "object", properties: { path: { type: "string" } }, required: ["path"] };
     const input = { id: "structured-input", items: [{ type: "text" as const, text: "report" }], outputSchema };
-    const admitted = await f.service.admitPromptAndMaybeRun("s1", input);
+    const admitted = await admitPrompt(f.service, "s1", input);
     expect(f.store.conversations.getInput(admitted.input.id)?.metadata.outputSchema).toEqual(outputSchema);
     expect(f.store.runs.getRun(admitted.run!.id)?.metadata.outputSchema).toEqual(outputSchema);
-    await expect(f.service.admitPromptAndMaybeRun("s1", { ...input, outputSchema: { type: "string" } })).rejects.toThrow(/already used|conflict/i);
+    await expect(admitPrompt(f.service, "s1", { ...input, outputSchema: { type: "string" } })).rejects.toThrow(/already used|conflict/i);
   });
   it("rejects unsupported output constraints and changing a contract through steer before admission", async () => {
     const f = createStoredAdmission();
-    await expect(async () => f.service.admitPromptAndMaybeRun("s1", { id: "invalid-output", items: [{ type: "text", text: "report" }], outputSchema: { type: "string", pattern: "x" } })).rejects.toThrow(/schema|constraint/i);
-    await expect(async () => f.service.admitPromptAndMaybeRun("s1", { id: "steered-output", items: [{ type: "text", text: "report" }], delivery: "steer", outputSchema: { type: "object" } })).rejects.toThrow(/queue|steer/i);
-    await expect(async () => f.service.admitPromptAndMaybeRun("s1", { id: "oversized-output", items: [{ type: "text", text: "report" }], outputSchema: { type: "string", description: "x".repeat(65_536) } })).rejects.toThrow(/64 KiB/);
+    await expect(async () => admitPrompt(f.service, "s1", { id: "invalid-output", items: [{ type: "text", text: "report" }], outputSchema: { type: "string", pattern: "x" } })).rejects.toThrow(/schema|constraint/i);
+    await expect(async () => admitPrompt(f.service, "s1", { id: "steered-output", items: [{ type: "text", text: "report" }], delivery: "steer", outputSchema: { type: "object" } })).rejects.toThrow(/queue|steer/i);
+    await expect(async () => admitPrompt(f.service, "s1", { id: "oversized-output", items: [{ type: "text", text: "report" }], outputSchema: { type: "string", description: "x".repeat(65_536) } })).rejects.toThrow(/64 KiB/);
     expect(f.store.conversations.getInput("invalid-output")).toBeUndefined();
     expect(f.store.conversations.getInput("steered-output")).toBeUndefined();
     expect(f.store.conversations.getInput("oversized-output")).toBeUndefined();
@@ -232,7 +238,7 @@ describe("RunAdmissionService synchronous queued persistence", () => {
     options.goals = { userWorkSettled: async (sessionId, failed) => {
       observed.push({ sessionId, failed, pending: service.hasPendingAdmission(sessionId) });
     } };
-    const result = service.admitPromptAndMaybeRun("s1", { id: "preparing", items: [{ type: "text", text: "补充" }] });
+    const result = admitPrompt(service, "s1", { id: "preparing", items: [{ type: "text", text: "补充" }] });
     if (failed) await expect(result).rejects.toThrow("prepare failed");
     else await result;
     expect(observed).toEqual([{ sessionId: "s1", failed, pending: false }]);
@@ -427,7 +433,7 @@ describe("RunAdmissionService user priority", () => {
       actions.push("steer");
       return { merged: true, activeRunId: "active-run", delivery: Promise.resolve({ sessionId: "s1", inputId: "steered-input", runId: "active-run" }) };
     });
-    await new RunAdmissionService(options).admitPromptAndMaybeRun("s1", {
+    await admitPrompt(new RunAdmissionService(options), "s1", {
       id: "steered-input", delivery: "steer", items: [{ type: "text", text: "steer" }],
     });
     expect(actions).toEqual(["priority", "lookup", "steer"]);
@@ -439,8 +445,8 @@ describe("RunAdmissionService user priority", () => {
     options.goals = { getCurrentGoal: () => ({ id: "g1", status: "active", objectiveVersion: 1 }), cancelGoalRuns };
     const service = new RunAdmissionService(options);
     const input: AdmitPromptInput = { id: "shared-user-id", items: [{ type: "text", text: "hello" }] };
-    const first = service.admitPromptAndMaybeRun("s1", input);
-    const repeated = service.admitPromptAndMaybeRun("s1", input);
+    const first = admitPrompt(service, "s1", input);
+    const repeated = admitPrompt(service, "s1", input);
     expect((await first).run?.id).toBe((await repeated).run?.id);
     expect(runs.size).toBe(1);
     expect(cancelGoalRuns).toHaveBeenCalledTimes(2);
@@ -451,7 +457,7 @@ describe("RunAdmissionService user priority", () => {
     const cancelGoalRuns = vi.fn(() => []);
     options.goals = { getCurrentGoal: () => ({ id: "g1", status: "active", objectiveVersion: 1 }), cancelGoalRuns };
     const service = new RunAdmissionService(options);
-    const admitted = await service.admitPromptAndMaybeRun("s1", {
+    const admitted = await admitPrompt(service, "s1", {
       items: [{ type: "text", text: "goal" }], runMetadata: { goalId: "g1", goalRunKind: "continuation" },
     });
     service.replayInput(admitted.input.id, {});
@@ -460,13 +466,26 @@ describe("RunAdmissionService user priority", () => {
 });
 
 describe("RunAdmissionService", () => {
+  it.each([["queue", "active"], ["steer", "  "]] as const)(
+    "rejects delivery %s with target %j before admitting an Input",
+    async (delivery, expectedActiveRunId) => {
+      const { options, conversationTransactions } = createMockOptions();
+      const service = new RunAdmissionService(options);
+      await expect(async () => service.preparePrompt("s1", {
+        delivery, expectedActiveRunId, items: [{ type: "text", text: "follow-up" }],
+      })).rejects.toMatchObject({ status: 400 });
+      expect(conversationTransactions.admitPrompt).not.toHaveBeenCalled();
+      expect(conversationTransactions.admitPromptWithRun).not.toHaveBeenCalled();
+    },
+  );
+
   it.each(["metadata", "runMetadata"] as const)("rejects host UI %s before Prompt persistence or goal cancellation", async namespace => {
     for (const name of ["pluginUi", "uiAction", "pluginUiSubmission"]) {
       const { options, inputs, runs } = createMockOptions();
       const cancelGoalRuns = vi.fn(() => []);
       options.goals = { getCurrentGoal: () => ({ id: "g1", status: "active", objectiveVersion: 1 }), cancelGoalRuns };
       const service = new RunAdmissionService(options);
-      await expect(Promise.resolve().then(() => service.admitPromptAndMaybeRun("s1", {
+      await expect(Promise.resolve().then(() => admitPrompt(service, "s1", {
         items: [{ type: "text", text: "hello" }], [namespace]: { [name]: {} },
       }))).rejects.toMatchObject({ code: "invalid_request" });
       expect(inputs.size).toBe(0);
@@ -553,7 +572,7 @@ describe("RunAdmissionService", () => {
     const { options, createRun, enqueueRunFn } = createMockOptions();
     const service = new RunAdmissionService(options);
 
-    const result = await service.admitPromptAndMaybeRun("s1", {
+    const result = await admitPrompt(service, "s1", {
       items: [{ type: "text", text: "hello" }],
     });
 
@@ -569,7 +588,7 @@ describe("RunAdmissionService", () => {
     enqueueRunFn.mockReturnValue("queued");
     const service = new RunAdmissionService(options);
 
-    const result = await service.admitPromptAndMaybeRun("s1", {
+    const result = await admitPrompt(service, "s1", {
       items: [{ type: "text", text: "hello queue" }],
     });
 
@@ -595,7 +614,7 @@ describe("RunAdmissionService", () => {
     });
     const service = new RunAdmissionService(options);
 
-    const result = await service.admitPromptAndMaybeRun("s1", {
+    const result = await admitPrompt(service, "s1", {
       delivery: "steer",
       items: [{ type: "text", text: "steer msg" }],
     });
@@ -608,7 +627,7 @@ describe("RunAdmissionService", () => {
     const { options, conversationTransactions } = createMockOptions();
     const service = new RunAdmissionService(options);
 
-    const result = await service.admitPromptAndMaybeRun("s1", {
+    const result = await admitPrompt(service, "s1", {
       delivery: "steer",
       items: [{ type: "text", text: "steer with attachment" }],
       attachments: [{ assetId: "ast-1" } as AdmitPromptAttachmentInput],
@@ -627,7 +646,7 @@ describe("RunAdmissionService", () => {
     const service = new RunAdmissionService(options);
 
     await expect(
-      service.admitPromptAndMaybeRun("s1", {
+      admitPrompt(service, "s1", {
         delivery: "steer",
         items: [
           {
@@ -648,11 +667,11 @@ describe("RunAdmissionService", () => {
     const { options } = createMockOptions();
     const service = new RunAdmissionService(options);
 
-    const p1 = service.admitPromptAndMaybeRun("s1", {
+    const p1 = admitPrompt(service, "s1", {
       id: "shared-id",
       items: [{ type: "text", text: "hello" }],
     });
-    const p2 = service.admitPromptAndMaybeRun("s1", {
+    const p2 = admitPrompt(service, "s1", {
       id: "shared-id",
       items: [{ type: "text", text: "hello" }],
     });
@@ -667,13 +686,13 @@ describe("RunAdmissionService", () => {
     const { options } = createMockOptions();
     const service = new RunAdmissionService(options);
 
-    const p1 = service.admitPromptAndMaybeRun("s1", {
+    const p1 = admitPrompt(service, "s1", {
       id: "conflicting-id",
       items: [{ type: "text", text: "first text" }],
     });
 
     expect(() =>
-      service.admitPromptAndMaybeRun("s1", {
+      service.preparePrompt("s1", {
         id: "conflicting-id",
         items: [{ type: "text", text: "different text" }],
       }),
@@ -696,7 +715,7 @@ describe("RunAdmissionService", () => {
     inputs.set("existing-input-1", existingInput);
     const service = new RunAdmissionService(options);
 
-    const result = await service.admitPromptAndMaybeRun("s1", {
+    const result = await admitPrompt(service, "s1", {
       id: "existing-input-1",
       items: [{ type: "text", text: "existing text" }],
     });
@@ -722,7 +741,7 @@ describe("RunAdmissionService", () => {
     const service = new RunAdmissionService(options);
 
     await expect(
-      service.admitPromptAndMaybeRun("s1", {
+      admitPrompt(service, "s1", {
         delivery: "steer",
         items: [{ type: "text", text: "failing steer" }],
       }),
@@ -744,7 +763,7 @@ describe("RunAdmissionService", () => {
     };
     const service = new RunAdmissionService(options);
 
-    await service.admitPromptAndMaybeRun("s1", {
+    await admitPrompt(service, "s1", {
       items: [{ type: "text", text: "user message" }],
     });
 

@@ -259,6 +259,51 @@ function mountPanel(
 }
 
 describe("UtilityPanel review tool access", () => {
+  it.each(["missing.html", "missing.svg"])("shows the browser error page for missing %s", async (name) => {
+    installProbe(async () => ({ isRepository: false, rootPath: null }))
+    const path = `C:/Users/ruanz/.answer-me-with-html/pages/${name}`
+    Object.assign(window.desktop, {
+      browser: { updateTab: vi.fn().mockResolvedValue(undefined) },
+      workspace: {
+        listFiles: vi.fn(async () => ({ rootPath: "D:/plain-dir", entries: [] })),
+        readFile: vi.fn(),
+      },
+    })
+    vi.stubGlobal("ResizeObserver", class { observe = vi.fn(); unobserve = vi.fn(); disconnect = vi.fn() })
+    useOutsideProjectSession("D:/plain-dir")
+    const scopeId = `session:missing-${name}`
+    mountPanel(scopeId, { fileOpenRequest: { id: 1, path } })
+    await settle()
+    await settle()
+    const state = readUtilityPanelRuntimeState(scopeId)!
+    expect(state.tabs.find(tab => tab.id === state.activeTabId)?.tool).toBe("browser")
+    const webview = mountedContainer!.querySelector("webview")!
+    expect(webview.getAttribute("src")).toBe(`file:///${path}`)
+    Object.assign(webview, { getURL: () => `file:///${path}`, getTitle: () => "", canGoBack: () => false, canGoForward: () => false })
+    const event = Object.assign(new Event("did-fail-load"), { isMainFrame: true, errorCode: -6, errorDescription: "ERR_FILE_NOT_FOUND", validatedURL: `file:///${path}` })
+    await act(async () => webview.dispatchEvent(event))
+    expect(mountedContainer?.textContent).toContain("找不到本地文件")
+  })
+
+  it.each(["不支持预览该路径。", "不支持预览该路径 C:/ENOENT/report.txt"])("shows denied non-web file reads: %s", async (reason) => {
+    installProbe(async () => ({ isRepository: false, rootPath: null }))
+    Object.assign(window.desktop, {
+      browser: { updateTab: vi.fn().mockResolvedValue(undefined) },
+      workspace: {
+        listFiles: vi.fn(async () => ({ rootPath: "D:/plain-dir", entries: [] })),
+        readFile: vi.fn().mockRejectedValue(new Error(reason)),
+      },
+    })
+    vi.stubGlobal("ResizeObserver", class { observe = vi.fn(); unobserve = vi.fn(); disconnect = vi.fn() })
+    useOutsideProjectSession("D:/plain-dir")
+    const scopeId = reason.includes("ENOENT") ? "session:denied-html-enoent-name" : "session:denied-html"
+    mountPanel(scopeId, { fileOpenRequest: { id: 1, path: "C:/protected/report.txt" } })
+    await settle()
+    await settle()
+    expect(readUtilityPanelRuntimeState(scopeId)!.browserTabs).toEqual([])
+    expect(mountedContainer?.textContent).toContain("不支持预览该路径")
+  })
+
   it("opens a message web URL in a browser tab in the current scope", async () => {
     installProbe(async () => ({ isRepository: false, rootPath: null }))
     Object.assign(window.desktop, { browser: { updateTab: vi.fn().mockResolvedValue(undefined) } })
@@ -282,26 +327,102 @@ describe("UtilityPanel review tool access", () => {
     expect(state.browserTabs[0]?.url).toBe(url)
   })
 
-  it("opens outside HTML in a browser tab without opening a file viewer", async () => {
+  it.each([
+    ["C:/outside/report.html", "C:/outside/report.html"],
+    ["reports/report.html", "D:/plain-dir/reports/report.html"],
+    ["images/diagram.svg", "D:/plain-dir/images/diagram.svg"],
+    ["../report.HTM", "D:/report.HTM"],
+  ])("opens %s directly in a browser tab", async (path, absolutePath) => {
     installProbe(async () => ({ isRepository: false, rootPath: null }))
-    Object.assign(window.desktop, { browser: { updateTab: vi.fn().mockResolvedValue(undefined) } })
+    const name = absolutePath.split("/").pop()!
+    const format = name.endsWith("svg") ? "SVG" : "HTML"
+    const readFile = vi.fn(async () => ({
+      path: absolutePath, name, language: format === "SVG" ? "xml" : "html", size: 14,
+      binary: false, content: format === "SVG" ? "<svg />" : "<p>report</p>", scope: "extra-root",
+      relativePath: name, rootLabel: "项目外文件", previewBytes: null,
+      mediaType: null, imagePreviewError: null,
+    }))
+    Object.assign(window.desktop, {
+      browser: { updateTab: vi.fn().mockResolvedValue(undefined) },
+      workspace: {
+        listFiles: vi.fn(async () => ({ rootPath: "D:/plain-dir", entries: [] })),
+        readFile,
+      },
+    })
     vi.stubGlobal("ResizeObserver", class {
       observe = vi.fn()
       unobserve = vi.fn()
       disconnect = vi.fn()
     })
     useOutsideProjectSession("D:/plain-dir")
-    const scopeId = "session:outside-html"
+    const scopeId = `session:html-file:${path}`
     mountPanel(scopeId, { fileOpenRequest: {
-      id: 1, path: "C:/Users/ruanz/.answer-me-with-html/pages/report.html",
+      id: 1, path,
     } })
+    await settle()
     await settle()
     const state = readUtilityPanelRuntimeState(scopeId)!
     expect(state.tabs).toHaveLength(1)
-    expect(state.tabs[0]).toMatchObject({ tool: "browser", title: "report.html" })
+    expect(state.tabs[0]).toMatchObject({ tool: "browser", title: name })
     expect(state.activeTabId).toBe(state.tabs[0].id)
-    expect(state.browserTabs[0].url).toBe("file:///C:/Users/ruanz/.answer-me-with-html/pages/report.html")
+    expect(state.browserTabs).toHaveLength(1)
+    expect(readFile).not.toHaveBeenCalled()
+    expect(mountedContainer?.querySelector("webview")?.getAttribute("src")).toBe(`file:///${absolutePath}`)
+    expect(mountedContainer?.querySelector(`[aria-label="查看 ${format} 源码"]`)).toBeNull()
   })
+
+  it("keeps a file request when the parent rerenders before its open timer runs", async () => {
+    installProbe(async () => ({ isRepository: false, rootPath: null }))
+    Object.assign(window.desktop, {
+      browser: { updateTab: vi.fn().mockResolvedValue(undefined) },
+      workspace: {
+        listFiles: async () => ({ rootPath: "D:/plain-dir", entries: [] }),
+        readFile: async () => ({
+          path: "report.html", name: "report.html", language: "html", size: 13,
+          binary: false, content: "<p>report</p>", scope: "project",
+          relativePath: "report.html", rootLabel: "", previewBytes: null,
+          mediaType: null, imagePreviewError: null,
+        }),
+      },
+    })
+    vi.stubGlobal("ResizeObserver", class {
+      observe = vi.fn()
+      unobserve = vi.fn()
+      disconnect = vi.fn()
+    })
+    useOutsideProjectSession("D:/plain-dir")
+    const scopeId = "session:file-request-rerender"
+    writeUtilityPanelRuntimeState(scopeId, {
+      ...defaultUtilityPanelRuntimeState(),
+      tabs: [{ id: "files-tab", tool: "files", title: "文件" }],
+      activeTabId: "files-tab",
+    })
+    mountPanel(scopeId)
+    await settle()
+
+    const props: React.ComponentProps<typeof UtilityPanel> = {
+      scopeId, open: true, maximized: false,
+      onToggleMaximized: vi.fn(), onClose: vi.fn(),
+      fileOpenRequest: { id: 1, path: "report.html" },
+      reviewOpenRequest: null, terminalOpenRequest: null, toolOpenRequest: null,
+      onOpenFile: vi.fn(), onOpenReview: vi.fn(), onOpenTerminal: vi.fn(),
+    }
+    vi.useFakeTimers()
+    try {
+      act(() => mountedRoot!.render(createElement(UtilityPanel, props)))
+      // The request is queued, but no timer has run before this unrelated parent update.
+      act(() => mountedRoot!.render(createElement(UtilityPanel, { ...props, maximized: true })))
+      await act(async () => vi.runAllTimersAsync())
+
+      expect(readUtilityPanelRuntimeState(scopeId)?.tabs.filter(tab => tab.tool === "browser")).toEqual([
+        expect.objectContaining({ tool: "browser", title: "report.html" }),
+      ])
+      expect(mountedContainer?.querySelector("webview")?.getAttribute("src")).toBe("file:///D:/plain-dir/report.html")
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it.each(["cancel", "discard", "save", "failure"])(
     "protects an inactive dirty file on close: %s",
     async (action) => {

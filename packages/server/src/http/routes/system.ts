@@ -31,6 +31,7 @@ export interface SystemRoutesContext {
   memoryManagementReady?: boolean;
   pluginAppsReady?: boolean;
   sessionFilesReady?: boolean;
+  browserBridgeReady?: () => boolean;
   pluginLifecycle?: PluginLifecycle;
   version?: string;
   commandCatalog?: CommandCatalogProvider;
@@ -42,6 +43,7 @@ export interface SystemRoutesContext {
     | "acquireGlobalMutation"
     | "closeAllRuntimes"
     | "invalidateRuntimes"
+    | "healthSnapshot"
     | "runtimeSnapshot"
     | "inspectRun"
     | "listProjectionDiagnostics"
@@ -82,7 +84,7 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
             serverVersion: context.version ?? "0.1.0",
             protocol: { version: CURRENT_PROTOCOL_VERSION },
             features: {
-              steer: 1,
+              steer: 2,
               runAttempts: 1,
               toolAttempts: 1,
               jobs: 3,
@@ -98,6 +100,7 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
               attachments: 1,
               pluginCapabilities: 1,
               ...(context.pluginAppsReady ? { pluginApps: 1 } : {}),
+              ...(context.browserBridgeReady?.() ? { browserBridge: 1 } : {}),
               mcpOAuth: 1,
               executionObservability: 1,
               structuredDelivery: 1,
@@ -122,17 +125,13 @@ export function createSystemRoutes(context: SystemRoutesContext): Hono {
     .get("/health", () => {
       const prepared = context.restartPreparedHealth?.();
       if (prepared) return jsonResponse(prepared);
-      const snapshot = context.control.runtimeSnapshot();
       return jsonResponse({
         ok: true,
         ...(context.version ? { version: context.version } : {}),
-        startedAt: snapshot.startedAt,
-        uptimeMs: snapshot.uptimeMs,
-        sessionCount: snapshot.sessions.total,
-        activeRunCount: snapshot.coordinator.activeRunCount,
-        queuedRunCount: snapshot.coordinator.queuedRunCount,
+        ...context.control.healthSnapshot(),
       } satisfies VykorServerHealth);
     })
+    .get("/debug/process", () => jsonResponse({ pid: process.pid }))
     .get("/debug/runtime", () =>
       jsonResponse(context.control.runtimeSnapshot()),
     )

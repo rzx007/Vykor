@@ -11,7 +11,12 @@ describe("light-ocr real runtime smoke", () => {
         <text x="50" y="170" font-family="Arial, sans-serif" font-size="112" fill="black">VYKOR 2026</text>
       </svg>
     `)).png().toBuffer();
-    const engine = new LightOcrEngine();
+    // Native OCR correctness must not depend on a GPU driver in the test host.
+    // Default-provider selection and CPU fallback are covered by light-ocr-engine.test.ts.
+    const engine = new LightOcrEngine({ loadLibrary: async () => {
+      const library = await import("@arcships/light-ocr");
+      return { createEngine: options => library.createEngine({ ...options, execution: { provider: "cpu" } }) };
+    } });
     try {
       const result = await engine.recognize(image, { applyExif: true });
       expect(result.lines.length).toBeGreaterThan(0);

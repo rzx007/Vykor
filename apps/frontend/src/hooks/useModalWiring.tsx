@@ -12,89 +12,13 @@ type Dialog = ReturnType<typeof useDialog>;
 /**
  * 把后端发来的 modal / select 请求接到 Dialog 栈上。
  *
- * - permission：渲染 PermissionDialog；ESC 兜底按拒绝回应（否则后端挂起）。
- * - question：渲染 QuestionDialog；ESC 兜底回空串（否则后端 questionRequests 永久挂起）。
+ * - permission：渲染 PermissionDialog；显式 ESC 按拒绝回应。
+ * - question：渲染 QuestionDialog；显式 ESC 回空串，自动替换只关闭界面。
  * - select：空选项直接丢弃；否则渲染 DialogSelect，选中后提交 `${submitPrefix}${value}`。
  */
 export function useModalWiring(session: Session, dialog: Dialog): void {
-  // ── Dialog wiring for modal (permission / question) ─────────────────────────
-  useEffect(() => {
-    const modal = session.modal;
-    if (!modal) return;
-
-    if (modal.kind === "permission") {
-      const requestId = modal.request_id;
-      if (typeof requestId !== "string" || !requestId) return;
-      const respondedRef = { current: false };
-
-      const sendResponse = (allowed: boolean, scope: "once" | "session"): void => {
-        if (respondedRef.current) return;
-        respondedRef.current = true;
-        session.sendRequest({
-          type: "permission_response",
-          request_id: requestId,
-          allowed,
-          scope,
-        });
-        session.setModal(null);
-        dialog.close();
-      };
-
-      const onClose = (): void => {
-        // ESC fallback: deny if not already responded
-        if (!respondedRef.current) {
-          respondedRef.current = true;
-          session.sendRequest({
-            type: "permission_response",
-            request_id: requestId,
-            allowed: false,
-            scope: "once",
-          });
-          session.setModal(null);
-        }
-      };
-
-      dialog.replace(
-        <PermissionDialog modal={modal} onRespond={sendResponse} />,
-        onClose,
-      );
-      return;
-    }
-
-    if (modal.kind === "question") {
-      const requestId = modal.request_id;
-      if (typeof requestId !== "string" || !requestId) return;
-      const respondedRef = { current: false };
-
-      const sendAnswer = (answer: string): void => {
-        if (respondedRef.current) return;
-        respondedRef.current = true;
-        session.sendRequest({
-          type: "question_response",
-          request_id: requestId,
-          answer,
-        });
-        session.setModal(null);
-      };
-
-      const onClose = (): void => {
-        // esc 兜底：必须应答，否则后端 questionRequests 永久挂起。
-        sendAnswer("");
-      };
-
-      dialog.replace(
-        <QuestionDialog
-          modal={modal}
-          onSubmit={(answer) => {
-            sendAnswer(answer);
-            dialog.close();
-          }}
-        />,
-        onClose,
-      );
-    }
-  }, [session.modal]); // eslint-disable-line react-hooks/exhaustive-deps
-
+  const interactionDialogRef = useRef<Session["modal"]>(null);
+  const submittedInteractionRef = useRef<Session["modal"]>(null);
   useEffect(() => {
     const req = session.displayRequest;
     if (!req) return;
@@ -154,4 +78,82 @@ export function useModalWiring(session: Session, dialog: Dialog): void {
       session.setSelectRequest(null);
     });
   }, [session.selectRequest]); // eslint-disable-line react-hooks/exhaustive-deps
+  // ── Dialog wiring for modal (permission / question) ─────────────────────────
+  useEffect(() => {
+    // An overlay may temporarily cover a pending interaction without changing the request.
+    if (session.displayRequest || session.selectRequest) return;
+    const modal = session.modal;
+    if (!modal) {
+      if (interactionDialogRef.current) dialog.close();
+      return;
+    }
+    if (interactionDialogRef.current === modal || submittedInteractionRef.current === modal) return;
+    if (dialog.isOpen && !interactionDialogRef.current) return;
+
+    if (modal.kind === "permission") {
+      const requestId = modal.request_id;
+      if (typeof requestId !== "string" || !requestId) return;
+      const respondedRef = { current: false };
+
+      const sendResponse = (allowed: boolean, scope: "once" | "session"): void => {
+        if (respondedRef.current) return;
+        respondedRef.current = true;
+        submittedInteractionRef.current = modal;
+        session.sendRequest({
+          type: "permission_response",
+          request_id: requestId,
+          allowed,
+          scope,
+        });
+        dialog.close();
+      };
+
+      interactionDialogRef.current = modal;
+      dialog.replace(
+        <PermissionDialog key={requestId} modal={modal} onRespond={sendResponse} />,
+        (reason) => {
+          if (interactionDialogRef.current === modal) interactionDialogRef.current = null;
+          if (reason === "escape" && !respondedRef.current) {
+            respondedRef.current = true;
+            submittedInteractionRef.current = modal;
+            session.sendRequest({ type: "permission_response", request_id: requestId, allowed: false, scope: "once" });
+          }
+        },
+      );
+      return;
+    }
+
+    if (modal.kind === "question") {
+      const requestId = modal.request_id;
+      if (typeof requestId !== "string" || !requestId) return;
+      const respondedRef = { current: false };
+
+      const sendAnswer = (answer: string): void => {
+        if (respondedRef.current) return;
+        respondedRef.current = true;
+        submittedInteractionRef.current = modal;
+        session.sendRequest({
+          type: "question_response",
+          request_id: requestId,
+          answer,
+        });
+      };
+
+      interactionDialogRef.current = modal;
+      dialog.replace(
+        <QuestionDialog
+          key={requestId}
+          modal={modal}
+          onSubmit={(answer) => {
+            sendAnswer(answer);
+            dialog.close();
+          }}
+        />,
+        (reason) => {
+          if (interactionDialogRef.current === modal) interactionDialogRef.current = null;
+          if (reason === "escape") sendAnswer("");
+        },
+      );
+    }
+  }, [dialog.isOpen, session.modal, session.displayRequest, session.selectRequest]); // eslint-disable-line react-hooks/exhaustive-deps
 }

@@ -145,6 +145,7 @@ describe("PendingPromptQueue", () => {
   it("does not treat the first pending run as queued before it starts running", () => {
     const html = renderToStaticMarkup(
       createElement(PendingPromptQueue, {
+        handoffRunId: "run-direct",
         prompts: [
           {
             input: {
@@ -207,6 +208,7 @@ describe("PendingPromptQueue", () => {
     const html = renderToStaticMarkup(
       createElement(PendingPromptQueue, {
         prompts: [prompt("first", "normal request", 1), prompt("second", "queued request", 2)],
+        handoffRunId: "run-first",
         onPromote: vi.fn(),
         onCancel: vi.fn(),
       })

@@ -170,6 +170,79 @@ describe("BrowserAgentService click actions", () => {
     service.setActiveTab(7, "browser-tab-1")
   })
 
+  it("discards an approval when the window switches away from the subscribed session", async () => {
+    let ownerToken = {}
+    const approval = Promise.withResolvers<boolean>()
+    const requested = Promise.withResolvers<void>()
+    const action = service.execute({
+      action: { action: "inspect" },
+      sessionId: "session-1",
+      cwd: "D:/workspace",
+      includeScreenshot: true,
+      approve: () => {
+        requested.resolve()
+        return approval.promise
+      },
+    }, {
+      signal: new AbortController().signal,
+      getOwnerSessionToken: (ownerId, sessionId) => ownerId === 7 && sessionId === "session-1"
+        ? ownerToken
+        : undefined,
+    })
+    await requested.promise
+    ownerToken = {}
+    approval.resolve(true)
+
+    await expect(action).rejects.toThrow(/session changed/i)
+    expect(service.listOriginApprovals()).toEqual([])
+    expect(page.captureCount).toBe(0)
+  })
+
+  it("discards an approval when the same URL reloads during the prompt", async () => {
+    const ownerToken = {}
+    const approval = Promise.withResolvers<boolean>()
+    const requested = Promise.withResolvers<void>()
+    const action = service.execute({
+      action: { action: "inspect" },
+      sessionId: "session-1",
+      cwd: "D:/workspace",
+      includeScreenshot: true,
+      approve: () => {
+        requested.resolve()
+        return approval.promise
+      },
+    }, {
+      signal: new AbortController().signal,
+      getOwnerSessionToken: () => ownerToken,
+    })
+    await requested.promise
+    page.emit("did-start-navigation", { isMainFrame: true, isSameDocument: false, url: page.url })
+    approval.resolve(true)
+
+    await expect(action).rejects.toThrow(/page changed/i)
+    expect(service.listOriginApprovals()).toEqual([])
+    expect(page.captureCount).toBe(0)
+  })
+  it("rejects a click target from before a same-address reload", async () => {
+    const ownerToken = {}
+    const scope = { signal: new AbortController().signal, getOwnerSessionToken: () => ownerToken }
+    const input = {
+      sessionId: "session-1",
+      cwd: "D:/workspace",
+      includeScreenshot: false,
+      approve: async () => true,
+    }
+    const before = await service.execute({ ...input, action: { action: "inspect" } }, scope)
+    page.clickBehavior = (current) => { current.pageText = "wrong document clicked" }
+    page.emit("did-start-navigation", { isMainFrame: true, isSameDocument: false, url: page.url })
+
+    await expect(service.execute({
+      ...input,
+      action: { action: "click", elementId: before.elements![0]!.id },
+    }, scope)).rejects.toThrow(/element ID is stale/i)
+    expect(page.pageText).toBe("before click")
+  })
+
   it("asks again after a saved site approval is revoked", async () => {
     await inspect(service)
     expect(service.listOriginApprovals()).toEqual([{ sessionId: "session-1", origin: "http://127.0.0.1:8080" }])

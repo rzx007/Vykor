@@ -2,9 +2,11 @@
 
 Vykor 终端 CLI：在终端里跑 AI Agent。默认进入交互式 TUI（需 [Bun](https://bun.sh)），也可一次性打印结果后退出。会话由本机 daemon 持久化，可与 Desktop 等客户端共用同一后端。
 
-命令行入口：`vk` 与 `vykor`（等价）。
+命令行入口：`vk` 与 `vykor`（等价）。源码导航见 [src/README.md](./src/README.md)。
 
-产品操作与类型由私有工作区包 `@vykor/application-client` 提供，会话同步复用公开 SDK `@rzx/client`。构建会把私有包打进 CLI 与 TUI，安装发布包无需单独安装它。
+`--data-root <绝对路径>` 必须放在命令和其他选项之前，例如 `vk --data-root D:\Vykor serve --register`。它优先于 `VYKOR_CONFIG_DIR`、用户 home 下的 `.vykor-root.json` 和默认 `~/.vykor`。启动错误会注明来源或需要恢复的记录；默认首次启动不会生成定位记录。
+
+CLI 和 TUI 通过公开 SDK `@rzx/client` 连接 daemon、同步会话和处理审批。渠道、MCP 与插件等产品管理命令使用按职责导入的 `@vykor/daemon-admin`，由构建纳入发布包。 [Client SDK](../../packages/client/README.md) · [管理入口](../../packages/daemon-admin/README.md)
 
 ## 要求
 
@@ -138,3 +140,7 @@ vk config set daemon.autoStart true
 - 问题反馈：[https://github.com/rzx007/Vykor/issues](https://github.com/rzx007/Vykor/issues)
 
 本地从源码开发请看仓库根目录 `README.md`。
+
+已登记的本机后台可由 CLI 或 Desktop 启动。CLI 会验证协议和 token 后复用兼容实例。默认按需启动和常驻服务使用同一个后台实现，详细流程见 [daemon 系统常驻](../../docs/daemon-system-service.md)。
+
+普通启动在导入业务模块前检查旧独立目录覆盖：`VYKOR_DATA_DIR`、`VYKOR_CHANNELS_DIR` 和 `VYKOR_IMAGE_ATTACHMENT_CACHE_DIR` 指向规范目标时可接受，冲突时列出来源、原值与目标后停止。聊天图片写入所选用户根的 `data/attachments/images/`；旧独立图片目录只作为迁移来源，不再静默覆盖目标。

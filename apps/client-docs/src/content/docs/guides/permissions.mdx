@@ -41,9 +41,23 @@ await client.permissions.reply(request.id, { status: "denied" });
 
 回复成功后，权限事件可能稍后才到达；持续观察的程序应按请求 ID 记住已发送的回复，避免旧快照触发重复提交。多个客户端同时处理同一请求时，后到的回复可能返回 409，应刷新状态继续观察；其他错误仍按请求失败处理。
 
+## 回答 Agent 的问题
+
+当 `request.toolName` 为 `AskUser` 且 `request.payload.input.kind` 为 `question` 时，展示问题内容并等待用户回答。`input.question` 是单条文字问题，`input.questions` 是一组问题及选项。用当前请求的 ID 回传用户填写的答案：
+
+```ts
+await client.permissions.reply(request.id, {
+  status: "approved",
+  decision: "once",
+  answer: userAnswer,
+});
+```
+
+`answer` 是字符串。单条问题直接传文字，多问题可把每题答案按原顺序编码到一个字符串中。这个回执继续当前运行。普通工具审批使用上节的格式。Goal 自己暂停等待用户时，通过 `sessions.applyGoalAction()` 的 `resume` 操作提交当前 `questionId` 和 `response`。
+
 ## 与结果等待并行
 
-一个观察流程负责显示和回复权限，另一个用 `waitForRun` 等待指定 Run。完整 Node 示例见[运行第一个任务](../../getting-started/first-run/)，它为演示明确拒绝全部待审批请求。
+一个观察流程负责显示和回复权限或问题，另一个用 `waitForRun` 等待指定 Run。完整 Node 示例见[运行第一个任务](../../getting-started/first-run/)。
 
 关闭面板或切换会话时可以取消旧观察的 signal。取消观察不会拒绝待审批请求，也不会中断后台运行；需要中断时调用 `sessions.interrupt()`。
 

@@ -288,6 +288,12 @@ export function createDaemonAgentLoader(
         ? { executionEnvironment: acquireExecutionEnvironment, ownsExecutionEnvironment: true }
         : {}),
       ...configuration,
+      readApprovalMode: (sessionId) => {
+        const current = options.getSession?.(sessionId);
+        return current ? readSessionRuntimeConfig(current, {
+          approvalMode: normalizeApprovalMode(storedSettings?.permission.mode),
+        }).approvalMode : undefined;
+      },
       requestConfigurationStore,
       ...(options.getSession
         ? {

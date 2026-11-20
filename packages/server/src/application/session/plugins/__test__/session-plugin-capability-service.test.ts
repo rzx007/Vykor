@@ -13,10 +13,10 @@ const session = { id: "s1", cwd: "/repo" } as SessionRecord;
 
 describe("SessionPluginCapabilityService", () => {
   it("captures the eligible plugin identities before an ordinary Input is persisted", async () => {
-    const { application, admitPromptAndMaybeRun } = applicationService(inventory());
+    const { application, preparePrompt } = applicationService(inventory());
     await application.admitPrompt("s1", { id: "auto-multi", items: [{ type: "text", text: "hello" }],
       metadata: { pluginScope: { scopeVersion: 2, source: "auto", pluginIds: ["forged"], candidates: [] } } });
-    expect(admitPromptAndMaybeRun.mock.calls[0]?.[1].metadata).toMatchObject({
+    expect(preparePrompt.mock.calls[0]?.[1].metadata).toMatchObject({
       pluginScope: { scopeVersion: 2, source: "auto", pluginIds: [pluginId], candidates: [expect.objectContaining({ pluginId })] },
     });
   });
@@ -29,18 +29,18 @@ describe("SessionPluginCapabilityService", () => {
     expect(replayInput.mock.calls[0]?.[1].metadata).toMatchObject({ pluginSelection: selection });
   });
   it("keeps an ordinary steer inside the active automatically selected plugin", async () => {
-    const { application, admitPromptAndMaybeRun } = applicationService(inventory(), {
+    const { application, preparePrompt } = applicationService(inventory(), {
       activeRun: { id: "auto-run", metadata: { pluginId, pluginSelection: { source: "auto", status: "resolved" } } },
     });
     await application.admitPrompt("s1", { id: "steer-auto", delivery: "steer", items: [{ type: "text", text: "保留引用" }] });
-    const admitted = admitPromptAndMaybeRun.mock.calls[0]?.[1];
+    const admitted = preparePrompt.mock.calls[0]?.[1];
     expect(admitted?.metadata).toMatchObject({ pluginSelectionPolicy: "auto" });
     expect(admitted?.metadata).not.toHaveProperty("pluginId");
     expect(admitted?.runMetadata ?? {}).not.toHaveProperty("pluginId");
   });
   it("keeps a manual single-plugin steer compatible with a versioned Run scope", async () => {
     const current = inventory();
-    const { application, store, admitPromptAndMaybeRun } = applicationService(current, {
+    const { application, store, preparePrompt } = applicationService(current, {
       activeRun: { id: "manual-run", metadata: { pluginId, pluginSelection: {
         status: "resolved", source: "inherited", scopeVersion: 2, pluginId, pluginIds: [pluginId],
         candidates: [...current.plugins.values()],
@@ -50,14 +50,14 @@ describe("SessionPluginCapabilityService", () => {
     store.getSession.mockReturnValue({ ...session, metadata: { activePluginId: pluginId } });
     await expect(application.admitPrompt("s1", { id: "manual-steer", delivery: "steer",
       items: [{ type: "text", text: "continue" }] })).resolves.toMatchObject({ input: { metadata: { pluginId } } });
-    expect(admitPromptAndMaybeRun).toHaveBeenCalledOnce();
+    expect(preparePrompt).toHaveBeenCalledOnce();
   });
   it("strips caller-forged automatic selection metadata", async () => {
-    const { application, admitPromptAndMaybeRun } = applicationService(inventory());
+    const { application, preparePrompt } = applicationService(inventory());
     const forged = { status: "resolved", source: "auto", pluginId: "forged" };
     await application.admitPrompt("s1", { id: "forged-selection", items: [{ type: "text", text: "hello" }],
       metadata: { pluginSelection: forged }, runMetadata: { pluginSelection: forged } });
-    expect(admitPromptAndMaybeRun.mock.calls[0]?.[1]).toMatchObject({ metadata: {}, runMetadata: {} });
+    expect(preparePrompt.mock.calls[0]?.[1]).toMatchObject({ metadata: {}, runMetadata: {} });
   });
   it.each(["bundled", "user", "project"] as const)(
     "returns an empty admission for an ordinary %s Skill",
@@ -161,7 +161,7 @@ describe("SessionPluginCapabilityService", () => {
   });
 
   it("adds the admitted pluginId to Input and Run metadata before persistence", async () => {
-    const { application, admitPromptAndMaybeRun } = applicationService(inventory());
+    const { application, preparePrompt } = applicationService(inventory());
     const items: SessionUserInputItem[] = [
       { type: "capability", kind: "plugin", pluginId, displayName: "Quality" },
       {
@@ -185,7 +185,7 @@ describe("SessionPluginCapabilityService", () => {
       metadata: { source: "desktop" },
     });
 
-    expect(admitPromptAndMaybeRun).toHaveBeenCalledWith("s1", {
+    expect(preparePrompt).toHaveBeenCalledWith("s1", {
       id: "plugin-input",
       items,
       metadata: { source: "desktop", pluginId },
@@ -194,7 +194,7 @@ describe("SessionPluginCapabilityService", () => {
   });
 
   it("writes inventory ownership for a plugin Skill with a forged source", async () => {
-    const { application, admitPromptAndMaybeRun } = applicationService(inventory());
+    const { application, preparePrompt } = applicationService(inventory());
     const items: SessionUserInputItem[] = [{
       type: "skill",
       source: "user",
@@ -204,7 +204,7 @@ describe("SessionPluginCapabilityService", () => {
 
     await application.admitPrompt("s1", { id: "forged-skill", items });
 
-    expect(admitPromptAndMaybeRun).toHaveBeenCalledWith("s1", {
+    expect(preparePrompt).toHaveBeenCalledWith("s1", {
       id: "forged-skill",
       items,
       metadata: { pluginId },
@@ -213,7 +213,7 @@ describe("SessionPluginCapabilityService", () => {
   });
 
   it("rejects invalid plugin references before creating an Input or Run", async () => {
-    const { application, store, admitPromptAndMaybeRun } = applicationService(inventory());
+    const { application, store, preparePrompt } = applicationService(inventory());
 
     await expect(application.admitPrompt("s1", {
       id: "invalid-plugin-input",
@@ -225,13 +225,13 @@ describe("SessionPluginCapabilityService", () => {
       }],
     })).rejects.toThrow("session_plugin_capability_unavailable");
 
-    expect(admitPromptAndMaybeRun).not.toHaveBeenCalled();
+    expect(preparePrompt).not.toHaveBeenCalled();
     expect(store.admitPrompt).not.toHaveBeenCalled();
     expect(store.createRun).not.toHaveBeenCalled();
   });
 
   it("strips caller-supplied pluginId from an ordinary Input and Run", async () => {
-    const { application, admitPromptAndMaybeRun } = applicationService(inventory());
+    const { application, preparePrompt } = applicationService(inventory());
 
     await application.admitPrompt("s1", {
       id: "ordinary-input",
@@ -240,7 +240,7 @@ describe("SessionPluginCapabilityService", () => {
       runMetadata: { pluginId: "dev.vykor.forged", source: "desktop" },
     });
 
-    expect(admitPromptAndMaybeRun).toHaveBeenCalledWith("s1", {
+    expect(preparePrompt).toHaveBeenCalledWith("s1", {
       id: "ordinary-input",
       items: [{ type: "text", text: "hello" }],
       metadata: { source: "desktop", pluginSelectionPolicy: "auto", pluginScope: expect.objectContaining({
@@ -251,7 +251,7 @@ describe("SessionPluginCapabilityService", () => {
   });
 
   it("requires plugin capability steer to remain a queued draft", async () => {
-    const { application, store, admitPromptAndMaybeRun } = applicationService(inventory());
+    const { application, store, preparePrompt } = applicationService(inventory());
 
     await expect(application.admitPrompt("s1", {
       id: "plugin-steer",
@@ -264,7 +264,7 @@ describe("SessionPluginCapabilityService", () => {
       }],
     })).rejects.toThrow("session_capability_requires_queued_run");
 
-    expect(admitPromptAndMaybeRun).not.toHaveBeenCalled();
+    expect(preparePrompt).not.toHaveBeenCalled();
     expect(store.admitPrompt).not.toHaveBeenCalled();
     expect(store.createRun).not.toHaveBeenCalled();
   });
@@ -501,7 +501,7 @@ function applicationService(current: PluginCapabilityInventory, options: {
     createRun: vi.fn(),
     appendEvent: vi.fn(),
   };
-  const admitPromptAndMaybeRun = vi.fn(async (_sessionId, input) =>
+  const preparePrompt = vi.fn(async (_sessionId, input) =>
     input.id === options.existingInput?.id
       ? { input: options.existingInput, run: options.existingRun }
       : {
@@ -532,7 +532,7 @@ function applicationService(current: PluginCapabilityInventory, options: {
     conversations: store as never,
     runs: store as never,
     admission: {
-      admitPromptAndMaybeRun,
+      preparePrompt,
       replayInput,
       replaceLatestPrompt,
     },
@@ -553,7 +553,7 @@ function applicationService(current: PluginCapabilityInventory, options: {
   return {
     application,
     store,
-    admitPromptAndMaybeRun,
+    preparePrompt,
     replayInput,
     replaceLatestPrompt,
     agentPool,

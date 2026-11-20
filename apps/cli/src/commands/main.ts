@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { ContentBlock } from "@vykor/agent-contracts";
 import type { Settings } from "@vykor/host-config";
-import { loadSettings, getSkillsDir, getDataDir } from "@vykor/host-config";
+import { loadSettings, getSkillsDir } from "@vykor/host-config";
+import { getDataRoot, resolveUserDataPaths } from "@vykor/host-config/paths";
 import { CommandRegistry } from "@vykor/commands";
 import { SkillRegistry, SkillLoader, findProjectSkillDirs, type SkillDefinition } from "@vykor/skills";
 import { buildRuntimeSystemPrompt } from "@vykor/prompts";
@@ -123,8 +124,7 @@ function assertImageSize(sizeBytes: number): void {
 }
 
 function imageAttachmentCacheDir(): string {
-  return process.env.VYKOR_IMAGE_ATTACHMENT_CACHE_DIR
-    ?? join(getDataDir(), "attachments", "images");
+  return resolveUserDataPaths(getDataRoot()).imageAttachmentCacheDir;
 }
 
 async function cacheImageBuffer(buffer: Buffer, mediaType: string): Promise<string> {

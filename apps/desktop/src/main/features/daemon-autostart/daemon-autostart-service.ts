@@ -1,8 +1,10 @@
+import { getDataRoot } from "@vykor/host-config/paths"
 import { dirname } from "node:path"
 
 import {
   createDaemonAutoStartController,
   DaemonSystemService,
+  withDaemonControlLock,
   type DaemonAutoStartController,
 } from "@vykor/server/daemon-host"
 import { app } from "electron"
@@ -72,16 +74,21 @@ export class DaemonAutoStartService {
 
 export function createDesktopDaemonSystemService(): DaemonSystemService {
   const flag = process.platform === "win32" ? "--daemon-watchdog" : "--daemon-service"
-  const args = app.isPackaged ? [flag] : [app.getAppPath(), flag]
+  const args = [...(app.isPackaged ? [] : [app.getAppPath()]), "--data-root", getDataRoot(), flag]
   return new DaemonSystemService({
     invocation: { command: process.execPath, args, cwd: dirname(process.execPath) },
   })
 }
 
 export function createDesktopDaemonAutoStartController(): DaemonAutoStartController {
-  return createDaemonAutoStartController({
+  const controller = createDaemonAutoStartController({
     invocation: createDesktopDaemonSystemService().invocation(),
   })
+  return {
+    snapshot: controller.snapshot,
+    enable: () => withDaemonControlLock(controller.enable),
+    disable: () => withDaemonControlLock(controller.disable),
+  }
 }
 
 export const daemonAutoStartService = new DaemonAutoStartService()

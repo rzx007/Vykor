@@ -9,4 +9,4 @@
 
 `client.jobs.list({ sessionId })` 返回 `{ jobs, errors }`。read/wait/send/cancel 使用快照中的完整 `JobTarget`；Agent target 包含 kind、jobId、runId，其余任务包含 kind、jobId。send 可以返回新一轮输入的接纳回执。任务状态保存在 daemon，SDK 不建立本地任务执行器。
 
-Git、开发环境管理和持久终端管理迁入 [私有应用客户端](../../../../application-client/README.md)。新增只读能力描述或任务操作放对应文件，测试放 [`__test__/`](./__test__)。
+新增只读能力描述或任务操作放对应文件，测试放本目录的 `__test__/`。远端 Git 与工作区管理走 daemon-admin，持久终端管理由 Desktop 主进程的终端模块调用。 [工作区管理](../../../../daemon-admin/src/workspace/README.md) · [桌面终端](../../../../../apps/desktop/src/main/features/terminal/terminal-resource.ts) · [测试](./__test__)

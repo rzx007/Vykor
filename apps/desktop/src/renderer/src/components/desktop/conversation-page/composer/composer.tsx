@@ -1,5 +1,5 @@
 import { ChevronDown, Goal, Plus, ShieldCheck, X, Undo2 } from "lucide-react"
-import { useState, type ReactNode } from "react"
+import { useState, useSyncExternalStore, type ReactNode } from "react"
 
 import { Button } from "@renderer/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@renderer/components/ui/popover"
@@ -13,8 +13,10 @@ import type {
   DesktopWorkMode,
   DesktopSessionRecord,
 } from "@shared/session-types"
-import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
+import { selectComposerDocumentText, type ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
+import { promptQueueOnlyReason } from "@renderer/stores/desktop-session/pending-prompt-state"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session/store"
+import { pluginAppModelContexts } from "../../shell/plugin-apps/plugin-app-model-context"
 import { PluginAppComposerContext } from "../../shell/plugin-apps/composer-context"
 import { ComposerAttachments } from "./composer-attachments"
 import { ComposerBrowserAnnotations } from "./composer-browser-annotations"
@@ -68,6 +70,8 @@ export function Composer({
   onOpenContextUsage,
   onDraftChange,
   onSubmit,
+  followUpRunId,
+  lastAcceptedInputId,
   onCommand,
   onInterrupt,
   onSelectModel,
@@ -122,7 +126,9 @@ export function Composer({
   contextUsage?: DesktopContextUsageSnapshot | null
   onOpenContextUsage?: () => void | Promise<boolean | void>
   onDraftChange: (value: ComposerDocument) => void
-  onSubmit: () => void
+  onSubmit: (delivery?: "queue" | "steer") => void
+  followUpRunId?: string
+  lastAcceptedInputId?: string
   onCommand?: (command: ComposerPickerCommand) => Promise<void>
   onInterrupt?: () => void
   onSelectModel: (model: DesktopModel) => void
@@ -155,7 +161,7 @@ export function Composer({
     }
   }
   const [activePicker, setActivePicker] = useState<
-    "model" | "permission" | "effort" | "goal" | null
+    "model" | "permission" | "effort" | "goal" | "delivery" | null
   >(null)
   const [contextPickerRequest, setContextPickerRequest] = useState(0)
   const [contextPickerOpen, setContextPickerOpen] = useState(false)
@@ -177,7 +183,6 @@ export function Composer({
   const permissionLabel = resolvePermissionModeLabel(permissionMode)
   const PermissionIcon = permissionModeIcons[permissionMode]
   const closePicker = (): void => setActivePicker(null)
-  const allowSubmit = !preparingAttachments && !modeChangePending && (canSubmit ?? draft.items.length > 0)
   const attachDisabled = attachmentReadOnly || sending
   const contextItems: ContextPickerItem[] = [
     {
@@ -228,9 +233,33 @@ export function Composer({
       : []),
   ]
 
+  const [deliveryChoice, setDeliveryChoice] = useState<{
+    delivery: "queue" | "steer"
+    runId?: string
+    afterInputId?: string
+  } | null>(null)
+  const appContexts = useSyncExternalStore(
+    pluginAppModelContexts.subscribe,
+    pluginAppModelContexts.snapshot,
+    pluginAppModelContexts.serverSnapshot
+  )
+  const isFollowUp = Boolean(followUpRunId && !goalMode)
+  const fullAccess = permissionMode === "full_access"
+  const hasAppContext = appContexts.some(entry => entry.source.sessionId === activeSessionId)
+  const hasContent = Boolean(canSubmit || selectComposerDocumentText(draft).trim() ||
+    attachments.length || browserAnnotations?.length || hasAppContext)
+  const allowSubmit = !preparingAttachments && !modeChangePending && (canSubmit ?? hasContent)
+  const firstDraftItem = draft.items[0]
+  const queueOnlyReason = promptQueueOnlyReason(attachments.length, draft.items, {
+    pluginContext: hasAppContext,
+    observation: firstDraftItem?.type === "text" && /^\s*observe-session(?:\s|$)/u.test(firstDraftItem.text),
+  })
+  const manualDelivery = deliveryChoice && deliveryChoice.runId === followUpRunId &&
+    deliveryChoice.afterInputId === lastAcceptedInputId ? deliveryChoice.delivery : undefined
+  const delivery = queueOnlyReason ? "queue" : fullAccess ? "steer" : manualDelivery ?? "queue"
   const submit = (): void => {
-    if (sending || !allowSubmit) return
-    onSubmit()
+    if (sending || interrupting || !allowSubmit) return
+    onSubmit(isFollowUp ? delivery : undefined)
   }
 
   return (
@@ -323,6 +352,14 @@ export function Composer({
         onCancel={(draftId) => void attachmentAction(() => onCancelAttachment?.(draftId), "取消上传")}
         onRetry={(draftId) => void attachmentAction(() => onRetryAttachment?.(draftId), "重试附件")}
         onRemove={(draftId) => void attachmentAction(() => onRemoveAttachment?.(draftId), "移除附件")}
+        onShowText={composerScope ? (draftId) => {
+          // 恢复正文在 store 中同步完成，上传清理由后台继续处理。
+          void attachmentAction(
+            () => useDesktopSessionStore.getState().showPastedTextAttachment(composerScope, draftId),
+            "显示粘贴文本"
+          )
+          document.getElementById(id)?.focus()
+        } : undefined}
       />
       <RichPromptInput
         key={id}
@@ -547,6 +584,40 @@ export function Composer({
             }}
           />
           <ContextUsageControl snapshot={contextUsage} onOpen={onOpenContextUsage} />
+          {isFollowUp && fullAccess && queueOnlyReason ? (
+            <span role="status" className="text-xs text-muted-foreground">{queueOnlyReason}</span>
+          ) : null}
+          {isFollowUp && !fullAccess ? (
+            <Popover open={activePicker === "delivery"} onOpenChange={(open) => setActivePicker(open ? "delivery" : null)}>
+              <PopoverTrigger
+                render={<Button type="button" variant="control" shape="pill" size="sm" />}
+                disabled={sending || interrupting}
+                aria-label="本条消息的发送方式"
+                title={queueOnlyReason}
+              >
+                {delivery === "steer" ? "现在补充" : "排队"}
+                <ChevronDown className="size-3" />
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-40 p-1">
+                <Button type="button" variant="ghost" size="sm" className="w-full justify-start"
+                  disabled={Boolean(queueOnlyReason)}
+                  onClick={() => {
+                    setDeliveryChoice({ delivery: "steer", runId: followUpRunId, afterInputId: lastAcceptedInputId })
+                    closePicker()
+                  }}>
+                  现在补充
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="w-full justify-start"
+                  onClick={() => {
+                    setDeliveryChoice({ delivery: "queue", runId: followUpRunId, afterInputId: lastAcceptedInputId })
+                    closePicker()
+                  }}>
+                  排队
+                </Button>
+                {queueOnlyReason ? <p className="px-2 py-1 text-xs text-muted-foreground">{queueOnlyReason}</p> : null}
+              </PopoverContent>
+            </Popover>
+          ) : null}
           {goalEditing ? (
             <Button type="submit" size="sm" shape="pill" disabled={sending || !allowSubmit}>
               {sending ? "正在保存…" : "保存目标"}
@@ -556,6 +627,7 @@ export function Composer({
               sending={sending}
               running={running && !goalMode}
               interrupting={interrupting}
+              hasContent={hasContent}
               disabled={!allowSubmit}
               onInterrupt={onInterrupt}
             />

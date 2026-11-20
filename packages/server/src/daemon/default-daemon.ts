@@ -19,13 +19,19 @@ export type VykorDaemonOptions = Pick<
   | "host"
   | "logger"
   | "outsideProjectWorkspaceRoot"
+  | "channelsWorkspaceRoot"
   | "port"
   | "store"
   | "storePath"
+  | "storeFileMustExist"
   | "token"
   | "version"
   | "executionSurface"
   | "browserHost"
+  | "enableDesktopBrowser"
+  | "enableBrowserDeveloper"
+  | "registeredDaemonControl"
+  | "deferBackgroundActivation"
 >;
 
 /** Starts the opinionated daemon application with all standard resource services installed. */

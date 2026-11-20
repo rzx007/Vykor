@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 
 import type { DesktopAttachmentCandidate } from "@shared/attachment-types"
@@ -51,7 +52,7 @@ describe("desktop attachment actions", () => {
       },
     })
     vi.stubGlobal("window", {
-      desktop: { attachments: { uploadClipboardImage: vi.fn(async () => {}) } },
+      desktop: { businessData: businessDataFixture, attachments: { uploadClipboardImage: vi.fn(async () => {}) } },
     })
     await useDesktopSessionStore.getState().addImageFeedback(scope, {
       original: {
@@ -99,7 +100,7 @@ describe("desktop attachment actions", () => {
   it("adds picked candidates in order and sets the task id before starting each upload", async () => {
     const startUpload = vi.fn(async (input: { taskId: string }) => ({ taskId: input.taskId }))
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         attachments: {
           pickFiles: vi.fn(async () => [candidate]),
           startUpload,
@@ -126,7 +127,7 @@ describe("desktop attachment actions", () => {
   it("routes completion, retries with a new task, and ignores a late old-task failure", async () => {
     const retryUpload = vi.fn(async (input: { taskId: string }) => ({ taskId: input.taskId }))
     vi.stubGlobal("window", {
-      desktop: { attachments: { retryUpload } },
+      desktop: { businessData: businessDataFixture, attachments: { retryUpload } },
     })
     useDesktopSessionStore.setState({
       composerDraftsByScope: {
@@ -200,7 +201,7 @@ describe("desktop attachment actions", () => {
     }))
     const files = [{ name: "drop.pdf" }] as unknown as File[]
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         attachments: {
           pickImages: vi.fn(async () => [image]),
           stageDroppedFiles: vi.fn(async () => [dropped]),
@@ -259,7 +260,7 @@ describe("desktop attachment actions", () => {
     const discardDraft = vi.fn(async () => undefined)
     const deleteUnreferenced = vi.fn(async () => ({ deleted: true, inUse: false }))
     vi.stubGlobal("window", {
-      desktop: { attachments: { cancelUpload, discardDraft, deleteUnreferenced } },
+      desktop: { businessData: businessDataFixture, attachments: { cancelUpload, discardDraft, deleteUnreferenced } },
     })
     useDesktopSessionStore.setState({
       composerDraftsByScope: {
@@ -308,7 +309,7 @@ describe("desktop attachment actions", () => {
       throw new Error("offline")
     })
     vi.stubGlobal("window", {
-      desktop: { attachments: { deleteUnreferenced } },
+      desktop: { businessData: businessDataFixture, attachments: { deleteUnreferenced } },
     })
     useDesktopSessionStore.setState({
       composerDraftsByScope: {
@@ -346,7 +347,7 @@ describe("desktop attachment actions", () => {
     const stageDroppedFiles = vi.fn()
     const uploadClipboardImage = vi.fn()
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         attachments: { pickFiles, pickImages, stageDroppedFiles, uploadClipboardImage },
       },
     })
@@ -378,7 +379,7 @@ describe("desktop attachment actions", () => {
   it("treats a missing attachment capability from an older bootstrap as disabled", async () => {
     const pickFiles = vi.fn()
     vi.stubGlobal("window", {
-      desktop: { attachments: { pickFiles } },
+      desktop: { businessData: businessDataFixture, attachments: { pickFiles } },
     })
     useDesktopSessionStore.setState({ attachmentSupport: undefined as never })
 
@@ -390,7 +391,7 @@ describe("desktop attachment actions", () => {
 
   it("redacts rejected IPC details before storing a retryable renderer error", async () => {
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         attachments: {
           pickFiles: vi.fn(async () => [candidate]),
           startUpload: vi.fn(async () => {

@@ -1,6 +1,6 @@
 # Skill 管理
 
-Skill 列表、详情、导出与相关控件。
+Skill 列表、详情、导出与官方技能市场。「浏览市场」与「已安装」沿用插件页的标签样式。在市场标题旁选择个人或当前项目，用列表行的按钮安装或更新；卸载入口在已安装的技能详情里。后台缺少市场接口时，页面提供「安全重启并重试」。
 
 ## 放置边界
 
@@ -11,7 +11,9 @@ Skill 列表、详情、导出与相关控件。
 ## 主要文件
 
 - [skill-manager.tsx](skill-manager.tsx)
+- [skill-marketplace.tsx](skill-marketplace.tsx)
 - [skill-detail.tsx](skill-detail.tsx)
+- [skill-quick-start.ts](skill-quick-start.ts) 校验技能在项目中可用，再把引用放进新对话草稿。
 - [skill-controls.tsx](skill-controls.tsx)
 
 ## 维护约定

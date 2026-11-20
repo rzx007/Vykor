@@ -1,6 +1,7 @@
+import { getDesktopDataDir } from "@vykor/host-config/paths"
 import { execFile } from "node:child_process"
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises"
-import { join } from "node:path"
+import { join, relative } from "node:path"
 import { tmpdir } from "node:os"
 import { promisify } from "node:util"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
@@ -24,29 +25,34 @@ vi.mock("electron", () => ({
 }))
 vi.mock("../session/session-service", () => ({
   desktopSessionService: {
-    daemonClient: async () => ({
-      projects: { list: async () => [{ id: "project", name: "Project", path: host.projectPath }] },
+    daemonTransport: async () => ({}),
+    agentClient: async () => ({
       protocol: { capabilities: async () => ({ features: { gitWorktreeBindings: 1 } }) },
       sessions: {
         list: async () => [{ id: "session", title: "Task" }],
         getState: async () => host.state,
-        clearWorktreeBinding: async (
-          sessionId: string,
-          binding: { id: string; path: string; branch: string }
-        ) => {
-          host.bindingRequests.push({ sessionId, binding })
-          if (host.bindingFailure) throw new Error("Binding update unavailable")
-          const desktop = host.state.session.metadata.desktop as Record<string, unknown> | undefined
-          if (desktop) {
-            const { worktree: _worktree, ...rest } = desktop
-            host.state.session.metadata = { ...host.state.session.metadata, desktop: rest }
-          }
-          return host.state.session
-        },
       },
     }),
   },
 }))
+vi.mock("../session/project-resource", () => ({ ProjectResource: class {
+  async list() { return [{ id: "project", name: "Project", path: host.projectPath }] }
+} }))
+vi.mock("./worktree-binding-resource", () => ({ WorktreeBindingResource: class {
+  async clearWorktreeBinding(
+    sessionId: string,
+    binding: { id: string; path: string; branch: string }
+  ) {
+    host.bindingRequests.push({ sessionId, binding })
+    if (host.bindingFailure) throw new Error("Binding update unavailable")
+    const desktop = host.state.session.metadata.desktop as Record<string, unknown> | undefined
+    if (desktop) {
+      const { worktree: _worktree, ...rest } = desktop
+      host.state.session.metadata = { ...host.state.session.metadata, desktop: rest }
+    }
+    return host.state.session
+  }
+} }))
 vi.mock("./runtime-settings-service", () => ({
   desktopRuntimeSettingsService: {
     snapshot: async () => ({ effective: { kind: "native" }, source: "用户默认" }),
@@ -65,6 +71,7 @@ const service = new GitSettingsService()
 let base: string
 beforeAll(async () => {
   base = await mkdtemp(join(tmpdir(), "vykor-git-settings-"))
+  vi.stubEnv("VYKOR_CONFIG_DIR", join(base, "root"))
   host.userData = join(base, "settings")
   host.projectPath = join(base, "project")
   await mkdir(host.projectPath)
@@ -77,15 +84,16 @@ beforeAll(async () => {
   await command("git", ["commit", "-m", "initial"], { cwd: host.projectPath })
 })
 afterAll(async () => {
+  vi.unstubAllEnvs()
   await rm(base, { recursive: true, force: true })
 })
 describe("Git settings", () => {
   it("persists a versioned preference file and rejects stale saves", async () => {
-    const initial = readGitSettingsAt(host.userData)
+    const initial = readGitSettingsAt(getDesktopDataDir())
     expect(initial.preferences).toEqual(defaultGitPreferences)
     const preferences = { ...initial.preferences, branchPrefix: "test/", ignoreWhitespace: true }
     await service.updatePreferences({ preferences, expected: initial.preferences })
-    expect(readGitSettingsAt(host.userData).preferences).toEqual(preferences)
+    expect(readGitSettingsAt(getDesktopDataDir()).preferences).toEqual(preferences)
     await expect(
       service.updatePreferences({ preferences: initial.preferences, expected: initial.preferences })
     ).rejects.toThrow("已被修改")
@@ -169,7 +177,19 @@ describe("Git settings", () => {
     }
   })
   it("protects dirty worktrees, unmerged commits and active sessions", async () => {
+    const settings = readGitSettingsAt(getDesktopDataDir())
+    writeGitSettingsAt(getDesktopDataDir(), {
+      ...settings,
+      preferences: {
+        ...settings.preferences,
+        worktreeRoot: join(process.env.VYKOR_CONFIG_DIR!, "."),
+      },
+    })
     const record = await service.createTaskWorktree("project", host.projectPath)
+    expect(record.configDir).toBe(process.env.VYKOR_CONFIG_DIR)
+    expect(relative(process.env.VYKOR_CONFIG_DIR!, record.path).replace(/\\/g, "/")).toMatch(
+      /^worktrees\/[^/]+\/task-/
+    )
     expect(record.branch).toMatch(/^test\/task-/)
     service.bindTaskWorktree(record.id, "session")
     await writeFile(join(record.path, "file.txt"), "changed\n")
@@ -218,7 +238,7 @@ describe("Git settings", () => {
       sessionId: "session",
       binding: { id: record.id, path: record.path, branch: record.branch },
     })
-    expect(readGitSettingsAt(host.userData).worktrees).toEqual([])
+    expect(readGitSettingsAt(getDesktopDataDir()).worktrees).toEqual([])
   })
   it("reports removed directories separately and retries failed binding updates without deleting again", async () => {
     const record = await service.createTaskWorktree("project", host.projectPath)
@@ -232,7 +252,7 @@ describe("Git settings", () => {
     host.bindingFailure = true
     try {
       await expect(service.cleanup({ id: record.id })).rejects.toThrow("目录已清理")
-      expect(readGitSettingsAt(host.userData).worktrees).toHaveLength(1)
+      expect(readGitSettingsAt(getDesktopDataDir()).worktrees).toHaveLength(1)
       const pending = (await service.worktrees())[0]!
       expect(pending.cleanupAllowed).toBe(true)
       expect(pending.reason).toContain("绑定")
@@ -240,19 +260,33 @@ describe("Git settings", () => {
       host.bindingFailure = false
     }
     await new GitSettingsService().cleanup({ id: record.id })
-    expect(readGitSettingsAt(host.userData).worktrees).toEqual([])
+    expect(readGitSettingsAt(getDesktopDataDir()).worktrees).toEqual([])
     expect(host.state.session.metadata).toEqual({ desktop: { settingsRoot: host.projectPath } })
     expect(
       (await command("git", ["show-ref", `refs/heads/${record.branch}`], { cwd: host.projectPath }))
         .stdout
     ).toBeTruthy()
   })
+  it("rejects an old external worktreeRoot before allocating another task directory", async () => {
+    const current = readGitSettingsAt(getDesktopDataDir())
+    writeGitSettingsAt(getDesktopDataDir(), {
+      ...current,
+      preferences: { ...current.preferences, worktreeRoot: join(base, "old-worktrees") },
+    })
+    try {
+      await expect(service.createTaskWorktree("project", host.projectPath)).rejects.toThrow(
+        /old-worktrees.*迁移/
+      )
+    } finally {
+      writeGitSettingsAt(getDesktopDataDir(), current)
+    }
+  })
   it("rejects malformed saved formats instead of guessing a migration", () => {
-    writeGitSettingsAt(host.userData, {
+    writeGitSettingsAt(getDesktopDataDir(), {
       version: 1,
       preferences: { ...defaultGitPreferences, branchPrefix: "../bad" },
       worktrees: [],
     })
-    expect(() => readGitSettingsAt(host.userData)).toThrow("格式无效")
+    expect(() => readGitSettingsAt(getDesktopDataDir())).toThrow("格式无效")
   })
 })

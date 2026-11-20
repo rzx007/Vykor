@@ -5,7 +5,7 @@ import type {
   AttachmentStorageGcResult,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-} from "@vykor/application-client"
+} from "../../../shared/attachment-types"
 
 import type { DesktopAttachmentCandidate, DesktopAttachmentUploadEvent } from "@shared/attachment-types"
 
@@ -14,6 +14,7 @@ import {
   DesktopAttachmentServiceError,
   type AttachmentClient,
   type AttachmentFileSystem,
+  type AttachmentStorageClient,
 } from "./attachment-support"
 import {
   AttachmentUploadService,
@@ -30,6 +31,7 @@ export interface AttachmentServiceDependencies {
   maxBytesPerFile: number
   emit(ownerId: number, event: DesktopAttachmentUploadEvent): void
   getClient(): Promise<AttachmentClient>
+  getStorageClient(): Promise<AttachmentStorageClient>
   now?: () => number
   fileSystem?: Partial<AttachmentFileSystem>
   onOpenSource?: (path: string) => void
@@ -156,15 +158,15 @@ export class DesktopAttachmentService {
   }
 
   async scanStorage(): Promise<AttachmentStorageReport> {
-    return await (await this.dependencies.getClient()).attachments.scanStorage()
+    return (await this.dependencies.getStorageClient()).scanStorage()
   }
 
   async repairStorage(): Promise<AttachmentStorageRepairResult> {
-    return await (await this.dependencies.getClient()).attachments.repairStorage()
+    return (await this.dependencies.getStorageClient()).repairStorage()
   }
 
   async gcStorage(): Promise<AttachmentStorageGcResult> {
-    return await (await this.dependencies.getClient()).attachments.gcStorage()
+    return (await this.dependencies.getStorageClient()).gcStorage()
   }
 }
 

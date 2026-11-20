@@ -1,11 +1,11 @@
 import type { WebContents } from "electron"
 import {
   syncEvents,
-  type ScheduledRunRecord,
   type SessionEventRecord,
   type SessionGoal,
   type SyncEventUpdate,
-} from "@vykor/application-client"
+} from "@rzx/client"
+import type { ScheduledRunRecord } from "@vykor/protocol"
 import type {
   DesktopActivityUpdate,
   DesktopScheduledActivity,

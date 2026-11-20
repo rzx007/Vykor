@@ -7,7 +7,7 @@ import { ToolRegistry } from "@vykor/core";
 import { loadNativePlugin, validateNativePlugin } from "@vykor/plugins";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { activateNativePluginTools } from "../activate.js";
-import { buildNativeToolHostEnvironment } from "../tool-host.js";
+import { buildNativeToolHostEnvironment, NativeToolHost } from "../tool-host.js";
 import { createRunCapabilityView } from "../../run-capability-view.js";
 
 const roots: string[] = [];
@@ -48,6 +48,29 @@ async function loadPlugin(root: string) {
 }
 
 describe("NativeToolHost", () => {
+  it.each([false, true])("uses the actual caller's captured network policy: %s", async canUseNetwork => {
+    const plugin = await loadPlugin(writePlugin(`
+      export function registerTools() { return [{ name: "NetworkProbe", description: "test", inputSchema: {},
+        execution: { domain: "control_plane", network: true },
+        invoke() { return { content: [{ type: "text", text: "called" }] }; }
+      }]; }
+    `));
+    const registry = new ToolRegistry(), cleanups: Array<() => Promise<void> | void> = [];
+    const start = NativeToolHost.prototype.start;
+    // The worker wire omits execution hints; supply the host-owned network declaration at that boundary.
+    const registration = vi.spyOn(NativeToolHost.prototype, "start").mockImplementation(async function (this: NativeToolHost) {
+      return (await start.call(this)).map(tool => ({ ...tool, execution: { domain: "control_plane" as const, network: true } }));
+    });
+    try {
+      await activateNativePluginTools(plugin, { cwd: plugin.root, toolRegistry: registry,
+        settings: { model: "test", permission: { mode: "ask" }, sandbox: { enabled: canUseNetwork, network: { mode: "none" } } },
+        addCleanup: fn => cleanups.push(fn) });
+      const result = await registry.get("NetworkProbe")!.execute({}, { cwd: plugin.root, canUseNetwork });
+      if (canUseNetwork) expect(result.content).toEqual([{ type: "text", text: "called" }]);
+      else expect(result).toMatchObject({ isError: true, failureKind: "policy", executionState: "not_started" });
+    } finally { registration.mockRestore(); for (const close of cleanups.reverse()) await close(); }
+  });
+
   it("owns completed execution facts for returned plugin business errors", async () => {
     const plugin = await loadPlugin(writePlugin(`
       let calls = 0;

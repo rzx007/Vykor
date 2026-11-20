@@ -9,6 +9,7 @@
 | [validation.ts](validation.ts) | 打开、关闭、工具调用、会话提交及输入框上下文的校验 |
 | [limits.ts](limits.ts) | 交接数据大小、消息字符数和输入框上下文数量上限 |
 | [history.ts](history.ts) | 只读解析既有旧插件 UI 历史数据中的实例、动作和提交回执 |
+| [plugin-management.ts](plugin-management.ts) | 安装列表、运行状态和重载回执的数据类型，状态由 daemon 管理 |
 
 `@vykor/domain-contracts/plugin-apps/history` 直接公开历史读取定义。旧 UI 模块只用于读取已有历史数据，不用于创建新 UI、发起动作或恢复旧 UI 执行能力。
 

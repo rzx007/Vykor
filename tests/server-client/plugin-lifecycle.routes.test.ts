@@ -5,10 +5,13 @@ import {
   discoverInstalledNativePlugins, readInstalledPluginStore, verifyInstalledNativePlugin,
 } from "@vykor/plugins";
 import { describe, expect, it } from "vitest";
-import { VykorClient } from "@vykor/application-client";
-import { dispatchSessionCommand } from "@vykor/application-client";
-import { createInitialClientState } from "@rzx/client";
-import type { ReloadPluginsResponse } from "@vykor/application-client";
+import { HttpTransport, VykorClient, createInitialClientState, type VykorClientOptions } from "@rzx/client";
+import { PluginResource } from "@vykor/daemon-admin/plugins";
+import { AuthResource, ProviderResource, SystemResource } from "@vykor/daemon-admin/configuration";
+import { KnowledgeResource } from "@vykor/daemon-admin/knowledge";
+import { DevelopmentResource, ProjectResource } from "@vykor/daemon-admin/workspace";
+import { dispatchSessionCommand } from "../../apps/frontend/src/hooks/commands/session-commands.js";
+import type { ReloadPluginsResponse } from "@vykor/protocol";
 import {
   callInspector, expectRuntimeStopped, pluginId, settings, toolName, withNativePluginFixture,
   type NativePluginFixture,
@@ -45,6 +48,7 @@ function lifecycleRoutes(fixture: NativePluginFixture) {
       acquireGlobalMutation: () => undefined,
       closeAllRuntimes: async () => {},
       invalidateRuntimes: async () => {},
+      healthSnapshot: () => { throw new Error("Health is outside this lifecycle test"); },
       runtimeSnapshot: () => { throw new Error("Runtime snapshot is outside this lifecycle test"); },
       queryExecutionObservations: () => { throw new Error("Execution observations are outside this lifecycle test"); },
       inspectRun: () => undefined,
@@ -53,7 +57,7 @@ function lifecycleRoutes(fixture: NativePluginFixture) {
   }));
   const requests: Array<{ path: string; method: string }> = [];
   const reloadResponses: ReloadPluginsResponse[] = [];
-  const client = new VykorClient({
+  const connection: VykorClientOptions = {
     baseUrl: "http://plugin-lifecycle.test",
     async fetch(input, init) {
       const request = new Request(input, init);
@@ -63,12 +67,15 @@ function lifecycleRoutes(fixture: NativePluginFixture) {
       if (path === "/plugins/reload") reloadResponses.push(await response.clone().json() as ReloadPluginsResponse);
       return response;
     },
-  });
+  };
+  const agent = new VykorClient(connection);
+  const transport = new HttpTransport(connection);
+  const plugins = new PluginResource(transport);
   return {
-    client, requests, reloadResponses, closedCwds,
+    plugins, requests, reloadResponses, closedCwds,
     get globalCloseCount() { return globalCloseCount; },
     async install(link: boolean) {
-      await client.plugins.installLocal({
+      await plugins.installLocal({
         cwd: fixture.cwds[0], sourcePath: fixture.source, scope: "user", approvedPermissions: ["ui:invoke-own-tools", "ui:render"], link,
       });
       expect(requests.at(-1)).toEqual({ path: link ? "/plugins/link-local" : "/plugins/install-local", method: "POST" });
@@ -81,7 +88,12 @@ function lifecycleRoutes(fixture: NativePluginFixture) {
     async reloadViaSlash(cwd = fixture.cwds[0]) {
       const emitted: string[] = [];
       const outcome = await dispatchSessionCommand({ name: "/reload-plugins", args: "" }, {
-        client, cwd, commandCatalog: [], clientState: createInitialClientState(), busy: false,
+        client: {
+          protocol: agent.protocol, sessions: agent.sessions, runtime: agent.runtime, jobs: agent.jobs,
+          plugins, system: new SystemResource(transport), auth: new AuthResource(transport),
+          providers: new ProviderResource(transport), knowledge: new KnowledgeResource(transport),
+          projects: new ProjectResource(transport), development: new DevelopmentResource(transport),
+        }, cwd, commandCatalog: [], clientState: createInitialClientState(), busy: false,
         emit: text => emitted.push(text),
       });
       expect(outcome).toBe("handled");
@@ -204,8 +216,8 @@ describe("plugin lifecycle routes with real installation, discovery, registry an
       const before = await readInstalledPluginStore(getInstalledPluginStorePath());
       const previousCloses = routes.globalCloseCount;
 
-      if (operation === "disable") await routes.client.plugins.disable(pluginId, { cwd: fixture.cwds[0] });
-      else await routes.client.plugins.uninstall(pluginId, { cwd: fixture.cwds[0] });
+      if (operation === "disable") await routes.plugins.disable(pluginId, { cwd: fixture.cwds[0] });
+      else await routes.plugins.uninstall(pluginId, { cwd: fixture.cwds[0] });
       expect(routes.requests.at(-1)).toEqual({
         path: `/plugins/${pluginId}${operation === "disable" ? "/disable" : ""}`,
         method: operation === "disable" ? "POST" : "DELETE",
@@ -219,12 +231,12 @@ describe("plugin lifecycle routes with real installation, discovery, registry an
       expect(after.revision).toBe(before.revision + 1);
       if (operation === "disable") {
         expect(Object.values(after.plugins)).toEqual([{ ...installed, enabled: false, updatedAt: expect.any(String) }]);
-        expect((await routes.client.plugins.list({ cwd: fixture.cwds[1] })).plugins[0]).toMatchObject({
+        expect((await routes.plugins.list({ cwd: fixture.cwds[1] })).plugins[0]).toMatchObject({
           enabled: false, activation: "inactive", toolRuntime: { hostCount: 0, registeredToolCount: 0 },
         });
       } else {
         expect(after.plugins).toEqual({});
-        expect((await routes.client.plugins.list({ cwd: fixture.cwds[1] })).plugins).toEqual([]);
+        expect((await routes.plugins.list({ cwd: fixture.cwds[1] })).plugins).toEqual([]);
       }
       for (const cwd of fixture.cwds) {
         expect(await discoverInstalledNativePlugins({ cwd })).toEqual([]);

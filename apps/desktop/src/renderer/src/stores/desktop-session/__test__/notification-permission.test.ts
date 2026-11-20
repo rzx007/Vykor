@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 import { afterEach, expect, it, vi } from "vitest"
 import { createActivityState } from "../activity-state"
 import { useDesktopSessionStore } from "../store"
@@ -8,7 +9,7 @@ afterEach(() => vi.unstubAllGlobals())
 it("carries the originating permission request through native notification delivery", async () => {
   const delivered: unknown[] = []
   vi.stubGlobal("window", {
-    desktop: {
+    desktop: { businessData: businessDataFixture,
       settings: {
         snapshot: async () => ({
           notificationMode: "when_unfocused",

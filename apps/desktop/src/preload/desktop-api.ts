@@ -1,3 +1,4 @@
+import { BusinessDataChannels, type BusinessDataKey } from "../shared/business-data-types"
 import { ipcRenderer, webUtils } from "electron"
 import type { DesktopWindowThemeSource } from "../shared/window-theme-types"
 import {
@@ -42,6 +43,28 @@ const invoke = <C extends IpcChannel>(
 ): Promise<IpcInvokeMap[C]["result"]> => ipcRenderer.invoke(channel, ...args)
 
 export const desktopAPI = {
+  businessData: {
+    recordDesktopScan: (sources: Record<string, string>) => invoke(BusinessDataChannels.recordDesktopScan, sources),
+    read: (key: BusinessDataKey) => invoke(BusinessDataChannels.read, key),
+    write: (key: BusinessDataKey, value: unknown, revision: number | null) => invoke(BusinessDataChannels.write, key, value, revision),
+    importLegacy: (key: BusinessDataKey, value: unknown, digest: string, unresolvedSessionIds?: string[]) => invoke(BusinessDataChannels.importLegacy, key, value, digest, unresolvedSessionIds),
+    acknowledgeUnresolvedComposer: (digest: string) => invoke(BusinessDataChannels.acknowledgeUnresolved, digest),
+    classifySessions: (ids: string[]) => invoke(BusinessDataChannels.classifySessions, ids),
+    flush: () => invoke(BusinessDataChannels.flush),
+    onFlushRequested: (listener: (freeze?: boolean) => Promise<void>, onExportResumed?: () => void) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, requestId: string, freeze?: boolean) => {
+        void Promise.resolve().then(() => listener(freeze === true)).then(
+          () => invoke(BusinessDataChannels.flushAck, requestId, true),
+          () => invoke(BusinessDataChannels.flushAck, requestId, false),
+        )
+      }
+      const resumed = () => onExportResumed?.()
+      ipcRenderer.on("business-data:export-resumed", resumed)
+      ipcRenderer.on("business-data:flush-request", wrapped)
+      void invoke(BusinessDataChannels.consumerReady)
+      return () => { ipcRenderer.removeListener("business-data:flush-request", wrapped); ipcRenderer.removeListener("business-data:export-resumed", resumed) }
+    },
+  },
   workflows: {
     read: (input: IpcInvokeMap[typeof IpcChannels.workflowRead]["args"][0]) =>
       invoke(IpcChannels.workflowRead, input),
@@ -472,6 +495,10 @@ export const desktopAPI = {
     test: (input) => invoke(ProviderDefaultsChannels.test, input),
   },
   maintenance: {
+    dataRootInfo: () => invoke(MaintenanceSettingsChannels.dataRootInfo),
+    inspectDataRoot: (target) => invoke(MaintenanceSettingsChannels.inspectDataRoot, target),
+    migrateDataRoot: (target) => invoke(MaintenanceSettingsChannels.migrateDataRoot, target),
+    recoverDataRoot: (journal) => invoke(MaintenanceSettingsChannels.recoverDataRoot, journal),
     usage: (filter) => invoke(MaintenanceSettingsChannels.usage, filter),
     price: (price) => invoke(MaintenanceSettingsChannels.price, price),
     budget: (budget) => invoke(MaintenanceSettingsChannels.budget, budget),
@@ -553,6 +580,9 @@ export const desktopAPI = {
       invoke(IpcChannels.pluginCancelGit, input),
   },
   skills: {
+    marketplace: () => invoke(IpcChannels.skillMarketplace),
+    installMarketplace: (input: IpcInvokeMap[typeof IpcChannels.skillMarketplaceInstall]["args"][0]) =>
+      invoke(IpcChannels.skillMarketplaceInstall, input),
     snapshot: (input: IpcInvokeMap[typeof IpcChannels.skillSnapshot]["args"][0]) =>
       invoke(IpcChannels.skillSnapshot, input),
     remove: (input: IpcInvokeMap[typeof IpcChannels.skillRemove]["args"][0]) =>

@@ -4,15 +4,20 @@ import { ToolResult } from "./tool-result"
 export function ShellToolDetails({
   input,
   output,
+  metadata,
   calling,
   unparsedInput,
 }: {
   input: unknown
   output: unknown
+  metadata: Record<string, unknown>
   calling: boolean
   unparsedInput: boolean
 }): React.JSX.Element {
   const command = shellCommandText(input)
+  const { exitCode, status } = metadata
+  const exited = !calling && typeof exitCode === "number" &&
+    status !== "timed_out" && status !== "interrupted"
 
   return (
     <>
@@ -36,6 +41,11 @@ export function ShellToolDetails({
         </pre>
       )}
       <div className="border-t px-3 pt-2 text-xs font-medium">输出</div>
+      {exited && (
+        <p className="px-3 py-1 text-xs text-ui-muted">
+          {exitCode === 0 ? "命令已退出" : "命令失败"} · 退出码 {exitCode}
+        </p>
+      )}
       {output === undefined ? (
         <p className="px-3 py-2 text-xs text-ui-muted">
           {calling ? "等待工具返回结果" : "没有记录结果"}

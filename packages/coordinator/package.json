@@ -5,6 +5,10 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
+    "./workflow-relocation": {
+      "import": "./src/workflow/path-relocation.ts",
+      "types": "./src/workflow/path-relocation.ts"
+    },
     ".": {
       "import": "./src/index.ts",
       "types": "./src/index.ts"

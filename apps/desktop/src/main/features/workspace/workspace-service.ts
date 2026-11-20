@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto"
 import { open, readdir, readFile, realpath, rename, stat, unlink } from "node:fs/promises"
-import { homedir } from "node:os"
+import { getDataRoot, resolveUserDataPaths, resolveManagedHistoryPath } from "@vykor/host-config/paths"
 import {
   basename,
   dirname,
@@ -34,7 +34,6 @@ import {
 } from "../../../shared/safe-image-preview"
 import { evaluateInspectedImagePreview } from "../image-preview/inspect-safe-image-layout"
 
-import { buildOutsideProjectRoot } from "../session/outside-project-workspace"
 import {
   classifyWorkspacePath,
   isPathInside,
@@ -60,10 +59,10 @@ export const maxImagePreviewBytes = 50 * 1024 * 1024
 const textDecoder = new TextDecoder("utf-8", { fatal: false })
 
 class WorkspaceService {
-  private allowedRoots: { configDir: string; documentsPath: string } | null = null
+  private allowedRoots: { configDir: string; workspacesDir: string } | null = null
   private savingPaths = new Set<string>()
 
-  configureAllowedRoots(input: { configDir: string; documentsPath: string }): void {
+  configureAllowedRoots(input: { configDir: string; workspacesDir: string }): void {
     this.allowedRoots = input
   }
 
@@ -251,7 +250,7 @@ class WorkspaceService {
   }
 
   async revealPath(input: WorkspaceRevealPathInput): Promise<void> {
-    const resolved = await this.resolveAllowedFile(input.rootPath, input.path)
+    const resolved = await this.resolveAllowedFile(input.rootPath, input.path, false, true)
     const info = await stat(resolved.absolutePath)
 
     if (info.isDirectory()) {
@@ -269,7 +268,7 @@ class WorkspaceService {
     const match = input.path.match(/^attachment:\/\/([^/]+)\//)
     if (!match) throw new Error("无效附件引用。")
     const assetId = decodeURIComponent(match[1]!)
-    const client = await desktopSessionService.daemonClient()
+    const client = await desktopSessionService.agentClient()
     const asset = await client.attachments.get(assetId)
     if (
       !documentFormat(asset.displayName) ||
@@ -326,27 +325,36 @@ class WorkspaceService {
   private async resolveAllowedFile(
     projectRoot: string,
     rawPath: string,
-    allowExternalRead = false
+    allowExternalRead = false,
+    allowExternalDirectory = false
   ): Promise<{ absolutePath: string; classification: WorkspacePathClassification }> {
     const rootPath = await resolveDirectory(projectRoot)
     const roots = this.rootsFor(rootPath)
-    const cleaned = stripLocationSuffix(rawPath).replace(/^\/(?=[a-z]:[\\/])/i, "")
+    const cleaned = await resolveManagedHistoryPath(stripLocationSuffix(rawPath).replace(/^\/(?=[a-z]:[\\/])/i, ""), roots.configDir)
     const pathApi = process.platform === "win32" ? win32 : posix
     const classification = classifyWorkspacePath(cleaned, roots, { win32, posix })
-    // 只扩大显式绝对文件路径的查看范围；写入、目录扫描和项目内链接仍走原边界。
+    // 只允许显式打开项目外文件或在文件管理器中打开目录；写入和目录扫描仍走原边界。
     if (
-      allowExternalRead &&
+      (allowExternalRead || allowExternalDirectory) &&
       isAbsolute(cleaned) &&
       classification?.kind !== "extra-root" &&
       !isPathInside(cleaned, rootPath, pathApi)
     ) {
       if (/^(?:\\\\|\/\/)/.test(cleaned) || isPathInside(cleaned, roots.configDir, pathApi))
         throw new Error("不支持预览该路径。")
-      const absolutePath = await realpath(cleaned).catch(() => undefined)
+      const absolutePath = await realpath(cleaned).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === "ENOENT") throw new Error("文件不存在。")
+        return undefined
+      })
       if (absolutePath) {
         const configPath = await realpath(roots.configDir).catch(() => resolve(roots.configDir))
         if (isPathInside(absolutePath, configPath, pathApi)) throw new Error("不支持预览该路径。")
-        if (!(await stat(absolutePath)).isFile()) throw new Error("只能预览文件。")
+        const info = await stat(absolutePath)
+        if (
+          !(allowExternalRead && info.isFile()) &&
+          !(allowExternalDirectory && info.isDirectory())
+        )
+          throw new Error(allowExternalRead ? "只能预览文件。" : "不支持打开该路径。")
         return {
           absolutePath,
           classification: {
@@ -368,7 +376,8 @@ class WorkspaceService {
     let absolutePath: string
     try {
       absolutePath = await realpath(candidate)
-    } catch {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new Error("文件不存在。")
       throw new Error("无法预览。")
     }
 
@@ -389,14 +398,15 @@ class WorkspaceService {
 
   private rootsFor(projectRoot: string): WorkspaceAllowedRoots {
     const configDir =
-      this.allowedRoots?.configDir ?? process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor")
-    const documentsPath = this.allowedRoots?.documentsPath ?? ""
+      this.allowedRoots?.configDir ?? getDataRoot()
+    const paths = resolveUserDataPaths(configDir)
     return {
       projectRoot,
       configDir,
       skillsDir: join(configDir, "skills"),
       userProfilePath: join(configDir, "USER.md"),
-      outsideProjectRoot: documentsPath ? buildOutsideProjectRoot(documentsPath) : "",
+      outsideProjectRoot: this.allowedRoots?.workspacesDir ?? paths.workspacesDir,
+      managedWorkspaceRoots: [paths.workspacesDir, paths.channelsDir],
     }
   }
 }

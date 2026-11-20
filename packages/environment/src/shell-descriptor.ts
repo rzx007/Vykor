@@ -37,7 +37,13 @@ export function shellArgv(shell: ShellDescriptor, command: string): string[] {
   const script = shell.dialect === "windows-powershell"
     ? `$utf8 = New-Object System.Text.UTF8Encoding($false); [Console]::InputEncoding = $utf8; [Console]::OutputEncoding = $utf8; $OutputEncoding = $utf8; $PSDefaultParameterValues['*:Encoding'] = 'utf8'; ${command}`
     : command;
-  return [shell.executable, ...shell.argsPrefix, script];
+  const startupArgs = shell.dialect === "pwsh"
+    ? shell.argsPrefix.filter(arg => !/^(?:-interactive|-i)$/i.test(arg))
+    : shell.argsPrefix;
+  const args = shell.family === "powershell" && !startupArgs.some(arg => /^-noni(?:nteractive)?$/i.test(arg))
+    ? ["-NonInteractive", ...startupArgs]
+    : startupArgs;
+  return [shell.executable, ...args, script];
 }
 
 export function shellResultMetadata(

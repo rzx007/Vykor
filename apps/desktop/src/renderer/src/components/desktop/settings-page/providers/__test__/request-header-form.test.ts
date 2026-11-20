@@ -4,11 +4,23 @@ import { headersFromRows, rowsFromHeaders } from "../request-header-form"
 
 describe("headersFromRows", () => {
   it("keeps secret values out of ordinary settings and emits explicit removals", () => {
-    expect(headersFromRows([
-      { key: "1", name: "X-Token", value: "new-secret", secret: true },
-      { key: "2", name: "X-Session", value: "{{sessionId}}" },
-    ], ["Old-Token"])).toEqual({ ok: true, headers: { "X-Session": "{{sessionId}}" }, secretHeaders: { "Old-Token": null, "X-Token": "new-secret" } })
-    expect(headersFromRows(rowsFromHeaders(undefined, ["X-Token"]), ["X-Token"])).toEqual({ ok: true, headers: {} })
+    expect(
+      headersFromRows(
+        [
+          { key: "1", name: "X-Token", value: "new-secret", secret: true },
+          { key: "2", name: "X-Session", value: "{{sessionId}}" },
+        ],
+        ["Old-Token"]
+      )
+    ).toEqual({
+      ok: true,
+      headers: { "X-Session": "{{sessionId}}" },
+      secretHeaders: { "Old-Token": null, "X-Token": "new-secret" },
+    })
+    expect(headersFromRows(rowsFromHeaders(undefined, ["X-Token"]), ["X-Token"])).toEqual({
+      ok: true,
+      headers: {},
+    })
   })
   it("preserves template text and reports incomplete rows", () => {
     expect(headersFromRows([{ key: "1", name: " X-Session ", value: " {{sessionId}} " }])).toEqual({
@@ -18,6 +30,8 @@ describe("headersFromRows", () => {
 
     expect(headersFromRows([{ key: "1", name: "X-Session", value: "" }])).toEqual({
       ok: false,
+      rowKey: "1",
+      field: "value",
       message: "请求头名称和值需要同时填写。",
     })
   })

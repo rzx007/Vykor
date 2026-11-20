@@ -1,4 +1,4 @@
-import { readSessionRuntimeConfig } from "@vykor/application-client"
+import { readSessionRuntimeConfig } from "@rzx/client"
 import type {
   DesktopBootstrapData,
   DesktopPermissionMode,
@@ -120,6 +120,14 @@ export function sessionPermissionMode(
   fallback: DesktopPermissionMode = "ask"
 ): DesktopPermissionMode {
   return sessionModes(session, fallback).approvalMode ?? fallback
+}
+
+export function latestSessionRecord(
+  stored: DesktopSessionRecord | undefined,
+  viewed: DesktopSessionRecord | undefined
+): DesktopSessionRecord | undefined {
+  // Equal timestamps keep immediate RPC feedback until the stream catches up.
+  return stored && (!viewed || stored.updatedAt >= viewed.updatedAt) ? stored : viewed
 }
 
 export function sessionWorkMode(session: DesktopSessionRecord): DesktopWorkMode {

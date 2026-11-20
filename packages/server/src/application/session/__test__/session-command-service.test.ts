@@ -128,6 +128,40 @@ describe("SessionCommandService", () => {
   });
 
   describe("updateSession", () => {
+    it("hot-switches all approval modes without replacing the active Run revision", async () => {
+      const { service, sessions } = createService({
+        hasWork: true, persistSession: true,
+        sessionRecord: { ...session, metadata: {
+          runtimeRevision: 7,
+          runtime: { model: "gpt-test", approvalMode: "ask", workMode: "execute" },
+        } } as any,
+      });
+      for (const approvalMode of ["auto_review", "full_access", "ask"] as const) {
+        const updated = await service.updateSession("s1", { metadata: { runtime: { approvalMode } } });
+        expect(updated.metadata).toMatchObject({ runtimeRevision: 7, runtime: { approvalMode, workMode: "execute" } });
+        expect(sessions.getSession("s1")?.metadata).toMatchObject({ runtime: { approvalMode } });
+      }
+    });
+
+    it("rejects an invalid approval mode before changing the session", async () => {
+      const { service, sessions } = createService({ persistSession: true });
+      await expect(service.updateSession("s1", { metadata: { runtime: { approvalMode: "anything" } } }))
+        .rejects.toMatchObject({ code: "invalid_request" });
+      expect(sessions.getSession("s1")?.metadata).toEqual({ runtime: { model: "gpt-test" } });
+    });
+
+    it("selects the first explicit approval mode during an active Run", async () => {
+      const { service } = createService({ hasWork: true });
+      await expect(service.updateSession("s1", { metadata: { runtime: { approvalMode: "full_access" } } }))
+        .resolves.toMatchObject({ metadata: { runtimeRevision: 0, runtime: { model: "gpt-test", approvalMode: "full_access" } } });
+    });
+
+    it("does not hot-switch work mode together with approval mode", async () => {
+      const { service } = createService({ hasWork: true });
+      await expect(service.updateSession("s1", { metadata: { runtime: { approvalMode: "full_access", workMode: "plan" } } }))
+        .rejects.toMatchObject({ status: 409 });
+    });
+
     it("rejects setting the retired reply style", async () => {
       const { service } = createService({ hasWork: true, persistSession: true });
       await expect(service.updateSession("s1", { metadata: { runtime: { replyStyle: "direct" } } })).rejects.toThrow(/Unknown runtime config/);

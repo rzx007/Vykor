@@ -48,7 +48,7 @@ export const LOCAL_READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
 const TOOL_PATH_NAMES = ["path", "filePath", "file_path"] as const;
 
 export interface PermissionCheckOptions {
-  mode: PermissionMode;
+  mode: PermissionMode | (() => PermissionMode);
   rules?: PermissionRule[];
   allowedTools?: string[];
   deniedTools?: string[];
@@ -66,7 +66,7 @@ export interface PermissionCheckOptions {
 }
 
 export class PermissionChecker {
-  private mode: PermissionMode;
+  private mode: PermissionCheckOptions["mode"];
   private rules: PermissionRule[];
   private allowedTools: Set<string>;
   private deniedTools: Set<string>;
@@ -80,8 +80,7 @@ export class PermissionChecker {
   private shellDialect: PermissionShellDialect | undefined;
 
   constructor(options: PermissionCheckOptions) {
-    this.mode = options.mode === "full_access" ? "full_auto"
-      : options.mode === "ask" || options.mode === "auto_review" ? "default" : options.mode;
+    this.mode = options.mode;
     this.rules = (options.rules ?? []).map((rule) => ({
       ...rule,
       ...(rule.tool ? { tool: canonicalToolName(rule.tool) } : {}),
@@ -115,11 +114,12 @@ export class PermissionChecker {
     inputSchema?: Record<string, unknown>,
     context?: ToolPermissionCheckContext,
   ): Promise<PermissionDecision> {
-    const decision = await this.checkToolPolicy(toolName, input, inputSchema);
+    const mode = this.getMode();
+    const decision = await this.checkToolPolicy(toolName, input, inputSchema, mode);
     // Apply the session's approval mode once, after all tool and command checks.
     // Full access never overrides a deny, including read-only planning limits.
     if (decision.action === "deny") return decision;
-    if (this.mode === "full_auto") return { action: "allow", reason: "Full auto mode" };
+    if (mode === "full_auto") return { action: "allow", reason: "Full auto mode" };
     if (context?.requireConfirmation) return { action: "ask", reason: "The concrete operation requires confirmation" };
     return decision;
   }
@@ -128,15 +128,16 @@ export class PermissionChecker {
     toolName: string,
     input: Record<string, unknown>,
     inputSchema?: Record<string, unknown>,
+    mode = this.getMode(),
   ): Promise<PermissionDecision> {
     toolName = canonicalToolName(toolName);
     if (!["Shell", "BackgroundShellCreate", "TerminalOpen"].includes(toolName) || typeof input.command !== "string") {
-      return this.checkSingleTool(toolName, input, inputSchema);
+      return this.checkSingleTool(toolName, input, inputSchema, mode);
     }
 
     // Preserve whole-request deny rules, but a whole-string allow must never
     // authorize commands following a separator.
-    const whole = await this.checkSingleTool(toolName, input, inputSchema);
+    const whole = await this.checkSingleTool(toolName, input, inputSchema, mode);
     if (whole.action === "deny") return whole;
     // A terminal can choose its own interpreter, including an input.shell
     // override. Do not reuse the foreground/background executor's identity.
@@ -144,10 +145,10 @@ export class PermissionChecker {
     if (toolName === "TerminalOpen" && input.shell !== undefined) analysis.complete = false;
     let result: PermissionDecision = { action: "allow", reason: "Every literal shell command is allowed" };
     for (const { source: command, denyCandidate } of analysis.commands) {
-      const decision = await this.checkSingleTool(toolName, { ...input, command }, inputSchema);
+      const decision = await this.checkSingleTool(toolName, { ...input, command }, inputSchema, mode);
       if (decision.action === "deny") return decision;
       if (denyCandidate !== command) {
-        const normalized = await this.checkSingleTool(toolName, { ...input, command: denyCandidate }, inputSchema);
+        const normalized = await this.checkSingleTool(toolName, { ...input, command: denyCandidate }, inputSchema, mode);
         if (normalized.action === "deny") return normalized;
       }
       if (decision.action === "ask") result = decision;
@@ -161,6 +162,7 @@ export class PermissionChecker {
     toolName: string,
     input: Record<string, unknown>,
     inputSchema?: Record<string, unknown>,
+    mode = this.getMode(),
   ): Promise<PermissionDecision> {
     toolName = canonicalToolName(toolName);
     const pathNames = TOOL_PATH_NAMES.filter(name => Object.hasOwn(input, name));
@@ -181,7 +183,7 @@ export class PermissionChecker {
 
     // Plan is a read-only ceiling, including against ordinary explicit allow rules.
     const modeControl = toolName === "EnterPlanMode" || toolName === "ExitPlanMode";
-    if (this.mode === "plan" && (
+    if (mode === "plan" && (
       (!READ_ONLY_TOOLS.has(toolName) && !modeControl) ||
       this.untrustedToolNames.has(toolName) ||
       (this.trustedLocalReadOnlyToolNames && !this.trustedLocalReadOnlyToolNames.has(toolName))
@@ -267,7 +269,7 @@ export class PermissionChecker {
       };
     }
 
-    if (this.mode === "plan") {
+    if (mode === "plan") {
       if (modeControl) return { action: "allow", reason: "Runtime-scoped mode control" };
       return { action: "ask", reason: "Plan mode requires confirmation" };
     }
@@ -293,7 +295,9 @@ export class PermissionChecker {
   }
 
   getMode(): PermissionMode {
-    return this.mode;
+    const mode = typeof this.mode === "function" ? this.mode() : this.mode;
+    return mode === "full_access" ? "full_auto"
+      : mode === "ask" || mode === "auto_review" ? "default" : mode;
   }
 }
 

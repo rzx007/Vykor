@@ -1,7 +1,6 @@
 import { SessionFileError } from "@vykor/domain-contracts/files";
 import { SessionFileService } from "./files/session-file-service.js";
 import { bindToolDispatchCheck } from "./session/execution/tool-dispatch-check.js";
-import { createNoteApplicationService, type NoteApplicationService } from "./notes/note-application-service.js";
 import { createProjectFactsService, type ProjectFactsService } from "./personalization/project-facts-service.js";
 import { createMaintenanceApplicationService, type MaintenanceApplicationContext } from "./maintenance/maintenance-application-service.js";
 import { ToolResultService } from "./session/execution/tool-result-service.js";
@@ -161,11 +160,16 @@ export interface DaemonApplicationOptions {
   getSettings?: () => Settings;
   getSettingsForCwd?: (cwd: string) => Promise<Settings>;
   executionSurface?: "desktop_managed" | "cli_advanced";
-  /** Root used for scheduled conversations that intentionally run outside a project. */
+  deferBackgroundActivation?: boolean;
+  /** Root for projectless schedules; embedded channels use its channels/ subdirectory unless overridden. */
   outsideProjectWorkspaceRoot?: string;
+  /** Complete channel workspace root. Product hosts pass the selected data root's channels directory. */
+  channelsWorkspaceRoot?: string;
   createAgent?: CreateDaemonAgent;
-  /** Browser control is supplied by an embedding desktop host; the server builds the agent tool. */
+  /** Browser control supplied by the configured host. */
   browserHost?: BrowserHost;
+  /** Enable BrowserDeveloper when the configured host implements developer inspection. */
+  enableBrowserDeveloper?: boolean;
   /** 提供后 daemon 才构造渠道运行时与接入服务；未提供时渠道路由返回 503。 */
   channelConfigStore?: ChannelConfigStore;
   terminalProviderForSession?(session: SessionRecord): TerminalProvider;
@@ -189,7 +193,6 @@ export interface DurableAgentApplication {
   readonly pluginApps?: ReturnType<typeof assemblePluginApps>;
   readonly pluginAppConversation?: PluginAppConversationService;
   readonly store: SessionStore;
-  readonly notes: NoteApplicationService;
   readonly facts: ProjectFactsService;
   readonly attachments: AttachmentService;
   readonly interactions: SessionInteractionService;
@@ -219,6 +222,7 @@ export interface DurableAgentApplication {
   /** Bounded, in-memory OAuth login operations owned by this daemon instance. */
   readonly mcpOAuthOperations: McpOAuthOperationService;
   ready(): Promise<void>;
+  activateBackgroundWork?(): void | Promise<void>;
   close(): Promise<void>;
 }
 
@@ -242,7 +246,6 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly pluginApps: ReturnType<typeof assemblePluginApps>;
   readonly pluginAppConversation: PluginAppConversationService;
   readonly store: SessionStore;
-  readonly notes: NoteApplicationService;
   readonly facts: ProjectFactsService;
   readonly attachments: AttachmentService;
   readonly permissions: StorePermissionBroker;
@@ -282,7 +285,9 @@ export class DaemonApplication implements DurableAgentApplication {
   readonly runAdmission: RunAdmissionService;
   readonly runControl: RunControlService;
   private readonly localOcr: LocalOcrService;
-  private readonly startupRecovery: Promise<void>;
+  private startupRecovery: Promise<void>;
+  private deferredRecovery?: () => Promise<void>;
+  private backgroundActivation?: Promise<void>;
   createMaintenanceService(host: Pick<MaintenanceApplicationContext, "logs" | "settings"> & { beforeClose?(): void } = {}) {
     return createMaintenanceApplicationService({ store: this.store, control: this.control, commands: this.commands, terminals: this.terminals, ...host, readiness: () => this.diagnosticState, closeApplication: () => { host.beforeClose?.(); return this.close(); } });
   }
@@ -298,7 +303,6 @@ export class DaemonApplication implements DurableAgentApplication {
     this.store = store;
     const executionOwner = options.executionOwner ?? new ExecutionRuntimeOwner();
     this.executionOwner = executionOwner;
-    this.notes = createNoteApplicationService({ notes: store.notes, readiness: () => this.diagnosticState });
     this.mcpRuntimes = new McpRuntimeConnectionCoordinator();
     this.mcpOAuth = new McpOAuthApplicationService({ coordinator: this.mcpRuntimes });
     this.mcpOAuthOperations = new McpOAuthOperationService({ application: this.mcpOAuth });
@@ -332,6 +336,7 @@ export class DaemonApplication implements DurableAgentApplication {
         attachmentRoot: options.attachmentRoot,
         attachmentLimits: options.attachmentLimits,
         attachments: options.attachments,
+        deferActivation: options.deferBackgroundActivation,
       });
       this.attachments = attachmentServices.attachments;
       this.attachmentResources = attachmentServices.resources;
@@ -541,6 +546,8 @@ export class DaemonApplication implements DurableAgentApplication {
         accepting: () => this.readyState === "ready" && this.operationGate.accepting });
       const toolResults = new ToolResultService({ store, ownerLease: () => this.ownerLease,
         accepting: () => this.readyState === "ready" && this.operationGate.accepting });
+      const browserHost = options.browserHost;
+      const enableBrowserDeveloper = options.enableBrowserDeveloper === true && Boolean(browserHost?.executeDeveloper);
       const loadAgent = createDaemonAgentLoader({
         readAttachment: async (uri, context) => {
           const authorizationSessionId = context.sessionId
@@ -601,7 +608,7 @@ export class DaemonApplication implements DurableAgentApplication {
               : []),
             imageToTextTool,
             imageGenerationTool,
-            createBrowserTool(options.browserHost, async ({ bytes }) => {
+            ...(browserHost ? [createBrowserTool(browserHost, async ({ bytes }) => {
               const asset = await this.attachments.import({
                 displayName: `browser-${randomUUID()}.png`,
                 declaredMediaType: "image/png",
@@ -613,8 +620,8 @@ export class DaemonApplication implements DurableAgentApplication {
                 }),
               })
               return (await this.attachments.resolveReadyContentPath(asset.id)).path
-            }, () => this.modelCatalog.load()),
-            createBrowserDeveloperTool(options.browserHost),
+            }, () => this.modelCatalog.load())] : []),
+            ...(enableBrowserDeveloper ? [createBrowserDeveloperTool(browserHost)] : []),
           ]
         },
         toolDecorators: [{ name: "Read", decorate: base => {
@@ -1077,6 +1084,7 @@ export class DaemonApplication implements DurableAgentApplication {
           getSettings: options.getSettings,
           settings: options.settings,
           outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot,
+          channelsWorkspaceRoot: options.channelsWorkspaceRoot,
           log: options.log,
         });
         this.channelRuntime = channelServices.runtime;
@@ -1101,6 +1109,7 @@ export class DaemonApplication implements DurableAgentApplication {
       });
       this.schedules = new ScheduledTaskService({
         schedules: store.schedules,
+        deferStart: options.deferBackgroundActivation ?? false,
         latestEventSeq: () => store.conversations.latestEventSeq(),
         onDurableEvent: (previousEventSeq) => this.eventPublisher.publishSince(previousEventSeq),
         execute: (task, run, onSessionReady) => scheduledExecutor.execute(task, run, onSessionReady),
@@ -1128,7 +1137,7 @@ export class DaemonApplication implements DurableAgentApplication {
         recoverGoalWaits: () => { this.goals.recoverExternalWaits(); },
         recoverWorkflows: () => recoverInterruptedWorkflows({ workflowHost: this.workflowHost }),
       });
-      this.startupRecovery = recovery.run()
+      const runRecovery = () => recovery.run()
         .then(
           () => {
             if (this.readyState === "starting") this.readyState = "ready";
@@ -1141,6 +1150,9 @@ export class DaemonApplication implements DurableAgentApplication {
             throw error;
           },
         );
+      this.deferredRecovery = options.deferBackgroundActivation ? runRecovery : undefined;
+      this.startupRecovery = options.deferBackgroundActivation ? Promise.resolve() : runRecovery();
+      if (options.deferBackgroundActivation) this.readyState = "ready";
       void this.startupRecovery.catch(() => {});
     } catch (error) {
       createdAgentPool?.stopIdleEviction();
@@ -1157,8 +1169,23 @@ export class DaemonApplication implements DurableAgentApplication {
 
   async ready(): Promise<void> {
     await this.startupRecovery;
-    // 后台自动连接 enabled 渠道：不阻塞 listen，也不 reject。
-    void this.channelRuntime?.startEnabled();
+    if (!this.options.deferBackgroundActivation) await this.activateBackgroundWork();
+  }
+
+  activateBackgroundWork(): Promise<void> {
+    if (this.backgroundActivation) return this.backgroundActivation;
+    if (this.readyState !== "ready") return Promise.resolve();
+    this.backgroundActivation = (async () => {
+      this.attachmentResources.activate();
+      if (this.deferredRecovery) {
+        const recover = this.deferredRecovery; this.deferredRecovery = undefined;
+        this.startupRecovery = recover(); await this.startupRecovery;
+      }
+      if (this.readyState !== "ready") return;
+      this.schedules.start();
+      void this.channelRuntime?.startEnabled();
+    })();
+    return this.backgroundActivation;
   }
 
   close(): Promise<void> {
@@ -1230,7 +1257,7 @@ export class DaemonApplication implements DurableAgentApplication {
       failures.push(error);
     }
     try {
-      const settlementRecovery = recoverProjectionSettlements(this.options.store);
+      const settlementRecovery = this.deferredRecovery ? { pending: 0 } : recoverProjectionSettlements(this.options.store);
       if (settlementRecovery.pending > 0) {
         throw new Error(
           `Daemon shutdown left ${settlementRecovery.pending} projection settlement(s) pending`,

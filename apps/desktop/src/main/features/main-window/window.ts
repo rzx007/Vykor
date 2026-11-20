@@ -1,3 +1,5 @@
+import { trackBusinessDataWindow, requestWindowBusinessDataFlush } from "../business-data/window-flush"
+import { desktopNoteService } from "../notes/note-service"
 import { app, BrowserWindow, nativeTheme, shell, type WebPreferences } from "electron"
 import { release } from "node:os"
 import { join } from "node:path"
@@ -189,11 +191,13 @@ export function showMainWindow(win: BrowserWindow): void {
 }
 
 function attachMainWindowBehavior(ctx: AppContext, win: BrowserWindow): void {
+  trackBusinessDataWindow(win.webContents)
+  let closing: Promise<void> | null = null
   attachWebviewPolicy(win)
   browserAgentService.setOpenTabRequestHandler(() => {
     showMainWindow(win)
     win.webContents.send(IpcEvents.browserOpenRequest)
-  })
+  }, win.webContents.id)
   win.once("closed", () => browserAgentService.setOpenTabRequestHandler(undefined))
   const clearUnreadAttention = (): void => clearAttention(() => win)
 
@@ -205,8 +209,10 @@ function attachMainWindowBehavior(ctx: AppContext, win: BrowserWindow): void {
     if (isForceQuit()) return
 
     event.preventDefault()
-    win.hide()
-    showPetWindow(ctx)
+    closing ??= requestWindowBusinessDataFlush(win.webContents).then(() => desktopNoteService.flush()).then(() => {
+      win.hide()
+      showPetWindow(ctx)
+    }).catch(() => { win.show() }).finally(() => { closing = null })
   })
 
   win.on("minimize", () => {

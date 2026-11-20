@@ -17,7 +17,7 @@ beforeEach(() => {
   localStorage.clear()
 })
 
-it("keeps browser comments with their composer when a new conversation becomes a session", () => {
+it("keeps browser comments with their composer when a new conversation becomes a session", async () => {
   const actions = useDesktopSessionStore.getState()
   actions.putBrowserAnnotation("new-conversation", record)
   actions.updateBrowserAnnotationComment("new-conversation", record.id, "增大按钮间距")
@@ -30,7 +30,7 @@ it("keeps browser comments with their composer when a new conversation becomes a
     .toBeUndefined()
 })
 
-it("removes individual or all pending browser comments without clearing the text", () => {
+it("removes individual or all pending browser comments without clearing the text", async () => {
   const actions = useDesktopSessionStore.getState()
   actions.setComposerDraftText("session:a", "正文")
   actions.putBrowserAnnotation("session:a", record)
@@ -43,13 +43,13 @@ it("removes individual or all pending browser comments without clearing the text
     .toMatchObject({ document: composerDocument([{ type: "text", text: "正文" }]), browserAnnotations: [] })
 })
 
-it("recovers browser comments even when the composer has no text or files", () => {
-  saveComposerRecovery({
+it("recovers browser comments even when the composer has no text or files", async () => {
+  await saveComposerRecovery({
     composerDraftsByScope: {
       "session:a": { document: composerDocument([]), attachments: [], browserAnnotations: [record] },
     },
     sessionRuntimes: {},
   })
-  expect(readComposerRecovery().composerDraftsByScope["session:a"]?.browserAnnotations)
+  expect((await readComposerRecovery()).composerDraftsByScope["session:a"]?.browserAnnotations)
     .toEqual([record])
 })

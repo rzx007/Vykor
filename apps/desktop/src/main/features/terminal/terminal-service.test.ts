@@ -5,15 +5,18 @@ import type { WebContents } from "electron"
 const state = vi.hoisted(() => ({ invalidated: undefined as (() => void) | undefined, streams: [] as Array<{ signal: AbortSignal; finish: () => void; emit: (value: unknown) => void }> }))
 vi.mock("../session/session-service", () => ({ desktopSessionService: {
   onDaemonInvalidated: (callback: () => void) => { state.invalidated = callback; return () => {} },
-  daemonClient: async () => ({ terminals: {
-    list: async () => [],
-    streamEvents: ({ signal }: { signal: AbortSignal }) => ({ [Symbol.asyncIterator]() {
+  daemonTransport: async () => ({}),
+} }))
+vi.mock("./terminal-resource", () => ({ TerminalResource: class {
+  async list() { return [] }
+  subscribeEvents({ signal }: { signal: AbortSignal }) {
+    return { [Symbol.asyncIterator]() {
       let complete = false
       let pending: ((value: IteratorResult<unknown>) => void) | undefined
       state.streams.push({ signal, finish: () => { complete = true; pending?.({ done: true, value: undefined }) }, emit: value => pending?.({ done: false, value }) })
       return { next: () => complete ? Promise.resolve({ done: true, value: undefined }) : new Promise<IteratorResult<unknown>>(resolve => { pending = resolve }) }
-    } }),
-  } }),
+    } }
+  }
 } }))
 vi.mock("../settings/desktop-preferences", () => ({ getDesktopPreferences: () => ({}) }))
 vi.mock("../settings/runtime-settings-service", () => ({ desktopRuntimeSettingsService: {} }))

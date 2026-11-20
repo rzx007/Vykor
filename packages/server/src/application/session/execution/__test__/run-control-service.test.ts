@@ -5,6 +5,11 @@ import {
   type RunControlServiceOptions,
 } from "../run-control-service.js";
 
+async function promoteQueuedRun(service: RunControlService, ...args: Parameters<RunControlService["prepareQueuedRunPromotion"]>) {
+  const result = await service.prepareQueuedRunPromotion(...args);
+  return result && ("completion" in result ? result.completion : result);
+}
+
 function createMockControlOptions() {
   const sessions = new Map<string, any>();
   const runs = new Map<string, SessionRunRecord>();
@@ -110,6 +115,27 @@ function createMockControlOptions() {
 }
 
 describe("RunControlService", () => {
+  it.each(["session", "active", "queued"] as const)("retains recoverable promotion state only when stopping the target from %s", (scope) => {
+    const { options, runs, activeRuns, queuedRuns, inputs } = createMockControlOptions();
+    const promotion = { kind: "steering", queuedRunId: "r-q", inputId: "i-q", activeRunId: "r-active" };
+    runs.set("r-active", { id: "r-active", sessionId: "s1", status: "running", metadata: {}, createdAt: 1, updatedAt: 1 });
+    runs.set("r-q", { id: "r-q", sessionId: "s1", inputId: "i-q", status: "pending", metadata: { promotion }, createdAt: 2, updatedAt: 2 });
+    activeRuns.set("s1", "r-active");
+    queuedRuns.set("s1", ["r-q"]);
+    inputs.set("i-q", { id: "i-q", sessionId: "s1", seq: 1, content: "keep my follow-up", delivery: "queue", items: [{ type: "text", text: "keep my follow-up" }], attachments: [], metadata: {}, createdAt: 2 });
+    const service = new RunControlService(options);
+    if (scope === "session") service.interruptSession("s1");
+    else if (scope === "active") {
+      vi.mocked(options.runtime.interruptRun).mockReturnValueOnce({ activeRunId: "r-active", queuedRunIds: ["r-q"], interrupted: true });
+      service.interruptRun("s1", "r-active");
+    } else service.interruptQueuedRun("s1", "r-q");
+
+    expect(runs.get("r-q")).toMatchObject({ status: "interrupted", metadata: {
+      promotion: { ...promotion, kind: scope === "queued" ? "steering" : "failed" },
+    } });
+    expect(inputs.get("i-q")?.content).toBe("keep my follow-up");
+  });
+
   it.each(["session", "run"] as const)("still interrupts the %s when saving the Goal pause fails", (scope) => {
     const { options, runs, activeRuns } = createMockControlOptions();
     activeRuns.set("s1", "r1");
@@ -287,7 +313,7 @@ describe("RunControlService", () => {
     expect(markGoalContinuation).toHaveBeenCalledWith("gr1", "cancelled");
   });
 
-  it("promotes queued prompt into active run and updates metadata", async () => {
+  it("reserves the promoted Run until the runtime reports it applied", async () => {
     const { options, sessions, runs, inputs, activeRuns, queuedRuns } = createMockControlOptions();
     sessions.set("s1", { id: "s1", cwd: "/project", status: "open" });
     inputs.set("inp-1", {
@@ -320,14 +346,13 @@ describe("RunControlService", () => {
     queuedRuns.set("s1", ["r-q1"]);
 
     const service = new RunControlService(options);
-    const promoted = await service.promoteQueuedRun("s1", "inp-1", "r-q1", "r-act");
+    const promoted = await promoteQueuedRun(service, "s1", "inp-1", "r-q1", "r-act");
 
     expect(promoted).toBeDefined();
-    expect(promoted?.queued_run.status).toBe("interrupted");
-    expect(options.durableRuns.updateRun).toHaveBeenCalledWith("r-q1", expect.objectContaining({
-      status: "interrupted",
-      error: "Queued prompt was promoted into the active run",
-    }));
+    expect(promoted?.queued_run.status).toBe("pending");
+    expect(options.durableRuns.updateRun).toHaveBeenCalledWith("r-q1", {
+      metadata: { promotion: { kind: "steering", queuedRunId: "r-q1", inputId: "inp-1", activeRunId: "r-act" } },
+    });
   });
 
   it("rejects attachment promotion directly without touching runtime", async () => {
@@ -338,7 +363,7 @@ describe("RunControlService", () => {
     runs.set("r-act", { id: "r-act", sessionId: "s1", status: "running", metadata: {}, createdAt: 1, updatedAt: 1 });
     activeRuns.set("s1", "r-act"); queuedRuns.set("s1", ["r-q1"]);
 
-    await expect(new RunControlService(options).promoteQueuedRun("s1", "inp-1", "r-q1", "r-act"))
+    await expect(promoteQueuedRun(new RunControlService(options), "s1", "inp-1", "r-q1", "r-act"))
       .rejects.toThrow("attachment_structured_steer_unsupported");
     expect(options.runtime.promoteQueuedRun).not.toHaveBeenCalled();
   });
@@ -350,7 +375,7 @@ describe("RunControlService", () => {
     runs.set("r-q1", { id: "r-q1", sessionId: "s1", inputId: "inp-1", status: "pending", metadata: { pluginId: "P" }, createdAt: 1, updatedAt: 1 });
     runs.set("r-act", { id: "r-act", sessionId: "s1", status: "running", metadata: { pluginId: activePluginId }, createdAt: 1, updatedAt: 1 });
     activeRuns.set("s1", "r-act"); queuedRuns.set("s1", ["r-q1"]);
-    const result = new RunControlService(options).promoteQueuedRun("s1", "inp-1", "r-q1", "r-act");
+    const result = promoteQueuedRun(new RunControlService(options), "s1", "inp-1", "r-q1", "r-act");
     if (activePluginId === "P") {
       await expect(result).resolves.toMatchObject({ active_run: { id: "r-act" } });
       expect(options.runtime.promoteQueuedRun).toHaveBeenCalledOnce();
@@ -378,7 +403,7 @@ describe("RunControlService", () => {
     runs.set("r-act", { id: "r-act", sessionId: "s1", status: "running", metadata: { pluginId: "P",
       pluginSelection: { status: "resolved", source: scenario.source ?? "auto", pluginId: "P" } }, createdAt: 1, updatedAt: 1 });
     activeRuns.set("s1", "r-act"); queuedRuns.set("s1", ["r-q1"]);
-    const result = new RunControlService(options).promoteQueuedRun("s1", "inp-1", "r-q1", "r-act");
+    const result = promoteQueuedRun(new RunControlService(options), "s1", "inp-1", "r-q1", "r-act");
     if (scenario.allowed) {
       await expect(result).resolves.toMatchObject({ active_run: { id: "r-act", metadata: { pluginId: "P" } } });
       expect(options.runtime.promoteQueuedRun).toHaveBeenCalledOnce();
@@ -403,7 +428,7 @@ describe("RunControlService", () => {
     runs.set("r-q1", { id: "r-q1", sessionId: "s1", inputId: "inp-1", status: "pending", metadata: {}, createdAt: 1, updatedAt: 1 });
     runs.set("r-act", { id: "r-act", sessionId: "s1", inputId: "inp-active", status: "pending", metadata: {}, createdAt: 1, updatedAt: 1 });
     activeRuns.set("s1", "r-act"); queuedRuns.set("s1", ["r-q1"]);
-    const result = new RunControlService(options).promoteQueuedRun("s1", "inp-1", "r-q1", "r-act");
+    const result = promoteQueuedRun(new RunControlService(options), "s1", "inp-1", "r-q1", "r-act");
     if (sameScope) await expect(result).resolves.toMatchObject({ active_run: { id: "r-act" } });
     else await expect(result).rejects.toThrow("session_capability_requires_queued_run");
   });
@@ -431,7 +456,7 @@ describe("RunControlService", () => {
       pluginIds: scenario.activeIds ?? ["P", "Q"], candidates: candidates(scenario.activeIds ?? ["P", "Q"]),
     } }, createdAt: 1, updatedAt: 1 });
     activeRuns.set("s1", "r-act"); queuedRuns.set("s1", ["r-q1"]);
-    const result = new RunControlService(options).promoteQueuedRun("s1", "inp-1", "r-q1", "r-act");
+    const result = promoteQueuedRun(new RunControlService(options), "s1", "inp-1", "r-q1", "r-act");
     if (scenario.allowed) await expect(result).resolves.toMatchObject({ active_run: { id: "r-act" } });
     else await expect(result).rejects.toThrow("session_capability_requires_queued_run");
   });
@@ -442,7 +467,7 @@ describe("RunControlService", () => {
     runs.set("r-act", { id: "r-act", sessionId: "s1", status: "completed", metadata: {}, createdAt: 1, updatedAt: 1 });
     runs.set("r-q1", { id: "r-q1", sessionId: "s1", inputId: "inp-1", status: "interrupted", metadata: { promotion: { kind: "steered", inputId: "inp-1", activeRunId: "r-act" } }, createdAt: 1, updatedAt: 1 });
 
-    await expect(new RunControlService(options).promoteQueuedRun("s1", "inp-1", "r-q1", "r-act"))
+    await expect(promoteQueuedRun(new RunControlService(options), "s1", "inp-1", "r-q1", "r-act"))
       .resolves.toEqual({ input: inputs.get("inp-1"), queued_run: runs.get("r-q1"), active_run: runs.get("r-act") });
     expect(options.runtime.promoteQueuedRun).not.toHaveBeenCalled();
   });
@@ -510,7 +535,7 @@ describe("RunControlService", () => {
     queuedRuns.set("s1", ["r-q1"]);
 
     const service = new RunControlService(options);
-    await expect(service.promoteQueuedRun("s1", "inp-1", "r-q1", "r-act")).rejects.toThrow();
+    await expect(promoteQueuedRun(service, "s1", "inp-1", "r-q1", "r-act")).rejects.toThrow();
 
     expect(options.runtime.promoteQueuedRun).not.toHaveBeenCalled();
     expect(options.durableRuns.updateRun).not.toHaveBeenCalled();
@@ -570,7 +595,7 @@ describe("RunControlService", () => {
     const service = new RunControlService(options);
     await service.stopAndDrain();
 
-    await expect(service.promoteQueuedRun("s1", "i1", "q1", "a1")).rejects.toThrow("stopping");
+    await expect(promoteQueuedRun(service, "s1", "i1", "q1", "a1")).rejects.toThrow("stopping");
     expect(options.runtime.promoteQueuedRun).not.toHaveBeenCalled();
   });
 

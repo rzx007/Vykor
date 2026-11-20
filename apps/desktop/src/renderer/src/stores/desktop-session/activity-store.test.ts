@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createActivityState } from "./activity-state"
 import { useDesktopSessionStore } from "./store"
@@ -21,7 +22,7 @@ describe("Desktop Activity store", () => {
     })
     vi.stubGlobal("Audio", audio)
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         settings: {
           snapshot: async () => ({
             notificationMode: "never",
@@ -67,7 +68,7 @@ describe("Desktop Activity store", () => {
       const notify = vi.fn(async () => undefined)
       vi.stubGlobal("Audio", audio)
       vi.stubGlobal("window", {
-        desktop: {
+        desktop: { businessData: businessDataFixture,
           settings: { snapshot: async () => ({ notificationMode: "never" }) },
           tray: { notify },
         },
@@ -117,7 +118,7 @@ describe("Desktop Activity store", () => {
     )
     const notify = vi.fn(async () => undefined)
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         settings: {
           snapshot: async () => ({
             notificationMode: "always",
@@ -161,7 +162,7 @@ describe("Desktop Activity store", () => {
     async (notificationMode) => {
       const notify = vi.fn(async () => undefined)
       vi.stubGlobal("window", {
-        desktop: {
+        desktop: { businessData: businessDataFixture,
           settings: { snapshot: async () => ({ notificationMode }) },
           tray: { notify },
         },

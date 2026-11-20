@@ -18,6 +18,10 @@ import { MAX_NOTE_CONTENT_LENGTH } from "@vykor/domain-contracts/notes";
 
 export function ensureNoteDirectory(directory: string): void {
   mkdirSync(directory, { recursive: true });
+  assertNoteDirectory(directory);
+}
+
+export function assertNoteDirectory(directory: string): void {
   const stat = lstatSync(directory);
   if (!stat.isDirectory() || stat.isSymbolicLink())
     throw new Error("便签存储目录不是普通目录。");
@@ -35,7 +39,7 @@ export function noteFilePath(directory: string, id: string): string {
 
 /** Check Markdown identities without reading bodies or updating their index. */
 export function scanNoteIds(directory: string): string[] {
-  ensureNoteDirectory(directory);
+  assertNoteDirectory(directory);
   const ids: string[] = [];
   for (const name of readdirSync(directory)) {
     if (!name.endsWith(".md")) continue;
@@ -53,6 +57,10 @@ export function scanNoteIds(directory: string): string[] {
     ids.push(id);
   }
   return ids;
+}
+
+export function noteOrganizationFileNames(directory: string): string[] {
+  return readdirSync(directory).filter(name => name === "organization.json" || name === "organization.previous.json" || /^organization\.corrupt-[\w-]+\.json$/.test(name)).sort();
 }
 
 export function readNoteFile(

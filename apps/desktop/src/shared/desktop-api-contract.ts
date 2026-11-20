@@ -1,3 +1,4 @@
+import type { DesktopBusinessDataApi } from "./business-data-types"
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
 import type { DesktopWindowThemeSource } from "./window-theme-types"
 import type { TerminalSettingsAPI } from "./terminal-settings-types"
@@ -143,6 +144,8 @@ import type {
   DesktopSkillRemoveInput,
   DesktopSkillSnapshot,
   DesktopSkillSnapshotInput,
+  DesktopSkillMarketplaceCatalog,
+  DesktopSkillMarketplaceInstallInput,
 } from "./skill-types"
 import type {
   DesktopSettingsSnapshot,
@@ -174,7 +177,7 @@ import type {
   AttachmentStorageGcResult,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-} from "@vykor/application-client"
+} from "@shared/attachment-types"
 import type { DesktopUpdateState } from "./update-types"
 import type {
   DesktopMcpAddInput,
@@ -190,7 +193,7 @@ import type {
   DesktopMcpSnapshot,
   DesktopMcpUpdateInput,
 } from "./mcp-types"
-import type { ChannelRuntimeStatus, FeishuChannelSnapshot } from "@vykor/application-client"
+import type { ChannelRuntimeStatus, FeishuChannelSnapshot } from "@vykor/protocol"
 import type {
   DesktopConnectionsSnapshot,
   DesktopFeishuAllowInput,
@@ -206,6 +209,8 @@ import type {
 } from "./window-material-types"
 
 export type DesktopAPI = {
+  dataRootMaintenance?: boolean
+  businessData: DesktopBusinessDataApi
   workflows: import("./workflow-types").DesktopWorkflowAPI
   terminalSettings: TerminalSettingsAPI
   gitSettings: GitSettingsAPI
@@ -482,6 +487,8 @@ export type DesktopAPI = {
   skills: {
     snapshot: (input: DesktopSkillSnapshotInput) => Promise<DesktopSkillSnapshot>
     remove: (input: DesktopSkillRemoveInput) => Promise<DesktopSkillSnapshot>
+    marketplace: () => Promise<DesktopSkillMarketplaceCatalog>
+    installMarketplace: (input: DesktopSkillMarketplaceInstallInput) => Promise<DesktopSkillSnapshot>
   }
   sessions: {
     readAgentActivity: (input: import("./session-types").ReadDesktopAgentActivityInput) => Promise<import("./session-types").DesktopAgentActivity | null>

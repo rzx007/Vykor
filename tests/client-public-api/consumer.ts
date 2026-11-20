@@ -63,6 +63,7 @@ export async function consumePublicApi(client: VykorClient, signal: AbortSignal)
   const decision: ReplyPermissionInput = { status: "denied" };
   await client.permissions.list({ sessionId: session.id, signal });
   await client.permissions.reply("permission", decision, { signal });
+  await client.permissions.reply("question", { status: "approved", decision: "once", answer: "继续" }, { signal });
   const jobs = await client.jobs.list({ sessionId: session.id, signal });
   const target = { kind: "agent" as const, jobId: "child", runId: "exact-run" };
   await client.jobs.read(target, { sessionId: session.id, signal });

@@ -6,6 +6,8 @@
 
 `createDefaultNodeApplication()` 组装默认配置与本机能力；`DaemonApplication` 创建各项服务，处理启动与关闭。`settings-api.ts` 定义可注入的服务接口，`support.ts` 保存共用的运行快照和辅助函数。
 
+默认组装在创建数据库前检查根内旧选库记录，以及适用的旧 Desktop 选库记录。旧记录指向其他位置时要求先执行 `data-root migrate`，普通 `serve`、非本机监听和 HTTP 默认入口都不能另建空库；明确传入的 `store` 或 `storePath` 仍由嵌入调用方负责。
+
 ## 状态归属
 
 应用持有服务实例与资源生命周期；持久记录通过 services 提供的接口访问，各业务目录保存自己的临时协调状态。
@@ -42,7 +44,6 @@
 | [goals/](./goals/README.md) | 为 Agent 提供目标读取、修改、策略和每次运行的目标上下文。 |
 | [maintenance/](./maintenance/README.md) | 统一处理存储扫描、清理策略、用量报表及维护准备。 |
 | [mcp/](./mcp/README.md) | 管理外部工具服务的配置、OAuth 登录和运行连接同步。 |
-| [notes/](./notes/README.md) | 提供笔记查询、保存和删除的应用入口。 |
 | [observability/](./observability/README.md) | 汇总会话运行与工作流执行信息，供状态页和诊断接口查询。 |
 | [personalization/](./personalization/README.md) | 提供记忆配置、规则查看和项目事实维护。 |
 | [plugins/](./plugins/README.md) | 把插件安装操作接入当前应用，并在需要时请求安装确认。 |

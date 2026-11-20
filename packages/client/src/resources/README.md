@@ -11,4 +11,4 @@
 
 资源负责将动作映射到 HTTP 请求；协议握手与事件连接由 transport 完成。会话及运行事实保存在 daemon，同步视图交由 state 模块维护。
 
-插件、笔记、渠道、调度、项目和全局管理资源位于 [私有应用客户端](../../../application-client/README.md)。新增生命周期动作放对应分类，业务管理动作放私有包；测试放被测分类的 `__test__/`。
+新增生命周期动作放对应分类，测试放被测分类的 `__test__/`。共享的后台管理请求按职责放在 `@vykor/daemon-admin`，Desktop 独有的功能放在各自的主进程模块。 [管理入口](../../../daemon-admin/README.md) · [产品接入](../../../../docs/product-surface-integration.md)

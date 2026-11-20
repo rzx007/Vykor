@@ -387,7 +387,7 @@ async function loadFromFile(): Promise<Partial<Settings> | null> {
   return loadSettingsFile(configPath);
 }
 
-async function loadSettingsFile(configPath: string): Promise<Partial<Settings> | null> {
+export async function loadSettingsFile(configPath: string): Promise<Partial<Settings> | null> {
   try {
     const raw = await readFile(configPath, "utf-8");
     const parsed = JSON.parse(raw) as unknown;

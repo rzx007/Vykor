@@ -1,3 +1,4 @@
+import { businessDataFixture, resetBusinessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 import type { DesktopBootstrapData, DesktopSessionView } from "@shared/session-types"
 import { vi } from "vitest"
 
@@ -49,6 +50,9 @@ export const refreshedBootstrap: DesktopBootstrapData = {
 const initialState = useDesktopSessionStore.getState()
 
 export function resetDesktopSessionStore(): void {
+  resetBusinessDataFixture()
+  if (typeof window !== "undefined" && window.document) Object.defineProperty(window, "desktop", { configurable: true, writable: true, value: { ...window.desktop, businessData: businessDataFixture } })
+  else vi.stubGlobal("window", { desktop: { businessData: businessDataFixture } })
   if (typeof localStorage === "undefined") {
     const values = new Map<string, string>()
     vi.stubGlobal("localStorage", {

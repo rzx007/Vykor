@@ -1,6 +1,6 @@
 # Product Surface Integration
 
-> 状态：CLI、TUI、Web、Desktop、IDE、Bot 和 Workflow 接入 Durable Application 的权威边界。最后核对：2026-10-30。
+> 状态：CLI、TUI、Web、Desktop、IDE、Bot 和 Workflow 接入 Durable Application 的权威边界。最后核对：2026-11-19。
 
 ## 共同原则
 
@@ -15,10 +15,10 @@
 
 | 产品 | 推荐入口 | 自己负责 | 不能自己再做一套 |
 |---|---|---|---|
-| CLI 单次执行 | 私有应用客户端 + daemon Session API | 参数、终端输出、退出码 | 临时 JSON Session、独立 Run 状态机 |
-| TUI | 私有应用客户端 + SDK 同步与命令 API | 键盘、布局、选择、权限弹框 | 后台 Task/Workflow 真相、第二个 Agent |
+| CLI 单次执行 | `@rzx/client`，本机后台管理使用 `@rzx/client/service` | 参数、终端输出、退出码 | 临时 JSON Session、独立 Run 状态机 |
+| TUI | `@rzx/client` 会话与同步，斜杠管理命令使用内部资源 | 键盘、布局、选择、权限与提问弹框 | 后台 Task/Workflow 真相、第二个 Agent |
 | Web | 浏览器安全的生命周期 SDK + HTTP/SSE | Web 路由、渲染、断线提示 | Node polyfill、直接访问文件和数据库 |
-| Desktop | renderer 通过 main 使用私有应用客户端；main 提供本机能力 | 窗口、PTY、系统集成 | renderer 直连 SQLite、第二份 Run 状态 |
+| Desktop | renderer 通过 IPC 调用 main；main 使用 `@rzx/client` 接入普通会话 | 窗口、系统集成、桌面产品操作 | renderer 直连 SQLite、第二份 Run 状态 |
 | IDE | 生命周期 SDK + IDE 宿主桥接 | 编辑器选择、diff、workspace 体验 | 绕过 Permission 直接写文件 |
 | Bot | Channel adapter + DurableChannelBridge | 平台鉴权、message ID、ACL、发送 | 独立 Agent history、失败后重跑 Agent |
 | Workflow | Application 提供 repository 和 child host | DAG 计划、task snapshot、重试策略 | 第二套 Session/Job/child 所有权 |
@@ -26,7 +26,7 @@
 
 ## 共享 client 的标准流程
 
-TUI、Web、Desktop 和 IDE 共用 `@rzx/client` 的会话同步；CLI、TUI、Desktop 的产品业务接口通过私有 `@vykor/application-client` 使用，它复用公开 SDK 的实现。公开 SDK 实例只含 `protocol`、`runtime`、`sessions`、`permissions`、`attachments`、`jobs` 和 `events`。调用流程：
+CLI、TUI、Desktop、Web 和 IDE 的普通 Agent 会话直接使用 `@rzx/client`。首方使用 `@vykor/daemon-admin` 的分项入口管理设置、知识、工作区、渠道、MCP 和插件。Desktop 专用的调用由 Electron 主进程按功能接入。公开 SDK 实例提供 `protocol`、`runtime`、`sessions`、`permissions`、`attachments`、`jobs`、`events` 和 `files`。调用流程如下。
 
 1. 调 `/capabilities`，协议版本必须完全匹配。
 2. 获取 Session snapshot。
@@ -109,3 +109,7 @@ Workflow 负责“任务怎样拆、依赖怎样排、失败怎样重试”，Ap
 - 协议：[Protocol Contract](./protocol-contract.md)
 - Runtime 嵌入：[Vykor Agent SDK](./agent-sdk.md)
 - 状态所有权：[Agent Framework Capability Boundary](./agent-framework-capability-boundary.md)
+
+## Desktop 聊天发送时机
+
+主聊天和侧聊的输入框在当前 Run 进行时显示「现在补充」和「排队」。完全访问默认补充，询问审批与自动审查默认排队，计划模式沿用当前权限的选择。手动选择只用于本条。停止有独立按钮，停止期间暂停同一会话的新提交；侧聊队列沿自身会话订阅更新。

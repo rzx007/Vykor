@@ -1,5 +1,59 @@
-import type { DesktopSessionView } from "@shared/session-types"
+import type { DesktopSessionView, SessionUserInputItem } from "@shared/session-types"
 import type { DesktopSessionRuntime, PendingPromptSubmission, QueuedPromptAction } from "./types"
+
+export const FOLLOW_UP_TARGET_UNAVAILABLE = "这条补充未送达当前回复。请核对会话状态后重新发送。"
+
+export function promptQueueOnlyReason(
+  attachmentCount: number,
+  items: readonly SessionUserInputItem[],
+  flags: { pluginContext?: boolean; observation?: boolean; structuredOutput?: boolean }
+): string | undefined {
+  if (attachmentCount > 0) return "附件需要排队发送"
+  if (
+    flags.pluginContext ||
+    items.some((item) => item.type === "capability" || (item.type === "skill" && item.source === "plugin"))
+  ) {
+    return "插件内容需要排队发送"
+  }
+  if (flags.observation) return "观察会话需要排队发送"
+  if (flags.structuredOutput) return "结构化输出需要排队发送"
+  return undefined
+}
+
+export function isTranscriptFollowUp(submission: PendingPromptSubmission): boolean {
+  return submission.delivery === "steer" && submission.placement === "transcript"
+}
+
+export function classifyFollowUps(view: Pick<DesktopSessionView, "inputs" | "runs">) {
+  const runsById = new Map(view.runs.map(run => [run.id, run]))
+  const failedPromotions = new Set<string>()
+  const failedSteers = new Set<string>()
+  for (const run of view.runs) {
+    if (!run.inputId) continue
+    if (run.metadata.steerDeliveryFailed === true) failedSteers.add(run.inputId)
+    const promotion = run.metadata.promotion as { kind?: string } | undefined
+    if (run.status === "interrupted" && promotion?.kind === "failed") failedPromotions.add(run.inputId)
+  }
+
+  const statuses = new Map<string, "applied" | "waiting" | "failed">()
+  for (const input of view.inputs) {
+    if (input.delivery === "queue") {
+      if (failedPromotions.has(input.id)) statuses.set(input.id, "failed")
+      continue
+    }
+    const target = input.metadata.steerTargetRunId
+    if (typeof target !== "string") continue
+    const run = runsById.get(target)
+    const applied = run?.metadata.appliedInputState as { inputIds?: string[] } | undefined
+    if (applied?.inputIds?.includes(input.id)) {
+      statuses.set(input.id, "applied")
+    } else {
+      const terminal = run && run.status !== "pending" && run.status !== "running"
+      statuses.set(input.id, terminal || failedSteers.has(input.id) ? "failed" : "waiting")
+    }
+  }
+  return statuses
+}
 
 export function classifyPromptPlacement(
   view: DesktopSessionView | null,
@@ -53,10 +107,13 @@ export function reconcilePendingPromptSubmissions(
       .filter((run) => run.status !== "pending" && run.status !== "running")
       .map((run) => run.inputId)
   )
+  const followUps = Object.values(submissions).some(isTranscriptFollowUp)
+    ? classifyFollowUps(view)
+    : undefined
   return Object.fromEntries(
     Object.entries(submissions).flatMap(([id, submission]) => {
       if (submission.sessionId !== view.session.id) return [[id, submission]]
-      if (projectedInputIds.has(id) || finishedInputIds.has(id)) return []
+      if (projectedInputIds.has(id) || finishedInputIds.has(id) || followUps?.get(id) === "failed") return []
       if (confirmedInputIds.has(id)) {
         return [[id, { ...submission, phase: "accepted" as const, error: undefined }]]
       }

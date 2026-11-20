@@ -1,7 +1,8 @@
 import { readFile, writeFile, mkdir, access, rename, rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { join, dirname } from "node:path";
-import { homedir } from "node:os";
+import { dirname } from "node:path";
+import { getCredentialsFilePath } from "@vykor/host-config/paths";
+import { StoreLifecycle } from "./store-lifecycle.js";
 
 export interface CredentialData {
   [provider: string]: {
@@ -10,11 +11,12 @@ export interface CredentialData {
 }
 
 export class CredentialStorage {
-  private filePath: string;
+  private readonly filePath: string;
+  private readonly lifecycle = new StoreLifecycle();
   private cache: CredentialData | null = null;
 
   constructor(filePath?: string) {
-    this.filePath = filePath ?? join(getDefaultConfigDir(), "credentials.json");
+    this.filePath = filePath ?? getCredentialsFilePath();
   }
 
   async storeCredential(provider: string, key: string, value: string): Promise<void> {
@@ -22,31 +24,39 @@ export class CredentialStorage {
   }
 
   async loadCredential(provider: string, key: string): Promise<string | undefined> {
-    const data = await this.load();
-    return Object.hasOwn(data, provider) && Object.hasOwn(data[provider]!, key) ? data[provider]![key] : undefined;
+    return this.lifecycle.run(async () => {
+      const data = await this.load();
+      return Object.hasOwn(data, provider) && Object.hasOwn(data[provider]!, key) ? data[provider]![key] : undefined;
+    });
   }
 
   async clearProviderCredentials(provider: string): Promise<void> {
-    const data = await this.load(true);
-    if (Object.hasOwn(data, provider)) {
-      delete data[provider];
-      await this.save(data);
-    }
+    return this.lifecycle.run(async () => {
+      const data = await this.load(true);
+      if (Object.hasOwn(data, provider)) {
+        delete data[provider];
+        await this.save(data);
+      }
+    });
   }
 
   async updateCredentials(provider: string, values: Record<string, string | null>): Promise<void> {
-    const data = await this.load(true);
-    const entries: Record<string, string> = Object.assign(Object.create(null), Object.hasOwn(data, provider) ? data[provider] : {});
-    for (const [key, value] of Object.entries(values)) {
-      if (value === null) delete entries[key]; else entries[key] = value;
-    }
-    if (Object.keys(entries).length) Object.defineProperty(data, provider, { value: entries, configurable: true, writable: true, enumerable: true }); else delete data[provider];
-    await this.save(data);
+    return this.lifecycle.run(async () => {
+      const data = await this.load(true);
+      const entries: Record<string, string> = Object.assign(Object.create(null), Object.hasOwn(data, provider) ? data[provider] : {});
+      for (const [key, value] of Object.entries(values)) {
+        if (value === null) delete entries[key]; else entries[key] = value;
+      }
+      if (Object.keys(entries).length) Object.defineProperty(data, provider, { value: entries, configurable: true, writable: true, enumerable: true }); else delete data[provider];
+      await this.save(data);
+    });
   }
 
   async listStoredProviders(): Promise<string[]> {
-    const data = await this.load();
-    return Object.keys(data);
+    return this.lifecycle.run(async () => {
+      const data = await this.load();
+      return Object.keys(data);
+    });
   }
 
   async loadApiKey(provider: string): Promise<string | undefined> {
@@ -59,6 +69,11 @@ export class CredentialStorage {
 
   getFilePath(): string {
     return this.filePath;
+  }
+
+  async close(): Promise<void> {
+    await this.lifecycle.close();
+    this.cache = null;
   }
 
   private async load(refresh = false): Promise<CredentialData> {
@@ -91,8 +106,4 @@ export class CredentialStorage {
       throw error;
     }
   }
-}
-
-function getDefaultConfigDir(): string {
-  return process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor");
 }

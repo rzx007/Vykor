@@ -107,6 +107,21 @@ const inbound = (patch: Partial<InboundMessage> = {}): InboundMessage => ({
 });
 
 describe("ChannelRuntimeService", () => {
+  it("defaults new channel workspaces to dataRoot/channels regardless of old environment overrides", async () => {
+    const previous = process.env.VYKOR_CHANNELS_DIR;
+    process.env.VYKOR_CHANNELS_DIR = join(process.env.VYKOR_CONFIG_DIR!, "old-channel-override");
+    try {
+      const { service, created } = makeService({ workspaceRoot: undefined });
+      await service.startEnabled();
+      const cwd = await created[0]!.input.resolveCwd(inbound());
+      expect(cwd.replace(/\\/g, "/")).toContain(`${process.env.VYKOR_CONFIG_DIR!.replace(/\\/g, "/")}/channels/`);
+      await service.stop();
+    } finally {
+      if (previous === undefined) delete process.env.VYKOR_CHANNELS_DIR;
+      else process.env.VYKOR_CHANNELS_DIR = previous;
+    }
+  });
+
   it("starts only enabled connectors and reports running", async () => {
     const { service, created } = makeService();
     await service.startEnabled();

@@ -2,8 +2,10 @@ import { MaintenanceSettingsChannels as channels } from "../../../shared/mainten
 import type { DiagnosticFilter, UsageFilter, UsagePrice, UsageSettings } from "../../../shared/maintenance-settings-types"
 import type { IpcContribution } from "../../core/ipc/types"
 import { desktopMaintenanceSettingsService as service } from "./maintenance-settings-service"
+import { dataRootSettingsIpcContribution } from "./data-root-settings-ipc"
 
 export const maintenanceSettingsIpcContribution: IpcContribution = { id: "maintenance-settings", register() { service.startBudgetMonitor(); return [
+  ...dataRootSettingsIpcContribution.register(undefined as never),
   { channel: channels.storagePolicy, handler: () => service.storagePolicy() },
   { channel: channels.updateStoragePolicy, handler: (_event, input) => service.updateStoragePolicy(input as Parameters<typeof service.updateStoragePolicy>[0]) },
   { channel: channels.cleanupPreview, handler: (_event, input) => service.cleanupPreview(input as Parameters<typeof service.cleanupPreview>[0]) },

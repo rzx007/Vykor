@@ -77,7 +77,7 @@ if(process.argv[1] && resolve(process.argv[1])===fileURLToPath(import.meta.url))
   const root=resolve(dirname(fileURLToPath(import.meta.url)),'../dist');
   const errors=await checkSite(root,{base:process.env.CLIENT_DOCS_BASE,site:process.env.CLIENT_DOCS_SITE});
   const files=await htmlFiles(root);
-  for(const required of ['index.html','getting-started/installation/index.html','api/index.html','pagefind/pagefind.js']) {
+  for(const required of ['index.html','getting-started/installation/index.html','reference/agent-http/index.html','agent-openapi.json','api/index.html','pagefind/pagefind.js']) {
     try {if(!(await stat(join(root,required))).isFile()) throw new Error('Expected file');}
     catch {errors.push(`Missing built documentation artifact: ${required}`);}
   }

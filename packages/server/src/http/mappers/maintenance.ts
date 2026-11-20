@@ -21,12 +21,15 @@ export function usageReportDto(input: App.UsageReport): Wire.UsageReport {
       budget: { enabled: input.settings.budget.enabled, tokens: input.settings.budget.tokens, amount: input.settings.budget.amount, currency: input.settings.budget.currency } } };
 }
 function backupManifestDto(input: Wire.MaintenanceBackupManifest): Wire.MaintenanceBackupManifest {
-  return { version: input.version, backupId: input.backupId, createdAt: input.createdAt, database: input.database,
-    directories: { artifacts: input.directories.artifacts, memory: input.directories.memory, "execution-output": input.directories["execution-output"],
-      attachments: input.directories.attachments, ...(input.directories.notes !== undefined ? { notes: input.directories.notes } : {}) },
+  const { artifacts, memory, "execution-output": executionOutput } = input.directories;
+  const directories = { artifacts, memory, "execution-output": executionOutput };
+  const fields = { backupId: input.backupId, createdAt: input.createdAt, database: input.database,
     ...(input.attachments ? { attachments: { assets: input.attachments.assets, uniqueBlobs: input.attachments.uniqueBlobs, physicalBytes: input.attachments.physicalBytes,
       consistency: { errors: input.attachments.consistency.errors, warnings: input.attachments.consistency.warnings, issueCounts: input.attachments.consistency.issueCounts } } } : {}),
     recovery: { reviveLiveProcesses: input.recovery.reviveLiveProcesses, closeActiveRecordsOnStartup: input.recovery.closeActiveRecordsOnStartup } };
+  if (input.version === 4) return { ...fields, version: 4, scope: input.scope, directories: { ...directories, attachments: input.directories.attachments } };
+  return { ...fields, version: input.version, directories: { ...directories, attachments: input.directories.attachments,
+    ...(input.directories.notes !== undefined ? { notes: input.directories.notes } : {}) } };
 }
 export function storageReportDto(input: App.StorageReport): Wire.StorageReport {
   return { scannedAt: input.scannedAt, dataDirectory: input.dataDirectory, totalBytes: input.totalBytes, availableBytes: input.availableBytes, writable: input.writable,

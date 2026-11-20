@@ -1,6 +1,12 @@
 # Agent 跨包回归测试
 
+`__test__/live-approval-modes.integration.test.ts` 通过真实 DaemonApplication、默认 Node 工厂、SQLite、同一个实际 Run 和文件写入，验证运行中依次切换三种批准方式。旧人工请求保留到人工回复，旧自动审核在切回人工方式后仍按原决定完成，新调用使用当时的方式；全程只创建一个 Agent。仅替换外部模型和审核模型的响应，不访问第三方。
+
 这里验证 Core 模型/工具循环与 API、权限、提示词、真实文件工具组合后的行为：流中断重试、参数纠错、文件保护、内容复用、Shell 分页、Job 等待时限及 ToolSearch 注册表接入。
+
+`__test__/delegation-guidance.integration.test.ts` 执行提示词里的 Job 工具调用示例，将生成参数交给真实工具输入校验器，检查完整目标包含子代理 runId。子结果等待和最终输出的运行流程在 `packages/agent-runtime/src/kernel/__test__/child-result-collection.test.ts` 覆盖。
+
+`__test__/child-model-error.integration.test.ts` 在 SDK 和 daemon 两种入口注入模型请求故障，核对任务查询与父运行收到的子结果都保留 `model_error` 和错误说明。
 
 `__test__/context-compaction.integration.test.ts` 连接真实 Codex / OpenAI 客户端与 Core，只替换网络响应，覆盖流内超长恢复、工具定义限制不压缩历史及摘要输出上限。它还连接真实 SQLite 目标用量账本，验证无限预算时恢复后逐次记账、显式预算下未知用量仍暂停。
 
@@ -8,7 +14,7 @@
 
 文件工作流与内容复用回归分别验证调用状态和实际文件内容：框架在调用前拒绝时保持 `not_started`；工具已被调用后，其自报的 `not_started` 由共同入口归为 `unknown`。真实 Write/Edit 的调用次数、文件未被错误覆盖、内容复用重新检查权限及显式纠正后成功的断言同时保留，不能仅凭执行状态推断文件是否改写。
 
-`__test__/approval-review.integration.test.ts` 验证定时任务输入经过独立审查、用户指令核实和审批存储后，能在审查输出截断并重试成功时解除 BackgroundShellCreate 的等待，且不留下待人工确认的请求。
+`__test__/approval-review.integration.test.ts` 验证定时任务输入经过独立审查、用户指令核实和审批存储后，能在审查输出截断并重试成功时解除 BackgroundShellCreate 的等待，且不留下待人工确认的请求。它也使用真实 Node 工具注册、QueryEngine、浏览器工具和 SQLite 审批仓库，验证来源为 `agent` 的浏览器连续操作及站点确认可以经自动审查完成，全程没有人工回复。只替换审查模型响应和实际页面宿主，不访问外部站点。
 
 `__test__/full-access-authorization.integration.test.ts` 将真实权限检查器、受检工具执行、浏览器工具、安装配置工具、会话审批适配器和 SQLite 审批仓库接在一起：完全访问连续访问来源、重复开发检查、固定预览插件安装和 MCP 添加均不产生普通审批；普通模式仍逐项确认，具体操作不复用或创建工具级会话授权。内部两条请求入口不能绕过禁止名单或本轮工具范围，工具超时会使等待请求过期，迟到批准不能产生副作用；真正的业务提问仍返回用户答案。外部浏览器、插件来源和网络连接使用受控服务，不访问第三方。
 

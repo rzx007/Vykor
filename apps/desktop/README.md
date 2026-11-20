@@ -6,11 +6,14 @@
 
 真正首次安装且尚未开启常驻时，侧边栏底部会显示一次「保持后台运行」引导。开启成功或选择「暂不开启」后该区域永久消失；升级安装不会补发引导。安装身份和引导状态保存在 Desktop 的 `desktop-preferences.json`，与 `daemon.autoStart` 分开管理。
 
-Desktop 的 Vykor workspace 边界只有两个：所有 HTTP/SSE 操作和协议类型走 `@vykor/application-client`；内嵌 daemon、registry 和系统启动项等本机能力走 `@vykor/server/daemon-host`。WSL 可用性由 daemon 宿主校验，Desktop 不直接依赖 core、sandbox、terminal 或 terminal-node。
+Desktop 和 CLI 可以共用独立 daemon。桌面主进程用 `@rzx/client/service` 查找或按需拉起无窗口后台，通过 `@rzx/client` 处理会话、附件和权限请求并订阅事件。后台声明支持浏览器桥接时，桌面会接入桥接，供 Agent 请求操作本机浏览器标签页。
+设置、渠道、MCP 和插件管理通过 `@vykor/daemon-admin` 的对应子入口发送。桌面界面经 IPC 调用主进程，再由主进程使用已校验的 daemon 连接。无窗口入口、登记和系统启动项使用 `@vykor/server/daemon-host`。应用安装包自带后台，窗口关闭后按需进程可继续处理任务。常驻开关控制登录启动与异常恢复。
 
-私有应用客户端复用公开 SDK `@rzx/client` 的生命周期资源和同步流程，同时提供笔记、插件及设置等产品操作。Electron 将两层客户端打入安装包。
+内置便签通过 IPC 读写 `data/desktop/notes/`，关闭后台后仍可以编辑。升级会在保留旧库和 Markdown 的前提下导入。桌面设置可同时备份后台会话和本地便签，或将旧备份恢复到新目录。 [便签主进程说明](src/main/features/notes/README.md)
 
 Electron + React desktop shell for Vykor.
+
+主进程启动顺序和数据根选择见 [src/main/README.md](src/main/README.md)。
 
 ## Structure
 
@@ -20,13 +23,15 @@ Electron + React desktop shell for Vykor.
 - [src/main/features/clipboard](src/main/features/clipboard/README.md)：剪贴板读写和原生文本菜单。
 - `src/main/features/pet`: transparent desktop Pet window, visibility, click-through, and position persistence.
 - [src/main/features/session](src/main/features/session/README.md)：会话与项目操作、后台连接、订阅和恢复流程。
-- [src/main/features/daemon-autostart](src/main/features/daemon-autostart/README.md)：后台服务启动、接管与系统默认回复语言初始化。
+- [src/main/features/daemon-autostart](src/main/features/daemon-autostart/README.md)：无窗口后台启动、系统常驻设置与默认回复语言初始化。
 - [src/main/features/settings](src/main/features/settings/README.md)：桌面设置读写、输入校验和快照。
 - [src/main/features/plugin](src/main/features/plugin/README.md): 插件列表、归档和市场安装、权限确认及操作结果。
 - `src/preload`: safe renderer-facing desktop API exposed as `window.desktop`.
 - [src/renderer](src/renderer/README.md)：主窗口页面入口、镂空名称启动画面、主题恢复与就绪退场。
 - [src/renderer/src/assets](src/renderer/src/assets/README.md)：全局样式入口、主题变量，以及按 Markdown、工作区、动效、便签和设置分类的样式。
-- `src/shared`: IPC channel names and shared request/result types.
+- [src/shared](src/shared/README.md)：IPC 通道、业务类型与纯校验。
+- [src/main/features/business-data](src/main/features/business-data/README.md)：桌面恢复文件、旧源确认与关闭前刷盘。
+- [src/renderer/src/lib](src/renderer/src/lib/README.md)：跨页面辅助逻辑与异步恢复记录客户端。
 - [src/renderer/src/components/appearance](src/renderer/src/components/appearance/README.md)：主题、字体、字号及外观偏好的读取、保存和应用。
 - [src/document-preview](src/document-preview/README.md)：独立文档预览页面和预览外壳样式。
 

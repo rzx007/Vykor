@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { selectArchivedSessions, selectSessions } from "./selectors"
@@ -45,7 +46,7 @@ it("does not save a temporary active session for restart restoration", () => {
 it("opening a temporary fork does not save its active session ID", async () => {
   const view = emptySessionView("temporary")
   view.session.storage = "memory"
-  vi.stubGlobal("window", { desktop: { sessions: { open: async () => view, close: async () => {} } } })
+  vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { open: async () => view, close: async () => {} } } })
   await useDesktopSessionStore.getState().openSession("temporary")
   expect(useDesktopSessionStore.getState().sessionView?.session.id).toBe("temporary")
   expect(localStorage.getItem("vykor.desktop.active-session.v1")).toBeNull()

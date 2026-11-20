@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 import { afterEach, expect, it, vi } from "vitest"
 import type { SendDesktopPromptInput } from "@shared/session-types"
 import { submitConversationDraft } from "../submit-conversation-draft"
@@ -10,7 +11,7 @@ it("the real page submit entry admits a context-only draft through the existing 
   useDesktopSessionStore.setState({ activeSessionId: "s", sessionView: emptySessionView("s") })
   pluginAppModelContexts.put({ id: "selection", source: { sessionId: "s", appId: "a" }, pluginId: "example", text: "selection", data: null })
   const sendPrompt = vi.fn<(input: SendDesktopPromptInput) => Promise<void>>(async () => {})
-  vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+  vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
   await submitConversationDraft({ sessionId: "s", content: "", attachmentCount: 0, ready: true, blocked: false, goalMode: false },
     () => useDesktopSessionStore.getState().sendMessage(""))
   expect(sendPrompt).toHaveBeenCalledOnce()

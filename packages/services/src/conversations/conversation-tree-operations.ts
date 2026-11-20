@@ -52,8 +52,9 @@ export function forkSessionWithHistory(input: {
       if (!message.inputId || inputIdMap.has(message.inputId)) continue;
       const sourceInput = context.storage.state.inputs[message.inputId];
       if (!sourceInput) continue;
-      const copiedInputMetadata = withoutHostPluginMetadata(sourceInput.metadata);
-      if (Object.keys(copiedInputMetadata).length !== Object.keys(sourceInput.metadata).length) {
+      const { steerTargetRunId: _historicalTarget, ...sourceMetadata } = sourceInput.metadata;
+      const copiedInputMetadata = withoutHostPluginMetadata(sourceMetadata);
+      if (Object.keys(copiedInputMetadata).length !== Object.keys(sourceMetadata).length) {
         copiedInputMetadata.approvalInstructionSource = "external";
       }
       const copiedInput = context.admitPrompt({

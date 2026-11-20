@@ -179,9 +179,9 @@ export async function installRuntimeIntegrations(
   });
   const mcpManager = new McpClientManager({
     cwd: options.executionEnvironment?.workspace.executionRoot ?? options.cwd,
-    settings: options.settings,
+    settings: runtime.settings,
     sessionId: options.sessionId,
-    processExecutor: options.executionEnvironment?.process,
+    processExecutor: runtime.processExecutor ?? options.executionEnvironment?.process,
     oauthRuntime: mcpOAuthRuntime,
   });
   runtime.addCleanup(() => mcpManager.disconnectAll());

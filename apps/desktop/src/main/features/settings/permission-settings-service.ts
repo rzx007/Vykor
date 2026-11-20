@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util"
 import { isAbsolute } from "node:path"
-import { normalizeApprovalMode, type VykorClient } from "@vykor/application-client"
+import { normalizeApprovalMode, type VykorClient } from "@rzx/client"
+import { SystemResource } from "@vykor/daemon-admin/configuration"
 import {
   checkPermissionConfiguration,
   inspectPermissionConfiguration,
@@ -19,7 +20,10 @@ import { browserAgentService } from "../browser/browser-agent-service"
 import { getDesktopPreferences } from "./desktop-preferences"
 
 interface Dependencies {
-  daemonClient(): Promise<Pick<VykorClient, "system" | "permissions">>
+  daemonClient(): Promise<{
+    system: Pick<SystemResource, "getSettings" | "patchSettings">
+    permissions: Pick<VykorClient["permissions"], "listApprovals" | "revokeApproval">
+  }>
   browser: Pick<typeof browserAgentService, "listOriginApprovals" | "revokeOriginApproval">
   getDeveloperMode(): boolean
 }
@@ -27,7 +31,11 @@ interface Dependencies {
 export class DesktopPermissionSettingsService {
   constructor(
     private readonly deps: Dependencies = {
-      daemonClient: () => desktopSessionService.daemonClient(),
+      daemonClient: async () => {
+        const agent = await desktopSessionService.agentClient()
+        const system = new SystemResource(await desktopSessionService.daemonTransport(agent))
+        return { system, permissions: agent.permissions }
+      },
       browser: browserAgentService,
       getDeveloperMode: () => getDesktopPreferences().browserDeveloperMode === true,
     }

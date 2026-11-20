@@ -126,6 +126,51 @@ export class DaemonAgentEventProjector {
       case "input.accepted":
         this.projectInput(event);
         return;
+      case "input.applied": {
+        const { runId, sessionId, inputId } = event.context;
+        const run = runId ? this.context.store.runs.getRun(runId) : undefined;
+        const { inputIds, revision } = event.data;
+        const previous = run?.metadata.appliedInputState as { revision: number; inputIds: string[] } | undefined;
+        const transcript = this.transcripts.get(runId ?? "");
+        const added = inputIds.slice(previous?.inputIds.length ?? 0);
+        const projected = new Set(this.context.store.conversations.listMessages(sessionId)
+          .filter(message => message.role === "user" && message.runId === runId)
+          .map(message => message.inputId));
+        if (!run || run.sessionId !== sessionId || run.status !== "running" ||
+            !added.length || inputIds[0] !== inputId || run.inputId !== inputId || revision !== (previous?.revision ?? 0) + 1 ||
+            previous?.inputIds.some((id, index) => inputIds[index] !== id) ||
+            new Set(inputIds).size !== inputIds.length || !transcript) {
+          throw new Error("Applied inputs do not match their active run");
+        }
+        const snapshot = snapshotTranscript(transcript);
+        try {
+          this.projectAtomicEvent(() => {
+            for (const id of added) {
+              const input = this.context.store.conversations.getInput(id);
+              if (input?.sessionId !== sessionId) throw new Error("Applied input does not belong to its session");
+              if (id === inputId || projected.has(id)) continue;
+              const queued = this.context.store.runs.findRunByInput(id);
+              const promotion = queued?.metadata.promotion;
+              if (queued?.sessionId === sessionId && queued.status === "pending" &&
+                  isRecord(promotion) && promotion.kind === "steering" && promotion.activeRunId === runId && promotion.accepted === true) {
+                this.context.store.runs.updateRun(queued.id, {
+                  status: "interrupted",
+                  error: "Queued prompt was promoted into the active run",
+                  metadata: { promotion: { ...promotion, kind: "steered", promotedAt: Date.now() } },
+                });
+              } else if (input.metadata.steerTargetRunId !== runId) {
+                throw new Error("Applied input does not belong to its active run");
+              }
+              this.context.transcriptProjection.projectSteeredInputs(transcript, [input]);
+            }
+            this.context.store.runs.updateRun(run.id, { metadata: { appliedInputState: { revision, inputIds } } });
+          });
+        } catch (error) {
+          restoreTranscript(transcript, snapshot);
+          throw error;
+        }
+        return;
+      }
       case "run.started":
         await this.startRun(event);
         return;
@@ -391,6 +436,16 @@ export class DaemonAgentEventProjector {
             queuedRun.inputId === inputId &&
             queuedRun.status === "pending" &&
             jsonEqual(withoutTraceId(input.metadata), withoutTraceId(baseMetadata));
+          if (queuedPromptPromotion && isRecord(queuedRun.metadata?.promotion) &&
+              queuedRun.metadata.promotion.kind === "steering" &&
+              queuedRun.metadata.promotion.activeRunId === runId) {
+            this.context.store.runs.updateRun(queuedRun.id, {
+              metadata: { promotion: { ...queuedRun.metadata.promotion, accepted: true } },
+            });
+          }
+          if (typeof input.metadata.steerTargetRunId === "string" && input.metadata.steerTargetRunId !== runId) {
+            throw new Error(`Agent input target mismatch: ${inputId}`);
+          }
           if (
             !queuedPromptPromotion &&
             (
@@ -405,7 +460,10 @@ export class DaemonAgentEventProjector {
           }
         }
 
-        if (transcript && event.data.delivery === "steer") {
+        // Bound inputs become transcript messages when they enter model history.
+        // Until then the admitted Input and the promotion reservation drive feedback.
+        if (transcript && event.data.delivery === "steer" && input.metadata.steerTargetRunId === undefined &&
+            !(isRecord(metadata.promotion) && metadata.promotion.kind === "queued_prompt")) {
           this.context.transcriptProjection.projectSteeredInputs(transcript, [input]);
         }
       });
@@ -454,7 +512,10 @@ export class DaemonAgentEventProjector {
       } else if (existing.status === "completed" || existing.status === "failed" || existing.status === "interrupted") {
         throw new Error(`Agent run is already terminal: ${runId}`);
       }
-      this.context.store.runs.updateRun(runId, { status: "running", metadata: childBinding });
+      this.context.store.runs.updateRun(runId, { status: "running", metadata: {
+        ...childBinding,
+        ...(event.type === "run.started" && event.data.tracksAppliedInputs ? { appliedInputState: { revision: 0, inputIds: [] } } : {}),
+      } });
       const existingAttempts = this.context.store.runs.listRunAttempts(runId);
       if (existingAttempts.length === 0) {
         const session = this.context.store.sessions.get(sessionId);
@@ -826,6 +887,17 @@ export class DaemonAgentEventProjector {
           ...(error ? { error } : {}),
           ...(Object.keys(metadataPatch).length > 0 ? { metadata: metadataPatch } : {}),
         });
+        for (const queued of this.context.store.runs.listRuns(event.context.sessionId)) {
+          const promotion = queued.metadata.promotion;
+          if (queued.status === "pending" && isRecord(promotion) && promotion.kind === "steering" &&
+              promotion.activeRunId === runId && promotion.accepted === true) {
+            this.context.store.runs.updateRun(queued.id, {
+              status: "interrupted",
+              error: "Promoted prompt did not enter the active run",
+              metadata: { promotion: { ...promotion, kind: "failed" } },
+            });
+          }
+        }
         if (event.context.childId) {
           const child = this.children.get(event.context.childId);
           if (child) this.completeChildTask(child.taskId, event.type === "run.completed"

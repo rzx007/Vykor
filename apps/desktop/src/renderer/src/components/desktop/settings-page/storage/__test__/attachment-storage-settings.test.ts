@@ -9,7 +9,7 @@ import type {
   AttachmentStorageIssue,
   AttachmentStorageRepairResult,
   AttachmentStorageReport,
-} from "@vykor/application-client"
+} from "@shared/attachment-types"
 
 const toastMocks = vi.hoisted(() => ({
   error: vi.fn(),

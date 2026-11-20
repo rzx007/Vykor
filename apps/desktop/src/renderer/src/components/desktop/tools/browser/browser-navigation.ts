@@ -13,8 +13,12 @@ export function normalizeBrowserUrl(input: string): string | null {
 
 export function resolveExternalBrowserUrl(input: string | null | undefined): string | null {
   if (input == null) return null
-  const normalized = normalizeBrowserUrl(input)
-  return normalized ? toExternalBrowserUrl(normalized) : null
+  try {
+    const normalized = normalizeBrowserUrl(input)
+    return normalized ? toExternalBrowserUrl(normalized) : null
+  } catch {
+    return null
+  }
 }
 
 export function toLocalFileUrl(projectPath: string, relativePath: string): string {

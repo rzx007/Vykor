@@ -3,50 +3,24 @@ import {
   Link2,
   LoaderCircle,
   Pencil,
-  Plus,
   Search,
   Sparkles,
   Trash2,
   Unplug,
 } from "lucide-react"
 import { useRef, useState } from "react"
+import { Input } from "@renderer/components/motion/input"
 import {
   OverflowActions,
   type OverflowActionItem,
 } from "@renderer/components/motion/overflow-actions"
 import type * as React from "react"
-import { Badge } from "@renderer/components/ui/badge"
 import { Button } from "@renderer/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@renderer/components/ui/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@renderer/components/ui/dialog"
-import { Input } from "@renderer/components/ui/input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@renderer/components/ui/dialog"
 import { ScrollArea } from "@renderer/components/ui/scroll-area"
-import { Separator } from "@renderer/components/ui/separator"
 import { cn } from "@renderer/lib/utils"
 import type { DesktopProviderCredentialSource, DesktopProviderInfo } from "@shared/provider-types"
 import { resolveProviderBrandIcon, type ProviderBrandIcon } from "./provider-brand-icons"
-
-const providerDescriptions: Record<string, string> = {
-  openai: "GPT 系列模型",
-  anthropic: "Claude 系列模型",
-  deepseek: "DeepSeek 对话与推理模型",
-  openrouter: "通过一个 API 使用多个模型",
-  gemini: "Google Gemini 系列模型",
-  dashscope: "阿里云百炼与通义千问模型",
-  moonshot: "Moonshot 与 Kimi 系列模型",
-  minimax: "MiniMax 系列模型",
-  zhipu: "智谱 GLM 系列模型",
-  "zhipuai-coding-plan": "智谱 Coding Plan 专属模型",
-  xiaomi: "小米 MiMo 系列模型",
-  groq: "Groq 高速推理服务",
-  mistral: "Mistral 与 Codestral 模型",
-}
 
 const localizedProviderNames: Record<string, string> = {
   zhipu: "智谱",
@@ -60,7 +34,7 @@ export function providerDisplayName(provider: DesktopProviderInfo): string {
   return localizedProviderNames[provider.name] ?? provider.displayName
 }
 
-export function ProviderListCard({
+export function ProviderList({
   connectedProviders,
   availableProviders,
   additionalProviderCount,
@@ -68,7 +42,6 @@ export function ProviderListCard({
   onShowMore,
   onConnect,
   onDisconnect,
-  onAddCustom,
   onEditCustom,
   onRemoveCustom,
   verified,
@@ -81,81 +54,44 @@ export function ProviderListCard({
   onShowMore: () => void
   onConnect: (provider: DesktopProviderInfo) => void
   onDisconnect: (provider: DesktopProviderInfo) => void
-  onAddCustom: () => void
   onEditCustom: (provider: DesktopProviderInfo) => void
   onRemoveCustom: (provider: DesktopProviderInfo) => void
   verified: Record<string, { model: string; checkedAt: number }>
   onTest: (provider: DesktopProviderInfo) => void
 }): React.JSX.Element {
   return (
-    <Card className="py-0 shadow-xs">
-      <CardHeader className="sr-only">
-        <CardTitle>供应商列表</CardTitle>
-      </CardHeader>
-      <CardContent className="px-0">
-        <ProviderGroup
-          label="已配置"
-          description="已找到连接信息，测试后确认是否可用。"
-          providers={connectedProviders}
-          verified={verified}
-          onTest={onTest}
-          emptyText="还没有检测到已连接的供应商。"
-          busyProvider={busyProvider}
-          onConnect={onConnect}
-          onDisconnect={onDisconnect}
-          onEditCustom={onEditCustom}
-          onRemoveCustom={onRemoveCustom}
-        />
-        <Separator />
-        <ProviderGroup
-          label="可连接"
-          description="选择一个服务，接入它的模型。"
-          providers={availableProviders}
-          verified={verified}
-          onTest={onTest}
-          emptyText="所有内置供应商都已连接。"
-          busyProvider={busyProvider}
-          onConnect={onConnect}
-          onDisconnect={onDisconnect}
-          onEditCustom={onEditCustom}
-          onRemoveCustom={onRemoveCustom}
-        />
-        {additionalProviderCount > 0 ? (
-          <>
-            <Separator />
-            <div className="flex justify-center px-6 py-2.5">
-              <Button type="button" variant="link" size="sm" onClick={onShowMore}>
-                查看更多供应商（{additionalProviderCount}）
-              </Button>
-            </div>
-          </>
-        ) : null}
-        <Separator />
-        <div className="flex items-center justify-between gap-4 bg-muted/20 px-6 py-3.5">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-background text-muted-foreground ring-1 ring-foreground/10 [&_svg]:size-4">
-              <Plus />
-            </span>
-            <div className="min-w-0">
-              <p className="font-heading text-sm font-semibold">自定义供应商</p>
-              <p className="mt-1 truncate text-xs text-muted-foreground">
-                添加 Ollama、vLLM 或其他 OpenAI 兼容接口
-              </p>
-            </div>
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={busyProvider !== null}
-            onClick={onAddCustom}
-          >
-            <Plus data-icon="inline-start" />
-            添加
+    <div className="flex flex-col gap-5">
+      <ProviderGroup
+        label="已配置"
+        providers={connectedProviders}
+        verified={verified}
+        onTest={onTest}
+        emptyText="还没有配置供应商。"
+        busyProvider={busyProvider}
+        onConnect={onConnect}
+        onDisconnect={onDisconnect}
+        onEditCustom={onEditCustom}
+        onRemoveCustom={onRemoveCustom}
+      />
+      <ProviderGroup
+        label="可连接"
+        providers={availableProviders}
+        verified={verified}
+        onTest={onTest}
+        emptyText={additionalProviderCount === 0 ? "没有其他可连接的供应商。" : undefined}
+        busyProvider={busyProvider}
+        onConnect={onConnect}
+        onDisconnect={onDisconnect}
+        onEditCustom={onEditCustom}
+        onRemoveCustom={onRemoveCustom}
+      >
+        {additionalProviderCount > 0 && (
+          <Button type="button" variant="ghost" shape="pill" onClick={onShowMore}>
+            更多供应商（{additionalProviderCount}）
           </Button>
-        </div>
-      </CardContent>
-    </Card>
+        )}
+      </ProviderGroup>
+    </div>
   )
 }
 
@@ -180,26 +116,18 @@ export function MoreProvidersDialog({
 }): React.JSX.Element {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(38rem,calc(100vh-2rem))] flex-col gap-3 sm:max-w-lg">
+      <DialogContent className="flex max-h-[min(38rem,calc(100dvh-2rem))] flex-col gap-3 sm:max-w-lg [&>[data-slot=dialog-close]]:rounded-full">
         <DialogHeader>
           <DialogTitle>更多供应商</DialogTitle>
-          <DialogDescription>
-            保存 API Key 时会请求服务的模型列表接口验证；上游可能按自己的规则收费。
-          </DialogDescription>
         </DialogHeader>
-        <div className="relative">
-          <Search
-            aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-          />
-          <Input
-            value={query}
-            onChange={(event) => onQueryChange(event.target.value)}
-            placeholder={`搜索 ${totalCount} 个供应商`}
-            aria-label="搜索更多供应商"
-            className="pl-9"
-          />
-        </div>
+        <Input
+          value={query}
+          onChange={onQueryChange}
+          placeholder={`搜索 ${totalCount} 个供应商`}
+          aria-label="搜索更多供应商"
+          leftIcon={<Search aria-hidden="true" />}
+          classNames={{ input: "pl-9" }}
+        />
         <ScrollArea horizontal={false} className="min-h-0 flex-1 pr-2">
           {providers.length === 0 ? (
             <p className="py-12 text-center text-sm text-muted-foreground">
@@ -243,7 +171,6 @@ export function MoreProvidersDialog({
 
 function ProviderGroup({
   label,
-  description,
   providers,
   emptyText,
   busyProvider,
@@ -253,11 +180,11 @@ function ProviderGroup({
   onRemoveCustom,
   verified,
   onTest,
+  children,
 }: {
   label: string
-  description: string
   providers: DesktopProviderInfo[]
-  emptyText: string
+  emptyText?: string
   busyProvider: string | null
   onConnect: (provider: DesktopProviderInfo) => void
   onDisconnect: (provider: DesktopProviderInfo) => void
@@ -265,24 +192,17 @@ function ProviderGroup({
   onRemoveCustom: (provider: DesktopProviderInfo) => void
   verified: Record<string, { model: string; checkedAt: number }>
   onTest: (provider: DesktopProviderInfo) => void
+  children?: React.ReactNode
 }): React.JSX.Element {
   return (
-    <div>
-      <div className="flex items-center justify-between gap-4 bg-muted/20 px-6 py-3">
-        <div className="flex flex-col gap-1">
-          <h3 className="font-heading text-sm font-semibold">{label}</h3>
-          <p className="text-xs text-muted-foreground">{description}</p>
-        </div>
-        <Badge variant="outline">{providers.length}</Badge>
-      </div>
-      <div className="px-6">
-        {providers.length === 0 ? (
-          <p className="py-5 text-center text-xs text-muted-foreground">{emptyText}</p>
-        ) : (
-          providers.map((provider, index) => (
-            <div key={provider.name}>
-              {index > 0 ? <Separator /> : null}
+    <section aria-label={label} className="space-y-2">
+      <h3 className="text-sm font-medium text-muted-foreground">{label}</h3>
+      <div className="divide-y divide-border/70 border-t border-border/70">
+        {providers.length === 0
+          ? emptyText && <p className="py-3 text-xs text-muted-foreground">{emptyText}</p>
+          : providers.map((provider) => (
               <ProviderRow
+                key={provider.name}
                 provider={provider}
                 busy={busyProvider === provider.name}
                 locked={busyProvider !== null}
@@ -293,11 +213,10 @@ function ProviderGroup({
                 verification={verified[provider.name]}
                 onTest={() => onTest(provider)}
               />
-            </div>
-          ))
-        )}
+            ))}
       </div>
-    </div>
+      {children}
+    </section>
   )
 }
 
@@ -326,12 +245,12 @@ function ProviderRow({
   const actionsRef = useRef<HTMLDivElement>(null)
   const actions: OverflowActionItem[] = []
   const name = providerDisplayName(provider)
-  if (provider.connected)
+  if (provider.connected && provider.name !== "codex" && provider.models.length > 0)
     actions.push({
       id: "test",
-      label: provider.name === "codex" ? "暂不支持独立测试" : "测试连接",
+      label: "测试连接",
       icon: <Link2 className="size-4" aria-hidden="true" />,
-      disabled: locked || !provider.models.length || provider.name === "codex",
+      disabled: locked,
       onClick: onTest,
       ariaLabel: `测试 ${name} 连接`,
     })
@@ -372,35 +291,29 @@ function ProviderRow({
         ariaLabel: `删除 ${provider.displayName}`,
       }
     )
+  const status = provider.connected
+    ? [
+        sourceLabel(provider.credentialSource, provider.credentialLabel),
+        verification
+          ? `模型列表已验证 · ${new Date(verification.checkedAt).toLocaleTimeString()}`
+          : "未验证",
+      ]
+    : []
+  if (provider.active) status.push("默认连接")
   return (
-    <div className="flex min-h-16 flex-col items-stretch gap-3 py-3 sm:flex-row sm:items-center">
+    <div className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2.5">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <ProviderIcon provider={provider} />
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <h3 className="font-heading text-sm font-semibold">{providerDisplayName(provider)}</h3>
-            {provider.connected ? (
-              <Badge variant="outline">
-                {sourceLabel(provider.credentialSource, provider.credentialLabel)}
-              </Badge>
-            ) : null}
-            {provider.active ? <Badge variant="outline">默认连接</Badge> : null}
-            {provider.connected ? (
-              <span className="text-xs text-muted-foreground">
-                {verification
-                  ? `已验证模型列表 · ${new Date(verification.checkedAt).toLocaleTimeString()}`
-                  : "已配置，未验证"}
-              </span>
-            ) : null}
-          </div>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {providerDescriptions[provider.name] ??
-              (provider.custom
-                ? provider.baseUrl
-                : provider.source === "catalog"
-                  ? "models.dev 目录供应商"
-                  : "Vykor 内置供应商")}
-          </p>
+          <h4 className="text-sm font-medium break-words">{name}</h4>
+          {status.length > 0 && (
+            <p className="mt-0.5 text-xs text-muted-foreground">{status.join(" · ")}</p>
+          )}
+          {provider.custom && provider.baseUrl && (
+            <p className="truncate text-xs text-muted-foreground" title={provider.baseUrl}>
+              {provider.baseUrl}
+            </p>
+          )}
         </div>
       </div>
       <div
@@ -423,15 +336,14 @@ function ProviderRow({
         {!provider.connected && provider.credentialSource !== "credentials" ? (
           <Button
             type="button"
-            size="icon-sm"
-            shape="circle"
+            shape="pill"
             variant="outline"
             title={`连接 ${name}`}
             aria-label={`连接 ${name}`}
             disabled={locked}
             onClick={onConnect}
           >
-            <Link2 data-icon="inline-start" />
+            连接
           </Button>
         ) : null}
         {actions.length ? (
@@ -477,10 +389,8 @@ function ProviderIcon({
   return (
     <span
       className={cn(
-        "grid shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground ring-1 ring-foreground/10",
-        compact
-          ? "size-5 rounded-sm bg-transparent ring-0 [&_svg]:size-3.5"
-          : "size-9 rounded-lg [&_svg]:size-4"
+        "grid shrink-0 place-items-center text-muted-foreground",
+        compact ? "size-5 [&_svg]:size-3.5" : "size-8 [&_svg]:size-5"
       )}
     >
       {BrandIcon ? <ProviderBrandMark icon={BrandIcon} /> : <Sparkles aria-hidden="true" />}

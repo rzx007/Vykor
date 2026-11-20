@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import type { VykorClient } from "@vykor/application-client"
+import type { HttpTransport } from "@rzx/client"
 
 const git = vi.hoisted(() => ({ execGit: vi.fn(), uniqueBranch: vi.fn() }))
 vi.mock("electron", () => ({
@@ -23,11 +23,17 @@ function deferred<T>() {
   return { promise, resolve }
 }
 
-function client(id: string): VykorClient {
+function transport(id: string): HttpTransport {
   return {
-    projects: { inspect: async (path: string) => ({ id, path, name: id, lastOpenedAt: 1, createdAt: 1, updatedAt: 1 }) },
-    development: { getGitBranch: async () => `Current branch: ${id}` },
-  } as unknown as VykorClient
+    path: (path: string) => path,
+    request: async (path: string, input: { body: { path: string } }) => {
+      if (path === "/projects/inspect") {
+        return { project: { id, path: input.body.path, name: id, lastOpenedAt: 1, createdAt: 1, updatedAt: 1 } }
+      }
+      if (path === "/git/branch") return { output: `Current branch: ${id}` }
+      throw new Error("Unexpected daemon request: " + path)
+    },
+  } as unknown as HttpTransport
 }
 
 beforeEach(() => {
@@ -41,9 +47,9 @@ describe("branch operations keep their calling client", () => {
     "%s keeps its client when another branch operation overlaps",
     async (firstMethod) => {
       const connection = new DaemonConnectionService()
-      vi.spyOn(connection, "getClient")
-        .mockResolvedValueOnce(client("first"))
-        .mockResolvedValueOnce(client("second"))
+      vi.spyOn(connection, "getTransport")
+        .mockResolvedValueOnce(transport("first"))
+        .mockResolvedValueOnce(transport("second"))
       const service = new DesktopSessionService(connection)
       const firstGit = deferred<{ stdout: string; stderr: string }>()
       const secondGit = deferred<{ stdout: string; stderr: string }>()
@@ -76,10 +82,10 @@ describe("branch operations keep their calling client", () => {
 
   it("keeps a later call's client when an earlier connection resolves late", async () => {
     const connection = new DaemonConnectionService()
-    const lateClient = deferred<VykorClient>()
-    vi.spyOn(connection, "getClient")
+    const lateClient = deferred<HttpTransport>()
+    vi.spyOn(connection, "getTransport")
       .mockReturnValueOnce(lateClient.promise)
-      .mockResolvedValueOnce(client("second"))
+      .mockResolvedValueOnce(transport("second"))
     const service = new DesktopSessionService(connection)
     const pendingGit = new Map([
       ["first", deferred<{ stdout: string; stderr: string }>()],
@@ -95,7 +101,7 @@ describe("branch operations keep their calling client", () => {
     const first = service.checkoutProjectBranch({ path: process.cwd(), branch: "first" })
     const second = service.createProjectBranch({ path: process.cwd(), branch: "second" })
     await started.get("second")!.promise
-    lateClient.resolve(client("first"))
+    lateClient.resolve(transport("first"))
     await started.get("first")!.promise
     pendingGit.get("second")!.resolve({ stdout: "", stderr: "" })
     pendingGit.get("first")!.resolve({ stdout: "", stderr: "" })

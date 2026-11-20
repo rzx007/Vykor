@@ -3,7 +3,7 @@ import { createInterface } from "node:readline/promises";
 import type {
   FeishuChannelSnapshot,
   FeishuRegistrationSnapshot,
-} from "@vykor/application-client";
+} from "@vykor/daemon-admin/channels";
 
 /**
  * `vk channels add feishu` / `vk channels allow` 的向导逻辑。
@@ -134,6 +134,15 @@ function tailLog(): string[] {
   ];
 }
 
+async function createLocalChannelsClient(): Promise<ChannelsClientLike> {
+  const { ensureLocalDaemon } = await import("../ensure-daemon.js");
+  const daemon = await ensureLocalDaemon();
+  const [{ HttpTransport }, { ChannelResource }] = await Promise.all([
+    import("@rzx/client"), import("@vykor/daemon-admin/channels"),
+  ]);
+  return { channels: new ChannelResource(new HttpTransport({ baseUrl: daemon.url, token: daemon.token })) };
+}
+
 /** 真实环境默认依赖：交互用 readline，client 延迟 import，测试不触发。 */
 export function createDefaultOnboardingDeps(): ChannelsOnboardingDeps {
   return {
@@ -161,12 +170,7 @@ export function createDefaultOnboardingDeps(): ChannelsOnboardingDeps {
       const answer = (await ask(`${question} [y/N] `)).trim().toLowerCase();
       return answer === "y" || answer === "yes";
     },
-    createClient: async () => {
-      const { ensureLocalDaemon } = await import("../ensure-daemon.js");
-      const daemon = await ensureLocalDaemon();
-      const { VykorClient } = await import("@vykor/application-client");
-      return new VykorClient({ baseUrl: daemon.url, token: daemon.token });
-    },
+    createClient: createLocalChannelsClient,
     renderQr: async (url) => {
       if (!process.stdout.isTTY) return;
       const mod = (await import("qrcode-terminal")) as unknown as QrModule & {
@@ -181,12 +185,7 @@ export function createDefaultOnboardingDeps(): ChannelsOnboardingDeps {
 
 export function createDefaultAllowDeps(): ChannelsAllowDeps {
   return {
-    createClient: async () => {
-      const { ensureLocalDaemon } = await import("../ensure-daemon.js");
-      const daemon = await ensureLocalDaemon();
-      const { VykorClient } = await import("@vykor/application-client");
-      return new VykorClient({ baseUrl: daemon.url, token: daemon.token });
-    },
+    createClient: createLocalChannelsClient,
     log: (message) => console.log(message),
   };
 }

@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 // @vitest-environment jsdom
 import { act, type ReactNode } from "react"
 import { createRoot, type Root } from "react-dom/client"
@@ -217,7 +218,7 @@ it.each(["stop", "remove"] as const)(
     const sendPrompt = vi.fn(() => sendReply)
     const interrupt = vi.fn(() => cancelReply)
     const cancelQueuedPrompt = vi.fn(() => cancelReply)
-    vi.stubGlobal("desktop", { sessions: { sendPrompt, interrupt, cancelQueuedPrompt } })
+    vi.stubGlobal("desktop", { businessData: businessDataFixture, sessions: { sendPrompt, interrupt, cancelQueuedPrompt } })
     useDesktopSessionStore.setState({
       activeSessionId: sessionId,
       sessions: [view.session],
@@ -272,13 +273,15 @@ it.each(["stop", "remove"] as const)(
     })
     const composer = host.querySelector<HTMLTextAreaElement>('[aria-label="正文草稿"]')!
     expect(host.querySelectorAll('[data-slot="item"]')).toHaveLength(1)
-    let stopping: Promise<void> | undefined
     try {
       await act(async () => {
-        if (action === "stop") stopping = useDesktopSessionStore.getState().interrupt()
-        else host.querySelector<HTMLButtonElement>('[aria-label="删除待处理消息"]')!.click()
+        if (action === "stop") {
+          composer.focus()
+          composer.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }))
+        } else host.querySelector<HTMLButtonElement>('[aria-label="删除待处理消息"]')!.click()
       })
       expect(interrupt).toHaveBeenCalledTimes(action === "stop" ? 1 : 0)
+      if (action === "stop") expect(interrupt).toHaveBeenCalledWith({ sessionId, expectedRunId: active.id })
       expect(cancelQueuedPrompt).toHaveBeenCalledTimes(action === "remove" ? 1 : 0)
       const ended = {
         ...view,
@@ -305,7 +308,6 @@ it.each(["stop", "remove"] as const)(
         if (action === "stop") finishSend()
         else failSend(new Error("late send response lost"))
         await sending
-        await stopping
       })
     }
     expect(

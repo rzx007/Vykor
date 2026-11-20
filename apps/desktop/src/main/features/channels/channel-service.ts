@@ -1,9 +1,10 @@
+import type { ChannelDenialNotice } from "@vykor/protocol"
+import { ChannelResource } from "@vykor/daemon-admin/channels"
 import type {
-  ChannelDenialNotice,
   ChannelRuntimeStatus,
   FeishuChannelSnapshot,
   FeishuRegistrationSnapshot,
-} from "@vykor/application-client"
+} from "@vykor/daemon-admin/channels"
 
 import type {
   DesktopConnectionsSnapshot,
@@ -179,5 +180,5 @@ async function defaultGenerateQrDataUrl(url: string): Promise<string> {
 }
 
 export const desktopChannelService = new DesktopChannelService({
-  getClient: () => desktopSessionService.daemonClient(),
+  getClient: async () => ({ channels: new ChannelResource(await desktopSessionService.daemonTransport()) }),
 })

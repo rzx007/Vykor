@@ -8,15 +8,15 @@ vi.mock("./ensure-daemon.js", () => ({
   })),
 }));
 
-vi.mock("@vykor/application-client", async () => {
-  const actual = await vi.importActual<typeof import("@vykor/application-client")>("@vykor/application-client");
+vi.mock("@rzx/client", async () => {
+  const actual = await vi.importActual<typeof import("@rzx/client")>("@rzx/client");
   return {
     ...actual,
     VykorClient: vi.fn(),
   };
 });
 
-import { VykorClient } from "@vykor/application-client";
+import { VykorClient } from "@rzx/client";
 import { ensureLocalDaemon } from "./ensure-daemon.js";
 import { buildPrintSessionMetadata, runPrintSession } from "./print-session.js";
 
@@ -68,6 +68,43 @@ describe("runPrintSession", () => {
     delete process.env.VYKOR_COORDINATOR_MODE;
     exitSpy.mockRestore();
     vi.clearAllMocks();
+  });
+
+  it("declines unattended questions without changing ordinary tool approval", async () => {
+    const session = { id: "s1", cwd: "/tmp", title: "print", status: "idle", metadata: {}, createdAt: 1, updatedAt: 1 };
+    const run = { id: "r1", sessionId: session.id, status: "running", metadata: {}, createdAt: 2, updatedAt: 2 };
+    const completed = { ...run, status: "completed", updatedAt: 3 };
+    const pending = { sessionId: session.id, runId: run.id, status: "pending", createdAt: 2, updatedAt: 2 };
+    const reply = vi.fn(async () => {});
+    const initial = { cursor: 0, session, inputs: [], messages: [], parts: [], runs: [], attempts: [], permissions: [] };
+    const Client = VykorClient as unknown as ReturnType<typeof vi.fn>;
+    Client.mockImplementation(() => printClient({
+      create: vi.fn(async () => session),
+      admitPrompt: vi.fn(async () => ({ run })),
+      getState: vi.fn()
+        .mockResolvedValueOnce(initial)
+        .mockResolvedValueOnce({ ...initial, cursor: 1, runs: [run], permissions: [
+          { ...pending, id: "approval", toolName: "Write", payload: {} },
+          { ...pending, id: "question", toolName: "AskUser", payload: { input: { kind: "question", question: "Continue?" } } },
+        ] })
+        .mockResolvedValue({ ...initial, cursor: 2, runs: [completed] }),
+      reply,
+      stream: async function* () {
+        yield { id: "e2", seq: 2, type: "session.run.updated", schemaVersion: 1, sessionId: session.id, createdAt: 3,
+          payload: { run: completed } };
+      },
+    }));
+    const stderr = vi.spyOn(process.stderr, "write").mockReturnValue(true);
+    const stdout = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+    try {
+      await runPrintSession({ model: "m" }, "hi", { cwd: "/tmp", dangerouslySkipPermissions: true });
+      expect(reply).toHaveBeenCalledWith("approval", { status: "approved", decision: "once" });
+      expect(reply).toHaveBeenCalledWith("question", { status: "denied", decision: "once" });
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining("interactive user"));
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
   });
 
   it("creates a session, admits prompt, renders text, and exits on run completion", async () => {

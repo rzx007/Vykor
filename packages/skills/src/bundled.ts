@@ -192,12 +192,12 @@ Do not guess. Default only if the user already said so.
 
 | Type | Path | Scope |
 |------|------|-------|
-| Personal | \`~/.vykor/skills/<skill-name>/\` | Available across all projects for this user |
+| Personal | \`<user-skills-dir>/<skill-name>/\` | Available across all projects for this user |
 | Project | \`<cwd>/.vykor/skills/<skill-name>/\` | Shared with the repository |
 
-The runtime also **scans** \`.agents/skills\` (git-root to cwd). When *creating*
-a skill, write to \`.vykor/skills\` unless the user explicitly asks
-for the other project directory.
+The runtime also **scans** \`.agents/skills\` (git-root to cwd). For a project-scoped
+skill, write to \`.vykor/skills\` unless the user explicitly asks for the other
+project directory. For a personal skill, use the absolute personal directory shown above.
 
 Load order is last-writer-wins: bundled < plugin < user < project.
 
@@ -245,7 +245,17 @@ export const BUNDLED_SKILLS: SkillDefinition[] = [
   bundled("debug", "Systematically reproduce, localize, and fix the root cause of a bug, then add a regression test.", DEBUG),
   bundled(
     "create-skill",
-    "Create or install a local skill by writing SKILL.md under ~/.vykor/skills or the project .vykor/skills directory. Use when the user asks to add, write, or install a skill on disk.",
+    "Create or install a local skill by writing SKILL.md under <user-skills-dir> or the project .vykor/skills directory. Use when the user asks to add, write, or install a skill on disk.",
     CREATE_SKILL,
   ),
 ];
+
+/** Pure rendering: Node callers supply their selected or explicitly injected directory. */
+export function createBundledSkills(userSkillsDir: string): SkillDefinition[] {
+  const directory = userSkillsDir.replaceAll("\\", "/");
+  return BUNDLED_SKILLS.map(skill => ({
+    ...skill,
+    description: skill.description.replaceAll("<user-skills-dir>", () => directory),
+    content: skill.content.replaceAll("<user-skills-dir>", () => directory),
+  }));
+}

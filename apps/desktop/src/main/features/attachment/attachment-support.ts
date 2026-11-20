@@ -1,13 +1,16 @@
 import type { createReadStream } from "node:fs"
 
-import type { AttachmentResource } from "@vykor/application-client"
+import type { AttachmentResource } from "@rzx/client"
+import type { AttachmentStorageResource } from "./attachment-storage-resource"
 
 export interface AttachmentClient {
   attachments: Pick<
     AttachmentResource,
-    "upload" | "get" | "download" | "delete" | "scanStorage" | "repairStorage" | "gcStorage"
+    "upload" | "get" | "download" | "delete"
   >
 }
+
+export type AttachmentStorageClient = Pick<AttachmentStorageResource, "scanStorage" | "repairStorage" | "gcStorage">
 
 export interface AttachmentFileSystem {
   lstat(path: string): Promise<{ isSymbolicLink(): boolean }>

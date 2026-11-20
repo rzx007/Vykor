@@ -10,7 +10,7 @@ vi.mock("electron", () => ({
 }))
 
 vi.mock("../session/session-service", () => ({
-  desktopSessionService: { daemonClient: vi.fn() },
+  desktopSessionService: { agentClient: vi.fn(), daemonTransport: vi.fn() },
 }))
 
 import { IpcChannels, IpcEvents } from "../../../shared/ipc-channels"

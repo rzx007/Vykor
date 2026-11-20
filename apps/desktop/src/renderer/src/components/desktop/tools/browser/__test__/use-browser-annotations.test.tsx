@@ -48,6 +48,28 @@ it("preserves text on a failed save and does not allow saving the expired select
   await act(async () => { await ui.save() })
   expect(ui.draft).toBe("调整间距"); expect(ui.error).toContain("页面已变化")
   expect(ui.selection).toBeNull()
+  read.mockResolvedValue(picking)
+  await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+  expect(ui.error).toBe("页面已变化，请重新选择")
+})
+it("silently retries while a tab becomes active and clears an old tab error on recovery", async () => {
+  const tabChanged = "浏览器标签页已变化，请重新选择"
+  read.mockRejectedValue(new Error(tabChanged))
+  visible = false
+  await act(async () => root.render(<Probe />))
+  visible = true
+  await act(async () => root.render(<Probe />))
+  await act(async () => { await vi.advanceTimersByTimeAsync(200) })
+  expect(ui.error).toBeNull()
+
+  vi.mocked(window.desktop.browser.setAnnotationMode).mockRejectedValueOnce(new Error(tabChanged))
+  await act(async () => { await ui.startPicking() })
+  expect(ui.error).toBe(tabChanged)
+
+  read.mockResolvedValue(metadata)
+  await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+  expect(ui.snapshot).toEqual(metadata)
+  expect(ui.error).toBeNull()
 })
 it("retains the draft and stops reading while hidden", async () => {
   await choose(); act(() => ui.setDraft("意见"))

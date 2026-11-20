@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { emptySessionView, resetDesktopSessionStore } from "./store-test-fixtures"
@@ -41,7 +42,7 @@ describe("desktop session store event lifecycle", () => {
     vi.useFakeTimers();
     let listener!: (update: DesktopSessionUpdate) => void;
     const refreshGoal = vi.fn(async () => {});
-    vi.stubGlobal("window", { desktop: { sessions: {
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: {
       onUpdated: (callback: typeof listener) => { listener = callback; return () => {}; },
       onDaemonStatusChanged: () => () => {}, onDataDirectoryChanged: () => () => {}, onDaemonRestarted: () => () => {},
       acknowledgeUpdate: vi.fn(async () => ({ accepted: true })), requestUpdateResync: vi.fn(),
@@ -66,7 +67,7 @@ describe("desktop session store event lifecycle", () => {
     const getGoal = vi.fn(async () => null)
     const open = vi.fn(async (sessionId: string) => emptySessionView(sessionId, 1))
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           onUpdated: (listener: (update: DesktopSessionUpdate) => void) => {
             listeners.add(listener)
@@ -193,7 +194,7 @@ describe("desktop session store event lifecycle", () => {
       scheduled: [],
     }))
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           onUpdated: () => () => undefined,
           onDaemonStatusChanged: () => () => undefined,
@@ -261,7 +262,7 @@ describe("desktop session store event lifecycle", () => {
       daemonSubscribers.forEach((listener) => listener(status))
     }
     vi.stubGlobal("window", {
-      desktop: {
+      desktop: { businessData: businessDataFixture,
         sessions: {
           onUpdated,
           onDaemonStatusChanged,
@@ -325,7 +326,7 @@ describe("desktop session store event lifecycle", () => {
     })
     const onDaemonStatusChanged = vi.fn(() => () => undefined)
     const open = vi.fn(async (sessionId: string) => emptySessionView(sessionId, 2))
-    vi.stubGlobal("window", { desktop: { sessions: {
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: {
       onUpdated, onDaemonStatusChanged, open,
       acknowledgeUpdate: vi.fn(async () => ({ accepted: true })),
       requestUpdateResync: vi.fn(async () => ({ accepted: true })),
@@ -355,7 +356,7 @@ describe("desktop session store event lifecycle", () => {
     })
     const getGoal = vi.fn(async () => null)
     vi.stubGlobal("window", {
-      desktop: { sessions: {
+      desktop: { businessData: businessDataFixture, sessions: {
         onUpdated,
         onDaemonStatusChanged: () => () => undefined,
         getGoal,
@@ -391,7 +392,7 @@ describe("desktop session store integration races", () => {
     const sendPrompt = vi.fn<
       (input: { id: string; sessionId: string; content: string }) => Promise<void>
     >(async () => undefined)
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: emptySessionView("session-1"),
@@ -417,13 +418,14 @@ describe("desktop session store integration races", () => {
           rejectSend = reject
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({
       activeSessionId: "session-1",
       sessionView: emptySessionView("session-1"),
     })
 
     const request = useDesktopSessionStore.getState().sendMessage("confirmed")
+    await vi.waitFor(() => expect(sendPrompt).toHaveBeenCalled())
     const inputId = sendPrompt.mock.calls[0]![0].id
     const confirmedView = emptySessionView("session-1", 1)
     confirmedView.inputs = [
@@ -440,6 +442,7 @@ describe("desktop session store integration races", () => {
       },
     ]
     useDesktopSessionStore.getState().applySessionUpdate(confirmedView)
+    await vi.waitFor(() => expect(rejectSend).toBeTypeOf("function"))
     rejectSend(new Error("response lost"))
 
     await expect(request).resolves.toBeUndefined()
@@ -458,11 +461,12 @@ describe("desktop session store integration races", () => {
           rejectSend = reject
         })
     )
-    vi.stubGlobal("window", { desktop: { sessions: { sendPrompt } } })
+    vi.stubGlobal("window", { desktop: { businessData: businessDataFixture, sessions: { sendPrompt } } })
     useDesktopSessionStore.setState({ activeSessionId: "session-old" })
 
     const request = useDesktopSessionStore.getState().sendMessage("old request")
     useDesktopSessionStore.setState({ activeSessionId: "session-new" })
+    await vi.waitFor(() => expect(rejectSend).toBeTypeOf("function"))
     rejectSend(new Error("old request failed"))
 
     await expect(request).rejects.toThrow("old request failed")

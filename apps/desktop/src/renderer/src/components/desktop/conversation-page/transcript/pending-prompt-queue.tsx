@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { CornerDownRight, GripVertical, Paperclip, Trash2 } from "lucide-react"
 
 import { Button } from "@renderer/components/ui/button"
@@ -10,11 +11,17 @@ import {
   ItemTitle,
 } from "@renderer/components/ui/item"
 import { Spinner } from "@renderer/components/ui/spinner"
+import {
+  classifyFollowUps,
+  FOLLOW_UP_TARGET_UNAVAILABLE,
+  promptQueueOnlyReason,
+  queuedPromptActionKey,
+} from "@renderer/stores/desktop-session/pending-prompt-state"
 import type {
   PendingPromptSubmission,
   QueuedPromptAction,
 } from "@renderer/stores/desktop-session/types"
-import type { DesktopSessionInput, DesktopSessionRun } from "@shared/session-types"
+import type { DesktopSessionInput, DesktopSessionRun, DesktopSessionView } from "@shared/session-types"
 import { readBrowserAnnotationContext } from "@renderer/components/desktop/tools/browser/browser-annotation-context"
 
 interface PendingPrompt {
@@ -33,43 +40,89 @@ type LocalPendingSubmission = Pick<
   | "error"
   | "dismissed"
   | "browserAnnotationContext"
-> & { attachments?: PendingPromptSubmission["attachments"] }
+  | "delivery"
+> & { attachments?: PendingPromptSubmission["attachments"]; restorable?: boolean }
+
+export function queuedPrompts(
+  view: DesktopSessionView | null,
+  actions: Record<string, QueuedPromptAction>
+): PendingPrompt[] {
+  if (!view) return []
+  return view.runs
+    .filter(run => run.status === "pending" && run.inputId)
+    .sort((left, right) => left.createdAt - right.createdAt)
+    .flatMap(run => {
+      const input = view.inputs.find(candidate => candidate.id === run.inputId)
+      return input ? [{ input, run, action: actions[queuedPromptActionKey(run.sessionId, run.id)] }] : []
+    })
+}
+
+export function followUpFeedback(
+  view: DesktopSessionView | null,
+  local: LocalPendingSubmission[]
+): LocalPendingSubmission[] {
+  if (!view) return local
+  const feedback = new Map(local.map(submission => [submission.id, {
+    ...submission, restorable: submission.error === FOLLOW_UP_TARGET_UNAVAILABLE,
+  }]))
+  const statuses = classifyFollowUps(view)
+  for (const input of view.inputs) {
+    const status = statuses.get(input.id)
+    if (!status) continue
+    if (status === "applied") {
+      feedback.delete(input.id)
+      continue
+    }
+    const waiting = status === "waiting"
+    if (waiting && feedback.get(input.id)?.placement === "transcript") continue
+    feedback.set(input.id, {
+      id: input.id,
+      sessionId: input.sessionId,
+      content: input.content,
+      delivery: "steer",
+      placement: "queue",
+      phase: waiting ? "accepted" : "failed",
+      restorable: !waiting,
+      ...(waiting ? {} : { error: "这条补充未进入当前回复。" }),
+    })
+  }
+  return [...feedback.values()]
+}
 
 export function PendingPromptQueue({
   prompts,
   activeRunId,
+  handoffRunId,
   localSubmissions = [],
   onPromote,
   onCancel,
   onDismissLocal = () => {},
   onRetryLocal,
+  onRestoreLocal,
 }: {
   prompts: PendingPrompt[]
   activeRunId?: string
+  handoffRunId?: string
   localSubmissions?: LocalPendingSubmission[]
   onPromote: (inputId: string, queuedRunId: string) => void
   onCancel: (inputId: string, queuedRunId: string) => void
   onDismissLocal?: (inputId: string) => void
   onRetryLocal?: (inputId: string) => void
+  onRestoreLocal?: (inputId: string) => Promise<boolean>
 }): React.JSX.Element | null {
+  const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
   const authorityInputIds = new Set(prompts.map(({ input }) => input.id))
   const visibleLocalSubmissions = localSubmissions.filter(
     (submission) =>
       !submission.dismissed &&
+      !dismissed.has(submission.id) &&
       !authorityInputIds.has(submission.id) &&
       (submission.placement === "queue" || submission.phase === "failed")
   )
-  const activeCandidateRunId =
-    activeRunId ??
-    prompts.reduce<PendingPrompt | undefined>(
-      (oldest, prompt) =>
-        !oldest || prompt.run.createdAt < oldest.run.createdAt ? prompt : oldest,
-      undefined
-    )?.run.id
   const visiblePrompts = prompts.filter(
     ({ run, action }) =>
-      action?.phase !== "acknowledged" &&
-      (run.id !== activeCandidateRunId || action?.phase === "failed")
+      (action?.phase !== "acknowledged" || (run.metadata.promotion as { kind?: string } | undefined)?.kind === "steering") &&
+      run.id !== handoffRunId
   )
   if (visiblePrompts.length === 0 && visibleLocalSubmissions.length === 0) return null
 
@@ -109,12 +162,21 @@ export function PendingPromptQueue({
               {visibleLocalSubmission.phase === "submitting"
                 ? "正在发送"
                 : visibleLocalSubmission.phase === "accepted"
-                  ? "等待处理"
+                  ? visibleLocalSubmission.delivery === "steer" ? "等候进入当前回复" : "等待处理"
                   : "发送失败"}
             </span>
             {visibleLocalSubmission.phase === "failed" ? (
               <>
-                {onRetryLocal ? (
+                {visibleLocalSubmission.restorable && onRestoreLocal ? (
+                  <Button type="button" variant="ghost" shape="pill" size="sm" onClick={() => {
+                    void onRestoreLocal(visibleLocalSubmission.id).then(restored => {
+                      if (restored) setDismissed(current => new Set([...current, visibleLocalSubmission.id]))
+                    }).catch(() => undefined)
+                  }}>
+                    恢复到草稿
+                  </Button>
+                ) : null}
+                {onRetryLocal && !visibleLocalSubmission.restorable ? (
                   <Button
                     type="button"
                     variant="ghost"
@@ -133,7 +195,10 @@ export function PendingPromptQueue({
                   className="[&_svg]:size-3.5"
                   aria-label="关闭发送错误"
                   title="关闭"
-                  onClick={() => onDismissLocal(visibleLocalSubmission.id)}
+                  onClick={() => {
+                    setDismissed(current => new Set([...current, visibleLocalSubmission.id]))
+                    onDismissLocal(visibleLocalSubmission.id)
+                  }}
                 >
                   <Trash2 />
                 </Button>
@@ -143,9 +208,16 @@ export function PendingPromptQueue({
         </Item>
       ))}
       {visiblePrompts.map(({ input, run, action }) => {
+        const queueOnlyReason = promptQueueOnlyReason(input.attachments.length, input.items, {
+          observation: Boolean(run.metadata.sessionObservationGrant) && run.metadata.recoveredAdmission !== true,
+          structuredOutput:
+            input.metadata.outputSchema !== undefined || run.metadata.outputSchema !== undefined,
+        })
         const promoting = action?.kind === "promote" && action.phase === "pending"
         const cancelling = action?.kind === "cancel" && action.phase === "pending"
-        const busy = action?.phase === "pending"
+        const promotion = run.metadata.promotion as { kind?: string; accepted?: boolean } | undefined
+        const waitingToApply = promotion?.kind === "steering" && promotion.accepted
+        const busy = action?.phase === "pending" || promotion?.kind === "steering"
         return (
           <Item
             key={run.id}
@@ -165,28 +237,33 @@ export function PendingPromptQueue({
               ) : null}
             </ItemContent>
             <ItemActions className="min-h-7 shrink-0 gap-1">
-              <Button
-                type="button"
-                variant="ghost"
-                shape="pill"
-                size="sm"
-                disabled={!activeRunId || busy}
-                onClick={() => onPromote(input.id, run.id)}
-              >
-                {promoting ? (
-                  <Spinner data-icon="inline-start" />
-                ) : (
-                  <CornerDownRight data-icon="inline-start" />
-                )}
-                调整方向
-              </Button>
+              {waitingToApply ? <span className="text-xs text-muted-foreground">等候进入当前回复</span> : null}
+              {queueOnlyReason ? (
+                <span className="text-xs text-muted-foreground">{queueOnlyReason}</span>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  shape="pill"
+                  size="sm"
+                  disabled={!activeRunId || busy}
+                  onClick={() => onPromote(input.id, run.id)}
+                >
+                  {promoting ? (
+                    <Spinner data-icon="inline-start" />
+                  ) : (
+                    <CornerDownRight data-icon="inline-start" />
+                  )}
+                  补充到当前回复
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="ghost"
                 shape="circle"
                 size="icon-sm"
                 className="[&_svg]:size-3.5"
-                disabled={busy}
+                disabled={cancelling || waitingToApply}
                 aria-label="删除待处理消息"
                 title="删除待处理消息"
                 onClick={() => onCancel(input.id, run.id)}

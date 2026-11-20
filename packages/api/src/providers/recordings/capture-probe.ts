@@ -2,6 +2,7 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { getConfigFilePath, getCredentialsFilePath } from "@vykor/host-config/paths";
 import { fileURLToPath } from "node:url";
 import { buildCodexHeaders, CodexSubscriptionClient } from "../codex.js";
 import { captureHttpExchange } from "./http-recording.js";
@@ -9,7 +10,6 @@ import { captureHttpExchange } from "./http-recording.js";
 const route = process.argv[2];
 try {
   if (route !== "openai" && route !== "codex") throw new Error("Explicit route openai or codex required");
-  const configDir = process.env.VYKOR_CONFIG_DIR ?? join(homedir(), ".vykor");
   const prompt = "Call Echo once with value public-probe. Do not write prose.";
   const schema = { type: "object", properties: { value: { type: "string" } }, required: ["value"], additionalProperties: false };
   let url: string;
@@ -18,8 +18,8 @@ try {
   let secrets: string[];
   let codex: CodexSubscriptionClient | undefined;
   if (route === "openai") {
-    const settings = JSON.parse(await readFile(join(configDir, "settings.json"), "utf8"));
-    const credentials = JSON.parse(await readFile(join(configDir, "credentials.json"), "utf8"));
+    const settings = JSON.parse(await readFile(getConfigFilePath(), "utf8"));
+    const credentials = JSON.parse(await readFile(getCredentialsFilePath(), "utf8"));
     const provider = settings.customProviders?.find((item: { id: string }) => item.id === "tokenharbor");
     const key = credentials.tokenharbor?.api_key;
     if (!provider?.baseUrl || provider.apiFormat !== "openai" || !key || !provider.models.some((item: { id: string }) => item.id === "mimo-v2.5:free")) throw new Error("Approved route unavailable");

@@ -1,14 +1,18 @@
 # Markdown 笔记
 
-保存笔记索引，并协调 Markdown 文件与记录修订。
+保存 Desktop 便签正文、组织和索引，保留旧会话库的读取兼容。
 
 ## 入口与流程
 
-NoteRepository 查询、创建、修改和删除笔记；文件辅助函数检查路径与内容，并以替换文件的方式写入；修订冲突通过明确错误返回。
+Desktop 主进程从 `@vykor/services/notes` 调用 `openDesktopNoteRepository(directory)`，用返回的 `repository` 查询、创建、更新和删除便签。每次正文读写先取得 SQLite 写锁，再核对 Markdown 与索引。发现外部编辑时，先登记新修订，再判断调用方传来的版本是否仍可写。关闭前由调用方排空写入并调用 `close()`。
+
+`importLegacyNotes()` 接受停写的旧库和便签目录。它将旧 SQLite 与 WAL（保存已提交、尚未合入主库的记录）复制到临时工作区，只打开副本，读取旧索引、旧内嵌正文和删除记录。新 Markdown、索引、组织与导入收据在目标同一磁盘上暂存。校验成功后一次重命名发布；同一来源重试会保留已发布目录里的编辑和删除，不同的旧来源碰到独立目标会报告冲突。
+
+`backupTo()` 将一致的索引和 Markdown 写入调用方提供的空暂存目录。`validateDesktopNotes()` 只读检查 SQLite、正文哈希、组织和收据，不生成新目录。整根迁移在后台停写后检查完成的副本。旧备份和首次升级仍可读取历史 `note` 和 `note_file_index`，旧 `note_attachment` 随原库保留。
 
 ## 状态归属
 
-正文保存在笔记目录的 Markdown 文件，数据库保存索引和相关元数据；修改通过共享事务接口协调。
+当前正文保存在 `data/desktop/notes/` 的 Markdown 文件，`notes.sqlite` 记录修订、时间、正文摘要和删除标记，`organization.json` 和 `organization.previous.json` 保存整理与上一次版本。`import-receipt.json` 标明导入版本和旧来源的内容摘要。旧记录的读取使用单独的兼容入口。
 
 ## 主要文件
 
@@ -16,6 +20,11 @@ NoteRepository 查询、创建、修改和删除笔记；文件辅助函数检�
 | -------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | [commands.ts](./commands.ts)                                         | `CreateNoteInput`、`UpdateNoteInput`                                        |
 | [index.ts](./index.ts)                                               | 汇总本分类的接口                                                            |
+| [desktop-note-index.ts](./desktop-note-index.ts)                       | 打开独立 SQLite，负责事务、索引和备份副本                                 |
+| [desktop-note-repository.ts](./desktop-note-repository.ts)             | Desktop 打开、关闭和备份校验入口                                           |
+| [legacy-note-import.ts](./legacy-note-import.ts)                       | 旧便签一次性导入、暂存校验和发布                                           |
+| [legacy-note-repository.ts](./legacy-note-repository.ts)               | 旧会话库的兼容适配                                                         |
+| [note-index.ts](./note-index.ts)                                      | 正文仓库需要的索引操作和事务回调                                           |
 | [markdown-note-files.ts](./markdown-note-files.ts)                   | `ensureNoteDirectory`、`noteFilePath`、`readNoteFile` 等                    |
 | [note-repository.ts](./note-repository.ts)                           | `NoteRevisionConflictError`、`NoteRepository`                               |
 | [note-organization.ts](./note-organization.ts)                       | 复用浏览器安全的组织类型与纯函数，模型定义在 domain-contracts 的 notes 分类 |

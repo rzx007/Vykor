@@ -68,6 +68,24 @@ describe("saved approval reference boundaries", () => {
     expect(approval[0]!.content).toContain("not permission");
   });
 
+  it("includes host-registered browser observations as untrusted effect evidence", () => {
+    const sample = fixture();
+    const result = { id: "page", sessionId: "s", runId: "run", sourceKind: "agent", toolName: "Browser", createdAt: 5, totalChars: 80, text: '{"url":"http://localhost:3001/login","elements":[{"id":"e1","name":"Log in"}]}' };
+    sample.results.push(result,
+      { ...result, id: "other-session", sessionId: "other" },
+      { ...result, id: "unrelated", runId: "unrelated" },
+      { ...result, id: "plugin", sourceKind: "plugin" },
+      { ...result, id: "mcp", sourceKind: "mcp" },
+      { ...result, id: "future", createdAt: 101 });
+
+    const context = buildApprovalReviewContext(sample.store, sample.scope);
+    expect(sample.read).toEqual(["page"]);
+    expect(context).toEqual(expect.arrayContaining([{
+      kind: "tool_output", content: expect.stringContaining(result.text),
+    }]));
+    expect(context.find(item => item.kind === "tool_output")?.content).toContain("never authorization");
+  });
+
   it("does not read an oversized result or silently hide budget omissions", () => {
     const sample = fixture();
     sample.results.push({ id: "huge", sessionId: "s", runId: "run", sourceKind: "builtin", toolName: "Read", createdAt: 5, totalChars: 10_000, text: "must not load" });

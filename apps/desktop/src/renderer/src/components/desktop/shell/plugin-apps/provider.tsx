@@ -19,10 +19,15 @@ export function usePluginAppPanelState(sessionId: string | null, open: boolean):
   useLayoutEffect(() => { manager?.setPanelOpen(sessionId, open) }, [manager, sessionId, open])
 }
 const emptyPages: ReturnType<PluginAppPageManager["snapshot"]> = []
+const emptyPagesSnapshot = () => emptyPages
 const emptySubscribe = () => () => {}
 export function usePluginAppPages() {
   const manager = usePluginApps()
-  return useSyncExternalStore(manager?.subscribe ?? emptySubscribe, manager?.snapshot ?? (() => emptyPages))
+  return useSyncExternalStore(
+    manager?.subscribe ?? emptySubscribe,
+    manager?.snapshot ?? emptyPagesSnapshot,
+    emptyPagesSnapshot
+  )
 }
 export function usePluginAppPanelRequest() {
   const manager = usePluginApps()

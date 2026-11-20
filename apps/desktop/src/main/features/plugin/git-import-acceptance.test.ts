@@ -12,7 +12,8 @@ vi.mock("electron", () => ({
   dialog: { showOpenDialog: vi.fn() },
 }))
 
-import { VykorClient } from "@vykor/application-client"
+import { HttpTransport } from "@rzx/client"
+import { DesktopPluginResource } from "./desktop-plugin-resource"
 import {
   discoverInstalledNativePlugins,
   loadNativePlugin,
@@ -109,6 +110,7 @@ function createDesktopService(): DesktopPluginService {
         acquireGlobalMutation: () => undefined,
         closeAllRuntimes: async () => {},
         invalidateRuntimes: async () => {},
+        healthSnapshot: () => { throw new Error("Health is outside this Git acceptance test") },
         runtimeSnapshot: () => {
           throw new Error("Runtime snapshot is outside this Git acceptance test")
         },
@@ -122,11 +124,11 @@ function createDesktopService(): DesktopPluginService {
       },
     })
   )
-  const client = new VykorClient({
+  const transport = new HttpTransport({
     baseUrl: "http://desktop-git.test",
     fetch: async (input, init) => await routes.request(input, init),
   })
-  return new DesktopPluginService({ daemonClient: async () => client })
+  return new DesktopPluginService({ daemonClient: async () => ({ plugins: new DesktopPluginResource(transport) }) })
 }
 
 describe("Desktop Native Git import acceptance", () => {

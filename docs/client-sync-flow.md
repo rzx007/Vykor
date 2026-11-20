@@ -1,6 +1,6 @@
 # Client Sync Flow
 
-> 状态：当前 TUI、Web、Desktop 共用客户端同步的权威说明。最后核对：2026-10-30。
+> 状态：当前 TUI、Web、Desktop 共用客户端同步的权威说明。最后核对：2026-11-19。
 
 ## 边界
 
@@ -36,7 +36,7 @@ const jobs = await client.jobs.list();
 
 上例的 `daemonCwd` 和 `model` 由调用方提供，若 Run 需要权限回复，现有审批界面应在等待期间通过 `client.permissions.reply(requestId, { status: "approved", decision: "once" })` 处理。完整可运行示例见 [Client SDK 使用指南](./client-sdk.md)。`waitForRun` 返回指定 Run 的真实终态和消息；传入的 `AbortSignal` 只结束等待。底层 transport 类仍可作为 SDK 构件导入，但 `VykorClient` 实例不暴露 transport 属性；产品代码不应绕过资源接口直接拼 endpoint。
 
-笔记、渠道、调度、插件及市场、插件应用、Office、全局设置、提供商与登录、开发/终端管理、命令及业务展示规则来自私有 [`@vykor/application-client`](../packages/application-client/README.md)。CLI、TUI 和 Desktop 使用私有包承接产品功能；它复用公开 SDK 的资源与同步实现。
+CLI、TUI 和 Desktop 的普通 Agent 流程直接使用公开客户端。全局设置、渠道、MCP 与插件管理使用 `@vykor/daemon-admin` 的分组入口；桌面市场、终端与插件应用由 Desktop 各自功能调用同一个 daemon。Desktop 便签由主进程从本地 Markdown 和 SQLite 读取，经窗口与主进程之间的 IPC 返回。TUI 斜杠命令的分发与显示由 TUI 本地处理。 [管理入口](../packages/daemon-admin/README.md) · [Desktop 便签](../apps/desktop/src/main/features/notes/README.md) · [TUI 命令](../apps/frontend/src/hooks/commands/README.md)
 
 ## 首个请求前的协议握手
 
@@ -166,3 +166,7 @@ Resource response
 - `scripts/client-public-api-contract.json`：当前公共面事实源。
 
 服务端请求与投影流程见 [Daemon Application Architecture](./daemon-application-architecture.md)，协议错误和 breaking change 规则见 [Protocol Contract](./protocol-contract.md)。
+
+## 运行中补充的确认
+
+发送回执只用于结算本次请求。界面使用事件或快照里的 Input ID 核对接纳，并清理同一条已提交草稿。目标 Run 的 `appliedInputState` 决定补充是否已进入历史。连接结果未知时，以原 Input ID 和目标核对及重试。

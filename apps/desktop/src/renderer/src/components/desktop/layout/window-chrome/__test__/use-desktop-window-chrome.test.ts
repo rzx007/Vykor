@@ -1,3 +1,4 @@
+import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
 type Effect = () => void | (() => void)
@@ -102,7 +103,7 @@ function createDesktopWindow(): DesktopWindowFixture {
     close: vi.fn(() => Promise.resolve()),
   }
 
-  Object.assign(globalThis, { window: { desktop: { window: desktopWindow } } })
+  Object.assign(globalThis, { window: { desktop: { businessData: businessDataFixture, window: desktopWindow } } })
 
   return {
     desktopWindow,

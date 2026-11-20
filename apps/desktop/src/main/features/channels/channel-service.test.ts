@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
-import type { ChannelRuntimeStatus } from "@vykor/application-client"
+import type { ChannelRuntimeStatus } from "@vykor/protocol"
 
 import { DesktopChannelService, type DesktopChannelClient } from "./channel-service"
 

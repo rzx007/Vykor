@@ -19,6 +19,7 @@
 | [attachment.ts](./attachment.ts) | `AttachmentRouteService`、`createAttachmentRoutes`、`contentDisposition` |
 | [auth.ts](./auth.ts) | `AuthRoutesContext`、`createAuthRoutes` |
 | [background-shell.ts](./background-shell.ts) | `BackgroundShellRoutesContext`、`createBackgroundShellRoutes` |
+| [browser-host.ts](./browser-host.ts) | 注册本机桌面浏览器流，转交操作审批与结果 |
 | [channel-control.ts](./channel-control.ts) | `ChannelControlRoutesContext`、`createChannelControlRoutes` |
 | [channel.ts](./channel.ts) | `createChannelRoutes` |
 | [events.ts](./events.ts) | `HttpEventHub` |
@@ -29,7 +30,7 @@
 | [marketplace.ts](./marketplace.ts) | `createMarketplaceRoutes` |
 | [mcp.ts](./mcp.ts) | `McpRoutesContext`、`createMcpRoutes` |
 | [memory.ts](./memory.ts) | `MemoryRoutesContext`、`createMemoryRoutes` |
-| [notes.ts](./notes.ts) | `NoteRoutesContext`、`createNoteRoutes` |
+| [notes.ts](./notes.ts) | `createRetiredNotesRoutes` 为旧客户端返回 `410 notes_moved` |
 | [permission.ts](./permission.ts) | `PermissionRoutesContext`、`createPermissionRoutes` |
 | [project.ts](./project.ts) | `createProjectRoutes` |
 | [run-execution.ts](./run-execution.ts) | `RunExecutionRoutesContext`、`createRunExecutionRoutes` |
