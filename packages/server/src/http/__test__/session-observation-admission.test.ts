@@ -84,6 +84,38 @@ it.each(["metadata", "runMetadata"])("rejects forged observation grants in %s", 
   expect(store.conversations.getInput("forged")).toBeUndefined();
 });
 
+it.each(["metadata", "runMetadata"])("rejects forged lookup eligibility in %s", async field => {
+  const response = await submit({ id: "forged", content: "plain prompt", [field]: { sessionLookupAllowed: true } });
+  expect(response.status).toBe(400);
+  expect(store.conversations.getInput("forged")).toBeUndefined();
+});
+
+it("limits lookup eligibility to Runs newly queued by the ordinary HTTP prompt route", async () => {
+  const response = await submit({ id: "ordinary", delivery: "queue", content: "plain prompt" });
+  expect(response.status).toBe(202);
+  const { input, run } = await response.json();
+  expect(run.metadata).toHaveProperty("sessionLookupAllowed", true);
+  expect(input.metadata).not.toHaveProperty("sessionLookupAllowed");
+  expect(runs.admission.replayInput(input.id, { id: "replay-lookup" }).run?.metadata).not.toHaveProperty("sessionLookupAllowed");
+
+  const internal = await runs.admission.preparePrompt(source, { id: "internal", items: [{ type: "text", text: "plain prompt" }] });
+  if ("completion" in internal) throw new Error("Expected queued admission");
+  expect(internal.run?.metadata).not.toHaveProperty("sessionLookupAllowed");
+  const retry = await submit({ id: "internal", content: "plain prompt" });
+  expect((await retry.json()).run.metadata).not.toHaveProperty("sessionLookupAllowed");
+
+  store.conversationTransactions.admitPrompt({ id: "orphan-lookup", sessionId: source, delivery: "queue", items: [{ type: "text", text: "plain prompt" }] });
+  const recovered = await submit({ id: "orphan-lookup", content: "plain prompt" });
+  expect(recovered.status).toBe(202);
+  const recoveredRun = (await recovered.json()).run;
+  expect(recoveredRun.metadata).toHaveProperty("recoveredAdmission", true);
+  expect(recoveredRun.metadata).not.toHaveProperty("sessionLookupAllowed");
+
+  const steered = await submit({ id: "steer-lookup", delivery: "steer", content: "plain prompt" });
+  expect(steered.status).toBe(202);
+  expect((await steered.json()).run?.metadata).not.toHaveProperty("sessionLookupAllowed");
+});
+
 it.each(["observe-session", "observe-session target suffix", "observe-session\ttarget"])("rejects a malformed directive (%s)", async content => {
   expect((await submit({ id: "bad", content })).status).toBe(400);
   expect(store.conversations.getInput("bad")).toBeUndefined();

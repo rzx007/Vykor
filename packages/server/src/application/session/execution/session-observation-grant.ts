@@ -61,8 +61,12 @@ export function createSessionObservationGrant(
       store.channels.hasConversationSession(sourceSessionId) || store.channels.hasConversationSession(targetSessionId)) {
     throw new SessionApplicationError(409, "observe-session requires available, durable root sessions without channel bindings");
   }
-  const runs = store.runs.listRuns(targetSessionId);
-  const selected = runs.find(run => run.id === activeRunId && (run.status === "pending" || run.status === "running")) ??
-    runs.find(run => run.status === "running") ?? runs.find(run => run.status === "pending") ?? runs.at(-1);
+  const selected = selectSessionObservationRun(store.runs.listRuns(targetSessionId), activeRunId);
   return { targetSessionId, targetRunId: selected?.id ?? null, afterSeq };
+}
+
+/** Runs come from the repository in creation order. */
+export function selectSessionObservationRun(runs: readonly SessionRunRecord[], activeRunId?: string): SessionRunRecord | undefined {
+  return runs.find(run => run.id === activeRunId && (run.status === "pending" || run.status === "running")) ??
+    runs.find(run => run.status === "running") ?? runs.find(run => run.status === "pending") ?? runs.at(-1);
 }

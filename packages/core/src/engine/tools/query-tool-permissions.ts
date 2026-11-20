@@ -69,13 +69,17 @@ export async function authorizeToolCall(
   if (decision.action === "ask" && !confirmed) {
     let allowed = false;
     if (execution) {
-      const request = {
+      // A different Run can expose an unrelated tool under the same name.
+      const confirmOnce = execution.contribution?.tools?.some(item =>
+        item.definition === tool && item.permission === "runtime-confirm-once");
+      const request: AgentPermissionRequest = {
         toolName: toolUse.name,
         toolSource:
           execution.tools?.get(toolUse.name)?.source?.kind ?? "unknown",
         toolDescription: tool.description,
         reason: decision.reason,
         input: toolUse.input,
+        ...(confirmOnce ? { confirmation: "once" } : {}),
       };
       await emitToolLifecycle(
         execution,

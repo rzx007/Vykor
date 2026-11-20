@@ -13,6 +13,7 @@ import type { GoalReadSnapshot } from "../../goals/goal-read-tool.js";
 import {
   isAgentExecutionLimitError,
   type AgentExecutionLimits,
+  type AgentRunToolContribution,
   type ToolDefinition,
 } from "@vykor/agent-contracts";
 import { type ContentBlock } from "@vykor/agent-contracts";
@@ -29,6 +30,7 @@ import type { SessionAutoReviewService } from "../../auto-review/session-auto-re
 import { RunStallWatchdog } from "./run-stall-watchdog.js";
 import { readStoredOutputSchema } from "./run-admission-work.js";
 import { readSessionObservationGrant, type SessionObservationGrant } from "./session-observation-grant.js";
+import type { SessionDiscoveryTool } from "./session-discovery-tool.js";
 import type { SessionPostRunMaintenance } from "../maintenance/session-post-run-maintenance.js";
 import type { SessionEventPublisher } from "../transcript/session-event-publisher.js";
 import type { SessionTranscriptProjection } from "../transcript/transcript-projection.js";
@@ -77,6 +79,7 @@ export interface SessionRunExecutorContext {
   >;
   goals: Pick<GoalOperations, "getGoal">;
   createSessionObservationTool?(input: ExecuteSessionRunInput, grant: SessionObservationGrant): ToolDefinition;
+  createSessionDiscoveryTool?(input: ExecuteSessionRunInput & { cwd: string }): SessionDiscoveryTool | undefined;
   checkGoalExecution?(goalId: string, objectiveVersion: number): void;
   checkGoalRunExecution?(
     goalId: string,
@@ -461,31 +464,43 @@ export class SessionRunExecutor {
       let preparedCapabilities = capabilityView;
       const observationGrant = readSessionObservationGrant(storedRun);
       const observationTool = observationGrant && this.context.createSessionObservationTool?.(input, observationGrant);
+      const discoveryTool = storedRun.metadata.sessionLookupAllowed === true
+        ? this.context.createSessionDiscoveryTool?.({ ...input, cwd: session.cwd })
+        : undefined;
+      const scopedTools: Array<{ tool: ToolDefinition; permission: AgentRunToolContribution["permission"]; sourceAvailable?(): boolean }> = [];
       if (observationTool) {
-        if (preparedCapabilities?.tools.has(observationTool.name)) {
-          // The explicit observation request owns this name for the current Run.
+        scopedTools.push({ tool: observationTool, permission: "host-internal" });
+      }
+      if (discoveryTool) {
+        scopedTools.push({ tool: discoveryTool, permission: "runtime-confirm-once", sourceAvailable: discoveryTool.sourceAvailable });
+      }
+      for (const { tool, permission, sourceAvailable } of scopedTools) {
+        if (preparedCapabilities?.tools.has(tool.name)) {
+          // The host contribution owns this name for the eligible Run.
           const tools = new Map(preparedCapabilities.tools);
-          tools.delete(observationTool.name);
+          tools.delete(tool.name);
           preparedCapabilities = { ...preparedCapabilities, tools };
         }
-        const permitted = () => host?.permitsHostRunTool?.(observationTool);
+        const permitted = async (toolInput?: Record<string, unknown>) =>
+          await host?.permitsHostRunTool?.(tool, permission === "runtime-confirm-once" ? toolInput : undefined) &&
+          (!sourceAvailable || (!workContext.signal.aborted && sourceAvailable()));
         if (await permitted()) {
           const definition: ToolDefinition = {
-            ...observationTool,
+            ...tool,
             async execute(toolInput, toolContext) {
-              if (await permitted()) {
-                const result = await observationTool.execute(toolInput, toolContext);
-                if (await permitted()) return result;
+              if (await permitted(toolInput)) {
+                const result = await tool.execute(toolInput, toolContext);
+                if (await permitted(toolInput)) return result;
               }
               return {
                 isError: true,
-                content: [{ type: "text", text: "SessionObserve is unavailable under the current tool policy." }],
+                content: [{ type: "text", text: `${tool.name} is unavailable under the current tool policy.` }],
               };
             },
           };
           contribution = {
             ...contribution,
-            tools: [...(contribution?.tools ?? []), { definition, permission: "host-internal" }],
+            tools: [...(contribution?.tools ?? []), { definition, permission }],
           };
         }
       }

@@ -49,6 +49,7 @@ export function createRunExecutionRoutes(
       try {
         const admitted = await context.application.admitPrompt(sessionId, {
           ...input,
+          ...(input.delivery !== "steer" ? { allowSessionLookup: true } : {}),
           ...(observationTargetSessionId === undefined ? {} : { observationTargetSessionId }),
           traceId: context.traces.get(c.req.raw),
         });

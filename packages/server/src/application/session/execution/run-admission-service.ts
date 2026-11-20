@@ -28,6 +28,8 @@ export interface AdmitPromptInput {
   delivery?: "queue" | "steer";
   expectedActiveRunId?: string;
   observationTargetSessionId?: string;
+  /** Set only by the ordinary queued HTTP prompt route. */
+  allowSessionLookup?: true;
   outputSchema?: Record<string, unknown>;
   items: SessionUserInputItem[];
   content?: string;

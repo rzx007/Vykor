@@ -5,6 +5,7 @@ import { Button } from "@renderer/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@renderer/components/ui/popover"
 import { cn } from "@renderer/lib/utils"
 import type { DesktopAttachmentDraft } from "@shared/attachment-types"
+import type { DesktopExecutionState, DesktopSessionActivity } from "@shared/activity-types"
 import type { DesktopContextUsageSnapshot } from "@shared/context-usage-types"
 import type {
   DesktopModel,
@@ -29,8 +30,18 @@ import { RichPromptInput } from "./rich-prompt-input"
 import type { ComposerSkill } from "./rich-prompt-input"
 import type { ComposerPickerCommand, ComposerPickerItem } from "./composer-picker"
 import type { ContextPickerItem } from "./context-picker"
+import { isDesktopObservableSession } from "../shared/session-observation"
 import { resolvePermissionModeLabel } from "../shared/utils"
 import { pluginMentionsEnabled as defaultPluginMentionsEnabled } from "./plugin-mentions-feature"
+
+const observationStatusLabels: Record<DesktopExecutionState, string> = {
+  needs_input: "等你处理",
+  running: "执行中",
+  idle: "空闲",
+  completed: "已完成",
+  failed: "失败",
+  interrupted: "已中断",
+}
 
 export function Composer({
   id,
@@ -54,6 +65,8 @@ export function Composer({
   pluginMentionsEnabled = defaultPluginMentionsEnabled,
   commands = [],
   conversations = [],
+  conversationActivities,
+  observationEnabled = false,
   activeSessionId = null,
   goalMode = false,
   goalEditing = false,
@@ -111,6 +124,8 @@ export function Composer({
   pluginMentionsEnabled?: boolean
   commands?: readonly ComposerPickerItem[]
   conversations?: readonly DesktopSessionRecord[]
+  conversationActivities?: Readonly<Record<string, DesktopSessionActivity>>
+  observationEnabled?: boolean
   activeSessionId?: string | null
   goalMode?: boolean
   goalEditing?: boolean
@@ -184,6 +199,7 @@ export function Composer({
   const PermissionIcon = permissionModeIcons[permissionMode]
   const closePicker = (): void => setActivePicker(null)
   const attachDisabled = attachmentReadOnly || sending
+  const canObserve = observationEnabled && !goalMode
   const contextItems: ContextPickerItem[] = [
     {
       id: "context:files",
@@ -209,18 +225,26 @@ export function Composer({
     ...conversations
       .filter((session) => session.id !== activeSessionId && session.status !== "archived")
       .sort((left, right) => right.updatedAt - left.updatedAt)
-      .map((session): ContextPickerItem => ({
-        id: `context:conversation:${session.id}`,
-        label: session.title.trim() || "未命名对话",
-        description: "引用历史对话",
-        sourceLabel: "对话",
-        group: "历史对话",
-        action: {
-          kind: "conversation",
-          sessionId: session.id,
-          displayName: session.title.trim() || "未命名对话",
-        },
-      })),
+      .map((session): ContextPickerItem => {
+        const label = session.title.trim() || "未命名对话"
+        const activity = conversationActivities?.[session.id]
+        const state = activity?.executionState ??
+          (session.status === "running" ? "running" : session.status === "error" ? "failed" : "idle")
+        return {
+          id: `context:conversation:${session.id}`,
+          label,
+          description: "引用历史对话",
+          sourceLabel: "对话",
+          group: "历史对话",
+          observation: canObserve && isDesktopObservableSession(session) ? {
+            priority: state === "needs_input" ? 0 : state === "running" ? 1 : 2,
+            workspace: session.cwd,
+            status: observationStatusLabels[state],
+            updatedAt: activity?.updatedAt ?? session.updatedAt,
+          } : undefined,
+          action: { kind: "conversation", sessionId: session.id, displayName: label },
+        }
+      }),
     ...(pluginMentionsEnabled
       ? plugins.map((plugin): ContextPickerItem => ({
           id: `context:plugin:${plugin.pluginId}`,
@@ -232,6 +256,15 @@ export function Composer({
         }))
       : []),
   ]
+  if (canObserve) {
+    contextItems.push({
+      id: "context:observe-mode",
+      label: "观察进度",
+      description: "选择要观察的会话",
+      group: "添加",
+      action: { kind: "observe-mode" },
+    })
+  }
 
   const [deliveryChoice, setDeliveryChoice] = useState<{
     delivery: "queue" | "steer"

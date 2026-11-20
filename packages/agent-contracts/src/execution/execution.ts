@@ -61,7 +61,8 @@ export interface AgentRunToolContribution {
   /** Trusted host validation after authorization and before taking dispatch rights. */
   readonly beforeDispatch?: (input: Record<string, unknown>, context: import("../tools/tools.js").ToolContext) => Promise<string | undefined>;
   readonly definition: import("../tools/tools.js").ToolDefinition;
-  readonly permission: "host-internal";
+  /** Runtime policy applies, with any requested approval limited to this invocation. */
+  readonly permission: "host-internal" | "runtime-confirm-once";
   /** End only after this exact definition succeeds and the whole batch is delivered. */
   readonly endRunOnSuccess?: true;
 }

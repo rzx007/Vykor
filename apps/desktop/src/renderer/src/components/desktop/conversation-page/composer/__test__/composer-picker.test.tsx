@@ -187,6 +187,95 @@ describe("ComposerPicker", () => {
     })
     expect(onDismiss).toHaveBeenCalledOnce()
   })
+
+  it("keeps the title filter when switching the same list to observation", async () => {
+    const onSelect = vi.fn()
+    const items: ContextPickerItem[] = [
+      {
+        id: "build",
+        label: "构建桌面版",
+        description: "引用历史对话",
+        group: "历史对话",
+        observation: { priority: 1, workspace: "D:/build", status: "执行中", updatedAt: 1 },
+        action: { kind: "conversation", sessionId: "build", displayName: "构建桌面版" },
+      },
+      {
+        id: "notes",
+        label: "记录版本",
+        description: "引用历史对话",
+        group: "历史对话",
+        observation: { priority: 0, workspace: "D:/notes", status: "等你处理", updatedAt: 1 },
+        action: { kind: "conversation", sessionId: "notes", displayName: "记录版本" },
+      },
+      {
+        id: "observe-mode",
+        label: "观察进度",
+        description: "选择要观察的会话",
+        group: "添加",
+        action: { kind: "observe-mode" },
+      },
+    ]
+    const options = () => [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+    await act(async () =>
+      root.render(createElement(ContextPicker, { items, query: "构建", onSelect, onDismiss: vi.fn() }))
+    )
+    expect(options()).toHaveLength(2)
+    expect(options()[0]?.getAttribute("aria-selected")).toBe("true")
+    expect(options()[1]?.textContent).toContain("观察进度")
+
+    await act(async () => options()[1]?.click())
+    expect(onSelect).not.toHaveBeenCalled()
+    expect(options()).toHaveLength(2)
+    expect(options()[0]?.textContent).toContain("构建桌面版")
+    expect(options()[0]?.textContent).toContain("D:/build")
+    expect(options()[0]?.textContent).toContain("执行中")
+    expect(options()[1]?.textContent).toContain("引用历史")
+
+    await act(async () =>
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }))
+    )
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith({
+      ...items[0],
+      action: { kind: "observe-session", sessionId: "build" },
+    })
+  })
+
+  it("keeps the highlighted observation target when live activity reorders the list", async () => {
+    const onSelect = vi.fn()
+    const first: ContextPickerItem = {
+      id: "first",
+      label: "构建桌面版",
+      description: "引用历史对话",
+      group: "历史对话",
+      observation: { priority: 0, workspace: "D:/build", status: "等你处理", updatedAt: 1 },
+      action: { kind: "conversation", sessionId: "first", displayName: "构建桌面版" },
+    }
+    const second: ContextPickerItem = {
+      ...first,
+      id: "second",
+      label: "发布桌面版",
+      observation: { priority: 1, workspace: "D:/release", status: "执行中", updatedAt: 1 },
+      action: { kind: "conversation", sessionId: "second", displayName: "发布桌面版" },
+    }
+    const mode: ContextPickerItem = {
+      id: "observe-mode", label: "观察进度", description: "选择会话", group: "添加",
+      action: { kind: "observe-mode" },
+    }
+    const props = { query: "", onSelect, onDismiss: vi.fn() }
+    await act(async () => root.render(createElement(ContextPicker, { ...props, items: [first, second, mode] })))
+    const options = () => [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')]
+    await act(async () => options().at(-1)?.click())
+    expect(options()[0]?.getAttribute("aria-selected")).toBe("true")
+    const updated = { ...first, observation: { priority: 2, workspace: "D:/build", status: "已完成", updatedAt: 2 } }
+    await act(async () => root.render(createElement(ContextPicker, { ...props, items: [updated, second, mode] })))
+    expect(options()[0]?.textContent).toContain("发布桌面版")
+    expect(options()[1]?.getAttribute("aria-selected")).toBe("true")
+    await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })))
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith({
+      ...updated,
+      action: { kind: "observe-session", sessionId: "first" },
+    })
+  })
 })
 
 describe("pickerItems", () => {

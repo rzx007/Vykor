@@ -5,6 +5,7 @@ import { createProjectFactsService, type ProjectFactsService } from "./personali
 import { createMaintenanceApplicationService, type MaintenanceApplicationContext } from "./maintenance/maintenance-application-service.js";
 import { ToolResultService } from "./session/execution/tool-result-service.js";
 import { createSessionObservationTool } from "./session/execution/session-observation-tool.js";
+import { createSessionDiscoveryTool } from "./session/execution/session-discovery-tool.js";
 import { createNodeJobBindings } from "@vykor/agent-runtime";
 import { GoalModelAttemptService } from "./goals/goal-model-attempt-service.js";
 import {hostedContextUsageAgent} from "./context-usage/assemble-session-context-usage.js";
@@ -855,6 +856,11 @@ export class DaemonApplication implements DurableAgentApplication {
           store, events: this.events, assertApplicationOwner,
           accepting: () => this.readyState === "ready" && this.operationGate.accepting,
         }, input, grant),
+        createSessionDiscoveryTool: (input) => createSessionDiscoveryTool({
+          store, assertApplicationOwner,
+          accepting: () => this.readyState === "ready" && this.operationGate.accepting,
+          activeRunId: (sessionId) => runServices.engine.runtimeBridge.activeRunId(sessionId),
+        }, input),
         checkGoalExecution: (goalId, version) => this.goals.checkExecution(goalId, version),
         checkGoalRunExecution: (goalId, version, runId, boundary, tool) => this.goals.checkRunExecution(goalId, version, runId, boundary, tool),
         readGoalSnapshot: (goalId, version, runId) => this.goals.readSnapshot(goalId, version, runId),

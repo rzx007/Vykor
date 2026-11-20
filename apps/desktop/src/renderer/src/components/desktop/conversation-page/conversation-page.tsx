@@ -90,6 +90,7 @@ import { openConversationTextMenu } from "./shared/conversation-text-actions"
 import type { AddToComposerEventDetail, ConversationPaneProps } from "./shared/types"
 import { resolveScrollerAgentStatus } from "./transcript/scroller-agent-status"
 import { resolveModelLabel, stopChatOnEscape } from "./shared/utils"
+import { isDesktopObservableSession } from "./shared/session-observation"
 
 function ConversationPane({
   panelOpen,
@@ -119,6 +120,7 @@ function ConversationPane({
   const activeSessionId = useDesktopSessionStore((state) => state.activeSessionId)
   const sessionView = useDesktopSessionStore((state) => state.sessionView)
   const activeSession = useDesktopSessionStore(selectActiveSessionRecord)
+  const conversationActivities = useDesktopSessionStore((state) => state.activity.sessions)
   const openingSession = useDesktopSessionStore(selectActiveSessionOpening)
   const activeSessionError = useDesktopSessionStore(selectActiveSessionComposerError)
   const newConversationError = useDesktopSessionStore(selectNewConversationError)
@@ -884,6 +886,8 @@ function ConversationPane({
                   pluginMentionsEnabled={pluginMentionsEnabled}
                   commands={applicationCommands}
                   conversations={sessions}
+                  conversationActivities={conversationActivities}
+                  observationEnabled={!goalMode && isDesktopObservableSession(activeSession)}
                   activeSessionId={activeSessionId}
                   goalMode={goalMode}
                   goalEditing={goalMode && Boolean(goalComposer.editingGoal)}

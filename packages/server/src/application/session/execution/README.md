@@ -14,6 +14,8 @@
 
 工具从已有运行和审批记录读取状态，按固定的运行 ID 查找直接关联的待审批和待回答请求。默认立即返回状态摘要。请求等待时，通过现有事件流接收变化，最长等待 30 秒。目标启动下一轮时，状态摘要仍指向接纳时选中的那一轮。
 
+普通 HTTP 提示新建的合格排队 Run 还可通过 `SessionLookup` 按标题查询状态。接纳时在本轮记录中保存查询标记。执行器凭标记调用工具工厂，由工厂核对实际会话和输入资格，调用继续经过普通工具审批。查询从来源会话保存的工作目录查找可用持久根会话，返回标题、运行状态和更新时间。查询结果是当时的状态，精确等待仍需单独指定观察目标。
+
 ## 状态归属
 
 输入和运行结果通过存储保存；活跃 Agent、取消信号与计时器由注入的运行资源及本目录服务持有。
@@ -30,6 +32,7 @@
 | [run-auto-review.ts](./run-auto-review.ts) | `captureAutoReviewBaseline`、`reviewAutoReview`、`settleUnreviewedAutoReview` |
 | [run-control-service.ts](./run-control-service.ts) | `RunControlDurableSessions`、`RunControlDurableRuns`、`RunControlDurableInputs`、`RunControlRuntime` 等 |
 | [run-stall-watchdog.ts](./run-stall-watchdog.ts) | `RunStallWatchdogOptions`、`RunStallWatchdog` |
+| [session-discovery-tool.ts](./session-discovery-tool.ts) | 按工作目录和已保存标题查询会话状态 |
 | [session-observation-grant.ts](./session-observation-grant.ts) | 首行指令、目标选择和每轮授权 |
 | [session-observation-tool.ts](./session-observation-tool.ts) | 只读状态、人工待办和短时等待 |
 | [session-run-assembly.ts](./session-run-assembly.ts) | `SessionRunAssemblyOptions`、`assembleSessionRunServices` |

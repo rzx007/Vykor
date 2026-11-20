@@ -24,6 +24,7 @@ Context Picker 当前提供：
 - 文件和文件夹：继续调用现有文件选择与附件上传逻辑。
 - 计划模式：独立切换当前会话的 `workMode`，保留原授权档位；支持从标记或 `/plan` 退出。
 - 历史对话：插入结构化、只读的会话引用。
+- 观察进度：普通主会话可以用同一份列表按标题选择要观察的会话，选中后在草稿首行填入观察指令。
 - 插件：按服务端目录插入本轮插件引用，后端决定实际可用的 Skill、工具与 Agent；选择插件不授予执行权限。
 - 目标：进入独立目标输入模式；提交后由会话级 Banner 展示和控制状态。
 
@@ -46,6 +47,7 @@ Context Picker 当前提供：
 | `composer.tsx` | Composer 外壳、底部控制区、`+` 入口和 Context Picker 数据组装 |
 | `rich-prompt-input.tsx` | Lexical 编辑器、结构化节点、触发器、选择和光标处理 |
 | `composer-picker.tsx` | Picker 列表、搜索、键盘导航、图标和选择回调 |
+| `context-picker.tsx` | `@` 和 `+` 共用的列表，持有本次打开时的历史或观察用途 |
 | `composer-trigger.ts` | `/`、`$`、`@` 的 token 边界识别 |
 | `skill-mention-node.tsx` | Skill 的 Lexical 原子节点 |
 | `resource-mention-node.tsx` | 文件/资源/历史会话上下文的 Lexical 原子节点 |
@@ -84,6 +86,7 @@ Context Picker
 计划模式 ─→ 更新 workMode，保留 approvalMode
 插件 ─────→ 插入 plugin capability item
 历史对话 ─→ 插入 conversation context item
+观察进度 ─→ 在首个文本项写入 observe-session 指令与换行
         ↓
 ComposerDocument
         ↓
@@ -91,6 +94,10 @@ ComposerDocument
 ```
 
 键入 `@查询词` 后选择历史对话时，编辑器会用结构化节点替换 `@查询词`，保留其前后正文并把光标放回节点后。点击 `+` 不向正文插入 `@`。
+
+已经保存的普通主会话可以在 `@` 或 `+` 列表末尾切换到「观察进度」。切换时保留当前标题搜索词，关闭列表后重新打开默认使用历史引用。观察列表排除当前会话、临时会话、子会话、渠道会话、关闭中及已归档会话。候选显示工作目录和状态，按等你处理、执行中、其他排列，同一组按最近活动更新时间排序。后台在发送时重新核实来源与目标资格。
+
+点选观察目标只改当前草稿，在最前面写入 `observe-session <会话 ID>` 和换行，已有合法指令时替换目标。一次撤销即可恢复原草稿，正文、结构化引用和附件仍可继续编辑。指令存在时消息走排队发送；删除后由常规发送规则决定。目标模式、临时会话和子会话的输入框没有观察入口。
 
 ## 历史对话引用
 
@@ -135,7 +142,7 @@ Context Picker 不替换附件系统。以下能力必须保持：
 
 - Picker 支持 ArrowUp、ArrowDown、Enter、Tab 和 Escape。
 - IME composition 期间 Enter 由输入法处理，不发送消息。
-- Picker 选择后不得生成额外段落或换行。
+- 引用历史或插入 Skill 时保持原有段落，观察指令单独占用首行。
 - `//`、`$$`、URL 中的 `/` 等内容不能误触发菜单。
 
 ## 系统状态

@@ -1,6 +1,6 @@
 import { businessDataFixture } from "@renderer/lib/__test__/business-data-fixture"
 // @vitest-environment jsdom
-import { act, type ReactNode } from "react"
+import { act, type ComponentProps, type ReactNode } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
@@ -9,18 +9,20 @@ import {
   resetDesktopSessionStore,
 } from "@renderer/stores/desktop-session/store-test-fixtures"
 import { createEmptySessionRuntime } from "@renderer/stores/desktop-session/operation-state"
-import {
-  selectComposerDocumentText,
-  type ComposerDocument,
-} from "@renderer/stores/desktop-session/composer-document"
-import type { DesktopSessionInput, DesktopSessionRun } from "@shared/session-types"
+import { selectComposerDocumentText } from "@renderer/stores/desktop-session/composer-document"
+import type { DesktopSessionActivity } from "@shared/activity-types"
+import type { DesktopSessionInput, DesktopSessionRecord, DesktopSessionRun } from "@shared/session-types"
+import type { Composer } from "../composer/composer"
 
 // Keep the actual page/queue relationship; omit unrelated native surfaces and the rich editor.
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn() }))
+type ObservationProps = Pick<ComponentProps<typeof Composer>, "observationEnabled" | "conversations" | "conversationActivities">
+const { readComposer } = vi.hoisted(() => ({ readComposer: vi.fn<(props: ObservationProps) => void>() }))
 vi.mock("../composer/composer", () => ({
-  Composer: ({ draft }: { draft: ComposerDocument }) => (
-    <textarea aria-label="正文草稿" value={selectComposerDocumentText(draft)} readOnly />
-  ),
+  Composer: ({ draft, observationEnabled, conversations, conversationActivities }: ComponentProps<typeof Composer>) => {
+    readComposer({ observationEnabled, conversations, conversationActivities })
+    return <textarea aria-label="正文草稿" value={selectComposerDocumentText(draft)} readOnly />
+  },
 }))
 vi.mock("../transcript/transcript", () => ({ ConversationTranscript: () => null }))
 vi.mock("../transcript/conversation-find", () => ({ ConversationFind: () => null }))
@@ -64,6 +66,40 @@ afterEach(() => {
   resetDesktopSessionStore()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+})
+
+it("passes observation candidates and live activity for a saved root chat only outside Goal mode", async () => {
+  const view = emptySessionView("chat")
+  const target = emptySessionView("target").session
+  const activity: DesktopSessionActivity = {
+    session: target, executionState: "needs_input", attentionState: "read", activitySeq: 1, updatedAt: 1,
+  }
+  useDesktopSessionStore.setState((state) => ({
+    activeSessionId: "chat",
+    sessions: [view.session, target],
+    loadStatus: "idle",
+    sessionView: view,
+    activity: { ...state.activity, sessions: { target: activity } },
+    refreshGoal: vi.fn(async () => {}),
+  }))
+  await act(async () => root.render(
+    <ConversationPane panelOpen canOpenReview={false} onTogglePanel={vi.fn()} onOpenFile={vi.fn()}
+      onOpenReview={vi.fn()} onOpenTerminal={vi.fn()} onOpenAgents={vi.fn()} />
+  ))
+  const lastProps = () => readComposer.mock.lastCall?.[0]
+  expect(lastProps()).toMatchObject({
+    observationEnabled: true, conversations: [view.session, target], conversationActivities: { target: activity },
+  })
+  await act(async () => useDesktopSessionStore.getState().setGoalMode("session:chat", true))
+  expect(lastProps()?.observationEnabled).toBe(false)
+  await act(async () => useDesktopSessionStore.getState().setGoalMode("session:chat", false))
+  const excludedSources: Partial<DesktopSessionRecord>[] = [
+    { storage: "memory" }, { parentId: "parent" }, { metadata: { source: "channel" } }, { status: "closing" },
+  ]
+  for (const changes of excludedSources) {
+    await act(async () => useDesktopSessionStore.setState({ sessionView: { ...view, session: { ...view.session, ...changes } } }))
+    expect(lastProps()?.observationEnabled).toBe(false)
+  }
 })
 
 it("reconciles sending, accepted and queued snapshots into one queue without remounting or clearing the composer", async () => {

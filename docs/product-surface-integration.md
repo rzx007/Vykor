@@ -41,7 +41,9 @@ CLI、TUI、Desktop、Web 和 IDE 的普通 Agent 会话直接使用 `@rzx/clien
 
 ## 在当前对话观察另一条会话
 
-在 Desktop 目标会话的「更多 → 复制」菜单选择「复制观察指令」。回到当前会话，把指令粘贴到空白输入框，在下一行写下要做的事，再排队发送。TUI、CLI 和 HTTP Client SDK（`@rzx/client`）也可以提交以下格式的文本。
+在 Desktop 当前会话的输入框按 `@` 或「+」，切到「观察进度」，按标题选择目标。输入框会填好指令首行。写下要做的事后排队发送。直接点选会话的默认用法仍是引用历史消息。
+
+也可以在目标会话的「更多 → 复制」菜单使用「复制观察指令」。TUI、CLI 和 HTTP Client SDK（`@rzx/client`）可提交同样的文本。
 
 ```text
 observe-session <目标会话 ID>
@@ -50,7 +52,9 @@ observe-session <目标会话 ID>
 
 后台服务在接纳消息时固定目标当时的一轮运行。当前 Agent 可立即查看状态，或短时等待其结束、请求审批或提出问题。等待超时会返回当时的状态。目标若需要处理，请回到目标会话操作。观察工具仍受当前会话的工具权限限制。
 
-这项授权只属于当前消息创建的运行，适用于同一后台服务上的两个独立持久会话。子会话、分叉、临时会话与渠道会话由各自入口管理。设计与验收见[跨会话观察设计](./superpowers/specs/2026-11-06-session-observation-design.md)和[实施计划](./superpowers/plans/2026-11-06-session-observation.md)。
+这项授权只属于当前消息创建的运行，适用于同一后台服务上的两个独立持久会话。子会话、分叉、临时会话与渠道会话由各自入口管理。
+
+也可以直接问「桌面打包那边结束了吗」。`SessionLookup` 可按已保存的标题搜索同一工作目录内的会话，结果包含标题、运行状态和更新时间，并遵循当前工具审批设置。有多个候选时，用名称和时间确认要查哪条。需要短时等待或查看当前待办时，先明确选定要观察的会话。[跨会话观察设计](./superpowers/specs/2026-11-06-session-observation-design.md) · [点选与按需查询计划](./superpowers/plans/2026-11-20-session-observation-entry-and-discovery.md)
 
 ## CLI
 

@@ -2971,7 +2971,7 @@
     {
       "path": "packages/domain-contracts/src/inputs/metadata.ts",
       "line": 20,
-      "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\", \"pluginAppAction\", \"pluginAppSubmission\", \"pluginAppSource\", \"sessionObservationGrant\", \"appliedInputState\", \"steerTargetRunId\", \"promotion\"]) {",
+      "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\", \"pluginAppAction\", \"pluginAppSubmission\", \"pluginAppSource\", \"sessionObservationGrant\", \"sessionLookupAllowed\", \"appliedInputState\", \"steerTargetRunId\", \"promotion\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
@@ -3474,37 +3474,37 @@
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 14,
+      "line": 15,
       "text": "import { PluginUiHistoryService } from \"./session/plugins/plugin-ui-history-service.js\";",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 15,
+      "line": 16,
       "text": "import { retirePluginUiActions } from \"./recovery/retire-plugin-ui-actions.js\";",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 191,
+      "line": 192,
       "text": "  readonly pluginUiHistory?: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 244,
+      "line": 245,
       "text": "  readonly pluginUiHistory: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 430,
+      "line": 431,
       "text": "      this.pluginUiHistory = new PluginUiHistoryService({ store });",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 1126,
+      "line": 1132,
       "text": "        recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
