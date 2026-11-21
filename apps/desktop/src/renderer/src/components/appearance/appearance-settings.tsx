@@ -1,6 +1,6 @@
-import { RotateCcw } from "lucide-react"
 import { useEffect, useState } from "react"
 
+import { SettingsResetButton } from "@renderer/components/desktop/settings-page/shared/settings-reset-button"
 import {
   ColorPicker,
   ColorPickerArea,
@@ -45,12 +45,16 @@ import { Slider } from "@renderer/components/ui/slider"
 import { Switch } from "@renderer/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@renderer/components/ui/toggle-group"
 import { toast } from "@renderer/lib/toast"
-import type { DesktopWindowMaterialPreference } from "@shared/window-material-types"
+import {
+  DEFAULT_WINDOW_MATERIAL_PREFERENCE,
+  type DesktopWindowMaterialPreference,
+} from "@shared/window-material-types"
 
 import {
   ACCENT_PRESET_COLORS,
   APPEARANCE_SURFACES,
   resolveAppearanceColors,
+  resolveAccentColor,
 } from "./appearance-colors"
 import { CODE_FONT_OPTIONS, UI_FONT_OPTIONS, type AppearanceFontOption } from "./appearance-fonts"
 import {
@@ -90,6 +94,24 @@ const WINDOW_MATERIAL_OPTIONS: readonly {
   { value: "glass", label: "透明磨玻璃" },
   { value: "opaque", label: "不透明" },
 ]
+const SCALAR_PREFERENCES = [
+  "theme",
+  "uiFont",
+  "codeFont",
+  "uiFontSize",
+  "codeFontSize",
+  "reducedMotion",
+  "streamingTextAnimation",
+  "glassStrength",
+] as const
+const PALETTE_COLORS = ["background", "foreground"] as const
+const COLOR_MODES = ["light", "dark"] as const
+const defaultPreferences = DEFAULT_APPEARANCE_PREFERENCES
+const defaultAccent = resolveAccentColor(defaultPreferences.accent)
+
+function defaultPaletteColor(theme: (typeof COLOR_MODES)[number], key: keyof AppearancePalette) {
+  return defaultPreferences.colors[theme][key] ?? APPEARANCE_SURFACES[theme][key]
+}
 
 export function AppearanceSettings(): React.JSX.Element {
   const {
@@ -99,28 +121,49 @@ export function AppearanceSettings(): React.JSX.Element {
     fontAvailability,
     saveState,
     setPreference,
-    patchPreferences,
     setWindowMaterial,
     resetAppearance,
   } = useAppearance()
-  const selectedAccent =
-    preferences.accent.kind === "custom"
-      ? preferences.accent.value
-      : ACCENT_PRESET_COLORS[preferences.accent.id]
+  const selectedAccent = resolveAccentColor(preferences.accent)
+  const accentChanged = selectedAccent !== defaultAccent
+  const resetAccent = () => setPreference("accent", defaultPreferences.accent)
   const palette = preferences.colors[resolvedTheme]
-  const defaults = APPEARANCE_SURFACES[resolvedTheme]
-  const requestedForeground = palette.foreground ?? defaults.foreground
+  const requestedForeground = palette.foreground ?? defaultPaletteColor(resolvedTheme, "foreground")
   const colors = resolveAppearanceColors(preferences.accent, resolvedTheme, palette)
-  const setPaletteColor = (key: keyof AppearancePalette, value: `#${string}` | null): boolean =>
-    setPreference("colors", {
+  const paletteColorChanged = (theme: (typeof COLOR_MODES)[number], key: keyof AppearancePalette) => {
+    const defaultColor = defaultPaletteColor(theme, key)
+    return (preferences.colors[theme][key] ?? defaultColor) !== defaultColor
+  }
+  const setPaletteColor = (key: keyof AppearancePalette, value: `#${string}` | null): boolean => {
+    const savedValue = value === defaultPaletteColor(resolvedTheme, key)
+      ? defaultPreferences.colors[resolvedTheme][key]
+      : value
+    return setPreference("colors", {
       ...preferences.colors,
-      [resolvedTheme]: { ...palette, [key]: value },
+      [resolvedTheme]: { ...palette, [key]: savedValue },
     })
+  }
   const isWindows = typeof window !== "undefined" && window.electron?.process?.platform === "win32"
   const isMac = typeof window !== "undefined" && window.electron?.process?.platform === "darwin"
   // Linux 没有系统提供的窗口材质，主进程永远解析成不透明档，所以干脆不展示这一组设置。
   const isLinux = typeof window !== "undefined" && window.electron?.process?.platform === "linux"
-  const glassStrength = preferences.glassStrength ?? DEFAULT_APPEARANCE_PREFERENCES.glassStrength
+  const glassStrength = preferences.glassStrength ?? defaultPreferences.glassStrength
+  const windowMaterialChanged =
+    windowMaterial !== null && windowMaterial.preference !== DEFAULT_WINDOW_MATERIAL_PREFERENCE
+  const preferenceChanged = (key: (typeof SCALAR_PREFERENCES)[number]) =>
+    (preferences[key] ?? defaultPreferences[key]) !== defaultPreferences[key]
+  const resetPreference = (key: (typeof SCALAR_PREFERENCES)[number]) =>
+    preferenceChanged(key) ? () => setPreference(key, defaultPreferences[key]) : undefined
+  const resetPaletteColor = (key: keyof AppearancePalette) =>
+    paletteColorChanged(resolvedTheme, key)
+      ? () => setPaletteColor(key, defaultPreferences.colors[resolvedTheme][key])
+      : undefined
+  const hasChanges =
+    SCALAR_PREFERENCES.some(preferenceChanged) ||
+    windowMaterialChanged ||
+    accentChanged ||
+    COLOR_MODES.some((theme) => PALETTE_COLORS.some((key) => paletteColorChanged(theme, key)))
+
   const commitSingle = <T extends string>(
     values: readonly T[],
     commit: (value: T) => void
@@ -140,11 +183,13 @@ export function AppearanceSettings(): React.JSX.Element {
         <p aria-live="polite" className="text-xs text-muted-foreground">
           {saveState.status === "saved" ? "已自动保存到当前设备" : "更改会即时预览并自动保存"}
         </p>
-        <ResetAppearanceDialog onReset={resetAppearance} />
+        {hasChanges ? <ResetAppearanceDialog onReset={resetAppearance} /> : null}
       </div>
 
-      <AppearanceSection title="模式">
-        <Button variant="ghost" className="self-end" onClick={() => setPreference("theme", DEFAULT_APPEARANCE_PREFERENCES.theme)}>恢复默认主题</Button>
+      <AppearanceSection
+        title="模式"
+        titleAction={<SettingsResetButton label="恢复默认主题" onReset={resetPreference("theme")} />}
+      >
         <FieldGroup>
           <Field>
             <FieldLabel className="sr-only">主题</FieldLabel>
@@ -181,9 +226,17 @@ export function AppearanceSettings(): React.JSX.Element {
           <FieldGroup>
             <Field orientation="responsive">
               <FieldContent>
-                <FieldTitle id="window-material-label">
-                  {isWindows ? "半透明侧边栏" : "窗口背景"}
-                </FieldTitle>
+                <div className="flex items-center gap-1">
+                  <FieldTitle id="window-material-label">
+                    {isWindows ? "半透明侧边栏" : "窗口背景"}
+                  </FieldTitle>
+                  {!isWindows && windowMaterialChanged ? (
+                    <SettingsResetButton
+                      label="恢复默认窗口背景"
+                      onReset={() => setWindowMaterial(DEFAULT_WINDOW_MATERIAL_PREFERENCE)}
+                    />
+                  ) : null}
+                </div>
                 <FieldDescription id="window-material-description">
                   {windowMaterialDescription(windowMaterial, isWindows ? "win32" : undefined)}
                 </FieldDescription>
@@ -217,7 +270,13 @@ export function AppearanceSettings(): React.JSX.Element {
             {isMac || isWindows ? (
               <Field orientation="responsive" data-disabled={windowMaterial.active !== "glass"}>
                 <FieldContent>
-                  <FieldTitle>透光强度</FieldTitle>
+                  <div className="flex items-center gap-1">
+                    <FieldTitle>透光强度</FieldTitle>
+                    <SettingsResetButton
+                      label="恢复默认透光强度"
+                      onReset={resetPreference("glassStrength")}
+                    />
+                  </div>
                   <FieldDescription>
                     {windowMaterial.active === "glass"
                       ? "低一些更安静，高一些更透光。正文不受影响。"
@@ -254,11 +313,15 @@ export function AppearanceSettings(): React.JSX.Element {
       ) : null}
 
       <AppearanceSection title="颜色">
-        <Button variant="ghost" className="self-end" onClick={() => patchPreferences({ accent: DEFAULT_APPEARANCE_PREFERENCES.accent, colors: DEFAULT_APPEARANCE_PREFERENCES.colors })}>恢复默认颜色</Button>
         <FieldGroup>
           <Field orientation="responsive">
             <FieldContent>
-              <FieldTitle>强调色</FieldTitle>
+              <div className="flex items-center gap-1">
+                <FieldTitle>强调色</FieldTitle>
+                {preferences.accent.kind === "preset" && accentChanged ? (
+                  <SettingsResetButton label="恢复默认强调色" onReset={resetAccent} />
+                ) : null}
+              </div>
               <FieldDescription>用于主要操作、链接和键盘焦点。</FieldDescription>
             </FieldContent>
             <ToggleGroup
@@ -287,9 +350,16 @@ export function AppearanceSettings(): React.JSX.Element {
           <CustomColorField
             id="appearance-custom-color"
             label="自定义强调色"
+            title="自定义强调色"
             description="输入六位颜色值，或打开选色板。列表选中与悬停底色由背景派生。"
             initialColor={selectedAccent}
-            onChange={(value) => setPreference("accent", { kind: "custom", value })}
+            onChange={(value) =>
+              setPreference(
+                "accent",
+                value === defaultAccent ? defaultPreferences.accent : { kind: "custom", value }
+              )
+            }
+            onReset={preferences.accent.kind === "custom" && accentChanged ? resetAccent : undefined}
           />
           <Separator />
           <FieldDescription>
@@ -299,22 +369,22 @@ export function AppearanceSettings(): React.JSX.Element {
             key={`background-${resolvedTheme}`}
             id="appearance-background-color"
             label="自定义背景色"
+            title="背景色"
             description="工作区直接使用此色，侧栏、浮层和边框随之调整。"
-            initialColor={palette.background ?? defaults.background}
+            initialColor={palette.background ?? defaultPaletteColor(resolvedTheme, "background")}
             onChange={(value) => setPaletteColor("background", value)}
-            onReset={() => setPaletteColor("background", null)}
-            isCustom={palette.background !== null}
+            onReset={resetPaletteColor("background")}
           />
           <Separator />
           <CustomColorField
             key={`foreground-${resolvedTheme}`}
             id="appearance-foreground-color"
             label="自定义前景色"
+            title="前景色"
             description="正文、控件与侧栏文字共用此色，按层级调整深浅。"
             initialColor={requestedForeground}
             onChange={(value) => setPaletteColor("foreground", value)}
-            onReset={() => setPaletteColor("foreground", null)}
-            isCustom={palette.foreground !== null}
+            onReset={resetPaletteColor("foreground")}
           />
           {colors.foreground !== requestedForeground ? (
             <FieldDescription role="status">
@@ -325,7 +395,6 @@ export function AppearanceSettings(): React.JSX.Element {
       </AppearanceSection>
 
       <AppearanceSection title="字体">
-        <div className="flex flex-wrap gap-2"><Button variant="ghost" onClick={() => patchPreferences({ uiFont: DEFAULT_APPEARANCE_PREFERENCES.uiFont, codeFont: DEFAULT_APPEARANCE_PREFERENCES.codeFont })}>恢复默认字体</Button><Button variant="ghost" onClick={() => patchPreferences({ uiFontSize: DEFAULT_APPEARANCE_PREFERENCES.uiFontSize, codeFontSize: DEFAULT_APPEARANCE_PREFERENCES.codeFontSize })}>恢复默认字号</Button></div>
         <FieldGroup>
           <FontSelect
             label="界面字体"
@@ -334,7 +403,7 @@ export function AppearanceSettings(): React.JSX.Element {
             options={UI_FONT_OPTIONS}
             availability={fontAvailability}
             onChange={(value) => setPreference("uiFont", value)}
-            onReset={() => setPreference("uiFont", DEFAULT_APPEARANCE_PREFERENCES.uiFont)}
+            onReset={resetPreference("uiFont")}
           />
           <Separator />
           <FontSelect
@@ -344,7 +413,7 @@ export function AppearanceSettings(): React.JSX.Element {
             options={CODE_FONT_OPTIONS}
             availability={fontAvailability}
             onChange={(value) => setPreference("codeFont", value)}
-            onReset={() => setPreference("codeFont", DEFAULT_APPEARANCE_PREFERENCES.codeFont)}
+            onReset={resetPreference("codeFont")}
           />
           <Separator />
           <FontSizeControl
@@ -352,7 +421,7 @@ export function AppearanceSettings(): React.JSX.Element {
             value={preferences.uiFontSize}
             range={UI_FONT_SIZE_RANGE}
             onChange={(value) => setPreference("uiFontSize", value)}
-            onReset={() => setPreference("uiFontSize", DEFAULT_APPEARANCE_PREFERENCES.uiFontSize)}
+            onReset={resetPreference("uiFontSize")}
           />
           <Separator />
           <FontSizeControl
@@ -360,28 +429,22 @@ export function AppearanceSettings(): React.JSX.Element {
             value={preferences.codeFontSize}
             range={CODE_FONT_SIZE_RANGE}
             onChange={(value) => setPreference("codeFontSize", value)}
-            onReset={() => setPreference("codeFontSize", DEFAULT_APPEARANCE_PREFERENCES.codeFontSize)}
+            onReset={resetPreference("codeFontSize")}
           />
         </FieldGroup>
       </AppearanceSection>
 
       <AppearanceSection title="动效">
-        <Button
-          variant="ghost"
-          className="self-end"
-          onClick={() =>
-            patchPreferences({
-              reducedMotion: DEFAULT_APPEARANCE_PREFERENCES.reducedMotion,
-              streamingTextAnimation: DEFAULT_APPEARANCE_PREFERENCES.streamingTextAnimation,
-            })
-          }
-        >
-          恢复默认动效
-        </Button>
         <FieldGroup>
           <Field orientation="responsive">
             <FieldContent>
-              <FieldTitle id="reduced-motion-label">减少动态效果</FieldTitle>
+              <div className="flex items-center gap-1">
+                <FieldTitle id="reduced-motion-label">减少动态效果</FieldTitle>
+                <SettingsResetButton
+                  label="恢复默认减少动态效果"
+                  onReset={resetPreference("reducedMotion")}
+                />
+              </div>
               <FieldDescription>减少页面切换和内容展开时的动画。</FieldDescription>
             </FieldContent>
             <ToggleGroup
@@ -422,19 +485,19 @@ export function AppearanceSettings(): React.JSX.Element {
 function CustomColorField({
   id,
   label,
+  title,
   description,
   initialColor,
   onChange,
   onReset,
-  isCustom,
 }: {
   id: string
   label: string
+  title: string
   description: string
   initialColor: string
   onChange: (value: `#${string}`) => boolean
   onReset?: () => boolean
-  isCustom?: boolean
 }): React.JSX.Element {
   const [draft, setDraft] = useState({ savedColor: initialColor, value: initialColor })
   // 外部设置改变时同步草稿，保留输入节点与焦点，也不需要渲染后的额外同步。
@@ -455,7 +518,19 @@ function CustomColorField({
   return (
     <Field orientation="responsive" data-invalid={customColorInvalid || undefined}>
       <FieldContent>
-        <FieldLabel htmlFor={id}>{label.replace("自定义", "")}</FieldLabel>
+        <div className="flex items-center gap-1">
+          <FieldLabel htmlFor={id}>{title}</FieldLabel>
+          <SettingsResetButton
+            label={`恢复默认${title}`}
+            onReset={
+              onReset
+                ? () => {
+                    if (onReset()) setCustomColor(initialColor)
+                  }
+                : undefined
+            }
+          />
+        </div>
         <FieldDescription id={`${id}-description`}>{description}</FieldDescription>
         {customColorInvalid ? (
           <FieldError id={`${id}-error`}>请输入完整的六位颜色值，例如 #006AFF。</FieldError>
@@ -496,21 +571,6 @@ function CustomColorField({
           className="font-mono uppercase"
           onChange={(event) => handleCommit(event.target.value)}
         />
-        {onReset ? (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            shape="circle"
-            aria-label={`恢复默认${label.replace("自定义", "")}`}
-            title="恢复默认颜色"
-            disabled={!isCustom}
-            onClick={() => {
-              if (onReset()) setCustomColor(initialColor)
-            }}
-          >
-            <RotateCcw />
-          </Button>
-        ) : null}
       </div>
     </Field>
   )
@@ -518,16 +578,21 @@ function CustomColorField({
 
 function AppearanceSection({
   title,
+  titleAction,
   children,
 }: {
   title: string
+  titleAction?: React.ReactNode
   children: React.ReactNode
 }): React.JSX.Element {
   return (
     <section className="flex flex-col gap-4" aria-labelledby={`appearance-${title}`}>
-      <h2 id={`appearance-${title}`} className="font-heading text-lg font-semibold">
-        {title}
-      </h2>
+      <div className="flex items-center gap-1">
+        <h2 id={`appearance-${title}`} className="font-heading text-lg font-semibold">
+          {title}
+        </h2>
+        {titleAction}
+      </div>
       {children}
     </section>
   )
@@ -548,7 +613,7 @@ function FontSelect<Id extends UiFontId | CodeFontId>({
   options: readonly AppearanceFontOption<Id>[]
   availability: Readonly<Record<string, boolean>>
   onChange: (value: Id) => void
-  onReset: () => boolean
+  onReset?: () => void
 }): React.JSX.Element {
   const items = options.map((option) => ({ label: option.label, value: option.id }))
   const selected = options.find((option) => option.id === value)
@@ -556,9 +621,11 @@ function FontSelect<Id extends UiFontId | CodeFontId>({
   return (
     <Field orientation="responsive">
       <FieldContent>
-        <FieldTitle>{label}</FieldTitle>
+        <div className="flex items-center gap-1">
+          <FieldTitle>{label}</FieldTitle>
+          <SettingsResetButton label={`恢复默认${label}`} onReset={onReset} />
+        </div>
         <FieldDescription>{description}</FieldDescription>
-        <Button variant="ghost" size="sm" onClick={onReset} aria-label={`恢复默认${label}`}>恢复默认</Button>
       </FieldContent>
       <Select
         items={items}
@@ -612,7 +679,7 @@ function FontSizeControl({
   value: number
   range: { min: number; max: number }
   onChange: (value: number) => void
-  onReset: () => boolean
+  onReset?: () => void
 }): React.JSX.Element {
   const commit = (next: number | readonly number[]): void => {
     const candidate = Array.isArray(next) ? next[0] : next
@@ -623,11 +690,13 @@ function FontSizeControl({
   return (
     <Field orientation="responsive">
       <FieldContent>
-        <FieldTitle>{label}</FieldTitle>
+        <div className="flex items-center gap-1">
+          <FieldTitle>{label}</FieldTitle>
+          <SettingsResetButton label={`恢复默认${label}`} onReset={onReset} />
+        </div>
         <FieldDescription>
           范围 {range.min}–{range.max} px。
         </FieldDescription>
-        <Button variant="ghost" size="sm" onClick={onReset} aria-label={`恢复默认${label}`}>恢复默认</Button>
       </FieldContent>
       <div className="flex w-full max-w-72 items-center gap-3">
         <Slider
@@ -660,8 +729,7 @@ function ResetAppearanceDialog({ onReset }: { onReset: () => boolean }): React.J
 
   return (
     <AlertDialog open={open} onOpenChange={setOpen}>
-      <AlertDialogTrigger render={<Button variant="outline" size="sm" />}>
-        <RotateCcw data-icon="inline-start" />
+      <AlertDialogTrigger render={<Button variant="outline" size="sm" shape="pill" />}>
         恢复默认
       </AlertDialogTrigger>
       <AlertDialogContent>

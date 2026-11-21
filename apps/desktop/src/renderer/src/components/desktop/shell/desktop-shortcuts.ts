@@ -98,6 +98,14 @@ function normalizedBinding(binding: string): string {
   return `${modifiers.slice().sort().join("+")}+${normalizedKey.toLowerCase()}`
 }
 
+export function hasCustomShortcutBinding(id: DesktopShortcutId): boolean {
+  const { bindings } = getShortcut(id)
+  const defaults = desktopShortcuts[id].bindings
+  if (bindings === defaults) return false
+  return bindings.length !== defaults.length ||
+    bindings.some((binding, index) => normalizedBinding(binding) !== normalizedBinding(defaults[index]))
+}
+
 export function setShortcutBinding(
   id: DesktopShortcutId,
   binding: string,

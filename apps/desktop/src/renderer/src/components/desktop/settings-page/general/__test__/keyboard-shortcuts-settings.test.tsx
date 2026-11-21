@@ -5,7 +5,7 @@ import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { setToastDispatcher } from "@renderer/lib/toast"
 
-import { getShortcut, setShortcutBinding } from "../../../shell/desktop-shortcuts"
+import { getShortcut, resetAllShortcutBindings, setShortcutBinding } from "../../../shell/desktop-shortcuts"
 import { KeyboardShortcutsSettings } from "../keyboard-shortcuts-settings"
 
 describe("KeyboardShortcutsSettings", () => {
@@ -28,19 +28,25 @@ describe("KeyboardShortcutsSettings", () => {
     setToastDispatcher(null)
     act(() => root.unmount())
     container.remove()
-    setShortcutBinding("toggleSidebar", "$mod+b", "B")
+    resetAllShortcutBindings()
   })
   it("clears and restores the binding with shared toast feedback", () => {
     act(() => root.render(<KeyboardShortcutsSettings />))
+    const reset = () => container.querySelector<HTMLButtonElement>('[aria-label="恢复默认切换侧边栏快捷键"]')
+    const resetAll = () => container.querySelector<HTMLButtonElement>('[aria-label="恢复全部默认快捷键"]')
+    expect(reset()).toBeNull()
+    expect(resetAll()).toBeNull()
     act(() =>
       container.querySelector<HTMLButtonElement>('[aria-label="清除切换侧边栏快捷键"]')!.click()
     )
     expect(getShortcut("toggleSidebar").bindings).toEqual([])
     expect(showToast).toHaveBeenCalledWith(expect.objectContaining({ status: "success" }))
-    act(() =>
-      container.querySelector<HTMLButtonElement>('[aria-label="恢复默认切换侧边栏快捷键"]')!.click()
-    )
+    expect(reset()?.previousElementSibling?.textContent).toBe("切换侧边栏")
+    expect(resetAll()?.previousElementSibling?.textContent).toBe("键盘快捷键")
+    act(() => reset()!.click())
     expect(getShortcut("toggleSidebar").bindings).toEqual(["$mod+b"])
+    expect(reset()).toBeNull()
+    expect(resetAll()).toBeNull()
   })
 
   it("searches the existing commands without offering add or delete actions", () => {
@@ -79,5 +85,12 @@ describe("KeyboardShortcutsSettings", () => {
       )
     })
     expect(getShortcut("toggleSidebar").bindings).toEqual(["$mod+Shift+KeyL"])
+
+    expect(container.querySelector('[aria-label="恢复默认切换侧边栏快捷键"]')).not.toBeNull()
+    act(() => {
+      expect(setShortcutBinding("toggleSidebar", "$mod+KeyB", "B")).toBe("updated")
+    })
+    expect(container.querySelector('[aria-label="恢复默认切换侧边栏快捷键"]')).toBeNull()
+    expect(container.querySelector('[aria-label="恢复全部默认快捷键"]')).toBeNull()
   })
 })

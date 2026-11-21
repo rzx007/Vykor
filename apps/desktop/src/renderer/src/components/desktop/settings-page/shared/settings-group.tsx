@@ -132,12 +132,14 @@ export function SettingsSelect({
 
 export function SettingsRow({
   title,
+  titleAction,
   description,
   help,
   control,
   labelFor,
 }: {
   title: string
+  titleAction?: ReactNode
   description?: string
   help?: string
   control: ReactNode
@@ -154,6 +156,7 @@ export function SettingsRow({
           ) : (
             <h3 className="text-sm font-medium">{title}</h3>
           )}
+          {titleAction}
           {help ? <FieldHelp label={`${title}说明`}>{help}</FieldHelp> : null}
         </div>
         {description ? (

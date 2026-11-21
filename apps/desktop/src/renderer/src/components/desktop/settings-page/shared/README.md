@@ -15,6 +15,7 @@
 - [settings-group.tsx](settings-group.tsx)
 - [settings-status.tsx](settings-status.tsx)
 - [field-help.tsx](field-help.tsx)
+- [settings-reset-button.tsx](settings-reset-button.tsx) 在设置项标题旁显示恢复箭头。调用方比较当前值和默认值，仅在不同时提供恢复操作。按钮复用主题样式，悬停或聚焦时显示操作名称。
 
 ## 维护约定
 
