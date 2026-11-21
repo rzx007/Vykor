@@ -16,6 +16,10 @@ export function promptQueueOnlyReason(
     return "插件内容需要排队发送"
   }
   if (flags.observation) return "观察会话需要排队发送"
+  const firstItem = items[0]
+  if (firstItem?.type === "text" && /^\/check(?:[ \t]|\r?\n|$)/u.test(firstItem.text)) {
+    return "验收任务需要排队发送"
+  }
   if (flags.structuredOutput) return "结构化输出需要排队发送"
   return undefined
 }

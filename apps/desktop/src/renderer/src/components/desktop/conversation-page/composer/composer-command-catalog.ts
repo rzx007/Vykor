@@ -1,6 +1,7 @@
 import {
   Blocks,
   Brain,
+  ClipboardCheck,
   FileDiff,
   GitBranchPlus,
   Goal,
@@ -47,6 +48,13 @@ const definitions = [
   { id: "effort", title: "推理强度", description: "调整模型的思考强度", icon: Brain, local: true },
   { id: "status", title: "状态", description: "查看聊天状态和当前模型", icon: Info, local: false },
   { id: "goal", title: "目标", description: "设置需要持续完成的目标", icon: Goal, local: false },
+  {
+    id: "check",
+    title: "收尾验收",
+    description: "填写检查命令，再换行写任务",
+    icon: ClipboardCheck,
+    local: true,
+  },
   {
     id: "plan",
     title: "计划模式",
@@ -142,7 +150,7 @@ export function toComposerCommands(
           description: presentation.description,
           icon: presentation.icon,
           requiresEmptyComposer: true,
-          selection: "execute",
+          selection: id === "check" ? "insert" : "execute",
         },
       }
     })

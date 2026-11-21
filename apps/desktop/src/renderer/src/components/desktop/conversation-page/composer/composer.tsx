@@ -408,7 +408,7 @@ export function Composer({
         rows={rows}
         disabled={sending}
         skills={skills}
-        commands={commands}
+        commands={goalMode ? commands.filter((command) => command.id !== "check") : commands}
         className={textareaClassName}
         onChange={onDraftChange}
         onSubmit={submit}

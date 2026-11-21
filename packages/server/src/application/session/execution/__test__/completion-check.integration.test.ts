@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, it } from "vitest";
 import type { StreamingMessageClient, ToolExecutionResult } from "@vykor/agent-contracts";
@@ -19,7 +19,8 @@ it.each([
 ] as const)("settles a normal chat with $mode", async ({ mode, status, exitCodes, modelCalls }) => {
   const directory = mkdtempSync(join(process.cwd(), ".test-completion-check-"));
   const store = new SessionStore({ path: join(directory, "sessions.db") });
-  writeFileSync(join(directory, "report.txt"), mode === "truncated then passed" ? "fixed" : "broken");
+  const reportPath = join(directory, "report.txt");
+  writeFileSync(reportPath, mode === "truncated then passed" ? "fixed" : "broken");
   writeFileSync(join(directory, "check.cjs"), `
     if (require("node:fs").readFileSync("report.txt", "utf8") !== "fixed") {
       console.error("Report still broken");
@@ -27,6 +28,7 @@ it.each([
     }
   `);
   const shellResults: ToolExecutionResult[] = [];
+  const deliveries: { text: string; checkExitCode: unknown }[] = [];
   const permissionCommands: unknown[] = [];
   let calls = 0;
   let feedback = "";
@@ -43,7 +45,7 @@ it.each([
     }
     if (mode === "repair limit reached" && calls > 1) {
       yield { type: "tool_use_start", toolUse: { type: "tool_use", id: `read-${calls}`, name: "Read",
-        input: { file_path: join(directory, "report.txt") } } };
+        input: { file_path: reportPath } } };
       yield { type: "complete", stopReason: "tool_use" };
       return;
     }
@@ -53,7 +55,7 @@ it.each([
       if (mode === "repaired" || mode === "still failing") {
         if (mode === "still failing") yield { type: "text_delta", phase: "final_answer", delta: "Premature final answer" };
         yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "repair", name: "Write",
-          input: { file_path: join(directory, "report.txt"), content: mode === "repaired" ? "fixed" : "different but broken" } } };
+          input: { file_path: reportPath, content: mode === "repaired" ? "fixed" : "different but broken" } } };
         yield { type: "complete", stopReason: "tool_use" };
         return;
       }
@@ -73,6 +75,9 @@ it.each([
         } },
         onEvent: async event => {
           if (event.type === "tool.completed" && event.data.result.toolName === "Shell") shellResults.push(event.data.result);
+          if (event.type === "output.text.delta") {
+            deliveries.push({ text: event.data.delta, checkExitCode: shellResults.at(-1)?.metadata?.exitCode });
+          }
           await options.onEvent?.(event);
         },
       });
@@ -82,7 +87,7 @@ it.each([
   try {
     await app.ready();
     const session = app.commands.createSession({ cwd: directory, model: "offline" });
-    const check = "验收命令: node check.cjs";
+    const check = mode === "truncated then passed" ? "验收命令: node check.cjs" : "/check node check.cjs";
     const text = mode === "ordinary prompt" ? `Fix the report\n${check}` : `${check}\nFix the report`;
     const { run } = await app.interactions.admitPrompt(session.id, { items: [{ type: "text", text }] });
     const result = await app.runControl.awaitRun(session.id, run!.id);
@@ -90,14 +95,19 @@ it.each([
     expect(calls, result.error ?? undefined).toBe(modelCalls);
     expect(shellResults.map(result => result.metadata?.exitCode)).toEqual(exitCodes);
     expect(store.runs.listRuns(session.id)).toHaveLength(1);
+    if (status === "failed") expect(deliveries).toEqual([]);
     if (mode === "permission denied") {
       expect(permissionCommands).toEqual(["node check.cjs"]);
       expect(shellResults[0]?.executionState).toBe("not_started");
     }
     if (mode === "repaired") {
       expect(feedback).toContain("Report still broken");
+      expect(readFileSync(reportPath, "utf8")).toBe("fixed");
       expect(result.output).toBe("Report updated");
+      expect(deliveries.map(delivery => delivery.text).join("")).toBe(result.output);
+      expect(deliveries.every(delivery => delivery.checkExitCode === 0)).toBe(true);
     }
+    if (mode === "still failing") expect(readFileSync(reportPath, "utf8")).toBe("different but broken");
     if (mode === "truncated then passed") {
       expect(result.output).toBe("First part. Report updated");
       const next = await app.interactions.admitPrompt(session.id, { items: [{ type: "text", text: "Summarize the previous task" }] });

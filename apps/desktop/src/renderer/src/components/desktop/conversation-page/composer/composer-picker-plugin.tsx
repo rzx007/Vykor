@@ -289,16 +289,19 @@ export async function executeComposerCommand(
 ): Promise<void> {
   if (!editor.getEditorState().read(() => canExecuteComposerCommand())) return
   const previous = editor.getEditorState().read(composerDocumentFromLexical)
+  const insert = command.selection === "insert"
   editor.update(
     () => {
       const root = $getRoot()
       root.clear()
       const paragraph = $createParagraphNode()
+      if (insert) paragraph.append($createTextNode(`/${command.id} `))
       root.append(paragraph)
       paragraph.selectEnd()
     },
-    { discrete: true }
+    { discrete: true, tag: insert ? HISTORY_PUSH_TAG : undefined }
   )
+  if (insert) return
   try {
     await onCommand(command)
   } catch (error) {

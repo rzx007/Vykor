@@ -137,7 +137,8 @@ export async function executeTuiAction(
     case "submit_line": {
       if (!client) return;
       const line = action.line;
-      const slash = parseSlashLine(line);
+      const parsedSlash = parseSlashLine(line);
+      const slash = parsedSlash?.name === "/check" ? null : parsedSlash;
 
       const newSession = line.match(/^\/new(?:\s+(.+))?$/);
       if (newSession) {

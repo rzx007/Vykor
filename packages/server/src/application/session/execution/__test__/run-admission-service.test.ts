@@ -233,6 +233,7 @@ describe("RunAdmissionService synchronous queued persistence", () => {
   it.each([
     { parts: ["验收命令: pnpm test\n修复问题"] },
     { parts: ["验收命", "令: pnpm test", "\n修复问题"] },
+    { parts: ["/check pnpm test\n修复问题"] },
   ])("requires queue delivery for an explicit completion check with text parts $parts", async ({ parts }) => {
     const f = createStoredAdmission();
     const input = { id: "checked-prompt", items: parts.map(text => ({ type: "text" as const, text })) };
@@ -244,6 +245,13 @@ describe("RunAdmissionService synchronous queued persistence", () => {
     const queued = await admitPrompt(f.service, "s1", input);
     expect(queued.input).toMatchObject({ id: input.id, delivery: "queue", items: [{ type: "text", text: parts.join("") }] });
     expect(queued.run?.inputId).toBe(input.id);
+  });
+  it("asks for a Shell command before admitting a bare /check", async () => {
+    const f = createStoredAdmission();
+    const input = { id: "bare-check", content: "/check\n修复问题" };
+    await expect(async () => admitPrompt(f.service, "s1", input))
+      .rejects.toMatchObject({ status: 400, message: expect.stringContaining("请在 /check 后填写") });
+    expect(f.store.conversations.getInput(input.id)).toBeUndefined();
   });
   it.each([false, true])("notifies queued Goal resumes after clearing an admission, including preparation failure (%s)", async failed => {
     const { options, conversationTransactions } = createMockOptions();

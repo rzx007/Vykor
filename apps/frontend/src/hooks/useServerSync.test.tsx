@@ -2169,6 +2169,38 @@ for (const scenario of [
   });
 }
 
+test("useServerSync forwards /check and its task as one session prompt", async () => {
+  const { requests, session } = workflowJobFixture();
+  let captured: TuiSessionController | undefined;
+  function Harness() {
+    captured = useServerSync({ daemon: { url: "http://daemon.test", token: "tok", cwd: process.cwd(), model: "m" } });
+    return <box />;
+  }
+
+  const { renderer, renderOnce } = await testRender(<Harness />, { width: 80, height: 24 });
+  try {
+    for (let i = 0; i < 20 && !captured?.ready; i += 1) {
+      await act(async () => {
+        await renderOnce();
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+    }
+    const line = '/check node check.cjs "two words"\nFix the report.\nKeep the subject.';
+    await act(async () => {
+      captured?.sendRequest({ type: "submit_line", line });
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    const prompts = requests.filter((request) => request.path === `/sessions/${session.id}/prompts`);
+    expect(prompts).toEqual([expect.objectContaining({
+      method: "POST",
+      body: expect.objectContaining({ items: [{ type: "text", text: line }] }),
+    })]);
+  } finally {
+    renderer.destroy();
+  }
+});
+
 test("useServerSync refreshes Jobs only after a successful /background creation", async () => {
   const { requests, shellJob } = workflowJobFixture();
   let captured: TuiSessionController | undefined;

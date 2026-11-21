@@ -3588,25 +3588,25 @@
     },
     {
       "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
-      "line": 391,
+      "line": 399,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
-      "line": 498,
+      "line": 506,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
-      "line": 515,
+      "line": 523,
       "text": "    const input = { items: [{ type: \"text\" as const, text: \"hello\" }], [namespace]: { uiAction: {} } };",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
-      "line": 527,
+      "line": 535,
       "text": "    expect(() => service.replayInput(\"i1\", { metadata: { pluginUi: {} } })).toThrow();",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },

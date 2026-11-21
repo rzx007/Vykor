@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { act, useState } from "react"
 import { createRoot, type Root } from "react-dom/client"
+import { $getSelection, $isRangeSelection, getNearestEditorFromDOMNode } from "lexical"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 import { Composer } from "../composer"
+import { toComposerCommands } from "../composer-command-catalog"
 import type { ComposerPickerItem } from "../composer-picker"
 import { composerDocument } from "@renderer/stores/desktop-session/composer-document"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session/store"
@@ -185,6 +187,56 @@ it("opens supported reasoning tiers and applies the selected effort without a pr
   expect(onSelectEffort).toHaveBeenCalledWith("high")
   expect(onCommand).not.toHaveBeenCalled()
   expect(onSubmit).not.toHaveBeenCalled()
+})
+
+it("inserts /check into the draft and queues the completed task as an ordinary prompt", async () => {
+  const commands = toComposerCommands([], {
+    hasSession: true, running: true, canOpenReview: false, pinned: false,
+    permissionMode: "full_access", hasModels: true, hasEffortTiers: true,
+  })
+  const submit = vi.fn()
+  function Fixture() {
+    const [draft, setDraft] = useState(composerDocument([{ type: "text", text: "/chec" }]))
+    return <Composer
+      id="completion-check-test"
+      draft={draft}
+      followUpRunId="active"
+      running
+      sending={false}
+      models={models}
+      selectedModel="test-model"
+      selectedProvider="local"
+      modelLabel="测试模型"
+      permissionMode="full_access"
+      effort={null}
+      commands={commands}
+      onDraftChange={setDraft}
+      onSubmit={(delivery) => submit(delivery, draft)}
+      onCommand={onCommand}
+      onSelectModel={onSelectModel}
+      onSelectPermissionMode={() => {}}
+      onSelectEffort={onSelectEffort}
+    />
+  }
+  await act(async () => root.render(<Fixture />))
+  const option = container.querySelector<HTMLButtonElement>('[role="option"]')
+  expect(option?.textContent).toContain("收尾验收")
+  await act(async () => option!.click())
+  const textbox = container.querySelector<HTMLElement>('[role="textbox"]')!
+  expect(textbox.textContent).toBe("/check ")
+  expect(container.querySelector('[role="option"]')).toBeNull()
+  expect(onCommand).not.toHaveBeenCalled()
+  expect(submit).not.toHaveBeenCalled()
+
+  const editor = getNearestEditorFromDOMNode(textbox)!
+  await act(async () => editor.update(() => {
+    const selection = $getSelection()
+    if ($isRangeSelection(selection)) selection.insertRawText("pnpm test\n修复构建")
+  }, { discrete: true }))
+  await act(async () => container.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })))
+  expect(submit).toHaveBeenCalledExactlyOnceWith("queue", {
+    version: 1, items: [{ type: "text", text: "/check pnpm test\n修复构建" }],
+  })
 })
 
 it("selects one eligible target from + and queues the preserved draft even in full access mode", async () => {

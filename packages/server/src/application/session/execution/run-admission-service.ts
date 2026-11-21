@@ -553,7 +553,7 @@ export class RunAdmissionService {
   preparePrompt(sessionId: string, input: AdmitPromptInput): Promise<AdmitPromptResult | { completion: Promise<AdmitPromptResult> }> {
     assertPromptMetadataAllowed(input);
     input = validateOutputSchemaRequest(input);
-    if (input.delivery === "steer") readCompletionCheckCommand(inputItems(input), "steer");
+    readCompletionCheckCommand(inputItems(input), input.delivery === "steer" ? "steer" : undefined);
     if (input.expectedActiveRunId !== undefined && (!input.expectedActiveRunId.trim() || input.delivery !== "steer")) {
       throw new SessionApplicationError(400, "expectedActiveRunId requires steer delivery");
     }
