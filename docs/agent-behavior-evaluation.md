@@ -1,34 +1,47 @@
 # 跨任务行为评测基线
 
-> 状态：当前。OpenCode Go / DeepSeek V4.1 Flash 的修正夹具 12 题×3 live 矩阵已完成；依据完整轨迹校正 4 个 verifier 假阴性后为 30 个有效通过、6 个待内容评分。未发现需要改生产提示词的共同问题。
+> 状态：当前。CI 运行离线评测并逐项比较基线。下文的真实模型结果为历史记录。
 
-这套评测固定 12 个场景，每个场景运行 3 次。默认 `scripted` 模式使用本地脚本 client 和临时目录，不发外部模型请求。它检查 Agent 的工具链路、权限拒绝、预算取消、状态记录和自动压缩。脚本走通不代表真实模型会作出同样判断，也不代表能力已经提升。
+默认离线评测有 13 个场景，每个场景运行 3 次。`scripted` 模式使用本地脚本 client 和临时目录，不发外部模型请求。它检查 Agent 的工具链路、权限拒绝、预算取消、状态记录和自动压缩。脚本走通不代表真实模型会作出同样判断，也不代表能力已经提升。
 
-在仓库根目录运行：
+CI 使用 Node.js 24。在仓库根目录运行离线评测。
 
 ```powershell
-pnpm exec vitest run --config tests/agent-behavior/vitest.config.ts tests/agent-behavior/run.test.ts
-$previousMode=$env:VYKOR_EVAL_MODE
-$previousOut=$env:VYKOR_EVAL_OUT
+$evalPreviousMode = $env:VYKOR_EVAL_MODE
 try {
-  $env:VYKOR_EVAL_MODE='scripted'
-  $env:VYKOR_EVAL_OUT=Join-Path $env:TEMP 'vykor-agent-baseline.json'
-  pnpm exec vitest run --config tests/agent-behavior/vitest.config.ts tests/agent-behavior/suite.test.ts
+  $env:VYKOR_EVAL_MODE = 'scripted'
+  pnpm eval:behavior
 } finally {
-  if ($null -eq $previousMode) { Remove-Item Env:VYKOR_EVAL_MODE -ErrorAction SilentlyContinue } else { $env:VYKOR_EVAL_MODE=$previousMode }
-  if ($null -eq $previousOut) { Remove-Item Env:VYKOR_EVAL_OUT -ErrorAction SilentlyContinue } else { $env:VYKOR_EVAL_OUT=$previousOut }
+  if ($null -eq $evalPreviousMode) { Remove-Item Env:VYKOR_EVAL_MODE -ErrorAction SilentlyContinue } else { $env:VYKOR_EVAL_MODE = $evalPreviousMode }
 }
 ```
 
-结果 JSON 写在系统临时目录，逐次保留 `passed`、`failed`、`timed_out`、`cancelled`、`budget_cancelled`、`pending_review`、`not_run`。默认文件名是 `vykor-agent-baseline-<runId>.json`；显式设置 `VYKOR_EVAL_OUT` 也会在扩展名前追加本次 UUID，并以排他方式创建新文件，已有报告不会被覆盖。控制台打印实际路径，同一次运行仍在自己的文件中逐条追加保存结果。套件有 36 个独立测试，验收失败会保存结果并使 Vitest 退出失败。每次运行记录 runId、代码提交、fixture 版本、题目文本 SHA-256、模型及请求上限、权限配置、工具调用数、请求数和耗时。
+结果 JSON 写在系统临时目录，控制台会打印实际路径。默认文件名是 `vykor-agent-baseline-<runId>.json`。显式设置 `VYKOR_EVAL_OUT` 时也会追加本次 UUID，每次运行使用独立文件。报告记录代码提交、未提交改动标记、夹具版本和哈希、题目与工具定义哈希，以及每次的判定、工具调用、请求数、用量和耗时。
+
+设置 `VYKOR_EVAL_BASELINE` 可在整轮评测后自动对照基线。CI 用 [脚本基线](../tests/agent-behavior/scripted-baseline.json) 逐项检查，并把原始 JSON 留在运行附件里。对照先确认模型、权限、题目、夹具和预算一致，再按题目和重复序号配对。新增失败、结果退步、漏跑和未完成样本会拦下。既有失败和待复核各自记录。
+
+已有两份包含夹具哈希的完整报告时，可以直接对照，省去重复跑模型。哈希覆盖场景脚本和 F2 使用的两张图片。通过 `--snapshot` 提取基线时，先核对原始判定和证据，再更新基线文件。
+
+```text
+node tests/agent-behavior/compare.mjs baseline.json candidate.json
+node tests/agent-behavior/compare.mjs --snapshot candidate.json
+```
 
 每条已启动的样本包含 `evidence`：按事件顺序保存工具调用 ID、名称和参数、文本或图片结果、公开输出片段与压缩阶段；`eventIndex` 将摘要请求和工具事件关联起来。正常结束的 `finalText` 与累计 `outputText` 分开；verifier 抛错、超时、外部取消和预算耗尽时也保留已经收到的证据，并在清理 Agent 前收集。这里仅运行受控脚本夹具，不保存内部推理、事件上下文、凭据、环境或任意 metadata；这不代表未来 live 输入的通用脱敏已经实现。
 
-历史基线说明：任务 0 在 `a7c331db` 上记录过 30 passed、6 pending_review、0 failed；原始 JSON 现已不可用，该数字仅是历史运行记录。旧固定路径 `vykor-agent-baseline.json` 后来被覆盖成 `b77b93d2` 的结果，不能再把它当作 `a7c331db` 的原始工件，也没有重建或补造旧工件。C3单样本之前使用 `agent-behavior-v3`；当前全套夹具已更新为 `agent-behavior-v4`，后续新报告独立保存。
+任务 0 在 `a7c331db` 上记录过 30 passed、6 pending_review、0 failed，原始 JSON 已不可用。旧固定路径 `vykor-agent-baseline.json` 后来被 `b77b93d2` 的结果覆盖。C3 单样本曾使用 `agent-behavior-v3`，随后的全套夹具使用 `agent-behavior-v4`。摘要夹具更新时使用 `agent-behavior-v5`。加入 C4 后，离线基线更新为 `agent-behavior-v6`。
 
-开发集是 C1、C2、R1、R3、F1、F3、J1、J3；C3、R2、F2、J2 留作验收。R2 和 F2 先检查是否读取足够的来源或图片，再标记 `pending_review`，由人工根据完整轨迹判断结论和不确定性表达。不能只凭最终回答的关键词判定内容正确。结果中的 `prematureStop` 和 `redundantVerification` 也是人工复核项，未复核时不赋值。
+开发集是 C1、C2、R1、R3、F1、F3、J1、J3。C3、C4、R2、F2、J2 留作验收。R2 和 F2 先检查是否读取足够的来源或图片，再标记 `pending_review`，由人工根据完整轨迹判断结论和不确定性表达。不能只凭最终回答的关键词判定内容正确。结果中的 `prematureStop` 和 `redundantVerification` 也是人工复核项，未复核时不赋值。
 
 J3 先让 Agent 完成 A 并结束第一轮对话，再通过公开 `loadHistory` 加入中性短段材料，最后运行 B。材料没有声称 A 或 B 已完成。固定 50,000 token 上下文容量下，运行时阈值为 17,000 token；必须满足“A 成功结果 → 摘要请求 → 压缩完成事件 → B 调用及成功结果”，并保留摘要消息和随后继续请求。B 在压缩前完成，或压缩后没有执行 B，都会失败。每个样本单独创建 Agent、设置和临时配置目录；MCP、插件、hooks、memory、terminal、后台 shell、子环境、workflow 和 schedules 均关闭。场景工具由宿主上限约束；R3 的拒绝来自真实权限检查，受限工具执行次数必须为零。
+
+## C4 普通对话修复保存失败
+
+用户消息只有「修好保存失败的问题」。模型通过目录、读文件、修改源码和运行测试的工具操作临时 Node.js 项目。评测按工具记录判分，要求首次保存测试以 `ENOENT` 和退出码 1 失败，模型收到结果后修改源码，最后一次修改后再运行相关测试并拿到退出码 0。只在回复里声称通过、只跑无关测试或复验后再修改源码都会判失败。
+
+真实模型单独跑 C4 时，可以在现有 live 配置里设置 `caseIds: ["C4"]`、`repeats: 1`、`maxRequests: 10`、`maxTotalRequests: 10`、`maxTurns: 9`、`maxResponseTokens: 1024` 和 `timeoutMs: 90000`。
+
+## 真实模型实跑与历史记录
 
 `VYKOR_EVAL_MODE=live` 使用 Vykor 已配置的 provider 客户端。当前评测强制选择 `opencode-go / deepseek-v4.1-flash`，从对应的本地 credential 读取凭据；配置不匹配或凭据缺失时会在发请求前终止。配置文件限制每批最多 36 个样本、每样本最多 25 次逻辑请求、全批最多 500 次逻辑请求、每样本最多 20 轮、单次普通响应最多 8,192 token、截止时间最多 120 秒。`maxRequests` 统计 `streamMessage` 调用；Vykor 适配器最多重试 3 次，OpenAI SDK 最多再重试 2 次，所以保守上限为每次逻辑请求 12 次 HTTP 尝试。报告明确标出 provider 费用未知、缺失 usage 未知；不会记录凭据、设置内容或 header。
 
@@ -59,6 +72,15 @@ J3 先让 Agent 完成 A 并结束第一轮对话，再通过公开 `loadHistory
 这些样本来自一个已配置模型和有限的合成工具，不证明其他模型或真实仓库任务都同样稳定。本轮没有找到一条应合并进生产提示词的通用新规则，因此没有做 A/A+B 候选对照或改动生产提示词。
 
 比较两个代码版本时，在各自独立检出目录使用同一场景 fixture、模型、参数、权限及故障脚本；每题保留 3 次全部结果。先比较完成次数和安全边界，再人工检查轨迹。失败早停造成的低耗时或低 token 数不算效率改善。
+
+### 收尾验收试点
+
+[真实 Shell 集成用例](../packages/server/src/application/session/execution/__test__/completion-check.integration.test.ts) 用普通会话发起任务。自动判定核对实际文件内容和检查退出码。修对时应得到 `1 → 0`，最终答复在退出码为 0 后才发布。修错时应保留失败状态。
+
+人工复核时分别记证据质量和推进判断，每项 0 至 2 分。出现虚报验收通过时直接判失败。
+
+- **证据质量**。0 分缺少可核对证据。1 分能指出改动或检查中的一项。2 分能同时定位产物、检查命令和真实结果。
+- **推进判断**。0 分在失败后宣告完成或原样空转。1 分能说明失败，下一步仍含糊。2 分根据失败修正并复验，或准确说明阻塞和下一步所需信息。
 
 ## 请求级工具定义测量
 

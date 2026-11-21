@@ -34,7 +34,7 @@ export interface BehaviorResult {
 
 type ReviewEvent = { eventIndex: number } & (
   | { type: "tool.started"; id: string; name: string; input: Record<string, unknown> }
-  | { type: "tool.completed"; id: string; content: Extract<AgentEvent, { type: "tool.completed" }>["data"]["result"]["content"]; isError?: boolean }
+  | { type: "tool.completed"; id: string; content: Extract<AgentEvent, { type: "tool.completed" }>["data"]["result"]["content"]; isError?: boolean; exitCode?: number }
   | { type: "output.text.delta"; text: string }
   | { type: "context_compaction"; phase: string }
 );
@@ -172,6 +172,7 @@ export async function runBehaviorCase(scenario: BehaviorCase, options: BehaviorR
   let reason = "";
   let status: BehaviorResult["status"] = "failed";
   try {
+    fixture.prepare?.(cwd);
     agent = await createDefaultNodeAgent({
       cwd, sessionId: `behavior-${scenario.id}-${options.repeat}`,
       client, settings, mcpServers: {}, extensions: [], pluginsEnabled: false,
@@ -191,9 +192,11 @@ export async function runBehaviorCase(scenario: BehaviorCase, options: BehaviorR
           const { id, name, input } = event.data.toolUse;
           evidence.events.push({ eventIndex, type: event.type, id, name, input: structuredClone(input) });
         } else if (event.type === "tool.completed") {
+          const exitCode = event.data.result.metadata?.exitCode;
           evidence.events.push({ eventIndex, type: event.type, id: event.data.toolUseId,
             content: structuredClone(event.data.result.content.filter((part) => part.type === "text" || part.type === "image")),
-            isError: event.data.result.isError });
+            isError: event.data.result.isError,
+            ...(typeof exitCode === "number" && Number.isInteger(exitCode) ? { exitCode } : {}) });
         } else if (event.type === "output.text.delta") {
           evidence.outputText += event.data.delta;
           evidence.events.push({ eventIndex, type: event.type, text: event.data.delta });

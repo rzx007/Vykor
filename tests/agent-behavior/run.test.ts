@@ -83,8 +83,8 @@ describe("behavior runner", () => {
       expect(saved.status).toBe(outcome === "success" ? "pending_review" : outcome === "verifier throws" ? "failed" : outcome);
       expect(saved.evidence.events).toEqual(expect.arrayContaining([
         expect.objectContaining({ type: "tool.started", name: "ReadSourceA", input: {} }),
-        expect.objectContaining({ type: "tool.completed", content: [{ type: "text", text: "Source A: yes" }] }),
-        expect.objectContaining({ type: "tool.completed", content: [{ type: "text", text: "Source B: no" }] }),
+        expect.objectContaining({ type: "tool.completed", content: [{ type: "text", text: "Visitor guide: evening access is available." }] }),
+        expect.objectContaining({ type: "tool.completed", content: [{ type: "text", text: "Service bulletin: evening access is unavailable." }] }),
       ]));
       if (outcome === "success" || outcome === "verifier throws") expect(saved.evidence.finalText).toContain("Sources disagree");
       if (outcome === "cancelled" || outcome === "timed_out") expect(saved.evidence.outputText).toContain("Partial answer");

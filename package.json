@@ -35,6 +35,7 @@
     "check-types:server-client": "tsc -p tests/server-client/tsconfig.json",
     "test:server-client": "vitest run --config tests/server-client/vitest.config.ts",
     "test:agent-integration": "vitest run --config tests/agent-integration/vitest.config.ts",
+    "eval:behavior": "node --test tests/agent-behavior/compare.test.mjs && vitest run --config tests/agent-behavior/vitest.config.ts tests/agent-behavior/cases.test.ts tests/agent-behavior/live.test.ts tests/agent-behavior/run.test.ts tests/agent-behavior/suite.test.ts",
     "test:desktop-integration": "vitest run --config tests/desktop-integration/vitest.config.ts",
     "release:client": "node packages/client/scripts/release.mjs",
     "release:client:dry": "node packages/client/scripts/release.mjs --dry-run"

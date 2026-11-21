@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { loadSettings, type Settings } from "@vykor/host-config";
 import { type StreamingMessageClient } from "@vykor/core";
 import { CredentialStorage } from "@vykor/auth";
-import { resolveApiClient } from "../../packages/agent-runtime/src/default-runtime-provider.js";
+import { resolveApiClient } from "../../packages/agent-runtime/src/node/configuration/default-runtime-provider.js";
 import type { BehaviorCase } from "./cases.js";
 import type { BehaviorRunOptions } from "./run.js";
 

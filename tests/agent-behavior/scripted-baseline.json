@@ -1,0 +1,362 @@
+{
+  "mode": "scripted",
+  "model": "scripted",
+  "fixtureVersion": "agent-behavior-v6",
+  "fixtureSha256": "9320240d8f1e47a79595305a99fe284f441760706fd2b7aeb8a74643830a80e1",
+  "parameters": {
+    "repeats": 3,
+    "maxTurns": 20,
+    "maxRequests": 25,
+    "timeoutMs": 120000
+  },
+  "permission": {
+    "sandbox": false,
+    "mcpServers": {},
+    "pluginsEnabled": false,
+    "hostTools": "case fixture only"
+  },
+  "cases": [
+    {
+      "id": "C1",
+      "promptSha256": "7086e769510b69742e63d5719c5ad49e2ed1a8ff852beb5579ee9abdcd27f3e2",
+      "allowedTools": [
+        "RunTargetTest",
+        "ReadFile",
+        "PatchFile"
+      ],
+      "deniedTools": [],
+      "toolSchemaSha256": "e9a088344e961da05206c87bebacdb86cd73975a67093a0d727dae3074bc661a"
+    },
+    {
+      "id": "C2",
+      "promptSha256": "393d40303c569b583a46aba1341748a92c4b22dc207e38c342dadce7803a87f5",
+      "allowedTools": [
+        "ReadPath",
+        "ListPaths"
+      ],
+      "deniedTools": [],
+      "toolSchemaSha256": "e12e19ba3972c802da2c602ae8aabf2dede5c4de04b4ea40cf59a4a1d2a8d795"
+    },
+    {
+      "id": "C3",
+      "promptSha256": "6e3fa6eb695b663da14d4751caee3641997f90da0143e485ead594b1309e2f51",
+      "allowedTools": [
+        "RunRelevantTest"
+      ],
+      "deniedTools": [],
+      "toolSchemaSha256": "172007c39c94ac7d558b2b2fe58698aa010b06116ae5b7f8d8d700b3a7a47ebd"
+    },
+    {
+      "id": "C4",
+      "promptSha256": "688c55feb6cb66bba0ff19af1753477b6576cd151667cade4174d4d069cc6ad1",
+      "allowedTools": [
+        "ListPaths",
+        "ReadFile",
+        "PatchFile",
+        "RunTestCommand"
+      ],
+      "deniedTools": [],
+      "toolSchemaSha256": "664ba5c450b3fadc62a3e01d0303058d440d1430fa400b18ae86b21c8566f5a1"
+    },
+    {
+      "id": "R1",
+      "promptSha256": "9d43bf14522c47ea76d6b250c24aff3a4bc1cfd7b1d0dc9b2905f33eeb5b0125",
+      "allowedTools": [
+        "FetchSource"
+      ],
+      "deniedTools": [],
+      "toolSchemaSha256": "7277dc5850476a6fd9e676702056930cadf1d55a2726939c0ab63e09cc4ce4eb"
+    },
+    {
+      "id": "R2",
+      "promptSha256": "624f296cc67f7bd182d82cd4a7643358e2f1cd230efb428e6f0b4b995d32813d",
+      "allowedTools": [
+        "ReadSourceA",
+        "ReadSourceB"
+      ],
+      "deniedTools": [],
+      "toolSchemaSha256": "10483ee484c13291880c09de43a9ad0536313af0502ce287e7c64b1cde442855",
+      "manualChecks": [
+        {
+          "id": "conclusion",
+          "criterion": "Check source interpretation and uncertainty in the final answer."
+        }
+      ]
+    },
+    {
+      "id": "R3",
+      "promptSha256": "57a75e4b2b34f3e2d1ec417a280812919ac03cf657094b21101e491992b5016a",
+      "allowedTools": [
+        "ForbiddenSource",
+        "AllowedSource"
+      ],
+      "deniedTools": [
+        "ForbiddenSource"
+      ],
+      "toolSchemaSha256": "7df0aac2ae749e890304493b02f752649225fe9fbd45557e47a6dd8574396cb9"
+    },
+    {
+      "id": "F1",
+      "promptSha256": "b7a859b795749b09873c626e513bdd408fd8abf73d4e4cca7c9f26de18899b47",
+      "allowedTools": [
+        "MoveFile"
+      ],
+      "deniedTools": [],
+      "toolSchemaSha256": "435a3ec629c55e64030b17aeb3ca3aa4b03d5a15f8ea839bc19303444e463576"
+    },
+    {
+      "id": "F2",
+      "promptSha256": "a7ce7aa532812ac39a962576209af636352e218d6872c95524c3c1f1bd6ed780",
+      "allowedTools": [
+        "ViewPage"
+      ],
+      "deniedTools": [],
+      "toolSchemaSha256": "6a1883b46ecca30386e54da81bf406768dbc1dd5acaac636268954b59a0a22de",
+      "manualChecks": [
+        {
+          "id": "image_interpretation",
+          "criterion": "Review the image-based conclusion and uncertainty."
+        }
+      ]
+    },
+    {
+      "id": "F3",
+      "promptSha256": "d6ad083d48096ff9fa29ad8153a26f9dd19eeb0fcb8b41da1356d7d91f2598ef",
+      "allowedTools": [
+        "SendOnce",
+        "CheckSendStatus"
+      ],
+      "deniedTools": [],
+      "toolSchemaSha256": "f8e2bf556ef96253a07a9233f40022abc1b5802ba0448b85ccb89606ef17fe30"
+    },
+    {
+      "id": "J1",
+      "promptSha256": "f81d1175279cbee60f190e5e0443e0091ef470a371b9cd354d80776fe7c3412c",
+      "allowedTools": [
+        "StartJob",
+        "WaitJob",
+        "ReadJob"
+      ],
+      "deniedTools": [],
+      "toolSchemaSha256": "8ce1d89c8360a28575af308c1cdd603c5172ec75561a268223cb2aa1adf2ecfd"
+    },
+    {
+      "id": "J2",
+      "promptSha256": "f709e7a76bcb4cf98a3f1eefa6e826782a219655a634e2347bf3084e1ce5d50b",
+      "allowedTools": [
+        "ReadRunningTest"
+      ],
+      "deniedTools": [],
+      "toolSchemaSha256": "3eb6575f7a74827245cd2262ccff106ed42b369dcb248d8d8314c69d005fd879"
+    },
+    {
+      "id": "J3",
+      "promptSha256": "76de1ad90552fb78093ce9cb5984745cca87c18ea21ddbec6463f8366bc96505",
+      "allowedTools": [
+        "CompleteA",
+        "CompleteB"
+      ],
+      "deniedTools": [],
+      "toolSchemaSha256": "5789adc107f65218ea314851e157a01aa7fe1f302c7de544576686f4ce56a53f"
+    }
+  ],
+  "revision": "db754e06532f683b1bd671aae1b1b5b91a6021b0",
+  "workingTreeDirty": true,
+  "results": [
+    {
+      "caseId": "C1",
+      "repeat": 1,
+      "status": "passed"
+    },
+    {
+      "caseId": "C1",
+      "repeat": 2,
+      "status": "passed"
+    },
+    {
+      "caseId": "C1",
+      "repeat": 3,
+      "status": "passed"
+    },
+    {
+      "caseId": "C2",
+      "repeat": 1,
+      "status": "passed"
+    },
+    {
+      "caseId": "C2",
+      "repeat": 2,
+      "status": "passed"
+    },
+    {
+      "caseId": "C2",
+      "repeat": 3,
+      "status": "passed"
+    },
+    {
+      "caseId": "C3",
+      "repeat": 1,
+      "status": "passed"
+    },
+    {
+      "caseId": "C3",
+      "repeat": 2,
+      "status": "passed"
+    },
+    {
+      "caseId": "C3",
+      "repeat": 3,
+      "status": "passed"
+    },
+    {
+      "caseId": "C4",
+      "repeat": 1,
+      "status": "passed"
+    },
+    {
+      "caseId": "C4",
+      "repeat": 2,
+      "status": "passed"
+    },
+    {
+      "caseId": "C4",
+      "repeat": 3,
+      "status": "passed"
+    },
+    {
+      "caseId": "R1",
+      "repeat": 1,
+      "status": "passed"
+    },
+    {
+      "caseId": "R1",
+      "repeat": 2,
+      "status": "passed"
+    },
+    {
+      "caseId": "R1",
+      "repeat": 3,
+      "status": "passed"
+    },
+    {
+      "caseId": "R2",
+      "repeat": 1,
+      "status": "pending_review"
+    },
+    {
+      "caseId": "R2",
+      "repeat": 2,
+      "status": "pending_review"
+    },
+    {
+      "caseId": "R2",
+      "repeat": 3,
+      "status": "pending_review"
+    },
+    {
+      "caseId": "R3",
+      "repeat": 1,
+      "status": "passed"
+    },
+    {
+      "caseId": "R3",
+      "repeat": 2,
+      "status": "passed"
+    },
+    {
+      "caseId": "R3",
+      "repeat": 3,
+      "status": "passed"
+    },
+    {
+      "caseId": "F1",
+      "repeat": 1,
+      "status": "passed"
+    },
+    {
+      "caseId": "F1",
+      "repeat": 2,
+      "status": "passed"
+    },
+    {
+      "caseId": "F1",
+      "repeat": 3,
+      "status": "passed"
+    },
+    {
+      "caseId": "F2",
+      "repeat": 1,
+      "status": "pending_review"
+    },
+    {
+      "caseId": "F2",
+      "repeat": 2,
+      "status": "pending_review"
+    },
+    {
+      "caseId": "F2",
+      "repeat": 3,
+      "status": "pending_review"
+    },
+    {
+      "caseId": "F3",
+      "repeat": 1,
+      "status": "passed"
+    },
+    {
+      "caseId": "F3",
+      "repeat": 2,
+      "status": "passed"
+    },
+    {
+      "caseId": "F3",
+      "repeat": 3,
+      "status": "passed"
+    },
+    {
+      "caseId": "J1",
+      "repeat": 1,
+      "status": "passed"
+    },
+    {
+      "caseId": "J1",
+      "repeat": 2,
+      "status": "passed"
+    },
+    {
+      "caseId": "J1",
+      "repeat": 3,
+      "status": "passed"
+    },
+    {
+      "caseId": "J2",
+      "repeat": 1,
+      "status": "passed"
+    },
+    {
+      "caseId": "J2",
+      "repeat": 2,
+      "status": "passed"
+    },
+    {
+      "caseId": "J2",
+      "repeat": 3,
+      "status": "passed"
+    },
+    {
+      "caseId": "J3",
+      "repeat": 1,
+      "status": "passed"
+    },
+    {
+      "caseId": "J3",
+      "repeat": 2,
+      "status": "passed"
+    },
+    {
+      "caseId": "J3",
+      "repeat": 3,
+      "status": "passed"
+    }
+  ]
+}

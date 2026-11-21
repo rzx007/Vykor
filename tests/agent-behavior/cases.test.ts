@@ -22,6 +22,51 @@ function observation(finalText = "", toolNames: string[] = []): BehaviorObservat
 }
 
 describe("case verifiers reject incomplete evidence", () => {
+  const runSaveTests = { name: "RunTestCommand", input: { command: "npm test 2>&1" } };
+  const repairSave = { name: "PatchFile", input: {
+    path: "src/notes.mjs", oldText: "await fs.writeFile",
+    newText: "await fs.mkdir(directory, { recursive: true });\n  await fs.writeFile",
+  } };
+  const lateEdit = { name: "PatchFile", input: {
+    path: "src/notes.mjs", oldText: "await fs.writeFile", newText: "/* later edit */ await fs.writeFile",
+  } };
+  const unrelatedTest = { name: "RunTestCommand", input: { command: "node --test test/labels.test.mjs" } };
+
+  it.each([
+    { label: "red, edit, green", steps: [runSaveTests, repairSave, runSaveTests], expected: "passed" },
+    { label: "a claim without tools", steps: [], expected: "failed" },
+    { label: "editing before reproducing the bug", steps: [repairSave, runSaveTests], expected: "failed" },
+    { label: "requesting the first test and fix together", steps: [[runSaveTests, repairSave], runSaveTests], expected: "failed" },
+    { label: "finishing without rerunning", steps: [runSaveTests, repairSave], expected: "failed" },
+    { label: "rerunning a test that still fails", steps: [runSaveTests, lateEdit, runSaveTests], expected: "failed" },
+    { label: "running an unrelated test after the fix", steps: [runSaveTests, repairSave, unrelatedTest], expected: "failed" },
+    { label: "editing again after a green test", steps: [runSaveTests, repairSave, runSaveTests, lateEdit], expected: "failed" },
+  ])("C4 grades the tool trace for $label", async ({ steps, expected }) => {
+    const scenario = behaviorCases.find((item) => item.id === "C4");
+    expect(scenario?.prompt).toBe("修好保存失败的问题");
+    let turn = 0;
+    const client: StreamingMessageClient = { async *streamMessage() {
+      const step = steps[turn++];
+      if (step) {
+        for (const [index, call] of (Array.isArray(step) ? step : [step]).entries()) {
+          yield { type: "tool_use_start", toolUse: { type: "tool_use", id: `save-${turn}-${index}`, ...call } };
+        }
+        yield { type: "complete", stopReason: "tool_use" };
+        return;
+      }
+      yield { type: "text_delta", delta: "已修好，测试通过。" };
+      yield { type: "complete", stopReason: "end_turn" };
+    } };
+    const result = await runBehaviorCase(scenario!, { client, model: "scripted", revision: "save-loop",
+      repeat: 1, maxRequests: 8, timeoutMs: 12_000 });
+    expect(result.status, result.reason).toBe(expected);
+    if (expected === "passed") {
+      const exits = result.evidence?.events.flatMap(event =>
+        event.type === "tool.completed" && event.exitCode !== undefined ? [event.exitCode] : []);
+      expect(exits).toEqual([1, 0]);
+    }
+  });
+
   it.each([
     ["The relevant test passed. No further action needed.", "passed"],
     ["The test has passed; no edits are needed.", "passed"],
@@ -132,7 +177,7 @@ describe("case verifiers reject incomplete evidence", () => {
     let request = 0;
     const client: StreamingMessageClient = { async *streamMessage(params) {
       if (params.maxTokens === 20_000 && !params.tools) {
-        yield { type: "text_delta", delta: "A completed; continue B; keep job-17." };
+        yield { type: "text_delta", delta: "<summary>A completed; continue B; keep job-17.</summary>" };
       } else {
         const name = request++ === 0 ? "CompleteA" : earlyB && request === 2 ? "CompleteB" : undefined;
         if (name) {
@@ -200,6 +245,7 @@ describe("case verifiers reject incomplete evidence", () => {
   it("parameterized tool schemas describe and enforce their real inputs", async () => {
     const inputs: Record<string, Record<string, unknown>> = {
       PatchFile: { path: "src/flag.ts", oldText: "return false", newText: "return true" },
+      RunTestCommand: { command: "npm test" },
       ReadFile: { path: "src/flag.ts" }, ReadPath: { path: "src/actual.ts" }, ListPaths: { directory: "src" }, FetchSource: { id: "valid" },
       MoveFile: { id: "a", destination: "archive" }, ViewPage: { page: 1 },
       CheckSendStatus: { sendId: "send-17" }, SendOnce: { sendId: "send-17" },

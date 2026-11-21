@@ -37,9 +37,11 @@ describe("live evaluation preflight", () => {
 
   it("allows the 36-sample matrix to stop at a smaller shared budget", () => {
     const allCases = behaviorCases.map((item) => item.id);
-    expect(allCases).toHaveLength(12);
-    expect(parseLiveConfig({ ...valid, caseIds: allCases, repeats: 3,
+    expect(() => parseLiveConfig({ ...valid, caseIds: allCases, repeats: 3 }, behaviorCases)).toThrow();
+    expect(parseLiveConfig({ ...valid, caseIds: allCases.slice(0, 12), repeats: 3,
       maxRequests: 25, maxTotalRequests: 500 }, behaviorCases).maxTotalRequests).toBe(500);
+    expect(parseLiveConfig({ ...valid, caseIds: ["C4"], maxRequests: 10, maxTotalRequests: 10, maxTurns: 9 },
+      behaviorCases).caseIds).toEqual(["C4"]);
   });
 
   it("rejects missing provider, model or stored credential before client resolution", async () => {

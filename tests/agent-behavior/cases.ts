@@ -1,7 +1,11 @@
 import type { AgentEvent, AgentRunResult, StreamingMessageClient, ToolDefinition } from "@vykor/core";
 import type { Message } from "@vykor/agent-contracts";
 import type { VykorAgent } from "@vykor/agent-runtime";
+import { execFile } from "node:child_process";
+import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import { validateToolInput } from "../../packages/core/src/engine/tools/tool-input-schema.js";
 
 export interface BehaviorObservation {
@@ -23,6 +27,7 @@ export interface BehaviorCase {
     tools: ToolDefinition[];
     toolOverrides?: ToolDefinition[];
     deniedTools?: string[];
+    prepare?(cwd: string): void;
     run?: (agent: VykorAgent, signal: AbortSignal) => Promise<AgentRunResult>;
     verify(observation: BehaviorObservation): { passed: boolean; reason: string };
   };
@@ -34,7 +39,7 @@ function scripted(steps: Step[], finalText: string): StreamingMessageClient {
   let index = 0;
   return { async *streamMessage(params) {
     if (params.maxTokens === 20_000 && !params.tools) {
-      yield { type: "text_delta" as const, delta: "A completed with tool evidence; B remains. Keep job-17 and permission constraints." };
+      yield { type: "text_delta" as const, delta: "<summary>A completed with tool evidence; B remains. Keep job-17 and permission constraints.</summary>" };
       yield { type: "complete" as const, stopReason: "end_turn" };
       return;
     }
@@ -59,6 +64,151 @@ function tool(name: string, description: string, properties: Record<string, unkn
 const text = (value: string) => ({ content: [{ type: "text" as const, text: value }] });
 const calls = (observation: BehaviorObservation, name: string) =>
   observation.events.filter((event) => event.type === "tool.started" && event.data.toolUse.name === name).length;
+
+const runTestProcess = promisify(execFile);
+const saveSource = "src/notes.mjs";
+const saveTest = "test/notes.test.mjs";
+const labelTest = "test/labels.test.mjs";
+const firstSaveTestName = "saving the first note works in a fresh workspace";
+const saveFixtureFiles = {
+  "README.md": "# Tiny Notebook\n\nRun all tests with npm test, or a test file with node --test <path>.\n",
+  "package.json": '{"name":"tiny-notebook","private":true,"scripts":{"test":"node --test"}}\n',
+  [saveSource]: [
+    'import * as fs from "node:fs/promises";',
+    'import { join } from "node:path";',
+    'export async function saveNote(workspace, name, content) {',
+    '  const directory = join(workspace, "notes");',
+    '  await fs.writeFile(join(directory, name + ".txt"), content, "utf8");',
+    '}',
+  ].join("\n") + "\n",
+  [saveTest]: [
+    'import assert from "node:assert/strict";',
+    'import { mkdtemp, readFile } from "node:fs/promises";',
+    'import { join } from "node:path";',
+    'import test from "node:test";',
+    'import { saveNote } from "../src/notes.mjs";',
+    'test(' + JSON.stringify(firstSaveTestName) + ', async () => {',
+    '  const workspace = await mkdtemp(join(import.meta.dirname, "../.test-data/note-"));',
+    '  await saveNote(workspace, "first", "hello");',
+    '  assert.equal(await readFile(join(workspace, "notes", "first.txt"), "utf8"), "hello");',
+    '});',
+  ].join("\n") + "\n",
+  "src/labels.mjs": 'export const labelFor = (text) => text.trim().toLowerCase();\n',
+  [labelTest]: [
+    'import assert from "node:assert/strict";',
+    'import test from "node:test";',
+    'import { labelFor } from "../src/labels.mjs";',
+    'test("labels normalize text", () => assert.equal(labelFor(" Work "), "work"));',
+  ].join("\n") + "\n",
+};
+const saveTestCommands = new Map([
+  ["npm test", [saveTest, labelTest]],
+  ["node --test", [saveTest, labelTest]],
+  ["node --test " + saveTest, [saveTest]],
+  ["node --test " + labelTest, [labelTest]],
+]);
+
+function verifySaveRepair({ events, requests }: BehaviorObservation) {
+  const starts = new Map<string, { name: string; index: number }>();
+  const edits: { start: number; end: number }[] = [];
+  const checks: { start: number; end: number; reproduced: boolean; passed: boolean }[] = [];
+  for (const [index, event] of events.entries()) {
+    if (event.type === "tool.started") {
+      starts.set(event.data.toolUse.id, { name: event.data.toolUse.name, index });
+    }
+    if (event.type !== "tool.completed") continue;
+    const start = starts.get(event.data.toolUseId);
+    const { result } = event.data;
+    if (start?.name === "PatchFile" && !result.isError) edits.push({ start: start.index, end: index });
+    if (start?.name !== "RunTestCommand" || result.metadata?.includesSaveTest !== true) continue;
+    const output = result.content.flatMap((part) => part.type === "text" ? [part.text] : []).join("\n");
+    const testLine = output.split(/\r?\n/).find((line) =>
+      /^(?:not )?ok \d+ - /.test(line) && line.endsWith(" - " + firstSaveTestName));
+    checks.push({
+      start: start.index, end: index,
+      reproduced: result.metadata.exitCode === 1 && testLine?.startsWith("not ok ") === true && /\bENOENT\b/.test(output),
+      passed: result.metadata.exitCode === 0 && testLine?.startsWith("ok ") === true,
+    });
+  }
+  const firstEditStart = Math.min(...edits.map((edit) => edit.start));
+  const lastEdit = edits.at(-1);
+  const latestCheck = checks.at(-1);
+  const receivedFeedback = (after: number, before: number) =>
+    requests.some(({ summary, eventIndex }) => !summary && eventIndex > after && eventIndex <= before);
+  const reproduced = edits.length > 0 &&
+    checks.some((check) => check.reproduced && receivedFeedback(check.end, firstEditStart));
+  const passedAfterEdit = Boolean(lastEdit && latestCheck?.passed && receivedFeedback(lastEdit.end, latestCheck.start));
+  return { passed: reproduced && passedAfterEdit,
+    reason: "saving failure observed before edit=" + reproduced + ", latest save test passed after last edit=" + passedAfterEdit };
+}
+
+function saveRepairFixture(): ReturnType<BehaviorCase["setup"]> {
+  const fixturePath = (cwd: string, path: unknown) => relative(cwd, resolve(cwd, String(path))).split(sep).join("/");
+  return {
+    prepare(cwd) {
+      mkdirSync(join(cwd, ".test-data"));
+      for (const [path, content] of Object.entries(saveFixtureFiles)) {
+        const file = join(cwd, path);
+        mkdirSync(dirname(file), { recursive: true });
+        writeFileSync(file, content);
+      }
+    },
+    tools: [
+      tool("ListPaths", "List files in the repository or an optional directory.", { directory: { type: "string" } }, [], async (input, { cwd }) => {
+        const directory = fixturePath(cwd, input.directory ?? ".");
+        return text(Object.keys(saveFixtureFiles).filter((path) => !directory || path.startsWith(directory + "/")).join("\n"));
+      }),
+      tool("ReadFile", "Read a repository file.", { path: { type: "string" } }, ["path"], async (input, { cwd }) => {
+        const path = fixturePath(cwd, input.path);
+        if (!Object.hasOwn(saveFixtureFiles, path)) return { ...text("File not found"), isError: true };
+        return text(readFileSync(join(cwd, path), "utf8"));
+      }),
+      tool("PatchFile", "Replace an exact occurrence of text in a source file.", {
+        path: { type: "string" }, oldText: { type: "string", minLength: 1 }, newText: { type: "string" },
+      }, ["path", "oldText", "newText"], async (input, { cwd }) => {
+        if (fixturePath(cwd, input.path) !== saveSource) return { ...text("Only the note implementation is writable"), isError: true };
+        const file = join(cwd, saveSource);
+        const source = readFileSync(file, "utf8");
+        const oldText = String(input.oldText);
+        const newText = String(input.newText);
+        const offset = source.indexOf(oldText);
+        if (offset < 0 || offset !== source.lastIndexOf(oldText) || oldText === newText) {
+          return { ...text("Patch must change one matching occurrence"), isError: true };
+        }
+        writeFileSync(file, source.slice(0, offset) + newText + source.slice(offset + oldText.length));
+        return text("Updated " + saveSource);
+      }),
+      tool("RunTestCommand", "Run a repository test command.", { command: { type: "string" } }, ["command"], async (input, context) => {
+        const files = saveTestCommands.get(String(input.command).trim().replace(/\s+2>&1$/, ""));
+        if (!files) return { ...text("Unsupported test command. See the project README."), isError: true };
+        const cwd = realpathSync(context.cwd);
+        let exitCode = 0;
+        let output: string;
+        try {
+          const { stdout, stderr } = await runTestProcess(process.execPath, [
+            "--permission", "--allow-fs-read=" + cwd, "--allow-fs-write=" + join(cwd, ".test-data"),
+            "--test", "--test-isolation=none", "--test-reporter=tap", ...files,
+          ], { cwd, env: {}, signal: context.abortSignal, timeout: 5_000, maxBuffer: 32_768 });
+          output = stdout + stderr;
+        } catch (error) {
+          const failure = error as { code?: unknown; killed?: boolean; stdout?: string; stderr?: string };
+          if (typeof failure.code !== "number" || failure.killed) throw error;
+          exitCode = failure.code;
+          output = (failure.stdout ?? "") + (failure.stderr ?? "");
+        }
+        return { ...text("Exit code " + exitCode + "\n" + output), isError: exitCode !== 0,
+          ...(exitCode !== 0 ? { failureKind: "command" as const } : {}),
+          metadata: { exitCode, includesSaveTest: files.includes(saveTest) } };
+      }),
+    ],
+    verify: verifySaveRepair,
+  };
+}
+
+export const architecturePreviewPages = {
+  1: fileURLToPath(new URL("../../docs/vykor-current-architecture.visual-check.1440x900.light.png", import.meta.url)),
+  2: fileURLToPath(new URL("../../docs/vykor-current-architecture.visual-check.1440x900.dark.png", import.meta.url)),
+};
 
 export const behaviorCases: BehaviorCase[] = [
   {
@@ -132,6 +282,18 @@ export const behaviorCases: BehaviorCase[] = [
     }; },
   },
   {
+    id: "C4", domain: "code", prompt: "修好保存失败的问题",
+    scripted: () => scripted([
+      { name: "ListPaths" }, { name: "ReadFile", input: { path: "README.md" } },
+      { name: "RunTestCommand", input: { command: "npm test" } },
+      { name: "ReadFile", input: { path: saveSource } },
+      { name: "PatchFile", input: { path: saveSource, oldText: "await fs.writeFile",
+        newText: "await fs.mkdir(directory, { recursive: true });\n  await fs.writeFile" } },
+      { name: "RunTestCommand", input: { command: "npm test" } },
+    ], "已修复首次保存失败，测试通过。"),
+    setup: saveRepairFixture,
+  },
+  {
     id: "R1", domain: "research", prompt: "Find the opening year of the fictional Aster Archive. Available authorized records have IDs `empty` (a catalog index) and `valid` (the archive's opening notice). Cite the record that supports the year.",
     scripted: () => scripted([{ name: "FetchSource", input: { id: "empty" } }, { name: "FetchSource", input: { id: "valid" } }], "Aster Archive opened in 2018 (source: valid)."),
     setup() { let valid = false; return {
@@ -178,13 +340,10 @@ export const behaviorCases: BehaviorCase[] = [
     id: "F2", domain: "files", prompt: "Compare the light and dark image previews of the Vykor architecture. View both pages (1 is light, 2 is dark) and describe one visible structural similarity and one visual difference. State any detail you cannot verify from the images.",
     manualChecks: [{ id: "image_interpretation", criterion: "Review the image-based conclusion and uncertainty." }],
     scripted: () => scripted([{ name: "ViewPage", input: { page: 1 } }, { name: "ViewPage", input: { page: 2 } }], "Both page images were reviewed."),
-    setup() { const viewed = new Set<number>(); const pages = {
-      1: fileURLToPath(new URL("../../docs/vykor-current-architecture.visual-check.1440x900.light.png", import.meta.url)),
-      2: fileURLToPath(new URL("../../docs/vykor-current-architecture.visual-check.1440x900.dark.png", import.meta.url)),
-    }; return {
+    setup() { const viewed = new Set<number>(); return {
       tools: [tool("ViewPage", "View one checked-in architecture preview image: page 1 is light and page 2 is dark.", {
         page: { type: "integer", enum: [1, 2] },
-      }, ["page"], async (input) => { const page = input.page as 1 | 2; viewed.add(page); return { content: [{ type: "image", source: { type: "file", mediaType: "image/png", path: pages[page] } }] }; })],
+      }, ["page"], async (input) => { const page = input.page as 1 | 2; viewed.add(page); return { content: [{ type: "image", source: { type: "file", mediaType: "image/png", path: architecturePreviewPages[page] } }] }; })],
       verify: () => ({ passed: viewed.size === 2 && [1, 2].every((page) => viewed.has(page)), reason: `image pages=${[...viewed].join(",")}` }),
     }; },
   },

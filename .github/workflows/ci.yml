@@ -45,6 +45,24 @@ jobs:
       - name: Test
         run: pnpm test
 
+      - name: Evaluate scripted Agent behavior
+        id: behavior_eval
+        env:
+          VYKOR_EVAL_MODE: scripted
+          VYKOR_EVAL_BASELINE: tests/agent-behavior/scripted-baseline.json
+        run: |
+          eval_dir=$(mktemp -d)
+          echo "VYKOR_EVAL_REPORT_DIR=$eval_dir" >> "$GITHUB_ENV"
+          VYKOR_EVAL_OUT="$eval_dir/behavior.json" pnpm eval:behavior
+
+      - name: Upload Agent behavior report
+        if: always() && steps.behavior_eval.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-behavior-report
+          path: ${{ env.VYKOR_EVAL_REPORT_DIR }}/*.json
+          if-no-files-found: ignore
+
       - name: Notify by email
         if: failure()
         uses: dawidd6/action-send-mail@v3
