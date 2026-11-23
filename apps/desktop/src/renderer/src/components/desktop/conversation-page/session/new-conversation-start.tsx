@@ -148,7 +148,7 @@ export function NewConversationStart({
   attachmentInteractionEnabled: boolean
   panelOpen: boolean
   onDraftChange: (value: ComposerDocument) => void
-  onSubmit: (delivery?: "queue" | "steer", computer?: true | "auto", appHint?: string) => void
+  onSubmit: (delivery?: "queue" | "steer", computer?: "auto") => void
   onPickFiles: () => void | Promise<void>
   onDropFiles: (files: readonly File[]) => void | Promise<void>
   onPasteFiles: (files: readonly File[]) => void | Promise<void>

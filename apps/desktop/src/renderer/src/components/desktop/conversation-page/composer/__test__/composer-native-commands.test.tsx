@@ -112,7 +112,7 @@ beforeEach(() => {
   root = createRoot(container)
 })
 
-it("uses a one-message Computer opt-in and queues it instead of steering the active run", async () => {
+it("keeps ordinary follow-up delivery while an agent run is active", async () => {
   vi.stubGlobal("desktop", { computer: { supported: true } })
   try {
     await act(async () => root.render(
@@ -135,55 +135,23 @@ it("uses a one-message Computer opt-in and queues it instead of steering the act
         computerEnabled
       />
     ))
-    const button = container.querySelector<HTMLButtonElement>('[aria-label="电脑操作"]')!
     const form = container.querySelector("form")!
     const send = () => { form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })) }
-    expect(button.getAttribute("aria-pressed")).toBe("false")
-    await act(async () => button.click())
-    expect(button.getAttribute("aria-pressed")).toBe("true")
     await act(async () => send())
-    expect(onSubmit).toHaveBeenNthCalledWith(1, "queue", true)
-    expect(button.getAttribute("aria-pressed")).toBe("false")
-    await act(async () => send())
-    expect(onSubmit).toHaveBeenNthCalledWith(2, "steer")
+    expect(onSubmit).toHaveBeenCalledExactlyOnceWith("steer")
   } finally {
     vi.unstubAllGlobals()
   }
 })
 
-it("keeps the bundled Computer opt-in scoped to the current draft", async () => {
-  vi.stubGlobal("desktop", { computer: { supported: true } })
-  await renderComputerComposer("session:first")
-  const trigger = container.querySelector<HTMLButtonElement>('[aria-label="电脑操作"]')!
-  await act(async () => trigger.click())
-  expect(trigger.getAttribute("aria-pressed")).toBe("true")
-  await setAppHint("记事本")
-  await renderComputerComposer("session:second")
-  expect(container.querySelector('[aria-label="电脑操作"]')?.getAttribute("aria-pressed")).toBe("false")
-  expect(onSubmit).not.toHaveBeenCalled()
-  await act(async () => trigger.click())
-  expect(container.querySelector<HTMLInputElement>('[aria-label="目标应用（可选）"]')?.value).toBe("")
-})
-
-it("passes the app hint only in the armed message", async () => {
+it("sends a natural desktop task without a Computer toggle or app field", async () => {
   vi.stubGlobal("desktop", { computer: { supported: true } })
   await renderComputerComposer("session:test")
-  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="电脑操作"]')!.click())
-  await setAppHint(" 记事本 ")
-  const send = () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
-  await act(async () => { send() })
-  expect(onSubmit).toHaveBeenNthCalledWith(1, "queue", true, "记事本")
-  await act(async () => { send() })
-  expect(onSubmit).toHaveBeenNthCalledWith(2, undefined, "auto")
+  expect(container.querySelector('[aria-label="电脑操作"]')).toBeNull()
+  expect(container.querySelector('[aria-label="目标应用（可选）"]')).toBeNull()
+  await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })))
+  expect(onSubmit).toHaveBeenCalledExactlyOnceWith(undefined, "auto")
 })
-
-async function setAppHint(value: string) {
-  const input = container.querySelector<HTMLInputElement>('[aria-label="目标应用（可选）"]')!
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value)
-    input.dispatchEvent(new Event("input", { bubbles: true }))
-  })
-}
 
 it.each([false, true])("adds a chosen window to the attachment draft only if the chat stays current (switched=%s)", async (switched) => {
   const picture = Promise.withResolvers<{ bytes: Uint8Array }>()
@@ -202,7 +170,6 @@ it.each([false, true])("adds a chosen window to the attachment draft only if the
   if (switched) expect(pasteFiles).not.toHaveBeenCalled()
   else expect(pasteFiles).toHaveBeenCalledExactlyOnceWith([expect.objectContaining({ name: "窗口截图.png", type: "image/png" })])
   expect(onSubmit).not.toHaveBeenCalled()
-  expect(container.querySelector('[aria-label="电脑操作"]')?.getAttribute("aria-pressed")).toBe("false")
 })
 
 it("keeps ordinary messaging available when Computer Use is unavailable", async () => {
