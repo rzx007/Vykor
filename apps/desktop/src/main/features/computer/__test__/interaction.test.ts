@@ -5,8 +5,8 @@ const preferences = vi.hoisted(() => ({
   get: vi.fn(),
   patch: vi.fn(),
 }))
-const overlay = vi.hoisted(() => ({ show: vi.fn(), close: vi.fn() }))
-vi.mock("../computer-control-overlay", () => ({ showComputerControlOverlay: overlay.show }))
+const overlay = vi.hoisted(() => vi.fn<(signal: AbortSignal, onUnavailable: () => void) => Promise<void>>())
+vi.mock("../computer-control-overlay", () => ({ showComputerControlOverlay: overlay }))
 vi.mock("../../settings/desktop-preferences", () => ({
   getDesktopPreferences: preferences.get,
   patchDesktopPreferences: preferences.patch,
@@ -23,27 +23,27 @@ function window() {
 beforeEach(() => {
   preferences.get.mockReturnValue({ computerAppGrants: [] })
   preferences.patch.mockClear()
-  overlay.show.mockReset().mockReturnValue(overlay.close)
-  overlay.close.mockClear()
+  overlay.mockReset().mockResolvedValue(undefined)
 })
 
-it("shows the overlay only while input is held and forwards an emergency stop once", () => {
+it("keeps the overlay in the owning chat and forwards an emergency stop once", async () => {
   const { owner } = window()
   const scope = new AbortController()
   const stop = vi.fn()
   const interaction = createComputerInteraction(owner, scope.signal, id => id === "session", stop)
-  interaction.publishActivity("other", { runId: "run", phase: "foreground" })
+  await expect(interaction.showForeground("other", "run", scope.signal)).rejects.toThrow("聊天已离开")
   interaction.publishActivity("session", { runId: "run", phase: "observing" })
-  expect(overlay.show).not.toHaveBeenCalled()
-  interaction.publishActivity("session", { runId: "run", phase: "foreground" })
-  interaction.publishActivity("session", { runId: "run", phase: "foreground" })
-  expect(overlay.show).toHaveBeenCalledOnce()
-  interaction.publishActivity("session", { runId: "run", phase: "stopped" })
-  expect(overlay.close).toHaveBeenCalledOnce()
-  interaction.emergencyStop("session", "run")
+  expect(overlay).not.toHaveBeenCalled()
+  await interaction.showForeground("session", "run", scope.signal)
+  const [signal, unavailable] = overlay.mock.calls[0]!
+  expect(signal.aborted).toBe(false)
+  unavailable()
   expect(stop).toHaveBeenCalledExactlyOnceWith("session", "run")
-  interaction.emergencyStop("session", "run")
+  interaction.clearPreview()
+  expect(signal.aborted).toBe(false)
   scope.abort()
+  expect(signal.aborted).toBe(true)
+  unavailable()
   expect(stop).toHaveBeenCalledTimes(1)
 })
 

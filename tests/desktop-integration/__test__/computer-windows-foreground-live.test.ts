@@ -92,6 +92,7 @@ it.runIf(realWindows)("observes and safely drives a real Calculator through the 
       authorizeApp: async () => true,
       chooseTarget: async () => { throw new Error("Expected one test-owned Calculator window") },
       emergencyStop: () => {},
+      showForeground: async () => {},
       publishActivity: (_session, state) => { activity = state },
     }, resourcesPath ? (target, signal) => createWindowsDriver(target, signal, join(resourcesPath, "computer-windows", "cua-driver.exe")) : undefined,
     createWindowsForeground())
@@ -238,6 +239,7 @@ it.skipIf(!realWindows).each(["key", "click"] as const)("releases a held %s thro
     }, {
       authorizeApp: async () => true, chooseTarget: async () => { throw new Error("Expected the exact test window") },
       emergencyStop: () => {},
+      showForeground: async () => {},
     }, undefined, {
       enter: native.enter,
       capture: async (...args) => { frame = await native.capture(...args); return frame },

@@ -127,9 +127,11 @@ export class ComputerRunAccess {
     };
     const mayChange = (action: ComputerAction) =>
       action.type !== "observe" && action.type !== "capture" && action.type !== "handoff";
-    const preflight = (action: ComputerAction | undefined, context: ToolContext) => {
+    const preflight = (input: Record<string, unknown>, action: ComputerAction | undefined, context: ToolContext) => {
       if (!permitted(context)) return unavailable;
-      if (!action) return "Invalid Computer Use action.";
+      if (!action) return input.action === "observe"
+        ? 'Observe reads the current window. Omit app and all other fields. Retry with {"action":"observe"}.'
+        : "Invalid Computer Use action.";
       if (needsObservation && (mayChange(action) || (action.type === "capture" && action.purpose === "result"))) return verifyFirst;
     };
     return {
@@ -137,7 +139,7 @@ export class ComputerRunAccess {
       permission: "host-internal",
       reportsNotStarted: true,
       async beforeDispatch(input, context) {
-        return preflight(parseInput(input), context);
+        return preflight(input, parseInput(input), context);
       },
       definition: {
         name: COMPUTER_TOOL_NAME,
@@ -145,7 +147,7 @@ export class ComputerRunAccess {
         inputSchema: {
           type: "object",
           properties: {
-            action: { type: "string", enum: ["open_app", "observe", "invoke", "choose", "set_text", "scroll", "capture", "foreground", "handoff", "click", "key", "type_text"] },
+            action: { type: "string", description: 'After open_app, call {"action":"observe"} to read the bound window.', enum: ["open_app", "observe", "invoke", "choose", "set_text", "scroll", "capture", "foreground", "handoff", "click", "key", "type_text"] },
             purpose: { type: "string", enum: ["result"], description: "For capture only. Attach the final window image to the assistant answer. Omit for temporary visual inspection." },
             app: { type: "string", minLength: 1, maxLength: 256, description: "Application name or current app reference, for open_app." },
             windowHint: { type: "string", minLength: 1, maxLength: 256, description: "Optional existing window title or document hint for open_app." },
@@ -167,7 +169,7 @@ export class ComputerRunAccess {
         serialGroup: "desktop-interaction",
         execute: async (input, context) => {
           const action = parseInput(input);
-          const blocked = preflight(action, context);
+          const blocked = preflight(input, action, context);
           if (!action || blocked) return refused(blocked ?? "Invalid Computer Use action.");
           const changesState = mayChange(action);
           // Retain uncertainty even if the runtime stops awaiting a dispatched call first.

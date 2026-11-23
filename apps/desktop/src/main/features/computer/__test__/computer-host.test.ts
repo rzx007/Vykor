@@ -78,6 +78,7 @@ it("reuses a unique named document without launching or asking for a target choi
   f.windows.mockResolvedValue([root, { ...reading, title: "unrelated.txt - Notepad" }])
   const opened = await f.open("Notepad", "notes.txt")
   expect(opened).toHaveProperty("text", expect.stringContaining('"source":"reused"'))
+  expect(opened).toHaveProperty("text", expect.stringContaining('"next":{"action":"observe"}'))
   expect(opened).toHaveProperty("text", expect.stringContaining('"title":"notes.txt - Notepad"'))
   expect(opened).not.toHaveProperty("text", expect.stringContaining('"pid"'))
   expect(f.launch).not.toHaveBeenCalled()

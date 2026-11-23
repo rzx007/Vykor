@@ -16,6 +16,7 @@ const frame: WindowsForegroundFrame = {
 function fixture() {
   const connection = new AbortController()
   const emergencyStop = vi.fn()
+  const showForeground = vi.fn<(_sessionId: string, _runId: string, _signal: AbortSignal) => Promise<void>>(async () => {})
   const publishActivity = vi.fn()
   const invalidateCapturedImage = vi.fn()
   const perform = vi.fn(async () => ({ state: "sent" as const, released: true }))
@@ -32,7 +33,7 @@ function fixture() {
     discover: async name => [{ id: name, name }], windows,
     launch,
   }, {
-    authorizeApp: async () => true, chooseTarget: async () => undefined, emergencyStop, publishActivity, invalidateCapturedImage,
+    authorizeApp: async () => true, chooseTarget: async () => undefined, emergencyStop, showForeground, publishActivity, invalidateCapturedImage,
   }, undefined, { capture, enter })
   const approve = vi.fn(async () => true)
   const dispatch = vi.fn(async () => true)
@@ -43,7 +44,7 @@ function fixture() {
     const result = await execute({ type: "capture" }) as ComputerResult
     return { result, ref: JSON.parse(result.text).frame.ref as string }
   }
-  return { approve, emergencyStop, capture, dispatch, enter, execute, host, perform, publishActivity, release, windows, launch, invalidateCapturedImage,
+  return { approve, emergencyStop, showForeground, capture, dispatch, enter, execute, host, perform, publishActivity, release, windows, launch, invalidateCapturedImage,
     loseFocus: () => lost?.("focus_lost"), pressEscape: () => lost?.("emergency_stop"), snapshot }
 }
 
@@ -110,6 +111,36 @@ it("stops input and interrupts the original run when the OS reports Escape", asy
   expect(f.publishActivity.mock.lastCall?.[1]).toMatchObject({ phase: "stopped" })
   expect(await f.execute({ type: "key", key: "Tab" })).toMatchObject({ executionState: "not_started" })
   expect(f.perform).not.toHaveBeenCalled()
+})
+
+it.each(["ready", "stop", "unavailable"] as const)("waits for the foreground notice before accepting input (%s)", async outcome => {
+  const f = fixture()
+  const notice = Promise.withResolvers<void>()
+  const waiting = Promise.withResolvers<void>()
+  f.showForeground.mockImplementationOnce((_session, _run, signal) => {
+    signal.addEventListener("abort", () => notice.reject(signal.reason), { once: true })
+    waiting.resolve()
+    return notice.promise
+  })
+  await f.execute({ type: "open_app", app: "First" })
+  const foreground = f.execute({ type: "foreground" })
+  await Promise.race([waiting.promise, foreground])
+  expect(f.showForeground).toHaveBeenCalledOnce()
+  expect(f.publishActivity.mock.lastCall?.[1]?.phase).not.toBe("foreground")
+  expect(f.perform).not.toHaveBeenCalled()
+  if (outcome === "stop") {
+    f.pressEscape()
+    await expect(foreground).rejects.toThrow()
+    expect(f.release).toHaveBeenCalledOnce()
+  } else if (outcome === "unavailable") {
+    notice.reject(new Error("overlay could not open"))
+    expect(await foreground).toMatchObject({ error: "无法显示前台控制提示，键鼠输入未派发。", executionState: "not_started" })
+    expect(f.release).toHaveBeenCalledOnce()
+  } else {
+    notice.resolve()
+    expect(await foreground).toHaveProperty("text", expect.stringContaining('"status":"foreground"'))
+    expect(f.publishActivity.mock.lastCall?.[1]?.phase).toBe("foreground")
+  }
 })
 
 it("yields the keyboard and mouse to Browser and requires a fresh window frame on return", async () => {

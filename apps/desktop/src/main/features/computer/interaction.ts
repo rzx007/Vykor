@@ -17,6 +17,7 @@ export interface ComputerInteraction {
   authorizeApp(app: DesktopComputerAppGrant, signal: AbortSignal, sessionId: string, onceOnly?: true): Promise<boolean | "remembered">
   chooseTarget(candidates: readonly DesktopComputerCandidate[], signal: AbortSignal, sessionId?: string, confirmChange?: true): Promise<string | undefined>
   emergencyStop?(sessionId: string, runId: string): void
+  showForeground?(sessionId: string, runId: string, signal: AbortSignal): Promise<void>
   invalidateCapturedImage?(sessionId: string, runId: string): Promise<boolean> | undefined
   publishActivity?(sessionId: string, activity: Omit<DesktopComputerActivity, "sessionId"> | null): void
 }
@@ -94,7 +95,6 @@ export function createComputerInteraction(
     sessionId && canReplyInSession ? () => canReplyInSession(sessionId) : undefined
   const isVisible = (sessionId: string) => !ownerSignal.aborted && !owner.isDestroyed() && (canReplyInSession?.(sessionId) ?? false)
   let activity: DesktopComputerActivity | null = null
-  let closeOverlay: (() => void) | undefined
   let emergencyRun: string | undefined
 
   function emergencyStop(sessionId: string, runId: string): void {
@@ -114,12 +114,18 @@ export function createComputerInteraction(
 
   ownerSignal.addEventListener("abort", () => {
     activity = null
-    closeOverlay?.()
   }, { once: true })
 
   return {
     isRememberedApp,
     emergencyStop,
+    async showForeground(sessionId: string, runId: string, lifetime: AbortSignal): Promise<void> {
+      if (!isVisible(sessionId)) throw new Error("发起电脑操作的聊天已离开。")
+      const signal = AbortSignal.any([ownerSignal, lifetime])
+      await showComputerControlOverlay(signal, () => {
+        if (!signal.aborted) emergencyStop(sessionId, runId)
+      })
+    },
     async authorizeApp(app: DesktopComputerAppGrant, operationSignal: AbortSignal, sessionId: string, onceOnly?: true): Promise<boolean | "remembered"> {
       const signal = AbortSignal.any([ownerSignal, operationSignal])
       if (signal.aborted || replyCheck(sessionId)?.() === false) return false
@@ -154,16 +160,6 @@ export function createComputerInteraction(
       } else if (activity?.sessionId === sessionId) {
         activity = null
       } else return
-      if (activity?.phase === "foreground" && isVisible(sessionId)) {
-        const { runId } = activity
-        closeOverlay ??= showComputerControlOverlay(() => {
-          if (activity?.runId === runId && activity.phase === "foreground" && isVisible(sessionId))
-            emergencyStop(sessionId, runId)
-        })
-      } else {
-        closeOverlay?.()
-        closeOverlay = undefined
-      }
       notify({ sessionId, activity })
     },
     getActivity(sessionId: string): DesktopComputerActivity | null {
@@ -171,8 +167,6 @@ export function createComputerInteraction(
     },
     getBoundActivity(): DesktopComputerActivity | null { return activity },
     clearPreview(): void {
-      closeOverlay?.()
-      closeOverlay = undefined
       if (!activity?.preview) return
       const { preview: _preview, ...description } = activity
       activity = description

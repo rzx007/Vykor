@@ -467,7 +467,7 @@ export class ComputerHost {
   }
 
   private async enterInput(task: Task, occupied: Occupation, signal: AbortSignal): Promise<WindowsForegroundLease> {
-    if (!this.foreground || !await this.inputCleanup || task.occupation !== occupied) {
+    if (!this.foreground || !this.interaction.showForeground || !await this.inputCleanup || task.occupation !== occupied) {
       throw new TargetError("前台控制尚未就绪，或上次的输入释放未能确认。")
     }
     signal.throwIfAborted()
@@ -487,6 +487,12 @@ export class ComputerHost {
         this.pauseTask(task, reason === "focus_lost" ? "目标窗口已失焦。" : "前台控制已结束，请确认目标窗口后继续。")
       }, lifetime)
       const lease = await input.opening
+      try {
+        await this.interaction.showForeground(task.run.sessionId, task.run.runId, lifetime)
+      } catch {
+        lifetime.throwIfAborted()
+        throw new TargetError("无法显示前台控制提示，键鼠输入未派发。")
+      }
       lifetime.throwIfAborted()
       signal.throwIfAborted()
       input.lease = lease
@@ -534,7 +540,8 @@ export class ComputerHost {
   }
 
   private async beginForeground(task: Task, signal: AbortSignal, approve?: ApproveAction, dispatch?: ApproveDispatch): Promise<ComputerResult> {
-    if (!this.foreground || !this.interaction.emergencyStop) throw new TargetError("当前 Desktop 未提供可用的前台控制和本机急停。")
+    if (!this.foreground || !this.interaction.emergencyStop || !this.interaction.showForeground)
+      throw new TargetError("当前 Desktop 未提供可用的前台提示和本机急停。")
     if (task.occupation) throw new TargetError("目标窗口的前台控制已获准。请先观察当前界面。")
     const target = this.requireTarget(task)
     await this.liveTarget(task, target, signal)
@@ -749,7 +756,7 @@ export class ComputerHost {
   }
 
   private ready(target: Target, source: "reused" | "launched"): ComputerResult {
-    return { text: JSON.stringify({ status: "ready", ...this.targetDetails(target), source }) }
+    return { text: JSON.stringify({ status: "ready", ...this.targetDetails(target), source, next: { action: "observe" } }) }
   }
 
   private targetDetails(target: Target) {

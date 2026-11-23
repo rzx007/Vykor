@@ -139,6 +139,34 @@ async function fixture(
   }
 }
 
+it("corrects redundant observe parameters without dispatching them to Desktop", async () => {
+  const f = await fixture("full_access", "observe", async function* (_params, call) {
+    if (call === 1) {
+      yield { type: "tool_use_start", toolUse: {
+        type: "tool_use", id: "invalid-observe", name: "Computer", input: { action: "observe", app: "Calculator" },
+      } };
+    } else if (call === 2) {
+      yield { type: "tool_use_start", toolUse: {
+        type: "tool_use", id: "corrected-observe", name: "Computer", input: { action: "observe" },
+      } };
+    }
+    yield { type: "complete", stopReason: call < 3 ? "tool_use" : "end_turn" };
+  });
+  try {
+    const desktop = await f.open();
+    const run = await f.run(await desktop.submit(sessionId, input("observe-parameters")));
+    const observed = await desktop.next();
+    expect(observed).toMatchObject({ type: "execute", action: { type: "observe" } });
+    if (observed.type !== "execute") throw new Error("Expected the corrected observation");
+    expect((await desktop.result(observed.requestId)).ok).toBe(true);
+    expect(await f.awaitRun(run)).toMatchObject({ status: "completed" });
+    const feedback = f.requests[1]?.messages.find(message => message.type === "tool_result" && message.toolUseId === "invalid-observe");
+    expect(feedback?.content).toContainEqual(expect.objectContaining({
+      type: "text", text: expect.stringContaining('{"action":"observe"}'),
+    }));
+  } finally { await f.close(); }
+});
+
 it.each(["deliver", "revoke", "stop"] as const)("handles a result screenshot before final delivery: %s", async outcome => {
   const finishAnswer = Promise.withResolvers<void>();
   const f = await fixture("full_access", { action: "capture", purpose: "result" }, (_params, call) => {
