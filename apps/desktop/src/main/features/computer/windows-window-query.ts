@@ -14,6 +14,7 @@ public static class VykorWindowsWindowQuery
     [DllImport("user32.dll")] private static extern bool EnumWindows(Enumerate callback, IntPtr parameter);
     [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr window, Enumerate callback, IntPtr parameter);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr window);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr window);
     [DllImport("user32.dll")] private static extern bool IsWindowEnabled(IntPtr window);
     [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr window, uint relation);
     [DllImport("user32.dll")] private static extern IntPtr GetLastActivePopup(IntPtr window);
@@ -130,6 +131,7 @@ public static class VykorWindowsWindowQuery
     {
         var result = new Result { desktopAvailable = ReadDesktop() };
         if (!result.desktopAvailable) return result;
+        bool sharePicker = String.IsNullOrEmpty(application) && String.IsNullOrEmpty(executable);
         uint session = (uint)Process.GetCurrentProcess().SessionId;
         var user = WindowsIdentity.GetCurrent().User;
         var cache = new Dictionary<uint, Identity>();
@@ -143,7 +145,7 @@ public static class VykorWindowsWindowQuery
         };
         var windows = new Dictionary<long, Window>();
         EnumWindows(delegate(IntPtr handle, IntPtr ignored) {
-            if (!IsWindowVisible(handle)) return true;
+            if (!IsWindowVisible(handle) || (sharePicker && IsIconic(handle))) return true;
             int cloaked;
             if (DwmGetWindowAttribute(handle, 14, out cloaked, 4) == 0 && cloaked != 0) return true;
             uint pid;
@@ -154,13 +156,15 @@ public static class VykorWindowsWindowQuery
             var owner = GetWindow(handle, 4); // GW_OWNER
             var className = new StringBuilder(128);
             GetClassName(handle, className, className.Capacity);
+            if (sharePicker && (className.ToString() == "Progman" || className.ToString() == "WorkerW" ||
+                className.ToString() == "Shell_TrayWnd" || className.ToString() == "Shell_SecondaryTrayWnd")) return true;
             Identity appProcess = null;
             if (!String.IsNullOrEmpty(executable)) {
                 if (!String.Equals(windowProcess.image, executable, StringComparison.OrdinalIgnoreCase)) return true;
                 if (explorer && owner == IntPtr.Zero && className.ToString() != "CabinetWClass"
                     && className.ToString() != "ExploreWClass") return true;
                 appProcess = windowProcess;
-            } else if (String.Equals(windowProcess.appId, application, StringComparison.OrdinalIgnoreCase)) {
+            } else if (!sharePicker && String.Equals(windowProcess.appId, application, StringComparison.OrdinalIgnoreCase)) {
                 appProcess = windowProcess;
             } else if (className.ToString() == "ApplicationFrameWindow" &&
                 String.Equals(windowProcess.image, frameImage, StringComparison.OrdinalIgnoreCase)) {
@@ -170,13 +174,14 @@ public static class VykorWindowsWindowQuery
                     GetWindowThreadProcessId(child, out childPid);
                     if (childPid != 0 && childPid != pid && IsWindowVisible(child)) {
                         var identity = read(childPid);
-                        if (identity != null && String.Equals(identity.appId, application, StringComparison.OrdinalIgnoreCase))
+                        if (identity != null && (sharePicker ? !String.IsNullOrEmpty(identity.appId)
+                            : String.Equals(identity.appId, application, StringComparison.OrdinalIgnoreCase)))
                             children[childPid] = identity;
                     }
                     return true;
                 }, IntPtr.Zero);
                 if (children.Count == 1) foreach (var child in children.Values) appProcess = child;
-            }
+            } else if (sharePicker) appProcess = windowProcess;
             if (appProcess == null) return true;
             if (!appProcess.allowed || !windowProcess.allowed) {
                 result.restricted = true;

@@ -29,6 +29,7 @@ type Occupation = {
   input?: { stop: AbortController; opening?: Promise<WindowsForegroundLease>; lease?: WindowsForegroundLease }
 }
 type Task = {
+  automatic?: true
   run: ComputerRunIdentity
   stop: AbortController
   work: AbortController
@@ -43,6 +44,7 @@ type Task = {
   allowed: Map<string, "task" | "remembered">
   apps: Map<string, WindowsApp>
   target?: Target
+  launchToVerify?: { app: WindowsApp; windowHint?: string }
   observation?: ComputerObservation
 }
 
@@ -122,6 +124,27 @@ export class ComputerHost {
     return this.inputCleanup
   }
 
+  async yieldInputToBrowser(sessionId: string): Promise<boolean> {
+    const task = this.findTask(sessionId)
+    if (!task) return this.inputCleanup
+    const leavingForeground = task.occupation !== undefined
+    task.observation = undefined
+    this.invalidateTaskImage(task)
+    const released = this.releaseInput(task)
+    if (leavingForeground) {
+      task.inputRelease = "pending"
+      task.activity = { action: "退出电脑前台控制" }
+    }
+    this.publish(task)
+    const confirmed = await released
+    if (leavingForeground && this.task === task && !task.paused) {
+      task.inputRelease = confirmed ? undefined : "failed"
+      task.activity = { ...task.activity, evidence: confirmed ? "键鼠已释放。" : "无法确认键鼠已释放。" }
+      this.publish(task)
+    }
+    return confirmed
+  }
+
   runUsingRememberedApp(appId: string): ComputerRunIdentity | undefined {
     return this.task?.allowed.get(appId) === "remembered" ? this.task.run : undefined
   }
@@ -175,6 +198,7 @@ export class ComputerHost {
 
   async execute(
     event: ExecuteEvent, signal: AbortSignal, connection: AbortSignal, approve?: ApproveAction, authorizeDispatch?: ApproveDispatch,
+    automatic?: true,
   ): Promise<ComputerHostResponse> {
     let launchAttempted = false
     let task: Task | undefined
@@ -182,7 +206,7 @@ export class ComputerHost {
     try {
       connection.throwIfAborted()
       signal.throwIfAborted()
-      task = this.currentTask(event.run, connection)
+      task = this.currentTask(event.run, connection, automatic)
       signal = AbortSignal.any([signal, connection, task.stop.signal])
       if (event.action.type === "handoff") {
         this.pauseTask(task, "请在目标应用中完成需要手动操作的步骤，然后回到聊天继续。")
@@ -234,19 +258,24 @@ export class ComputerHost {
     }
     if (action.type === "observe") {
       const target = task.target
-      if (!target) throw new TargetError("请先找到并打开本次任务的目标应用。")
+      const app = target?.app ?? task.launchToVerify?.app
+      if (!app) throw new TargetError("请先找到并打开本次任务的目标应用。")
       try {
-        const bound = await this.bind(task, target.app, target.root, signal)
+        this.assertPermission(task, app)
+        const root = target?.root ?? await this.selectRoot(task,
+          primaryWindows(await this.apps.windows(app, signal)), task.launchToVerify?.windowHint, true, signal)
+        const bound = await this.bind(task, app, root, signal, target !== undefined)
         this.publish(task, "observing")
         if (!this.openDriver) return this.ready(bound, "reused")
         return await this.useDriver(task, bound, signal, async driver => {
           const state = await driver.observe(signal)
           await this.liveTarget(task, bound, signal)
+          task.launchToVerify = undefined
           return this.observed(task, bound, state, { status: "observed" })
         })
       } catch (error) {
         if (error instanceof WindowsDriverHandoffError) throw error
-        task.target = undefined
+        task.target = target
         task.observation = undefined
         this.invalidateTaskImage(task)
         await this.releaseInput(task)
@@ -272,7 +301,7 @@ export class ComputerHost {
       label: candidate.name, detail: candidate.detail ?? `Windows 应用 ${index + 1}`,
     }), signal, task.run.sessionId)
     if (!this.hasPermission(task, app)) {
-      const choice = await this.interaction.authorizeApp(app, signal, task.run.sessionId)
+      const choice = await this.interaction.authorizeApp(app, signal, task.run.sessionId, task.automatic)
       if (!choice) throw new TargetError("用户没有授权本次任务使用这个应用。")
       signal.throwIfAborted()
       task.allowed.set(app.id, choice === "remembered" ? "remembered" : "task")
@@ -292,23 +321,18 @@ export class ComputerHost {
       await requireDispatch(authorizeDispatch, signal)
       launchAttempted = true
       onLaunch()
+      task.launchToVerify = { app, windowHint }
       await this.apps.launch(app, signal)
       roots = await this.waitForWindow(app, signal)
     }
     const pinned = current && windowHint === undefined ? roots.find(window => sameWindow(current.root, window)) : undefined
-    const matches = pinned ? [pinned] : windowHint ? matchDocuments(roots, windowHint) : roots
-    if (!matches.length) {
+    let root: WindowsAppWindow
+    try {
+      root = await this.selectRoot(task, pinned ? [pinned] : roots, windowHint, launchAttempted, signal)
+    } catch (error) {
       task.target = undefined
-      throw new TargetError(launchAttempted
-        ? "应用已启动，但找不到与提示匹配的窗口或已打开文档。"
-        : "应用正在运行，但没有与提示匹配的窗口或已打开文档。")
+      throw error
     }
-    const usable = matches.filter(window => !window.blocked)
-    if (!usable.length) {
-      task.target = undefined
-      throw new TargetPausedError("目标窗口被对话框阻挡。请先在 Windows 中处理该对话框，再继续。")
-    }
-    const root = await this.choose(usable, (candidate, index) => this.windowLabel(candidate, index), signal, task.run.sessionId)
     const bound = await this.bind(task, app, root, signal)
     if (!launchAttempted) {
       try {
@@ -318,9 +342,21 @@ export class ComputerHost {
         throw error
       }
     }
+    task.launchToVerify = undefined
     task.activity = { action: "打开应用", evidence: "已核对窗口" }
     this.publish(task)
     return this.ready(bound, launchAttempted ? "launched" : "reused")
+  }
+
+  private selectRoot(task: Task, roots: WindowsAppWindow[], windowHint: string | undefined, launchAttempted: boolean, signal: AbortSignal) {
+    const matches = windowHint ? matchDocuments(roots, windowHint) : roots
+    if (!matches.length) throw new TargetError(launchAttempted
+      ? "已请求启动应用，但尚未找到与任务匹配的窗口或文档。"
+      : "应用正在运行，但没有与提示匹配的窗口或已打开文档。")
+    const usable = matches.filter(window => !window.blocked)
+    if (!usable.length)
+      throw new TargetPausedError("目标窗口被对话框阻挡。请先在 Windows 中处理该对话框，再继续。")
+    return this.choose(usable, (candidate, index) => this.windowLabel(candidate, index), signal, task.run.sessionId)
   }
 
   private unavailableMessage(error: WindowsAppUnavailableError): string {
@@ -354,8 +390,9 @@ export class ComputerHost {
     task.observation = undefined
     this.invalidateTaskImage(task)
     task.activity = { reason: "控制已撤销。" }
+    const waitingForInput = Boolean(task.occupation?.input) || task.inputRelease === "pending"
     const released = this.releaseInput(task)
-    task.inputRelease = "pending"
+    if (waitingForInput) task.inputRelease = "pending"
     this.publish(task, "stopped")
     void released.then(ok => {
       if (this.task) return
@@ -598,7 +635,7 @@ export class ComputerHost {
     }
   }
 
-  private currentTask(run: ComputerRunIdentity, connection: AbortSignal): Task {
+  private currentTask(run: ComputerRunIdentity, connection: AbortSignal, automatic?: true): Task {
     if (this.connection !== connection) {
       if (this.task) this.stopTask(this.task)
       this.connection = connection
@@ -612,7 +649,7 @@ export class ComputerHost {
     }
     if (this.task && !sameRun(this.task.run, run)) throw new TargetError("另一个运行仍拥有电脑操作许可。")
     if (!this.task) {
-      this.task = { run, stop: new AbortController(), work: new AbortController(), capture: new AbortController(), allowed: new Map(), apps: new Map() }
+      this.task = { run, automatic, stop: new AbortController(), work: new AbortController(), capture: new AbortController(), allowed: new Map(), apps: new Map() }
     }
     return this.task
   }
@@ -646,14 +683,26 @@ export class ComputerHost {
 
   private async bind(
     task: Task, app: WindowsApp, root: WindowsAppWindow, signal: AbortSignal,
+    allowRetitle = false,
   ): Promise<Target> {
     const previous = task.target
     task.target = undefined
     task.observation = undefined
     this.assertPermission(task, app)
-    const fresh = await this.apps.windows(app, signal)
+    let fresh = await this.apps.windows(app, signal)
     signal.throwIfAborted()
-    const refreshedRoot = fresh.find(window => sameWindow(root, window))
+    let refreshedRoot = fresh.find(window => sameWindow(root, window))
+    if (!refreshedRoot && allowRetitle) {
+      const renamed = fresh.find(window => sameWindowInstance(root, window) && root.document === window.document)
+      if (renamed && !renamed.blocked && !root.document) {
+        await this.choose([renamed], (candidate, index) => this.windowLabel(candidate, index), signal, task.run.sessionId, true)
+        fresh = await this.apps.windows(app, signal)
+        signal.throwIfAborted()
+        refreshedRoot = fresh.find(window => sameWindow(renamed, window))
+      } else {
+        refreshedRoot = renamed
+      }
+    }
     if (!refreshedRoot) {
       throw new TargetError("目标窗口或文档已变化。请重新查找目标。")
     }
@@ -669,7 +718,7 @@ export class ComputerHost {
     if (!pinned && usable.length > 1) {
       const confirmed = await this.apps.windows(app, signal)
       signal.throwIfAborted()
-      if (!confirmed.some(window => !window.blocked && sameWindow(root, window)) ||
+      if (!confirmed.some(window => !window.blocked && sameWindow(refreshedRoot, window)) ||
           !confirmed.some(window => !window.blocked && sameWindow(selected, window))) {
         throw new TargetError("所选对话框已变化。请重新查找目标。")
       }
@@ -828,12 +877,12 @@ export class ComputerHost {
 
   private async choose<T>(
     candidates: readonly T[], describe: (candidate: T, index: number) => { label: string; detail?: string },
-    signal: AbortSignal, sessionId: string,
+    signal: AbortSignal, sessionId: string, confirmChange?: true,
   ): Promise<T> {
     signal.throwIfAborted()
-    if (candidates.length === 1) return candidates[0]!
+    if (candidates.length === 1 && !confirmChange) return candidates[0]!
     const choices = candidates.map((candidate, index) => ({ id: randomUUID(), ...describe(candidate, index) }))
-    const selection = await this.interaction.chooseTarget(choices, signal, sessionId)
+    const selection = await this.interaction.chooseTarget(choices, signal, sessionId, confirmChange)
     signal.throwIfAborted()
     const index = choices.findIndex(candidate => candidate.id === selection)
     if (index < 0) throw new TargetError("用户没有选择目标。")

@@ -18,7 +18,7 @@ function fixture(isRememberedApp?: (id: string) => boolean) {
   const discover = vi.fn(async (name: string, _signal: AbortSignal) =>
     [editor, calc].filter(app => app.name === name))
   const authorizeApp = vi.fn(async (_app: typeof editor, _signal: AbortSignal): Promise<boolean | "remembered"> => true)
-  const chooseTarget = vi.fn(async (candidates: readonly { id: string; label: string }[], _signal: AbortSignal) => candidates[0]?.id)
+  const chooseTarget = vi.fn(async (candidates: readonly { id: string; label: string }[], _signal: AbortSignal): Promise<string | undefined> => candidates[0]?.id)
   const host = new ComputerHost({ windows, discover, launch }, { authorizeApp, chooseTarget, isRememberedApp })
   const connection = new AbortController()
   const dispatch = vi.fn(async () => true)
@@ -36,6 +36,40 @@ it("does not launch after the daemon withdrew the run permission", async () => {
   const f = fixture()
   f.dispatch.mockResolvedValueOnce(false)
   expect(await f.open("Calculator")).toMatchObject({ executionState: "not_started" })
+  expect(f.launch).not.toHaveBeenCalled()
+})
+
+it("observes a window that appeared after an uncertain launch without launching again", async () => {
+  const f = fixture()
+  f.launch.mockRejectedValueOnce(new Error("launch reply lost"))
+  expect(await f.open("Calculator")).toMatchObject({ executionState: "unknown" })
+  f.windows.mockResolvedValue([calculator])
+  expect(await f.observe()).toHaveProperty("text", expect.stringContaining("Calculator"))
+  expect(f.launch).toHaveBeenCalledOnce()
+  expect(f.authorizeApp).toHaveBeenCalledOnce()
+})
+
+it("observes a retitled instance again and excludes a different document in that window", async () => {
+  const f = fixture()
+  f.windows.mockResolvedValue([{ ...root, document: "D:/notes.txt" }])
+  expect(await f.open("Notepad")).toHaveProperty("text")
+  f.windows.mockResolvedValue([{ ...root, title: "Notes saved - Notepad", document: "D:/other.txt" }])
+  expect(await f.observe()).toMatchObject({ executionState: "not_started" })
+  f.windows.mockResolvedValue([{ ...root, title: "Notes saved - Notepad", document: "D:/notes.txt" }])
+  expect(await f.observe()).toHaveProperty("text", expect.stringContaining("Notes saved - Notepad"))
+  expect(f.launch).not.toHaveBeenCalled()
+})
+
+it("asks before observing a retitled window when Windows cannot establish document identity", async () => {
+  const f = fixture()
+  expect(await f.open("Notepad")).toHaveProperty("text")
+  f.windows.mockResolvedValue([{ ...root, title: "Another document - Notepad" }])
+  f.chooseTarget.mockResolvedValueOnce(undefined)
+  expect(await f.observe()).toMatchObject({ executionState: "not_started" })
+  expect(f.chooseTarget).toHaveBeenCalledExactlyOnceWith(
+    [expect.objectContaining({ label: "Another document - Notepad" })], expect.any(AbortSignal), f.run.sessionId, true,
+  )
+  expect(await f.observe()).toHaveProperty("text", expect.stringContaining("Another document - Notepad"))
   expect(f.launch).not.toHaveBeenCalled()
 })
 

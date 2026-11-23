@@ -78,4 +78,20 @@ describe("Windows application identity", () => {
     mockShell({ windows: [], restricted: true, desktopAvailable: true })
     await expect(native.windows(app!, signal)).rejects.toMatchObject({ reason: "window_restricted" })
   })
+
+  it("lists an unowned window with a null Windows owner, excluding blocked windows, dialogs and Vykor itself", async () => {
+    const root = { windowId: 21, ownerWindowId: null, pid: 4, threadId: 5, sessionId: 1, processStartedAt: 1,
+      processStartKey: "1", applicationPid: 4, applicationStartKey: "1", title: "App window" }
+    mockShell({ desktopAvailable: true, windows: [
+      root,
+      { ...root, windowId: 22, title: "Parent window" },
+      { ...root, windowId: 23, ownerWindowId: 22, title: "Dialog" },
+      { ...root, windowId: 24, blocked: true, title: "Blocked window" },
+      { ...root, windowId: 25, pid: process.pid, title: "Vykor" },
+    ] })
+    const candidates = await createWindowsApps().visibleWindows(signal)
+    expect(candidates).toEqual([expect.objectContaining({ windowId: 21, title: "App window" })])
+    expect(candidates[0]?.ownerWindowId).toBeUndefined()
+    expect(mocks.launch).not.toHaveBeenCalled()
+  })
 })

@@ -14,6 +14,8 @@ import type { RequestTraceRegistry } from "../control/index.js";
 import type { SessionInteractionService } from "../../application/session/interactions/session-interaction-service.js";
 import type { AdmitPromptInput, AdmitPromptResult } from "../../application/session/execution/run-admission-service.js";
 import { parseSessionObservationTarget } from "../../application/session/execution/session-observation-grant.js";
+import { ComputerSessionUnavailableError } from "../../application/session/session-application-error.js";
+import { COMPUTER_SESSION_UNAVAILABLE } from "../../application/computer-tools/computer-bridge-protocol.js";
 
 export interface RunExecutionRoutesContext {
   application: Pick<
@@ -51,6 +53,8 @@ async function submitPrompt(
   try {
     return jsonResponse(await admit(input), 202);
   } catch (error) {
+    if (error instanceof ComputerSessionUnavailableError)
+      return jsonResponse({ code: COMPUTER_SESSION_UNAVAILABLE, message: error.message }, 409);
     return applicationErrorResponse(error, sessionMutationErrorStatus(error));
   }
 }

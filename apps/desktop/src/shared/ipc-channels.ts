@@ -317,6 +317,7 @@ export const IpcChannels = {
   computerSendPrompt: "computer:send-prompt",
   computerReply: "computer:reply",
   computerActivityGet: "computer:activity-get",
+  computerShareWindow: "computer:share-window",
   computerControl: "computer:control",
   computerListAppGrants: "computer:list-app-grants",
   computerRevokeAppGrant: "computer:revoke-app-grant",
@@ -894,9 +895,10 @@ export interface IpcInvokeMap
   }
   [IpcChannels.sessionClose]: { args: []; result: void }
   [IpcChannels.sessionSendPrompt]: { args: [input: SendDesktopPromptInput]; result: void }
-  [IpcChannels.computerSendPrompt]: { args: [input: SendDesktopPromptInput]; result: void }
+  [IpcChannels.computerSendPrompt]: { args: [input: SendDesktopPromptInput, automatic?: true]; result: void }
   [IpcChannels.computerReply]: { args: [reply: DesktopComputerInteractionReply]; result: boolean }
   [IpcChannels.computerActivityGet]: { args: [sessionId: string]; result: DesktopComputerActivity | null }
+  [IpcChannels.computerShareWindow]: { args: []; result: { bytes: Uint8Array } | null }
   [IpcChannels.computerControl]: { args: [input: DesktopComputerControl]; result: boolean }
   [IpcChannels.computerListAppGrants]: { args: []; result: DesktopComputerAppGrant[] }
   [IpcChannels.computerRevokeAppGrant]: { args: [id: string]; result: DesktopComputerAppGrant[] }

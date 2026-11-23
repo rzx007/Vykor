@@ -17,7 +17,7 @@ import {
   type DaemonOperationLease,
 } from "../../control/daemon-operation-gate.js";
 import { isRecord, jsonEqual, withoutTraceId } from "../../support.js";
-import { SessionApplicationError } from "../session-application-error.js";
+import { ComputerSessionUnavailableError, SessionApplicationError } from "../session-application-error.js";
 import { inputItems, validateOutputSchemaRequest, readStoredOutputSchema } from "../execution/run-admission-work.js";
 import { readCompletionCheckCommand } from "../execution/completion-check-command.js";
 import { isObservableSession } from "../execution/session-observation-grant.js";
@@ -247,7 +247,7 @@ export class SessionInteractionService {
         const computer = computerConnectionId === undefined
           ? undefined : this.context.authorizeComputerPrompt?.(session, computerConnectionId);
         if (computerConnectionId !== undefined && (!computer || this.context.liveChildren.has(sessionId))) {
-          throw new SessionApplicationError(409, "Computer Use requires an authorized Desktop root session");
+          throw new ComputerSessionUnavailableError();
         }
         return this.admitPromptWork(session, input, computer);
       });

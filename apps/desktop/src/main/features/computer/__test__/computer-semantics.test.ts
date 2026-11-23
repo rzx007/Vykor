@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest"
 import type { ComputerBridgeEvent, ComputerResult, ComputerSemanticAction } from "@vykor/server/daemon-host"
 import { ComputerHost } from "../computer-host"
+import { projectObservation } from "../computer-semantics"
 import type { WindowsApp, WindowsAppWindow } from "../windows-apps"
 import { WindowsDriverError, WindowsDriverHandoffError, type WindowsDriver, type WindowsDriverElement } from "../windows-driver"
 
@@ -13,6 +14,22 @@ const destructive: WindowsDriverElement = {
   role: "Button", token: "private-delete", identity: "runtime-delete", label: "Delete entry", actions: ["invoke"],
 }
 const run = { sessionId: "s", runId: "r", inputId: "i" }
+
+it("retains the current selection and its control when surrounding text fills the observation budget", () => {
+  const surroundingText = Array.from({ length: 140 }, (_, i) => ({
+    token: String(i), role: "Text", label: `Unrelated description ${i}`, actions: [],
+  }))
+  const snapshot = projectObservation("display", { title: "Settings", elements: [
+    ...surroundingText,
+    { token: "scale", role: "ComboBox", label: "Scale", depth: 3, actions: ["expand"] },
+    { token: "scale-value", role: "ListItem", label: "100% (Recommended)", depth: 4, selected: true, actions: ["select"] },
+  ] })
+  expect(snapshot.display.limited).toBe(true)
+  expect(snapshot.display.elements.slice(-2)).toMatchObject([
+    { label: "Scale", actions: ["invoke"] },
+    { label: "100% (Recommended)", selected: true, actions: ["choose"] },
+  ])
+})
 
 function fixture(remember = false) {
   const connection = new AbortController()

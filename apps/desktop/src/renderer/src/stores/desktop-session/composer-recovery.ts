@@ -96,7 +96,7 @@ export function decodeComposerRecovery(raw: unknown): RecoveredComposer {
         ...parsed.data,
         content: selectComposerDocumentText(composerDocument(parsed.data.items)),
         phase: "failed",
-        error: parsed.data.computer
+        error: parsed.data.computer === true
           ? "上次电脑操作提交尚未确认。可核对状态，或重新开启电脑操作后提交。"
           : "上次发送的结果尚未确认，请核对状态后重试。",
       }

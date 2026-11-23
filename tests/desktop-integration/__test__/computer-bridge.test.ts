@@ -21,6 +21,7 @@ it.each([
   const image = { mediaType: "image/png" as const, width: 1, height: 1,
     data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHuoAAAAASUVORK5CYII=" }
   const actions = capture ? ["observe", "observe", "capture", "observe"] : ["observe"]
+  const automatic = !capture
   const captureStarted = Promise.withResolvers<void>()
   const finishCapture = Promise.withResolvers<void>()
   const firstModelTurn = Promise.withResolvers<void>()
@@ -76,7 +77,7 @@ it.each([
     bridge = new DesktopComputerBridge({ baseUrl, daemonPid: process.pid, daemonToken, computerToken, execute, authorizeDaemon: () => {} })
     const admitted = await bridge.submit(session.id, {
       id: "desktop-computer-input", items: [{ type: "text", text: "Read the fake window." }],
-    }, () => {})
+    }, () => {}, undefined, automatic ? true : undefined)
     expect(admitted.run?.id).toBeTruthy()
     if (switchChat) {
       await firstModelTurn.promise
@@ -101,7 +102,8 @@ it.each([
     expect(execute).toHaveBeenNthCalledWith(1, expect.objectContaining({
       action: { type: "observe" },
       run: { sessionId: session.id, runId: admitted.run!.id, inputId: "desktop-computer-input" },
-    }), expect.any(AbortSignal), expect.any(AbortSignal), expect.any(Function), expect.any(Function))
+    }), expect.any(AbortSignal), expect.any(AbortSignal), expect.any(Function), expect.any(Function),
+    ...(automatic ? [true] : []))
     expect(toolResult).toMatchObject({ content: expect.arrayContaining([{ type: "text", text: observed }]) })
     if (revokeImage) {
       expect(modelCapture).toContainEqual({ type: "text", text: observed })

@@ -15,8 +15,8 @@ import { getDesktopPreferences, patchDesktopPreferences } from "../settings/desk
 
 export interface ComputerInteraction {
   isRememberedApp?(id: string): boolean
-  authorizeApp(app: DesktopComputerAppGrant, signal: AbortSignal, sessionId?: string): Promise<boolean | "remembered">
-  chooseTarget(candidates: readonly DesktopComputerCandidate[], signal: AbortSignal, sessionId?: string): Promise<string | undefined>
+  authorizeApp(app: DesktopComputerAppGrant, signal: AbortSignal, sessionId?: string, onceOnly?: true): Promise<boolean | "remembered">
+  chooseTarget(candidates: readonly DesktopComputerCandidate[], signal: AbortSignal, sessionId?: string, confirmChange?: true): Promise<string | undefined>
   armEmergencyStop?(sessionId: string, runId: string, signal: AbortSignal): boolean
   emergencyStop?(sessionId: string, runId: string): void
   invalidateCapturedImage?(sessionId: string, runId: string): Promise<boolean> | undefined
@@ -123,11 +123,12 @@ export function createComputerInteraction(
   return {
     isRememberedApp,
     emergencyStop,
-    async authorizeApp(app: DesktopComputerAppGrant, operationSignal: AbortSignal, sessionId?: string): Promise<boolean | "remembered"> {
+    async authorizeApp(app: DesktopComputerAppGrant, operationSignal: AbortSignal, sessionId?: string, onceOnly?: true): Promise<boolean | "remembered"> {
       const signal = AbortSignal.any([ownerSignal, operationSignal])
       if (signal.aborted || replyCheck(sessionId)?.() === false) return false
-      if (isRememberedApp(app.id)) return "remembered"
-      const choice = await ask(owner, { id: randomUUID(), kind: "authorize", appName: app.name }, ["once", "always"], signal, replyCheck(sessionId))
+      if (!onceOnly && isRememberedApp(app.id)) return "remembered"
+      const choice = await ask(owner, { id: randomUUID(), kind: "authorize", appName: app.name, ...(onceOnly ? { onceOnly } : {}) },
+        onceOnly ? ["once"] : ["once", "always"], signal, replyCheck(sessionId))
       if (signal.aborted) return false
       if (choice === "always") {
         const grants = listComputerAppGrants().filter((grant) => grant.id !== app.id)
@@ -136,12 +137,13 @@ export function createComputerInteraction(
       }
       return choice === "once"
     },
-    async chooseTarget(candidates: readonly DesktopComputerCandidate[], operationSignal: AbortSignal, sessionId?: string) {
+    async chooseTarget(candidates: readonly DesktopComputerCandidate[], operationSignal: AbortSignal, sessionId?: string, confirmChange?: true) {
       const signal = AbortSignal.any([ownerSignal, operationSignal])
       if (signal.aborted) return undefined
-      if (candidates.length <= 1) return candidates[0]?.id
+      if (candidates.length <= 1 && !confirmChange) return candidates[0]?.id
       const display = candidates.map(({ id, label, detail }) => ({ id, label, detail }))
-      const choice = await ask(owner, { id: randomUUID(), kind: "choose", candidates: display }, candidates.map((entry) => entry.id), signal, replyCheck(sessionId))
+      const choice = await ask(owner, { id: randomUUID(), kind: "choose", candidates: display, ...(confirmChange ? { confirmChange } : {}) },
+        candidates.map((entry) => entry.id), signal, replyCheck(sessionId))
       return signal.aborted ? undefined : choice
     },
     armEmergencyStop(sessionId: string, runId: string, operationSignal: AbortSignal): boolean {

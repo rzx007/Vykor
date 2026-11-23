@@ -87,6 +87,29 @@ it("releases on focus loss, parks further work, and requires a new occupation an
   expect(await f.execute({ type: "key", key: "Tab" })).toMatchObject({ executionState: "not_started" })
 })
 
+it("yields the keyboard and mouse to Browser and requires a fresh window frame on return", async () => {
+  const f = fixture()
+  await f.execute({ type: "open_app", app: "First" })
+  await f.execute({ type: "foreground" })
+  const { ref } = await f.snapshot()
+  await expect(f.host.yieldInputToBrowser("different-session")).resolves.toBe(true)
+  expect(f.release).not.toHaveBeenCalled()
+
+  const release = Promise.withResolvers<{ released: boolean; exited: boolean }>()
+  f.release.mockReturnValueOnce(release.promise)
+  const yielded = f.host.yieldInputToBrowser(run.sessionId)
+  expect(f.release).toHaveBeenCalledOnce()
+  expect(f.publishActivity.mock.lastCall?.[1]?.preview).toBeUndefined()
+  expect(f.publishActivity.mock.lastCall?.[1]).toMatchObject({ inputRelease: "pending" })
+  release.resolve({ released: true, exited: true })
+  await expect(yielded).resolves.toBe(true)
+  expect(f.publishActivity.mock.lastCall?.[1]).toMatchObject({ phase: "ready", evidence: "键鼠已释放。" })
+  expect(await f.execute({ type: "key", key: "Tab" })).toMatchObject({ executionState: "not_started" })
+  await f.execute({ type: "foreground" })
+  expect(await f.execute({ type: "click", frameRef: ref, x: 3, y: 4 })).toMatchObject({ executionState: "not_started" })
+  expect(f.perform).not.toHaveBeenCalled()
+})
+
 it("retires input and images on switch, pause, capture opt-out, and Stop", async () => {
   const f = fixture()
   await f.execute({ type: "open_app", app: "First" })

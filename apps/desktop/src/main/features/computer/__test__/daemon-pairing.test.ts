@@ -132,6 +132,36 @@ describe.runIf(process.platform === "win32" && process.arch === "x64")("Desktop 
     expect(await service.getClient()).toBe(original)
   })
 
+  it("skips automatic pairing on unrelated daemons before entering maintenance", async () => {
+    state.registry = { ...existing, launcher: "cli" }
+    const service = new DaemonConnectionService()
+    const original = await service.getClient()
+    await expect(service.getComputerBridge(() => {}, new AbortController().signal, undefined, undefined, true))
+      .rejects.toThrow(/无法完成电脑操作配对/)
+    expect(state.verified).not.toHaveBeenCalled()
+    expect(state.prepare).not.toHaveBeenCalled()
+    expect(await service.getClient()).toBe(original)
+  })
+
+  it("waits for the verified daemon replacement before delivering another message", async () => {
+    const gate = Promise.withResolvers<{ prepared: boolean }>()
+    state.prepare.mockReturnValueOnce(gate.promise)
+    const service = new DaemonConnectionService()
+    const original = await service.getClient()
+    const paired = service.getComputerBridge(() => {}, new AbortController().signal, undefined, undefined, true)
+    await vi.waitFor(() => expect(state.prepare).toHaveBeenCalledOnce())
+    const receipt = vi.fn()
+    const waiting = service.getClient().then(receipt)
+    await Promise.resolve()
+    expect(receipt).not.toHaveBeenCalled()
+    gate.resolve({ prepared: true })
+    await paired
+    await waiting
+    expect(receipt).toHaveBeenCalledExactlyOnceWith(await service.getClient())
+    expect(receipt.mock.calls[0]?.[0]).not.toBe(original)
+    expect(state.stop).toHaveBeenCalledOnce()
+  })
+
   it.each(["changed registration", "dead registered process"])("protects temporary chats before restart and revokes after a %s", async condition => {
     const notify = vi.fn(async () => {})
     const service = new DaemonConnectionService({ onComputerDaemonRestarted: notify })

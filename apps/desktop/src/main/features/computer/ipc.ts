@@ -6,7 +6,9 @@ import type { SendDesktopPromptInput } from "../../../shared/session-types"
 import type { AppContext } from "../../core/app-context"
 import type { IpcContribution } from "../../core/ipc/types"
 import { desktopSessionService } from "../session/session-service"
+import { computerAvailability } from "./availability"
 import { createComputerInteraction, listComputerAppGrants, replyToComputerInteraction, revokeComputerAppGrant } from "./interaction"
+import { shareWindowsPicture } from "./window-share"
 
 function documentUrl(value: string): string {
   const url = new URL(value)
@@ -37,9 +39,10 @@ export const computerIpcContribution: IpcContribution = {
   id: "computer",
   register(ctx) {
     let owner: { frame: WebFrameMain; signal: AbortSignal; revoke: () => void; interaction: ReturnType<typeof createComputerInteraction> } | undefined
+    let sharePending = false
     return [{
       channel: IpcChannels.computerSendPrompt,
-      handler(event, input) {
+      handler(event, input, automatic) {
         const frame = event.senderFrame
         if (!frame) throw new Error("电脑操作只能从当前 Vykor 主窗口发送。")
         const authorize = () => {
@@ -47,7 +50,8 @@ export const computerIpcContribution: IpcContribution = {
           const main = ctx.windowManager.getMain()
           if (main?.isVisible?.() === false || main?.isMinimized?.()) throw new Error("请先恢复电脑操作的主窗口。")
         }
-        authorize()
+        if (automatic === true) assertComputerSender(ctx, event, frame)
+        else authorize()
         if (!owner || owner.frame !== frame) {
           owner?.revoke()
           const controller = new AbortController()
@@ -100,7 +104,10 @@ export const computerIpcContribution: IpcContribution = {
           main?.once("session-end", revoke)
           owner = { frame, signal: controller.signal, revoke, interaction }
         }
-        return desktopSessionService.sendComputerPrompt(event.sender, input as SendDesktopPromptInput, authorize, owner.signal, owner.interaction)
+        const prompt = input as SendDesktopPromptInput
+        return automatic === true
+          ? desktopSessionService.sendComputerPrompt(event.sender, prompt, authorize, owner.signal, owner.interaction, true)
+          : desktopSessionService.sendComputerPrompt(event.sender, prompt, authorize, owner.signal, owner.interaction)
       },
     }, {
       channel: IpcChannels.computerReply,
@@ -114,6 +121,47 @@ export const computerIpcContribution: IpcContribution = {
         assertComputerSender(ctx, event, event.senderFrame)
         if (typeof sessionId !== "string" || !sessionId || sessionId.length > 256) return null
         return owner?.frame === event.senderFrame ? owner.interaction.getActivity(sessionId) : null
+      },
+    }, {
+      channel: IpcChannels.computerShareWindow,
+      async handler(event) {
+        const frame = event.senderFrame
+        assertComputerSender(ctx, event, frame)
+        const main = ctx.windowManager.getMain()
+        if (!main?.isVisible() || main.isMinimized() || computerAvailability() !== "ready")
+          throw new Error("请在支持电脑操作的 Windows 主窗口里分享截图。")
+        if (sharePending) return null
+        sharePending = true
+        const controller = new AbortController()
+        const contents = event.sender
+        const abort = (): void => controller.abort()
+        const navigate = (details: { isMainFrame: boolean; isSameDocument: boolean }): void => {
+          if (details.isMainFrame && !details.isSameDocument) abort()
+        }
+        contents.once("destroyed", abort)
+        contents.once("render-process-gone", abort)
+        contents.on("did-start-navigation", navigate)
+        main.once("hide", abort)
+        main.once("minimize", abort)
+        const removeInvalidation = desktopSessionService.subscriptions.onOwnerInvalidated((id) => {
+          if (id === contents.id) abort()
+        })
+        try {
+          const picture = await shareWindowsPicture(main, controller.signal)
+          assertComputerSender(ctx, event, frame)
+          return controller.signal.aborted ? null : picture
+        } catch (error) {
+          if (controller.signal.aborted) return null
+          throw error
+        } finally {
+          sharePending = false
+          contents.removeListener("destroyed", abort)
+          contents.removeListener("render-process-gone", abort)
+          contents.removeListener("did-start-navigation", navigate)
+          main.removeListener("hide", abort)
+          main.removeListener("minimize", abort)
+          removeInvalidation()
+        }
       },
     }, {
       channel: IpcChannels.computerControl,

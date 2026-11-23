@@ -16,6 +16,9 @@ const service = vi.hoisted(() => ({
   },
 }))
 vi.mock("../../session/session-service", () => ({ desktopSessionService: service }))
+vi.mock("../availability", () => ({ computerAvailability: () => "ready" }))
+const shareWindowsPicture = vi.hoisted(() => vi.fn<(window: unknown, signal: AbortSignal) => Promise<{ bytes: Uint8Array } | null>>())
+vi.mock("../window-share", () => ({ shareWindowsPicture }))
 
 import { computerIpcContribution } from "../ipc"
 
@@ -28,7 +31,7 @@ function fixture() {
   const source = "http://127.0.0.1:5173/"
   const frame = { url: source + "#/" }
   const contents = Object.assign(new EventEmitter(), { id: 8, mainFrame: frame, isDestroyed: () => false, send: vi.fn() })
-  const window = Object.assign(new EventEmitter(), { webContents: contents })
+  const window = Object.assign(new EventEmitter(), { webContents: contents, isVisible: () => true, isMinimized: () => false })
   const app = { paths: { rendererUrl: source }, windowManager: { getMain: () => window } }
   const registrations = computerIpcContribution.register(app as unknown as AppContext)
   const [registration] = registrations
@@ -41,6 +44,24 @@ it("rejects a companion, a subframe, and a navigated main document", () => {
   expect(() => registration.handler({ sender: contents, senderFrame: { ...frame } } as never, {})).toThrow(/主窗口/)
   frame.url = "https://example.test/"
   expect(() => registration.handler({ sender: contents, senderFrame: frame } as never, {})).toThrow(/主窗口/)
+  expect(service.sendComputerPrompt).not.toHaveBeenCalled()
+})
+
+it("shares only from the main chat and drops the picture when the user changes chats", async () => {
+  const { registrations, contents, frame } = fixture()
+  const share = registrations.find(item => item.channel === IpcChannels.computerShareWindow)!.handler
+  const captured = Promise.withResolvers<{ bytes: Uint8Array }>()
+  shareWindowsPicture.mockReset().mockReturnValue(captured.promise)
+  await expect(share({ sender: contents, senderFrame: { ...frame } } as never)).rejects.toThrow(/主窗口/)
+  expect(shareWindowsPicture).not.toHaveBeenCalled()
+
+  const request = share({ sender: contents, senderFrame: frame } as never)
+  expect(shareWindowsPicture).toHaveBeenCalledOnce()
+  const signal = shareWindowsPicture.mock.calls[0]![1]
+  service.subscriptions.onOwnerInvalidated.mock.calls[0]![0](contents.id, { nextSessionId: "other" })
+  expect(signal.aborted).toBe(true)
+  captured.resolve({ bytes: new Uint8Array([1, 2]) })
+  await expect(request).resolves.toBeNull()
   expect(service.sendComputerPrompt).not.toHaveBeenCalled()
 })
 

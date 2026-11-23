@@ -18,6 +18,7 @@ interface BrowserBridgeOptions {
   baseUrl: string
   token: string
   getOwnerSessionToken: BrowserRequestScope["getOwnerSessionToken"]
+  beforeCommand?: (sessionId: string) => Promise<boolean> | undefined
   browser?: BrowserAgentService
 }
 
@@ -59,6 +60,9 @@ export function startBrowserBridge(options: BrowserBridgeOptions): () => void {
     const { sessionId, cwd } = command
     let body: object
     try {
+      signal.throwIfAborted()
+      if (await options.beforeCommand?.(sessionId) === false)
+        throw new Error("无法确认电脑键鼠已释放，浏览器操作已取消。")
       signal.throwIfAborted()
       if (command.kind === "browser") {
         const { screenshotBytes, ...result } = await browser.execute(

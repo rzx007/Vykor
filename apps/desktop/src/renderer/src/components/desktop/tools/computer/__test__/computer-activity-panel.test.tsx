@@ -75,3 +75,24 @@ it("waits for cleanup confirmation before saying the user can take over", async 
   expect(container.textContent).toContain("你可以操作窗口")
   expect(button("继续").disabled).toBe(false)
 })
+
+it("hides routine observation and successful completion while keeping cleanup problems visible", async () => {
+  await act(async () => root.render(<ComputerActivityPanel sessionId="original" />))
+  await act(async () => listener({ sessionId: "original", activity: { ...activity, phase: "observing", preview: undefined } }))
+  expect(container.querySelector("section")).toBeNull()
+  await act(async () => listener({ sessionId: "original", activity: {
+    ...activity, phase: "stopped", preview: undefined, inputRelease: "pending",
+  } }))
+  expect(container.textContent).toContain("正在释放键鼠")
+  expect(container.querySelector("button")).toBeNull()
+  await act(async () => listener({ sessionId: "original", activity: {
+    ...activity, phase: "stopped", preview: undefined, inputRelease: "failed",
+  } }))
+  expect(container.textContent).toContain("无法确认键鼠已释放")
+  await act(async () => button("关闭提示").click())
+  expect(container.querySelector("section")).toBeNull()
+  await act(async () => listener({ sessionId: "original", activity: {
+    ...activity, phase: "stopped", preview: undefined, evidence: "输入已释放",
+  } }))
+  expect(container.querySelector("section")).toBeNull()
+})

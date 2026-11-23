@@ -44,10 +44,12 @@ export function ComputerInteractionDialog(): React.JSX.Element | null {
       <DialogContent showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>
-            {prompt.kind === "authorize" ? "允许电脑操作使用此应用？" : "选择要使用的目标"}
+            {prompt.kind === "authorize" ? "允许电脑操作使用此应用？"
+              : prompt.confirmChange ? "确认继续使用这个窗口？" : "选择要使用的目标"}
           </DialogTitle>
           <DialogDescription>
-            {prompt.kind === "authorize" ? prompt.appName : "当前有多个匹配项，选中后继续本次任务。"}
+            {prompt.kind === "authorize" ? prompt.appName
+              : prompt.confirmChange ? "窗口标题已变更，确认后再读取内容。" : "当前有多个匹配项，选中后继续本次任务。"}
           </DialogDescription>
         </DialogHeader>
         {prompt.kind === "choose" ? (
@@ -70,7 +72,9 @@ export function ComputerInteractionDialog(): React.JSX.Element | null {
         <DialogFooter>
           <Button type="button" variant="ghost" disabled={answering} onClick={() => void answer(null)}>取消</Button>
           {prompt.kind === "authorize" ? (<>
-            <Button type="button" variant="outline" disabled={answering} onClick={() => void answer("always")}>始终允许</Button>
+            {prompt.onceOnly ? null : (
+              <Button type="button" variant="outline" disabled={answering} onClick={() => void answer("always")}>始终允许</Button>
+            )}
             <Button type="button" disabled={answering} onClick={() => void answer("once")}>仅本任务</Button>
           </>) : null}
         </DialogFooter>

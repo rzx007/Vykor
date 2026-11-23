@@ -2,6 +2,7 @@ import { setTimeout as delay } from "node:timers/promises"
 import { HttpTransport, SseTransport, VykorApiError, type AdmitClientPromptInput, type PromptResponse } from "@rzx/client"
 import {
   COMPUTER_HOST_TOKEN_HEADER,
+  COMPUTER_SESSION_UNAVAILABLE,
   parseComputerBridgeEvent,
   type ComputerApprovalProposal,
   type ComputerBridgeEvent,
@@ -17,6 +18,7 @@ export type DesktopComputerApproval = (proposal: ComputerApprovalProposal, signa
 export type DesktopComputerDispatch = (signal?: AbortSignal) => Promise<boolean>
 export type DesktopComputerDriver = (
   request: ExecuteEvent, signal: AbortSignal, connection: AbortSignal, approve: DesktopComputerApproval, dispatch: DesktopComputerDispatch,
+  automatic?: true,
 ) => Promise<ComputerHostResponse>
 
 interface ComputerBridgeOptions {
@@ -37,6 +39,7 @@ interface Submission {
   stopped: boolean
   stoppedRunIds?: Set<string>
   dispatchedRequests: Set<string>
+  automatic?: true
 }
 
 interface Connection {
@@ -66,6 +69,9 @@ function bindRun(submission: Submission, runId: string): void {
   submission.stoppedRunIds = undefined
 }
 
+/** Failure before the private HTTP request can be sent. */
+export class ComputerPromptNotSubmittedError extends Error {}
+
 export class DesktopComputerBridge {
   private readonly http: HttpTransport
   private readonly headers: Record<string, string>
@@ -89,31 +95,36 @@ export class DesktopComputerBridge {
   }
 
   async submit(
-    sessionId: string, input: AdmitClientPromptInput, authorize: () => void, signal?: AbortSignal,
+    sessionId: string, input: AdmitClientPromptInput, authorize: () => void, signal?: AbortSignal, automatic?: true,
+    admissionSignal = signal,
   ): Promise<PromptResponse> {
     // A caller waits for a handshake, never replays an already-sent submit.
-    const waiting = AbortSignal.any([this.shutdown.signal, AbortSignal.timeout(5_000), ...(signal ? [signal] : [])])
-    while (!this.connection) {
-      await delay(50, undefined, { signal: waiting }).catch(() => {
-        signal?.throwIfAborted()
-        throw new Error("电脑操作桥暂时无法连接，请重试。")
-      })
+    try {
+      const waiting = AbortSignal.any([this.shutdown.signal, AbortSignal.timeout(5_000), ...(signal ? [signal] : [])])
+      while (!this.connection) {
+        await delay(50, undefined, { signal: waiting }).catch(() => {
+          signal?.throwIfAborted()
+          throw new Error("电脑操作桥暂时无法连接，请重试。")
+        })
+      }
+      signal?.throwIfAborted()
+      authorize()
+      this.options.authorizeDaemon()
+    } catch (error) {
+      throw new ComputerPromptNotSubmittedError(error instanceof Error ? error.message : String(error), { cause: error })
     }
-    signal?.throwIfAborted()
-    authorize()
-    this.options.authorizeDaemon()
     const connection = this.connection
     const inputId = input.id
     if (!inputId) throw new Error("电脑操作需要消息 ID。")
     const remembered = connection.submissions.get(inputId)
-    const submission: Submission = remembered ?? { sessionId, stopped: false, dispatchedRequests: new Set() }
+    const submission: Submission = remembered ?? { sessionId, stopped: false, dispatchedRequests: new Set(), automatic }
     connection.submissions.set(inputId, submission)
     try {
       const response = await this.http.request<PromptResponse>(this.path(connection, "submit"), {
         method: "POST",
         body: { sessionId, input },
         headers: this.headers,
-        signal: signal ? AbortSignal.any([connection.signal, signal]) : connection.signal,
+        signal: admissionSignal ? AbortSignal.any([connection.signal, admissionSignal]) : connection.signal,
       })
       if (response.run) {
         bindRun(submission, response.run.id)
@@ -125,6 +136,10 @@ export class DesktopComputerBridge {
       if (!remembered && !submission.runId && connection.submissions.get(inputId) === submission &&
         error instanceof VykorApiError && error.status >= 400 && error.status < 500) {
         connection.submissions.delete(inputId)
+        const body = error.body
+        if (error.status === 409 && body && typeof body === "object" &&
+          "code" in body && body.code === COMPUTER_SESSION_UNAVAILABLE)
+          throw new ComputerPromptNotSubmittedError(error.message, { cause: error })
       }
       throw error
     }
@@ -340,7 +355,10 @@ export class DesktopComputerBridge {
       }
     }
     try {
-      const body = await this.options.execute(event, signal, connection.signal, approve, dispatch).then(
+      const action = submission.automatic
+        ? this.options.execute(event, signal, connection.signal, approve, dispatch, true)
+        : this.options.execute(event, signal, connection.signal, approve, dispatch)
+      const body = await action.then(
         result => {
           if ("error" in result) return result
           return { result: result.image && connection.capture?.requestId !== event.requestId ? { text: result.text } : result }

@@ -4,12 +4,11 @@ import { Button } from "@renderer/components/ui/button"
 import { COMPUTER_STOP_SHORTCUT } from "@shared/computer-types"
 import type { DesktopComputerActivity, DesktopComputerControl } from "@shared/computer-types"
 
-const statusText: Record<DesktopComputerActivity["phase"], string> = {
-  ready: "结构化操作",
-  observing: "正在观察窗口",
+const statusText: Record<Exclude<DesktopComputerActivity["phase"], "stopped">, string> = {
+  ready: "电脑操作",
+  observing: "电脑操作",
   foreground: "正在使用鼠标和键盘",
   paused: "已暂停，你可以操作窗口",
-  stopped: "电脑控制已结束",
 }
 
 export function ComputerActivityPanel({ sessionId }: { sessionId: string }): React.JSX.Element | null {
@@ -43,22 +42,30 @@ export function ComputerActivityPanel({ sessionId }: { sessionId: string }): Rea
   }, [sessionId])
 
   if (!activity || activity.sessionId !== sessionId) return null
+  const cleanupVisible = activity.inputRelease !== undefined || activity.captureRevocation !== undefined
+  if (activity.phase === "stopped" && !cleanupVisible) return null
+  if ((activity.phase === "ready" || activity.phase === "observing") &&
+    !cleanupVisible && !activity.preview) return null
   return <ComputerActivityControls key={activity.runId} activity={activity} />
 }
 
-function ComputerActivityControls({ activity }: { activity: DesktopComputerActivity }): React.JSX.Element {
+function ComputerActivityControls({ activity }: { activity: DesktopComputerActivity }): React.JSX.Element | null {
   const previewId = useId()
   const [showPreview, setShowPreview] = useState(false)
   const [pending, setPending] = useState<DesktopComputerControl["action"] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [dismissed, setDismissed] = useState(false)
   const latest = useRef<symbol | undefined>(undefined)
   const { sessionId, runId, phase, preview, captureRevocation, inputRelease } = activity
   const captureEnabled = activity.captureEnabled !== false
   const canShowPreview = captureEnabled && phase !== "paused" && phase !== "stopped" && Boolean(preview)
   const expanded = canShowPreview && showPreview
   const target = [activity.app, activity.title].filter(Boolean).join(" · ")
+  const captureStatus = captureRevocation === "pending" ? "正在撤回后台待发送的截图" : "无法确认后台截图已撤回"
   const status = inputRelease === "pending" ? "正在释放键鼠"
-    : inputRelease === "failed" ? "无法确认键鼠已释放" : statusText[phase]
+    : inputRelease === "failed" ? "无法确认键鼠已释放"
+    : phase === "stopped" ? captureStatus : statusText[phase]
+  const canDismiss = phase === "stopped" && inputRelease !== "pending" && captureRevocation !== "pending"
 
   async function request(action: DesktopComputerControl["action"]): Promise<void> {
     const attempt = Symbol()
@@ -78,6 +85,7 @@ function ComputerActivityControls({ activity }: { activity: DesktopComputerActiv
     }
   }
 
+  if (canDismiss && dismissed) return null
   return (
     <section aria-label="电脑操作" className="border-b border-border pb-2 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
@@ -92,6 +100,8 @@ function ComputerActivityControls({ activity }: { activity: DesktopComputerActiv
           {canShowPreview ? (
             <Button type="button" shape="pill" size="sm" variant="ghost" aria-expanded={expanded} aria-controls={previewId}
               onClick={() => setShowPreview(!expanded)}>{expanded ? "收起预览" : "窗口预览"}</Button>
+          ) : canDismiss ? (
+            <Button type="button" shape="pill" size="sm" variant="ghost" onClick={() => setDismissed(true)}>关闭提示</Button>
           ) : null}
           {phase !== "stopped" ? (
             <>
@@ -115,12 +125,9 @@ function ComputerActivityControls({ activity }: { activity: DesktopComputerActiv
       {phase === "foreground" || (phase !== "stopped" && activity.emergencyArmed) ? (
         <p className="mt-1 text-xs text-muted-foreground">本机急停 <kbd>{COMPUTER_STOP_SHORTCUT}</kbd></p>
       ) : null}
-      {activity.action || activity.evidence ? <p className="mt-1 break-words text-xs text-muted-foreground">
-        {[activity.action, activity.evidence].filter(Boolean).join(" · ")}
-      </p> : null}
-      {activity.reason ? <p className="mt-1 break-words text-xs text-muted-foreground">{activity.reason}</p> : null}
-      {captureRevocation ? <p role="status" className="mt-1 text-xs text-muted-foreground">
-        {captureRevocation === "pending" ? "正在撤回后台待发送的截图" : "无法确认后台截图已撤回"}
+      {phase === "paused" && activity.reason ? <p className="mt-1 break-words text-xs text-muted-foreground">{activity.reason}</p> : null}
+      {captureRevocation && (phase !== "stopped" || inputRelease) ? <p role="status" className="mt-1 text-xs text-muted-foreground">
+        {captureStatus}
       </p> : null}
       {error ? <p role="alert" className="mt-1 text-xs text-destructive">{error}</p> : null}
       {expanded && preview ? (

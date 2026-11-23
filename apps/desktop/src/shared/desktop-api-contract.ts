@@ -495,10 +495,11 @@ export type DesktopAPI = {
   }
   computer: {
     supported: boolean
-    sendPrompt: (input: SendDesktopPromptInput) => Promise<void>
+    sendPrompt: (input: SendDesktopPromptInput, automatic?: true) => Promise<void>
     onInteraction: (handler: (event: DesktopComputerInteractionEvent) => void) => () => void
     reply: (input: DesktopComputerInteractionReply) => Promise<boolean>
     getActivity: (sessionId: string) => Promise<DesktopComputerActivity | null>
+    shareWindow: () => Promise<{ bytes: Uint8Array } | null>
     onActivity: (handler: (event: DesktopComputerActivityUpdate) => void) => () => void
     control: (input: DesktopComputerControl) => Promise<boolean>
     listAppGrants: () => Promise<DesktopComputerAppGrant[]>

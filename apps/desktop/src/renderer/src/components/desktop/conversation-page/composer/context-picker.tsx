@@ -1,4 +1,4 @@
-import { Eye, Goal, ListChecks, MessageSquare, Paperclip } from "lucide-react"
+import { Eye, Goal, ListChecks, MessageSquare, Monitor, Paperclip } from "lucide-react"
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { Button } from "@renderer/components/ui/button"
@@ -15,6 +15,7 @@ export interface ContextPickerItem {
   observation?: { priority: number; workspace: string; status: string; updatedAt: number }
   action:
     | { kind: "files" }
+    | { kind: "window-picture" }
     | { kind: "plan" }
     | { kind: "goal" }
     | { kind: "observe-mode" }
@@ -170,6 +171,8 @@ export function ContextPicker({
                     <ExtensionIcon name={item.label} src={item.icon} size="sm" />
                   ) : item.action.kind === "files" ? (
                     <Paperclip className="size-4" />
+                  ) : item.action.kind === "window-picture" ? (
+                    <Monitor className="size-4" />
                   ) : item.action.kind === "plan" ? (
                     <ListChecks className="size-4" />
                   ) : item.action.kind === "goal" ? (

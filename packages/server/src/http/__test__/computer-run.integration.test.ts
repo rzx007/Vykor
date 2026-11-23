@@ -6,8 +6,10 @@ import type { StreamEvent, StreamMessageParams, StreamingMessageClient } from "@
 import { ModelRequestFailure } from "@vykor/agent-contracts";
 import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 import { CURRENT_PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER } from "@vykor/protocol";
+import type { BrowserHost } from "../../application/browser-tools/browser-host.js";
 import {
   COMPUTER_HOST_TOKEN_HEADER,
+  COMPUTER_SESSION_UNAVAILABLE,
   parseComputerBridgeEvent,
   type ComputerBridgeEvent,
 } from "../../application/computer-tools/computer-bridge-protocol.js";
@@ -34,6 +36,7 @@ async function fixture(
   mode: "full_access" | "ask",
   action = "observe",
   modelResponse?: (params: StreamMessageParams, call: number) => void | AsyncIterable<StreamEvent>,
+  browserHost?: BrowserHost,
 ) {
   const directory = mkdtempSync(join(tmpdir(), "vk-computer-run-"));
   const requests: StreamMessageParams[] = [];
@@ -60,9 +63,10 @@ async function fixture(
   const server = new VykorHttpServer({
     token: "api-test-token",
     desktopComputerToken: computerToken,
+    browserHost,
     storePath: join(directory, "sessions.db"),
     settings: {
-      model: "test-model", apiFormat: "openai", maxTurns: 3,
+      model: "test-model", apiFormat: "openai", maxTurns: 7,
       permission: { mode }, plugins: { enabled: false }, memory: { enabled: false }, sandbox: { enabled: false },
     },
     async createAgent({ options }) {
@@ -111,6 +115,8 @@ async function fixture(
         post(path + "/submit", { sessionId: target, input: prompt }, desktopHeaders),
       result: (requestId: string, result: Record<string, unknown> = { text: "Verified fake window" }) =>
         post(path + "/" + requestId + "/result", { result }, desktopHeaders),
+      error: (requestId: string, executionState: "unknown" | "not_started") =>
+        post(path + "/" + requestId + "/result", { error: "Windows fixture outcome", executionState }, desktopHeaders),
       revokeImage: (requestId: string, auth = desktopHeaders) =>
         post(path + "/" + requestId + "/revoke-image", {}, auth),
       close: async () => { await reader.cancel(); openReaders.delete(reader); },
@@ -247,6 +253,85 @@ it.each([frame.data, frame.data.slice(0, 32)])("keeps an echoed screenshot paylo
   } finally { await f.close(); }
 }, 20_000);
 
+it("keeps an uncertain action in history, blocks another mutation and still permits observation", async () => {
+  const steps = [
+    { action: "open_app", app: "Notepad" },
+    { action: "open_app", app: "Calculator" },
+    { action: "observe" },
+    { action: "open_app", app: "Paint" },
+  ];
+  const f = await fixture("full_access", "observe", async function* (_params, call) {
+    const step = steps[call - 1];
+    if (!step) {
+      yield { type: "complete", stopReason: "end_turn" };
+      return;
+    }
+    yield { type: "tool_use_start", toolUse: { type: "tool_use", id: `computer-${call}`, name: "Computer", input: step } };
+    yield { type: "complete", stopReason: "tool_use" };
+  });
+  try {
+    const desktop = await f.open();
+    const run = await f.run(await desktop.submit(sessionId, input("verify-unknown")));
+    const first = await desktop.next();
+    if (first.type !== "execute") throw new Error("Expected the first Computer action");
+    expect(first.action).toEqual({ type: "open_app", app: "Notepad" });
+    expect((await desktop.error(first.requestId, "unknown")).status).toBe(200);
+    const observation = await desktop.next();
+    if (observation.type !== "execute") throw new Error("Expected a Computer observation");
+    expect(observation.action).toEqual({ type: "observe" });
+    await desktop.result(observation.requestId, { text: '{"status":"observed","observation":[]}' });
+    const next = await desktop.next();
+    if (next.type !== "execute") throw new Error("Expected a Computer action after observation");
+    expect(next.action).toEqual({ type: "open_app", app: "Paint" });
+    await desktop.error(next.requestId, "not_started");
+    expect(await f.awaitRun(run)).toMatchObject({ status: "completed" });
+    const results = f.requests.at(-1)?.messages.filter(message => message.type === "tool_result");
+    expect(results).toEqual(expect.arrayContaining([
+      expect.objectContaining({ toolUseId: "computer-1", executionState: "unknown" }),
+      expect.objectContaining({ toolUseId: "computer-2", executionState: "not_started" }),
+      expect.objectContaining({ toolUseId: "computer-4", executionState: "not_started" }),
+    ]));
+  } finally { await f.close(); }
+}, 20_000);
+
+it("orders Computer and Browser in the same batch and carries a read value into the next browser call", async () => {
+  const execute = vi.fn<BrowserHost["execute"]>(async ({ action }) => ({
+    url: action.action === "navigate" ? action.url : "https://example.test/",
+    title: "Orders",
+    pageText: action.action === "navigate" && action.url.endsWith("/order-38") ? "Order 38 verified" : "Order lookup",
+  }));
+  const f = await fixture("full_access", "observe", async function* (params, call) {
+    if (call === 1) {
+      yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "order-window", name: "Computer", input: { action: "observe" } } };
+      yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "order-browser", name: "Browser", input: { action: "inspect" } } };
+      yield { type: "complete", stopReason: "tool_use" };
+    } else if (call === 2) {
+      const window = params.messages.find(message => message.type === "tool_result" && message.toolUseId === "order-window");
+      const order = /order-\d+/u.exec(JSON.stringify(window))?.[0];
+      expect(order).toBe("order-38");
+      yield { type: "tool_use_start", toolUse: { type: "tool_use", id: "order-result", name: "Browser", input: { action: "navigate", url: "https://example.test/" + order } } };
+      yield { type: "complete", stopReason: "tool_use" };
+    } else {
+      yield { type: "complete", stopReason: "end_turn" };
+    }
+  }, { execute });
+  try {
+    const desktop = await f.open();
+    const run = await f.run(await desktop.submit(sessionId, input("cross-host")));
+    const computer = await desktop.next();
+    if (computer.type !== "execute") throw new Error("Expected the Computer observation");
+    expect(computer.action.type).toBe("observe");
+    expect(execute).not.toHaveBeenCalled();
+    await desktop.result(computer.requestId, { text: '{"status":"observed","observation":"order-38"}' });
+    expect(await f.awaitRun(run)).toMatchObject({ status: "completed" });
+    expect(execute.mock.calls.map(([input]) => input.action)).toEqual([
+      { action: "inspect" }, { action: "navigate", url: "https://example.test/order-38" },
+    ]);
+    const readback = f.requests.at(-1)?.messages.find(message => message.type === "tool_result" && message.toolUseId === "order-result");
+    expect(JSON.stringify(readback)).toContain("Order 38 verified");
+  } finally { await f.close(); }
+}, 20_000);
+
 it("exposes the real Computer tool only to a newly admitted Desktop user run", async () => {
   const f = await fixture("full_access");
   try {
@@ -280,7 +365,17 @@ it("exposes the real Computer tool only to a newly admitted Desktop user run", a
     f.server.store.channels.upsertConversation({ connector: "test", accountId: "test", chatId: "test", sessionId: "channel" });
     expect((await desktop.submit("channel", input("channel"))).status).toBe(409);
     f.server.store.sessions.create({ id: "delegated", model: "test-model", cwd: process.cwd(), parentId: sessionId });
-    expect((await desktop.submit("delegated", input("delegated"))).status).toBe(409);
+    const delegated = await desktop.submit("delegated", input("delegated"));
+    expect(delegated.status).toBe(409);
+    expect(await delegated.json()).toMatchObject({ code: COMPUTER_SESSION_UNAVAILABLE });
+    const forkResponse = await f.post(`/sessions/${sessionId}/fork`, { copyHistory: false });
+    expect(forkResponse.status).toBe(201);
+    const { session: fork } = await forkResponse.json() as { session: { id: string } };
+    const unavailable = await desktop.submit(fork.id, input("fork"));
+    expect(await unavailable.json()).toMatchObject({ code: COMPUTER_SESSION_UNAVAILABLE });
+    const fallback = await f.run(await f.post(`/sessions/${fork.id}/prompts`, input("fork")));
+    expect(await f.awaitRun(fallback)).toMatchObject({ status: "completed" });
+    expect(f.requests.at(-1)?.tools?.map(tool => tool.name)).not.toContain("Computer");
     expect((await desktop.submit(sessionId, { ...input("steer"), delivery: "steer" })).status).toBe(409);
     expect((await f.create("denied", { metadata: { runtime: { disallowedTools: ["Computer"] } } })).status).toBe(201);
     const denied = await f.run(await desktop.submit("denied", input("denied")));

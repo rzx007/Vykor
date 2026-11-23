@@ -593,8 +593,8 @@ export const desktopAPI = {
   },
   computer: {
     supported: process.argv.includes(COMPUTER_AVAILABLE_ARGUMENT),
-    sendPrompt: (input: IpcInvokeMap[typeof IpcChannels.computerSendPrompt]["args"][0]) =>
-      invoke(IpcChannels.computerSendPrompt, input),
+    sendPrompt: (input: IpcInvokeMap[typeof IpcChannels.computerSendPrompt]["args"][0], automatic?: true) =>
+      invoke(IpcChannels.computerSendPrompt, input, automatic),
     onInteraction: (handler: (event: DesktopComputerInteractionEvent) => void) => {
       const receive = (_event: Electron.IpcRendererEvent, update: DesktopComputerInteractionEvent) => handler(update)
       ipcRenderer.on(IpcEvents.computerInteraction, receive)
@@ -602,6 +602,7 @@ export const desktopAPI = {
     },
     reply: (input: DesktopComputerInteractionReply) => invoke(IpcChannels.computerReply, input),
     getActivity: (sessionId: string) => invoke(IpcChannels.computerActivityGet, sessionId),
+    shareWindow: () => invoke(IpcChannels.computerShareWindow),
     onActivity: (handler: (update: DesktopComputerActivityUpdate) => void) => {
       const receive = (_event: Electron.IpcRendererEvent, update: DesktopComputerActivityUpdate) => handler(update)
       ipcRenderer.on(IpcEvents.computerActivity, receive)

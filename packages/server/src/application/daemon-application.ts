@@ -8,7 +8,7 @@ import { createSessionObservationTool } from "./session/execution/session-observ
 import { createSessionDiscoveryTool } from "./session/execution/session-discovery-tool.js";
 import { ComputerRunAccess } from "./computer-tools/computer-tool.js";
 import type { DesktopComputerBridge } from "./computer-tools/computer-bridge.js";
-import { SessionApplicationError } from "./session/session-application-error.js";
+import { ComputerSessionUnavailableError, SessionApplicationError } from "./session/session-application-error.js";
 import { readRuntimeMetadata } from "@vykor/domain-contracts/sessions";
 import { createNodeJobBindings } from "@vykor/agent-runtime";
 import { GoalModelAttemptService } from "./goals/goal-model-attempt-service.js";
@@ -1068,7 +1068,7 @@ export class DaemonApplication implements DurableAgentApplication {
         pluginCapabilities,
         ...(computerRuns ? { authorizeComputerPrompt: (session, connectionId) => {
           if (!permitsComputerSession(session)) {
-            throw new SessionApplicationError(409, "Computer Use requires a Desktop root session in execution mode");
+            throw new ComputerSessionUnavailableError();
           }
           return computerRuns.authorizePrompt(connectionId);
         } } : {}),

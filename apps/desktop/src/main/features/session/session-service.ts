@@ -87,6 +87,7 @@ import { DaemonConnectionService } from "./daemon-connection-service"
 import { browserAgentService } from "../browser/browser-agent-service"
 import { startBrowserBridge } from "../browser/browser-bridge"
 import type { ComputerInteraction } from "../computer/interaction"
+import { ComputerPromptNotSubmittedError } from "../computer/computer-bridge"
 import type { DesktopComputerControl } from "../../../shared/computer-types"
 import { SessionSubscriptionService, toDesktopSessionRecord } from "./session-subscription-service"
 import { GlobalActivitySubscriptionService } from "../activity/global-activity-subscription-service"
@@ -110,7 +111,7 @@ export type DesktopSessionConnection = Pick<
   | "switchDataDirectory"
   | "dispose"
   | "freezeForDataRootMigration"
-> & Partial<Pick<DaemonConnectionService, "getTransport" | "getComputerBridge" | "revokeComputerRun" | "revokeComputerApp" | "replyComputerApproval" | "pauseComputer" | "resumeComputer" | "setComputerCapture" | "confirmComputerCleanup" | "disconnectComputer" | "closeComputerAdmission" | "invalidateComputerView">>
+> & Partial<Pick<DaemonConnectionService, "getTransport" | "getComputerBridge" | "revokeComputerRun" | "revokeComputerApp" | "replyComputerApproval" | "pauseComputer" | "resumeComputer" | "setComputerCapture" | "confirmComputerCleanup" | "disconnectComputer" | "closeComputerAdmission" | "invalidateComputerView" | "yieldComputerInputToBrowser">>
 
 export class DesktopSessionService {
   async readAgentActivity(owner: WebContents, input: ReadDesktopAgentActivityInput): Promise<DesktopAgentActivity | null> {
@@ -177,13 +178,14 @@ export class DesktopSessionService {
     (ownerId, sessionIds) => this.subscriptions.closeDeletedSessions(ownerId, sessionIds)
   )
   readonly operations = new SessionOperations()
-  private readonly pendingComputerPrompts = new Map<string, Set<AbortController>>()
+  private readonly pendingComputerPrompts = new Map<string, Set<{ stop: AbortController; view: AbortController }>>()
 
   constructor(connection?: DesktopSessionConnection) {
     this.connection = connection ?? new DaemonConnectionService({
       onConnected: ({ url, token }) => startBrowserBridge({
         baseUrl: url,
         token,
+        beforeCommand: (sessionId) => this.connection.yieldComputerInputToBrowser?.(sessionId),
         getOwnerSessionToken: (ownerId, sessionId) =>
           this.subscriptions.getOwnerSessionToken(ownerId, sessionId),
       }),
@@ -492,14 +494,16 @@ export class DesktopSessionService {
     authorizeWindow: () => void,
     ownerSignal: AbortSignal,
     interaction?: ComputerInteraction,
+    automatic?: true,
   ): Promise<void> {
     const sessionId = requireString(input?.sessionId, "会话 ID")
     if (input.delivery === "steer" || input.expectedActiveRunId !== undefined || input.pluginAppContextIds?.length)
       throw new Error("电脑操作需要从主聊天发起一条新的用户消息。")
-    if (this.subscriptions.getOwnerSessionId(owner.id) !== sessionId)
+    if (!automatic && this.subscriptions.getOwnerSessionId(owner.id) !== sessionId)
       throw new Error("请先打开要发送消息的主聊天。")
-    const submission = new AbortController()
-    const signal = AbortSignal.any([ownerSignal, submission.signal])
+    const submission = { stop: new AbortController(), view: new AbortController() }
+    const ordinarySignal = AbortSignal.any([ownerSignal, submission.stop.signal])
+    const signal = AbortSignal.any([ordinarySignal, submission.view.signal])
     let requestedViewWasReset = false
     const authorize = (allowControlledReset = false) => {
       authorizeWindow()
@@ -507,20 +511,34 @@ export class DesktopSessionService {
       const active = this.subscriptions.getOwnerSessionId(owner.id)
       if (active !== sessionId && !(allowControlledReset && active === undefined)) throw new Error("会话已切换。")
     }
-    const pending = this.pendingComputerPrompts.get(sessionId) ?? new Set<AbortController>()
+    const pending = this.pendingComputerPrompts.get(sessionId) ?? new Set()
     pending.add(submission)
     this.pendingComputerPrompts.set(sessionId, pending)
     try {
       await this.operations.sendPrompt({
         sessions: { admitPrompt: async (id, prompt) => {
-          const bridge = await this.connection.getComputerBridge?.(() => authorize(requestedViewWasReset), ownerSignal, () => {
-            requestedViewWasReset = this.subscriptions.getOwnerSessionId(owner.id) === sessionId
-          }, interaction)
-          if (!bridge) throw new Error("当前后台不支持电脑操作。")
-          // The renderer reopens the chat after restart. The first tool can ask for consent immediately after admission.
-          if (requestedViewWasReset) await this.subscriptions.waitForPrimarySnapshot(owner.id, sessionId, signal)
-          authorize()
-          return bridge.submit(id, prompt, authorize, signal)
+          let privateSubmit = false
+          try {
+            authorize()
+            const bridge = await this.connection.getComputerBridge?.(() => authorize(requestedViewWasReset), ownerSignal, () => {
+              requestedViewWasReset = this.subscriptions.getOwnerSessionId(owner.id) === sessionId
+            }, interaction, automatic)
+            if (!bridge) throw new Error("当前后台不支持电脑操作。")
+            // Restore the current chat before admitting a run that can immediately ask for consent.
+            if (requestedViewWasReset) await this.subscriptions.waitForPrimarySnapshot(owner.id, sessionId, signal)
+            authorize()
+            privateSubmit = true
+            return automatic
+              ? await bridge.submit(id, prompt, authorize, signal, true, ordinarySignal)
+              : await bridge.submit(id, prompt, authorize, signal)
+          } catch (error) {
+            if (!automatic || privateSubmit && !(error instanceof ComputerPromptNotSubmittedError)) throw error
+            // An ordinary message can still be sent when the view moved or the host never received its request.
+            ordinarySignal.throwIfAborted()
+            const client = await this.agentClient()
+            ordinarySignal.throwIfAborted()
+            return client.sessions.admitPrompt(id, prompt, { signal: ordinarySignal })
+          }
         } },
       }, input)
     } finally {
@@ -560,7 +578,7 @@ export class DesktopSessionService {
   invalidateComputerView(nextSessionId?: string): void {
     for (const [sessionId, pending] of this.pendingComputerPrompts) {
       if (sessionId !== nextSessionId)
-        for (const submission of pending) submission.abort(new Error("电脑操作的主聊天已切换或隐藏。"))
+        for (const submission of pending) submission.view.abort(new Error("电脑操作的主聊天已切换或隐藏。"))
     }
     this.connection.invalidateComputerView?.(nextSessionId)
   }
@@ -601,7 +619,7 @@ export class DesktopSessionService {
     this.connection.revokeComputerRun?.(sessionId, runId)
     if (!runId) {
       for (const pending of this.pendingComputerPrompts.get(sessionId) ?? []) {
-        pending.abort(new Error("电脑操作已停止。"))
+        pending.stop.abort(new Error("电脑操作已停止。"))
       }
     }
     const client = await this.agentClient()

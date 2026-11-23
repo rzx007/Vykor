@@ -21,6 +21,7 @@ vi.mock("electron", () => ({
 vi.mock("../browser/browser-agent-service", () => ({ browserAgentService: {} }))
 import { DesktopSessionService, desktopSessionService } from "./session-service"
 import { DaemonConnectionService } from "./daemon-connection-service"
+import { ComputerPromptNotSubmittedError } from "../computer/computer-bridge"
 import { ProjectResource } from "./project-resource"
 import { workspaceService } from "../workspace/workspace-service"
 beforeEach(() => vi.clearAllMocks())
@@ -57,8 +58,8 @@ it("does not submit a preparing Computer prompt after an untargeted Chat Stop", 
   expect(submit).not.toHaveBeenCalled()
 })
 
-it("waits for the current chat's replacement snapshot before sending the first paired Computer prompt", async () => {
-  const h = await pairingPrompt()
+it.each([undefined, true] as const)("waits for its replacement snapshot when the first Computer request pairs the daemon (automatic=%s)", async automatic => {
+  const h = await pairingPrompt(automatic)
   try {
     await h.reset
     const opening = h.openReplacement()
@@ -67,11 +68,62 @@ it("waits for the current chat's replacement snapshot before sending the first p
     h.restore.resolve(h.snapshot)
     await opening
     await expect(h.request).resolves.toBeUndefined()
-    expect(h.submit).toHaveBeenCalledExactlyOnceWith("session", expect.objectContaining({ id: "input" }), expect.any(Function), expect.any(AbortSignal))
+    expect(h.submit).toHaveBeenCalledExactlyOnceWith("session", expect.objectContaining({ id: "input" }),
+      expect.any(Function), expect.any(AbortSignal), ...(automatic ? [true, expect.any(AbortSignal)] : []))
   } finally {
     h.cleanup()
   }
 })
+
+it("finishes an automatic message receipt after switching chats while revoking its Computer view", async () => {
+  const { service, connection } = serviceWithConnection()
+  vi.spyOn(service.subscriptions, "getOwnerSessionId").mockReturnValue("session")
+  const pending = Promise.withResolvers<void>()
+  const submit = vi.fn(() => pending.promise)
+  vi.spyOn(connection, "getComputerBridge").mockResolvedValue({ submit } as never)
+  const invalidated = vi.spyOn(connection, "invalidateComputerView")
+  const request = service.sendComputerPrompt({ id: 43 } as never, {
+    id: "ordinary", sessionId: "session", items: [{ type: "text", text: "打开记事本" }], attachments: [],
+  }, () => {}, new AbortController().signal, undefined, true)
+  await vi.waitFor(() => expect(submit).toHaveBeenCalledOnce())
+  const call = submit.mock.calls[0] as unknown as [unknown, unknown, unknown, AbortSignal, true, AbortSignal]
+  service.invalidateComputerView("other")
+  expect(call[3].aborted).toBe(true)
+  expect(call[5].aborted).toBe(false)
+  expect(invalidated).toHaveBeenCalledExactlyOnceWith("other")
+  pending.resolve()
+  await expect(request).resolves.toBeUndefined()
+})
+
+it.each(["hidden", "before-submit", "uncertain-submit", "stop"] as const)(
+  "preserves the ordinary message only when no Computer request was submitted (%s)", async phase => {
+    const { service, connection } = serviceWithConnection()
+    vi.spyOn(service.subscriptions, "getOwnerSessionId").mockReturnValue("session")
+    const plain = vi.fn().mockResolvedValue({})
+    vi.spyOn(service, "agentClient").mockResolvedValue({ sessions: { admitPrompt: plain } } as never)
+    const submit = vi.fn().mockRejectedValue(phase === "before-submit"
+      ? new ComputerPromptNotSubmittedError("handshake timeout") : new Error("admission unknown"))
+    vi.spyOn(connection, "getComputerBridge").mockImplementation(async () => {
+      if (phase === "stop") {
+        // The interruption calls the same fake client after revoking local admission.
+        void service.interruptSession({ sessionId: "session" }).catch(() => {})
+        throw new Error("setup stopped")
+      }
+      return { submit } as never
+    })
+    const result = service.sendComputerPrompt({ id: 43 } as never, {
+      id: "ordinary", sessionId: "session", items: [{ type: "text", text: "打开记事本" }], attachments: [],
+    }, () => { if (phase === "hidden") throw new Error("hidden Desktop") }, new AbortController().signal, undefined, true)
+    if (phase === "uncertain-submit" || phase === "stop") {
+      await expect(result).rejects.toThrow(phase === "stop" ? /已停止/ : /admission unknown/)
+      expect(plain).not.toHaveBeenCalled()
+    } else {
+      await result
+      expect(plain).toHaveBeenCalledExactlyOnceWith("session", expect.objectContaining({ id: "ordinary" }), { signal: expect.any(AbortSignal) })
+    }
+    expect(submit).toHaveBeenCalledTimes(phase === "before-submit" || phase === "uncertain-submit" ? 1 : 0)
+  }
+)
 
 it.each(["switch", "hide", "stop"] as const)("cancels a first paired Computer prompt when the user chooses to %s during reconnect", async action => {
   const h = await pairingPrompt()
@@ -265,7 +317,7 @@ function serviceWithConnection() {
   }
 }
 
-async function pairingPrompt() {
+async function pairingPrompt(automatic?: true) {
   const { service, connection, invalidate } = serviceWithConnection()
   const owner = { id: 43, once: vi.fn(), isDestroyed: () => false, send: vi.fn() } as never
   const snapshot: SessionStateSnapshot = {
@@ -294,7 +346,7 @@ async function pairingPrompt() {
   })
   const request = service.sendComputerPrompt(owner, {
     id: "input", sessionId: "session", items: [{ type: "text", text: "打开记事本" }], attachments: [],
-  }, () => {}, lifetime.signal)
+  }, () => {}, lifetime.signal, undefined, automatic)
   void request.catch(() => {})
   return {
     service, client, owner, snapshot, restore, reset: reset.promise, submit, request,

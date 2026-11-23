@@ -48,6 +48,21 @@ it("arms the local emergency stop only for the current chat", () => {
   expect(stop).toHaveBeenCalledTimes(1)
 })
 
+it("requires task approval for automatic Computer calls even with a saved app grant", async () => {
+  preferences.get.mockReturnValue({ computerAppGrants: [app] })
+  const { owner, send } = window()
+  const signal = new AbortController().signal
+  const interaction = createComputerInteraction(owner, signal)
+  expect(await interaction.authorizeApp(app, signal)).toBe("remembered")
+  const approval = interaction.authorizeApp(app, signal, undefined, true)
+  const { prompt } = send.mock.lastCall?.[1]
+  expect(prompt).toMatchObject({ kind: "authorize", appName: app.name, onceOnly: true })
+  expect(replyToComputerInteraction(owner, { id: prompt.id, choice: "always" })).toBe(false)
+  expect(replyToComputerInteraction(owner, { id: prompt.id, choice: "once" })).toBe(true)
+  await expect(approval).resolves.toBe(true)
+  expect(preferences.patch).not.toHaveBeenCalled()
+})
+
 it("keeps window pixels available only in the current initiating chat and clears them on invalidation", () => {
   const { owner, send } = window()
   const lifetime = new AbortController()

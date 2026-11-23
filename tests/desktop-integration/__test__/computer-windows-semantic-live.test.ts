@@ -287,7 +287,9 @@ it.skipIf(!enabled).each(["notepad", "fixture"])("accepts Windows semantic contr
       try {
         await expect.poll(() => pending(sessionId).length, { timeout: 18_000 }).toBe(1)
       } catch (error) {
-        throw new Error(`No approval for ${name}. Tool output: ${JSON.stringify(outputs.get(name))}; Windows events: ${JSON.stringify(events())}`, { cause: error })
+        const [run] = (await client.sessions.getState(sessionId)).runs
+        const state = run && await settle({ sessionId, runId: run.id }).catch(() => ({ status: run.status }))
+        throw new Error(`No approval for ${name}. Run: ${JSON.stringify(state)}; tool output: ${JSON.stringify(outputs.get(name))}; Windows events: ${JSON.stringify(events())}`, { cause: error })
       }
       const [request] = pending(sessionId)
       expect(request).toMatchObject({ payload: { computerApproval: true } })

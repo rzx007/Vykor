@@ -51,6 +51,7 @@ export class DaemonConnectionService {
   private connection?: { endpoint: ServiceEndpoint; client: VykorClient; transport?: HttpTransport }
   private stopBrowserBridge?: () => void
   private computerPairing?: ComputerPairing
+  private pairingRestart?: Promise<void>
   private computerBridge?: DesktopComputerBridge
   private computerHost?: ComputerHost
   private computerInputCleanup = Promise.resolve(true)
@@ -68,7 +69,12 @@ export class DaemonConnectionService {
     return this.daemonStatus
   }
 
+  yieldComputerInputToBrowser(sessionId: string): Promise<boolean> {
+    return this.computerHost?.yieldInputToBrowser(sessionId) ?? this.computerInputCleanup
+  }
+
   getClient(): Promise<VykorClient> {
+    if (this.pairingRestart) return this.pairingRestart.catch(() => {}).then(() => this.getClient())
     if (this.restarting) return Promise.reject(new Error("后台服务正在重启或切换数据，请稍候。"))
     return this.getOrConnectClient()
   }
@@ -133,6 +139,7 @@ export class DaemonConnectionService {
     ownerSignal: AbortSignal,
     onControlledReset?: () => void,
     interaction?: ComputerInteraction,
+    automatic?: true,
   ): Promise<DesktopComputerBridge> {
     const assertOpen = () => {
       if (this.computerAdmissionClosed) throw new Error("Desktop 正在退出或更新，电脑操作已关闭。")
@@ -148,13 +155,25 @@ export class DaemonConnectionService {
       authorizeOwner()
     }
     authorize()
-    await assertBundledWindowsDriverIntegrity(ownerSignal)
+    if (!automatic || !this.computerBridge) await assertBundledWindowsDriverIntegrity(ownerSignal)
     authorize()
     const client = await this.getClient()
     authorize()
     const connection = this.connection
     if (!connection || connection.client !== client) throw new Error("后台连接已变化，请重试。")
-    if (!this.computerPairing) await this.restartForComputerPairing(connection.endpoint, authorize, onControlledReset)
+    if (!this.computerPairing) {
+      if (automatic) {
+        const registry = this.requireLocalRegistry(connection.endpoint)
+        if (registry.launcher !== "desktop" || registry.supervised !== false || await shouldStartManagedDaemon())
+          throw new Error("当前后台无法完成电脑操作配对。")
+        authorize()
+      }
+      if (!this.computerPairing) {
+        this.pairingRestart ??= this.restartForComputerPairing(connection.endpoint, authorize, onControlledReset)
+          .finally(() => { this.pairingRestart = undefined })
+        await this.pairingRestart
+      }
+    }
     authorize()
     const pairing = this.computerPairing
     if (!pairing || !this.connection || !sameComputerEndpoint(this.connection.endpoint, pairing.endpoint))
@@ -184,7 +203,8 @@ export class DaemonConnectionService {
         authorizeDaemon,
         onDaemonIdentityMismatch: () => this.invalidateComputerPairing(pairing),
         ...(host ? {
-          execute: (event, signal, connection, approve, authorizeDispatch) => host.execute(event, signal, connection, approve, authorizeDispatch),
+          execute: (event, signal, connection, approve, authorizeDispatch, automatic) =>
+            host.execute(event, signal, connection, approve, authorizeDispatch, automatic),
           cancel: (sessionId, runId) => { host.pause(sessionId, runId) },
           revoke: (sessionId, runId) => host.revoke(sessionId, runId),
         } : {}),

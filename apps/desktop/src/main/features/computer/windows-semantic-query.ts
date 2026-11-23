@@ -108,8 +108,10 @@ public static class VykorWindowsSemanticQuery
         if (VykorWindowsAuthentication.RequiresHandoff(current)) return null;
         int[] id = element.GetRuntimeId();
         if (id == null || id.Length == 0) return null;
+        var controlType = current.ControlType;
+        if (controlType == null) return null;
         Rect bounds = current.BoundingRectangle;
-        var role = current.ControlType.ProgrammaticName;
+        var role = controlType.ProgrammaticName;
         var name = current.Name;
         var value = Pattern<ValuePattern>(element, ValuePattern.Pattern);
         var currentValue = value == null ? null : value.Current.Value;

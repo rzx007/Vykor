@@ -12,8 +12,8 @@ export interface DesktopComputerCandidate {
 }
 
 export type DesktopComputerPrompt = { id: string } & (
-  | { kind: "authorize"; appName: string }
-  | { kind: "choose"; candidates: readonly DesktopComputerCandidate[] }
+  | { kind: "authorize"; appName: string; onceOnly?: true }
+  | { kind: "choose"; candidates: readonly DesktopComputerCandidate[]; confirmChange?: true }
 )
 
 export type DesktopComputerInteractionEvent =

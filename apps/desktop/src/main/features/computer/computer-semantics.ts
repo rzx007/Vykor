@@ -65,7 +65,11 @@ export function observationDigest(state: WindowsDriverObservation): string {
 export function projectObservation(windowRef: string, state: WindowsDriverObservation): ComputerObservation {
   const elements = new Map<string, ElementFacts>()
   const display: ComputerObservation["display"] = { elements: [], limited: false }
-  let bytes = 0
+  const candidates: Array<{
+    element: ElementFacts
+    row: ComputerObservation["display"]["elements"][number]
+    priority: number
+  }> = []
   for (const { token: _token, ...element } of state.elements) {
     if (!eligible(element)) continue
     const ref = `element_${randomUUID()}`
@@ -79,15 +83,21 @@ export function projectObservation(windowRef: string, state: WindowsDriverObserv
       },
       actions: offeredActions(element),
     }
+    // Keep current values and usable controls within the same budget on dense windows.
+    const hasState = Boolean(row.value) || row.selected === true || row.checked !== undefined
+    candidates.push({ element, row, priority: hasState ? 0 : row.actions.length ? 1 : 2 })
+  }
+  let bytes = 0
+  for (const { element, row } of candidates.toSorted((left, right) => left.priority - right.priority)) {
     const size = Buffer.byteLength(JSON.stringify(row), "utf8") + 1
     if (bytes + size > maxObservationBytes || elements.size >= 120) {
       display.limited = true
       continue
     }
     bytes += size
-    elements.set(ref, element)
-    display.elements.push(row)
+    elements.set(row.ref, element)
   }
+  display.elements = candidates.flatMap(({ row }) => elements.has(row.ref) ? [row] : [])
   return { windowRef, digest: observationDigest(state), focusIdentity: state.focusIdentity, elements, display }
 }
 

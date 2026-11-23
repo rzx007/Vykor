@@ -1,4 +1,5 @@
 export const COMPUTER_HOST_TOKEN_HEADER = "x-vykor-computer-token";
+export const COMPUTER_SESSION_UNAVAILABLE = "computer_session_unavailable";
 export const COMPUTER_CAPTURE_MAX_BASE64_BYTES = 1024 * 1024;
 const maxCaptureSide = 2000;
 

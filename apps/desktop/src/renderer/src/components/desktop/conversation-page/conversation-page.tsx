@@ -250,7 +250,7 @@ function ConversationPane({
   const sessionActions = useSessionActionDialogs()
   const beginFork = sessionActions.beginFork
 
-  const submitDraft = async (delivery?: "queue" | "steer", computer?: true): Promise<void> => {
+  const submitDraft = async (delivery?: "queue" | "steer", computer?: true | "auto", appHint?: string): Promise<void> => {
     const content = selectComposerDocumentText(draft)
     if (useDesktopSessionStore.getState().composerDraftsByScope[composerScope]?.attachmentPreparation?.pending.length) return
     const ready = areDesktopAttachmentsSendable(attachments)
@@ -271,17 +271,21 @@ function ConversationPane({
             await submitGoal(composerScope)
             return
           }
+          const computerOptions = computer ? {
+            computer,
+            ...(appHint ? { contextItems: [{ type: "text" as const, text: `目标 Windows 应用提示：${appHint}\n\n` }] } : {}),
+          } : {}
           if (hasSession) {
             await sendMessage(content, {
               document: draft, attachments, delivery,
-              ...(computer ? { computer } : {}),
+              ...computerOptions,
               ...(delivery === "steer" ? { expectedActiveRunId: activeRun?.id } : {}),
             })
           } else {
             await startSession(content, {
               document: draft,
               attachments,
-              ...(computer ? { computer } : {}),
+              ...computerOptions,
               ...(taskLocation !== "default" ? { taskLocation } : {}),
             })
           }
@@ -651,7 +655,7 @@ function ConversationPane({
             attachmentInteractionEnabled={attachmentSupport.interactionEnabled}
             panelOpen={panelOpen}
             onDraftChange={setDraft}
-            onSubmit={(delivery, computer) => void submitDraft(delivery, computer)}
+            onSubmit={(delivery, computer, appHint) => void submitDraft(delivery, computer, appHint)}
             onPickFiles={() => pickAttachmentFiles(composerScope)}
             onDropFiles={(files) => addDroppedAttachments(composerScope, files)}
             onPasteFiles={(files) => pasteAttachments(files)}
@@ -916,7 +920,7 @@ function ConversationPane({
                   attachmentPreparation={attachmentPreparation}
                   attachmentInteractionEnabled={attachmentSupport.interactionEnabled}
                   onDraftChange={setDraft}
-                  onSubmit={(delivery, computer) => void submitDraft(delivery, computer)}
+                  onSubmit={(delivery, computer, appHint) => void submitDraft(delivery, computer, appHint)}
                   computerEnabled={Boolean(hasSession && !archived)}
                   onCommand={executeComposerCommand}
                   onPickFiles={() => pickAttachmentFiles(composerScope)}

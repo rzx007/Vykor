@@ -61,6 +61,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
     return primaryNavigationGeneration
   }
   const openPrimarySession = async (sessionId: string): Promise<OpenSessionResult> => {
+    const navigationGeneration = primaryNavigationGeneration
     const projectSelectionGeneration = projectDetailsCoordinator.beginSelection()
     const operationId = globalThis.crypto.randomUUID()
     set((state) => {
@@ -91,11 +92,14 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
     })
     try {
       const view = await window.desktop.sessions.open(sessionId)
-      let snapshotApplied = false
+      let opened = false
       set((state) => {
         const runtime = state.sessionRuntimes[sessionId]
         const operation = runtime?.operations[operationId]
         if (!operation || operation.phase !== "pending") {
+          // A session update can settle the open operation before its reply arrives.
+          opened = !operation && state.activeSessionId === sessionId &&
+            state.sessionView?.session.id === sessionId
           return state
         }
         if (state.activeSessionId !== sessionId) {
@@ -109,6 +113,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
 
         const acceptedView = acceptActiveSessionView(state.activeSessionId, state.sessionView, view)
         const settledRuntime = reconcileRuntimeWithView(removeOperation(runtime, operationId), view)
+        opened = acceptedView?.session.id === sessionId
         if (acceptedView !== view) {
           return {
             sessionRuntimes: {
@@ -118,7 +123,6 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
           }
         }
 
-        snapshotApplied = true
         const workspace = resolveSessionWorkspace(state.projects, view.session)
         const ownsProjectSelection = projectDetailsCoordinator.ownsSelection(
           projectSelectionGeneration
@@ -146,7 +150,7 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
           },
         }
       })
-      if (!snapshotApplied) return "cancelled"
+      if (!opened || navigationGeneration !== primaryNavigationGeneration) return "cancelled"
 
       get().markActivitySessionRead(sessionId)
       if (view.session.storage !== "memory") writePersistedActiveSessionId(sessionId)

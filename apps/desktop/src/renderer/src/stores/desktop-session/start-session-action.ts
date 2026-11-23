@@ -35,8 +35,8 @@ export function createStartSessionAction(
   return async (content, options) => {
     if (get().pendingModeChanges.new) return null
     const document = options?.document ?? composerDocument([{ type: "text", text: content }])
-    const items = document.items
-    const prompt = selectComposerDocumentText(document)
+    const items = [...(options?.contextItems ?? []), ...document.items]
+    const prompt = selectComposerDocumentText({ ...document, items })
     const browserAnnotationContext = formatBrowserAnnotationContext(
       get().composerDraftsByScope[NEW_CONVERSATION_SCOPE]?.browserAnnotations ?? []
     )
@@ -127,7 +127,7 @@ export function createStartSessionAction(
       startedSessionId = session.id
       // 创建第一个提交
       const firstSubmission: PendingPromptSubmission = {
-        ...(options?.computer ? { computer: true } : {}),
+        ...(options?.computer ? { computer: options.computer } : {}),
         browserAnnotationContext,
         id: promptSubmissionId,
         sessionId: session.id,
@@ -207,9 +207,9 @@ export function createStartSessionAction(
       }
       // Switching pages keeps the runtime; confirmed deletion removes it.
       if (!get().sessionRuntimes[session.id]) return null
-      if (firstSubmission.computer && openResult !== "applied")
+      if (firstSubmission.computer === true && openResult !== "applied")
         throw new Error("会话已切换，请打开新会话后重新发送电脑操作消息。")
-      await get().submitPromptSubmission(firstSubmission)
+      await get().submitPromptSubmission(openResult === "applied" ? firstSubmission : { ...firstSubmission, computer: undefined })
       // 设置会话标题
       const title = prompt
         ? formatSessionTitle(prompt)

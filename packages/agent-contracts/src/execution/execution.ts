@@ -63,6 +63,8 @@ export interface AgentRunToolContribution {
   readonly definition: import("../tools/tools.js").ToolDefinition;
   /** Runtime policy applies, with any requested approval limited to this invocation. */
   readonly permission: "host-internal" | "runtime-confirm-once";
+  /** This private host can attest that an invocation ended before any action was dispatched. */
+  readonly reportsNotStarted?: true;
   /** End only after this exact definition succeeds and the whole batch is delivered. */
   readonly endRunOnSuccess?: true;
 }

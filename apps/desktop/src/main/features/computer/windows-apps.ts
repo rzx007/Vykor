@@ -188,7 +188,7 @@ function localLaunch(executable: string, signal: AbortSignal): Promise<void> {
   })
 }
 
-export function createWindowsApps(): WindowsApps {
+export function createWindowsApps(): WindowsApps & { visibleWindows(signal: AbortSignal): Promise<WindowsAppWindow[]> } {
   const systemRoot = process.env.SystemRoot ?? "C:\\Windows"
   const system32 = path.join(systemRoot, "System32")
   const powershell = path.join(system32, "WindowsPowerShell", "v1.0", "powershell.exe")
@@ -219,7 +219,42 @@ export function createWindowsApps(): WindowsApps {
       throw new WindowsAppUnavailableError("The Windows application changed after it was selected.", "app_changed")
     }
   }
+  const scan = async (signal: AbortSignal, application?: ResolvedApp) => {
+    const result = JSON.parse(await runPowerShell(windowScript, {
+      VYKOR_COMPUTER_WINDOW_CODE: windowsWindowQuery,
+      VYKOR_COMPUTER_APP_REGISTRATION: application?.registration ?? "",
+      VYKOR_COMPUTER_APP_EXECUTABLE: application?.executable ?? "",
+      VYKOR_COMPUTER_FRAME_IMAGE: path.join(system32, "ApplicationFrameHost.exe"),
+      VYKOR_COMPUTER_APP_EXPLORER: application?.explorer ? "1" : "0",
+    }, signal)) as { desktopAvailable?: boolean; restricted?: boolean; windows?: unknown[] }
+    if (!result.desktopAvailable)
+      throw new WindowsAppUnavailableError("The Windows desktop is locked or unavailable.", "desktop_unavailable")
+    if (!Array.isArray(result.windows)) throw new Error("Windows returned an invalid window inventory")
+    const windows = result.windows.filter(isUsableWindow).map(window => ({
+      windowId: window.windowId,
+      pid: window.pid,
+      sessionId: window.sessionId,
+      processStartedAt: window.processStartedAt,
+      processStartKey: window.processStartKey,
+      threadId: window.threadId,
+      applicationPid: window.applicationPid,
+      applicationStartKey: window.applicationStartKey,
+      title: window.title,
+      ...(window.blocked === true ? { blocked: true } : {}),
+      ...(Number.isSafeInteger(window.ownerWindowId) ? { ownerWindowId: window.ownerWindowId } : {}),
+      ...(typeof window.document === "string" && window.document.length <= 1024 ? { document: window.document } : {}),
+      ...(window.position && Number.isSafeInteger(window.position.left) && Number.isSafeInteger(window.position.top)
+        ? { position: { left: window.position.left, top: window.position.top } } : {}),
+    }))
+    return { windows, restricted: result.restricted }
+  }
   return {
+    async visibleWindows(signal) {
+      const { windows } = await scan(signal)
+      const withDialog = new Set(windows.map(window => window.ownerWindowId))
+      return windows.filter(window => window.ownerWindowId === undefined && !window.blocked &&
+        !withDialog.has(window.windowId) && window.pid !== process.pid)
+    },
     async discover(name, signal) {
       const query = normalized(name)
       if (!query || query.length > 160) return []
@@ -244,35 +279,9 @@ export function createWindowsApps(): WindowsApps {
     async windows(app, signal) {
       const known = resolved(app)
       await assertExecutable(known)
-      const result = JSON.parse(await runPowerShell(windowScript, {
-        VYKOR_COMPUTER_WINDOW_CODE: windowsWindowQuery,
-        VYKOR_COMPUTER_APP_REGISTRATION: known.registration,
-        VYKOR_COMPUTER_APP_EXECUTABLE: known.executable ?? "",
-        VYKOR_COMPUTER_FRAME_IMAGE: path.join(system32, "ApplicationFrameHost.exe"),
-        VYKOR_COMPUTER_APP_EXPLORER: known.explorer ? "1" : "0",
-      }, signal)) as { desktopAvailable?: boolean; restricted?: boolean; windows?: unknown[] }
-      if (!result.desktopAvailable) {
-        throw new WindowsAppUnavailableError("The Windows desktop is locked or unavailable.", "desktop_unavailable")
-      }
+      const { windows, restricted } = await scan(signal, known)
       await assertExecutable(known)
-      if (!Array.isArray(result.windows)) throw new Error("Windows returned an invalid window inventory")
-      const windows = result.windows.filter(isUsableWindow).map(window => ({
-        windowId: window.windowId,
-        pid: window.pid,
-        sessionId: window.sessionId,
-        processStartedAt: window.processStartedAt,
-        processStartKey: window.processStartKey,
-        threadId: window.threadId,
-        applicationPid: window.applicationPid,
-        applicationStartKey: window.applicationStartKey,
-        title: window.title,
-        ...(window.blocked === true ? { blocked: true } : {}),
-        ...(Number.isSafeInteger(window.ownerWindowId) ? { ownerWindowId: window.ownerWindowId } : {}),
-        ...(typeof window.document === "string" && window.document.length <= 1024 ? { document: window.document } : {}),
-        ...(window.position && Number.isSafeInteger(window.position.left) && Number.isSafeInteger(window.position.top)
-          ? { position: { left: window.position.left, top: window.position.top } } : {}),
-      }))
-      if (!windows.length && result.restricted) {
+      if (!windows.length && restricted) {
         throw new WindowsAppUnavailableError("Windows restricts access to this application's window.", "window_restricted")
       }
       return windows
