@@ -1,6 +1,6 @@
 import { FileCode2, FolderOpen } from "lucide-react"
 import type * as React from "react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { Group, Panel, usePanelRef } from "react-resizable-panels"
 
 import { DesktopEmptyState } from "@renderer/components/desktop/shared/desktop-empty-state"
@@ -25,10 +25,6 @@ import {
   createPanelWidthStore,
   shouldPersistPanelWidth,
 } from "@renderer/components/desktop/layout/shared/panel-width-store"
-import {
-  selectActiveWorkspaceProject,
-  useDesktopSessionStore,
-} from "@renderer/stores/desktop-session"
 import type {
   WorkspaceFileEntry,
   WorkspaceListFilesResult,
@@ -47,6 +43,8 @@ const fileTreeWidthStore = createPanelWidthStore({
 
 type FilesToolProps = {
   scopeId: string
+  rootPath?: string
+  projectName?: string
   tabs: FileViewerTab[]
   activePath: string | null
   loadingPath: string | null
@@ -63,6 +61,8 @@ type FilesToolProps = {
 
 export function FilesTool({
   scopeId,
+  rootPath,
+  projectName,
   tabs,
   activePath,
   loadingPath,
@@ -76,11 +76,6 @@ export function FilesTool({
   openRequest,
   onOpenWebDocument,
 }: FilesToolProps): React.JSX.Element {
-  const selectedProject = useDesktopSessionStore(selectActiveWorkspaceProject)
-  const sessionId = scopeId.startsWith("session:") ? scopeId.slice("session:".length) : null
-  const localRoot = selectedProject?.path
-  const workspaceKey = sessionId ?? localRoot
-  const fileTarget = sessionId ? { sessionId } : { rootPath: localRoot ?? "" }
   const [loadState, setLoadState] = useState<LoadState>("idle")
   const [error, setError] = useState<string | null>(null)
   const [listing, setListing] = useState<WorkspaceListFilesResult | null>(null)
@@ -98,7 +93,11 @@ export function FilesTool({
   const handledOpenRequestRef = useRef<number | null>(null)
   const [resolvedOpenRequestPath, setResolvedOpenRequestPath] = useState<string | null>(null)
   const attemptedPreviewPathRef = useRef<string | null>(null)
-  const sessionDirectoryReads = useRef(new Set<string>())
+  const mounted = useRef(false)
+  useLayoutEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
 
   useEffect(
     () => () => {
@@ -140,7 +139,7 @@ export function FilesTool({
     searchMatches.length === 0 ? -1 : Math.min(searchIndex, searchMatches.length - 1)
 
   const loadFiles = async (): Promise<void> => {
-    if (!workspaceKey) {
+    if (!rootPath) {
       setListing(null)
       setLoadState("idle")
       return
@@ -148,9 +147,8 @@ export function FilesTool({
 
     setLoadState("loading")
     setError(null)
-    sessionDirectoryReads.current = new Set()
     try {
-      const result = await window.desktop.workspace.listFiles(fileTarget)
+      const result = await window.desktop.workspace.listFiles({ rootPath })
       setListing(result)
       setLoadState("ready")
     } catch (loadError) {
@@ -164,25 +162,7 @@ export function FilesTool({
       void loadFiles()
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [selectedProject?.path, sessionId])
-
-  const loadSessionDirectory = useCallback(async (path: string) => {
-    if (!sessionId) return
-    const reads = sessionDirectoryReads.current
-    if (reads.has(path)) return
-    reads.add(path)
-    try {
-      const result = await window.desktop.workspace.listFiles({ sessionId, path })
-      if (sessionDirectoryReads.current !== reads) return
-      setListing((current) => current && {
-        entries: [...current.entries, ...result.entries],
-        truncated: current.truncated || result.truncated,
-      })
-    } catch (error) {
-      reads.delete(path)
-      if (sessionDirectoryReads.current === reads) setError(errorMessage(error))
-    }
-  }, [sessionId])
+  }, [rootPath])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -219,12 +199,11 @@ export function FilesTool({
     path: string,
     options: { requireListedFile?: boolean; fromOpenRequest?: boolean } = {}
   ): Promise<void> => {
-    if (!workspaceKey) return
+    if (!rootPath) return
     if (options.fromOpenRequest && /[\\/]$/.test(path)) {
-      if (sessionId || !localRoot) return
       setError(null)
       try {
-        await window.desktop.workspace.revealPath({ rootPath: localRoot, path })
+        await window.desktop.workspace.revealPath({ rootPath, path })
       } catch (revealError) {
         setError(errorMessage(revealError))
       }
@@ -234,8 +213,8 @@ export function FilesTool({
     const normalizedPath = path.replace(/\/$/, "")
     const entry = fileEntries.get(normalizedPath)
     if (requireListedFile && (!entry || entry.type !== "file")) return
-    if (!sessionId && localRoot && isWebDocumentPath(normalizedPath)) {
-      onOpenWebDocument(localRoot, normalizedPath)
+    if (isWebDocumentPath(normalizedPath)) {
+      onOpenWebDocument(rootPath, normalizedPath)
       return
     }
 
@@ -247,9 +226,10 @@ export function FilesTool({
     let resultPath: string | undefined
     try {
       const result = await window.desktop.workspace.readFile({
-        ...fileTarget,
+        rootPath,
         path: normalizedPath,
       })
+      if (!mounted.current) return
       resultPath = result.path
       onActivePathChange(result.path)
       onOpenFileStart(result.path)
@@ -259,11 +239,13 @@ export function FilesTool({
         setResolvedOpenRequestPath(result.path)
       }
     } catch (readError) {
-      setError(errorMessage(readError))
+      if (mounted.current) setError(errorMessage(readError))
     } finally {
-      onLoadingPathChange((current) =>
-        current === normalizedPath || current === resultPath ? null : current
-      )
+      if (mounted.current) {
+        onLoadingPathChange((current) =>
+          current === normalizedPath || current === resultPath ? null : current
+        )
+      }
     }
   }
 
@@ -293,13 +275,13 @@ export function FilesTool({
         void openFile(requestedPath, { requireListedFile: false, fromOpenRequest: true })
     }, 0)
     return () => window.clearTimeout(timer)
-  }, [fileEntries, loadState, openRequest, selectedProject?.path])
+  }, [fileEntries, loadState, openRequest, rootPath])
 
   async function restoreOpenFiles(): Promise<void> {
-    if (!workspaceKey) return
+    if (!rootPath) return
     const existingPaths = restorePaths
       .map((path) => path.replace(/\/$/, ""))
-      .filter((path) => sessionId || (!isWebDocumentPath(path) && fileEntries.get(path)?.type === "file"))
+      .filter((path) => !isWebDocumentPath(path) && fileEntries.get(path)?.type === "file")
       .slice(0, 12)
     if (existingPaths.length === 0) return
 
@@ -313,18 +295,19 @@ export function FilesTool({
     ]
 
     for (const path of orderedPaths) {
+      if (!mounted.current) return
       onOpenFileStart(path)
       onLoadingPathChange(path)
       try {
         const result = await window.desktop.workspace.readFile({
-          ...fileTarget,
+          rootPath,
           path,
         })
-        onFileOpened(toFileViewerTab(result))
+        if (mounted.current) onFileOpened(toFileViewerTab(result))
       } catch (restoreError) {
-        setError(errorMessage(restoreError))
+        if (mounted.current) setError(errorMessage(restoreError))
       } finally {
-        onLoadingPathChange((current) => (current === path ? null : current))
+        if (mounted.current) onLoadingPathChange((current) => (current === path ? null : current))
       }
     }
   }
@@ -332,8 +315,8 @@ export function FilesTool({
   useEffect(() => {
     if (
       loadState !== "ready" ||
-      !workspaceKey ||
-      restoredProjectRef.current === workspaceKey ||
+      !rootPath ||
+      restoredProjectRef.current === rootPath ||
       tabs.length > 0 ||
       restorePaths.length === 0
     ) {
@@ -341,12 +324,12 @@ export function FilesTool({
     }
 
     const timer = window.setTimeout(() => {
-      restoredProjectRef.current = workspaceKey
+      restoredProjectRef.current = rootPath
       void restoreOpenFiles()
     }, 0)
 
     return () => window.clearTimeout(timer)
-  }, [loadState, workspaceKey, restoreActivePath, restorePaths, tabs.length])
+  }, [loadState, rootPath, restoreActivePath, restorePaths, tabs.length])
 
   const handleTreeLayoutChanged = (
     _layout: Record<string, number>,
@@ -387,7 +370,7 @@ export function FilesTool({
     })
   }
 
-  if (!workspaceKey) {
+  if (!rootPath) {
     return (
       <DesktopEmptyState
         icon={FolderOpen}
@@ -409,7 +392,7 @@ export function FilesTool({
       }
     >
       <FileViewerToolbar
-        projectName={selectedProject?.name ?? "会话工作目录"}
+        projectName={projectName ?? rootPath}
         path={activePath ?? "/"}
         preview={activeTab?.preview}
         format={activePreviewFormat}
@@ -423,12 +406,6 @@ export function FilesTool({
       {loadState === "ready" && error && (
         <p role="alert" className="border-b border-border/45 px-3 py-2 text-sm text-destructive">
           {error}
-        </p>
-      )}
-
-      {loadState === "ready" && listing?.truncated && (
-        <p role="status" className="border-b border-border/45 px-3 py-2 text-sm text-ui-muted">
-          有目录达到显示上限，仅显示部分条目。
         </p>
       )}
 
@@ -527,7 +504,7 @@ export function FilesTool({
               style={{ width: "var(--file-tree-content-width)" }}
             >
               <ProjectFileTree
-                rootPath={sessionId ? undefined : localRoot}
+                rootPath={rootPath}
                 paths={treePaths}
                 selectedPath={activeTab?.preview.scope === "extra-root" ? null : activePath}
                 onSelect={(path) => void openFile(path)}
@@ -536,7 +513,6 @@ export function FilesTool({
                   void openFile(path)
                 }}
                 onActionError={(actionError) => setError(errorMessage(actionError))}
-                onExpandDirectory={sessionId ? loadSessionDirectory : undefined}
               />
             </div>
           </Panel>

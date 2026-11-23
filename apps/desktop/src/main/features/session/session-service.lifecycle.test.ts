@@ -35,6 +35,7 @@ it("chooses, lists and previews a real local directory with no daemon connection
 
     const selected = await service.chooseProject({} as never)
     expect(selected).toMatchObject({ path: rootPath })
+    await expect(service.readLocalProjectDirectory(rootPath)).resolves.toMatchObject({ path: rootPath })
     expect(await workspaceService.listFiles({ rootPath })).toMatchObject({
       entries: [{ path: "offline.txt", type: "file" }],
     })
@@ -47,7 +48,7 @@ it("chooses, lists and previews a real local directory with no daemon connection
   }
 })
 
-it("lists and previews the session working directory through the SDK and a running daemon", async () => {
+it("recursively lists, previews and edits local project files while its session daemon is stopped", async () => {
   const root = await mkdtemp(join(tmpdir(), "vykor-session-files-"))
   let daemon: Awaited<ReturnType<typeof startVykorDaemon>> | undefined
   let agentClient: ReturnType<typeof vi.spyOn> | undefined
@@ -67,29 +68,20 @@ it("lists and previews the session working directory through the SDK and a runni
     const options = { baseUrl: daemon.listen.url }
     const client = new VykorClient(options)
     const { id: projectId } = await new ProjectResource(new HttpTransport(options)).inspect(project)
-    const session = await client.sessions.create({
-      projectId, cwd: sessionDirectory, model: "fixture", metadata: { runtime: { disallowedTools: ["Glob"] } },
-    })
-    agentClient = vi.spyOn(desktopSessionService, "agentClient").mockResolvedValue(client)
-
-    const localListing = await workspaceService.listFiles({ rootPath: project })
-    expect(localListing.entries).toContainEqual(expect.objectContaining({ path: "project-only.txt" }))
-    const listing = await workspaceService.listFiles({ sessionId: session.id })
-    expect(listing.entries.map((entry) => entry.path)).toEqual(["nested/", "same.txt"])
-    expect((await workspaceService.listFiles({ sessionId: session.id, path: "nested" })).entries)
-      .toMatchObject([{ path: "nested/agent-only.txt", type: "file" }])
-    expect(await workspaceService.readFile({ sessionId: session.id, path: "same.txt" })).toMatchObject({
-      scope: "session", content: "agent version", truncated: false,
-    })
-
+    const session = await client.sessions.create({ projectId, cwd: sessionDirectory, model: "fixture" })
     await daemon.server.close()
-    await expect(workspaceService.listFiles({ sessionId: session.id })).rejects.toThrow()
-    showOpenDialog.mockResolvedValue({ canceled: false, filePaths: [project] })
-    expect(await desktopSessionService.chooseProject({} as never)).toMatchObject({ path: project })
-    expect(await workspaceService.listFiles({ rootPath: project })).toEqual(localListing)
+    agentClient = vi.spyOn(desktopSessionService, "agentClient").mockRejectedValue(new Error("daemon stopped"))
+    const listing = await workspaceService.listFiles({ rootPath: project })
+    expect(listing.entries.map((entry) => entry.path)).toContain("task/nested/agent-only.txt")
+    const file = { rootPath: project, path: join(session.cwd, "same.txt") }
+    expect(await workspaceService.readFile(file)).toMatchObject({ scope: "project", content: "agent version" })
+    expect(await workspaceService.writeFile({ ...file, originalContent: "agent version", content: "edited" }))
+      .toMatchObject({ scope: "project", content: "edited" })
+    expect(await workspaceService.readFile(file)).toMatchObject({ content: "edited" })
     expect(await workspaceService.readFile({ rootPath: project, path: "same.txt" })).toMatchObject({
       content: "project version",
     })
+    expect(agentClient).not.toHaveBeenCalled()
   } finally {
     agentClient?.mockRestore()
     await daemon?.server.close()
@@ -97,7 +89,7 @@ it("lists and previews the session working directory through the SDK and a runni
   }
 })
 
-it("creates a Desktop Git worktree session and reads that worktree through the daemon", async () => {
+it("creates a Desktop Git worktree session and reads the worktree locally", async () => {
   const root = await mkdtemp(join(tmpdir(), "vykor-worktree-session-"))
   let daemon: Awaited<ReturnType<typeof startVykorDaemon>> | undefined
   const mocks: Array<{ mockRestore(): void }> = []
@@ -139,9 +131,9 @@ it("creates a Desktop Git worktree session and reads that worktree through the d
     expect(session.cwd).not.toBe(project)
     await writeFile(join(session.cwd, "same.txt"), "worktree version")
     await writeFile(join(session.cwd, "worktree-only.txt"), "")
-    expect((await workspaceService.listFiles({ sessionId: session.id })).entries)
+    expect((await workspaceService.listFiles({ rootPath: session.cwd })).entries)
       .toContainEqual(expect.objectContaining({ path: "worktree-only.txt" }))
-    expect(await workspaceService.readFile({ sessionId: session.id, path: "same.txt" }))
+    expect(await workspaceService.readFile({ rootPath: session.cwd, path: "same.txt" }))
       .toMatchObject({ content: "worktree version" })
     await expect(client.sessions.create({
       projectId, cwd: session.cwd, model: "fixture", metadata: session.metadata,

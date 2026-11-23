@@ -4,12 +4,13 @@ import { useAppearance } from "@renderer/components/appearance/appearance-provid
 import { Button } from "@renderer/components/ui/button"
 import { Spinner } from "@renderer/components/ui/spinner"
 import { DOCUMENT_PREVIEW_URL } from "@shared/document-preview"
-import type { WorkspaceReadFileResult } from "@shared/workspace-types"
 
 export function LocalDocumentPreview({
-  preview,
+  name,
+  bytes,
 }: {
-  preview: WorkspaceReadFileResult
+  name: string
+  bytes: ArrayBuffer
 }): React.JSX.Element {
   const frame = useRef<HTMLIFrameElement>(null)
   const section = useRef<HTMLElement>(null)
@@ -27,8 +28,8 @@ export function LocalDocumentPreview({
       frame.current?.contentWindow?.postMessage(
         {
           type: "document:open",
-          name: preview.name,
-          bytes: preview.documentPreview?.bytes,
+          name,
+          bytes,
           colors: style
             ? {
                 background: style.backgroundColor,
@@ -64,17 +65,17 @@ export function LocalDocumentPreview({
       window.clearTimeout(timeout)
       window.removeEventListener("message", receive)
     }
-  }, [preview, revision, resolvedTheme])
+  }, [name, bytes, revision, resolvedTheme])
 
   return (
     <section
       ref={section}
       className="relative flex h-full min-h-0 flex-col border-border bg-muted/30 text-foreground"
-      aria-label={`${preview.name} 只读预览`}
+      aria-label={`${name} 只读预览`}
     >
       <iframe
         ref={frame}
-        title={`${preview.name} 文档内容`}
+        title={`${name} 文档内容`}
         src={DOCUMENT_PREVIEW_URL}
         sandbox="allow-scripts"
         referrerPolicy="no-referrer"

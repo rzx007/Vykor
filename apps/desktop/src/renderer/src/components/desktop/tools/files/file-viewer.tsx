@@ -122,11 +122,6 @@ export function FileViewer({
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col bg-background">
-      {activeTab?.preview.truncated && (
-        <p role="status" className="px-3 py-2 text-sm text-ui-muted">
-          文件较大，仅显示开头的文本。
-        </p>
-      )}
       <div className="min-h-0 min-w-0 flex-1">
         {loadingPath && loadingPath === activePath ? (
           <div className="text-ui-small flex h-full items-center justify-center gap-2 text-ui-muted">
@@ -143,8 +138,12 @@ export function FileViewer({
           ) : (
             <DocumentPlaceholder preview={activeTab.preview} />
           )
-        ) : activeTab?.type === "local-document" ? (
-          <LocalDocumentPreview key={activeTab.preview.path} preview={activeTab.preview} />
+        ) : activeTab?.type === "local-document" && activeTab.preview.documentPreview ? (
+          <LocalDocumentPreview
+            key={activeTab.preview.path}
+            name={activeTab.preview.name}
+            bytes={activeTab.preview.documentPreview.bytes}
+          />
         ) : activeTab?.type === "document" ? (
           <DocumentPlaceholder preview={activeTab.preview} />
         ) : activeTab?.type === "markdown" && viewMode === "preview" ? (

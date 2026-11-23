@@ -40,12 +40,12 @@ describe("prepareFileOpenRequest", () => {
     })
   })
 
-  it("keeps session links in the text viewer and makes paths under the session cwd relative", () => {
-    expect(prepareFileOpenRequest("D:\\worktree\\page.html:42", "D:/worktree", true)).toEqual({
-      openPath: "page.html",
-      placeholderPath: null,
-    })
-    expect(prepareFileOpenRequest("D:/project/page.html", "D:/worktree", true).openPath)
-      .toBe("D:/project/page.html")
+  it("resolves relative session links from the session directory while browsing the project", () => {
+    expect(prepareFileOpenRequest("note.txt", "D:/repo", "D:/repo/task").openPath)
+      .toBe("D:/repo/task/note.txt")
+    expect(prepareFileOpenRequest("page.html", "D:/repo", "D:/repo/task").browserUrl)
+      .toBe("file:///D:/repo/task/page.html")
+    expect(prepareFileOpenRequest("attachment://asset/doc.pdf", "D:/repo", "D:/repo/task").openPath)
+      .toBe("attachment://asset/doc.pdf")
   })
 })

@@ -293,7 +293,11 @@ export class DesktopSessionService {
       : await dialog.showOpenDialog(options)
     const path = result.filePaths[0]
     if (result.canceled || !path) return null
-    return await this.operations.readLocalProjectDirectory(path)
+    return await this.readLocalProjectDirectory(path)
+  }
+
+  readLocalProjectDirectory(path: string): Promise<DesktopProjectDirectory> {
+    return this.operations.readLocalProjectDirectory(path)
   }
 
   async inspectProject(inputPath: string): Promise<DesktopProjectDetails> {

@@ -1,6 +1,7 @@
 import { join } from "node:path"
 
 import type { SafeImageMediaType } from "@shared/safe-image-preview"
+import { documentFormat, MAX_DOCUMENT_PREVIEW_BYTES, type AttachmentDocumentPreview } from "@shared/document-preview"
 import { evaluateInspectedImagePreview } from "../image-preview/inspect-safe-image-layout"
 
 import {
@@ -47,6 +48,19 @@ export class AttachmentFileService {
       )
     }
     return { bytes: exactArrayBuffer(bytes), mediaType }
+  }
+
+  async readDocumentPreview(assetId: string): Promise<AttachmentDocumentPreview> {
+    const client = await this.dependencies.getClient()
+    const asset = await client.attachments.get(assetId)
+    const format = documentFormat(asset.displayName)
+    if (!format || asset.status !== "ready") throw serviceError("attachment_preview_unsupported")
+    const limit = MAX_DOCUMENT_PREVIEW_BYTES
+    if (!asset.sizeBytes || asset.sizeBytes > limit) throw serviceError("attachment_preview_too_large")
+    const response = await client.attachments.download(assetId)
+    const bytes = await readResponseBytes(response, limit)
+    if (bytes.byteLength === 0) throw serviceError("attachment_preview_unsupported")
+    return { name: asset.displayName, format, bytes: exactArrayBuffer(bytes) }
   }
 
   async openAttachment(assetId: string): Promise<void> {
@@ -124,15 +138,19 @@ async function readResponseBytes(response: Response, maxBytes: number): Promise<
   const reader = response.body.getReader()
   const chunks: Uint8Array[] = []
   let totalBytes = 0
-  for (; ;) {
-    const result = await reader.read()
-    if (result.done) break
-    totalBytes += result.value.byteLength
-    if (totalBytes > maxBytes) {
-      await reader.cancel()
-      throw serviceError("attachment_preview_too_large")
+  try {
+    for (;;) {
+      const result = await reader.read()
+      if (result.done) break
+      totalBytes += result.value.byteLength
+      if (totalBytes > maxBytes) {
+        await reader.cancel().catch(() => undefined)
+        throw serviceError("attachment_preview_too_large")
+      }
+      chunks.push(result.value)
     }
-    chunks.push(result.value)
+  } finally {
+    reader.releaseLock()
   }
   const bytes = new Uint8Array(totalBytes)
   let offset = 0

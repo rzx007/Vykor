@@ -27,6 +27,7 @@ export type UtilityTool =
   | "workflows"
   | "plugin-app"
   | "image"
+  | "attachment"
 
 export type UtilityToolRequest = Extract<
   UtilityTool,
@@ -44,6 +45,7 @@ export type UtilityTab = {
   terminalId?: string
   imageSource?: ImageSource
   imageGallery?: ImageGallery
+  attachmentAssetId?: string
 }
 
 export const utilityToolMeta: Record<
@@ -59,6 +61,7 @@ export const utilityToolMeta: Record<
   workflows: { icon: GitBranch, label: "编排" },
   "plugin-app": { icon: PanelsTopLeft, label: "应用" },
   image: { icon: FileImage, label: "图片" },
+  attachment: { icon: FileText, label: "文档附件" },
 }
 
 export const utilityToolOrder: UtilityTool[] = [

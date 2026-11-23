@@ -285,6 +285,7 @@ export const IpcChannels = {
   sessionSearch: "session:search",
   sessionDaemonStatus: "session:daemon-status",
   sessionChooseProject: "session:choose-project",
+  sessionReadLocalProjectDirectory: "session:read-local-project-directory",
   sessionInspectProject: "session:inspect-project",
   sessionListCommands: "session:list-commands",
   sessionListContextPlugins: "session:list-context-plugins",
@@ -340,6 +341,7 @@ export const IpcChannels = {
   attachmentDiscardDraft: "attachment:discard-draft",
   attachmentDeleteUnreferenced: "attachment:delete-unreferenced",
   attachmentReadPreview: "attachment:read-preview",
+  attachmentReadDocumentPreview: "attachment:read-document-preview",
   attachmentOpen: "attachment:open",
   attachmentSaveAs: "attachment:save-as",
   attachmentStorageScan: "attachment:storage-scan",
@@ -780,6 +782,7 @@ export interface IpcInvokeMap
   }
   [IpcChannels.sessionDaemonStatus]: { args: []; result: DesktopDaemonStatus }
   [IpcChannels.sessionChooseProject]: { args: []; result: DesktopProjectDirectory | null }
+  [IpcChannels.sessionReadLocalProjectDirectory]: { args: [path: string]; result: DesktopProjectDirectory }
   [IpcChannels.sessionInspectProject]: {
     args: [path: string]
     result: DesktopProjectDetails
@@ -978,6 +981,10 @@ export interface IpcInvokeMap
   [IpcChannels.attachmentReadPreview]: {
     args: [input: DesktopAttachmentAssetInput]
     result: DesktopAttachmentPreview
+  }
+  [IpcChannels.attachmentReadDocumentPreview]: {
+    args: [input: DesktopAttachmentAssetInput]
+    result: import("./document-preview").AttachmentDocumentPreview
   }
   [IpcChannels.attachmentOpen]: {
     args: [input: DesktopAttachmentAssetInput]

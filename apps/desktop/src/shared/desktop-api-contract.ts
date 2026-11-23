@@ -317,6 +317,7 @@ export type DesktopAPI = {
       input: DesktopAttachmentAssetInput
     ) => Promise<{ deleted: boolean; inUse: boolean }>
     readPreview: (input: DesktopAttachmentAssetInput) => Promise<DesktopAttachmentPreview>
+    readDocumentPreview: (input: DesktopAttachmentAssetInput) => Promise<import("./document-preview").AttachmentDocumentPreview>
     open: (input: DesktopAttachmentAssetInput) => Promise<void>
     saveAs: (input: DesktopAttachmentAssetInput) => Promise<{ saved: boolean }>
     scanStorage: () => Promise<AttachmentStorageReport>
@@ -498,6 +499,7 @@ export type DesktopAPI = {
     search: (input: SearchSessionsOptions) => Promise<DesktopSessionSearchResult[]>
     daemonStatus: () => Promise<DesktopDaemonStatus>
     chooseProject: () => Promise<DesktopProjectDirectory | null>
+    readLocalProjectDirectory: (path: string) => Promise<DesktopProjectDirectory>
     inspectProject: (path: string) => Promise<DesktopProjectDetails>
     listCommands: (cwd: string) => Promise<DesktopCommandCatalogEntry[]>
     listContextPlugins: (cwd: string) => Promise<DesktopPluginCatalogEntry[]>

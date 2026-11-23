@@ -273,6 +273,8 @@ export const desktopAPI = {
     ) => invoke(IpcChannels.attachmentDeleteUnreferenced, input),
     readPreview: (input: IpcInvokeMap[typeof IpcChannels.attachmentReadPreview]["args"][0]) =>
       invoke(IpcChannels.attachmentReadPreview, input),
+    readDocumentPreview: (input: IpcInvokeMap[typeof IpcChannels.attachmentReadDocumentPreview]["args"][0]) =>
+      invoke(IpcChannels.attachmentReadDocumentPreview, input),
     open: (input: IpcInvokeMap[typeof IpcChannels.attachmentOpen]["args"][0]) =>
       invoke(IpcChannels.attachmentOpen, input),
     saveAs: (input: IpcInvokeMap[typeof IpcChannels.attachmentSaveAs]["args"][0]) =>
@@ -597,6 +599,7 @@ export const desktopAPI = {
       invoke(IpcChannels.sessionSearch, input),
     daemonStatus: () => invoke(IpcChannels.sessionDaemonStatus),
     chooseProject: () => invoke(IpcChannels.sessionChooseProject),
+    readLocalProjectDirectory: (path: string) => invoke(IpcChannels.sessionReadLocalProjectDirectory, path),
     inspectProject: (path: string) => invoke(IpcChannels.sessionInspectProject, path),
     listCommands: (cwd: string) => invoke(IpcChannels.sessionListCommands, cwd),
     listContextPlugins: (cwd: string) => invoke(IpcChannels.sessionListContextPlugins, cwd),

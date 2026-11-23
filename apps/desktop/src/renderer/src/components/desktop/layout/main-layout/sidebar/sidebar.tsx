@@ -185,7 +185,7 @@ export function Sidebar({
     setArchiveMode(false)
     void (async () => {
       await startNewConversation()
-      if (project) await selectProject(project)
+      if (project) void selectProject(project).catch(() => undefined)
       onOpenConversation(null)
     })()
   }

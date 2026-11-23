@@ -13,7 +13,7 @@
 - `session-subscription-service.ts` 保存窗口对应的会话订阅和推送状态。服务入口接到连接失效通知后清除订阅；活动订阅的连接替换由 `activitySubscriptions` 处理。
 - `session-operation-input.ts` 校验操作输入；`runtime-selection.ts` 解析桌面默认模型选择。其余读取和转换辅助文件放在本目录对应功能旁。
 
-`chooseProject` 通过系统弹窗返回本机目录与 Git 分支信息。桌面创建会话前调用 `inspectProject` 让 daemon 识别项目，再将项目 ID 交给 `createSession`。
+`chooseProject` 通过系统弹窗选择目录，通过 `readLocalProjectDirectory` 读取本机 Git 分支。打开侧栏已登记的项目也使用本机分支读取入口。新目录在创建 Agent 会话前调用 `inspectProject`，用 daemon 返回的项目 ID 创建会话。
 
 ## 新增代码和测试
 

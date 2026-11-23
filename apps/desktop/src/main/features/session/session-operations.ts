@@ -93,7 +93,8 @@ export {
 const DESKTOP_SESSION_COMMAND_NAMES = new Set(["/compact", "/goal", "/status", "/skills"])
 
 export class SessionOperations {
-  async readLocalProjectDirectory(path: string) {
+  async readLocalProjectDirectory(inputPath: string) {
+    const path = resolveRequiredPath(inputPath)
     try {
       const branches = await listLocalBranches(path)
       const branch = await execGit(path, ["symbolic-ref", "--quiet", "--short", "HEAD"])

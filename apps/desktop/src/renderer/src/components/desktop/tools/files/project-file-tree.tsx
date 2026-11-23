@@ -19,24 +19,26 @@ export function ProjectFileTree({
   onSelect,
   onRenderFile,
   onActionError,
-  onExpandDirectory,
 }: {
-  rootPath?: string
+  rootPath: string
   paths: string[]
   selectedPath: string | null
   onSelect: (path: string) => void
   onRenderFile: (path: string) => void
   onActionError: (error: unknown) => void
-  onExpandDirectory?: (path: string) => void
 }): React.JSX.Element {
   const preparedInput = useMemo(
-    () => prepareFileTreeInput(paths, { flattenEmptyDirectories: !onExpandDirectory }),
-    [paths, onExpandDirectory]
+    () => prepareFileTreeInput(paths, { flattenEmptyDirectories: true }),
+    [paths]
   )
+  const onSelectRef = useRef(onSelect)
+  useLayoutEffect(() => {
+    onSelectRef.current = onSelect
+  }, [onSelect])
   const { model } = useFileTree({
     icons: documentTreeIcons,
     density: "compact",
-    flattenEmptyDirectories: !onExpandDirectory,
+    flattenEmptyDirectories: true,
     fileTreeSearchMode: "hide-non-matches",
     initialExpansion: "closed",
     initialVisibleRowCount: 36,
@@ -47,7 +49,7 @@ export function ProjectFileTree({
     stickyFolders: true,
     onSelectionChange: (selectedPaths) => {
       const nextPath = selectedPaths[0]
-      if (nextPath) onSelect(nextPath)
+      if (nextPath) onSelectRef.current(nextPath)
     },
     unsafeCSS: `
       :host {
@@ -88,26 +90,13 @@ export function ProjectFileTree({
   const search = useFileTreeSearch(model)
 
   useEffect(() => {
-    const initialExpandedPaths = onExpandDirectory
-      ? model.getVisibleRows(0, model.getVisibleCount()).filter((row) => row.isExpanded).map((row) => row.path)
-      : []
-    model.resetPaths({ preparedInput, initialExpandedPaths })
-  }, [model, onExpandDirectory, preparedInput])
-
-  useEffect(() => {
-    if (!onExpandDirectory) return
-    return model.subscribe(() => {
-      for (const row of model.getVisibleRows(0, model.getVisibleCount())) {
-        if (row.kind === "directory" && row.isExpanded) onExpandDirectory(row.path.replace(/\/$/, ""))
-      }
-    })
-  }, [model, onExpandDirectory])
+    model.resetPaths({ preparedInput, initialExpandedPaths: [] })
+  }, [model, preparedInput])
 
   const handleContextAction = async (
     action: FileTreeAction,
     item: ContextMenuItem
   ): Promise<void> => {
-    if (!rootPath) return
     try {
       if (action === "reveal") {
         await window.desktop.workspace.revealPath({ rootPath, path: item.path })
@@ -167,7 +156,7 @@ export function ProjectFileTree({
       <div className="min-h-0 flex-1">
         <FileTree
           model={model}
-          renderContextMenu={rootPath ? (item, context) => (
+          renderContextMenu={(item, context) => (
             <FileTreeContextMenu
               item={item}
               rootPath={rootPath}
@@ -179,7 +168,7 @@ export function ProjectFileTree({
                 void handleContextAction(action, item)
               }}
             />
-          ) : undefined}
+          )}
           style={{ height: "100%" }}
         />
       </div>

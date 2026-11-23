@@ -128,6 +128,10 @@ export class DesktopAttachmentService {
     return this.files.readPreview(assetId)
   }
 
+  readDocumentPreview(assetId: string) {
+    return this.files.readDocumentPreview(assetId)
+  }
+
   openAttachment(assetId: string): Promise<void> {
     return this.files.openAttachment(assetId)
   }

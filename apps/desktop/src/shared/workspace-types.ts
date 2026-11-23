@@ -1,9 +1,9 @@
 import type { SafeImageMediaType } from "./safe-image-preview"
 import type { LocalDocumentPreview } from "./document-preview"
 
-export type WorkspaceListFilesInput =
-  | { rootPath: string; sessionId?: never }
-  | { sessionId: string; rootPath?: never; path?: string }
+export interface WorkspaceListFilesInput {
+  rootPath: string
+}
 
 export interface WorkspaceFileEntry {
   path: string
@@ -12,21 +12,21 @@ export interface WorkspaceFileEntry {
 }
 
 export interface WorkspaceListFilesResult {
-  rootPath?: string
+  rootPath: string
   entries: WorkspaceFileEntry[]
-  truncated?: boolean
 }
 
-export type WorkspaceReadFileInput = WorkspaceListFilesInput & { path: string }
-
-export interface WorkspaceWriteFileInput {
+export interface WorkspaceReadFileInput {
   rootPath: string
   path: string
+}
+
+export interface WorkspaceWriteFileInput extends WorkspaceReadFileInput {
   originalContent: string
   content: string
 }
 
-export type WorkspaceFileScope = "project" | "extra-root" | "session"
+export type WorkspaceFileScope = "project" | "extra-root"
 export type WorkspaceImagePreviewError = "image_too_large" | "image_unsupported"
 
 export interface WorkspaceReadFileResult {
@@ -37,7 +37,6 @@ export interface WorkspaceReadFileResult {
   size: number
   binary: boolean
   content: string | null
-  truncated?: boolean
   scope: WorkspaceFileScope
   relativePath: string
   rootLabel: string

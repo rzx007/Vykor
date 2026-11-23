@@ -32,6 +32,7 @@ export type UtilityPanelRuntimeState = {
 export type PersistedFileTabsByScope = Record<
   string,
   {
+    rootPath?: string
     activePath: string | null
     paths: string[]
   }
@@ -121,7 +122,11 @@ export function parsePersistedFileTabs(raw: string | null): PersistedFileTabsByS
         ? record.paths.filter((path): path is string => typeof path === "string")
         : []
       const activePath = typeof record.activePath === "string" ? record.activePath : null
-      if (paths.length > 0) result[scopeId] = { activePath, paths }
+      if (paths.length > 0) result[scopeId] = {
+        ...(typeof record.rootPath === "string" && record.rootPath ? { rootPath: record.rootPath } : {}),
+        activePath,
+        paths,
+      }
     }
     return result
   } catch {

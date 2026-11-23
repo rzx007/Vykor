@@ -93,6 +93,7 @@ function fakeService(): AttachmentIpcService {
     discardDraft: vi.fn(async () => undefined),
     deleteUnreferenced: vi.fn(async () => ({ deleted: true, inUse: false })),
     readPreview: vi.fn(async () => ({ bytes: new ArrayBuffer(0), mediaType: "image/png" })),
+    readDocumentPreview: vi.fn(async () => ({ name: "document.pdf", format: "pdf" as const, bytes: new ArrayBuffer(0) })),
     openAttachment: vi.fn(async () => undefined),
     saveAs: vi.fn(async () => ({ saved: true })),
     scanStorage: vi.fn(async () => ({ summary: {} as never, issues: [] })),

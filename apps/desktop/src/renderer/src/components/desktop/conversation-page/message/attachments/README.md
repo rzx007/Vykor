@@ -10,6 +10,7 @@
 
 ## 主要文件
 
+- [attachment-document-panel.tsx](attachment-document-panel.tsx)：按附件 ID 获取文档内容并复用沙箱文档预览组件。
 - [message-attachment.tsx](message-attachment.tsx)
 - [image-generation-message.tsx](image-generation-message.tsx)
 - [read-image-preview.tsx](read-image-preview.tsx)

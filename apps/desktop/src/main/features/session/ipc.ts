@@ -86,6 +86,10 @@ export const sessionIpcContribution: IpcContribution = {
         handler: (event) => desktopSessionService.chooseProject(event.sender),
       },
       {
+        channel: IpcChannels.sessionReadLocalProjectDirectory,
+        handler: (_event, path) => desktopSessionService.readLocalProjectDirectory(String(path ?? "")),
+      },
+      {
         channel: IpcChannels.sessionInspectProject,
         handler: (_event, path) => desktopSessionService.inspectProject(String(path ?? "")),
       },

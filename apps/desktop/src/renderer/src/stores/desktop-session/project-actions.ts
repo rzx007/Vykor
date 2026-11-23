@@ -141,7 +141,7 @@ export function createProjectActions(context: DesktopStoreContext): ProjectActio
       })
       const operationId = beginProjectOperation(project.id, "select-project")
       try {
-        const details = await window.desktop.sessions.inspectProject(project.path)
+        const details = await window.desktop.sessions.readLocalProjectDirectory(project.path)
         if (
           !isCurrentProjectOperation(project.id, operationId) ||
           !projectDetailsCoordinator.ownsSelection(selectionGeneration) ||
@@ -151,12 +151,10 @@ export function createProjectActions(context: DesktopStoreContext): ProjectActio
           return
         }
         set((state) => ({
-          projects: upsertProject(state.projects, details.project),
-          selectedProject: details.project,
-          selectedProjectGit: details.git ?? Boolean(details.branch || details.branches?.length),
+          selectedProjectGit: details.git,
           selectedProjectGitCheckedAt: Date.now(),
           branch: details.branch,
-          branches: details.branches ?? [],
+          branches: details.branches,
           projectOperations: replaceProjectOperationBucket(
             state.projectOperations,
             project.id,

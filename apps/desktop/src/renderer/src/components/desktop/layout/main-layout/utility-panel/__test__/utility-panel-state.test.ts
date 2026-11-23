@@ -116,12 +116,14 @@ describe("utility panel state", () => {
       parsePersistedFileTabs(
         JSON.stringify({
           "session:one": { activePath: "README.md", paths: ["README.md", 42] },
+          "session:root": { rootPath: "D:/repo", activePath: "a.txt", paths: ["a.txt"] },
           "session:empty": { activePath: null, paths: [] },
           invalid: "not-an-object",
         })
       )
     ).toEqual({
       "session:one": { activePath: "README.md", paths: ["README.md"] },
+      "session:root": { rootPath: "D:/repo", activePath: "a.txt", paths: ["a.txt"] },
     })
   })
 
