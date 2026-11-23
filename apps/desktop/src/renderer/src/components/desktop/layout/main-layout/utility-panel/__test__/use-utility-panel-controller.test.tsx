@@ -35,7 +35,8 @@ afterEach(() => {
 function mount(
   maximized: boolean,
   initialLayout: Layout,
-  groupElement: HTMLDivElement | null = null
+  groupElement: HTMLDivElement | null = null,
+  localDirectory?: { id: string }
 ) {
   writeUtilityPanelViewStates({
     "session:chat": { open: true, maximized, layout: { conversation: 60, utility: 40 } },
@@ -74,7 +75,8 @@ function mount(
   const element = { current: groupElement }
   const options = {
     activeSessionId: "chat",
-    selectedProjectId: null,
+    selectedProjectId: localDirectory?.id ?? null,
+    localDirectory,
     sessionIds: ["chat"],
     defaultLayout: { conversation: 50, utility: 50 },
     collapsedLayout: { conversation: 100, utility: 0 },
@@ -100,6 +102,19 @@ function mount(
       }),
   }
 }
+
+it("opens a message file in its session while keeping the selected local folder reachable", () => {
+  const workspace = mount(false, { conversation: 100, utility: 0 }, null, { id: "local" })
+  expect(workspace.controller().scopeId).toBe("draft:local")
+  act(() => workspace.controller().openFile("same.txt", 4, "chat"))
+  expect(workspace.controller().scopeId).toBe("session:chat")
+  expect(workspace.controller().open).toBe(true)
+  expect(workspace.controller().fileOpenRequest).toMatchObject({ path: "same.txt", line: 4 })
+  act(() => workspace.controller().openTool("files"))
+  expect(workspace.controller().scopeId).toBe("draft:local")
+  expect(workspace.controller().toolOpenRequest?.tool).toBe("files")
+  expect(workspace.controller().fileOpenRequest).toBeNull()
+})
 
 it("opens image requests in the originating scope and keeps successive requests unique", () => {
   const workspace = mount(false, { conversation: 100, utility: 0 })

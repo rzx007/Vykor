@@ -1396,13 +1396,13 @@ describe("desktop session actions", () => {
       workspaceMode: "project",
       cwd: projectB.path,
     }
-    let resolveChoose!: (value: ReturnType<typeof projectDetails>) => void
+    let resolveChoose!: (value: { path: string; git: boolean; branch: null; branches: string[] }) => void
     vi.stubGlobal("window", {
       desktop: { businessData: businessDataFixture,
         sessions: {
           chooseProject: vi.fn(
             () =>
-              new Promise<ReturnType<typeof projectDetails>>((resolve) => {
+              new Promise<Parameters<typeof resolveChoose>[0]>((resolve) => {
                 resolveChoose = resolve
               })
           ),
@@ -1420,7 +1420,7 @@ describe("desktop session actions", () => {
 
     const choosing = useDesktopSessionStore.getState().chooseProject()
     await useDesktopSessionStore.getState().openSession(view.session.id)
-    resolveChoose(projectDetails(projectA, "branch-a"))
+    resolveChoose({ path: projectA.path, git: false, branch: null, branches: [] })
     await choosing
 
     expect(useDesktopSessionStore.getState()).toMatchObject({
@@ -1431,8 +1431,23 @@ describe("desktop session actions", () => {
     })
   })
 
-  it("binds the first submission and create operation to the created session runtime", async () => {
-    const session = emptySessionView("session-created").session
+  it("registers a local folder before creating its worktree session and binds the first submission", async () => {
+    const project = {
+      id: "registered-project",
+      name: "repo",
+      path: "D:/code/repo",
+      lastOpenedAt: 100,
+      available: true,
+    }
+    const view = emptySessionView("session-created")
+    const session = {
+      ...view.session,
+      projectId: project.id,
+      cwd: "D:/code/worktree",
+      workspaceMode: "project" as const,
+    }
+    const inspectProject = vi.fn(async () => projectDetails(project, "main"))
+    const create = vi.fn(async () => session)
     let resolvePrompt!: () => void
     let operationsWhenOpening: ReturnType<
       typeof useDesktopSessionStore.getState
@@ -1440,12 +1455,13 @@ describe("desktop session actions", () => {
     vi.stubGlobal("window", {
       desktop: { businessData: businessDataFixture,
         sessions: {
-          create: vi.fn(async () => session),
+          inspectProject,
+          create,
           open: vi.fn(async () => {
             operationsWhenOpening = {
               ...useDesktopSessionStore.getState().sessionRuntimes[session.id]?.operations,
             }
-            return emptySessionView(session.id)
+            return { ...view, session }
           }),
           sendPrompt: vi.fn(
             () =>
@@ -1457,10 +1473,20 @@ describe("desktop session actions", () => {
       },
     })
     resetNewConversationState()
+    useDesktopSessionStore.setState({
+      workspaceMode: "project",
+      selectedProject: { ...project, id: "local:repo", localOnly: true },
+      projects: [],
+    })
 
-    const starting = useDesktopSessionStore.getState().startSession("first prompt")
+    const starting = useDesktopSessionStore.getState().startSession("first prompt", { taskLocation: "worktree" })
     await vi.waitFor(() => expect(resolvePrompt).toBeTypeOf("function"))
 
+    expect(inspectProject).toHaveBeenNthCalledWith(1, project.path)
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: project.id, cwd: project.path, taskLocation: "worktree" })
+    )
+    expect(useDesktopSessionStore.getState().selectedProject).toEqual(project)
     const runtime = useDesktopSessionStore.getState().sessionRuntimes[session.id]
     expect(Object.values(runtime?.pendingPromptSubmissions ?? {})).toContainEqual(
       expect.objectContaining({ items: [{ type: "text" as const, text: "first prompt" }],

@@ -51,6 +51,7 @@ export interface DesktopProject {
   pinnedAt?: number
   defaultShell?: string
   available: boolean
+  localOnly?: boolean
 }
 
 export interface DesktopModel {
@@ -249,6 +250,8 @@ export interface DesktopProjectDetails {
   branch: string | null
   branches: string[]
 }
+
+export type DesktopProjectDirectory = Omit<DesktopProjectDetails, "project"> & { path: string }
 
 export type DesktopCommandKind = "session" | "template"
 export type DesktopCommandSelection = "execute" | "submenu" | "insert"

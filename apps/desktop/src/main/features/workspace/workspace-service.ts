@@ -67,6 +67,18 @@ class WorkspaceService {
   }
 
   async listFiles(input: WorkspaceListFilesInput): Promise<WorkspaceListFilesResult> {
+    if (input.sessionId !== undefined) {
+      const client = await desktopSessionService.agentClient()
+      const result = await client.files.list(input.sessionId, { path: input.path, limit: 1000 })
+      return {
+        entries: result.entries.flatMap<WorkspaceFileEntry>(({ path, kind, sizeBytes }) =>
+          kind === "directory"
+            ? [{ path: `${path}/`, type: "directory" as const }]
+            : kind === "file" ? [{ path, type: "file" as const, size: sizeBytes }] : []
+        ),
+        truncated: result.truncated,
+      }
+    }
     const rootPath = await resolveDirectory(input.rootPath)
     const entries: WorkspaceFileEntry[] = []
 
@@ -109,6 +121,25 @@ class WorkspaceService {
 
   async readFile(input: WorkspaceReadFileInput): Promise<WorkspaceReadFileResult> {
     if (input.path.startsWith("attachment://")) return await this.readDocumentAttachment(input)
+    if (input.sessionId !== undefined) {
+      const client = await desktopSessionService.agentClient()
+      const { path, content, truncated } = await client.files.readText(input.sessionId, input.path)
+      return {
+        path,
+        name: posix.basename(path),
+        language: languageFromPath(path),
+        size: Buffer.byteLength(content),
+        binary: false,
+        content,
+        truncated,
+        scope: "session",
+        relativePath: path,
+        rootLabel: "会话工作目录",
+        previewBytes: null,
+        mediaType: null,
+        imagePreviewError: null,
+      }
+    }
     const resolved = await this.resolveAllowedFile(input.rootPath, input.path, true)
     const info = await stat(resolved.absolutePath)
     if (!info.isFile()) throw new Error("只能预览文件。")

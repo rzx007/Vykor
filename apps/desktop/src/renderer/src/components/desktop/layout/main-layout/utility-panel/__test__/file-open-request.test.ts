@@ -39,4 +39,13 @@ describe("prepareFileOpenRequest", () => {
       placeholderPath: null,
     })
   })
+
+  it("keeps session links in the text viewer and makes paths under the session cwd relative", () => {
+    expect(prepareFileOpenRequest("D:\\worktree\\page.html:42", "D:/worktree", true)).toEqual({
+      openPath: "page.html",
+      placeholderPath: null,
+    })
+    expect(prepareFileOpenRequest("D:/project/page.html", "D:/worktree", true).openPath)
+      .toBe("D:/project/page.html")
+  })
 })

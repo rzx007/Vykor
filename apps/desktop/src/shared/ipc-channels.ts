@@ -41,6 +41,7 @@ import type {
   DesktopBootstrapData,
   DesktopDaemonStatus,
   DesktopProjectDetails,
+  DesktopProjectDirectory,
   DesktopCommandCatalogEntry,
   DesktopPluginCatalogEntry,
   CompactDesktopSessionInput,
@@ -778,7 +779,7 @@ export interface IpcInvokeMap
     result: DesktopSessionSearchResult[]
   }
   [IpcChannels.sessionDaemonStatus]: { args: []; result: DesktopDaemonStatus }
-  [IpcChannels.sessionChooseProject]: { args: []; result: DesktopProjectDetails | null }
+  [IpcChannels.sessionChooseProject]: { args: []; result: DesktopProjectDirectory | null }
   [IpcChannels.sessionInspectProject]: {
     args: [path: string]
     result: DesktopProjectDetails

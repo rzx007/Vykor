@@ -93,6 +93,17 @@ export {
 const DESKTOP_SESSION_COMMAND_NAMES = new Set(["/compact", "/goal", "/status", "/skills"])
 
 export class SessionOperations {
+  async readLocalProjectDirectory(path: string) {
+    try {
+      const branches = await listLocalBranches(path)
+      const branch = await execGit(path, ["symbolic-ref", "--quiet", "--short", "HEAD"])
+        .then(({ stdout }) => stdout.trim() || null, () => null)
+      return { path, git: true, branch, branches }
+    } catch {
+      return { path, git: false, branch: null, branches: [] }
+    }
+  }
+
   async inspectProject(
     client: ProjectInspectionClient,
     inputPath: string

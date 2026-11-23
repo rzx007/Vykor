@@ -1,7 +1,7 @@
 import type { CreateDesktopSessionInput } from "@shared/session-types"
 import { formatBrowserAnnotationContext } from "@renderer/components/desktop/tools/browser/browser-annotation-context"
 import { errorMessage } from "./error-state"
-import { formatSessionTitle, upsertSession } from "./helpers"
+import { formatSessionTitle, resolveProjectForSession, upsertSession } from "./helpers"
 import {
   acknowledgeOperation,
   beginOperation,
@@ -100,12 +100,15 @@ export function createStartSessionAction(
       }
     })
     try {
+      const project = workspaceMode === "project" && selectedProject
+        ? await resolveProjectForSession(selectedProject, set)
+        : null
       const sessionInput: CreateDesktopSessionInput =
-        workspaceMode === "project" && selectedProject
+        workspaceMode === "project" && project
           ? {
-              projectId: selectedProject.id,
+              projectId: project.id,
               ...(options?.taskLocation ? { taskLocation: options.taskLocation } : {}),
-              cwd: selectedProject.path,
+              cwd: selectedProject?.path ?? project.path,
               model,
               ...(provider ? { provider } : {}),
               permissionMode: selectedPermissionMode,

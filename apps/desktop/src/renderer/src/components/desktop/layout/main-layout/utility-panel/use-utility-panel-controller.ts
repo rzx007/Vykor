@@ -29,6 +29,7 @@ type ScopedFileRequest = {
   scopeId: string
   path: string
   line?: number
+  localDirectory?: { id: string }
 }
 
 type ScopedTerminalRequest = {
@@ -52,6 +53,7 @@ type ScopedReviewRequest = DesktopGitReviewRequest & {
 type UseUtilityPanelControllerOptions = {
   activeSessionId: string | null
   selectedProjectId: string | null
+  localDirectory?: { id: string }
   sessionIds: string[]
   defaultLayout: Layout
   collapsedLayout: Layout
@@ -78,7 +80,7 @@ export type UtilityPanelController = {
   collapse: () => void
   toggle: () => void
   toggleMaximized: () => void
-  openFile: (path: string, line?: number) => void
+  openFile: (path: string, line?: number, sessionId?: string) => void
   openBrowser: (url: string) => void
   openImage: (source: ImageSource, gallery?: ImageGallery, expectedPanelScopeId?: string) => void
   openReview: (path?: string, scope?: DesktopGitDiffScope, rootPath?: string) => void
@@ -98,6 +100,7 @@ function isOpenLayout(layout: Layout | null | undefined): layout is Layout {
 export function useUtilityPanelController({
   activeSessionId,
   selectedProjectId,
+  localDirectory,
   sessionIds,
   defaultLayout,
   collapsedLayout,
@@ -108,13 +111,20 @@ export function useUtilityPanelController({
   onCollapseSidebar,
   beforeCollapseRef,
 }: UseUtilityPanelControllerOptions): UtilityPanelController {
-  const scopeId = utilityPanelScopeId(activeSessionId, selectedProjectId)
+  const [fileRequest, setFileRequest] = useState<ScopedFileRequest | null>(null)
+  const [toolRequest, setToolRequest] = useState<ScopedToolRequest | null>(null)
+  const sessionScope = utilityPanelScopeId(activeSessionId, selectedProjectId)
+  const localScope = utilityPanelScopeId(null, selectedProjectId)
+  const sessionFileRequested = activeSessionId && fileRequest?.scopeId === sessionScope &&
+    fileRequest.localDirectory === localDirectory
+  const scopeId = localDirectory && !sessionFileRequested ? localScope : sessionScope
   const [initialState] = useState(() => {
     const states = readUtilityPanelViewStates()
     return { states, view: readUtilityPanelViewState(states, scopeId) }
   })
   const panelStatesRef = useRef<UtilityPanelViewStates>(initialState.states)
   const activeScopeIdRef = useRef(scopeId)
+  const pendingOpenScopeRef = useRef<string | null>(null)
   const previousActiveSessionIdRef = useRef(activeSessionId)
   const knownSessionIdsRef = useRef(new Set(sessionIds))
   const previousLayoutRef = useRef<Layout | null>(null)
@@ -124,9 +134,7 @@ export function useUtilityPanelController({
   const [open, setOpen] = useState(initialState.view.open)
   const [maximized, setMaximized] = useState(initialState.view.maximized)
   const [layout, setLayout] = useState<Layout | null>(initialState.view.layout)
-  const [fileRequest, setFileRequest] = useState<ScopedFileRequest | null>(null)
   const [terminalRequest, setTerminalRequest] = useState<ScopedTerminalRequest | null>(null)
-  const [toolRequest, setToolRequest] = useState<ScopedToolRequest | null>(null)
   const [reviewRequest, setReviewRequest] = useState<ScopedReviewRequest | null>(null)
   const [imageRequest, setImageRequest] = useState<(ImageOpenRequest & { scopeId: string }) | null>(
     null
@@ -202,7 +210,9 @@ export function useUtilityPanelController({
     }
 
     activeScopeIdRef.current = scopeId
-    const nextView = readUtilityPanelViewState(panelStatesRef.current, scopeId)
+    const storedView = readUtilityPanelViewState(panelStatesRef.current, scopeId)
+    const nextView = pendingOpenScopeRef.current === scopeId ? { ...storedView, open: true } : storedView
+    pendingOpenScopeRef.current = null
     const nextLayout = nextView.layout ?? defaultLayout
     lastOpenLayoutRef.current = nextLayout
     previousLayoutRef.current = null
@@ -348,11 +358,13 @@ export function useUtilityPanelController({
   }, [defaultLayout, persistActiveView, workspaceGroupRef])
 
   const openFile = useCallback(
-    (path: string, line?: number): void => {
-      restore()
-      setFileRequest({ id: Date.now(), scopeId: activeScopeIdRef.current, path, line })
+    (path: string, line?: number, sessionId?: string): void => {
+      const targetScope = sessionId ? utilityPanelScopeId(sessionId, null) : activeScopeIdRef.current
+      if (targetScope === activeScopeIdRef.current) restore()
+      else pendingOpenScopeRef.current = targetScope
+      setFileRequest({ id: ++toolRequestSequence, scopeId: targetScope, path, line, localDirectory })
     },
-    [restore]
+    [localDirectory, restore]
   )
 
   const openImage = useCallback(
@@ -400,15 +412,19 @@ export function useUtilityPanelController({
 
   const openTool = useCallback(
     (tool: UtilityToolRequest, taskId?: string): void => {
-      restore()
+      const openLocalFiles = tool === "files" && localDirectory
+      const targetScope = openLocalFiles ? localScope : activeScopeIdRef.current
+      if (targetScope === activeScopeIdRef.current) restore()
+      else pendingOpenScopeRef.current = targetScope
+      if (openLocalFiles) setFileRequest(null)
       setToolRequest({
         id: ++toolRequestSequence,
-        scopeId: activeScopeIdRef.current,
+        scopeId: targetScope,
         tool,
         ...(tool === "agents" && taskId ? { taskId } : {}),
       })
     },
-    [restore]
+    [localDirectory, localScope, restore]
   )
 
   useEffect(() => {
@@ -516,7 +532,9 @@ export function useUtilityPanelController({
     open,
     maximized,
     visibleLayout: layout ?? defaultLayout,
-    fileOpenRequest: fileRequest?.scopeId === scopeId ? fileRequest : null,
+    fileOpenRequest: fileRequest?.scopeId === scopeId && fileRequest.localDirectory === localDirectory
+      ? fileRequest
+      : null,
     terminalOpenRequest: terminalRequest?.scopeId === scopeId ? terminalRequest : null,
     toolOpenRequest: toolRequest?.scopeId === scopeId ? toolRequest : null,
     reviewOpenRequest: reviewRequest?.scopeId === scopeId ? reviewRequest : null,

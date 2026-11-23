@@ -28,6 +28,7 @@ import type {
   DesktopPermissionMode,
   DesktopProject,
   DesktopProjectDetails,
+  DesktopProjectDirectory,
   DesktopSessionRecord,
   DesktopSessionLists,
   DesktopSessionSearchResult,
@@ -281,7 +282,7 @@ export class DesktopSessionService {
     return this.connection.getDaemonStatus()
   }
 
-  async chooseProject(webContents: WebContents): Promise<DesktopProjectDetails | null> {
+  async chooseProject(webContents: WebContents): Promise<DesktopProjectDirectory | null> {
     const owner = BrowserWindow.fromWebContents(webContents) ?? undefined
     const options: OpenDialogOptions = {
       title: "选择项目目录",
@@ -292,7 +293,7 @@ export class DesktopSessionService {
       : await dialog.showOpenDialog(options)
     const path = result.filePaths[0]
     if (result.canceled || !path) return null
-    return await this.inspectProject(path)
+    return await this.operations.readLocalProjectDirectory(path)
   }
 
   async inspectProject(inputPath: string): Promise<DesktopProjectDetails> {

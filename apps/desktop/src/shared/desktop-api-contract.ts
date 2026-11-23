@@ -35,6 +35,7 @@ import type {
   DesktopCompactSessionResult,
   DesktopDaemonStatus,
   DesktopProjectDetails,
+  DesktopProjectDirectory,
   DesktopSessionRecord,
   DesktopSessionLists,
   DesktopSessionSearchResult,
@@ -496,7 +497,7 @@ export type DesktopAPI = {
     list: () => Promise<DesktopSessionLists>
     search: (input: SearchSessionsOptions) => Promise<DesktopSessionSearchResult[]>
     daemonStatus: () => Promise<DesktopDaemonStatus>
-    chooseProject: () => Promise<DesktopProjectDetails | null>
+    chooseProject: () => Promise<DesktopProjectDirectory | null>
     inspectProject: (path: string) => Promise<DesktopProjectDetails>
     listCommands: (cwd: string) => Promise<DesktopCommandCatalogEntry[]>
     listContextPlugins: (cwd: string) => Promise<DesktopPluginCatalogEntry[]>

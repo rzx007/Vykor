@@ -13,6 +13,8 @@
 - `session-subscription-service.ts` 保存窗口对应的会话订阅和推送状态。服务入口接到连接失效通知后清除订阅；活动订阅的连接替换由 `activitySubscriptions` 处理。
 - `session-operation-input.ts` 校验操作输入；`runtime-selection.ts` 解析桌面默认模型选择。其余读取和转换辅助文件放在本目录对应功能旁。
 
+`chooseProject` 通过系统弹窗返回本机目录与 Git 分支信息。桌面创建会话前调用 `inspectProject` 让 daemon 识别项目，再将项目 ID 交给 `createSession`。
+
 ## 新增代码和测试
 
 `read-tool-image-preview.ts` 仍只接受后台保存的成功 Read 图片结果；其 Native 历史路径先经 `resolveManagedHistoryPath` 解析并检查真实边界，再执行原图片格式、大小和解码限制。附件卡片使用 assetId，继续走已授权的附件下载流程；不会改写历史正文、工具参数原文或 Shell 命令。

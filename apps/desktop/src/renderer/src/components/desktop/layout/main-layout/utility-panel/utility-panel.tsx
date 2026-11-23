@@ -46,6 +46,7 @@ import type {
 import { useActiveWorkspaceIsGit } from "@renderer/hooks/use-active-workspace-is-git"
 import { cn } from "@renderer/lib/utils"
 import {
+  selectActiveSessionRecord,
   selectActiveWorkspaceProject,
   useDesktopSessionStore,
 } from "@renderer/stores/desktop-session"
@@ -206,10 +207,15 @@ export function UtilityPanel({
     readPersistedUtilityFileTabs
   )
   const workspaceProject = useDesktopSessionStore(selectActiveWorkspaceProject)
-  const selectedProjectPath = workspaceProject?.path
+  const sessionCwd = useDesktopSessionStore((state) => selectActiveSessionRecord(state)?.cwd)
+  const sessionFiles = scopeId.startsWith("session:")
+  const selectedProjectPath = sessionFiles && workspaceProject?.localOnly
+    ? sessionCwd
+    : workspaceProject?.path
+  const fileRequestRoot = sessionFiles ? sessionCwd : selectedProjectPath
   const preparedFileOpenRequest = useMemo(
-    () => fileOpenRequest && prepareFileOpenRequest(fileOpenRequest.path, selectedProjectPath),
-    [fileOpenRequest, selectedProjectPath]
+    () => fileOpenRequest && prepareFileOpenRequest(fileOpenRequest.path, fileRequestRoot, sessionFiles),
+    [fileOpenRequest, fileRequestRoot, sessionFiles]
   )
   const resolvedFileOpenRequest = useMemo(
     () =>
@@ -280,8 +286,7 @@ export function UtilityPanel({
 
   useEffect(() => {
     if (!fileOpenRequest || handledFileRequestId === fileOpenRequest.id) return
-    const prepared = prepareFileOpenRequest(fileOpenRequest.path, selectedProjectPath)
-    if (prepared.placeholderPath || prepared.browserUrl) return
+    if (!preparedFileOpenRequest || preparedFileOpenRequest.placeholderPath || preparedFileOpenRequest.browserUrl) return
     const timer = window.setTimeout(() => {
       setHandledFileRequestId(fileOpenRequest.id)
       leaveImage(() =>
@@ -300,7 +305,7 @@ export function UtilityPanel({
   }, [
     fileOpenRequest,
     handledFileRequestId,
-    selectedProjectPath,
+    preparedFileOpenRequest,
     setActiveTabId,
     setHandledFileRequestId,
     setTabs,

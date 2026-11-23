@@ -11,15 +11,22 @@ vi.mock("@renderer/stores/desktop-session", () => ({
 }))
 vi.mock("../project-file-tree", () => ({
   ProjectFileTree: ({
+    paths,
     onSelect,
     onRenderFile,
+    onExpandDirectory,
   }: {
+    paths: string[]
     onSelect: (path: string) => void
     onRenderFile: (path: string) => void
+    onExpandDirectory?: (path: string) => void
   }) => (
     <>
       <button onClick={() => onSelect("index.html")}>select html</button>
       <button onClick={() => onRenderFile("image.svg")}>render svg</button>
+      {onExpandDirectory && <button onClick={() => onExpandDirectory("nested")}>expand</button>}
+      {paths.includes("nested/note.txt") &&
+        <button onClick={() => onSelect("nested/note.txt")}>open nested file</button>}
     </>
   ),
 }))
@@ -81,7 +88,7 @@ it("opens a requested directory in the file manager instead of reading it as a f
   Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT")
 })
 
-it("opens web files selected in the tree directly in the browser", async () => {
+it.each(["draft:repo", "session:agent"])("opens web files from the source selected by %s", async (scopeId) => {
   ;(
     globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true
@@ -93,36 +100,45 @@ it("opens web files selected in the tree directly in the browser", async () => {
       disconnect = vi.fn()
     }
   )
-  const readFile = vi.fn()
+  const readFile = vi.fn(async ({ path }: { path: string }) => ({
+    path,
+    name: path,
+    content: "agent workspace text",
+    previewBytes: null,
+    mediaType: null,
+    binary: false,
+  }))
+  const listFiles = vi.fn(async ({ path }: { path?: string }) => ({
+    entries: path === "nested" ? [{ path: "nested/note.txt", type: "file" }] : [
+      { path: "index.html", type: "file" },
+      { path: "image.svg", type: "file" },
+    ],
+  }))
   Object.defineProperty(window, "desktop", {
     configurable: true,
     value: {
       workspace: {
-        listFiles: vi.fn(async () => ({
-          entries: [
-            { path: "index.html", type: "file" },
-            { path: "image.svg", type: "file" },
-          ],
-        })),
+        listFiles,
         readFile,
       },
     },
   })
   const onOpenWebDocument = vi.fn()
+  const onFileOpened = vi.fn()
   const host = document.createElement("div")
   document.body.append(host)
   const root = createRoot(host)
   await act(async () => {
     root.render(
       <FilesTool
-        scopeId="test"
+        scopeId={scopeId}
         tabs={[]}
         activePath={null}
         loadingPath={null}
         onActivePathChange={vi.fn()}
         onLoadingPathChange={vi.fn()}
         onOpenFileStart={vi.fn()}
-        onFileOpened={vi.fn()}
+        onFileOpened={onFileOpened}
         restoreActivePath={null}
         restorePaths={[]}
         openRequest={null}
@@ -139,11 +155,33 @@ it("opens web files selected in the tree directly in the browser", async () => {
     buttons[0].click()
     buttons[1].click()
   })
-  expect(onOpenWebDocument.mock.calls).toEqual([
-    ["D:/repo", "index.html"],
-    ["D:/repo", "image.svg"],
-  ])
-  expect(readFile).not.toHaveBeenCalled()
+  if (scopeId === "session:agent") {
+    expect(listFiles).toHaveBeenCalledWith({ sessionId: "agent" })
+    expect(readFile.mock.calls).toEqual([
+      [{ sessionId: "agent", path: "index.html" }],
+      [{ sessionId: "agent", path: "image.svg" }],
+    ])
+    expect(onFileOpened).toHaveBeenCalledWith(
+      expect.objectContaining({ preview: expect.objectContaining({ content: "agent workspace text" }) })
+    )
+    expect(onOpenWebDocument).not.toHaveBeenCalled()
+    expect(listFiles).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      buttons[2].click()
+      buttons[2].click()
+    })
+    expect(listFiles).toHaveBeenLastCalledWith({ sessionId: "agent", path: "nested" })
+    expect(listFiles).toHaveBeenCalledTimes(2)
+    await act(async () => host.querySelectorAll("button")[3].click())
+    expect(readFile).toHaveBeenLastCalledWith({ sessionId: "agent", path: "nested/note.txt" })
+  } else {
+    expect(listFiles).toHaveBeenCalledWith({ rootPath: "D:/repo" })
+    expect(onOpenWebDocument.mock.calls).toEqual([
+      ["D:/repo", "index.html"],
+      ["D:/repo", "image.svg"],
+    ])
+    expect(readFile).not.toHaveBeenCalled()
+  }
   act(() => root.unmount())
   host.remove()
   Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT")

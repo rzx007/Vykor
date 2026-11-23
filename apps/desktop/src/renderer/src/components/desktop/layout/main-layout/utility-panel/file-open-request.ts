@@ -3,7 +3,8 @@ import { isWebDocumentPath } from "@renderer/components/desktop/tools/files/file
 
 export function prepareFileOpenRequest(
   rawPath: string,
-  projectPath: string | undefined
+  projectPath: string | undefined,
+  sessionFiles = false
 ): { openPath: string; placeholderPath: string | null; browserUrl?: string } {
   const path = rawPath
     .trim()
@@ -11,6 +12,15 @@ export function prepareFileOpenRequest(
     .replace(/\\/g, "/")
     .replace(/^\/(?=[a-z]:\/)/i, "")
   const windows = /^[a-z]:\//i.test(path)
+  if (sessionFiles) {
+    const root = projectPath?.replace(/\\/g, "/").replace(/\/$/, "")
+    const prefix = root && `${root}/`
+    const isWithin = prefix && (windows
+      ? path.toLowerCase().startsWith(prefix.toLowerCase())
+      : path.startsWith(prefix))
+    const openPath = prefix && isWithin ? path.slice(prefix.length) : path.replace(/^(?:\.\/)+/, "")
+    return { openPath, placeholderPath: null }
+  }
   if (
     !isWebDocumentPath(path) ||
     path.startsWith("//") ||

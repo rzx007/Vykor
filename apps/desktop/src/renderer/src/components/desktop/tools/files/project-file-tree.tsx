@@ -19,22 +19,24 @@ export function ProjectFileTree({
   onSelect,
   onRenderFile,
   onActionError,
+  onExpandDirectory,
 }: {
-  rootPath: string
+  rootPath?: string
   paths: string[]
   selectedPath: string | null
   onSelect: (path: string) => void
   onRenderFile: (path: string) => void
   onActionError: (error: unknown) => void
+  onExpandDirectory?: (path: string) => void
 }): React.JSX.Element {
   const preparedInput = useMemo(
-    () => prepareFileTreeInput(paths, { flattenEmptyDirectories: true }),
-    [paths]
+    () => prepareFileTreeInput(paths, { flattenEmptyDirectories: !onExpandDirectory }),
+    [paths, onExpandDirectory]
   )
   const { model } = useFileTree({
     icons: documentTreeIcons,
     density: "compact",
-    flattenEmptyDirectories: true,
+    flattenEmptyDirectories: !onExpandDirectory,
     fileTreeSearchMode: "hide-non-matches",
     initialExpansion: "closed",
     initialVisibleRowCount: 36,
@@ -86,13 +88,26 @@ export function ProjectFileTree({
   const search = useFileTreeSearch(model)
 
   useEffect(() => {
-    model.resetPaths({ preparedInput, initialExpandedPaths: [] })
-  }, [model, preparedInput])
+    const initialExpandedPaths = onExpandDirectory
+      ? model.getVisibleRows(0, model.getVisibleCount()).filter((row) => row.isExpanded).map((row) => row.path)
+      : []
+    model.resetPaths({ preparedInput, initialExpandedPaths })
+  }, [model, onExpandDirectory, preparedInput])
+
+  useEffect(() => {
+    if (!onExpandDirectory) return
+    return model.subscribe(() => {
+      for (const row of model.getVisibleRows(0, model.getVisibleCount())) {
+        if (row.kind === "directory" && row.isExpanded) onExpandDirectory(row.path.replace(/\/$/, ""))
+      }
+    })
+  }, [model, onExpandDirectory])
 
   const handleContextAction = async (
     action: FileTreeAction,
     item: ContextMenuItem
   ): Promise<void> => {
+    if (!rootPath) return
     try {
       if (action === "reveal") {
         await window.desktop.workspace.revealPath({ rootPath, path: item.path })
@@ -152,7 +167,7 @@ export function ProjectFileTree({
       <div className="min-h-0 flex-1">
         <FileTree
           model={model}
-          renderContextMenu={(item, context) => (
+          renderContextMenu={rootPath ? (item, context) => (
             <FileTreeContextMenu
               item={item}
               rootPath={rootPath}
@@ -164,7 +179,7 @@ export function ProjectFileTree({
                 void handleContextAction(action, item)
               }}
             />
-          )}
+          ) : undefined}
           style={{ height: "100%" }}
         />
       </div>

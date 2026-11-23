@@ -109,6 +109,26 @@ describe("goal actions", () => {
     }))
   }
 
+  it("registers a newly chosen local folder before creating a session for a goal", async () => {
+    const path = "D:/code/repo"
+    const project = { id: "project-id", path, name: "repo", available: true, lastOpenedAt: 0 }
+    const inspectProject = vi.fn(async () => ({ project, git: false, branch: null, branches: [] }))
+    Object.assign(window.desktop.sessions, { inspectProject })
+    useDesktopSessionStore.setState({
+      workspaceMode: "project",
+      selectedProject: { ...project, id: `local:${path}`, localOnly: true },
+    })
+    useDesktopSessionStore.getState().setGoalMode(NEW_CONVERSATION_SCOPE, true)
+    draft(NEW_CONVERSATION_SCOPE, "完成项目检查")
+    await useDesktopSessionStore.getState().submitGoal(NEW_CONVERSATION_SCOPE)
+
+    expect(inspectProject).toHaveBeenCalledWith(path)
+    expect(window.desktop.sessions.create).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: project.id, cwd: path,
+    }))
+    expect(useDesktopSessionStore.getState().projects).toContainEqual(project)
+  })
+
   it("submits an optional positive total budget and keeps invalid input in the draft", async () => {
     const scope = sessionComposerScope("s1");
     useDesktopSessionStore.getState().setGoalMode(scope, true);

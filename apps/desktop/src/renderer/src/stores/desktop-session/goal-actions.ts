@@ -12,7 +12,7 @@ import {
   sameComposerDocument,
   type ComposerDocument,
 } from "./composer-document"
-import { upsertSession } from "./helpers"
+import { resolveProjectForSession, upsertSession } from "./helpers"
 import type { DesktopStoreContext, GoalActions, GoalComposerState } from "./types"
 
 export const emptyGoalComposer: GoalComposerState = {
@@ -240,11 +240,10 @@ export function createGoalActions({ get, set }: DesktopStoreContext): GoalAction
             workMode: state.selectedWorkMode,
             ...(state.selectedEffort ? { effort: state.selectedEffort } : {}),
           }
-          const session = await window.desktop.sessions.create(
-            state.workspaceMode === "project" && state.selectedProject
-              ? { ...base, projectId: state.selectedProject.id, cwd: state.selectedProject.path }
-              : base
-          )
+          const project = state.workspaceMode === "project" ? state.selectedProject : null
+          const session = await window.desktop.sessions.create(project
+            ? { ...base, projectId: (await resolveProjectForSession(project, set)).id, cwd: project.path }
+            : base)
           sessionId = session.id
           updateComposer(scope, { createdSessionId: sessionId })
           set((current) => ({ sessions: upsertSession(current.sessions, session) }))

@@ -98,12 +98,21 @@ export function createProjectActions(context: DesktopStoreContext): ProjectActio
           finishAppOperation(operationId)
           return
         }
-        projectDetailsCoordinator.beginDetails(details.project.id)
+        const known = get().projects.find((project) => samePath(project.path, details.path))
+        const project: DesktopProject = {
+          id: `local:${details.path}`,
+          name: details.path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || details.path,
+          lastOpenedAt: Date.now(),
+          available: true,
+          ...known,
+          path: details.path,
+          localOnly: true,
+        }
+        projectDetailsCoordinator.beginDetails(project.id)
         set((state) => ({
-          projects: upsertProject(state.projects, details.project),
           workspaceMode: "project",
-          selectedProject: details.project,
-          selectedProjectGit: details.git ?? Boolean(details.branch || details.branches?.length),
+          selectedProject: project,
+          selectedProjectGit: details.git,
           selectedProjectGitCheckedAt: Date.now(),
           branch: details.branch,
           branches: details.branches ?? [],
@@ -181,6 +190,7 @@ export function createProjectActions(context: DesktopStoreContext): ProjectActio
 
     async refreshSelectedProjectGit(options) {
       const { selectedProject, selectedProjectGitCheckedAt } = get()
+      if (selectedProject?.localOnly) return get().selectedProjectGit
       if (!selectedProject) {
         set({
           selectedProjectGit: false,

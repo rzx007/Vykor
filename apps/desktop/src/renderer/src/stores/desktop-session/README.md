@@ -15,6 +15,8 @@
 
 组件从本目录入口导入 `useDesktopSessionStore`；业务代码也保持在本目录。
 
+系统弹窗选中的目录先保存为本机选择，供文件面板立即读取。普通消息和 `/goal` 创建会话前共用 `helpers.ts` 的项目识别入口，用该路径请求 daemon，把返回的项目记录加入 `projects`，再用项目 ID 创建会话。点会话消息里的文件时，文件面板按消息所属会话读取工作目录。
+
 浏览器保存成功的批注进入 `composerDraftsByScope[scope].browserAnnotations`，和正文、附件共用 `new-conversation` 或 `session:<id>` 范围。输入框可修改意见、删除单条或清空待发送批注；这些操作只改变当前草稿包。批注随草稿迁移，并由 `composer-recovery.ts` 在本机校验、保存和恢复；只有批注、没有正文或附件的草稿也会保留。
 
 普通发送与新会话首条消息使用当前草稿的批注包，调用 `tools/browser/browser-annotation-context.ts` 生成同步快照。空正文可以只发送批注；移除批注包后，发送入口不会重新从页面读取旧记录。编辑历史消息保留该消息原有的批注，独立于主输入框尚未发送的草稿。

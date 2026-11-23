@@ -75,6 +75,9 @@ export function MainLayout(): React.JSX.Element {
       : "reconnecting"
   )
   const selectedProjectId = useDesktopSessionStore((state) => state.selectedProject?.id ?? null)
+  const localDirectory = useDesktopSessionStore((state) =>
+    state.selectedProject?.localOnly ? state.selectedProject : undefined
+  )
   const selectedProjectOperationError = useDesktopSessionStore((state) =>
     selectProjectOperationError(state, state.selectedProject?.id ?? null)
   )
@@ -117,6 +120,7 @@ export function MainLayout(): React.JSX.Element {
   const utilityPanel = useUtilityPanelController({
     beforeCollapseRef: beforeUtilityCollapseRef,
     activeSessionId,
+    localDirectory,
     selectedProjectId,
     sessionIds,
     defaultLayout: defaultWorkspaceLayout,
@@ -145,6 +149,10 @@ export function MainLayout(): React.JSX.Element {
   const visiblePanelLayout = utilityPanel.visibleLayout
   const togglePanel = utilityPanel.toggle
   const openWorkspaceFile = utilityPanel.openFile
+  const openMessageFile = useCallback(
+    (path: string, line?: number) => openWorkspaceFile(path, line, activeSessionId ?? undefined),
+    [activeSessionId, openWorkspaceFile]
+  )
   const openReview = utilityPanel.openReview
   const openTerminal = utilityPanel.openTerminal
   const openUtilityTool = utilityPanel.openTool
@@ -409,7 +417,7 @@ export function MainLayout(): React.JSX.Element {
             onSearchTargetConsumed={consumeMessageSearchTarget}
             panelOpen={panelOpen}
             onTogglePanel={togglePanel}
-            onOpenFile={openWorkspaceFile}
+            onOpenFile={openMessageFile}
             canOpenReview={activeWorkspaceIsGit === true}
             onOpenReview={requestOpenReview}
             onOpenTerminal={openTerminal}
@@ -472,6 +480,7 @@ export function MainLayout(): React.JSX.Element {
       conversationPanelRef,
       innerGroupElementRef,
       openTerminal,
+      openMessageFile,
       openWorkspaceFile,
       openUtilityTool,
       panelOpen,
@@ -548,7 +557,7 @@ export function MainLayout(): React.JSX.Element {
             <MainLayoutContext.Provider
               value={{
                 conversationWorkspace,
-                openFile: openWorkspaceFile,
+                openFile: openMessageFile,
                 startNewConversation: startNewConversationRoute,
                 openSideChat: (sourceId, text) => {
                   if (sourceId !== activeSessionId) return

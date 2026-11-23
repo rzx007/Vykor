@@ -156,6 +156,7 @@ export function selectActiveSessionRecord(state: DesktopSessionState): DesktopSe
  * 项目外 workspace 也会做只读探测。
  */
 export function selectActiveWorkspaceProject(state: DesktopSessionState): DesktopProject | null {
+  if (state.selectedProject?.localOnly) return state.selectedProject
   const activeSession = state.activeSessionId
     ? state.sessionView?.session.id === state.activeSessionId
       ? state.sessionView.session

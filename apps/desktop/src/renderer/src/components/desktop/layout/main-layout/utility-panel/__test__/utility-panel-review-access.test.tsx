@@ -218,6 +218,17 @@ function useOutsideProjectSession(cwd: string): void {
   })
 }
 
+function useLocalDirectory(): void {
+  useDesktopSessionStore.setState({
+    activeSessionId: null,
+    sessionView: null,
+    selectedProject: {
+      id: "local:plain-dir", name: "plain-dir", path: "D:/plain-dir",
+      localOnly: true, available: true, lastOpenedAt: 0,
+    },
+  })
+}
+
 async function settle(): Promise<void> {
   for (let index = 0; index < 3; index += 1) {
     await act(async () => {
@@ -270,8 +281,8 @@ describe("UtilityPanel review tool access", () => {
       },
     })
     vi.stubGlobal("ResizeObserver", class { observe = vi.fn(); unobserve = vi.fn(); disconnect = vi.fn() })
-    useOutsideProjectSession("D:/plain-dir")
-    const scopeId = `session:missing-${name}`
+    useLocalDirectory()
+    const scopeId = `draft:missing-${name}`
     mountPanel(scopeId, { fileOpenRequest: { id: 1, path } })
     await settle()
     await settle()
@@ -354,8 +365,8 @@ describe("UtilityPanel review tool access", () => {
       unobserve = vi.fn()
       disconnect = vi.fn()
     })
-    useOutsideProjectSession("D:/plain-dir")
-    const scopeId = `session:html-file:${path}`
+    useLocalDirectory()
+    const scopeId = `draft:html-file:${path}`
     mountPanel(scopeId, { fileOpenRequest: {
       id: 1, path,
     } })
@@ -371,18 +382,19 @@ describe("UtilityPanel review tool access", () => {
     expect(mountedContainer?.querySelector(`[aria-label="查看 ${format} 源码"]`)).toBeNull()
   })
 
-  it("keeps a file request when the parent rerenders before its open timer runs", async () => {
+  it("keeps a session file request when the parent rerenders before its open timer runs", async () => {
     installProbe(async () => ({ isRepository: false, rootPath: null }))
+    const readFile = vi.fn(async () => ({
+      path: "report.html", name: "report.html", language: "html", size: 13,
+      binary: false, content: "<p>report</p>", scope: "session",
+      relativePath: "report.html", rootLabel: "", previewBytes: null,
+      mediaType: null, imagePreviewError: null,
+    }))
     Object.assign(window.desktop, {
       browser: { updateTab: vi.fn().mockResolvedValue(undefined) },
       workspace: {
         listFiles: async () => ({ rootPath: "D:/plain-dir", entries: [] }),
-        readFile: async () => ({
-          path: "report.html", name: "report.html", language: "html", size: 13,
-          binary: false, content: "<p>report</p>", scope: "project",
-          relativePath: "report.html", rootLabel: "", previewBytes: null,
-          mediaType: null, imagePreviewError: null,
-        }),
+        readFile,
       },
     })
     vi.stubGlobal("ResizeObserver", class {
@@ -391,7 +403,7 @@ describe("UtilityPanel review tool access", () => {
       disconnect = vi.fn()
     })
     useOutsideProjectSession("D:/plain-dir")
-    const scopeId = "session:file-request-rerender"
+    const scopeId = "session:s1"
     writeUtilityPanelRuntimeState(scopeId, {
       ...defaultUtilityPanelRuntimeState(),
       tabs: [{ id: "files-tab", tool: "files", title: "文件" }],
@@ -414,10 +426,11 @@ describe("UtilityPanel review tool access", () => {
       act(() => mountedRoot!.render(createElement(UtilityPanel, { ...props, maximized: true })))
       await act(async () => vi.runAllTimersAsync())
 
-      expect(readUtilityPanelRuntimeState(scopeId)?.tabs.filter(tab => tab.tool === "browser")).toEqual([
-        expect.objectContaining({ tool: "browser", title: "report.html" }),
+      expect(readFile).toHaveBeenCalledWith({ sessionId: "s1", path: "report.html" })
+      expect(readUtilityPanelRuntimeState(scopeId)?.fileTabs).toEqual([
+        expect.objectContaining({ preview: expect.objectContaining({ content: "<p>report</p>" }) }),
       ])
-      expect(mountedContainer?.querySelector("webview")?.getAttribute("src")).toBe("file:///D:/plain-dir/report.html")
+      expect(mountedContainer?.querySelector("webview")).toBeNull()
     } finally {
       vi.useRealTimers()
     }

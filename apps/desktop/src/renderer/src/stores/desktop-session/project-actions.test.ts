@@ -513,13 +513,13 @@ describe("desktop session store project order", () => {
       lastOpenedAt: 200,
       available: true,
     }
-    let resolveChoose!: (value: ReturnType<typeof projectDetails>) => void
+    let resolveChoose!: (value: { path: string; git: boolean; branch: null; branches: string[] }) => void
     vi.stubGlobal("window", {
       desktop: { businessData: businessDataFixture,
         sessions: {
           chooseProject: vi.fn(
             () =>
-              new Promise<ReturnType<typeof projectDetails>>((resolve) => (resolveChoose = resolve))
+              new Promise<Parameters<typeof resolveChoose>[0]>((resolve) => (resolveChoose = resolve))
           ),
           inspectProject: vi.fn(async () => projectDetails(projectB, "branch-b")),
         },
@@ -529,13 +529,36 @@ describe("desktop session store project order", () => {
 
     const choosing = useDesktopSessionStore.getState().chooseProject()
     await useDesktopSessionStore.getState().selectProject(projectB)
-    resolveChoose(projectDetails(projectA, "branch-a"))
+    resolveChoose({ path: projectA.path, git: false, branch: null, branches: [] })
     await choosing
 
     expect(useDesktopSessionStore.getState()).toMatchObject({
       selectedProject: projectB,
       branch: "branch-b",
       branches: ["branch-b"],
+    })
+  })
+
+  it("keeps an offline directory selection separate from registered projects", async () => {
+    const path = "D:\\code\\offline"
+    const inspectProject = vi.fn(async () => { throw new Error("daemon stopped") })
+    vi.stubGlobal("window", {
+      desktop: { businessData: businessDataFixture,
+        sessions: {
+          chooseProject: vi.fn(async () => ({ path, git: false, branch: null, branches: [] })),
+          inspectProject,
+          bootstrap: vi.fn(async () => ({ ...refreshedBootstrap, projects: [] })),
+        },
+      },
+    })
+    await useDesktopSessionStore.getState().chooseProject()
+    await useDesktopSessionStore.getState().refreshBootstrap()
+
+    expect(inspectProject).not.toHaveBeenCalled()
+    expect(useDesktopSessionStore.getState()).toMatchObject({
+      workspaceMode: "project",
+      selectedProject: { path, name: "offline", localOnly: true },
+      projects: [],
     })
   })
 
