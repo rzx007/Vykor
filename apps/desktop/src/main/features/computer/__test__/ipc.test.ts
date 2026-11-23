@@ -82,6 +82,22 @@ it("revokes the caller scope when the main document leaves and ignores history o
   expect(authorize).toThrow(/主窗口/)
 })
 
+it("scopes an app approval to its original chat and rejects the reply after a switch", async () => {
+  const { registration, registrations, contents, frame } = fixture()
+  const event = { sender: contents, senderFrame: frame } as never
+  registration.handler(event, { sessionId: "session", id: "input", items: [] })
+  const [, , , , interaction] = service.sendComputerPrompt.mock.calls[0]!
+  const authorization = interaction.authorizeApp({ id: "calculator", name: "计算器" }, new AbortController().signal, "session", true)
+  const { prompt } = contents.send.mock.lastCall![1]
+  expect(prompt).toMatchObject({ kind: "authorize", sessionId: "session", appName: "计算器", onceOnly: true })
+  const reply = registrations.find(item => item.channel === IpcChannels.computerReply)!.handler
+  expect(reply(event, { id: prompt.id, choice: "always" })).toBe(false)
+  service.subscriptions.getOwnerSessionId.mockReturnValue("other")
+  expect(reply(event, { id: prompt.id, choice: "once" })).toBe(false)
+  await expect(authorization).resolves.toBe(false)
+  expect(contents.send.mock.lastCall![1]).toEqual({ type: "dismissed", id: prompt.id })
+})
+
 it("only accepts controls for the exact run visible to the owning main chat", async () => {
   const { registration, registrations, contents, frame } = fixture()
   const event = { sender: contents, senderFrame: frame } as never

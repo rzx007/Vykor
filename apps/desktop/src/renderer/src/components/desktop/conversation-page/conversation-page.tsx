@@ -7,7 +7,7 @@ import { useNavigate } from "@tanstack/react-router"
 
 import { OpenWithSplitButton } from "@renderer/components/desktop/open-with"
 import { SideChatSelectionActions } from "@renderer/components/desktop/tools/side-chat/side-chat-selection-actions"
-import { ComputerActivityPanel } from "@renderer/components/desktop/tools/computer/computer-activity-panel"
+import { ComputerAppPermissionCard, useComputerAppPermission } from "@renderer/components/desktop/tools/computer/computer-interaction"
 import {
   ConversationScroller as MessageScroller,
   ConversationScrollerButton as MessageScrollerButton,
@@ -119,6 +119,7 @@ function ConversationPane({
   const navigate = useNavigate()
   const messageViewportRef = useRef<HTMLDivElement>(null)
   const activeSessionId = useDesktopSessionStore((state) => state.activeSessionId)
+  const hasComputerAppPermission = useComputerAppPermission(activeSessionId)
   const sessionView = useDesktopSessionStore((state) => state.sessionView)
   const activeSession = useDesktopSessionStore(selectActiveSessionRecord)
   const conversationActivities = useDesktopSessionStore((state) => state.activity.sessions)
@@ -325,6 +326,7 @@ function ConversationPane({
     )
   const pendingPrompts = queuedPrompts(sessionView, queuedPromptActions)
   const pendingPermissions = sessionView?.permissions.filter(requiresPermissionReply) ?? []
+  const pendingPermissionCount = pendingPermissions.length + Number(!archived && hasComputerAppPermission)
   const singleAskUserPrompt =
     pendingPermissions.length === 1 && isAskUserPermission(pendingPermissions[0]!)
   const localPromptSubmissions = Object.values(pendingPromptSubmissions)
@@ -340,7 +342,7 @@ function ConversationPane({
     parts: sessionView?.parts ?? [],
     messages: sessionView?.messages,
     runs: sessionView?.runs,
-    pendingPermissionCount: pendingPermissions.length,
+    pendingPermissionCount,
     agentTaskRunning: sessionView?.tasks.some(
       (task) => task.type === "agent" && (task.status === "pending" || task.status === "running")
     ),
@@ -728,7 +730,10 @@ function ConversationPane({
                           onOpenReview={onOpenReview}
                           onOpenTerminal={onOpenTerminal}
                           showReasoning={showReasoning}
-                          pendingPermissionCount={pendingPermissions.length}
+                          pendingPermissionCount={pendingPermissionCount}
+                          pendingComputerAppApproval={!archived && activeSessionId && hasComputerAppPermission
+                            ? <ComputerAppPermissionCard sessionId={activeSessionId} />
+                            : undefined}
                         />
                       )}
                     </MessageScrollerContent>
@@ -798,7 +803,6 @@ function ConversationPane({
               </div>
             ) : (
               <div className="conversation-composer-column mb-5 flex shrink-0 flex-col gap-2">
-                {activeSessionId ? <ComputerActivityPanel key={activeSessionId} sessionId={activeSessionId} /> : null}
                 {goal && goalComposer.dismissedGoalId !== goal.id ? (
                   <GoalBanner
                     key={`${goal.id}:${goal.wait?.kind === "user" ? goal.wait.questionId : ""}`}

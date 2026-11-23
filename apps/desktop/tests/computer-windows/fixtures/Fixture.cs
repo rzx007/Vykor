@@ -164,10 +164,11 @@ internal static class Fixture
             if (File.Exists(externalPath)) {
                 string name = File.ReadAllText(externalPath);
                 File.Delete(externalPath);
-                var exact = name == "target" ? target : name == "control" ? control : null;
+                var exact = name == "target" ? target : name == "control" || name == "control-esc" ? control : null;
                 if (exact != null && GetForegroundWindow() == exact.Handle) {
-                    keybd_event(0x78, 0, 0, UIntPtr.Zero); // F9, from outside the Vykor lease
-                    keybd_event(0x78, 0, 2, UIntPtr.Zero);
+                    byte key = name == "control-esc" ? (byte)0x1B : (byte)0x78;
+                    keybd_event(key, 0, 0, UIntPtr.Zero);
+                    keybd_event(key, 0, 2, UIntPtr.Zero);
                 }
             }
             if (!recreated && File.Exists(Path.Combine(directory, "recreate.request")))

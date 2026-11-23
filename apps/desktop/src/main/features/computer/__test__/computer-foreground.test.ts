@@ -15,7 +15,7 @@ const frame: WindowsForegroundFrame = {
 
 function fixture() {
   const connection = new AbortController()
-  const armEmergencyStop = vi.fn(() => true)
+  const emergencyStop = vi.fn()
   const publishActivity = vi.fn()
   const invalidateCapturedImage = vi.fn()
   const perform = vi.fn(async () => ({ state: "sent" as const, released: true }))
@@ -32,7 +32,7 @@ function fixture() {
     discover: async name => [{ id: name, name }], windows,
     launch,
   }, {
-    authorizeApp: async () => true, chooseTarget: async () => undefined, armEmergencyStop, publishActivity, invalidateCapturedImage,
+    authorizeApp: async () => true, chooseTarget: async () => undefined, emergencyStop, publishActivity, invalidateCapturedImage,
   }, undefined, { capture, enter })
   const approve = vi.fn(async () => true)
   const dispatch = vi.fn(async () => true)
@@ -43,8 +43,8 @@ function fixture() {
     const result = await execute({ type: "capture" }) as ComputerResult
     return { result, ref: JSON.parse(result.text).frame.ref as string }
   }
-  return { approve, armEmergencyStop, capture, dispatch, enter, execute, host, perform, publishActivity, release, windows, launch, invalidateCapturedImage,
-    loseFocus: () => lost?.("focus_lost"), snapshot }
+  return { approve, emergencyStop, capture, dispatch, enter, execute, host, perform, publishActivity, release, windows, launch, invalidateCapturedImage,
+    loseFocus: () => lost?.("focus_lost"), pressEscape: () => lost?.("emergency_stop"), snapshot }
 }
 
 it("makes a window image available only for capture and guards a coordinate with a fresh frame", async () => {
@@ -68,6 +68,18 @@ it("makes a window image available only for capture and guards a coordinate with
   expect(f.dispatch).toHaveBeenCalledTimes(3)
 })
 
+it("captures the result without acquiring input or revealing a preview or coordinate reference", async () => {
+  const f = fixture()
+  await f.execute({ type: "open_app", app: "First" })
+  const result = await f.execute({ type: "capture", purpose: "result" }) as ComputerResult
+  const reply = JSON.parse(result.text)
+  expect(reply).toMatchObject({ status: "captured" })
+  expect(reply.frame).toBeUndefined()
+  expect(result.image).toMatchObject({ data: frame.data })
+  expect(f.publishActivity.mock.lastCall?.[1]?.preview).toBeUndefined()
+  expect(f.enter).not.toHaveBeenCalled()
+})
+
 it("releases on focus loss, parks further work, and requires a new occupation and observation", async () => {
   const f = fixture()
   await f.execute({ type: "open_app", app: "First" })
@@ -85,6 +97,19 @@ it("releases on focus loss, parks further work, and requires a new occupation an
   await f.execute({ type: "foreground" })
   expect(f.enter).toHaveBeenCalledTimes(2)
   expect(await f.execute({ type: "key", key: "Tab" })).toMatchObject({ executionState: "not_started" })
+})
+
+it("stops input and interrupts the original run when the OS reports Escape", async () => {
+  const f = fixture()
+  await f.execute({ type: "open_app", app: "First" })
+  await f.execute({ type: "foreground" })
+  f.pressEscape()
+  f.pressEscape()
+  expect(f.release).toHaveBeenCalledOnce()
+  expect(f.emergencyStop).toHaveBeenCalledExactlyOnceWith(run.sessionId, run.runId)
+  expect(f.publishActivity.mock.lastCall?.[1]).toMatchObject({ phase: "stopped" })
+  expect(await f.execute({ type: "key", key: "Tab" })).toMatchObject({ executionState: "not_started" })
+  expect(f.perform).not.toHaveBeenCalled()
 })
 
 it("yields the keyboard and mouse to Browser and requires a fresh window frame on return", async () => {

@@ -16,6 +16,7 @@ import type { BrowserHost } from "../application/browser-tools/browser-host.js";
 import { DesktopBrowserBridge } from "../application/browser-tools/browser-bridge.js";
 import { DesktopComputerBridge } from "../application/computer-tools/computer-bridge.js";
 import { captureComputerApproval } from "../application/computer-tools/computer-approval.js";
+import { sessionSettingsRoot } from "../runtime/session-settings-root.js";
 import { createDefaultNodeApplication } from "../application/default-node-application.js";
 import type { CreateDaemonAgent } from "../daemon/daemon-agent.js";
 import type {
@@ -194,7 +195,13 @@ export class VykorHttpServer {
     const computerToken = options.desktopComputerToken;
     if (this.token && computerToken && computerToken !== this.token && /^[a-f0-9]{64}$/.test(computerToken)
       && !options.application) {
-      this.computerBridge = new DesktopComputerBridge(run => captureComputerApproval(this.store, this.application.permissions, run));
+      this.computerBridge = new DesktopComputerBridge(run => captureComputerApproval(
+        this.store, this.application.permissions, run, async session => {
+          const settings = await options.getSettingsForCwd?.(sessionSettingsRoot(session))
+            ?? options.getSettings?.() ?? options.settings;
+          return settings?.permission.mode;
+        },
+      ));
     }
     this.allowedOrigins = normalizeAllowedOrigins(options.allowedOrigins ?? []);
     this.services = options.services ?? {};

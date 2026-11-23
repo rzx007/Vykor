@@ -205,6 +205,7 @@ export class DesktopComputerBridge {
     const pending = this.pending;
     const access = pending?.approvalAccess;
     if (this.connection?.id !== connectionId || pending?.id !== requestId || !access || pending.action === "open_app"
+      || (proposal.ordinary && pending.action !== "invoke")
       || pending.approval || requestSignal.aborted || !pending.isCurrent()) return;
     const approval: NonNullable<Pending["approval"]> = {};
     pending.approval = approval;

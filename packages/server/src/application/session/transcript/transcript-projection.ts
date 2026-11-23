@@ -398,6 +398,29 @@ export class SessionTranscriptProjection {
     delete state.activeTextPhase;
   }
 
+  attachComputerScreenshot(state: ActiveTranscriptProjectionState, asset: {
+    id: string;
+    displayName: string;
+    mediaType: string;
+    sizeBytes: number;
+  }): boolean {
+    if (!state.assistantMessageId) return false;
+    this.store.conversations.upsertMessagePart({
+      id: `computer-screenshot:${state.runId}`,
+      sessionId: state.sessionId,
+      messageId: state.assistantMessageId,
+      type: "attachment",
+      status: "completed",
+      assetId: asset.id,
+      intent: "tool_resource",
+      displayName: asset.displayName,
+      mediaType: asset.mediaType,
+      sizeBytes: asset.sizeBytes,
+      metadata: { source: "computer_screenshot" },
+    });
+    return true;
+  }
+
   completeOpenReasoningPart(
     state: ActiveTranscriptProjectionState,
     status: Extract<SessionMessagePartStatus, "completed" | "failed" | "interrupted">,

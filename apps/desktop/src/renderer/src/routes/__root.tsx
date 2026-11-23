@@ -16,7 +16,7 @@ import { DesktopToastHost } from "@renderer/components/desktop/shell/desktop-toa
 import { ScopedOperationError } from "@renderer/components/desktop/conversation-page/session/scoped-operation-errors"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import { selectAppOperationError } from "@renderer/stores/desktop-session/selectors"
-import { ComputerInteractionDialog } from "@renderer/components/desktop/tools/computer/computer-interaction-dialog"
+import { ComputerInteractionProvider } from "@renderer/components/desktop/tools/computer/computer-interaction"
 
 export const Route = createRootRoute({
   component: DesktopRoot,
@@ -79,8 +79,9 @@ function DesktopRoot(): React.JSX.Element {
   return (
     <PluginAppsProvider>
       <DesktopSessionEventBridge enabled={sessionEventsEnabled} />
-      <Outlet />
-      <ComputerInteractionDialog />
+      <ComputerInteractionProvider>
+        <Outlet />
+      </ComputerInteractionProvider>
       <DesktopToastHost />
       {appOperationError ? (
         <div className="fixed inset-x-4 top-4 z-50 mx-auto w-full max-w-190">

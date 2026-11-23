@@ -1,5 +1,5 @@
 import { expect, it, vi } from "vitest"
-import type { ComputerBridgeEvent, ComputerResult, ComputerSemanticAction } from "@vykor/server/daemon-host"
+import type { ComputerApprovalProposal, ComputerBridgeEvent, ComputerResult, ComputerSemanticAction } from "@vykor/server/daemon-host"
 import { ComputerHost } from "../computer-host"
 import { projectObservation } from "../computer-semantics"
 import type { WindowsApp, WindowsAppWindow } from "../windows-apps"
@@ -31,7 +31,7 @@ it("retains the current selection and its control when surrounding text fills th
   ])
 })
 
-function fixture(remember = false) {
+function fixture(remember = false, selectedApp = app) {
   const connection = new AbortController()
   const windows = vi.fn(async () => [window])
   let elements = [control, destructive]
@@ -44,17 +44,17 @@ function fixture(remember = false) {
     observe, act, close,
   }))
   const publishActivity = vi.fn()
-  const host = new ComputerHost({ discover: async () => [app], windows, launch: async () => {} }, {
+  const host = new ComputerHost({ discover: async () => [selectedApp], windows, launch: async () => {} }, {
     authorizeApp: async () => remember ? "remembered" : true, chooseTarget: async () => undefined, isRememberedApp: () => remember,
     publishActivity,
   }, driver)
-  const approve = vi.fn(async () => true)
+  const approve = vi.fn(async (_proposal: ComputerApprovalProposal) => true)
   const dispatch = vi.fn(async () => true)
   const execute = (action: Extract<ComputerBridgeEvent, { type: "execute" }>["action"]) => host.execute({
     type: "execute", run, requestId: "test", deadlineAt: Date.now() + 20_000, action,
   }, connection.signal, connection.signal, approve, dispatch)
   async function open() {
-    await execute({ type: "open_app", app: "Notepad" })
+    await execute({ type: "open_app", app: selectedApp.name })
     const observed = await execute({ type: "observe" }) as ComputerResult
     expect(observed.text).not.toContain("private")
     return JSON.parse(observed.text).observation.elements as { ref: string; label: string }[]
@@ -62,6 +62,22 @@ function fixture(remember = false) {
   return { host, approve, dispatch, windows, execute, act, observe, close, open, publishActivity,
     changeElements: (rows: WindowsDriverElement[]) => { elements = rows } }
 }
+
+it("marks only verified Calculator keys as ordinary semantic actions", async () => {
+  const multiply = { ...destructive, label: "乘以", automationId: "multiplyButton" }
+  for (const builtIn of ["calculator", undefined] as const) {
+    const f = fixture(false, { id: "app", name: "计算器", builtIn })
+    f.changeElements([multiply, { ...destructive, identity: "other" }])
+    for (const index of [0, 1]) {
+      const buttons = await f.open()
+      await f.execute({ type: "invoke", elementRef: buttons[index]!.ref })
+      const proposal = f.approve.mock.lastCall?.[0]
+      expect(proposal).toMatchObject({ reason: expect.any(String) })
+      if (builtIn && index === 0) expect(proposal).toMatchObject({ ordinary: true })
+      else expect(proposal).not.toHaveProperty("ordinary")
+    }
+  }
+})
 
 it("keeps an in-flight semantic operation unknown when the user pauses", async () => {
   const f = fixture()

@@ -34,10 +34,11 @@ const frame = {
 
 async function fixture(
   mode: "full_access" | "ask",
-  action = "observe",
+  action: string | { action: "capture"; purpose: "result" } = "observe",
   modelResponse?: (params: StreamMessageParams, call: number) => void | AsyncIterable<StreamEvent>,
   browserHost?: BrowserHost,
 ) {
+  const toolInput = typeof action === "string" ? { action } : action;
   const directory = mkdtempSync(join(tmpdir(), "vk-computer-run-"));
   const requests: StreamMessageParams[] = [];
   const client: StreamingMessageClient = {
@@ -52,7 +53,7 @@ async function fixture(
       const toolUseId = "observe-" + params.messages.filter(message => message.type === "user").length;
       if (params.tools?.some(tool => tool.name === "Computer")
         && !afterPrompt.some(message => message.type === "tool_result" && message.toolUseId === toolUseId)) {
-        yield { type: "tool_use_start", toolUse: { type: "tool_use", id: toolUseId, name: "Computer", input: { action } } };
+        yield { type: "tool_use_start", toolUse: { type: "tool_use", id: toolUseId, name: "Computer", input: toolInput } };
         yield { type: "complete", stopReason: "tool_use" };
         return;
       }
@@ -71,7 +72,7 @@ async function fixture(
     },
     async createAgent({ options }) {
       const agent = await createDefaultNodeAgent({ ...options, client,
-        ...(action === "capture" ? { resolveModelImageSupport: async () => true } : {}),
+        ...(toolInput.action === "capture" ? { resolveModelImageSupport: async () => true } : {}),
       });
       return { agent, host: agent.host };
     },
@@ -137,6 +138,45 @@ async function fixture(
     throw error;
   }
 }
+
+it.each(["deliver", "revoke", "stop"] as const)("handles a result screenshot before final delivery: %s", async outcome => {
+  const finishAnswer = Promise.withResolvers<void>();
+  const f = await fixture("full_access", { action: "capture", purpose: "result" }, (_params, call) => {
+    if (call !== 2) return;
+    return (async function* (): AsyncIterable<StreamEvent> {
+      await finishAnswer.promise;
+      yield { type: "text_delta", delta: "The result is 56." };
+      yield { type: "complete", stopReason: "end_turn" };
+    })();
+  });
+  try {
+    const desktop = await f.open();
+    const run = await f.run(await desktop.submit(sessionId, input("result-screenshot")));
+    const captured = await desktop.next();
+    expect(captured).toMatchObject({ type: "execute", action: { type: "capture", purpose: "result" } });
+    if (captured.type !== "execute") throw new Error("Expected the result capture");
+    expect((await desktop.result(captured.requestId, { text: '{"status":"captured"}', image: frame })).status).toBe(200);
+    await vi.waitFor(() => expect(f.requests).toHaveLength(2));
+    expect(f.server.store.conversations.listMessageParts(sessionId).some(part => part.type === "attachment")).toBe(false);
+    if (outcome === "revoke") expect((await desktop.revokeImage(captured.requestId)).status).toBe(200);
+    if (outcome === "stop") expect((await f.post(`/sessions/${sessionId}/interrupt`, { expectedRunId: run.runId })).ok).toBe(true);
+    finishAnswer.resolve();
+    expect(await f.awaitRun(run)).toMatchObject({ status: outcome === "stop" ? "interrupted" : "completed" });
+    expect(JSON.stringify(f.requests)).not.toContain(frame.data);
+    const parts = f.server.store.conversations.listMessageParts(sessionId);
+    const attachments = parts.filter(part => part.type === "attachment");
+    if (outcome === "deliver") {
+      const answer = parts.find(part => part.type === "text" && part.text === "The result is 56.");
+      expect(answer).toBeDefined();
+      expect(attachments).toEqual([expect.objectContaining({ messageId: answer?.messageId, mediaType: "image/png" })]);
+      expect(attachments[0]!.seq).toBeGreaterThan(answer!.seq);
+      const asset = await f.server.application.attachments.openContent(attachments[0]!.assetId!);
+      expect(Buffer.from(await new Response(asset.content).arrayBuffer()).toString("base64")).toBe(frame.data);
+    } else {
+      expect(attachments).toEqual([]);
+    }
+  } finally { finishAnswer.resolve(); await f.close(); }
+}, 20_000);
 
 it("attaches a window image to one model request and keeps it out of durable history", async () => {
   const f = await fixture("full_access", "capture");

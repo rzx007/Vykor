@@ -18,6 +18,7 @@ import type { SessionInputRecord } from "@vykor/domain-contracts/sessions";
 
 import type { ObservabilityEvent } from "../../shared/observability.js";
 import type { LiveChildAgentDirectory } from "./live-child-agent-directory.js";
+import type { ComputerRunAccess } from "../computer-tools/computer-tool.js";
 import type { SessionEventPublisher } from "../session/transcript/session-event-publisher.js";
 import type { ActiveTranscriptProjectionState, SessionTranscriptProjection } from "../session/transcript/transcript-projection.js";
 import { isRecord, jsonEqual, withoutTraceId } from "../support.js";
@@ -60,6 +61,7 @@ export interface DaemonAgentEventProjectorContext {
   events: Pick<SessionEventPublisher, "checkpoint" | "publish" | "publishSince">;
   log(event: ObservabilityEvent): void;
   toolAppOrigins?: ToolAppOriginProjector;
+  prepareComputerScreenshot?: ComputerRunAccess["prepareResultScreenshot"];
 }
 
 /**
@@ -830,10 +832,13 @@ export class DaemonAgentEventProjector {
     if (this.context.store.runs.getRun(runId)?.metadata.terminalFrameworkEventId === event.id) return;
     const state = this.transcripts.get(runId);
     const stateSnapshot = state ? snapshotTranscript(state) : undefined;
-    const before = this.context.events.checkpoint();
     const interrupted = event.type === "run.interrupted";
     const failed = event.type === "run.failed";
     const error = event.type === "run.completed" ? undefined : event.data.error.message;
+    const screenshot = event.type === "run.completed" && state?.assistantMessageId
+      ? await this.context.prepareComputerScreenshot?.(runId) : undefined;
+    const before = this.context.events.checkpoint();
+    let attachedScreenshot = false;
     try {
       this.context.store.transaction(() => {
         if (state) {
@@ -846,6 +851,9 @@ export class DaemonAgentEventProjector {
               state,
               interrupted ? "interrupted" : failed ? "failed" : "completed",
             );
+          }
+          if (screenshot?.isCurrent()) {
+            attachedScreenshot = this.context.transcriptProjection.attachComputerScreenshot(state, screenshot.attachment);
           }
         }
         if (error) {
@@ -907,7 +915,10 @@ export class DaemonAgentEventProjector {
       });
     } catch (projectionError) {
       if (state && stateSnapshot) restoreTranscript(state, stateSnapshot);
+      attachedScreenshot = false;
       throw projectionError;
+    } finally {
+      if (!attachedScreenshot) screenshot?.discard();
     }
     this.context.log({
       level: failed ? "error" : interrupted ? "warn" : "info",

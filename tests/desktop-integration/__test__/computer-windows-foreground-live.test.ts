@@ -32,10 +32,13 @@ it.runIf(realWindows)("observes and safely drives a real Calculator through the 
   const daemonToken = randomBytes(24).toString("hex")
   const computerToken = randomBytes(32).toString("hex")
   const resourcesPath = process.env.VYKOR_COMPUTER_TEST_RESOURCES
-  const actions = [
-    { action: "open_app", app: "Calculator" }, ...(resourcesPath ? [{ action: "observe" }] : []),
+  const arithmetic = [/^(?:7|七)$/u, /multiply|乘/u, /^(?:8|八)$/u, /equal|等于/u]
+  const actions: (Record<string, unknown> | RegExp)[] = [
+    { action: "open_app", app: "Calculator" },
+    ...(resourcesPath ? [{ action: "observe" }, ...arithmetic, { action: "observe" }] : []),
     { action: "foreground" }, { action: "capture" },
     { action: "key", key: "Tab" }, { action: "capture" },
+    ...(resourcesPath ? [{ action: "observe" }, { action: "capture", purpose: "result" }] : []),
   ]
   let results: ToolResultMessage[] = []
   let sawModelImage = false
@@ -49,13 +52,22 @@ it.runIf(realWindows)("observes and safely drives a real Calculator through the 
       const latest = results.at(-1)
       if (latest?.content.some(content => content.type === "image" && content.source.type === "memory")) sawModelImage = true
       if (latest) modelBlocks.push(`${latest.toolUseId}:${latest.content.map(content => content.type).join(",")}`)
-      const action = actions[results.length]
-      if (action && !latest?.isError && tools?.some(tool => tool.name === "Computer")) {
+      let action = actions[results.length]
+      if (action instanceof RegExp && !latest?.isError) {
+        const label = action
+        const content = latest?.content.find(item => item.type === "text")
+        const state = content?.type === "text" ? JSON.parse(content.text) : {}
+        const control = state.observation?.elements.find((item: { label: string; actions: string[] }) =>
+          item.actions.includes("invoke") && label.test(item.label.toLowerCase()))
+        expect(control, state.observation?.elements.map((item: { label: string }) => item.label).join(", ")).toBeDefined()
+        action = { action: "invoke", elementRef: control.ref }
+      }
+      if (action && !(action instanceof RegExp) && !latest?.isError && tools?.some(tool => tool.name === "Computer")) {
         yield { type: "tool_use_start", toolUse: { type: "tool_use", id: `calculator-${results.length}`, name: "Computer", input: action } }
         yield { type: "complete", stopReason: "tool_use" }
         return
       }
-      yield { type: "text_delta", delta: "已结束计算器验证。" }
+      yield { type: "text_delta", delta: resourcesPath ? "计算器显示 56。" : "已结束计算器验证。" }
       yield { type: "complete", stopReason: "end_turn" }
     },
   }
@@ -64,7 +76,7 @@ it.runIf(realWindows)("observes and safely drives a real Calculator through the 
   vi.stubEnv("VYKOR_DISABLE_MODELS_FETCH", "1")
   const server = new VykorHttpServer({
     token: daemonToken, desktopComputerToken: computerToken, storePath: join(directory, "sessions.db"),
-    settings: { model: "test-model", apiFormat: "openai", maxTurns: 7, permission: { mode: "ask" },
+    settings: { model: "test-model", apiFormat: "openai", maxTurns: 16, permission: { mode: "ask" },
       plugins: { enabled: false }, memory: { enabled: false }, sandbox: { enabled: false } },
     async createAgent({ options }) {
       const agent = await createDefaultNodeAgent({ ...options, client: model, resolveModelImageSupport: async () => true })
@@ -79,7 +91,7 @@ it.runIf(realWindows)("observes and safely drives a real Calculator through the 
     const host = new ComputerHost(apps, {
       authorizeApp: async () => true,
       chooseTarget: async () => { throw new Error("Expected one test-owned Calculator window") },
-      armEmergencyStop: () => true,
+      emergencyStop: () => {},
       publishActivity: (_session, state) => { activity = state },
     }, resourcesPath ? (target, signal) => createWindowsDriver(target, signal, join(resourcesPath, "computer-windows", "cua-driver.exe")) : undefined,
     createWindowsForeground())
@@ -93,23 +105,41 @@ it.runIf(realWindows)("observes and safely drives a real Calculator through the 
       cancel: (session, run) => { host.pause(session, run) },
     })
     bridge = desktop
-    const session = await client.sessions.create({ cwd: directory, model: "test-model" })
-    const admitted = await desktop.submit(session.id, { id: "calculator", items: [{ type: "text", text: "打开计算器，观察窗口并按 Tab。" }] }, () => {})
+    const session = await client.sessions.create({ cwd: directory, model: "test-model",
+      metadata: { runtime: { approvalMode: "full_access" } } })
+    const request = resourcesPath ? "打开计算器，算出 7 × 8，核对结果并给我一张截图。" : "打开计算器，观察窗口并按 Tab。"
+    const admitted = await desktop.submit(session.id, { id: "calculator", items: [{ type: "text", text: request }] }, () => {})
     expect(admitted.run?.id).toBeTruthy()
     const pending = () => server.application.permissions.listRequests({ sessionId: session.id, toolName: "Computer", status: "pending" })
-    await expect.poll(() => pending().length, { timeout: 24_000 }).toBe(1)
+    await expect.poll(() => pending()[0]?.payload.reason, { timeout: 90_000 }).toMatch(/暂时使用键鼠/)
     await desktop.replyApproval(session.id, pending()[0]!.id, "approved")
-    expect(await server.application.runControl.awaitRun(session.id, admitted.run!.id, { timeoutMs: 45_000 })).toMatchObject({ status: "completed" })
-    const values = results.map(result => {
+    expect(await server.application.runControl.awaitRun(session.id, admitted.run!.id, { timeoutMs: 70_000 })).toMatchObject({ status: "completed" })
+    const values = results.map((result, index) => {
       const body = result.content.find(item => item.type === "text")
       if (body?.type !== "text" || result.isError) throw new Error(`Calculator step failed: ${desktopOutcomes.join(" | ")}`)
+      if (resourcesPath && index === actions.length - 1) {
+        expect(body.text).toContain("Captured the result window")
+        expect(result.content.some(item => item.type === "image")).toBe(false)
+        return { status: "result_captured" }
+      }
       return JSON.parse(body.text)
     })
     expect(values).toMatchObject([
-      { status: "ready", source: "launched" }, ...(resourcesPath ? [{ status: "observed" }] : []),
+      { status: "ready", source: "launched" },
+      ...(resourcesPath ? [{ status: "observed" }, ...arithmetic.map(() => ({ status: "observed_change" })), { status: "observed" }] : []),
       { status: "foreground" }, { status: "captured" },
       { status: "sent", inputReleased: true }, { status: "captured" },
+      ...(resourcesPath ? [{ status: "observed" }, { status: "result_captured" }] : []),
     ])
+    if (resourcesPath) {
+      expect(values.at(-2)?.observation?.elements.some((item: { label: string; value?: string }) =>
+        /(^|\D)56(\D|$)/u.test(item.value ?? item.label))).toBe(true)
+      const parts = await client.sessions.listMessageParts(session.id)
+      const answer = parts.find(part => part.type === "text" && part.text === "计算器显示 56。")
+      expect(parts.filter(part => part.type === "attachment")).toEqual([
+        expect.objectContaining({ messageId: answer?.messageId, mediaType: "image/png", assetId: expect.any(String) }),
+      ])
+    }
     expect(sawModelImage, modelBlocks.join(" ")).toBe(true)
     await expect.poll(() => activity, { timeout: 8_000 }).toMatchObject({ phase: "stopped", evidence: "输入已释放，前台控制已退出。" })
     expect(await host.waitForInputRelease()).toBe(true)
@@ -125,7 +155,7 @@ it.runIf(realWindows)("observes and safely drives a real Calculator through the 
     vi.unstubAllEnvs()
     await rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   }
-}, 95_000)
+}, 175_000)
 
 it.skipIf(!realWindows).each(["key", "click"] as const)("releases a held %s through actual chat Stop before an up is queued", async kind => {
   const directory = mkdtempSync(join(tmpdir(), "vykor-chat-stop-live-"))
@@ -207,7 +237,7 @@ it.skipIf(!realWindows).each(["key", "click"] as const)("releases a held %s thro
       windows: async (app, signal) => (await apps.windows(app, signal)).filter(window => window.windowId === target()?.target),
     }, {
       authorizeApp: async () => true, chooseTarget: async () => { throw new Error("Expected the exact test window") },
-      armEmergencyStop: () => true,
+      emergencyStop: () => {},
     }, undefined, {
       enter: native.enter,
       capture: async (...args) => { frame = await native.capture(...args); return frame },

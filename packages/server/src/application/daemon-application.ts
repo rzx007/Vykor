@@ -567,7 +567,7 @@ export class DaemonApplication implements DurableAgentApplication {
         const applied = run.metadata.appliedInputState;
         return applied === undefined || (!!applied && typeof applied === "object" && "inputIds" in applied
           && Array.isArray(applied.inputIds) && applied.inputIds.every(id => id === identity.inputId));
-      });
+      }, this.attachments);
       const enableBrowserDeveloper = options.enableBrowserDeveloper === true && Boolean(browserHost?.executeDeveloper);
       const loadAgent = createDaemonAgentLoader({
         readAttachment: async (uri, context) => {
@@ -713,6 +713,7 @@ export class DaemonApplication implements DurableAgentApplication {
             toolAppOrigins,
             store,
             transcriptProjection: this.transcriptProjection,
+            ...(computerRuns ? { prepareComputerScreenshot: runId => computerRuns.prepareResultScreenshot(runId) } : {}),
             liveChildren: this.liveChildren,
             events: this.eventPublisher,
             log: options.log,

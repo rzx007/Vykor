@@ -5,8 +5,8 @@ const preferences = vi.hoisted(() => ({
   get: vi.fn(),
   patch: vi.fn(),
 }))
-const shortcuts = vi.hoisted(() => ({ register: vi.fn(), unregister: vi.fn() }))
-vi.mock("electron", () => ({ globalShortcut: shortcuts }))
+const overlay = vi.hoisted(() => ({ show: vi.fn(), close: vi.fn() }))
+vi.mock("../computer-control-overlay", () => ({ showComputerControlOverlay: overlay.show }))
 vi.mock("../../settings/desktop-preferences", () => ({
   getDesktopPreferences: preferences.get,
   patchDesktopPreferences: preferences.patch,
@@ -23,28 +23,27 @@ function window() {
 beforeEach(() => {
   preferences.get.mockReturnValue({ computerAppGrants: [] })
   preferences.patch.mockClear()
-  shortcuts.register.mockReset().mockReturnValue(true)
-  shortcuts.unregister.mockClear()
+  overlay.show.mockReset().mockReturnValue(overlay.close)
+  overlay.close.mockClear()
 })
 
-it("arms the local emergency stop only for the current chat", () => {
+it("shows the overlay only while input is held and forwards an emergency stop once", () => {
   const { owner } = window()
   const scope = new AbortController()
   const stop = vi.fn()
-  let active = "session"
-  const interaction = createComputerInteraction(owner, new AbortController().signal, id => id === active, stop)
-  expect(interaction.armEmergencyStop("other", "run", scope.signal)).toBe(false)
-  expect(shortcuts.register).not.toHaveBeenCalled()
-  shortcuts.register.mockReturnValueOnce(false)
-  expect(interaction.armEmergencyStop("session", "run", scope.signal)).toBe(false)
-  expect(interaction.armEmergencyStop("session", "run", scope.signal)).toBe(true)
-  const [accelerator, invokeStop] = shortcuts.register.mock.lastCall!
-  active = "new-chat"
-  invokeStop()
+  const interaction = createComputerInteraction(owner, scope.signal, id => id === "session", stop)
+  interaction.publishActivity("other", { runId: "run", phase: "foreground" })
+  interaction.publishActivity("session", { runId: "run", phase: "observing" })
+  expect(overlay.show).not.toHaveBeenCalled()
+  interaction.publishActivity("session", { runId: "run", phase: "foreground" })
+  interaction.publishActivity("session", { runId: "run", phase: "foreground" })
+  expect(overlay.show).toHaveBeenCalledOnce()
+  interaction.publishActivity("session", { runId: "run", phase: "stopped" })
+  expect(overlay.close).toHaveBeenCalledOnce()
+  interaction.emergencyStop("session", "run")
   expect(stop).toHaveBeenCalledExactlyOnceWith("session", "run")
+  interaction.emergencyStop("session", "run")
   scope.abort()
-  expect(shortcuts.unregister).toHaveBeenCalledExactlyOnceWith(accelerator)
-  invokeStop()
   expect(stop).toHaveBeenCalledTimes(1)
 })
 
@@ -53,8 +52,8 @@ it("requires task approval for automatic Computer calls even with a saved app gr
   const { owner, send } = window()
   const signal = new AbortController().signal
   const interaction = createComputerInteraction(owner, signal)
-  expect(await interaction.authorizeApp(app, signal)).toBe("remembered")
-  const approval = interaction.authorizeApp(app, signal, undefined, true)
+  expect(await interaction.authorizeApp(app, signal, "session")).toBe("remembered")
+  const approval = interaction.authorizeApp(app, signal, "session", true)
   const { prompt } = send.mock.lastCall?.[1]
   expect(prompt).toMatchObject({ kind: "authorize", appName: app.name, onceOnly: true })
   expect(replyToComputerInteraction(owner, { id: prompt.id, choice: "always" })).toBe(false)
@@ -89,14 +88,14 @@ it("allows an app only from its owner's current prompt and stores a grant only f
   const { owner, send } = window()
   const controller = new AbortController()
   const interaction = createComputerInteraction(owner, controller.signal)
-  const first = interaction.authorizeApp(app, controller.signal)
+  const first = interaction.authorizeApp(app, controller.signal, "session")
   const request = send.mock.lastCall?.[1]
   expect(request).toMatchObject({ type: "prompt", prompt: { kind: "authorize", appName: app.name } })
   expect(replyToComputerInteraction(window().owner, { id: request.prompt.id, choice: "always" })).toBe(false)
   expect(replyToComputerInteraction(owner, { id: request.prompt.id, choice: "once" })).toBe(true)
   expect(await first).toBe(true)
   expect(preferences.patch).not.toHaveBeenCalled()
-  const second = interaction.authorizeApp(app, controller.signal)
+  const second = interaction.authorizeApp(app, controller.signal, "session")
   expect(replyToComputerInteraction(owner, { id: request.prompt.id, choice: "always" })).toBe(false)
   const current = send.mock.lastCall?.[1].prompt.id
   expect(replyToComputerInteraction(owner, { id: current, choice: "always" })).toBe(true)

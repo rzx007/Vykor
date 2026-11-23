@@ -93,6 +93,12 @@ it.runIf(process.env.VYKOR_WINDOWS_FOREGROUND_LIVE === "1" && process.platform =
       await expect.poll(() => events().filter(row => row.kind === "key-up-F9"), { timeout: 3_000 }).toEqual([expect.objectContaining({ window: "control" })])
 
       lease = await foreground.enter(control, reason => reasons.push(reason), signal)
+      writeFileSync(join(dir, "external.request"), "control-esc")
+      await expect.poll(() => reasons.at(-1), { timeout: 3_000 }).toBe("emergency_stop")
+      expect(await lease.release()).toEqual({ released: true, exited: true })
+      expect(events().filter(row => row.kind === "key-down-Escape")).toHaveLength(0)
+
+      lease = await foreground.enter(control, reason => reasons.push(reason), signal)
       const controlFocus = await focusIdentity(control)
       expect(await lease.perform({ type: "key", key: "Tab", focusIdentity: controlFocus }, undefined, signal)).toEqual({ state: "sent", released: true })
       expect(await lease.release()).toEqual({ released: true, exited: true })
@@ -160,10 +166,10 @@ Add-Type -ReferencedAssemblies $refs -TypeDefinition $env:VYKOR_TEST_SEMANTIC
 $q = $env:VYKOR_TEST_WINDOW_IDENTITY | ConvertFrom-Json
 foreach ($action in "observe", "invoke") {
   [VykorWindowsSemanticQuery]::Run($q.windowId, 0, $q.pid, $q.threadId, $q.sessionId, $q.processStartKey,
-    $q.applicationPid, $q.applicationStartKey, $action, "", "Button", "Increment once", "", 1, "", "", $q.title)
+    $q.applicationPid, $q.applicationStartKey, $action, "", "Button", "Increment once", "", "", 1, "", "", $q.title)
 }
 [VykorWindowsSemanticQuery]::Run($q.windowId, $q.windowId, $q.pid, $q.threadId, $q.sessionId, $q.processStartKey,
-  $q.applicationPid, $q.applicationStartKey, "observe", "", "", "", "", 1, "", "", $q.title)
+  $q.applicationPid, $q.applicationStartKey, "observe", "", "", "", "", "", 1, "", "", $q.title)
 `
       const gated = execFileSync(join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
         ["-NoProfile", "-NonInteractive", "-Command", source], {

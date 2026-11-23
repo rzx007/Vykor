@@ -12,7 +12,7 @@ export interface DesktopComputerCandidate {
 }
 
 export type DesktopComputerPrompt = { id: string } & (
-  | { kind: "authorize"; appName: string; onceOnly?: true }
+  | { kind: "authorize"; sessionId: string; appName: string; onceOnly?: true }
   | { kind: "choose"; candidates: readonly DesktopComputerCandidate[]; confirmChange?: true }
 )
 
@@ -24,8 +24,6 @@ export interface DesktopComputerInteractionReply {
   id: string
   choice: string | null
 }
-
-export const COMPUTER_STOP_SHORTCUT = "Ctrl+Alt+Shift+Escape"
 
 export interface DesktopComputerActivity {
   sessionId: string
@@ -39,7 +37,6 @@ export interface DesktopComputerActivity {
   captureEnabled?: boolean
   captureRevocation?: "pending" | "failed"
   inputRelease?: "pending" | "failed"
-  emergencyArmed?: boolean
   preview?: { dataUrl: string; width: number; height: number }
 }
 

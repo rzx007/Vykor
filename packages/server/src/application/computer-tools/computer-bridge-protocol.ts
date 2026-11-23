@@ -18,6 +18,8 @@ export type ComputerSemanticAction =
 export interface ComputerApprovalProposal {
   proposalId: string;
   reason: string;
+  /** Classification by authenticated Desktop main, never from Computer tool input. */
+  ordinary?: true;
 }
 
 export type ComputerForegroundAction =
@@ -27,7 +29,7 @@ export type ComputerForegroundAction =
 
 export type ComputerAction =
   | { type: "observe" }
-  | { type: "capture" }
+  | { type: "capture"; purpose?: "result" }
   | { type: "foreground" }
   | { type: "handoff" }
   | { type: "open_app"; app: string; windowHint?: string }
@@ -89,6 +91,7 @@ export function parseComputerAction(value: unknown): ComputerAction | undefined 
   const { type, elementRef, text, direction, amount, frameRef, x, y, button, key, modifiers } = value;
   const keys = Object.keys(value);
   if ((type === "observe" || type === "capture" || type === "foreground" || type === "handoff") && keys.length === 1) return { type };
+  if (type === "capture" && value.purpose === "result" && keys.length === 2) return { type, purpose: "result" };
   if (type === "click" && keys.every(name => ["type", "frameRef", "x", "y", "button"].includes(name))
     && typeof frameRef === "string" && /^frame_[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/u.test(frameRef)
     && coordinate(x) && coordinate(y) && (button === undefined || button === "left" || button === "right")) {

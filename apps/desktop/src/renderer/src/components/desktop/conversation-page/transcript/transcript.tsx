@@ -1,5 +1,5 @@
 import type { OrbState } from "thinking-orbs"
-import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { findWorkflowSourcePart } from "../../tools/workflows/workflow-model"
 import {
   readSessionModelRetryState,
@@ -57,6 +57,7 @@ interface ConversationTranscriptProps {
   runs: DesktopSessionRun[]
   running: boolean
   pendingPermissionCount?: number
+  pendingComputerAppApproval?: ReactNode
   canEditLastUserMessage: boolean
   onEditLastUserMessage: (sourceMessageId: string, document: ComposerDocument) => void
   onCopyAssistantMessage: (content: string) => void | Promise<void>
@@ -80,6 +81,7 @@ export const ConversationTranscript = memo(function ConversationTranscript({
   runs,
   running,
   pendingPermissionCount = 0,
+  pendingComputerAppApproval,
   canEditLastUserMessage,
   onEditLastUserMessage,
   onCopyAssistantMessage,
@@ -95,17 +97,19 @@ export const ConversationTranscript = memo(function ConversationTranscript({
 }: ConversationTranscriptProps): React.JSX.Element {
   usePluginAppResults(parts)
   const workflowScroller = useConversationScroller()
-  const previousContent = useRef({ messages, parts, runs })
+  const hasComputerAppApproval = Boolean(pendingComputerAppApproval)
+  const previousContent = useRef({ messages, parts, runs, hasComputerAppApproval })
   useLayoutEffect(() => {
     const previous = previousContent.current
     if (
       !sameReferences(previous.messages, messages) ||
       !sameReferences(previous.parts, parts) ||
-      !sameReferences(previous.runs, runs)
+      !sameReferences(previous.runs, runs) ||
+      (hasComputerAppApproval && !previous.hasComputerAppApproval)
     )
       workflowScroller?.notifyContentChanged()
-    previousContent.current = { messages, parts, runs }
-  }, [messages, parts, runs, workflowScroller])
+    previousContent.current = { messages, parts, runs, hasComputerAppApproval }
+  }, [messages, parts, runs, hasComputerAppApproval, workflowScroller])
   useEffect(() => {
     const reveal = (event: Event) => {
       const detail = (event as CustomEvent<{ sessionId: string; runId: string }>).detail
@@ -217,10 +221,12 @@ export const ConversationTranscript = memo(function ConversationTranscript({
         navigationId,
         estimateSize: 32,
       })
-    if (messages.length === 0 && !running && noticeRuns.length === 0)
+    if (hasComputerAppApproval)
+      result.push({ id: "conversation-computer-app-approval", messageIds: [], navigationId, estimateSize: 64 })
+    if (messages.length === 0 && !running && noticeRuns.length === 0 && !hasComputerAppApproval)
       result.push({ id: "conversation-empty", messageIds: [], estimateSize: 320 })
     return result
-  }, [entries, modelRetry, running, activeRunGrouped, messages.length, noticeRuns.length])
+  }, [entries, modelRetry, running, activeRunGrouped, messages.length, noticeRuns.length, hasComputerAppApproval])
 
   // 外层滚动容器随聊天或加载状态重新挂载，这份初始记录只属于当前聊天。
   const [initialPartIds] = useState(() => new Set(parts.map((part) => part.id)))
@@ -238,6 +244,8 @@ export const ConversationTranscript = memo(function ConversationTranscript({
           const row = rows[index]!
           const entry = entries[index]
           if (!entry) {
+            if (row.id === "conversation-computer-app-approval")
+              return <MessageScrollerItem>{pendingComputerAppApproval}</MessageScrollerItem>
             if (row.id === "conversation-empty")
               return (
                 <MessageScrollerItem>

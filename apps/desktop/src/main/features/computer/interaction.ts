@@ -1,7 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { globalShortcut } from "electron"
 import type { WebContents } from "electron"
-import { COMPUTER_STOP_SHORTCUT } from "../../../shared/computer-types"
 import type {
   DesktopComputerActivity,
   DesktopComputerActivityUpdate,
@@ -12,12 +10,12 @@ import type {
 } from "../../../shared/computer-types"
 import { IpcEvents } from "../../../shared/ipc-channels"
 import { getDesktopPreferences, patchDesktopPreferences } from "../settings/desktop-preferences"
+import { showComputerControlOverlay } from "./computer-control-overlay"
 
 export interface ComputerInteraction {
   isRememberedApp?(id: string): boolean
-  authorizeApp(app: DesktopComputerAppGrant, signal: AbortSignal, sessionId?: string, onceOnly?: true): Promise<boolean | "remembered">
+  authorizeApp(app: DesktopComputerAppGrant, signal: AbortSignal, sessionId: string, onceOnly?: true): Promise<boolean | "remembered">
   chooseTarget(candidates: readonly DesktopComputerCandidate[], signal: AbortSignal, sessionId?: string, confirmChange?: true): Promise<string | undefined>
-  armEmergencyStop?(sessionId: string, runId: string, signal: AbortSignal): boolean
   emergencyStop?(sessionId: string, runId: string): void
   invalidateCapturedImage?(sessionId: string, runId: string): Promise<boolean> | undefined
   publishActivity?(sessionId: string, activity: Omit<DesktopComputerActivity, "sessionId"> | null): void
@@ -96,8 +94,7 @@ export function createComputerInteraction(
     sessionId && canReplyInSession ? () => canReplyInSession(sessionId) : undefined
   const isVisible = (sessionId: string) => !ownerSignal.aborted && !owner.isDestroyed() && (canReplyInSession?.(sessionId) ?? false)
   let activity: DesktopComputerActivity | null = null
-  let releaseStop: (() => void) | undefined
-  let armedRun: string | undefined
+  let closeOverlay: (() => void) | undefined
   let emergencyRun: string | undefined
 
   function emergencyStop(sessionId: string, runId: string): void {
@@ -117,17 +114,17 @@ export function createComputerInteraction(
 
   ownerSignal.addEventListener("abort", () => {
     activity = null
-    releaseStop?.()
+    closeOverlay?.()
   }, { once: true })
 
   return {
     isRememberedApp,
     emergencyStop,
-    async authorizeApp(app: DesktopComputerAppGrant, operationSignal: AbortSignal, sessionId?: string, onceOnly?: true): Promise<boolean | "remembered"> {
+    async authorizeApp(app: DesktopComputerAppGrant, operationSignal: AbortSignal, sessionId: string, onceOnly?: true): Promise<boolean | "remembered"> {
       const signal = AbortSignal.any([ownerSignal, operationSignal])
       if (signal.aborted || replyCheck(sessionId)?.() === false) return false
       if (!onceOnly && isRememberedApp(app.id)) return "remembered"
-      const choice = await ask(owner, { id: randomUUID(), kind: "authorize", appName: app.name, ...(onceOnly ? { onceOnly } : {}) },
+      const choice = await ask(owner, { id: randomUUID(), kind: "authorize", sessionId, appName: app.name, ...(onceOnly ? { onceOnly } : {}) },
         onceOnly ? ["once"] : ["once", "always"], signal, replyCheck(sessionId))
       if (signal.aborted) return false
       if (choice === "always") {
@@ -146,30 +143,6 @@ export function createComputerInteraction(
         candidates.map((entry) => entry.id), signal, replyCheck(sessionId))
       return signal.aborted ? undefined : choice
     },
-    armEmergencyStop(sessionId: string, runId: string, operationSignal: AbortSignal): boolean {
-      const signal = AbortSignal.any([ownerSignal, operationSignal])
-      if (!isVisible(sessionId) || signal.aborted || !stopRun) return false
-      if (releaseStop && armedRun === runId) return true
-      releaseStop?.()
-      const release = () => {
-        if (releaseStop !== release) return
-        releaseStop = undefined
-        armedRun = undefined
-        signal.removeEventListener("abort", release)
-        globalShortcut.unregister(COMPUTER_STOP_SHORTCUT)
-      }
-      try {
-        if (!globalShortcut.register(COMPUTER_STOP_SHORTCUT, () => {
-          if (releaseStop === release && !signal.aborted) emergencyStop(sessionId, runId)
-        })) return false
-      } catch {
-        return false
-      }
-      releaseStop = release
-      armedRun = runId
-      signal.addEventListener("abort", release, { once: true })
-      return true
-    },
     publishActivity(sessionId: string, next: Omit<DesktopComputerActivity, "sessionId"> | null): void {
       if (ownerSignal.aborted || (!isVisible(sessionId) && activity?.sessionId !== sessionId)) return
       if (next) {
@@ -177,10 +150,20 @@ export function createComputerInteraction(
         const { preview, ...description } = next
         const showPreview = next.captureEnabled !== false && next.phase !== "paused" && next.phase !== "stopped" &&
           isVisible(sessionId) && isComputerPreview(preview)
-        activity = { ...description, sessionId, emergencyArmed: armedRun === next.runId, ...(showPreview ? { preview } : {}) }
+        activity = { ...description, sessionId, ...(showPreview ? { preview } : {}) }
       } else if (activity?.sessionId === sessionId) {
         activity = null
       } else return
+      if (activity?.phase === "foreground" && isVisible(sessionId)) {
+        const { runId } = activity
+        closeOverlay ??= showComputerControlOverlay(() => {
+          if (activity?.runId === runId && activity.phase === "foreground" && isVisible(sessionId))
+            emergencyStop(sessionId, runId)
+        })
+      } else {
+        closeOverlay?.()
+        closeOverlay = undefined
+      }
       notify({ sessionId, activity })
     },
     getActivity(sessionId: string): DesktopComputerActivity | null {
@@ -188,6 +171,8 @@ export function createComputerInteraction(
     },
     getBoundActivity(): DesktopComputerActivity | null { return activity },
     clearPreview(): void {
+      closeOverlay?.()
+      closeOverlay = undefined
       if (!activity?.preview) return
       const { preview: _preview, ...description } = activity
       activity = description

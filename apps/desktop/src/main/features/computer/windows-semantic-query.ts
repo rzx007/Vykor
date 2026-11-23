@@ -33,7 +33,7 @@ public static class VykorWindowsSemanticQuery
     {
         public int index, depth;
         public int? parentIndex;
-        public string identity, role, label, value, valueDigest;
+        public string identity, role, label, automationId, value, valueDigest;
         public bool enabled, valueTruncated;
         public bool? selected, checkedState, expanded;
         public double? horizontalScrollPercent, verticalScrollPercent;
@@ -115,12 +115,14 @@ public static class VykorWindowsSemanticQuery
         var name = current.Name;
         var value = Pattern<ValuePattern>(element, ValuePattern.Pattern);
         var currentValue = value == null ? null : value.Current.Value;
-        var label = FirstText(name, current.AutomationId, current.HelpText);
+        var automationId = current.AutomationId ?? String.Empty;
+        var label = FirstText(name, automationId, current.HelpText);
         if (label.Length > 500) label = label.Substring(0, 500);
         var row = new Row {
             index = index, parentIndex = parent, depth = depth, identity = String.Join(",", id),
             role = role.StartsWith("ControlType.", StringComparison.Ordinal) ? role.Substring(12) : role,
-            label = label, enabled = current.IsEnabled, valueTruncated = currentValue != null && currentValue.Length > 6000,
+            label = label, automationId = automationId.Length <= 128 ? automationId : String.Empty,
+            enabled = current.IsEnabled, valueTruncated = currentValue != null && currentValue.Length > 6000,
             value = currentValue == null || currentValue.Length <= 6000 ? currentValue : currentValue.Substring(0, 6000),
             valueDigest = currentValue == null ? null : ValueDigest(currentValue),
             frame = bounds.IsEmpty ? null : new Frame { x = bounds.X, y = bounds.Y, w = bounds.Width, h = bounds.Height }
@@ -172,7 +174,7 @@ public static class VykorWindowsSemanticQuery
     }
 
     public static object Run(long hwnd, long owner, int pid, uint thread, int session, string started, int app, string appStarted,
-        string operation, string identity, string role, string label, string direction, int amount, string oldValueDigest, string text, string title)
+        string operation, string identity, string role, string label, string automationId, string direction, int amount, string oldValueDigest, string text, string title)
     {
         bool dispatched = false;
         try {
@@ -204,7 +206,8 @@ public static class VykorWindowsSemanticQuery
             var element = matches[0].element;
             if (VykorWindowsAuthentication.RequiresHandoff(element.Current)) return "handoff";
             var row = Read(element, 0, 0, null);
-            if (row == null || row.identity != identity || row.role != role || row.label != label || !row.enabled) return "refused";
+            if (row == null || row.identity != identity || row.role != role || row.label != label ||
+                row.automationId != automationId || !row.enabled) return "refused";
             if (operation == "set_text" && row.actions.Contains("set_value")) {
                 var value = Pattern<ValuePattern>(element, ValuePattern.Pattern);
                 if (value == null || value.Current.IsReadOnly || String.IsNullOrEmpty(oldValueDigest)) return "refused";

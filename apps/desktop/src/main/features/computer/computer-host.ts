@@ -3,10 +3,11 @@ import { setTimeout as delay } from "node:timers/promises"
 import type {
   ComputerAction, ComputerBridgeEvent, ComputerResult, ComputerRunIdentity, ComputerSemanticAction,
 } from "@vykor/server/daemon-host"
-import { COMPUTER_STOP_SHORTCUT, type DesktopComputerActivity } from "../../../shared/computer-types"
+import type { DesktopComputerActivity } from "../../../shared/computer-types"
 import type { ComputerHostResponse, DesktopComputerApproval, DesktopComputerDispatch } from "./computer-bridge"
 import {
-  alreadySatisfied, approvalReason, findControl, needsApproval, observationDigest, projectObservation, supportsAction, verifiedEffect,
+  alreadySatisfied, approvalReason, findControl, isOrdinarySemanticAction, needsApproval, observationDigest, projectObservation,
+  supportsAction, verifiedEffect,
   type ComputerObservation,
 } from "./computer-semantics"
 import type { ComputerInteraction } from "./interaction"
@@ -251,7 +252,7 @@ export class ComputerHost {
     approve: ApproveAction | undefined, authorizeDispatch: ApproveDispatch | undefined, onLaunch: () => void,
   ): Promise<ComputerHostResponse> {
     let launchAttempted = false
-    if (action.type === "capture") return this.captureWindow(task, signal)
+    if (action.type === "capture") return this.captureWindow(task, signal, action.purpose === "result")
     if (action.type === "foreground") return this.beginForeground(task, signal, approve, authorizeDispatch)
     if (action.type === "click" || action.type === "key" || action.type === "type_text") {
       return this.foregroundAction(task, action, signal, approve, authorizeDispatch)
@@ -501,7 +502,7 @@ export class ComputerHost {
     return task.target
   }
 
-  private async captureWindow(task: Task, signal: AbortSignal): Promise<ComputerResult> {
+  private async captureWindow(task: Task, signal: AbortSignal, resultOnly: boolean): Promise<ComputerResult> {
     if (!this.foreground || task.capture.signal.aborted) throw new TargetError("本次任务的窗口画面未启用。")
     if (await task.imageRevocation === false) throw new TargetError("无法确认上一次截图已撤回。")
     const target = this.requireTarget(task)
@@ -515,8 +516,14 @@ export class ComputerHost {
     })
     await this.liveTarget(task, target, active)
     active.throwIfAborted()
-    const ref = `frame_${randomUUID()}`
     const { mimeType, data, width, height } = image
+    if (resultOnly) {
+      return {
+        text: JSON.stringify({ status: "captured", ...this.targetDetails(target) }),
+        image: { mediaType: mimeType, data, width, height },
+      }
+    }
+    const ref = `frame_${randomUUID()}`
     task.frame = { ref, target, image, capturedAt: Date.now() }
     task.activity = { action: "观察窗口画面", evidence: "已核对目标窗口" }
     this.publish(task)
@@ -527,7 +534,7 @@ export class ComputerHost {
   }
 
   private async beginForeground(task: Task, signal: AbortSignal, approve?: ApproveAction, dispatch?: ApproveDispatch): Promise<ComputerResult> {
-    if (!this.foreground || !this.interaction.armEmergencyStop) throw new TargetError("当前 Desktop 未提供可用的前台控制和本机急停。")
+    if (!this.foreground || !this.interaction.emergencyStop) throw new TargetError("当前 Desktop 未提供可用的前台控制和本机急停。")
     if (task.occupation) throw new TargetError("目标窗口的前台控制已获准。请先观察当前界面。")
     const target = this.requireTarget(task)
     await this.liveTarget(task, target, signal)
@@ -538,13 +545,10 @@ export class ComputerHost {
     task.occupation = occupied
     const requestSignal = AbortSignal.any([signal, occupied.grant.signal])
     try {
-      if (!this.interaction.armEmergencyStop(task.run.sessionId, task.run.runId, task.stop.signal)) {
-        throw new TargetError("无法启用本机急停，前台控制未开始。")
-      }
-      task.activity = { action: "等待前台控制授权", reason: `可用 ${COMPUTER_STOP_SHORTCUT} 本机急停。` }
+      task.activity = { action: "等待前台控制授权" }
       this.publish(task)
       if (!approve || !await approve({ proposalId: randomUUID(), reason:
-        `允许 Vykor 暂时使用键鼠操作「${displayTitle(target.window).slice(0, 150)}」吗？可随时接管，或按 ${COMPUTER_STOP_SHORTCUT} 停止。`,
+        `允许 Vykor 暂时使用键鼠操作「${displayTitle(target.window).slice(0, 150)}」吗？按 Esc 可停止。`,
       }, requestSignal)) throw new TargetError("本次前台控制没有获准。")
       await this.liveTarget(task, target, requestSignal)
       await requireDispatch(dispatch, requestSignal)
@@ -829,6 +833,7 @@ export class ComputerHost {
       }
       if (!approve || !await approve({
         proposalId: randomUUID(), reason: approvalReason(target.app.name, target.window.title, action, expected),
+        ...(isOrdinarySemanticAction(action, prior.control, target.app) ? { ordinary: true } : {}),
       }, signal)) throw new TargetError("该操作没有获得本次批准。")
       signal.throwIfAborted()
     }

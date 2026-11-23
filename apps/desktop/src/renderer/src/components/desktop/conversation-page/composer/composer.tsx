@@ -20,6 +20,7 @@ import { promptQueueOnlyReason } from "@renderer/stores/desktop-session/pending-
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session/store"
 import { pluginAppModelContexts } from "../../shell/plugin-apps/plugin-app-model-context"
 import { PluginAppComposerContext } from "../../shell/plugin-apps/composer-context"
+import { ComputerActivityMenu } from "../../tools/computer/computer-activity-panel"
 import { ComposerAttachments } from "./composer-attachments"
 import { ComposerBrowserAnnotations } from "./composer-browser-annotations"
 import { readComposerDrop } from "./composer-file-input"
@@ -517,6 +518,7 @@ export function Composer({
             <span className="@max-[36rem]/composer:sr-only">电脑操作</span>
           </Button>
         ) : null}
+        {computerEnabled && activeSessionId ? <ComputerActivityMenu key={activeSessionId} sessionId={activeSessionId} /> : null}
         {computerArmed ? (
           <Input
             aria-label="目标应用（可选）"

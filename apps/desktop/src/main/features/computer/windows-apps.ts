@@ -8,7 +8,7 @@ import { windowsActivatePackagedApp, windowsWindowQuery } from "./windows-window
 export interface WindowsApp {
   id: string
   name: string
-  builtIn?: "notepad"
+  builtIn?: "notepad" | "calculator"
   /** Local application chooser only. Never include native details in a model result. */
   detail?: string
 }
@@ -59,12 +59,14 @@ interface ResolvedApp extends WindowsApp {
 
 const run = promisify(execFile)
 const explorerId = "microsoft.windows.explorer"
+const notepadId = "microsoft.windowsnotepad_8wekyb3d8bbwe!app"
+const calculatorId = "microsoft.windowscalculator_8wekyb3d8bbwe!app"
 const packagedId = /^[a-z\d][a-z\d.-]*_[a-z\d]+![a-z\d][a-z\d.-]*$/i
 const aliases = new Map<string, readonly string[]>([
   [explorerId, ["File Explorer", "Windows Explorer", "Explorer", "资源管理器", "文件资源管理器", "explorer.exe"]],
   ["microsoft.paint_8wekyb3d8bbwe!app", ["Paint", "MS Paint", "画图", "mspaint.exe"]],
-  ["microsoft.windowsnotepad_8wekyb3d8bbwe!app", ["Notepad", "记事本", "notepad.exe"]],
-  ["microsoft.windowscalculator_8wekyb3d8bbwe!app", ["Calculator", "计算器", "calc", "calc.exe"]],
+  [notepadId, ["Notepad", "记事本", "notepad.exe"]],
+  [calculatorId, ["Calculator", "计算器", "calc", "calc.exe"]],
 ])
 
 const catalogScript = String.raw`
@@ -266,10 +268,11 @@ export function createWindowsApps(): WindowsApps & { visibleWindows(signal: Abor
         signal.throwIfAborted()
         const known = await resolveEntry(candidate, systemRoot)
         if (!known || apps.has(known.id)) continue
+        const registration = normalized(known.registration)
+        const builtIn = known.executable ? undefined
+          : registration === notepadId ? "notepad" : registration === calculatorId ? "calculator" : undefined
         const app: WindowsApp = Object.freeze({
-          id: known.id, name: known.name, detail: known.executable ?? known.registration,
-          ...(normalized(known.registration) === "microsoft.windowsnotepad_8wekyb3d8bbwe!app" && !known.executable
-            ? { builtIn: "notepad" as const } : {}),
+          id: known.id, name: known.name, detail: known.executable ?? known.registration, builtIn,
         })
         issued.set(app, known)
         apps.set(app.id, app)

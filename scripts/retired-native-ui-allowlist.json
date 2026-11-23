@@ -3504,7 +3504,7 @@
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 1160,
+      "line": 1161,
       "text": "        recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
@@ -4068,7 +4068,7 @@
     },
     {
       "path": "packages/server/src/http/server.ts",
-      "line": 528,
+      "line": 535,
       "text": "    this.app.route(\"/sessions\", createSessionPluginUiHistoryRoutes(this.application.pluginUiHistory));",
       "reason": "Registers read-only history/410 routes only."
     },

@@ -14,6 +14,7 @@ export interface WindowsDriverElement {
   token: string
   role: string
   label: string
+  automationId?: string
   actions: string[]
   value?: string
   /** Proof of the complete native field value, including text outside the preview. */
@@ -121,7 +122,7 @@ ${windowsSemanticQuery}
 '@
 $q = $env:VYKOR_CUA_NATIVE_REQUEST | ConvertFrom-Json
 $result = [VykorWindowsSemanticQuery]::Run($q.hwnd, $q.owner, $q.pid, $q.thread, $q.session, $q.started, $q.app, $q.appStarted,
-  $q.operation, $q.identity, $q.role, $q.label, $q.direction, $q.amount, $q.oldValueDigest, $q.text, $q.title)
+  $q.operation, $q.identity, $q.role, $q.label, $q.automationId, $q.direction, $q.amount, $q.oldValueDigest, $q.text, $q.title)
 ConvertTo-Json -InputObject $result -Depth 6 -Compress
 `
 
@@ -130,6 +131,7 @@ function nativeQuery(window: WindowsAppWindow, signal: AbortSignal, control?: Na
     hwnd: window.windowId, owner: window.ownerWindowId ?? 0, pid: window.pid, thread: window.threadId ?? 0, session: window.sessionId,
     started: window.processStartKey, app: window.applicationPid ?? window.pid, appStarted: window.applicationStartKey ?? "",
     operation: action?.type ?? "observe", identity: control?.identity ?? "", role: control?.role ?? "", label: control?.label ?? "",
+    automationId: control?.automationId ?? "",
     direction: action?.type === "scroll" ? action.direction : "", amount: action?.type === "scroll" ? action.amount ?? 1 : 1,
     oldValueDigest: control?.valueDigest ?? "", text: action?.type === "set_text" ? action.text : "", title: window.title,
   }

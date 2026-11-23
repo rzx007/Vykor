@@ -212,6 +212,7 @@ public sealed class VykorWindowsForeground
     IntPtr keyboard, pointer, focusWatch;
     Control pump;
     volatile bool stopping, ready, releaseUnverified;
+    bool revocationReported;
     string reason;
     int inFlight;
 
@@ -232,8 +233,12 @@ public sealed class VykorWindowsForeground
             if (code >= 0) {
                 var key = (KeyboardHook)Marshal.PtrToStructure(data, typeof(KeyboardHook));
                 if ((key.Flags & 128) == 0) {
-                    bool stop = key.Key == 27 && Down(16) && Down(17) && Down(18);
-                    Revoke(stop ? "emergency_stop" : "physical_input");
+                    if (key.Key == 27 && ready && !stopping && !revocationReported) {
+                        Interlocked.Exchange(ref reason, "emergency_stop");
+                        cancelled.Set();
+                        return new IntPtr(1);
+                    }
+                    Revoke("physical_input");
                 }
             }
             return CallNextHookEx(IntPtr.Zero, code, message, data);
@@ -477,11 +482,10 @@ public sealed class VykorWindowsForeground
                     finally { Interlocked.Exchange(ref checkingSurface, 0); }
                 }, null, 100, 100))
                 using (var timer = new System.Windows.Forms.Timer { Interval = 50 }) {
-                    bool notified = false;
                     timer.Tick += delegate {
                         if (Reason == null && !stopping && !AtTarget()) Revoke("focus_lost");
-                        if (Reason != null && !notified) {
-                            notified = true;
+                        if (Reason != null && !revocationReported) {
+                            revocationReported = true;
                             Write(new { @event = "revoked", reason = Reason });
                         }
                         if ((stopping || Reason != null) && Interlocked.CompareExchange(ref inFlight, 0, 0) == 0) {
