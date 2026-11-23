@@ -1,5 +1,6 @@
 import { BusinessDataChannels, type BusinessDataIpcMap } from "./business-data-types"
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
+import type { DesktopComputerActivity, DesktopComputerAppGrant, DesktopComputerControl, DesktopComputerInteractionReply } from "./computer-types"
 import type { DesktopWindowThemeSource } from "./window-theme-types"
 import { TerminalSettingsChannels, type TerminalSettingsIpcMap } from "./terminal-settings-types"
 import { GitSettingsChannels, type GitSettingsIpcMap } from "./git-settings-types"
@@ -41,6 +42,7 @@ import type {
   DesktopBootstrapData,
   DesktopDaemonStatus,
   DesktopProjectDetails,
+  DesktopProjectDirectory,
   DesktopCommandCatalogEntry,
   DesktopPluginCatalogEntry,
   CompactDesktopSessionInput,
@@ -284,6 +286,7 @@ export const IpcChannels = {
   sessionSearch: "session:search",
   sessionDaemonStatus: "session:daemon-status",
   sessionChooseProject: "session:choose-project",
+  sessionReadLocalProjectDirectory: "session:read-local-project-directory",
   sessionInspectProject: "session:inspect-project",
   sessionListCommands: "session:list-commands",
   sessionListContextPlugins: "session:list-context-plugins",
@@ -311,6 +314,13 @@ export const IpcChannels = {
   sessionFork: "session:fork",
   sessionClose: "session:close",
   sessionSendPrompt: "session:send-prompt",
+  computerSendPrompt: "computer:send-prompt",
+  computerReply: "computer:reply",
+  computerActivityGet: "computer:activity-get",
+  computerShareWindow: "computer:share-window",
+  computerControl: "computer:control",
+  computerListAppGrants: "computer:list-app-grants",
+  computerRevokeAppGrant: "computer:revoke-app-grant",
   sessionCheckPromptAccepted: "session:check-prompt-accepted",
   sessionEditLatestPrompt: "session:edit-latest-prompt",
   sessionPromoteQueuedPrompt: "session:promote-queued-prompt",
@@ -339,6 +349,7 @@ export const IpcChannels = {
   attachmentDiscardDraft: "attachment:discard-draft",
   attachmentDeleteUnreferenced: "attachment:delete-unreferenced",
   attachmentReadPreview: "attachment:read-preview",
+  attachmentReadDocumentPreview: "attachment:read-document-preview",
   attachmentOpen: "attachment:open",
   attachmentSaveAs: "attachment:save-as",
   attachmentStorageScan: "attachment:storage-scan",
@@ -488,6 +499,8 @@ export const IpcEvents = {
   terminalExit: "terminal:exit",
   terminalError: "terminal:error",
   browserOpenRequest: "browser:open-request",
+  computerInteraction: "computer:interaction",
+  computerActivity: "computer:activity",
 } as const
 
 export type IpcChannel =
@@ -778,7 +791,8 @@ export interface IpcInvokeMap
     result: DesktopSessionSearchResult[]
   }
   [IpcChannels.sessionDaemonStatus]: { args: []; result: DesktopDaemonStatus }
-  [IpcChannels.sessionChooseProject]: { args: []; result: DesktopProjectDetails | null }
+  [IpcChannels.sessionChooseProject]: { args: []; result: DesktopProjectDirectory | null }
+  [IpcChannels.sessionReadLocalProjectDirectory]: { args: [path: string]; result: DesktopProjectDirectory }
   [IpcChannels.sessionInspectProject]: {
     args: [path: string]
     result: DesktopProjectDetails
@@ -881,6 +895,13 @@ export interface IpcInvokeMap
   }
   [IpcChannels.sessionClose]: { args: []; result: void }
   [IpcChannels.sessionSendPrompt]: { args: [input: SendDesktopPromptInput]; result: void }
+  [IpcChannels.computerSendPrompt]: { args: [input: SendDesktopPromptInput, automatic?: true]; result: void }
+  [IpcChannels.computerReply]: { args: [reply: DesktopComputerInteractionReply]; result: boolean }
+  [IpcChannels.computerActivityGet]: { args: [sessionId: string]; result: DesktopComputerActivity | null }
+  [IpcChannels.computerShareWindow]: { args: []; result: { bytes: Uint8Array } | null }
+  [IpcChannels.computerControl]: { args: [input: DesktopComputerControl]; result: boolean }
+  [IpcChannels.computerListAppGrants]: { args: []; result: DesktopComputerAppGrant[] }
+  [IpcChannels.computerRevokeAppGrant]: { args: [id: string]; result: DesktopComputerAppGrant[] }
   [IpcChannels.sessionCheckPromptAccepted]: { args: [input: { sessionId: string; inputId: string }]; result: boolean }
   [IpcChannels.sessionEditLatestPrompt]: {
     args: [input: EditLatestDesktopPromptInput]
@@ -977,6 +998,10 @@ export interface IpcInvokeMap
   [IpcChannels.attachmentReadPreview]: {
     args: [input: DesktopAttachmentAssetInput]
     result: DesktopAttachmentPreview
+  }
+  [IpcChannels.attachmentReadDocumentPreview]: {
+    args: [input: DesktopAttachmentAssetInput]
+    result: import("./document-preview").AttachmentDocumentPreview
   }
   [IpcChannels.attachmentOpen]: {
     args: [input: DesktopAttachmentAssetInput]

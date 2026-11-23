@@ -4,4 +4,6 @@
 
 入口为 `node --test scripts/__test__/prepare-office-engine.test.mjs`。新增跨包脚本测试放这里；模块内部测试放回对应模块。
 
+`node --test scripts/__test__/prepare-cua-driver.test.mjs` 用错误的归档验证 Cua 准备脚本会在解包前拒绝摘要不符的资源。
+
 `documentation-policy.test.mjs` 验证文档分类不会被交叉引用误导、旧协议版本声明会失败、模块 README 扫描会跳过安装依赖和构建产物。`pnpm check-docs` 自动运行这组测试，也可用 `node --test scripts/__test__/documentation-policy.test.mjs` 单独执行。

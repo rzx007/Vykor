@@ -175,6 +175,53 @@ function createStoredAdmission() {
   return { store, options, enqueueRunFn, steerFn, service: new RunAdmissionService(options) };
 }
 
+describe("Computer prompt admission", () => {
+  const prompt = { id: "computer", items: [{ type: "text" as const, text: "Observe my application" }] };
+
+  it("binds the persisted identity before enqueueing, only once across duplicate submissions and replay", async () => {
+    const f = createStoredAdmission();
+    const bind = vi.fn();
+    const authorization = { assertCurrent: vi.fn(), bind };
+    f.enqueueRunFn.mockImplementationOnce((run, inputId) => {
+      expect(f.store.conversations.getInput(inputId)?.sessionId).toBe("s1");
+      expect(bind).toHaveBeenCalledWith({ sessionId: "s1", runId: run.id, inputId });
+      return "running";
+    });
+    const accepted = await f.service.preparePrompt("s1", prompt, authorization);
+    if ("completion" in accepted || !accepted.run) throw new Error("Expected a newly admitted run");
+    await f.service.preparePrompt("s1", prompt, authorization);
+    f.store.runs.updateRun(accepted.run.id, { status: "interrupted" });
+    f.service.replayInput(accepted.input.id, { id: "replay" });
+    expect(bind).toHaveBeenCalledTimes(1);
+    expect(accepted.input.metadata).not.toHaveProperty("computer");
+    expect(accepted.run.metadata).not.toHaveProperty("computer");
+  });
+
+  it("does not upgrade an ordinary input or recovered admission on a trusted retry", async () => {
+    const f = createStoredAdmission();
+    const { options } = f;
+    options.runtimeQueue.hasRuntime = false;
+    await admitPrompt(f.service, "s1", prompt);
+    options.runtimeQueue.hasRuntime = true;
+    const binding = { assertCurrent: vi.fn(), bind: vi.fn() };
+    const recovered = await f.service.preparePrompt("s1", prompt, binding);
+    expect("completion" in recovered ? await recovered.completion : recovered).toMatchObject({
+      run: { metadata: { recoveredAdmission: true } },
+    });
+    expect(binding.bind).not.toHaveBeenCalled();
+  });
+
+  it("rejects a new prompt disconnected during preparation and stores no input", async () => {
+    const f = createStoredAdmission();
+    const disconnected = new Error("The Computer connection closed");
+    const binding = { assertCurrent: () => { throw disconnected; }, bind: vi.fn() };
+    await expect(async () => f.service.preparePrompt("s1", prompt, binding)).rejects.toThrow(disconnected);
+    expect(binding.bind).not.toHaveBeenCalled();
+    expect(f.store.conversations.getInput(prompt.id)).toBeUndefined();
+    expect(f.enqueueRunFn).not.toHaveBeenCalled();
+  });
+});
+
 describe("RunAdmissionService synchronous queued persistence", () => {
   it.each(["metadata", "runMetadata"])("rejects an implicit output schema in %s before creating records", async field => {
     const f = createStoredAdmission();

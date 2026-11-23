@@ -1,4 +1,5 @@
 import { acquireDataRootWriter, dataRootHome, isCompleteAbsolutePath, readDataRootSelector, resolveDataRootSelection, selectDataRoot, waitForDataRootSelection } from "@vykor/host-config/paths";
+import type { ChildProcess } from "node:child_process";
 import { access, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -27,6 +28,8 @@ export interface EnsureServiceOptions extends DiscoverServiceOptions {
   env?: Record<string, string | undefined>;
   /** Append the detached process output to this file when starting a service. */
   logPath?: string;
+  /** Use inherited Node IPC to pair only with the child this call started and discovered. */
+  pairSpawned?: (child: ChildProcess, endpoint: ServiceEndpoint, signal: AbortSignal) => Promise<void>;
 }
 
 export function clientOptions(endpoint: ServiceEndpoint): { baseUrl: string; token: string } {
@@ -103,12 +106,15 @@ function isManagedRegistryCandidate(file: string, env: Record<string, string | u
   return file === registryFileForRoot(selectDataRoot({ env, homeDir, selector }).dataRoot, env);
 }
 
-function waitForStartup(pending: Promise<ServiceEndpoint>, end: number, signal?: AbortSignal): Promise<ServiceEndpoint> {
+function waitForStartup<T>(
+  pending: Promise<T>, end: number, signal?: AbortSignal,
+  timeoutMessage = "Vykor service startup timed out waiting for the shared startup.",
+): Promise<T> {
   signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
     const cleanup = () => { clearTimeout(timer); signal?.removeEventListener("abort", abort); };
     const abort = () => { cleanup(); reject(signal!.reason); };
-    const timer = setTimeout(() => { cleanup(); reject(new Error("Vykor service startup timed out waiting for the shared startup.")); }, Math.max(1, end - Date.now()));
+    const timer = setTimeout(() => { cleanup(); reject(new Error(timeoutMessage)); }, Math.max(1, end - Date.now()));
     signal?.addEventListener("abort", abort, { once: true });
     pending.then(value => { cleanup(); resolve(value); }, error => { cleanup(); reject(error); });
   });
@@ -189,14 +195,28 @@ async function startRegisteredService(options: EnsureServiceOptions & { file: st
   const command = options.command ?? await defaultCommand(cwd);
   options.signal?.throwIfAborted();
   if (Date.now() >= end) throw new Error("Vykor service startup timed out before process creation.");
-  const started = startProcess(command, cwd, env, options.logPath);
+  const started = startProcess(command, cwd, env, options.logPath, Boolean(options.pairSpawned));
   try {
     while (Date.now() < end) {
       options.signal?.throwIfAborted();
       // Health, protocol negotiation and authentication share the remaining startup
       // budget. A cold capability probe can take longer than the normal 1s discovery.
       const endpoint = await discover({ ...options, timeoutMs: Math.max(1, end - Date.now()) });
-      if (endpoint && !sameInstance(endpoint, previous)) return endpoint;
+      if (endpoint && !sameInstance(endpoint, previous)) {
+        if (options.pairSpawned && endpoint.pid === started.child.pid && started.child.connected) {
+          const deadline = AbortSignal.timeout(Math.max(1, end - Date.now()));
+          const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
+          await waitForStartup(
+            options.pairSpawned(started.child, endpoint, signal), end, options.signal,
+            "Vykor service startup timed out during private startup pairing.",
+          );
+          signal.throwIfAborted();
+          const confirmed = await readEndpoint(options.file);
+          if (!sameInstance(endpoint, confirmed) || endpoint.storePath !== confirmed?.storePath)
+            throw new Error("Vykor service registration changed during private startup pairing.");
+        }
+        return endpoint;
+      }
       const failure = started.failure();
       if (failure) throw failure;
       await sleep(Math.min(50, Math.max(1, end - Date.now())), undefined, { signal: options.signal });
@@ -209,6 +229,8 @@ async function startRegisteredService(options: EnsureServiceOptions & { file: st
       if (sameInstance(current, await readEndpoint(options.file))) await unlink(options.file).catch(() => {});
     }
     throw error;
+  } finally {
+    if (started.child.connected) started.child.disconnect();
   }
 }
 

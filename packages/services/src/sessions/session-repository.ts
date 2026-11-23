@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { lstatSync } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { getDataRoot, getDesktopDataDir } from "@vykor/host-config/paths";
 
 import type { AppendEventInput } from "../conversations/commands.js";
 import type { CreateSessionInput, ListSessionsOptions, UpdateSessionInput, ClearSessionWorktreeBindingInput } from "./commands.js";
@@ -27,6 +28,39 @@ export interface SessionRepositoryOptions {
 
 class SessionWorktreeBindingError extends Error {
   readonly code = "worktree_binding_conflict";
+}
+
+function isOutsideDirectory(pathFromRoot: string): boolean {
+  return pathFromRoot === ".." || pathFromRoot.startsWith(`..${sep}`) || isAbsolute(pathFromRoot);
+}
+
+function isRegisteredDesktopWorktree(input: CreateSessionInput, project: ProjectRecord, cwd: string): boolean {
+  const desktop = input.metadata?.desktop as {
+    settingsRoot?: unknown;
+    worktree?: { id?: unknown; path?: unknown; branch?: unknown };
+  } | undefined;
+  const binding = desktop?.worktree;
+  if (typeof binding?.id !== "string" || !binding.id ||
+      typeof binding.branch !== "string" || !binding.branch ||
+      typeof binding.path !== "string" || relative(cwd, binding.path) !== "" ||
+      typeof desktop?.settingsRoot !== "string" || relative(project.path, desktop.settingsRoot) !== "") return false;
+  try {
+    const registry = JSON.parse(readFileSync(join(getDesktopDataDir(), "git-settings.json"), "utf8")) as {
+      version?: unknown;
+      worktrees?: unknown;
+    } | null;
+    if (registry?.version !== 1 || !Array.isArray(registry.worktrees)) return false;
+    const managedRoot = join(realpathSync(getDataRoot()), "worktrees");
+    const fromRoot = relative(managedRoot, realpathSync(cwd));
+    if (!fromRoot || isOutsideDirectory(fromRoot)) return false;
+    return registry.worktrees.some((entry) =>
+      entry?.id === binding.id && entry.projectId === project.id && entry.branch === binding.branch &&
+      entry.sessionId === undefined && typeof entry.path === "string" && relative(cwd, entry.path) === "" &&
+      typeof entry.projectPath === "string" && relative(project.path, entry.projectPath) === ""
+    );
+  } catch {
+    return false;
+  }
 }
 
 export class SessionRepository {
@@ -72,20 +106,20 @@ export class SessionRepository {
       if (!project) throw new Error(`Project not found: ${projectId}`);
       const cwd = resolve(input.cwd);
       const cwdRelative = relative(project.path, cwd);
-      if (
-        !input.parentId &&
-        (cwdRelative === ".." ||
-          cwdRelative.startsWith(`..${sep}`) ||
-          isAbsolute(cwdRelative))
-      ) {
-        throw new Error("Session cwd must be within the project directory");
+      const externalWorktree = !input.parentId && isOutsideDirectory(cwdRelative);
+      if (externalWorktree) {
+        const assigned = Object.values(this.storage.state.sessions).some((session) =>
+          !session.parentId && session.projectId === project.id && relative(cwd, session.cwd) === ""
+        );
+        if (assigned || !isRegisteredDesktopWorktree(input, project, cwd))
+          throw new Error("Session cwd must be within the project directory");
       }
       const session: SessionRecord = {
         id,
         ...(input.parentId ? { parentId: input.parentId } : {}),
         projectId: project.id,
         cwd,
-        cwdRelative,
+        ...(externalWorktree ? {} : { cwdRelative }),
         title: input.title ?? "",
         model: input.model,
         ...(input.agent ? { agent: input.agent } : {}),

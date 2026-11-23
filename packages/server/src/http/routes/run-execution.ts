@@ -12,7 +12,10 @@ import {
 } from "../support.js";
 import type { RequestTraceRegistry } from "../control/index.js";
 import type { SessionInteractionService } from "../../application/session/interactions/session-interaction-service.js";
+import type { AdmitPromptInput, AdmitPromptResult } from "../../application/session/execution/run-admission-service.js";
 import { parseSessionObservationTarget } from "../../application/session/execution/session-observation-grant.js";
+import { ComputerSessionUnavailableError } from "../../application/session/session-application-error.js";
+import { COMPUTER_SESSION_UNAVAILABLE } from "../../application/computer-tools/computer-bridge-protocol.js";
 
 export interface RunExecutionRoutesContext {
   application: Pick<
@@ -27,6 +30,45 @@ export interface RunExecutionRoutesContext {
   traces: Pick<RequestTraceRegistry, "get">;
 }
 
+async function submitPrompt(
+  admit: (input: AdmitPromptInput) => Promise<AdmitPromptResult>,
+  body: Record<string, unknown>,
+  traceId: string | undefined,
+): Promise<Response> {
+  let input;
+  try {
+    const parsed = parseAdmitPromptRequest(body);
+    // The protocol joins adjacent text items. Only the original first item can authorize observation.
+    const firstItem = Array.isArray(body.items) ? body.items[0] : parsed.items[0];
+    const observationTargetSessionId = parseSessionObservationTarget(firstItem, parsed.items[0]);
+    input = {
+      ...parsed,
+      ...(parsed.delivery !== "steer" ? { allowSessionLookup: true as const } : {}),
+      ...(observationTargetSessionId === undefined ? {} : { observationTargetSessionId }),
+      traceId,
+    };
+  } catch (error) {
+    return protocolValidationErrorResponse(error);
+  }
+  try {
+    return jsonResponse(await admit(input), 202);
+  } catch (error) {
+    if (error instanceof ComputerSessionUnavailableError)
+      return jsonResponse({ code: COMPUTER_SESSION_UNAVAILABLE, message: error.message }, 409);
+    return applicationErrorResponse(error, sessionMutationErrorStatus(error));
+  }
+}
+
+export function admitComputerPrompt(
+  application: Pick<SessionInteractionService, "admitComputerPrompt">,
+  sessionId: string,
+  body: Record<string, unknown>,
+  traceId: string | undefined,
+  connectionId: string,
+): Promise<Response> {
+  return submitPrompt(input => application.admitComputerPrompt(sessionId, input, connectionId), body, traceId);
+}
+
 export function createRunExecutionRoutes(
   context: RunExecutionRoutesContext,
 ): Hono {
@@ -34,31 +76,11 @@ export function createRunExecutionRoutes(
     .post("/:sessionId/prompts", async (c) => {
       const sessionId = c.req.param("sessionId");
       if (!sessionId) return errorResponse(400, "sessionId is required");
-      let input;
-      let observationTargetSessionId;
       try {
         const body = await readJson(c);
-        input = parseAdmitPromptRequest(body);
-        // The protocol joins adjacent text items. Only the original first item can authorize observation.
-        const firstItem = Array.isArray(body.items) ? body.items[0] : input.items[0];
-        observationTargetSessionId = parseSessionObservationTarget(firstItem, input.items[0]);
+        return submitPrompt(input => context.application.admitPrompt(sessionId, input), body, context.traces.get(c.req.raw));
       } catch (error) {
         return protocolValidationErrorResponse(error);
-      }
-
-      try {
-        const admitted = await context.application.admitPrompt(sessionId, {
-          ...input,
-          ...(input.delivery !== "steer" ? { allowSessionLookup: true } : {}),
-          ...(observationTargetSessionId === undefined ? {} : { observationTargetSessionId }),
-          traceId: context.traces.get(c.req.raw),
-        });
-        return jsonResponse(admitted, 202);
-      } catch (error) {
-        return applicationErrorResponse(
-          error,
-          sessionMutationErrorStatus(error),
-        );
       }
     })
     .post("/:sessionId/prompts/latest/edit", async (c) => {

@@ -33,6 +33,35 @@ function withBroker(
 }
 
 describe("StorePermissionBroker", () => {
+  it("requires a trusted, single-use answer for a Computer approval", async () => {
+    await withBroker(async ({ broker, store }) => {
+      let requestId = "";
+      const waiting = broker.askComputer({
+        sessionId: "s1", runId: "r1", inputId: "i1", reason: "Approve a Windows change",
+      }, id => { requestId = id; });
+      expect(store.permissions.get(requestId)).toMatchObject({
+        status: "pending",
+        toolName: "Computer",
+        payload: { computerApproval: true, confirmation: "once", approvalMode: "ask" },
+      });
+      expect(() => broker.reply({ requestId, status: "approved", decision: "session" })).toThrow(/Desktop Computer/);
+      expect(broker.replyComputer({ requestId, status: "approved" })).toMatchObject({ status: "approved", decision: "once" });
+      await expect(waiting).resolves.toMatchObject({ status: "approved", decision: "once" });
+      expect(() => broker.replyComputer({ requestId, status: "approved" })).toThrow(/already resolved/);
+      expect(broker.listApprovals()).toHaveLength(0);
+    });
+  });
+
+  it("keeps ordinary permissions outside the trusted Computer reply channel", async () => {
+    await withBroker(async ({ broker, store }) => {
+      const waiting = broker.ask({ sessionId: "s1", toolName: "Computer", input: { computerApproval: true } });
+      const requestId = store.permissions.list({ status: "pending" })[0]!.id;
+      expect(() => broker.replyComputer({ requestId, status: "approved" })).toThrow(/Computer approval/);
+      broker.reply({ requestId, status: "denied" });
+      await expect(waiting).resolves.toMatchObject({ status: "denied" });
+    });
+  });
+
   it("revokes session approvals durably without rewriting the original decision", async () => {
     await withBroker(async ({ broker, store }) => {
       const first = broker.ask({ sessionId: "s1", toolName: "Write" });

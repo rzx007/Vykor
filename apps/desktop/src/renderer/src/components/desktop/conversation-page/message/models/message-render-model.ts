@@ -8,6 +8,7 @@ import type {
 } from "@shared/session-types"
 import { readPluginUiInstance, type PluginUiInstanceRecord } from "@vykor/protocol"
 import { isToolGenerationPresentation } from "../activity/tool-generation-presentation"
+import { toolOutputText } from "./message-content"
 
 export type AssistantContentUnit =
   | {
@@ -275,6 +276,23 @@ function toolExecutionState(
   return undefined
 }
 
+export function computerActionOutcome(call: DesktopSessionPart, result?: DesktopSessionPart):
+  "未执行" | "已确认" | "待核对" | undefined {
+  if (call.toolName !== "Computer") return
+  const state = toolExecutionState(call, result)
+  if (state === "not_started") return "未执行"
+  const status = toolCallStatus(call, result)
+  if (state === "unknown" || status === "interrupted") return "待核对"
+  if (status !== "completed") return
+  const text = toolOutputText(result?.output ?? result?.text ?? call.output)
+  // The host writes the status first, so it survives the bounded transcript preview.
+  const outcome = text?.match(/^\{"status":"([a-z_]+)"[,}]/u)?.[1]
+  if (outcome === "sent" || outcome === "observed_change") return "待核对"
+  if (outcome && ["ready", "observed", "captured", "foreground", "resumed", "verified", "already_satisfied"].includes(outcome))
+    return "已确认"
+  return undefined
+}
+
 /** 一次活动的中文说明，加上与它对应的 orb 动画。 */
 export interface ActivityStep {
   label: string
@@ -382,6 +400,8 @@ export function toolGroupLatestLabel(
 export function toolGroupCompletedLabel(
   tools: { call: DesktopSessionPart; result?: DesktopSessionPart }[]
 ): string {
+  if (tools.some(({ call, result }) => computerActionOutcome(call, result) === "待核对"))
+    return "有电脑操作待核对"
   let edits = false,
     commands = false,
     reads = false

@@ -19,3 +19,7 @@ Platform-specific `@arcships/light-ocr-*` native packages use the license and NO
 | `react-zoom-pan-pinch` | 4.0.4 | MIT | Image zoom and pan |
 
 The complete notices for these bundled frontend libraries are distributed in `apps/desktop/resources/licenses/image-annotations.txt`, included by the desktop application's existing `resources/**` packaging rule.
+
+## Windows Computer Use
+
+Cua Driver 0.28.2 from Cua AI, Inc. is licensed under MIT and supplies local window observation and input on Windows x64. The full license accompanies the driver in `resources/computer-windows/CUA-LICENSE.txt` in the Windows x64 installation. [Cua Driver license](apps/desktop/resources/computer-windows/CUA-LICENSE.txt)

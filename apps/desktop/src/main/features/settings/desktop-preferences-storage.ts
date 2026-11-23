@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto"
 import { normalizeNotificationEvents, type DesktopNotificationEvents } from "../../../shared/notification-settings-types"
 import { join } from "node:path"
 import { validateTerminalSettings, type TerminalSettings } from "../../../shared/terminal-settings-types"
+import type { DesktopComputerAppGrant } from "../../../shared/computer-types"
 
 import {
   isDesktopNotificationMode,
@@ -36,6 +37,7 @@ export interface DesktopPreferences {
   notifiedEventIds?: string[]
   notificationTargets?: DesktopNotificationTarget[]
   browserDeveloperMode?: boolean
+  computerAppGrants?: DesktopComputerAppGrant[]
   linkOpeningMode?: DesktopLinkOpeningMode
   noteQuickShortcut?: string
   noteWindowAlwaysOnTop?: boolean
@@ -77,6 +79,7 @@ export function getDesktopPreferencesAt(userDataDir: string): DesktopPreferences
       ...(Array.isArray(raw.notifiedEventIds) ? { notifiedEventIds: raw.notifiedEventIds.filter((value): value is string => typeof value === "string").slice(-1000) } : {}),
       ...(raw.notificationTargets ? { notificationTargets: normalizeNotificationTargets(raw.notificationTargets) } : {}),
       ...(raw.browserDeveloperMode === true ? { browserDeveloperMode: true } : {}),
+      ...(raw.computerAppGrants ? { computerAppGrants: normalizeComputerAppGrants(raw.computerAppGrants) } : {}),
       ...(isDesktopLinkOpeningMode(raw.linkOpeningMode)
         ? { linkOpeningMode: raw.linkOpeningMode }
         : {}),
@@ -111,6 +114,7 @@ export function patchDesktopPreferencesAt(
     ...(Array.isArray(next.notifiedEventIds) ? { notifiedEventIds: next.notifiedEventIds.filter((value): value is string => typeof value === "string").slice(-1000) } : {}),
     ...(next.notificationTargets ? { notificationTargets: normalizeNotificationTargets(next.notificationTargets) } : {}),
     ...(next.browserDeveloperMode === true ? { browserDeveloperMode: true } : {}),
+    ...(next.computerAppGrants ? { computerAppGrants: normalizeComputerAppGrants(next.computerAppGrants) } : {}),
     ...(isDesktopLinkOpeningMode(next.linkOpeningMode)
       ? { linkOpeningMode: next.linkOpeningMode }
       : {}),
@@ -137,6 +141,18 @@ export function patchDesktopPreferencesAt(
 
 function isInstallIdentity(value: unknown): value is DesktopInstallIdentity {
   return value === "new" || value === "existing"
+}
+
+function normalizeComputerAppGrants(value: unknown): DesktopComputerAppGrant[] {
+  if (!Array.isArray(value)) return []
+  const grants = new Map<string, DesktopComputerAppGrant>()
+  for (const item of value) {
+    if (item && typeof item.id === "string" && item.id.trim() && item.id.length <= 1024 &&
+        typeof item.name === "string" && item.name.trim() && item.name.length <= 256) {
+      grants.set(item.id, { id: item.id, name: item.name })
+    }
+  }
+  return [...grants.values()]
 }
 
 function normalizeNotificationTargets(value: unknown): DesktopNotificationTarget[] {

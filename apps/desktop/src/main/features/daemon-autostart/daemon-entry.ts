@@ -10,6 +10,7 @@ import {
   setHostResponseLocale,
   shouldStartManagedDaemon,
 } from "@vykor/server/daemon-host"
+import { createDesktopComputerPairing } from "./computer-pairing"
 
 export type DesktopDaemonMode = "service" | "watchdog" | "on-demand"
 
@@ -32,12 +33,15 @@ export async function runDesktopDaemonEntry(mode: DesktopDaemonMode): Promise<vo
   }
 
   setHostResponseLocale(app.getPreferredSystemLanguages()[0])
+  const computerPairing = mode === "on-demand" && process.platform === "win32" && process.arch === "x64"
+    ? createDesktopComputerPairing(getDataRoot()) : undefined
   await runRegisteredDaemon({
     version: app.getVersion(),
     launcher: "desktop",
     supervised: mode === "service",
     enableDesktopBrowser: true,
     enableBrowserDeveloper: true,
+    ...(computerPairing ? { computerPairing } : {}),
     ...(mode === "service" && process.platform === "win32"
       ? { shouldStart: isWindowsDaemonServiceEnabled }
       : {}),

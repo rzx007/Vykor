@@ -9,6 +9,8 @@ const sessionEvents = vi.hoisted(() => ({
   attach: vi.fn(() => sessionEvents.detach),
   initialize: vi.fn<() => Promise<void>>(async () => undefined),
   activeSessionId: "session-1",
+  openingSession: false,
+  open: vi.fn(async (sessionId: string) => { sessionEvents.activeSessionId = sessionId }),
 }))
 
 // Keep the real route tree, root component and bridge; replace page bodies and IPC/store boundary.
@@ -40,10 +42,11 @@ vi.mock("@renderer/stores/desktop-session", () => ({
       getState: () => ({
         initialize: sessionEvents.initialize,
         activeSessionId: sessionEvents.activeSessionId,
-        sessionView: { session: { id: sessionEvents.activeSessionId } },
-        openSession: async (sessionId: string) => {
-          sessionEvents.activeSessionId = sessionId
-        },
+        sessionView: sessionEvents.openingSession ? null : { session: { id: sessionEvents.activeSessionId } },
+        sessionRuntimes: sessionEvents.openingSession ? {
+          [sessionEvents.activeSessionId]: { operations: { opening: { kind: "open-session", phase: "pending" } } },
+        } : {},
+        openSession: sessionEvents.open,
       }),
     }
   ),
@@ -103,6 +106,13 @@ it("keeps the last notification selection when an earlier lookup resolves later"
   expect(container.textContent).toBe("Conversation")
   expect(clicks.attach).toHaveBeenCalledOnce()
   expect(clicks.detach).not.toHaveBeenCalled()
+})
+
+it("does not start a second session open when the conversation route follows a pending open", async () => {
+  sessionEvents.openingSession = true
+  const router = await mountRouter("/conversation/session-1")
+  expect(router.state.location.pathname).toBe("/conversation/session-1")
+  expect(sessionEvents.open).not.toHaveBeenCalled()
 })
 
 it.each(["settings", "conversation"] as const)(
@@ -248,6 +258,8 @@ beforeEach(() => {
   sessionEvents.initialize.mockReset()
   sessionEvents.initialize.mockResolvedValue(undefined)
   sessionEvents.activeSessionId = "session-1"
+  sessionEvents.openingSession = false
+  sessionEvents.open.mockClear()
   container = document.createElement("div")
   document.body.append(container)
   root = createRoot(container)

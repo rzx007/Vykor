@@ -4,4 +4,6 @@
 
 会话和运行记录属于 daemon；网页保存连接和展示状态。daemon 需允许网页的准确来源，token 由应用在运行时管理。参数说明与检查命令见[示例总览](../README.md)。
 
+桌面项目资源管理器通过 Electron 访问本机目录。网页应用需要本机文件时，由网页请求用户选择。
+
 新的浏览器示例放在本目录，只从 `@rzx/client` 主入口导入。`tsconfig.json` 不加载 Node 全局类型，用来发现误用 `process` 等浏览器不可用接口；不要导入 `@rzx/client/service`。

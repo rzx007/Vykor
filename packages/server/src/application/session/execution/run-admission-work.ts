@@ -8,6 +8,7 @@ import { AttachmentError, normalizePromptAttachments, promptAttachmentFingerprin
 import { jsonEqual, normalizeTraceId, withoutTraceId } from "../../support.js";
 import { RunInterruptedError } from "../../../runtime/run-coordinator.js";
 import type { AdmitPromptInput, AdmitPromptResult, RunAdmissionServiceOptions } from "./run-admission-service.js";
+import type { ComputerPromptAuthorization } from "../../computer-tools/computer-tool.js";
 
 /** Validate a new request; metadata snapshots are never request aliases. */
 export function validateOutputSchemaRequest<T extends {
@@ -57,6 +58,7 @@ export async function admitPromptWork(
   sessionId: string,
   input: AdmitPromptInput,
   prioritizeObservation: () => void,
+  computer?: ComputerPromptAuthorization,
 ): Promise<AdmitPromptResult | { completion: Promise<AdmitPromptResult> }> {
   const targetRunId = input.expectedActiveRunId;
   if (targetRunId !== undefined && (input.attachments?.length || input.pluginAppContexts?.length)) {
@@ -145,6 +147,12 @@ export async function admitPromptWork(
     };
   }
 
+  if (computer) {
+    if (delivery !== "queue" || !options.runtimeQueue.hasRuntime) {
+      throw new SessionApplicationError(409, "Computer Use requires a new queued Run with a configured model");
+    }
+    computer.assertCurrent();
+  }
   let before = options.events.checkpoint();
   if (input.observationTargetSessionId !== undefined) {
     if (!options.runtimeQueue.hasRuntime || !options.createObservationGrant) {
@@ -173,6 +181,7 @@ export async function admitPromptWork(
           attachmentLimits: options.attachmentLimits,
         })
       : options.conversationTransactions.admitPromptWithRun(admission);
+    computer?.bind({ sessionId, runId: admitted.run.id, inputId: admitted.input.id });
     options.events.publishSince(before);
     return {
       input: admitted.input,

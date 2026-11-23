@@ -136,6 +136,33 @@ function send(response: ServerResponse, event: object) {
   response.write("data: " + JSON.stringify(event) + "\n\n")
 }
 
+it.each([true, false])("waits for Computer input release before Browser approval and inspection (released=%s)", async (released) => {
+  const { browser, page } = createBrowser()
+  const daemon = await createDaemon()
+  const handoff = Promise.withResolvers<boolean>()
+  const beforeCommand = vi.fn(() => handoff.promise)
+  const ownerToken = {}
+  cleanups.push(startBrowserBridge({
+    browser, baseUrl: daemon.baseUrl, token: "registry-token", beforeCommand,
+    getOwnerSessionToken: () => ownerToken,
+  }))
+  await vi.waitFor(() => expect(daemon.streams).toHaveLength(1))
+  send(daemon.streams[0]!, { ...command, requestId: "handoff", deadlineAt: Date.now() + 5_000 })
+  await vi.waitFor(() => expect(beforeCommand).toHaveBeenCalledExactlyOnceWith("session-1"))
+  expect(daemon.requests).toEqual([])
+  expect(page.executeJavaScript).not.toHaveBeenCalled()
+  handoff.resolve(released)
+  await vi.waitFor(() => expect(daemon.requests.at(-1)?.path).toMatch(/handoff\/result$/u))
+  if (released) {
+    expect(daemon.requests[0]?.path).toMatch(/handoff\/approval$/u)
+    expect(daemon.requests.at(-1)?.body).toMatchObject({ result: { pageText: "Page text" } })
+  } else {
+    expect(daemon.requests).toHaveLength(1)
+    expect(daemon.requests[0]?.body).toMatchObject({ error: expect.stringContaining("键鼠已释放") })
+    expect(page.executeJavaScript).not.toHaveBeenCalled()
+  }
+})
+
 it("posts approval and the screenshot result under the stream connection and command IDs", async () => {
   const { browser } = createBrowser()
   const daemon = await createDaemon()

@@ -25,6 +25,7 @@ import type {
   AttachmentStorageReport,
 } from "../../../shared/attachment-types"
 import { IpcChannels, IpcEvents } from "../../../shared/ipc-channels"
+import type { AttachmentDocumentPreview } from "../../../shared/document-preview"
 import type { IpcContribution } from "../../core/ipc/types"
 import { desktopSessionService } from "../session/session-service"
 import { AttachmentStorageResource } from "./attachment-storage-resource"
@@ -54,6 +55,7 @@ export interface AttachmentIpcService {
   discardDraft(ownerId: number, draftId: string): Promise<void>
   deleteUnreferenced(assetId: string): Promise<{ deleted: boolean; inUse: boolean }>
   readPreview(assetId: string): Promise<DesktopAttachmentPreview>
+  readDocumentPreview(assetId: string): Promise<AttachmentDocumentPreview>
   openAttachment(assetId: string): Promise<void>
   saveAs(assetId: string): Promise<{ saved: boolean }>
   scanStorage(): Promise<AttachmentStorageReport>
@@ -191,6 +193,13 @@ export function createAttachmentIpcContribution(
           handler: async (event, value) => {
             const service = await serviceFor(event.sender)
             return await service.readPreview((value as DesktopAttachmentAssetInput).assetId)
+          },
+        },
+        {
+          channel: IpcChannels.attachmentReadDocumentPreview,
+          handler: async (event, value) => {
+            const service = await serviceFor(event.sender)
+            return await service.readDocumentPreview((value as DesktopAttachmentAssetInput).assetId)
           },
         },
         {

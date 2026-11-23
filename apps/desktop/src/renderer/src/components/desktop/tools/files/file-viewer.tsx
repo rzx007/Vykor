@@ -138,8 +138,12 @@ export function FileViewer({
           ) : (
             <DocumentPlaceholder preview={activeTab.preview} />
           )
-        ) : activeTab?.type === "local-document" ? (
-          <LocalDocumentPreview key={activeTab.preview.path} preview={activeTab.preview} />
+        ) : activeTab?.type === "local-document" && activeTab.preview.documentPreview ? (
+          <LocalDocumentPreview
+            key={activeTab.preview.path}
+            name={activeTab.preview.name}
+            bytes={activeTab.preview.documentPreview.bytes}
+          />
         ) : activeTab?.type === "document" ? (
           <DocumentPlaceholder preview={activeTab.preview} />
         ) : activeTab?.type === "markdown" && viewMode === "preview" ? (

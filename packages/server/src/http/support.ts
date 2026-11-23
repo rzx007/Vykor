@@ -46,6 +46,7 @@ export type SseClient = {
 };
 
 export const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
+export const MAX_JSON_BODY_BYTES = 1024 * 1024;
 export const SSE_HEADERS = {
   "cache-control": "no-cache",
   "connection": "keep-alive",
@@ -112,6 +113,44 @@ export function jsonResponse(body: unknown, status = 200): Response {
 
 export function errorResponse(status: number, message: string): Response {
   return jsonResponse({ error: message }, status);
+}
+
+export function isBrowserIssuedRequest(request: Request): boolean {
+  for (const [name] of request.headers) {
+    if (name === "origin" || name.startsWith("sec-fetch-")) return true;
+  }
+  return false;
+}
+
+/** Limit a private Desktop upload as it is read, including chunked requests. */
+export async function readDesktopHostJson(
+  request: Request,
+  limit: number,
+  host: "Browser" | "Computer",
+): Promise<JsonRecord | Response> {
+  const reader = request.body?.getReader();
+  if (!reader) return errorResponse(400, `Missing ${host.toLowerCase()} host request body.`);
+  let size = 0;
+  const chunks: Uint8Array[] = [];
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > limit) {
+        void reader.cancel().catch(() => {});
+        return errorResponse(413, `${host} host request is too large.`);
+      }
+      chunks.push(value);
+    }
+    const value: unknown = JSON.parse(Buffer.concat(chunks, size).toString("utf8"));
+    if (isRecord(value)) return value;
+  } catch {
+    // A broken body or invalid JSON is not a private host request.
+  } finally {
+    reader.releaseLock();
+  }
+  return errorResponse(400, `Invalid ${host.toLowerCase()} host request body.`);
 }
 
 const ATTACHMENT_ERROR_HTTP_STATUS = {
@@ -185,7 +224,7 @@ export function sessionMutationErrorStatus(error: unknown): number {
     : 404;
 }
 
-export async function readJson(c: Context, tooLargeError = new ProtocolValidationError("Request body too large"), maxBytes = 1024 * 1024): Promise<JsonRecord> {
+export async function readJson(c: Context, tooLargeError = new ProtocolValidationError("Request body too large"), maxBytes = MAX_JSON_BODY_BYTES): Promise<JsonRecord> {
   const bytes = await c.req.arrayBuffer();
   if (bytes.byteLength > maxBytes) {
     throw tooLargeError;

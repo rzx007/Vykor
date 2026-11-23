@@ -15,6 +15,10 @@ export interface LocalDocumentPreview {
   bytes: ArrayBuffer
 }
 
+export interface AttachmentDocumentPreview extends LocalDocumentPreview {
+  name: string
+}
+
 export function documentFormat(name: string): DocumentFormat | undefined {
   const extension = name.split(".").pop()?.toLowerCase() ?? ""
   return Object.hasOwn(documentMediaTypes, extension) ? (extension as DocumentFormat) : undefined

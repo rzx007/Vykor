@@ -1,4 +1,5 @@
 import {
+  computerActionOutcome,
   formatValue,
   toolDisplayName,
   toolCallStatus,
@@ -21,6 +22,7 @@ export function ToolDetails({
   const { call: fullCall, result: fullResult, preview, error } = useToolDetails(call, result, true)
   const input = fullCall.input
   const output = fullResult?.output ?? fullCall.output
+  const computerOutcome = computerActionOutcome(fullCall, fullResult)
   const unparsedInput = Boolean(
     (fullResult?.metadata.toolInputError ?? fullCall.metadata.toolInputError) &&
     (input === undefined || Object.keys(input).length === 0)
@@ -62,6 +64,12 @@ export function ToolDetails({
             </pre>
           )}
           <div className="border-t px-3 pt-2 text-xs font-medium">结果</div>
+          {computerOutcome ? (
+            <p className="px-3 pt-2 text-xs text-ui-muted">
+              {computerOutcome}
+              {computerOutcome === "待核对" ? "。请先观察目标窗口，核对预期结果。任务已结束时，可以新发一条消息，只核对结果。" : ""}
+            </p>
+          ) : null}
           <ToolResult output={output} calling={calling} />
         </>
       )}

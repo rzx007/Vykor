@@ -9,3 +9,10 @@ export class SessionApplicationError extends ApplicationError {
     this.name = "SessionApplicationError";
   }
 }
+
+/** Raised before prompt admission when a session cannot expose Computer. */
+export class ComputerSessionUnavailableError extends SessionApplicationError {
+  constructor() {
+    super(409, "Computer Use requires an authorized Desktop root session in execution mode");
+  }
+}

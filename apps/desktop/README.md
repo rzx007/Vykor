@@ -23,6 +23,7 @@ Electron + React desktop shell for Vykor.
 - [src/main/features/clipboard](src/main/features/clipboard/README.md)：剪贴板读写和原生文本菜单。
 - `src/main/features/pet`: transparent desktop Pet window, visibility, click-through, and position persistence.
 - [src/main/features/session](src/main/features/session/README.md)：会话与项目操作、后台连接、订阅和恢复流程。
+- [src/main/features/computer](src/main/features/computer/README.md)：电脑操作可信入口、本机后台连接和断线撤权。
 - [src/main/features/daemon-autostart](src/main/features/daemon-autostart/README.md)：无窗口后台启动、系统常驻设置与默认回复语言初始化。
 - [src/main/features/settings](src/main/features/settings/README.md)：桌面设置读写、输入校验和快照。
 - [src/main/features/plugin](src/main/features/plugin/README.md): 插件列表、归档和市场安装、权限确认及操作结果。
@@ -33,7 +34,10 @@ Electron + React desktop shell for Vykor.
 - [src/main/features/business-data](src/main/features/business-data/README.md)：桌面恢复文件、旧源确认与关闭前刷盘。
 - [src/renderer/src/lib](src/renderer/src/lib/README.md)：跨页面辅助逻辑与异步恢复记录客户端。
 - [src/renderer/src/components/appearance](src/renderer/src/components/appearance/README.md)：主题、字体、字号及外观偏好的读取、保存和应用。
+- [src/renderer/src/components/desktop/tools/computer](src/renderer/src/components/desktop/tools/computer/README.md)：电脑操作的应用授权与目标选择。
 - [src/document-preview](src/document-preview/README.md)：独立文档预览页面和预览外壳样式。
+- [tests/computer-windows](./tests/computer-windows/README.md)：Windows Computer Use 的真实应用、窗口限域和输入验证。
+- [resources/computer-windows](resources/computer-windows/README.md)：固定的 Cua 驱动分发清单和许可。
 
 ## Development
 

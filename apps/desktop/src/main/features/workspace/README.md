@@ -6,6 +6,8 @@
 
 `workspace-service.ts` 从 IPC 接收当前项目和目标路径，交给 `workspace-path.ts` 分类，再解析实际文件位置并检查是否仍在允许根内；通过后返回文件内容或预览字节。写入只允许当前项目。`opener-service.ts` 和同类辅助文件负责系统打开方式、图标与进程参数。
 
+文件面板向 Electron Main 提交本机根路径。主进程用 `node:fs` 递归列出目录，读取文本和预览字节，并保存修改；会话是否连接不影响这些操作。会话文档附件由同级 `attachment` 模块处理。
+
 允许根由 bootstrap 的 `configureAllowedRoots({configDir,workspacesDir})` 注入；未注入时从进程已固定的数据根计算。额外访问范围包括个人 skills、USER.md、规范 workspaces/channels 以及明确注入的工作区根。读取、显示路径和系统打开会先用 `resolveManagedHistoryPath` 把受管历史路径解析到当前位置，然后继续原分类、realpath 和允许范围检查。旧来源和 excludedRoots 不加入文件允许根；原有显式外部文件打开规则仍适用。
 
 绝对路径未命中允许根时返回拒绝，不会剥去开头的斜杠后当作项目相对路径。Windows 盘符映射只使用允许根自身的盘符；路径分类和实际文件位置复查均区分 Windows 与 POSIX 路径，避免借用进程盘符扩大范围。

@@ -19,6 +19,7 @@ import {
   preparedImageDataUrl,
   prepareUserContentWithVisionImages,
   replaceMissingToolResultImages,
+  withoutRevokedMemoryImages,
 } from "./media/native-image-payload.js";
 
 const DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api";
@@ -94,6 +95,8 @@ export class CodexSubscriptionClient implements StreamingMessageClient {
     try {
       let response: Response;
       try {
+        const current = withoutRevokedMemoryImages(params);
+        if (current !== params) body.input = await convertMessagesToCodex(current.messages, lifecycle.signal);
         response = await fetch(this.url, {
           method: "POST",
           headers: buildCodexHeaders(this.config.apiKey),

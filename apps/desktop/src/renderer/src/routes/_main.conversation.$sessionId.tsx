@@ -2,12 +2,14 @@ import { createFileRoute, redirect } from "@tanstack/react-router"
 
 import { useMainLayout } from "@renderer/components/desktop/layout/main-layout"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
+import { selectActiveSessionOpening } from "@renderer/stores/desktop-session/selectors"
 
 export const Route = createFileRoute("/_main/conversation/$sessionId")({
   beforeLoad: async ({ params }) => {
     await useDesktopSessionStore.getState().initialize()
     const state = useDesktopSessionStore.getState()
-    if (state.sessionView?.session.id !== params.sessionId) {
+    const openingThisSession = state.activeSessionId === params.sessionId && selectActiveSessionOpening(state)
+    if (state.sessionView?.session.id !== params.sessionId && !openingThisSession) {
       await state.openSession(params.sessionId)
     }
     // 打开失败时仍保留当前会话及其错误，交给会话页展示；跳回首页会再次跳到同一会话。

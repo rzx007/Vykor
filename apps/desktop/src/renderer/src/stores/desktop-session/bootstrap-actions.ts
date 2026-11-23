@@ -52,8 +52,10 @@ export function createBootstrapActions(context: DesktopStoreContext): BootstrapA
         const latestDaemonStatus = await window.desktop.sessions
           .daemonStatus()
           .catch(() => get().daemonStatus)
+        const currentProject = get().selectedProject
         const workspaceMode =
-          get().workspaceMode === "outside_project" || data.projects.length === 0
+          get().workspaceMode === "outside_project" ||
+          (!currentProject?.localOnly && data.projects.length === 0)
             ? "outside_project"
             : "project"
         const selectedProject = resolveInitialProject(data, get().selectedProject, workspaceMode)
@@ -81,18 +83,18 @@ export function createBootstrapActions(context: DesktopStoreContext): BootstrapA
           workspaceMode,
           outsideProjectWorkspaceRoot: data.outsideProjectWorkspaceRoot,
           selectedProject,
-          selectedProjectGit: false,
-          selectedProjectGitCheckedAt: null,
-          branches: [],
+          ...(!selectedProject?.localOnly
+            ? { selectedProjectGit: false, selectedProjectGitCheckedAt: null, branches: [] }
+            : {}),
         }))
-        if (selectedProject)
+        if (selectedProject && !selectedProject.localOnly)
           await get()
             .selectProject(selectedProject)
             .catch(() => undefined)
-        if (persistedSessionId && sessions.some((session) => session.id === persistedSessionId)) {
-          await get().openSession(persistedSessionId)
-        } else if (persistedSessionId) {
-          clearPersistedActiveSessionId()
+        if (!selectedProject?.localOnly && persistedSessionId) {
+          if (sessions.some((session) => session.id === persistedSessionId))
+            await get().openSession(persistedSessionId)
+          else clearPersistedActiveSessionId()
         }
         set((state) => ({
           appOperations: removeScopedOperation(state.appOperations, operationId),
@@ -180,7 +182,9 @@ export function applyBootstrapData(
   preferredProvider: string | null
 ): Partial<DesktopSessionState> {
   const resolvedWorkspaceMode =
-    workspaceMode === "project" && data.projects.length === 0 ? "outside_project" : workspaceMode
+    workspaceMode === "project" && !currentProject?.localOnly && data.projects.length === 0
+      ? "outside_project"
+      : workspaceMode
   const selectedProject = resolveInitialProject(data, currentProject, resolvedWorkspaceMode)
   const preferredExists =
     preferredModel &&

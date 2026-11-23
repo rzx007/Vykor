@@ -93,6 +93,18 @@ export {
 const DESKTOP_SESSION_COMMAND_NAMES = new Set(["/compact", "/goal", "/status", "/skills"])
 
 export class SessionOperations {
+  async readLocalProjectDirectory(inputPath: string) {
+    const path = resolveRequiredPath(inputPath)
+    try {
+      const branches = await listLocalBranches(path)
+      const branch = await execGit(path, ["symbolic-ref", "--quiet", "--short", "HEAD"])
+        .then(({ stdout }) => stdout.trim() || null, () => null)
+      return { path, git: true, branch, branches }
+    } catch {
+      return { path, git: false, branch: null, branches: [] }
+    }
+  }
+
   async inspectProject(
     client: ProjectInspectionClient,
     inputPath: string
@@ -323,7 +335,11 @@ export class SessionOperations {
     return project.path
   }
 
-  async sendPrompt(client: SessionsClient, input: SendDesktopPromptInput, pluginAppContexts?: PluginAppConversationRequest[]): Promise<void> {
+  async sendPrompt(
+    client: { sessions: Pick<VykorClient["sessions"], "admitPrompt"> },
+    input: SendDesktopPromptInput,
+    pluginAppContexts?: PluginAppConversationRequest[],
+  ): Promise<void> {
     const id = requireString(input.id, "输入 ID")
     const sessionId = requireString(input.sessionId, "会话 ID")
     if (input.delivery !== undefined && input.delivery !== "queue" && input.delivery !== "steer")

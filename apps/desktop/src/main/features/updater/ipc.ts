@@ -5,7 +5,7 @@ import type { IpcContribution } from "../../core/ipc/types"
 export interface UpdateIpcService {
   getState(): DesktopUpdateState
   download(): Promise<void>
-  install(): void
+  install(): void | Promise<void>
   subscribe(listener: (state: DesktopUpdateState) => void): () => void
 }
 

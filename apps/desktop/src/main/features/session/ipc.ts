@@ -30,11 +30,12 @@ import type {
   SearchSessionsOptions,
 } from "../../../shared/session-types"
 import type { IpcContribution } from "../../core/ipc/types"
+import { assertComputerSender } from "../computer/ipc"
 import { desktopSessionService } from "./session-service"
 
 export const sessionIpcContribution: IpcContribution = {
   id: "session",
-  register() {
+  register(ctx) {
     // Includes local context preparation, before sendPrompt reaches daemon admission.
     const promptSubmissions = new Map<string, Set<Promise<void>>>()
     return [
@@ -84,6 +85,10 @@ export const sessionIpcContribution: IpcContribution = {
       {
         channel: IpcChannels.sessionChooseProject,
         handler: (event) => desktopSessionService.chooseProject(event.sender),
+      },
+      {
+        channel: IpcChannels.sessionReadLocalProjectDirectory,
+        handler: (_event, path) => desktopSessionService.readLocalProjectDirectory(String(path ?? "")),
       },
       {
         channel: IpcChannels.sessionInspectProject,
@@ -283,8 +288,10 @@ export const sessionIpcContribution: IpcContribution = {
       },
       {
         channel: IpcChannels.sessionReplyPermission,
-        handler: (_event, input) =>
-          desktopSessionService.replyPermission(input as ReplyDesktopPermissionInput),
+        handler: (event, input) =>
+          desktopSessionService.replyPermission(input as ReplyDesktopPermissionInput, event.sender, () => {
+            assertComputerSender(ctx, event, event.senderFrame)
+          }),
       },
       {
         channel: IpcChannels.sessionSetDefaultModel,

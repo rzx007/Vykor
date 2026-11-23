@@ -74,7 +74,7 @@ export function SettingsContent({ selectedSection }: SettingsContentProps): Reac
     }
   }, [target, selectedSection])
   const Page = pages[selectedSection]
-  const ownHeading = ["个人资料", "个性化", "通知", "终端", "Git"].includes(selectedSection)
+  const ownHeading = ["个人资料", "个性化", "通知", "终端", "Git", "键盘快捷键"].includes(selectedSection)
   return (
     <ScrollArea
       horizontal={false}

@@ -213,8 +213,11 @@ export async function executeCheckedTools(
             ? toolFeedbackFields(returned).compactSummary
             : undefined,
         } satisfies ToolExecutionResult;
-        // Only the checked host can prove a dispatched tool was never invoked.
+        // Only a checked host can attest that an invoked tool did not dispatch its action.
+        const hostReportsNotStarted = execution?.contribution?.tools?.some(item =>
+          item.definition === tool && item.permission === "host-internal" && item.reportsNotStarted);
         if (normalized.executionState === "not_started"
+          && !hostReportsNotStarted
           && !(normalized.hostProjectInstructionKeys && normalized.isError && normalized.failureKind === "precondition")) {
           normalized.executionState = "unknown";
         }

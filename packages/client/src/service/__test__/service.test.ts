@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { once } from "node:events";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -62,6 +63,53 @@ ${verifyRealGuard ? `const {spawnSync}=await import('node:child_process');const 
 }
 
 describe("local service management", () => {
+  it("pairs the registered child only for the caller owning the shared startup", async () => {
+    const paired = vi.fn(async (child: ChildProcess, endpoint: Awaited<ReturnType<typeof Service.ensure>>, signal: AbortSignal) => {
+      const reply = once(child, "message", { signal });
+      child.send("pair");
+      expect((await reply)[0]).toEqual({ pid: endpoint.pid, request: "pair" });
+    });
+    const options = { file, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION), "300"], timeoutMs: 5000 };
+    const [first, second] = await Promise.all([
+      Service.ensure({ ...options, pairSpawned: paired }),
+      Service.ensure({ ...options, pairSpawned: paired }),
+    ]);
+    endpoints.push(first);
+    expect(second.pid).toBe(first.pid);
+    expect(paired).toHaveBeenCalledTimes(1);
+    expect(paired.mock.calls[0][0].connected).toBe(false);
+    await Service.ensure({ ...options, pairSpawned: paired });
+    expect(paired).toHaveBeenCalledTimes(1);
+  });
+
+  it("withholds the inherited channel if the registration reports a different process", async () => {
+    const paired = vi.fn(async () => {});
+    const starts = join(directory, "pids");
+    const endpoint = await Service.ensure({
+      file, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION)],
+      env: { FIXTURE_REPORTED_PID: String(process.pid), START_PIDS: starts }, timeoutMs: 5000, pairSpawned: paired,
+    });
+    const spawned = Number((await readFile(starts, "utf8")).trim());
+    try {
+      expect(endpoint.pid).toBe(process.pid);
+      expect(spawned).not.toBe(endpoint.pid);
+      expect(paired).not.toHaveBeenCalled();
+    } finally {
+      if (spawned > 0 && spawned !== process.pid) process.kill(spawned, "SIGTERM");
+    }
+  });
+
+  it("refuses to return a child registration rewritten during pairing", async () => {
+    await expect(Service.ensure({
+      file, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION)],
+      timeoutMs: 5000,
+      pairSpawned: async (_child, endpoint) => {
+        const changed = { ...endpoint, storePath: "rewritten.db" };
+        await writeFile(file, JSON.stringify(changed));
+      },
+    })).rejects.toThrow(/registration changed during private startup pairing/);
+  });
+
   it.each([
     { state: "invalid selector", rootEnv: true, canonicalShape: false },
     { state: "pending migration", rootEnv: true, canonicalShape: false },

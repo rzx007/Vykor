@@ -1,5 +1,6 @@
 import type { DesktopBusinessDataApi } from "./business-data-types"
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
+import type { DesktopComputerActivity, DesktopComputerActivityUpdate, DesktopComputerAppGrant, DesktopComputerControl, DesktopComputerInteractionEvent, DesktopComputerInteractionReply } from "./computer-types"
 import type { DesktopWindowThemeSource } from "./window-theme-types"
 import type { TerminalSettingsAPI } from "./terminal-settings-types"
 import type { GitSettingsAPI } from "./git-settings-types"
@@ -35,6 +36,7 @@ import type {
   DesktopCompactSessionResult,
   DesktopDaemonStatus,
   DesktopProjectDetails,
+  DesktopProjectDirectory,
   DesktopSessionRecord,
   DesktopSessionLists,
   DesktopSessionSearchResult,
@@ -316,6 +318,7 @@ export type DesktopAPI = {
       input: DesktopAttachmentAssetInput
     ) => Promise<{ deleted: boolean; inUse: boolean }>
     readPreview: (input: DesktopAttachmentAssetInput) => Promise<DesktopAttachmentPreview>
+    readDocumentPreview: (input: DesktopAttachmentAssetInput) => Promise<import("./document-preview").AttachmentDocumentPreview>
     open: (input: DesktopAttachmentAssetInput) => Promise<void>
     saveAs: (input: DesktopAttachmentAssetInput) => Promise<{ saved: boolean }>
     scanStorage: () => Promise<AttachmentStorageReport>
@@ -490,13 +493,26 @@ export type DesktopAPI = {
     marketplace: () => Promise<DesktopSkillMarketplaceCatalog>
     installMarketplace: (input: DesktopSkillMarketplaceInstallInput) => Promise<DesktopSkillSnapshot>
   }
+  computer: {
+    supported: boolean
+    sendPrompt: (input: SendDesktopPromptInput, automatic?: true) => Promise<void>
+    onInteraction: (handler: (event: DesktopComputerInteractionEvent) => void) => () => void
+    reply: (input: DesktopComputerInteractionReply) => Promise<boolean>
+    getActivity: (sessionId: string) => Promise<DesktopComputerActivity | null>
+    shareWindow: () => Promise<{ bytes: Uint8Array } | null>
+    onActivity: (handler: (event: DesktopComputerActivityUpdate) => void) => () => void
+    control: (input: DesktopComputerControl) => Promise<boolean>
+    listAppGrants: () => Promise<DesktopComputerAppGrant[]>
+    revokeAppGrant: (id: string) => Promise<DesktopComputerAppGrant[]>
+  }
   sessions: {
     readAgentActivity: (input: import("./session-types").ReadDesktopAgentActivityInput) => Promise<import("./session-types").DesktopAgentActivity | null>
     bootstrap: () => Promise<DesktopBootstrapData>
     list: () => Promise<DesktopSessionLists>
     search: (input: SearchSessionsOptions) => Promise<DesktopSessionSearchResult[]>
     daemonStatus: () => Promise<DesktopDaemonStatus>
-    chooseProject: () => Promise<DesktopProjectDetails | null>
+    chooseProject: () => Promise<DesktopProjectDirectory | null>
+    readLocalProjectDirectory: (path: string) => Promise<DesktopProjectDirectory>
     inspectProject: (path: string) => Promise<DesktopProjectDetails>
     listCommands: (cwd: string) => Promise<DesktopCommandCatalogEntry[]>
     listContextPlugins: (cwd: string) => Promise<DesktopPluginCatalogEntry[]>

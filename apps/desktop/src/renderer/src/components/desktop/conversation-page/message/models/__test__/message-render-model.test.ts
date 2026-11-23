@@ -5,13 +5,32 @@ import type { DesktopSessionPart } from "@shared/session-types"
 import {
   buildAssistantContent,
   collectChangedFiles,
+  computerActionOutcome,
   parseFileReference,
   summarizeToolCall,
   toolCallStatus,
   toolDisplayName,
+  toolGroupCompletedLabel,
 } from "../message-render-model"
 
 describe("message render model", () => {
+  it.each([
+    ["not_started", "verified", "未执行"],
+    ["unknown", "verified", "待核对"],
+    ["completed", "verified", "已确认"],
+    ["completed", "sent", "待核对"],
+    ["completed", "observed_change", "待核对"],
+  ])("keeps Computer execution and app outcome distinct (%s / %s)", (executionState, status, label) => {
+    const call = toolPart("Computer", { action: "invoke" })
+    const result = {
+      ...call, id: "computer-result", type: "tool_result" as const,
+      output: { content: [{ type: "text", text: `{"status":"${status}","observation":` }] },
+      metadata: { executionState },
+    }
+    expect(computerActionOutcome(call, result)).toBe(label)
+    if (label === "待核对")
+      expect(toolGroupCompletedLabel([{ call, result }])).toBe("有电脑操作待核对")
+  })
   it.each([
     "write_file",
     "apply_patch",

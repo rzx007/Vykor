@@ -9,7 +9,17 @@ import type {
 } from "@shared/session-types"
 import { isChannelSessionMetadata } from "@shared/channel-types"
 
-import type { DesktopSessionState } from "./types"
+import type { DesktopSessionState, DesktopStoreContext } from "./types"
+
+export async function resolveProjectForSession(
+  project: DesktopProject,
+  set: DesktopStoreContext["set"]
+): Promise<DesktopProject> {
+  if (!project.localOnly) return project
+  const { project: registered } = await window.desktop.sessions.inspectProject(project.path)
+  set((state) => ({ projects: upsertProject(state.projects, registered) }))
+  return registered
+}
 
 /** 会话是否属于 IM 渠道（含旧会话；fork 出的普通会话不算）。 */
 export function isChannelSession(session: DesktopSessionRecord): boolean {
@@ -68,6 +78,7 @@ export function resolveInitialProject(
   workspaceMode: DesktopWorkspaceMode
 ): DesktopProject | null {
   if (workspaceMode === "outside_project") return null
+  if (current?.localOnly) return current
   if (current) {
     const match = data.projects.find((project) => samePath(project.path, current.path))
     if (match) return match

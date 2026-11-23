@@ -15,6 +15,7 @@ import { readCompletionCheckCommand } from "./completion-check-command.js";
 import { SessionApplicationError } from "../session-application-error.js";
 
 import type { SessionObservationGrant } from "./session-observation-grant.js";
+import type { ComputerPromptAuthorization } from "../../computer-tools/computer-tool.js";
 
 function hasPluginCapability(items: readonly SessionUserInputItem[]): boolean {
   return items.some(
@@ -550,9 +551,10 @@ export class RunAdmissionService {
     };
   }
 
-  preparePrompt(sessionId: string, input: AdmitPromptInput): Promise<AdmitPromptResult | { completion: Promise<AdmitPromptResult> }> {
+  preparePrompt(sessionId: string, input: AdmitPromptInput, computer?: ComputerPromptAuthorization): Promise<AdmitPromptResult | { completion: Promise<AdmitPromptResult> }> {
     assertPromptMetadataAllowed(input);
     input = validateOutputSchemaRequest(input);
+    computer?.assertCurrent();
     readCompletionCheckCommand(inputItems(input), input.delivery === "steer" ? "steer" : undefined);
     if (input.expectedActiveRunId !== undefined && (!input.expectedActiveRunId.trim() || input.delivery !== "steer")) {
       throw new SessionApplicationError(400, "expectedActiveRunId requires steer delivery");
@@ -571,7 +573,7 @@ export class RunAdmissionService {
       if (!input.runMetadata?.goalId) this.prioritizeUserInput(sessionId);
     };
     if (input.observationTargetSessionId === undefined && input.expectedActiveRunId === undefined) prioritize();
-    const admit = () => admitPromptWork(this.options, sessionId, input, prioritize);
+    const admit = () => admitPromptWork(this.options, sessionId, input, prioritize, computer);
     if (!input.id) return admit();
 
     const attachments = normalizePromptAttachments(input.attachments);

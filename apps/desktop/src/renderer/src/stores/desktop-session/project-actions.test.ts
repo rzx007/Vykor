@@ -131,12 +131,11 @@ describe("desktop session store project order", () => {
         available: true,
       },
     ]
-    const inspectedProject = { ...projects[1], lastOpenedAt: 400 }
     vi.stubGlobal("window", {
       desktop: { businessData: businessDataFixture,
         sessions: {
-          inspectProject: vi.fn(async () => ({
-            project: inspectedProject,
+          readLocalProjectDirectory: vi.fn(async () => ({
+            path: projects[1].path,
             git: false,
             branch: null,
             branches: [],
@@ -160,7 +159,7 @@ describe("desktop session store project order", () => {
       "project-b",
       "project-c",
     ])
-    expect(useDesktopSessionStore.getState().projects[1]).toEqual(inspectedProject)
+    expect(useDesktopSessionStore.getState().projects[1]).toEqual(projects[1])
   })
 
   it("keeps a project operation failure out of the active session runtime", async () => {
@@ -174,7 +173,7 @@ describe("desktop session store project order", () => {
     vi.stubGlobal("window", {
       desktop: { businessData: businessDataFixture,
         sessions: {
-          inspectProject: vi.fn(async () => {
+          readLocalProjectDirectory: vi.fn(async () => {
             throw new Error("project unavailable")
           }),
         },
@@ -196,6 +195,25 @@ describe("desktop session store project order", () => {
     ).toContainEqual(expect.objectContaining({ phase: "failed", error: "project unavailable" }))
   })
 
+  it("selects a registered project and reads Git locally while the daemon is offline", async () => {
+    const project = {
+      id: "registered", name: "Registered", path: "D:/registered", available: true, lastOpenedAt: 100,
+    }
+    const inspectProject = vi.fn(async () => { throw new Error("daemon offline") })
+    const readLocalProjectDirectory = vi.fn(async () => ({
+      path: project.path, git: true, branch: "main", branches: ["main"],
+    }))
+    vi.stubGlobal("window", {
+      desktop: { businessData: businessDataFixture, sessions: { inspectProject, readLocalProjectDirectory } },
+    })
+
+    await useDesktopSessionStore.getState().selectProject(project)
+
+    expect(inspectProject).not.toHaveBeenCalled()
+    expect(readLocalProjectDirectory).toHaveBeenCalledWith(project.path)
+    expect(useDesktopSessionStore.getState()).toMatchObject({ selectedProject: project, branch: "main" })
+  })
+
   it("clears only a retried action's failure after that action succeeds", async () => {
     const project = {
       id: "project-retry",
@@ -204,14 +222,14 @@ describe("desktop session store project order", () => {
       lastOpenedAt: 100,
       available: true,
     }
-    const inspectProject = vi
+    const readLocalProjectDirectory = vi
       .fn()
-      .mockRejectedValueOnce(new Error("inspect unavailable"))
-      .mockResolvedValueOnce(projectDetails(project, "main"))
+      .mockRejectedValueOnce(new Error("local project unavailable"))
+      .mockResolvedValueOnce({ ...projectDetails(project, "main"), path: project.path })
     vi.stubGlobal("window", {
       desktop: { businessData: businessDataFixture,
         sessions: {
-          inspectProject,
+          readLocalProjectDirectory,
           checkoutBranch: vi.fn(async () => {
             throw new Error("checkout unavailable")
           }),
@@ -228,7 +246,7 @@ describe("desktop session store project order", () => {
       "checkout unavailable"
     )
     await expect(useDesktopSessionStore.getState().selectProject(project)).rejects.toThrow(
-      "inspect unavailable"
+      "local project unavailable"
     )
     await useDesktopSessionStore.getState().selectProject(project)
 
@@ -281,7 +299,7 @@ describe("desktop session store project order", () => {
     vi.stubGlobal("window", {
       desktop: { businessData: businessDataFixture,
         sessions: {
-          inspectProject: vi.fn(
+          readLocalProjectDirectory: vi.fn(
             (path: string) =>
               new Promise((resolve) => {
                 if (path === projectA.path) resolveA = resolve
@@ -331,7 +349,9 @@ describe("desktop session store project order", () => {
       vi.stubGlobal("window", {
         desktop: { businessData: businessDataFixture,
           sessions: {
-            inspectProject: vi.fn(async () => projectDetails(projectB, "branch-b")),
+            readLocalProjectDirectory: vi.fn(async () => ({
+              ...projectDetails(projectB, "branch-b"), path: projectB.path,
+            })),
             [ipcMethod]: vi.fn(
               () =>
                 new Promise((resolve) => {
@@ -513,15 +533,17 @@ describe("desktop session store project order", () => {
       lastOpenedAt: 200,
       available: true,
     }
-    let resolveChoose!: (value: ReturnType<typeof projectDetails>) => void
+    let resolveChoose!: (value: { path: string; git: boolean; branch: null; branches: string[] }) => void
     vi.stubGlobal("window", {
       desktop: { businessData: businessDataFixture,
         sessions: {
           chooseProject: vi.fn(
             () =>
-              new Promise<ReturnType<typeof projectDetails>>((resolve) => (resolveChoose = resolve))
+              new Promise<Parameters<typeof resolveChoose>[0]>((resolve) => (resolveChoose = resolve))
           ),
-          inspectProject: vi.fn(async () => projectDetails(projectB, "branch-b")),
+          readLocalProjectDirectory: vi.fn(async () => ({
+            ...projectDetails(projectB, "branch-b"), path: projectB.path,
+          })),
         },
       },
     })
@@ -529,13 +551,36 @@ describe("desktop session store project order", () => {
 
     const choosing = useDesktopSessionStore.getState().chooseProject()
     await useDesktopSessionStore.getState().selectProject(projectB)
-    resolveChoose(projectDetails(projectA, "branch-a"))
+    resolveChoose({ path: projectA.path, git: false, branch: null, branches: [] })
     await choosing
 
     expect(useDesktopSessionStore.getState()).toMatchObject({
       selectedProject: projectB,
       branch: "branch-b",
       branches: ["branch-b"],
+    })
+  })
+
+  it("keeps an offline directory selection separate from registered projects", async () => {
+    const path = "D:\\code\\offline"
+    const inspectProject = vi.fn(async () => { throw new Error("daemon stopped") })
+    vi.stubGlobal("window", {
+      desktop: { businessData: businessDataFixture,
+        sessions: {
+          chooseProject: vi.fn(async () => ({ path, git: false, branch: null, branches: [] })),
+          inspectProject,
+          bootstrap: vi.fn(async () => ({ ...refreshedBootstrap, projects: [] })),
+        },
+      },
+    })
+    await useDesktopSessionStore.getState().chooseProject()
+    await useDesktopSessionStore.getState().refreshBootstrap()
+
+    expect(inspectProject).not.toHaveBeenCalled()
+    expect(useDesktopSessionStore.getState()).toMatchObject({
+      workspaceMode: "project",
+      selectedProject: { path, name: "offline", localOnly: true },
+      projects: [],
     })
   })
 

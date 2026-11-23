@@ -24,6 +24,7 @@ import {
   collectChangedFiles,
   isTurnComplete,
   summarizeToolCall,
+  computerActionOutcome,
   toolCallStatus,
   toolActivityLabel,
   toolGroupActivityLabel,
@@ -573,7 +574,7 @@ function ToolActivityGroup({
                     : Object.keys(input).length === 0
                       ? "无参数"
                       : "查看参数")
-            const statusText = toolActivityLabel(tool.call, tool.result)
+            const statusText = computerActionOutcome(tool.call, tool.result) ?? toolActivityLabel(tool.call, tool.result)
             const file = readFileReference(tool.call, tool.result)
             return (
               <div key={tool.id}>

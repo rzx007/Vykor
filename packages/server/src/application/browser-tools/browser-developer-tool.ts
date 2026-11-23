@@ -13,6 +13,7 @@ export function createBrowserDeveloperTool(host: BrowserHost | undefined): ToolD
   const available = Boolean(host?.executeDeveloper);
   return {
     name: DEVELOPER_TOOL_NAME,
+    serialGroup: "desktop-interaction",
     description: available
       ? "Inspect the active browser page available to this session for troubleshooting: DOM structure, computed styles, and bounded console/network diagnostics. Each inspection requests operation permission under the current session approval policy; this tool cannot run arbitrary JavaScript or raw CDP commands."
       : "Browser developer inspection is unavailable because this runtime has no host that supports it. Do not call this tool.",

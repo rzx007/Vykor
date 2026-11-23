@@ -50,6 +50,7 @@
 - [Desktop 长对话性能](./desktop-conversation-performance.md)：职责、测量范围与复测入口。
 - [Desktop 终端](./desktop-terminal-pty-design.md)：终端进程、IPC 及 Native/WSL 环境跟随。
 - [Desktop 浏览器能力](./browser-capabilities.md)：页面操作、开发者模式、授权与数据范围。
+- [Desktop 电脑操作](./computer-capabilities.md)：Windows 试点、应用与控件支持、授权、接管和停止。
 
 ## 插件、Skill、提示词和记忆
 

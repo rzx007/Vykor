@@ -17,7 +17,7 @@ export async function defaultCommand(cwd: string): Promise<string[]> {
   }
 }
 
-export function startProcess(command: readonly string[], cwd: string, env: Record<string, string | undefined>, logPath?: string): {
+export function startProcess(command: readonly string[], cwd: string, env: Record<string, string | undefined>, logPath?: string, ipc = false): {
   child: ChildProcess;
   failure: () => Error | undefined;
 } {
@@ -29,8 +29,9 @@ export function startProcess(command: readonly string[], cwd: string, env: Recor
   }
   let child: ChildProcess;
   try {
+    const output = log ?? "ignore";
     child = spawn(command[0], command.slice(1), {
-      cwd, env, stdio: log === undefined ? "ignore" : ["ignore", log, log],
+      cwd, env, stdio: ["ignore", output, output, ...(ipc ? ["ipc" as const] : [])],
       detached: true, windowsHide: true, shell: false,
     });
   } finally {
@@ -42,6 +43,9 @@ export function startProcess(command: readonly string[], cwd: string, env: Recor
     failure ??= new Error(`Vykor service exited before registration (${signal ?? code}).`);
   });
   child.unref();
+  // The detached child does not keep the caller alive. The startup channel does,
+  // until the owner has checked registration and explicitly disconnected it.
+  if (ipc) child.channel?.ref();
   return { child, failure: () => failure };
 }
 

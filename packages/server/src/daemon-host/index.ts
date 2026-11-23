@@ -44,6 +44,21 @@ export {
   type BrowserBridgeEvent,
 } from "../application/browser-tools/browser-bridge-protocol.js";
 export { BROWSER_BRIDGE_MAX_RESULT_BODY_BYTES, BROWSER_BRIDGE_RESULT_TOO_LARGE } from "../application/browser-tools/browser-bridge.js";
+export {
+  COMPUTER_CAPTURE_MAX_BASE64_BYTES,
+  COMPUTER_HOST_TOKEN_HEADER,
+  COMPUTER_SESSION_UNAVAILABLE,
+  parseComputerBridgeEvent,
+  type ComputerReply,
+  type ComputerApprovalProposal,
+  type ComputerAction,
+  type ComputerCaptureImage,
+  type ComputerForegroundAction,
+  type ComputerSemanticAction,
+  type ComputerBridgeEvent,
+  type ComputerResult,
+  type ComputerRunIdentity,
+} from "../application/computer-tools/computer-bridge-protocol.js";
 
 export { isWindowsDaemonServiceEnabled, runRegisteredDaemon, type RegisteredDaemonControl } from "./registered-daemon.js";
 export { legacyDesktopDataLocation, readLegacyDataLocation, readRegisteredDataLocation, readRegisteredDataSwitchResult } from "./data-location.js";

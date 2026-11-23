@@ -1,9 +1,11 @@
 import { toast } from "@renderer/lib/toast"
-import { Eraser, Pencil, RotateCcw, Search } from "lucide-react"
+import { Eraser, Pencil, Search } from "lucide-react"
 import { useState, useSyncExternalStore } from "react"
 
 import {
+  desktopShortcuts,
   getShortcutRevision,
+  hasCustomShortcutBinding,
   clearShortcutBinding,
   resetShortcutBinding,
   resetAllShortcutBindings,
@@ -15,6 +17,9 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@renderer/components/ui/tooltip"
 import { Kbd } from "@renderer/components/ui/kbd"
 import { Button } from "@renderer/components/ui/button"
+import { SettingsResetButton } from "../shared/settings-reset-button"
+
+const shortcutIds = Object.keys(desktopShortcuts) as DesktopShortcutId[]
 
 const groups: Array<{
   title: string
@@ -94,6 +99,7 @@ export function KeyboardShortcutsSettings(): React.JSX.Element {
     return false
   }
   const normalizedQuery = query.trim().toLocaleLowerCase()
+  const changedShortcuts = new Set(shortcutIds.filter(hasCustomShortcutBinding))
   const visibleGroups = groups
     .map((group) => ({
       ...group,
@@ -107,17 +113,22 @@ export function KeyboardShortcutsSettings(): React.JSX.Element {
     .filter((group) => group.shortcuts.length > 0)
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="settings-content-column">
+      <header className="flex flex-col gap-2">
+        <div className="flex items-center gap-1">
+          <h1 className="font-heading text-xl tracking-tight">键盘快捷键</h1>
+          {changedShortcuts.size > 0 ? (
+            <SettingsResetButton
+              label="恢复全部默认快捷键"
+              onReset={() => resultMessage(resetAllShortcutBindings())}
+            />
+          ) : null}
+        </div>
         <p className="text-xs text-muted-foreground">
           应用内快捷键。编辑器、终端和浏览器的原生按键保持各自行为；输入法组合时不触发应用操作。
           {isMac ? "使用 ⌘；系统保留的组合不可改。" : "使用 Ctrl；系统保留的组合不可改。"}
         </p>
-        <Button variant="ghost" onClick={() => resultMessage(resetAllShortcutBindings())}>
-          <RotateCcw data-icon="inline-start" />
-          恢复全部默认
-        </Button>
-      </div>
+      </header>
       {error && !editing && (
         <p role="alert" className="text-sm text-destructive">
           {error}
@@ -151,7 +162,15 @@ export function KeyboardShortcutsSettings(): React.JSX.Element {
                   className="grid min-h-19 grid-cols-1 gap-2 py-4 sm:grid-cols-[minmax(0,1fr)_16rem] sm:items-center sm:gap-6"
                 >
                   <div className="min-w-0">
-                    <h3 className="text-sm font-medium text-foreground">{shortcut.title}</h3>
+                    <div className="flex items-center gap-1">
+                      <h3 className="text-sm font-medium text-foreground">{shortcut.title}</h3>
+                      {changedShortcuts.has(shortcut.id) ? (
+                        <SettingsResetButton
+                          label={`恢复默认${shortcut.title}快捷键`}
+                          onReset={() => resultMessage(resetShortcutBinding(shortcut.id))}
+                        />
+                      ) : null}
+                    </div>
                     <p className="mt-1 text-xs leading-5 text-muted-foreground">
                       {shortcut.description}
                     </p>
@@ -218,12 +237,6 @@ export function KeyboardShortcutsSettings(): React.JSX.Element {
                             hint: "清除快捷键",
                             icon: Eraser,
                             onClick: () => resultMessage(clearShortcutBinding(shortcut.id)),
-                          },
-                          {
-                            label: `恢复默认${shortcut.title}快捷键`,
-                            hint: "恢复默认",
-                            icon: RotateCcw,
-                            onClick: () => resultMessage(resetShortcutBinding(shortcut.id)),
                           },
                         ].map(({ label, hint, icon: Icon, onClick }) => (
                           <Tooltip key={label}>

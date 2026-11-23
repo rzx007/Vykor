@@ -22,6 +22,22 @@ afterEach(async () => {
 })
 
 describe("AttachmentFileService", () => {
+  it("reads document bytes by asset ID and rejects a non-document before downloading", async () => {
+    const downloadAttachment = vi.fn(async () => new Response("%PDF"))
+    const service = createService({
+      downloadAttachment,
+      getAttachment: async (id) =>
+        readyAsset(id, id === "pdf" ? "report.pdf" : "page.html", 4),
+    })
+    await expect(service.readDocumentPreview("pdf")).resolves.toEqual({
+      name: "report.pdf", format: "pdf", bytes: toArrayBuffer(new TextEncoder().encode("%PDF")),
+    })
+    await expect(service.readDocumentPreview("html")).rejects.toMatchObject({
+      code: "attachment_preview_unsupported",
+    })
+    expect(downloadAttachment).toHaveBeenCalledExactlyOnceWith("pdf")
+  })
+
   it("only previews safe bitmap media and enforces the preview byte limit", async () => {
     const downloadAttachment = vi.fn(async () => new Response(toArrayBuffer(pngBytes())))
     const getAttachment = vi.fn(async (id: string) => {

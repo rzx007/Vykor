@@ -14,14 +14,21 @@ import {
   AlertDialogAction,
 } from "@renderer/components/ui/alert-dialog"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
-import type {
-  GitDetection,
-  GitIdentity,
-  GitPreferences,
-  GitSettingsSnapshot,
+import {
+  defaultGitPreferences,
+  type GitDetection,
+  type GitIdentity,
+  type GitPreferences,
+  type GitSettingsSnapshot,
 } from "@shared/git-settings-types"
 import { toast } from "@renderer/lib/toast"
-import { SettingsGroup, SettingsRow, SettingsSelect, SettingsFoldout } from "../shared/settings-group"
+import {
+  SettingsGroup,
+  SettingsRow,
+  SettingsSelect,
+  SettingsFoldout,
+} from "../shared/settings-group"
+import { SettingsResetButton } from "../shared/settings-reset-button"
 import { SettingsStatus } from "../shared/settings-status"
 import { errorMessage } from "../shared/settings-error-message"
 
@@ -50,10 +57,9 @@ export function GitSettings() {
     setError("")
   }, [projectId, environment])
   useEffect(() => {
-    setSnapshot(null)
     void reload().catch((failure) => setError(errorMessage(failure)))
     return () => {
-      version.current++
+      version.current += 1
     }
   }, [reload])
   async function run(operation: () => Promise<void>, success: string) {
@@ -94,8 +100,16 @@ export function GitSettings() {
   const prefixDirty = Boolean(
     snapshot && draft && draft.branchPrefix !== snapshot.preferences.branchPrefix
   )
-  function changeScope(next: string) {
-    const apply = async () => setProjectId(next === "global" ? undefined : next)
+  function selectScope(nextProjectId: string | undefined, nextEnvironment: typeof environment) {
+    if (nextProjectId === projectId && nextEnvironment === environment) return
+    // 切换后，尚未完成的旧检测不能回填设置。
+    version.current += 1
+    setSnapshot(null)
+    setProjectId(nextProjectId)
+    setEnvironment(nextEnvironment)
+  }
+  function changeProject(next: string) {
+    const apply = async () => selectScope(next === "global" ? undefined : next, environment)
     if (prefixDirty) setConfirmation({ text: "切换范围会放弃未保存的分支前缀，是否继续？", apply })
     else void apply()
   }
@@ -135,7 +149,7 @@ export function GitSettings() {
               ...projects.map((project) => ({ value: project.id, label: project.name })),
             ]}
             disabled={busy || identityEditing}
-            onChange={changeScope}
+            onChange={changeProject}
           />
         }
       />
@@ -254,7 +268,7 @@ export function GitSettings() {
                     { value: "wsl", label: "WSL Git" },
                   ]}
                   disabled={busy || identityEditing}
-                  onChange={(value) => setEnvironment(value as "native" | "wsl")}
+                  onChange={(value) => selectScope(projectId, value as typeof environment)}
                 />
               }
             />
@@ -348,36 +362,35 @@ export function GitSettings() {
               />
               <SettingsRow
                 title="目录位置"
+                titleAction={
+                  snapshot.preferences.worktreeRoot !== defaultGitPreferences.worktreeRoot ? (
+                    <SettingsResetButton
+                      label="恢复默认目录位置"
+                      disabled={busy}
+                      onReset={() =>
+                        void preference({ worktreeRoot: defaultGitPreferences.worktreeRoot })
+                      }
+                    />
+                  ) : null
+                }
                 description={snapshot.preferences.worktreeRoot ?? "使用系统管理的任务目录。"}
                 control={
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() =>
-                        void run(async () => {
-                          const path = await window.desktop.gitSettings.chooseDirectory()
-                          if (path) {
-                            await persistPreference({ worktreeRoot: path })
-                            toast.success("目录设置已保存。")
-                          }
-                        }, "")
-                      }
-                    >
-                      选择目录
-                    </Button>
-                    {snapshot.preferences.worktreeRoot ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={busy}
-                        onClick={() => void preference({ worktreeRoot: null })}
-                      >
-                        恢复默认
-                      </Button>
-                    ) : null}
-                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        const path = await window.desktop.gitSettings.chooseDirectory()
+                        if (path) {
+                          await persistPreference({ worktreeRoot: path })
+                          toast.success("目录设置已保存。")
+                        }
+                      }, "")
+                    }
+                  >
+                    选择目录
+                  </Button>
                 }
               />
               <SettingsRow

@@ -1,7 +1,7 @@
 import type { CreateDesktopSessionInput } from "@shared/session-types"
 import { formatBrowserAnnotationContext } from "@renderer/components/desktop/tools/browser/browser-annotation-context"
 import { errorMessage } from "./error-state"
-import { formatSessionTitle, upsertSession } from "./helpers"
+import { formatSessionTitle, resolveProjectForSession, upsertSession } from "./helpers"
 import {
   acknowledgeOperation,
   beginOperation,
@@ -35,8 +35,8 @@ export function createStartSessionAction(
   return async (content, options) => {
     if (get().pendingModeChanges.new) return null
     const document = options?.document ?? composerDocument([{ type: "text", text: content }])
-    const items = document.items
-    const prompt = selectComposerDocumentText(document)
+    const items = [...(options?.contextItems ?? []), ...document.items]
+    const prompt = selectComposerDocumentText({ ...document, items })
     const browserAnnotationContext = formatBrowserAnnotationContext(
       get().composerDraftsByScope[NEW_CONVERSATION_SCOPE]?.browserAnnotations ?? []
     )
@@ -100,12 +100,15 @@ export function createStartSessionAction(
       }
     })
     try {
+      const project = workspaceMode === "project" && selectedProject
+        ? await resolveProjectForSession(selectedProject, set)
+        : null
       const sessionInput: CreateDesktopSessionInput =
-        workspaceMode === "project" && selectedProject
+        workspaceMode === "project" && project
           ? {
-              projectId: selectedProject.id,
+              projectId: project.id,
               ...(options?.taskLocation ? { taskLocation: options.taskLocation } : {}),
-              cwd: selectedProject.path,
+              cwd: selectedProject?.path ?? project.path,
               model,
               ...(provider ? { provider } : {}),
               permissionMode: selectedPermissionMode,
@@ -124,6 +127,7 @@ export function createStartSessionAction(
       startedSessionId = session.id
       // 创建第一个提交
       const firstSubmission: PendingPromptSubmission = {
+        ...(options?.computer ? { computer: options.computer } : {}),
         browserAnnotationContext,
         id: promptSubmissionId,
         sessionId: session.id,
@@ -203,7 +207,9 @@ export function createStartSessionAction(
       }
       // Switching pages keeps the runtime; confirmed deletion removes it.
       if (!get().sessionRuntimes[session.id]) return null
-      await get().submitPromptSubmission(firstSubmission)
+      if (firstSubmission.computer === true && openResult !== "applied")
+        throw new Error("会话已切换，请打开新会话后重新发送电脑操作消息。")
+      await get().submitPromptSubmission(openResult === "applied" ? firstSubmission : { ...firstSubmission, computer: undefined })
       // 设置会话标题
       const title = prompt
         ? formatSessionTitle(prompt)

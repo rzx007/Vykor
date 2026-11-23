@@ -151,7 +151,7 @@ function ensureSurfacesContrast(
   )
 }
 
-function resolveAccentColor(accent: AppearancePreferences["accent"]): `#${string}` {
+export function resolveAccentColor(accent: AppearancePreferences["accent"]): `#${string}` {
   if (accent.kind === "preset") {
     return ACCENT_PRESET_COLORS[accent.id]
   }

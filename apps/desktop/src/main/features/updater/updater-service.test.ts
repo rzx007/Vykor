@@ -224,6 +224,41 @@ describe("updater service state and commands", () => {
     service.dispose()
   })
 
+  it("waits for local computer cleanup before starting the installer", async () => {
+    const updater = new FakeUpdater()
+    const setForceQuit = vi.fn()
+    let resolveRelease!: (released: boolean) => void
+    const beforeInstall = vi.fn(() => new Promise<boolean>((resolve) => { resolveRelease = resolve }))
+    const service = createService(updater, undefined, setForceQuit, beforeInstall)
+    updater.emit("update-downloaded", { version: "3.0.0" })
+
+    const installation = service.install()
+    expect(beforeInstall).toHaveBeenCalledOnce()
+    expect(setForceQuit).not.toHaveBeenCalled()
+    expect(updater.quitAndInstall).not.toHaveBeenCalled()
+    resolveRelease(true)
+    await installation
+    expect(updater.quitAndInstall).toHaveBeenCalledOnce()
+    service.dispose()
+  })
+
+  it("does not install or enable installation on quit when local input release could not be verified", async () => {
+    const updater = new FakeUpdater()
+    const setForceQuit = vi.fn()
+    const beforeInstall = vi.fn(async () => false)
+    const service = createService(updater, undefined, setForceQuit, beforeInstall)
+    updater.emit("update-downloaded", { version: "3.0.0" })
+
+    await Promise.all([service.install(), service.install()])
+
+    expect(beforeInstall).toHaveBeenCalledOnce()
+    expect(setForceQuit).not.toHaveBeenCalled()
+    expect(updater.quitAndInstall).not.toHaveBeenCalled()
+    expect(updater.autoInstallOnAppQuit).toBe(false)
+    expect(service.getState()).toMatchObject({ status: "error", version: "3.0.0" })
+    service.dispose()
+  })
+
   it("cancels the timer and removes updater listeners when disposed", async () => {
     vi.useFakeTimers()
     const updater = new FakeUpdater()
@@ -246,7 +281,8 @@ describe("updater service state and commands", () => {
 function createService(
   updater: FakeUpdater,
   logger = { info: vi.fn(), error: vi.fn() },
-  setForceQuit = vi.fn()
+  setForceQuit = vi.fn(),
+  beforeInstall?: () => Promise<boolean>,
 ) {
   return createUpdaterService({
     updater,
@@ -256,5 +292,6 @@ function createService(
     checkIntervalMs: UPDATE_CHECK_INTERVAL_MS,
     logger,
     setForceQuit,
+    beforeInstall,
   })
 }

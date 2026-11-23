@@ -14,6 +14,8 @@ import type { AttachmentService } from "../application/attachments/attachment-se
 import type { RegisteredDaemonControl } from "../daemon-host/registered-daemon.js";
 import type { BrowserHost } from "../application/browser-tools/browser-host.js";
 import { DesktopBrowserBridge } from "../application/browser-tools/browser-bridge.js";
+import { DesktopComputerBridge } from "../application/computer-tools/computer-bridge.js";
+import { captureComputerApproval } from "../application/computer-tools/computer-approval.js";
 import { createDefaultNodeApplication } from "../application/default-node-application.js";
 import type { CreateDaemonAgent } from "../daemon/daemon-agent.js";
 import type {
@@ -53,6 +55,7 @@ import { createAuthRoutes } from "./routes/auth.js";
 import { createAttachmentRoutes } from "./routes/attachment.js";
 import { createBackgroundShellRoutes } from "./routes/background-shell.js";
 import { createBrowserHostRoutes } from "./routes/browser-host.js";
+import { createComputerHostRoutes } from "./routes/computer-host.js";
 import { createChannelRoutes } from "./routes/channel.js";
 import { createChannelControlRoutes } from "./routes/channel-control.js";
 import { createScheduleRoutes } from "./routes/schedules.js";
@@ -65,7 +68,7 @@ import { createMemoryRoutes } from "./routes/memory.js";
 import { createFactsRoutes } from "./routes/facts.js";
 import { createPermissionRoutes } from "./routes/permission.js";
 import { createProjectRoutes } from "./routes/project.js";
-import { createRunExecutionRoutes } from "./routes/run-execution.js";
+import { admitComputerPrompt, createRunExecutionRoutes } from "./routes/run-execution.js";
 import { createServiceRoutes } from "./routes/service.js";
 import { createSessionRoutes } from "./routes/session.js";
 import { createSessionGoalRoutes } from "./routes/session-goal.js";
@@ -133,6 +136,8 @@ export interface VykorServerOptions {
   browserHost?: BrowserHost;
   /** Enable the private browser-host route for a registered, token-protected local daemon. */
   enableDesktopBrowser?: boolean;
+  /** Independent in-memory credential from the Desktop on-demand startup channel. */
+  desktopComputerToken?: string;
   /** Allow BrowserDeveloper for a trusted host that implements executeDeveloper. Defaults to false. */
   enableBrowserDeveloper?: boolean;
   registeredDaemonControl?: RegisteredDaemonControl;
@@ -172,7 +177,9 @@ export class VykorHttpServer {
   private readonly terminalEvents: TerminalHttpEventHub;
   private readonly requestTraces = new RequestTraceRegistry();
   private readonly browserBridge?: DesktopBrowserBridge;
+  private readonly computerBridge?: DesktopComputerBridge;
   private browserBridgeListening = false;
+  private computerBridgeListening = false;
   private listener?: Listener;
   private listenResult?: ListenResult;
   private closePromise?: Promise<void>;
@@ -183,6 +190,11 @@ export class VykorHttpServer {
     this.token = options.token;
     if (options.enableDesktopBrowser && this.token && !options.application && !options.browserHost) {
       this.browserBridge = new DesktopBrowserBridge();
+    }
+    const computerToken = options.desktopComputerToken;
+    if (this.token && computerToken && computerToken !== this.token && /^[a-f0-9]{64}$/.test(computerToken)
+      && !options.application) {
+      this.computerBridge = new DesktopComputerBridge(run => captureComputerApproval(this.store, this.application.permissions, run));
     }
     this.allowedOrigins = normalizeAllowedOrigins(options.allowedOrigins ?? []);
     this.services = options.services ?? {};
@@ -209,6 +221,7 @@ export class VykorHttpServer {
         createAgent: options.createAgent,
         browserHost: options.browserHost ?? this.browserBridge,
         enableBrowserDeveloper: options.enableBrowserDeveloper,
+        computerBridge: this.computerBridge,
         ...(options.channelConfigStore
           ? { channelConfigStore: options.channelConfigStore }
           : {}),
@@ -222,7 +235,7 @@ export class VykorHttpServer {
     this.jobs = this.application.jobs;
     this.eventHub = new HttpEventHub(this.application.events);
     this.terminalEvents = new TerminalHttpEventHub(this.terminals);
-    this.mountRoutes(options.registeredDaemonControl);
+    this.mountRoutes(options.registeredDaemonControl, computerToken);
   }
 
   get url(): string | undefined {
@@ -244,8 +257,9 @@ export class VykorHttpServer {
         },
         (info) => {
           this.listener = listener;
-          this.browserBridgeListening = Boolean(this.browserBridge)
-            && (info.address === "127.0.0.1" || info.address === "::1");
+          const loopback = info.address === "127.0.0.1" || info.address === "::1";
+          this.browserBridgeListening = Boolean(this.browserBridge) && loopback;
+          this.computerBridgeListening = Boolean(this.computerBridge) && loopback;
           this.listenResult = {
             host,
             port: info.port,
@@ -266,7 +280,7 @@ export class VykorHttpServer {
   }
 
   private async closeWork(): Promise<void> {
-    this.closeBrowserBridge();
+    this.closeDesktopBridges();
     const shutdown = this.ownsApplication
       ? this.application.close()
       : Promise.resolve();
@@ -298,7 +312,7 @@ export class VykorHttpServer {
     throwFailures(failures, "Vykor server shutdown failed");
   }
 
-  private mountRoutes(registeredDaemon?: RegisteredDaemonControl): void {
+  private mountRoutes(registeredDaemon?: RegisteredDaemonControl, computerToken?: string): void {
     this.app.onError((error) =>
       errorResponse(
         500,
@@ -330,7 +344,8 @@ export class VykorHttpServer {
 
     this.app.use("*", async (c, next) => {
       const origin = c.req.header("origin");
-      if (!origin || c.req.path.startsWith("/browser-host/")) {
+      if (!origin || c.req.path.startsWith("/browser-host/")
+        || c.req.path === "/computer-host" || c.req.path.startsWith("/computer-host/")) {
         await next();
         return;
       }
@@ -387,7 +402,7 @@ export class VykorHttpServer {
     );
     this.app.route("/", createMaintenanceRoutes({ registeredDaemon, maintenance: this.application.createMaintenanceService?.({ settings: this.services.settings, logs: () => this.maintenanceLogs,
       beforeClose: () => {
-        this.closeBrowserBridge();
+        this.closeDesktopBridges();
         this.restartPreparedHealth = { ok: true, ...(this.version ? { version: this.version } : {}),
           ...this.application.control.healthSnapshot(),
           ready: false, accepting: false, restartPrepared: true };
@@ -395,6 +410,16 @@ export class VykorHttpServer {
     }) }));
     if (this.browserBridge) {
       this.app.route("/browser-host", createBrowserHostRoutes(this.browserBridge, () => this.browserBridgeListening));
+    }
+    if (this.computerBridge && computerToken) {
+      this.app.route("/computer-host", createComputerHostRoutes({
+        bridge: this.computerBridge,
+        available: () => this.computerBridgeListening,
+        token: computerToken,
+        submit: (connectionId, sessionId, rawInput, request) => admitComputerPrompt(
+          this.application.interactions, sessionId, rawInput, this.requestTraces.get(request), connectionId,
+        ),
+      }));
     }
     this.app.route(
       "/attachments",
@@ -519,9 +544,11 @@ export class VykorHttpServer {
     return c.req.header("authorization") === `Bearer ${this.token}`;
   }
 
-  private closeBrowserBridge(): void {
+  private closeDesktopBridges(): void {
     this.browserBridgeListening = false;
+    this.computerBridgeListening = false;
     this.browserBridge?.close();
+    this.computerBridge?.close();
   }
 
   private log(event: ObservabilityEvent): void {

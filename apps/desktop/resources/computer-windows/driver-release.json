@@ -1,0 +1,10 @@
+{
+  "version": "0.28.2",
+  "platform": "win32-x64",
+  "sourceRevision": "fc188250b4ca8549b8e61f937fdb1fb560770e86",
+  "archive": "cua-driver-rs-0.28.2-windows-x86_64-binary.zip",
+  "archiveSha256": "1f4bfceeab64cb7f56be7aad774c3dc2d2910d1427e4be1d79939c706e8029ba",
+  "executable": "cua-driver.exe",
+  "executableSha256": "dbbd52d75759900155fbf3d5f0a13c759a12d06ef17338b88b3f2b8b9c1ef8dc",
+  "publisher": "Cua AI, Inc."
+}

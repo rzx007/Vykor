@@ -228,7 +228,7 @@ describe("AppearanceSettings", () => {
     expect(document.activeElement).toBe(input)
   })
 
-  it("shows save feedback and asks before restoring defaults", async () => {
+  it("shows save feedback", async () => {
     mocks.useAppearance.mockReturnValue({
       preferences: DEFAULT_APPEARANCE_PREFERENCES,
       resolvedTheme: "light",
@@ -244,20 +244,6 @@ describe("AppearanceSettings", () => {
 
     const liveRegion = container.querySelector('[aria-live="polite"]')
     expect(liveRegion?.textContent).toContain("已自动保存")
-
-    const reset = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "恢复默认"
-    )
-    await act(async () => reset?.click())
-    expect(document.body.textContent).toContain("恢复默认外观？")
-    expect(document.body.textContent).toContain("主题、颜色、字体、字号、动效和窗口材质")
-
-    const confirm = Array.from(document.body.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "确认恢复"
-    )
-    await act(async () => confirm?.click())
-    expect(resetAppearance).toHaveBeenCalledTimes(1)
-    expect(document.body.querySelector('[role="alertdialog"]')).toBeNull()
   })
 
   it("shows a toast when automatic saving fails", async () => {

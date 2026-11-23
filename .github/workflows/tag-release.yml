@@ -7,6 +7,14 @@ on:
         description: "Stable release version (X.Y.Z)"
         required: true
         type: string
+      sign_windows:
+        description: "Require a trusted Vykor signature on Windows pilot artifacts (requires build_only)"
+        type: boolean
+        default: false
+      build_only:
+        description: "Keep the verified artifacts for a pilot without publishing"
+        type: boolean
+        default: false
 
 concurrency:
   group: tag-release
@@ -36,7 +44,13 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
           REQUESTED_SHA: ${{ github.sha }}
+          SIGN_WINDOWS: ${{ inputs.sign_windows }}
+          BUILD_ONLY: ${{ inputs.build_only }}
         run: |
+          if [ "$SIGN_WINDOWS" = "true" ] && [ "$BUILD_ONLY" != "true" ]; then
+            echo "Signed Windows builds require build_only until the stable update channel migrates to one publisher."
+            exit 1
+          fi
           TAG="v${VERSION}"
           TAG="$TAG" node --input-type=module -e "import { parseReleaseTag } from './scripts/prepare-tag-release.mjs'; parseReleaseTag(process.env.TAG)"
           CHECKED_OUT_SHA="$(git rev-parse HEAD)"
@@ -121,17 +135,48 @@ jobs:
           pnpm --filter @vykor/desktop verify:update-packaging
           pnpm --filter @vykor/desktop^... build
           pnpm --filter @vykor/desktop build
-      - name: Package Windows
+      - name: Prepare and verify the pinned Windows Computer Use driver
         if: matrix.target == 'win'
-        run: pnpm --filter @vykor/desktop exec -- electron-builder --win --publish never
+        run: |
+          pnpm --filter @vykor/desktop prepare:computer
+          node scripts/prepare-cua-driver.mjs --verify apps/desktop/out/computer-windows/x64
+      - name: Package Windows
+        if: matrix.target == 'win' && !inputs.sign_windows
+        run: pnpm --filter @vykor/desktop exec -- electron-builder --win --x64 --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Package signed Windows artifacts
+        if: matrix.target == 'win' && inputs.sign_windows
+        run: pnpm --filter @vykor/desktop exec -- electron-builder --win --x64 --publish never --config.win.forceCodeSigning=true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
       - name: Package Linux
         if: matrix.target == 'linux'
         run: pnpm --filter @vykor/desktop exec -- electron-builder --linux --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify packaged and installed Windows Computer Use resources
+        if: matrix.target == 'win'
+        shell: pwsh
+        timeout-minutes: 10
+        env:
+          VYKOR_RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          VYKOR_EXPECTED_WINDOWS_PUBLISHER: ${{ vars.VYKOR_WINDOWS_PUBLISHER }}
+          VYKOR_REQUIRE_WINDOWS_SIGNATURE: ${{ inputs.sign_windows }}
+        run: |
+          pnpm --filter @vykor/desktop verify:computer --artifact dist/win-unpacked/resources
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./apps/desktop/scripts/verify-computer-install.ps1 `
+            -Installer "apps/desktop/dist/Vykor-$env:VYKOR_RELEASE_VERSION-setup.exe" `
+            -Unpacked apps/desktop/dist/win-unpacked `
+            -RequireSignature:($env:VYKOR_REQUIRE_WINDOWS_SIGNATURE -eq 'true') `
+            -Publisher $env:VYKOR_EXPECTED_WINDOWS_PUBLISHER
+      - name: Check that Linux ships no Windows Computer Use resources
+        if: matrix.target == 'linux'
+        run: pnpm --filter @vykor/desktop verify:computer --absent dist/linux-unpacked/resources
       - name: Verify updater artifacts
         run: pnpm --filter @vykor/desktop verify:update-packaging:artifact
       - name: Record migrations from the packaged Desktop app
@@ -195,6 +240,7 @@ jobs:
         run: pnpm check:clean-slate:artifacts
 
   create-tag:
+    if: ${{ !inputs.build_only }}
     needs: [validate, preflight, build-desktop, verify-clean-slate-artifacts]
     runs-on: ubuntu-latest
     steps:
@@ -340,6 +386,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Notify by email
+        if: ${{ !inputs.build_only }}
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}

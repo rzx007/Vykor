@@ -1,7 +1,8 @@
-import { ChevronDown, Goal, Plus, ShieldCheck, X, Undo2 } from "lucide-react"
-import { useState, useSyncExternalStore, type ReactNode } from "react"
+import { ChevronDown, Goal, Monitor, Plus, ShieldCheck, X, Undo2 } from "lucide-react"
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 
 import { Button } from "@renderer/components/ui/button"
+import { Input } from "@renderer/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@renderer/components/ui/popover"
 import { cn } from "@renderer/lib/utils"
 import type { DesktopAttachmentDraft } from "@shared/attachment-types"
@@ -83,6 +84,7 @@ export function Composer({
   onOpenContextUsage,
   onDraftChange,
   onSubmit,
+  computerEnabled = false,
   followUpRunId,
   lastAcceptedInputId,
   onCommand,
@@ -141,7 +143,8 @@ export function Composer({
   contextUsage?: DesktopContextUsageSnapshot | null
   onOpenContextUsage?: () => void | Promise<boolean | void>
   onDraftChange: (value: ComposerDocument) => void
-  onSubmit: (delivery?: "queue" | "steer") => void
+  onSubmit: (delivery?: "queue" | "steer", computer?: true | "auto", appHint?: string) => void
+  computerEnabled?: boolean
   followUpRunId?: string
   lastAcceptedInputId?: string
   onCommand?: (command: ComposerPickerCommand) => Promise<void>
@@ -279,9 +282,47 @@ export function Composer({
   const isFollowUp = Boolean(followUpRunId && !goalMode)
   const fullAccess = permissionMode === "full_access"
   const hasAppContext = appContexts.some(entry => entry.source.sessionId === activeSessionId)
+  const canUseComputer = computerEnabled && window.desktop?.computer?.supported === true &&
+    workMode === "execute" && !goalMode && !hasAppContext
+  const computerScope = composerScope ?? activeSessionId ?? id
+  const [armedComputer, setArmedComputer] = useState<{ scope: string; app: string } | null>(null)
+  const computerArmed = canUseComputer && armedComputer?.scope === computerScope
+  useEffect(() => {
+    setArmedComputer((current) => canUseComputer && current?.scope === computerScope ? current : null)
+  }, [canUseComputer, computerScope])
+  const windowShare = useRef<AbortController | null>(null)
+  const [sharingWindow, setSharingWindow] = useState(false)
+  useLayoutEffect(() => () => windowShare.current?.abort(), [computerScope])
+  if (computerEnabled && window.desktop?.computer?.supported && attachmentInteractionEnabled &&
+    onPasteFiles && !attachDisabled && !sharingWindow) {
+    contextItems.push({
+      id: "context:window-picture",
+      label: "分享窗口截图",
+      description: "选择一个窗口，发送前可预览",
+      group: "添加",
+      action: { kind: "window-picture" },
+    })
+  }
+  const shareWindow = async (): Promise<void> => {
+    if (!onPasteFiles || attachDisabled || windowShare.current) return
+    const controller = new AbortController()
+    windowShare.current = controller
+    setSharingWindow(true)
+    setAttachmentActionError(null)
+    try {
+      const picture = await window.desktop.computer.shareWindow()
+      if (!controller.signal.aborted && picture)
+        await onPasteFiles([new File([Uint8Array.from(picture.bytes)], "窗口截图.png", { type: "image/png" })])
+    } catch {
+      if (!controller.signal.aborted) setAttachmentActionError("无法分享这个窗口，请确认窗口可见并重试。")
+    } finally {
+      windowShare.current = null
+      setSharingWindow(false)
+    }
+  }
   const hasContent = Boolean(canSubmit || selectComposerDocumentText(draft).trim() ||
     attachments.length || browserAnnotations?.length || hasAppContext)
-  const allowSubmit = !preparingAttachments && !modeChangePending && (canSubmit ?? hasContent)
+  const allowSubmit = !preparingAttachments && !sharingWindow && !modeChangePending && (canSubmit ?? hasContent)
   const firstDraftItem = draft.items[0]
   const queueOnlyReason = promptQueueOnlyReason(attachments.length, draft.items, {
     pluginContext: hasAppContext,
@@ -292,7 +333,16 @@ export function Composer({
   const delivery = queueOnlyReason ? "queue" : fullAccess ? "steer" : manualDelivery ?? "queue"
   const submit = (): void => {
     if (sending || interrupting || !allowSubmit) return
-    onSubmit(isFollowUp ? delivery : undefined)
+    if (computerArmed) {
+      const appHint = armedComputer.app.trim()
+      setArmedComputer(null)
+      if (appHint) onSubmit("queue", true, appHint)
+      else onSubmit("queue", true)
+    } else {
+      const sendDelivery = isFollowUp ? delivery : undefined
+      if (canUseComputer && sendDelivery !== "steer") onSubmit(sendDelivery, "auto")
+      else onSubmit(sendDelivery)
+    }
   }
 
   return (
@@ -427,6 +477,7 @@ export function Composer({
         onContextPickerOpenChange={setContextPickerOpen}
         onContextAction={(item) => {
           if (item.action.kind === "files" && !attachDisabled) void attachmentAction(() => onPickFiles?.(), "添加附件")
+          if (item.action.kind === "window-picture") void shareWindow()
           if (item.action.kind === "plan" && !modeChangePending) onWorkModeChange?.("plan")
           if (item.action.kind === "goal") onGoalModeChange?.(true)
         }}
@@ -450,6 +501,32 @@ export function Composer({
         >
           <Plus strokeWidth={1.75} />
         </Button>
+        {canUseComputer ? (
+          <Button
+            type="button"
+            variant={computerArmed ? "secondary" : "ghost"}
+            size="sm"
+            shape="pill"
+            aria-label="电脑操作"
+            aria-pressed={computerArmed}
+            title="让下一条消息使用 Windows 应用"
+            disabled={sending || interrupting || modeChangePending}
+            onClick={() => setArmedComputer(computerArmed ? null : { scope: computerScope, app: "" })}
+          >
+            <Monitor className="size-3.5" />
+            <span className="@max-[36rem]/composer:sr-only">电脑操作</span>
+          </Button>
+        ) : null}
+        {computerArmed ? (
+          <Input
+            aria-label="目标应用（可选）"
+            placeholder="目标应用（可选）"
+            className="w-36"
+            maxLength={160}
+            value={armedComputer.app}
+            onChange={(event) => setArmedComputer({ scope: computerScope, app: event.currentTarget.value })}
+          />
+        ) : null}
         {goalMode && !goalEditing ? (
           <div className="ml-1 flex h-8 shrink-0 items-center rounded-full bg-secondary">
             <Button
@@ -617,10 +694,10 @@ export function Composer({
             }}
           />
           <ContextUsageControl snapshot={contextUsage} onOpen={onOpenContextUsage} />
-          {isFollowUp && fullAccess && queueOnlyReason ? (
+          {isFollowUp && !computerArmed && fullAccess && queueOnlyReason ? (
             <span role="status" className="text-xs text-muted-foreground">{queueOnlyReason}</span>
           ) : null}
-          {isFollowUp && !fullAccess ? (
+          {isFollowUp && !computerArmed && !fullAccess ? (
             <Popover open={activePicker === "delivery"} onOpenChange={(open) => setActivePicker(open ? "delivery" : null)}>
               <PopoverTrigger
                 render={<Button type="button" variant="control" shape="pill" size="sm" />}

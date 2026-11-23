@@ -1,6 +1,7 @@
 import { BusinessDataChannels, type BusinessDataKey } from "../shared/business-data-types"
 import { ipcRenderer, webUtils } from "electron"
 import type { DesktopWindowThemeSource } from "../shared/window-theme-types"
+import { COMPUTER_AVAILABLE_ARGUMENT, type DesktopComputerActivityUpdate, type DesktopComputerControl, type DesktopComputerInteractionEvent, type DesktopComputerInteractionReply } from "../shared/computer-types"
 import {
   TerminalSettingsChannels,
   TerminalSettingsEvents,
@@ -273,6 +274,8 @@ export const desktopAPI = {
     ) => invoke(IpcChannels.attachmentDeleteUnreferenced, input),
     readPreview: (input: IpcInvokeMap[typeof IpcChannels.attachmentReadPreview]["args"][0]) =>
       invoke(IpcChannels.attachmentReadPreview, input),
+    readDocumentPreview: (input: IpcInvokeMap[typeof IpcChannels.attachmentReadDocumentPreview]["args"][0]) =>
+      invoke(IpcChannels.attachmentReadDocumentPreview, input),
     open: (input: IpcInvokeMap[typeof IpcChannels.attachmentOpen]["args"][0]) =>
       invoke(IpcChannels.attachmentOpen, input),
     saveAs: (input: IpcInvokeMap[typeof IpcChannels.attachmentSaveAs]["args"][0]) =>
@@ -588,6 +591,27 @@ export const desktopAPI = {
     remove: (input: IpcInvokeMap[typeof IpcChannels.skillRemove]["args"][0]) =>
       invoke(IpcChannels.skillRemove, input),
   },
+  computer: {
+    supported: process.argv.includes(COMPUTER_AVAILABLE_ARGUMENT),
+    sendPrompt: (input: IpcInvokeMap[typeof IpcChannels.computerSendPrompt]["args"][0], automatic?: true) =>
+      invoke(IpcChannels.computerSendPrompt, input, automatic),
+    onInteraction: (handler: (event: DesktopComputerInteractionEvent) => void) => {
+      const receive = (_event: Electron.IpcRendererEvent, update: DesktopComputerInteractionEvent) => handler(update)
+      ipcRenderer.on(IpcEvents.computerInteraction, receive)
+      return () => { ipcRenderer.removeListener(IpcEvents.computerInteraction, receive) }
+    },
+    reply: (input: DesktopComputerInteractionReply) => invoke(IpcChannels.computerReply, input),
+    getActivity: (sessionId: string) => invoke(IpcChannels.computerActivityGet, sessionId),
+    shareWindow: () => invoke(IpcChannels.computerShareWindow),
+    onActivity: (handler: (update: DesktopComputerActivityUpdate) => void) => {
+      const receive = (_event: Electron.IpcRendererEvent, update: DesktopComputerActivityUpdate) => handler(update)
+      ipcRenderer.on(IpcEvents.computerActivity, receive)
+      return () => { ipcRenderer.removeListener(IpcEvents.computerActivity, receive) }
+    },
+    control: (input: DesktopComputerControl) => invoke(IpcChannels.computerControl, input),
+    listAppGrants: () => invoke(IpcChannels.computerListAppGrants),
+    revokeAppGrant: (id: string) => invoke(IpcChannels.computerRevokeAppGrant, id),
+  },
   sessions: {
     readAgentActivity: (input: IpcInvokeMap[typeof IpcChannels.sessionAgentActivity]["args"][0]) =>
       invoke(IpcChannels.sessionAgentActivity, input),
@@ -597,6 +621,7 @@ export const desktopAPI = {
       invoke(IpcChannels.sessionSearch, input),
     daemonStatus: () => invoke(IpcChannels.sessionDaemonStatus),
     chooseProject: () => invoke(IpcChannels.sessionChooseProject),
+    readLocalProjectDirectory: (path: string) => invoke(IpcChannels.sessionReadLocalProjectDirectory, path),
     inspectProject: (path: string) => invoke(IpcChannels.sessionInspectProject, path),
     listCommands: (cwd: string) => invoke(IpcChannels.sessionListCommands, cwd),
     listContextPlugins: (cwd: string) => invoke(IpcChannels.sessionListContextPlugins, cwd),

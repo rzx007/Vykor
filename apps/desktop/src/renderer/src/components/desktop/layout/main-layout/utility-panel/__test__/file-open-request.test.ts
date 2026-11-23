@@ -39,4 +39,13 @@ describe("prepareFileOpenRequest", () => {
       placeholderPath: null,
     })
   })
+
+  it("resolves relative session links from the session directory while browsing the project", () => {
+    expect(prepareFileOpenRequest("note.txt", "D:/repo", "D:/repo/task").openPath)
+      .toBe("D:/repo/task/note.txt")
+    expect(prepareFileOpenRequest("page.html", "D:/repo", "D:/repo/task").browserUrl)
+      .toBe("file:///D:/repo/task/page.html")
+    expect(prepareFileOpenRequest("attachment://asset/doc.pdf", "D:/repo", "D:/repo/task").openPath)
+      .toBe("attachment://asset/doc.pdf")
+  })
 })

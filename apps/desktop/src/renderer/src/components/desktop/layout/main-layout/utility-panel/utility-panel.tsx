@@ -15,6 +15,7 @@ import {
 } from "@renderer/components/desktop/tools/browser/browser-tool"
 import type { UtilityToolRequest } from "./utility-panel-tabs"
 import { FilesTool } from "@renderer/components/desktop/tools/files/files-tool"
+import { AttachmentDocumentPanel } from "@renderer/components/desktop/conversation-page/message/attachments/attachment-document-panel"
 import { toLocalFileUrl } from "@renderer/components/desktop/tools/browser/browser-navigation"
 import { getFileIcon } from "@renderer/components/desktop/tools/files/file-icons"
 import {
@@ -46,11 +47,12 @@ import type {
 import { useActiveWorkspaceIsGit } from "@renderer/hooks/use-active-workspace-is-git"
 import { cn } from "@renderer/lib/utils"
 import {
+  selectActiveSessionRecord,
   selectActiveWorkspaceProject,
   useDesktopSessionStore,
 } from "@renderer/stores/desktop-session"
 import { NEW_CONVERSATION_SCOPE } from "@renderer/stores/desktop-session/composer-draft-state"
-import { prepareFileOpenRequest } from "./file-open-request"
+import { parseAttachmentDocumentPath, prepareFileOpenRequest } from "./file-open-request"
 import {
   readPersistedUtilityFileTabs,
   writePersistedUtilityFileTabs,
@@ -206,10 +208,33 @@ export function UtilityPanel({
     readPersistedUtilityFileTabs
   )
   const workspaceProject = useDesktopSessionStore(selectActiveWorkspaceProject)
-  const selectedProjectPath = workspaceProject?.path
+  const sessionCwd = useDesktopSessionStore((state) => selectActiveSessionRecord(state)?.cwd)
+  const inSession = scopeId.startsWith("session:")
+  const selectedProjectPath = inSession && workspaceProject?.localOnly
+    ? sessionCwd
+    : workspaceProject?.path
+  const fileRequestRoot = inSession ? sessionCwd ?? selectedProjectPath : selectedProjectPath
+  const fileRequestOwner = useRef<{ id: number; rootPath: string | undefined | null } | null>(null)
+  const fileRequestMatchesRoot =
+    fileRequestOwner.current?.id !== fileOpenRequest?.id ||
+    fileRequestOwner.current?.rootPath === selectedProjectPath
+  useLayoutEffect(() => {
+    if (!fileOpenRequest) return
+    if (fileRequestOwner.current?.id !== fileOpenRequest.id) {
+      fileRequestOwner.current = { id: fileOpenRequest.id, rootPath: selectedProjectPath }
+    } else if (fileRequestOwner.current.rootPath !== selectedProjectPath) {
+      fileRequestOwner.current.rootPath = null
+    }
+  }, [fileOpenRequest, selectedProjectPath])
+  const attachmentRequest = useMemo(
+    () => fileOpenRequest && parseAttachmentDocumentPath(fileOpenRequest.path),
+    [fileOpenRequest]
+  )
   const preparedFileOpenRequest = useMemo(
-    () => fileOpenRequest && prepareFileOpenRequest(fileOpenRequest.path, selectedProjectPath),
-    [fileOpenRequest, selectedProjectPath]
+    () => fileOpenRequest && fileRequestMatchesRoot && !attachmentRequest
+      ? prepareFileOpenRequest(fileOpenRequest.path, selectedProjectPath, fileRequestRoot)
+      : null,
+    [fileOpenRequest, fileRequestMatchesRoot, selectedProjectPath, fileRequestRoot, attachmentRequest]
   )
   const resolvedFileOpenRequest = useMemo(
     () =>
@@ -225,7 +250,10 @@ export function UtilityPanel({
     activeWorkspaceIsGit === true
       ? utilityToolOrder
       : utilityToolOrder.filter((tool) => tool !== "review")
-  const persistedFileState = selectedProjectPath ? persistedFileTabs[scopeId] : undefined
+  const savedFiles = persistedFileTabs[scopeId]
+  const persistedFileState = selectedProjectPath && savedFiles?.rootPath === selectedProjectPath
+    ? savedFiles
+    : undefined
   const fileStateVisible = fileProjectPath === (selectedProjectPath ?? null)
   const visibleFileTabs = fileTabs.filter(
     (tab) => (tab.projectPath ?? null) === (selectedProjectPath ?? null)
@@ -280,10 +308,24 @@ export function UtilityPanel({
 
   useEffect(() => {
     if (!fileOpenRequest || handledFileRequestId === fileOpenRequest.id) return
-    const prepared = prepareFileOpenRequest(fileOpenRequest.path, selectedProjectPath)
-    if (prepared.placeholderPath || prepared.browserUrl) return
+    if (!attachmentRequest && (
+      !preparedFileOpenRequest || preparedFileOpenRequest.placeholderPath || preparedFileOpenRequest.browserUrl
+    )) return
     const timer = window.setTimeout(() => {
       setHandledFileRequestId(fileOpenRequest.id)
+      if (attachmentRequest) {
+        const id = `attachment:${attachmentRequest.assetId}`
+        leaveImage(() => {
+          setTabs((current) =>
+            current.some((tab) => tab.id === id) ? current : [...current, {
+              id, tool: "attachment", title: attachmentRequest.name,
+              attachmentAssetId: attachmentRequest.assetId,
+            }]
+          )
+          setActiveTabId(id)
+        })
+        return
+      }
       leaveImage(() =>
         setTabs((current) => {
           const existing = current.find((tab) => tab.id === filesTabId || tab.tool === "files")
@@ -298,9 +340,10 @@ export function UtilityPanel({
     }, 0)
     return () => window.clearTimeout(timer)
   }, [
+    attachmentRequest,
     fileOpenRequest,
     handledFileRequestId,
-    selectedProjectPath,
+    preparedFileOpenRequest,
     setActiveTabId,
     setHandledFileRequestId,
     setTabs,
@@ -491,6 +534,7 @@ export function UtilityPanel({
         delete nextState[scopeId]
       } else {
         nextState[scopeId] = {
+          rootPath: selectedProjectPath,
           activePath,
           paths: paths.slice(0, 12),
         }
@@ -865,9 +909,15 @@ export function UtilityPanel({
               onUpdate={(patch) => updateBrowserTab(tab.id, patch)}
             />
           ))}
+          {activeTab?.tool === "attachment" && activeTab.attachmentAssetId && (
+            <AttachmentDocumentPanel key={activeTab.id} assetId={activeTab.attachmentAssetId} />
+          )}
           {activeTab?.tool === "files" && (
             <FilesTool
+              key={selectedProjectPath}
               scopeId={scopeId}
+              rootPath={selectedProjectPath}
+              projectName={workspaceProject?.localOnly && inSession ? undefined : workspaceProject?.name}
               tabs={visibleFileTabs}
               activePath={visibleActiveFilePath}
               loadingPath={visibleLoadingFilePath}

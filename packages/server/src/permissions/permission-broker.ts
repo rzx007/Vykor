@@ -29,6 +29,9 @@ export interface PermissionAskInput {
   review?: PermissionApprovalReviewHook;
 }
 
+export type ComputerPermissionAskInput = Pick<PermissionAskInput, "reason" | "signal" | "runtimeRevision" | "traceId" | "isCurrent">
+  & { sessionId: string; runId: string; inputId: string };
+
 export type PermissionApprovalReviewHook = (context: {
   request: PermissionRequestRecord;
   input: PermissionAskInput;
@@ -91,10 +94,18 @@ export class StorePermissionBroker implements PermissionBroker {
   }
 
   async ask(input: PermissionAskInput): Promise<AgentPermissionDecision> {
+    return this.request(input);
+  }
+
+  async askComputer(input: ComputerPermissionAskInput, register: (requestId: string) => void): Promise<AgentPermissionDecision> {
+    return this.request({ ...input, toolName: "Computer", approvalMode: "ask", confirmation: "once" }, register);
+  }
+
+  private async request(input: PermissionAskInput, registerComputer?: (requestId: string) => void): Promise<AgentPermissionDecision> {
     // BrowserDeveloper is deliberately non-reusable and never routed to a parent
     // session: each inspection must be approved on its own, in its own session.
     const isDeveloper = input.toolName === "BrowserDeveloper";
-    const permissionSessionId = isDeveloper
+    const permissionSessionId = isDeveloper || registerComputer
       ? input.sessionId
       : this.resolvePermissionSessionId(input.sessionId);
     const reusable = isDeveloper || input.confirmation === "once"
@@ -111,6 +122,7 @@ export class StorePermissionBroker implements PermissionBroker {
       payload: {
         reason: input.reason,
         input: input.input ?? {},
+        ...(registerComputer ? { computerApproval: true } : {}),
         ...(input.confirmation ? { confirmation: input.confirmation } : {}),
         ...(permissionSessionId !== input.sessionId ? { childSessionId: input.sessionId } : {}),
         ...(permissionSessionId !== input.sessionId && input.runId ? { childRunId: input.runId } : {}),
@@ -130,6 +142,7 @@ export class StorePermissionBroker implements PermissionBroker {
       expire: (reason) => this.expire(request.id, reason),
     });
     void waiting.then(() => this.currentChecks.delete(request.id));
+    registerComputer?.(request.id);
     this.notify(previousEventSeq);
     this.logger?.({
       level: "info",
@@ -172,9 +185,20 @@ export class StorePermissionBroker implements PermissionBroker {
   }
 
   reply(input: PermissionReplyInput): PermissionRequestRecord {
+    return this.replyFrom(input, false);
+  }
+
+  replyComputer(input: Pick<PermissionReplyInput, "requestId" | "status">): PermissionRequestRecord {
+    return this.replyFrom({ ...input, clientId: "desktop-computer" }, true);
+  }
+
+  private replyFrom(input: PermissionReplyInput, trustedComputer: boolean): PermissionRequestRecord {
     const current = this.permissions.get(input.requestId);
     if (!current) throw new Error(`Permission request not found: ${input.requestId}`);
     if (current.status !== "pending") throw new Error(`Permission request already resolved: ${input.requestId}`);
+    const computer = current.payload.computerApproval === true;
+    if (computer && !trustedComputer) throw new Error("Desktop Computer approval requires a trusted Desktop reply");
+    if (!computer && trustedComputer) throw new Error("Permission request is not a Computer approval");
     if (!this.isCurrent(current.id)) {
       this.expire(current.id, "Session configuration changed before permission reply");
       return this.permissions.get(current.id)!;

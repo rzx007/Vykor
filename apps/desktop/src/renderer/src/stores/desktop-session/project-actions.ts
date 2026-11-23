@@ -98,12 +98,21 @@ export function createProjectActions(context: DesktopStoreContext): ProjectActio
           finishAppOperation(operationId)
           return
         }
-        projectDetailsCoordinator.beginDetails(details.project.id)
+        const known = get().projects.find((project) => samePath(project.path, details.path))
+        const project: DesktopProject = {
+          id: `local:${details.path}`,
+          name: details.path.replace(/[\\/]+$/, "").split(/[\\/]/).pop() || details.path,
+          lastOpenedAt: Date.now(),
+          available: true,
+          ...known,
+          path: details.path,
+          localOnly: true,
+        }
+        projectDetailsCoordinator.beginDetails(project.id)
         set((state) => ({
-          projects: upsertProject(state.projects, details.project),
           workspaceMode: "project",
-          selectedProject: details.project,
-          selectedProjectGit: details.git ?? Boolean(details.branch || details.branches?.length),
+          selectedProject: project,
+          selectedProjectGit: details.git,
           selectedProjectGitCheckedAt: Date.now(),
           branch: details.branch,
           branches: details.branches ?? [],
@@ -132,7 +141,7 @@ export function createProjectActions(context: DesktopStoreContext): ProjectActio
       })
       const operationId = beginProjectOperation(project.id, "select-project")
       try {
-        const details = await window.desktop.sessions.inspectProject(project.path)
+        const details = await window.desktop.sessions.readLocalProjectDirectory(project.path)
         if (
           !isCurrentProjectOperation(project.id, operationId) ||
           !projectDetailsCoordinator.ownsSelection(selectionGeneration) ||
@@ -142,12 +151,10 @@ export function createProjectActions(context: DesktopStoreContext): ProjectActio
           return
         }
         set((state) => ({
-          projects: upsertProject(state.projects, details.project),
-          selectedProject: details.project,
-          selectedProjectGit: details.git ?? Boolean(details.branch || details.branches?.length),
+          selectedProjectGit: details.git,
           selectedProjectGitCheckedAt: Date.now(),
           branch: details.branch,
-          branches: details.branches ?? [],
+          branches: details.branches,
           projectOperations: replaceProjectOperationBucket(
             state.projectOperations,
             project.id,
@@ -181,6 +188,7 @@ export function createProjectActions(context: DesktopStoreContext): ProjectActio
 
     async refreshSelectedProjectGit(options) {
       const { selectedProject, selectedProjectGitCheckedAt } = get()
+      if (selectedProject?.localOnly) return get().selectedProjectGit
       if (!selectedProject) {
         set({
           selectedProjectGit: false,

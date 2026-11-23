@@ -31,6 +31,10 @@ export function ProjectFileTree({
     () => prepareFileTreeInput(paths, { flattenEmptyDirectories: true }),
     [paths]
   )
+  const onSelectRef = useRef(onSelect)
+  useLayoutEffect(() => {
+    onSelectRef.current = onSelect
+  }, [onSelect])
   const { model } = useFileTree({
     icons: documentTreeIcons,
     density: "compact",
@@ -45,7 +49,7 @@ export function ProjectFileTree({
     stickyFolders: true,
     onSelectionChange: (selectedPaths) => {
       const nextPath = selectedPaths[0]
-      if (nextPath) onSelect(nextPath)
+      if (nextPath) onSelectRef.current(nextPath)
     },
     unsafeCSS: `
       :host {

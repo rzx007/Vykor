@@ -1,4 +1,4 @@
-import type { ToolResult, ToolExecutionResult } from "./tool-data.js";
+import type { MemoryImageSource, ToolResult, ToolExecutionResult } from "./tool-data.js";
 export type { ToolResult, ToolExecutionResult, HostFileFacts } from "./tool-data.js";
 import type { McpToolAnnotations, McpToolUiMetadata } from "./tool-data.js";
 import type { PermissionMode, AgentPermissionDecision, AgentPermissionRequest } from "../policy/permissions.js";
@@ -6,6 +6,8 @@ import type { AgentExecutionContext } from "../execution/execution.js";
 import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 
 export interface ToolContext {
+  /** Host-internal effect for one model request. The image never enters the tool result. */
+  attachModelImage?: (source: MemoryImageSource, isCurrent: () => boolean) => void;
   /** Host-owned visible-history state for lazy, path-scoped project rules. */
   projectInstructions?: {
     claim(key: string): "new" | "pending" | "visible";

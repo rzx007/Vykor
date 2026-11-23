@@ -26,6 +26,7 @@ export function PermissionCard({
   const developerScope = readDeveloperScope(permission)
   const operation = readPermissionOperation(permission)
   const review = readPermissionReview(permission)
+  const computer = permission.payload.computerApproval === true
   return (
     <section
       className={cn("mt-6 rounded-xl border border-border/70 bg-background px-4 py-3", className)}
@@ -36,7 +37,7 @@ export function PermissionCard({
         </span>
         <div className="min-w-0 flex-[1_1_12rem]">
           <h3 className="text-ui-small font-semibold text-foreground">
-            {review?.label ?? "需要你的批准"}
+            {review?.label ?? (computer ? "批准这次电脑操作" : "需要你的批准")}
           </h3>
           <p className="mt-1 text-xs break-words text-ui-muted">
             {"Vykor 请求"}
@@ -46,6 +47,9 @@ export function PermissionCard({
           </p>
           {review?.reason ? (
             <p className="mt-1 text-xs leading-snug break-words text-foreground">{review.reason}</p>
+          ) : null}
+          {computer && operation.reason ? (
+            <p className="mt-1 text-xs leading-snug break-words text-foreground">{operation.reason}</p>
           ) : null}
           <details className="group/permission-details mt-1 text-xs text-ui-muted">
             <summary className="text-ui-caption flex w-fit cursor-pointer list-none items-center gap-1 rounded-md py-1 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&::-webkit-details-marker]:hidden">
@@ -69,7 +73,7 @@ export function PermissionCard({
                   ))}
                 </dl>
               ) : null}
-              {operation.reason && !developerScope ? (
+              {operation.reason && !developerScope && !computer ? (
                 <p className="leading-snug break-words text-foreground">{operation.reason}</p>
               ) : null}
               {developerScope ? (

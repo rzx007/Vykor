@@ -3,7 +3,6 @@ import { act } from "react"
 import { createRoot } from "react-dom/client"
 import { expect, it, vi } from "vitest"
 import { LocalDocumentPreview } from "../local-document-preview"
-import type { WorkspaceReadFileResult } from "@shared/workspace-types"
 
 vi.mock("@renderer/components/appearance/appearance-provider", () => ({
   useAppearance: () => ({ resolvedTheme: "light" }),
@@ -18,14 +17,7 @@ it("sends only local bytes to its opaque sandbox and ignores unrelated messages"
   try {
     await act(async () =>
       root.render(
-        <LocalDocumentPreview
-          preview={
-            {
-              name: "真实名称.pdf",
-              documentPreview: { format: "pdf", bytes },
-            } as WorkspaceReadFileResult
-          }
-        />
+        <LocalDocumentPreview name="真实名称.pdf" bytes={bytes} />
       )
     )
     const frame = host.querySelector("iframe")!

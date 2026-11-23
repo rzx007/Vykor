@@ -36,6 +36,7 @@
 | [backup/](./backup/README.md) | 备份数据库及相关目录，校验清单并恢复应用数据。 |
 | [browser-tools/](./browser-tools/README.md) | 把浏览器宿主能力转换为 Agent 可调用的浏览器与开发工具。 |
 | [channel/](./channel/README.md) | 管理渠道配置、接入引导和外部消息到持久会话的转换。 |
+| [computer-tools/](./computer-tools/README.md) | 绑定 Desktop 运行许可，发送 Computer 请求并处理断线撤权。 |
 | [context-usage/](./context-usage/README.md) | 汇总会话当前使用的上下文与模型容量，并把活跃运行接到缓存。 |
 | [control/](./control/README.md) | 协调应用是否接受操作、独占维护，以及运行状态诊断。 |
 | [default-services/](./default-services/README.md) | 提供应用接口的默认实现，并共享当前配置引用。 |

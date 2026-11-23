@@ -17,7 +17,7 @@ import {
   type DaemonOperationLease,
 } from "../../control/daemon-operation-gate.js";
 import { isRecord, jsonEqual, withoutTraceId } from "../../support.js";
-import { SessionApplicationError } from "../session-application-error.js";
+import { ComputerSessionUnavailableError, SessionApplicationError } from "../session-application-error.js";
 import { inputItems, validateOutputSchemaRequest, readStoredOutputSchema } from "../execution/run-admission-work.js";
 import { readCompletionCheckCommand } from "../execution/completion-check-command.js";
 import { isObservableSession } from "../execution/session-observation-grant.js";
@@ -25,6 +25,7 @@ import { materializeSessionInput } from "./session-input-materializer.js";
 import { conversationContextCatalog } from "../transcript/session-conversation-context.js";
 import { capturePluginSelectionPolicy, emptyPluginScope } from "../plugins/session-plugin-selection.js";
 import type { PromoteQueuedRunResult } from "../execution/run-control-service.js";
+import type { ComputerPromptAuthorization } from "../../computer-tools/computer-tool.js";
 import type {
   CancelQueuedPromptInput,
   EditLatestPromptInput,
@@ -212,6 +213,26 @@ export class SessionInteractionService {
     sessionId: string,
     input: AdmitPromptInput,
   ): Promise<AdmitPromptResult> {
+    return this.submitPrompt(sessionId, input);
+  }
+
+  async admitComputerPrompt(
+    sessionId: string,
+    input: AdmitPromptInput,
+    connectionId: string,
+  ): Promise<AdmitPromptResult> {
+    if (!input.id?.trim()) throw new SessionApplicationError(400, "Computer Use requires an input ID");
+    if (input.delivery === "steer" || input.expectedActiveRunId !== undefined) {
+      throw new SessionApplicationError(409, "Computer Use requires a new queued user message");
+    }
+    return this.submitPrompt(sessionId, input, connectionId);
+  }
+
+  private async submitPrompt(
+    sessionId: string,
+    input: AdmitPromptInput,
+    computerConnectionId?: string,
+  ): Promise<AdmitPromptResult> {
     assertPromptMetadataAllowed(input);
     if (input.delivery === "steer") readCompletionCheckCommand(inputItems(input), "steer");
     if (input.expectedActiveRunId !== undefined && this.context.liveChildren.has(sessionId)) {
@@ -221,9 +242,15 @@ export class SessionInteractionService {
       throw new SessionApplicationError(409, "A live child cannot change its output schema; submit a separate queued Run");
     }
     const work = async () => {
-      const prepared = await this.context.operationRunner.run(sessionId, () =>
-        this.admitPromptWork(this.requireSession(sessionId), input),
-      );
+      const prepared = await this.context.operationRunner.run(sessionId, () => {
+        const session = this.requireSession(sessionId);
+        const computer = computerConnectionId === undefined
+          ? undefined : this.context.authorizeComputerPrompt?.(session, computerConnectionId);
+        if (computerConnectionId !== undefined && (!computer || this.context.liveChildren.has(sessionId))) {
+          throw new ComputerSessionUnavailableError();
+        }
+        return this.admitPromptWork(session, input, computer);
+      });
       return "completion" in prepared ? prepared.completion : prepared;
     };
     return this.context.admission.withUserInputPreparation
@@ -233,6 +260,7 @@ export class SessionInteractionService {
   private async admitPromptWork(
     session: SessionRecord,
     originalInput: AdmitPromptInput,
+    computer?: ComputerPromptAuthorization,
   ): Promise<AdmitPromptResult | { completion: Promise<AdmitPromptResult> }> {
     const sessionId = session.id;
     if (originalInput.observationTargetSessionId !== undefined &&
@@ -457,10 +485,8 @@ export class SessionInteractionService {
         ...(run.status === "pending" ? { queue_state: "queued" as const } : {}),
       };
     }
-    return await this.context.admission.preparePrompt(
-      sessionId,
-      input,
-    );
+    if (computer) return this.context.admission.preparePrompt(sessionId, input, computer);
+    return this.context.admission.preparePrompt(sessionId, input);
   }
 
   async resumeRun(

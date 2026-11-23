@@ -9,16 +9,19 @@ import {
   toModelRequestFailure,
 } from "../errors/index";
 import { createRequestLifecycle } from "./requests/retry";
+import { requestWithPrivateImage } from "./requests/private-image-request.js";
 import {
   createDsmlRecoveryScanner,
   type RecoveredToolCall,
 } from "./tools/dsml-tool-call-recovery.js";
 import { createToolPathSummary, isFileTool } from "./tools/tool-path-summary.js";
 import {
+  hasMemoryImages,
   prepareNativeImagePayload,
   preparedImageDataUrl,
   prepareUserContentWithVisionImages,
   replaceMissingToolResultImages,
+  withoutRevokedMemoryImages,
 } from "./media/native-image-payload.js";
 import { extractThinkBlocks } from "./streaming/think-blocks.js";
 import { parseToolInput } from "./tools/tool-input.js";
@@ -201,9 +204,11 @@ export class OpenAICompatibleClient implements StreamingMessageClient {
     try {
       let stream: AsyncIterable<OpenAI.ChatCompletionChunk>;
       try {
-        stream = await this._client.chat.completions.create(createParams, {
-          signal: lifecycle.signal,
-        });
+        const current = withoutRevokedMemoryImages(params);
+        if (current !== params) createParams.messages = await this.convertMessages(current);
+        stream = hasMemoryImages(current)
+          ? (await requestWithPrivateImage<OpenAI.ChatCompletionChunk>(this._client, "/chat/completions", createParams, lifecycle.signal)).stream
+          : await this._client.chat.completions.create(createParams, { signal: lifecycle.signal });
       } catch (error) {
         throw this.failModelRequest(error, "request", lifecycle, params.abortSignal);
       }

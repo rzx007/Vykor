@@ -81,6 +81,7 @@ export interface SessionRunExecutorContext {
   goals: Pick<GoalOperations, "getGoal">;
   createSessionObservationTool?(input: ExecuteSessionRunInput, grant: SessionObservationGrant): ToolDefinition;
   createSessionDiscoveryTool?(input: ExecuteSessionRunInput & { cwd: string }): SessionDiscoveryTool | undefined;
+  createComputerTool?(input: ExecuteSessionRunInput): AgentRunToolContribution | undefined;
   checkGoalExecution?(goalId: string, objectiveVersion: number): void;
   checkGoalRunExecution?(
     goalId: string,
@@ -473,14 +474,16 @@ export class SessionRunExecutor {
       const discoveryTool = storedRun.metadata.sessionLookupAllowed === true
         ? this.context.createSessionDiscoveryTool?.({ ...input, cwd: session.cwd })
         : undefined;
-      const scopedTools: Array<{ tool: ToolDefinition; permission: AgentRunToolContribution["permission"]; sourceAvailable?(): boolean }> = [];
+      const scopedTools: Array<AgentRunToolContribution & { sourceAvailable?(): boolean }> = [];
       if (observationTool) {
-        scopedTools.push({ tool: observationTool, permission: "host-internal" });
+        scopedTools.push({ definition: observationTool, permission: "host-internal" });
       }
       if (discoveryTool) {
-        scopedTools.push({ tool: discoveryTool, permission: "runtime-confirm-once", sourceAvailable: discoveryTool.sourceAvailable });
+        scopedTools.push({ definition: discoveryTool, permission: "runtime-confirm-once", sourceAvailable: discoveryTool.sourceAvailable });
       }
-      for (const { tool, permission, sourceAvailable } of scopedTools) {
+      const computerTool = this.context.createComputerTool?.(input);
+      if (computerTool) scopedTools.push(computerTool);
+      for (const { definition: tool, sourceAvailable, beforeDispatch, ...policy } of scopedTools) {
         if (preparedCapabilities?.tools.has(tool.name)) {
           // The host contribution owns this name for the eligible Run.
           const tools = new Map(preparedCapabilities.tools);
@@ -488,7 +491,7 @@ export class SessionRunExecutor {
           preparedCapabilities = { ...preparedCapabilities, tools };
         }
         const permitted = async (toolInput?: Record<string, unknown>) =>
-          await host?.permitsHostRunTool?.(tool, permission === "runtime-confirm-once" ? toolInput : undefined) &&
+          await host?.permitsHostRunTool?.(tool, policy.permission === "runtime-confirm-once" || beforeDispatch ? toolInput : undefined) &&
           (!sourceAvailable || (!workContext.signal.aborted && sourceAvailable()));
         if (await permitted()) {
           const definition: ToolDefinition = {
@@ -506,7 +509,14 @@ export class SessionRunExecutor {
           };
           contribution = {
             ...contribution,
-            tools: [...(contribution?.tools ?? []), { definition, permission }],
+            tools: [...(contribution?.tools ?? []), {
+              ...policy, definition,
+              ...(beforeDispatch ? {
+                beforeDispatch: async (toolInput, toolContext) => await permitted(toolInput)
+                  ? beforeDispatch(toolInput, toolContext)
+                  : `${tool.name} is unavailable under the current tool policy.`,
+              } : {}),
+            }],
           };
         }
       }

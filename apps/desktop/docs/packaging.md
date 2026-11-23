@@ -50,3 +50,11 @@ pnpm --filter @vykor/desktop build:win
 `searching for node modules` 之后如果很快出现 `asar` / `win-unpacked`，说明依赖树是瘦的。如果又开始刷 `duplicate dependency references` 和一长串 `antd-style`、`@tailwindcss/oxide-*`，就是有 UI 或 workspace 包被加回了 production 依赖。
 
 Windows 上可以把仓库目录、`apps/desktop/dist`、pnpm store 加进 Defender 排除，拷贝会再快一截。Electron 官方 zip 走 `electron-builder.yml` 里的 npmmirror，下过一次会缓存，不会每次卡在 download。
+
+## Windows 电脑操作资源
+
+`build:win` 准备固定版本的 Cua 驱动并构建 Windows x64 NSIS 安装器。CI 在 Windows 解包后和干净 runner 静默安装后核对驱动文件摘要、x64 架构、Cua 原厂签名与许可证。静默安装还会比较宿主、升级辅助程序与 `app.asar` 的 SHA-256，并检查卸载残留。Linux 构建确认解包目录和 `app.asar` 未包含 Windows 驱动文件。 [资源来源与准备命令](../resources/computer-windows/README.md)
+
+签名试点候选同时启用 `sign_windows` 和 `build_only`，工作流只保留验收制品。仓库 Secret 提供 `WIN_CSC_LINK` 与 `WIN_CSC_KEY_PASSWORD`，仓库变量 `VYKOR_WINDOWS_PUBLISHER` 填签名证书的发布者名称。工作流验证 Vykor 安装器、卸载器、宿主和 `elevate.exe` 的签名。 [发布流程](../../../docs/release-process.md)
+
+本机核对已解包的 Windows 构建，可运行 `pnpm --filter @vykor/desktop verify:computer --artifact dist/win-unpacked/resources`。静默安装验收使用干净 runner 或独立试点机器。试点的开关和应用范围见 [电脑操作说明](../../../docs/computer-capabilities.md)。

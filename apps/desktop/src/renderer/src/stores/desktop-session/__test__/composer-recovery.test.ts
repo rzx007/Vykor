@@ -17,6 +17,27 @@ import {
 } from "../composer-recovery"
 
 describe("composer recovery", () => {
+  it("checks a recovered ordinary prompt for prior admission before retrying with automatic Computer available", async () => {
+    const sendPrompt = vi.fn()
+    const sendComputer = vi.fn().mockResolvedValue(undefined)
+    const checkPromptAccepted = vi.fn().mockResolvedValue(false)
+    vi.stubGlobal("window", { desktop: {
+      businessData: businessDataFixture,
+      sessions: { sendPrompt, checkPromptAccepted },
+      computer: { supported: true, sendPrompt: sendComputer },
+    } })
+    const recovered = decodeComposerRecovery({ version: 1, drafts: {}, submissions: [{
+      id: "original-auto", sessionId: "s", computer: "auto", createdAt: 1,
+      items: [{ type: "text", text: "打开计算器" }], attachments: [], placement: "transcript",
+    }] })
+    useDesktopSessionStore.setState({
+      activeSessionId: "s", sessionView: emptySessionView("s"), sessionRuntimes: recovered.sessionRuntimes,
+    })
+    await useDesktopSessionStore.getState().retryPromptSubmission("original-auto")
+    expect(checkPromptAccepted).toHaveBeenCalledExactlyOnceWith({ sessionId: "s", inputId: "original-auto" })
+    expect(sendComputer).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: "original-auto" }), true)
+    expect(sendPrompt).not.toHaveBeenCalled()
+  })
   it("restores the original Input ID, delivery and target Run", () => {
     const original = {
       id: "submitted-follow-up", sessionId: "saved", delivery: "steer", expectedActiveRunId: "old-run",
@@ -26,6 +47,32 @@ describe("composer recovery", () => {
     const restored = decodeComposerRecovery(exportComposerRecovery(decoded))
     expect(restored.sessionRuntimes.saved?.pendingPromptSubmissions[original.id])
       .toMatchObject({ ...original, phase: "failed" })
+  })
+
+  it("checks a recovered Computer submission without using the private route until explicitly opted in again", async () => {
+    const sendPrompt = vi.fn()
+    const sendComputer = vi.fn().mockResolvedValue(undefined)
+    const checkPromptAccepted = vi.fn().mockResolvedValue(false)
+    vi.stubGlobal("window", { desktop: {
+      businessData: businessDataFixture,
+      sessions: { sendPrompt, checkPromptAccepted },
+      computer: { sendPrompt: sendComputer },
+    } })
+    const recovered = decodeComposerRecovery({ version: 1, drafts: {}, submissions: [{
+      id: "original-computer", sessionId: "s", computer: true, createdAt: 1,
+      items: [{ type: "text", text: "打开计算器" }], attachments: [], placement: "transcript",
+    }] })
+    useDesktopSessionStore.setState({
+      activeSessionId: "s", sessionView: emptySessionView("s"), sessionRuntimes: recovered.sessionRuntimes,
+    })
+    await expect(useDesktopSessionStore.getState().retryPromptSubmission("original-computer"))
+      .rejects.toThrow("重新开启电脑操作")
+    expect(checkPromptAccepted).toHaveBeenCalledOnce()
+    expect(sendPrompt).not.toHaveBeenCalled()
+    expect(sendComputer).not.toHaveBeenCalled()
+    await useDesktopSessionStore.getState().sendMessage("打开计算器", { computer: true })
+    expect(sendComputer).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: "original-computer" }))
+    expect(sendPrompt).not.toHaveBeenCalled()
   })
 
   it("does not revive a new session deleted while its initial snapshot is pending", async () => {
@@ -44,6 +91,41 @@ describe("composer recovery", () => {
     expect(await request).toBeNull()
     expect(sendPrompt).not.toHaveBeenCalled()
     expect(useDesktopSessionStore.getState().sessionRuntimes["deleted-first"]).toBeUndefined()
+  })
+
+  it.each([false, true])("keeps first Computer prompt ownership when the subscription settles the open (switched=%s)", async (switched) => {
+    const sessionId = "computer-first"
+    const sendComputer = vi.fn().mockResolvedValue(undefined)
+    let resolveOpen!: (view: ReturnType<typeof emptySessionView>) => void
+    const open = vi.fn((id: string) => Promise.resolve(emptySessionView(id, 5)))
+      .mockImplementationOnce(() => new Promise(resolve => { resolveOpen = resolve }))
+    vi.stubGlobal("window", { desktop: {
+      businessData: businessDataFixture,
+      sessions: { create: vi.fn(async () => emptySessionView(sessionId).session), open },
+      computer: { sendPrompt: sendComputer },
+    } })
+    useDesktopSessionStore.setState({
+      activeSessionId: null, sessionView: null, workspaceMode: "outside_project", selectedModel: "model",
+    })
+
+    const store = useDesktopSessionStore.getState
+    const starting = store().startSession("打开记事本", { computer: true })
+    await vi.waitFor(() => expect(open).toHaveBeenCalledWith(sessionId))
+    store().applySessionUpdate(emptySessionView(sessionId, 5))
+    if (switched) {
+      await store().openSession("other")
+      await store().openSession(sessionId)
+    }
+    resolveOpen(emptySessionView(sessionId, 2))
+
+    if (switched) {
+      await expect(starting).rejects.toThrow("会话已切换")
+      expect(sendComputer).not.toHaveBeenCalled()
+    } else {
+      await starting
+      expect(sendComputer).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ sessionId }))
+    }
+    expect(store().sessionView?.cursor).toBe(5)
   })
   it.each(["ordinary", "first"])(
     "does not send the %s prompt if its identity cannot be saved",

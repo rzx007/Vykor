@@ -47,6 +47,7 @@ interface UpdaterServiceDependencies {
   checkIntervalMs: number
   logger: UpdaterLogger
   setForceQuit(value: boolean): void
+  beforeInstall?(): Promise<boolean>
 }
 
 export interface UpdaterService {
@@ -54,7 +55,8 @@ export interface UpdaterService {
   getState(): DesktopUpdateState
   subscribe(listener: (state: DesktopUpdateState) => void): () => void
   download(): Promise<void>
-  install(): void
+  install(): void | Promise<void>
+  suppressAutoInstall(): void
   dispose(): void
 }
 
@@ -67,7 +69,9 @@ export function createUpdaterService(dependencies: UpdaterServiceDependencies): 
   let state: DesktopUpdateState = { status: "idle" }
   let availableVersion: string | undefined
   let userDownloadPending = false
+  let installing = false
   const subscribers = new Set<(state: DesktopUpdateState) => void>()
+  const suppressAutoInstall = () => { dependencies.updater.autoInstallOnAppQuit = false }
 
   const publish = (next: DesktopUpdateState): void => {
     state = next
@@ -190,11 +194,23 @@ export function createUpdaterService(dependencies: UpdaterServiceDependencies): 
         userDownloadPending = false
       }
     },
-    install(): void {
-      if (!enabled || state.status !== "downloaded") return
-      dependencies.setForceQuit(true)
-      dependencies.updater.quitAndInstall()
+    install(): void | Promise<void> {
+      if (!enabled || installing || state.status !== "downloaded") return
+      installing = true
+      const install = () => {
+        dependencies.setForceQuit(true)
+        dependencies.updater.quitAndInstall()
+      }
+      const block = () => {
+        suppressAutoInstall()
+        installing = false
+        publish({ status: "error", version: currentVersion(state), message: "无法确认电脑操作的键鼠已释放，更新已暂停。" })
+      }
+      const released = dependencies.beforeInstall?.()
+      if (released) return released.then(ok => { if (ok) install(); else block() }, block)
+      install()
     },
+    suppressAutoInstall,
     dispose(): void {
       if (timer) clearTimeout(timer)
       timer = null

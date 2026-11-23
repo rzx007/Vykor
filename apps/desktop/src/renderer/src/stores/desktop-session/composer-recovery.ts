@@ -96,7 +96,9 @@ export function decodeComposerRecovery(raw: unknown): RecoveredComposer {
         ...parsed.data,
         content: selectComposerDocumentText(composerDocument(parsed.data.items)),
         phase: "failed",
-        error: "上次发送的结果尚未确认，请核对状态后重试。",
+        error: parsed.data.computer === true
+          ? "上次电脑操作提交尚未确认。可核对状态，或重新开启电脑操作后提交。"
+          : "上次发送的结果尚未确认，请核对状态后重试。",
       }
       const runtime = Object.hasOwn(result.sessionRuntimes, pending.sessionId)
         ? result.sessionRuntimes[pending.sessionId]!

@@ -75,6 +75,8 @@ export interface RegisteredDaemonOptions extends Pick<
   shouldStart?: () => Promise<boolean>;
   canSwitchData?: () => Promise<boolean>;
   start?: (options: RegisteredRuntimeOptions) => Promise<RegisteredRuntime>;
+  /** One-time reply over the parent Desktop process's inherited startup channel. */
+  computerPairing?: { token: string; publish: (registration: DaemonRegistry) => void };
 }
 
 /** Holds the fixed registry for the entire lifetime of an independent local daemon. */
@@ -92,6 +94,8 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
   const registryPath = join(base, "daemon", "registry.json");
   const statePath = dataLocationFile(base);
   const start = options.start ?? startVykorDaemon;
+  const computerPairing = options.launcher === "desktop" && options.supervised === false && !options.baseDataDirectory
+    ? options.computerPairing : undefined;
   let current: OpenedRuntime | undefined;
   let published: DaemonRegistry | undefined;
   let state: DataLocationState;
@@ -146,12 +150,13 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
       current = await open(state.location, {
         token: options.initialToken,
         fileMustExist: Boolean(saved || legacy),
+        desktopComputerToken: computerPairing?.token,
       });
     }
     if (current && !stopping && legacy && options.baseDataDirectory) await saveDataLocationState(statePath, state);
     if (current && !stopping) {
       if (options.shouldStart && !await options.shouldStart()) return;
-      if (!stopping) await publish(current);
+      if (!stopping) await publish(current, computerPairing?.publish);
     }
     const error = await stopped;
     if (error) throw error;
@@ -214,7 +219,8 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
 
   async function open(
     location: RegisteredDataLocation,
-    { token = createBearerToken(), fileMustExist = true }: { token?: string; fileMustExist?: boolean } = {},
+    { token = createBearerToken(), fileMustExist = true, desktopComputerToken }:
+      { token?: string; fileMustExist?: boolean; desktopComputerToken?: string } = {},
   ): Promise<OpenedRuntime> {
     if (ownerError) throw ownerError;
     // Explicit embedded runtimes retain their legacy contract. Product roots never change in-process.
@@ -233,6 +239,7 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
       executionSurface: "desktop_managed",
       enableDesktopBrowser: options.enableDesktopBrowser,
       enableBrowserDeveloper: options.enableBrowserDeveloper,
+      ...(desktopComputerToken ? { desktopComputerToken } : {}),
       ...(options.allowedOrigins ? { allowedOrigins: options.allowedOrigins } : {}),
       ...(options.outsideProjectWorkspaceRoot
         ? { outsideProjectWorkspaceRoot: options.outsideProjectWorkspaceRoot } : {}),
@@ -247,7 +254,7 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
     return { ...runtime, token };
   }
 
-  async function publish(runtime: OpenedRuntime): Promise<void> {
+  async function publish(runtime: OpenedRuntime, paired?: (registration: DaemonRegistry) => void): Promise<void> {
     if (ownerError) throw ownerError;
     await runtime.server.application.activateBackgroundWork?.();
     const entry = createDaemonRegistryEntry({
@@ -262,6 +269,7 @@ export async function runRegisteredDaemon(options: RegisteredDaemonOptions): Pro
     });
     writeDaemonRegistry(entry, registryPath);
     published = entry;
+    paired?.(entry);
     if (options.launcher === "cli") console.log(`[daemon] listening ${entry.url}`);
   }
 

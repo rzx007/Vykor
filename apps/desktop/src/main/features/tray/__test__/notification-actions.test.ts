@@ -348,6 +348,21 @@ describe("native notification actions", () => {
     expect(calls).toEqual([])
   })
 
+  it("opens the original chat for protected Computer approvals without approving from a toast", async () => {
+    pending[0]!.toolName = "Computer"
+    pending[0]!.payload.computerApproval = true
+    const notification = (await actions.notificationInteractionOptions(
+      { title: "Vykor", body: "", sessionId: "original", permissionId: "p1" },
+      "需要批准"
+    ))!
+    expect(notification.toastXml).not.toContain('content="允许本次"')
+    expect(notification.toastXml).not.toContain('content="拒绝"')
+    await actions.handleNotificationActivation(activation(notification, "action", { actionIndex: 0 }))
+    await actions.handleNotificationActivation(activation(notification, "click"))
+    expect(approvals).toEqual([])
+    expect(navigations).toEqual(["original"])
+  })
+
   it("refuses through the permission endpoint and ignores a malformed action", async () => {
     const native = (await actions.notificationInteractionOptions(
       { title: "Vykor", body: "", sessionId: "original", permissionId: "p1" },

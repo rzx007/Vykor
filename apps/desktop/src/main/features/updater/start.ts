@@ -13,7 +13,7 @@ export interface DesktopUpdaterRuntime {
   contribution: IpcContribution
 }
 
-export function startDesktopUpdater(): DesktopUpdaterRuntime {
+export function startDesktopUpdater(beforeInstall: () => Promise<boolean>): DesktopUpdaterRuntime {
   autoUpdater.logger = log
   const service = createUpdaterService({
     updater: autoUpdater as Parameters<typeof createUpdaterService>[0]["updater"],
@@ -26,6 +26,7 @@ export function startDesktopUpdater(): DesktopUpdaterRuntime {
       error: (message, error) => log.error(`[updater] ${message}`, error),
     },
     setForceQuit,
+    beforeInstall,
   })
 
   const contribution = createUpdaterIpcContribution({

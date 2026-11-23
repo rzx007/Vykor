@@ -15,7 +15,6 @@ import {
 } from "node:path"
 import { clipboard, shell } from "electron"
 import { documentFormat, MAX_DOCUMENT_PREVIEW_BYTES } from "../../../shared/document-preview"
-import { desktopSessionService } from "../session/session-service"
 
 import type {
   WorkspaceCopyPathInput,
@@ -108,7 +107,6 @@ class WorkspaceService {
   }
 
   async readFile(input: WorkspaceReadFileInput): Promise<WorkspaceReadFileResult> {
-    if (input.path.startsWith("attachment://")) return await this.readDocumentAttachment(input)
     const resolved = await this.resolveAllowedFile(input.rootPath, input.path, true)
     const info = await stat(resolved.absolutePath)
     if (!info.isFile()) throw new Error("只能预览文件。")
@@ -260,59 +258,6 @@ class WorkspaceService {
     }
 
     shell.showItemInFolder(resolved.absolutePath)
-  }
-
-  private async readDocumentAttachment(
-    input: WorkspaceReadFileInput
-  ): Promise<WorkspaceReadFileResult> {
-    const match = input.path.match(/^attachment:\/\/([^/]+)\//)
-    if (!match) throw new Error("无效附件引用。")
-    const assetId = decodeURIComponent(match[1]!)
-    const client = await desktopSessionService.agentClient()
-    const asset = await client.attachments.get(assetId)
-    if (
-      !documentFormat(asset.displayName) ||
-      asset.status !== "ready" ||
-      !asset.sizeBytes ||
-      asset.sizeBytes > MAX_DOCUMENT_PREVIEW_BYTES
-    )
-      throw new Error("附件不是可预览的文档或超过 64 MB。")
-    const response = await client.attachments.download(assetId)
-    if (!response.body) throw new Error("无法读取附件。")
-    const reader = response.body.getReader(),
-      chunks: Uint8Array[] = []
-    let total = 0
-    try {
-      for (;;) {
-        const part = await reader.read()
-        if (part.done) break
-        total += part.value.byteLength
-        if (total > MAX_DOCUMENT_PREVIEW_BYTES) throw new Error("附件超过 64 MB。")
-        chunks.push(part.value)
-      }
-    } finally {
-      await reader.cancel().catch(() => {})
-      reader.releaseLock()
-    }
-    const bytes = Buffer.concat(chunks)
-    return {
-      path: input.path,
-      name: asset.displayName,
-      size: bytes.length,
-      binary: true,
-      content: null,
-      language: "",
-      scope: "project",
-      relativePath: input.path,
-      rootLabel: "会话附件",
-      previewBytes: null,
-      mediaType: null,
-      imagePreviewError: null,
-      documentPreview: {
-        format: documentFormat(asset.displayName)!,
-        bytes: exactArrayBuffer(bytes),
-      },
-    }
   }
 
   async copyPath(input: WorkspaceCopyPathInput): Promise<string> {
