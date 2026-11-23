@@ -100,6 +100,13 @@
 
 对应契约：[Agent Lifecycle Contract](./agent-lifecycle-contract.md)、[Agent Child Session Flow](./agent-child-session-flow.md)。
 
+## Windows 电脑操作
+
+- 私有桥核对任务授权，撤销旧任务和截图。 [Desktop 桥路集成](../tests/desktop-integration/__test__/computer-bridge.test.ts) · [后台路由](../packages/server/src/http/__test__/computer-host.test.ts)
+- 截图只供获准的请求，错误、历史、附件和导出不保留画面。 [后台运行与截图](../packages/server/src/http/__test__/computer-run.integration.test.ts)
+- 试点开关和资源完整性限制可用性。 [可用性测试](../apps/desktop/src/main/features/computer/__test__/availability.test.ts) · [签名及资源核验](../apps/desktop/docs/packaging.md)
+- 实机核对应用启动、语义操作、焦点、输入释放和 Stop。 [实机运行说明](../tests/desktop-integration/README.md) · [原生输入测试](../apps/desktop/src/main/features/computer/__test__/windows-foreground-live.test.ts)
+
 ## Durable 数据与收尾
 
 | 硬规则 | 主要测试 |

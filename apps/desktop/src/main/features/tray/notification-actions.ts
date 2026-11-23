@@ -45,6 +45,7 @@ export function notificationInteractionOptions(
         const review = request?.payload.approvalReview
         if (
           request &&
+          request.payload.computerApproval !== true &&
           !(
             review &&
             typeof review === "object" &&
@@ -184,6 +185,12 @@ export async function handleNotificationActivation(
         throw new Error("Goal answer was not accepted")
     } else {
       const request = await pendingPermission(client, target)
+      if (request?.payload.computerApproval === true) {
+        target.kind = "open"
+        saveTarget(target)
+        openSession?.(target.sessionId)
+        return
+      }
       if (!request || (target.kind === "approval" && request.toolName === "AskUser")) {
         target.resolved = true
         delete target.reply

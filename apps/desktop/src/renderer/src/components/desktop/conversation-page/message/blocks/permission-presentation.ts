@@ -8,6 +8,7 @@ const operationLabels: Record<string, string> = {
   ApplyPatch: "应用文件补丁",
   Read: "读取文件",
   Browser: "操作浏览器",
+  Computer: "操作 Windows 应用",
   BrowserDeveloper: "检查网页",
   JobCancel: "停止任务",
 }

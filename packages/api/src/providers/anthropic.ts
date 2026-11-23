@@ -15,12 +15,15 @@ import {
   toModelRequestFailure,
 } from "../errors/index";
 import { createRequestLifecycle } from "./requests/retry";
+import { requestWithPrivateImage } from "./requests/private-image-request.js";
 import { parseToolInput } from "./tools/tool-input.js";
 import { createToolPathSummary, isFileTool } from "./tools/tool-path-summary.js";
 import {
+  hasMemoryImages,
   prepareNativeImagePayload,
   prepareUserContentWithVisionImages,
   replaceMissingToolResultImages,
+  withoutRevokedMemoryImages,
 } from "./media/native-image-payload.js";
 
 export class AnthropicClient implements StreamingMessageClient {
@@ -61,19 +64,26 @@ export class AnthropicClient implements StreamingMessageClient {
       let stream: AsyncIterable<Anthropic.MessageStreamEvent>;
       let responseHeaders: unknown;
       try {
-        const result = await this.client.messages.create({
+        const current = withoutRevokedMemoryImages(params);
+        const authorizedMessages = current === params ? messages : await this.convertMessages(current.messages, lifecycle.signal);
+        const body: Anthropic.MessageCreateParamsStreaming = {
           model: params.model,
-          messages,
+          messages: authorizedMessages,
           system: params.system,
           tools: tools?.length ? tools : undefined,
           max_tokens: params.maxTokens ?? DEFAULT_OUTPUT_TOKEN_MAX,
           temperature: params.temperature,
           stream: true,
-        }, {
-          signal: lifecycle.signal,
-        }).withResponse();
-        stream = result.data;
-        responseHeaders = result.response.headers;
+        };
+        if (hasMemoryImages(current)) {
+          const result = await requestWithPrivateImage<Anthropic.MessageStreamEvent>(this.client, "/v1/messages", body, lifecycle.signal);
+          stream = result.stream;
+          responseHeaders = result.headers;
+        } else {
+          const result = await this.client.messages.create(body, { signal: lifecycle.signal }).withResponse();
+          stream = result.data;
+          responseHeaders = result.response.headers;
+        }
       } catch (error) {
         throw this.failModelRequest(error, "request", lifecycle, params.abortSignal);
       }

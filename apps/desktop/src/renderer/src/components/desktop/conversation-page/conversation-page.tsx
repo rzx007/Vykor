@@ -7,6 +7,7 @@ import { useNavigate } from "@tanstack/react-router"
 
 import { OpenWithSplitButton } from "@renderer/components/desktop/open-with"
 import { SideChatSelectionActions } from "@renderer/components/desktop/tools/side-chat/side-chat-selection-actions"
+import { ComputerActivityPanel } from "@renderer/components/desktop/tools/computer/computer-activity-panel"
 import {
   ConversationScroller as MessageScroller,
   ConversationScrollerButton as MessageScrollerButton,
@@ -249,7 +250,7 @@ function ConversationPane({
   const sessionActions = useSessionActionDialogs()
   const beginFork = sessionActions.beginFork
 
-  const submitDraft = async (delivery?: "queue" | "steer"): Promise<void> => {
+  const submitDraft = async (delivery?: "queue" | "steer", computer?: true): Promise<void> => {
     const content = selectComposerDocumentText(draft)
     if (useDesktopSessionStore.getState().composerDraftsByScope[composerScope]?.attachmentPreparation?.pending.length) return
     const ready = areDesktopAttachmentsSendable(attachments)
@@ -273,12 +274,14 @@ function ConversationPane({
           if (hasSession) {
             await sendMessage(content, {
               document: draft, attachments, delivery,
+              ...(computer ? { computer } : {}),
               ...(delivery === "steer" ? { expectedActiveRunId: activeRun?.id } : {}),
             })
           } else {
             await startSession(content, {
               document: draft,
               attachments,
+              ...(computer ? { computer } : {}),
               ...(taskLocation !== "default" ? { taskLocation } : {}),
             })
           }
@@ -648,7 +651,7 @@ function ConversationPane({
             attachmentInteractionEnabled={attachmentSupport.interactionEnabled}
             panelOpen={panelOpen}
             onDraftChange={setDraft}
-            onSubmit={() => void submitDraft()}
+            onSubmit={(delivery, computer) => void submitDraft(delivery, computer)}
             onPickFiles={() => pickAttachmentFiles(composerScope)}
             onDropFiles={(files) => addDroppedAttachments(composerScope, files)}
             onPasteFiles={(files) => pasteAttachments(files)}
@@ -791,6 +794,7 @@ function ConversationPane({
               </div>
             ) : (
               <div className="conversation-composer-column mb-5 flex shrink-0 flex-col gap-2">
+                {activeSessionId ? <ComputerActivityPanel key={activeSessionId} sessionId={activeSessionId} /> : null}
                 {goal && goalComposer.dismissedGoalId !== goal.id ? (
                   <GoalBanner
                     key={`${goal.id}:${goal.wait?.kind === "user" ? goal.wait.questionId : ""}`}
@@ -912,7 +916,8 @@ function ConversationPane({
                   attachmentPreparation={attachmentPreparation}
                   attachmentInteractionEnabled={attachmentSupport.interactionEnabled}
                   onDraftChange={setDraft}
-                  onSubmit={(delivery) => void submitDraft(delivery)}
+                  onSubmit={(delivery, computer) => void submitDraft(delivery, computer)}
+                  computerEnabled={Boolean(hasSession && !archived)}
                   onCommand={executeComposerCommand}
                   onPickFiles={() => pickAttachmentFiles(composerScope)}
                   onDropFiles={(files) => addDroppedAttachments(composerScope, files)}

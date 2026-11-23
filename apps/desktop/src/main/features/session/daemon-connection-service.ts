@@ -3,8 +3,9 @@ import { existsSync } from "node:fs"
 import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
 import { app, BrowserWindow } from "electron"
-import { HttpTransport, VykorClient } from "@rzx/client"
+import { HttpTransport, VykorApiError, VykorClient } from "@rzx/client"
 import { Service, type ServiceEndpoint } from "@rzx/client/service"
+import { getDataRoot } from "@vykor/host-config/paths"
 import {
   daemonPidAlive,
   getDaemonRegistryPath,
@@ -14,11 +15,21 @@ import {
   reconcileDaemonSystemServiceForConnection,
   shouldStartManagedDaemon,
   stopDaemonProcess,
+  stopRegisteredDaemon,
   withDaemonControlLock,
   type DaemonRegistry,
 } from "@vykor/server/daemon-host"
 import { createDesktopDaemonSystemService } from "../daemon-autostart/daemon-autostart-service"
+import { pairDesktopComputerDaemon } from "../daemon-autostart/computer-pairing"
 import { isLoopbackDaemonUrl } from "../daemon-autostart/daemon-surface"
+import { DesktopComputerBridge } from "../computer/computer-bridge"
+import { ComputerHost } from "../computer/computer-host"
+import { createWindowsApps } from "../computer/windows-apps"
+import { assertBundledWindowsDriverIntegrity, createWindowsDriver } from "../computer/windows-driver"
+import type { ComputerInteraction } from "../computer/interaction"
+import { computerAvailability } from "../computer/availability"
+import { isWindowsOnDemandDaemon } from "../computer/windows-daemon-identity"
+import { createWindowsForeground } from "../computer/windows-foreground"
 import { TerminalResource } from "../terminal/terminal-resource"
 import { IpcEvents } from "../../../shared/ipc-channels"
 import type { DesktopDaemonStatus, DesktopDaemonStatusPhase } from "../../../shared/session-types"
@@ -27,9 +38,11 @@ import { DaemonMaintenanceResource } from "./daemon-maintenance-resource"
 // The daemon's Windows capability check can spend 10 seconds in wsl.exe.
 const probeTimeoutMs = 15_000
 const startupTimeoutMs = 45_000
+type ComputerPairing = { endpoint: ServiceEndpoint; token: string }
 
 export interface DaemonConnectionServiceOptions {
   onConnected?: (endpoint: ServiceEndpoint) => () => void
+  onComputerDaemonRestarted?: (client: VykorClient) => Promise<void>
 }
 
 export class DaemonConnectionService {
@@ -37,6 +50,12 @@ export class DaemonConnectionService {
   private connectionAbort?: AbortController
   private connection?: { endpoint: ServiceEndpoint; client: VykorClient; transport?: HttpTransport }
   private stopBrowserBridge?: () => void
+  private computerPairing?: ComputerPairing
+  private computerBridge?: DesktopComputerBridge
+  private computerHost?: ComputerHost
+  private computerInputCleanup = Promise.resolve(true)
+  private computerAdmissionClosed = false
+  private computerOwner?: { signal: AbortSignal; revoke: () => void }
   private readonly invalidationListeners = new Set<() => void>()
   private daemonStatus: DesktopDaemonStatus = {
     phase: "idle", message: "等待连接 daemon", updatedAt: Date.now(),
@@ -58,6 +77,208 @@ export class DaemonConnectionService {
     const agent = client ?? await this.getClient()
     if (this.restarting) throw new Error("后台服务正在重启或切换数据，请稍候。")
     return this.connectedTransport(agent)
+  }
+
+  revokeComputerRun(sessionId: string, runId?: string): void {
+    this.computerBridge?.revoke(sessionId, runId)
+  }
+
+  invalidateComputerView(nextSessionId?: string): void {
+    this.computerBridge?.invalidateView(nextSessionId)
+  }
+
+  pauseComputer(sessionId: string, runId: string): boolean {
+    return this.computerHost?.pause(sessionId, runId) ?? false
+  }
+
+  async resumeComputer(sessionId: string, runId: string): Promise<boolean> {
+    return await this.computerHost?.resume(sessionId, runId) ?? false
+  }
+
+  async setComputerCapture(sessionId: string, runId: string, enabled: boolean): Promise<boolean> {
+    if (!this.computerHost?.setCaptureEnabled(sessionId, enabled, runId)) return false
+    return enabled || (await this.computerBridge?.invalidateCapturedImage(sessionId, runId) ?? true)
+  }
+
+  async confirmComputerCleanup(sessionId: string, runId: string): Promise<boolean> {
+    const [released, revoked] = await Promise.all([
+      this.computerHost?.waitForInputRelease() ?? this.computerInputCleanup,
+      this.computerBridge?.invalidateCapturedImage(sessionId, runId),
+    ])
+    return released && revoked !== false
+  }
+
+  disconnectComputer(): Promise<boolean> {
+    this.closeComputerBridge()
+    return this.computerInputCleanup
+  }
+
+  closeComputerAdmission(): Promise<boolean> {
+    this.computerAdmissionClosed = true
+    return this.disconnectComputer()
+  }
+
+  revokeComputerApp(appId: string): void {
+    const run = this.computerHost?.runUsingRememberedApp(appId)
+    if (run) this.revokeComputerRun(run.sessionId, run.runId)
+  }
+
+  async replyComputerApproval(sessionId: string, requestId: string, status: "approved" | "denied"): Promise<void> {
+    if (!this.computerBridge) throw new Error("这次电脑操作的审批已失效。")
+    await this.computerBridge.replyApproval(sessionId, requestId, status)
+  }
+
+  async getComputerBridge(
+    authorizeOwner: () => void,
+    ownerSignal: AbortSignal,
+    onControlledReset?: () => void,
+    interaction?: ComputerInteraction,
+  ): Promise<DesktopComputerBridge> {
+    const assertOpen = () => {
+      if (this.computerAdmissionClosed) throw new Error("Desktop 正在退出或更新，电脑操作已关闭。")
+    }
+    const authorize = () => {
+      assertOpen()
+      const availability = computerAvailability()
+      if (availability !== "ready") throw new Error({
+        unsupported: "此电脑操作需要 Windows x64 Desktop。",
+        disabled: "当前 Desktop 未启用电脑操作。",
+        missing_driver: "电脑操作驱动不完整。请重新安装经过核验的版本。",
+      }[availability])
+      authorizeOwner()
+    }
+    authorize()
+    await assertBundledWindowsDriverIntegrity(ownerSignal)
+    authorize()
+    const client = await this.getClient()
+    authorize()
+    const connection = this.connection
+    if (!connection || connection.client !== client) throw new Error("后台连接已变化，请重试。")
+    if (!this.computerPairing) await this.restartForComputerPairing(connection.endpoint, authorize, onControlledReset)
+    authorize()
+    const pairing = this.computerPairing
+    if (!pairing || !this.connection || !sameComputerEndpoint(this.connection.endpoint, pairing.endpoint))
+      throw new Error("当前后台无法为电脑操作完成私有配对。")
+    const authorizeDaemon = () => this.assertComputerRegistration(pairing)
+    authorizeDaemon()
+    ownerSignal.throwIfAborted()
+    if (this.computerOwner?.signal !== ownerSignal) {
+      this.closeComputerBridge()
+      const revoke = () => this.closeComputerBridge()
+      ownerSignal.addEventListener("abort", revoke, { once: true })
+      this.computerOwner = { signal: ownerSignal, revoke }
+    }
+    if (!this.computerBridge) {
+      const host = interaction && new ComputerHost(
+        createWindowsApps(), {
+          ...interaction,
+          invalidateCapturedImage: (sessionId, runId) => this.computerBridge?.invalidateCapturedImage(sessionId, runId),
+        }, createWindowsDriver, createWindowsForeground(), this.computerInputCleanup,
+      )
+      this.computerHost = host
+      this.computerBridge = new DesktopComputerBridge({
+        baseUrl: pairing.endpoint.url,
+        daemonPid: pairing.endpoint.pid,
+        daemonToken: pairing.endpoint.token,
+        computerToken: pairing.token,
+        authorizeDaemon,
+        onDaemonIdentityMismatch: () => this.invalidateComputerPairing(pairing),
+        ...(host ? {
+          execute: (event, signal, connection, approve, authorizeDispatch) => host.execute(event, signal, connection, approve, authorizeDispatch),
+          cancel: (sessionId, runId) => { host.pause(sessionId, runId) },
+          revoke: (sessionId, runId) => host.revoke(sessionId, runId),
+        } : {}),
+      })
+    }
+    return this.computerBridge
+  }
+
+  private assertComputerRegistration(pairing: ComputerPairing): void {
+    if (this.computerPairing === pairing) {
+      try {
+        const current = readDaemonRegistry(pairing.endpoint.file)
+        if (this.connection && sameComputerEndpoint(this.connection.endpoint, pairing.endpoint) &&
+            !relative(getDaemonRegistryPath(), pairing.endpoint.file) &&
+            sameComputerEndpoint(pairing.endpoint, current) &&
+            current?.launcher === "desktop" && current.supervised === false &&
+            daemonPidAlive(current.pid)) return
+      } catch {
+        // Missing or invalid registration revokes the Computer connection.
+      }
+      this.invalidateComputerPairing(pairing)
+    }
+    throw new Error("后台登记已变化，电脑操作连接已停用。请重新打开会话后重试。")
+  }
+
+  private invalidateComputerPairing(pairing: ComputerPairing): void {
+    if (this.computerPairing !== pairing) return
+    this.computerPairing = undefined
+    this.invalidateClient()
+  }
+
+  private async restartForComputerPairing(
+    endpoint: ServiceEndpoint, authorize: () => void, onControlledReset?: () => void
+  ): Promise<void> {
+    this.beginMaintenance()
+    let client: VykorClient
+    try {
+      const registry = this.requireLocalRegistry(endpoint)
+      const file = getDaemonRegistryPath()
+      const transport = new HttpTransport(Service.clientOptions(endpoint))
+      await withDaemonControlLock(async controllerSignal => {
+        const signal = AbortSignal.any([controllerSignal, AbortSignal.timeout(60_000)])
+        const expected = await readRegisteredDataLocation()
+        const verified = await isWindowsOnDemandDaemon(registry, signal)
+        if (!expected || relative(expected.storePath, registry.storePath) ||
+            !sameComputerEndpoint(endpoint, registry) || !verified || await shouldStartManagedDaemon())
+          throw new Error("现有后台需要保持运行，无法为电脑操作重新配对。")
+        const current = readDaemonRegistry(file)
+        if (relative(file, getDaemonRegistryPath()) || !sameComputerEndpoint(endpoint, current) ||
+          current?.launcher !== "desktop" || current.supervised !== false)
+          throw new Error("后台登记在核对期间发生变化，请重试。")
+        authorize()
+        const maintenance = new DaemonMaintenanceResource(transport)
+        try {
+          // This uses the daemon's atomic restart barrier, including in-memory chats.
+          if ((await maintenance.prepareRestartWithTemporaryChatProtection(signal)).prepared !== true)
+            throw new Error("后台未确认安全收尾。")
+        } catch (error) {
+          if (error instanceof VykorApiError && error.status < 500) throw error
+          if (!(error instanceof VykorApiError || error instanceof TypeError ||
+            (error instanceof DOMException && ["TimeoutError", "AbortError"].includes(error.name)))) throw error
+          // The response can be lost after the daemon sealed admission and started to close.
+          const recovery = AbortSignal.any([controllerSignal, AbortSignal.timeout(8_000)])
+          const recovered = await this.confirmPreparedRestart(endpoint, maintenance, recovery).catch(() => false)
+          if (!recovered) throw error
+        }
+        onControlledReset?.()
+        this.invalidateClient()
+        await stopRegisteredDaemon(async candidate => {
+          if (!sameComputerEndpoint(endpoint, candidate) ||
+            candidate.launcher !== "desktop" || candidate.supervised !== false) return false
+          const verification = AbortSignal.any([controllerSignal, AbortSignal.timeout(6_500)])
+          if (await isWindowsOnDemandDaemon(candidate, verification)) return true
+          // The earlier OS check identified the owner. A completed restart and the
+          // exact PID on its authenticated endpoint also verify a transient CIM failure.
+          const fallback = AbortSignal.any([controllerSignal, AbortSignal.timeout(3_000)])
+          return maintenance.isPreparedRestartComplete(candidate.pid, fallback).catch(() => false)
+        }, file)
+      })
+      client = await this.getOrConnectClient()
+    } finally {
+      this.restarting = false
+    }
+    await this.options.onComputerDaemonRestarted?.(client)
+  }
+
+  private async confirmPreparedRestart(
+    endpoint: ServiceEndpoint, maintenance: DaemonMaintenanceResource, signal: AbortSignal
+  ): Promise<boolean> {
+    while (!signal.aborted && sameComputerEndpoint(endpoint, readDaemonRegistry(endpoint.file))) {
+      if (await maintenance.isPreparedRestartComplete(endpoint.pid, signal).catch(() => false)) return true
+      await delay(100, undefined, { signal })
+    }
+    return false
   }
 
   private connectedTransport(client: VykorClient): HttpTransport {
@@ -174,14 +395,16 @@ export class DaemonConnectionService {
   }
 
   dispose(): Promise<void> {
+    this.computerPairing = undefined
     this.invalidateClient()
-    return Promise.resolve()
+    return this.computerInputCleanup.then(() => {})
   }
 
   /** Called after Desktop's final business export; no reconnect is allowed in this pinned process. */
   async freezeForDataRootMigration(): Promise<void> {
     this.beginMaintenance()
     const pending = this.clientPromise
+    this.computerPairing = undefined
     this.invalidateClient()
     await pending?.catch(() => undefined)
   }
@@ -220,9 +443,20 @@ export class DaemonConnectionService {
     this.connectionAbort = undefined
     this.stopBrowserBridge?.()
     this.stopBrowserBridge = undefined
+    this.closeComputerBridge()
     this.connection = undefined
     this.clientPromise = null
     for (const listener of this.invalidationListeners) listener()
+  }
+
+  private closeComputerBridge(): void {
+    this.computerBridge?.close()
+    if (this.computerHost) this.computerInputCleanup = this.computerHost.waitForInputRelease()
+    this.computerBridge = undefined
+    this.computerHost = undefined
+    if (this.computerOwner)
+      this.computerOwner.signal.removeEventListener("abort", this.computerOwner.revoke)
+    this.computerOwner = undefined
   }
 
   private async connect(signal: AbortSignal): Promise<VykorClient> {
@@ -253,7 +487,16 @@ export class DaemonConnectionService {
     // desktop profile when Windows cannot resolve the default roaming path.
     if (process.platform === "win32") command.push(`--user-data-dir=${app.getPath("userData")}`)
     const logPath = join(dirname(dirname(file)), "logs", "daemon.log")
-    return this.useEndpoint(await Service.ensure({ file, command, timeoutMs: startupTimeoutMs, signal, logPath }), signal)
+    const endpoint = await Service.ensure({
+      file, command, timeoutMs: startupTimeoutMs, signal, logPath,
+      ...(process.platform === "win32" && process.arch === "x64" ? {
+        pairSpawned: async (child, candidate, startupSignal) => {
+          const token = await pairDesktopComputerDaemon(child, candidate, getDataRoot(), startupSignal)
+          if (token) this.computerPairing = { endpoint: candidate, token }
+        },
+      } : {}),
+    })
+    return this.useEndpoint(endpoint, signal)
   }
 
   private async useEndpoint(endpoint: ServiceEndpoint, signal?: AbortSignal): Promise<VykorClient> {
@@ -267,6 +510,10 @@ export class DaemonConnectionService {
     if (expected && (!endpoint.storePath || relative(expected.storePath, endpoint.storePath)))
       throw new Error("当前后台使用其他数据目录。请先停止后台，再从桌面重新连接。")
     signal?.throwIfAborted()
+    if (this.computerPairing && !sameComputerEndpoint(endpoint, this.computerPairing.endpoint)) {
+      this.computerPairing = undefined
+      this.closeComputerBridge()
+    }
     this.stopBrowserBridge?.()
     this.stopBrowserBridge = undefined
     if ((capabilities.features.browserBridge ?? 0) >= 1)
@@ -312,6 +559,11 @@ function sameRegistration(
 ): boolean {
   return Boolean(right && left.pid === right.pid && left.url === right.url
     && left.token === right.token && left.startedAt === right.startedAt)
+}
+
+function sameComputerEndpoint(endpoint: ServiceEndpoint, candidate: Pick<ServiceEndpoint, "pid" | "url" | "token" | "startedAt" | "version" | "storePath"> | undefined): boolean {
+  return sameRegistration(endpoint, candidate) && endpoint.version === candidate?.version &&
+    Boolean(endpoint.storePath && candidate.storePath && !relative(endpoint.storePath, candidate.storePath))
 }
 
 function errorMessage(error: unknown): string {

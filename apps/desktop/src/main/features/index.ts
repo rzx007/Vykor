@@ -4,6 +4,7 @@ import { attachmentIpcContribution } from "./attachment/ipc"
 import { browserIpcContribution } from "./browser/ipc"
 import { channelIpcContribution } from "./channels/ipc"
 import { clipboardIpcContribution } from "./clipboard/ipc"
+import { computerIpcContribution } from "./computer/ipc"
 import { daemonAutoStartIpcContribution } from "./daemon-autostart/ipc"
 import { gitIpcContribution } from "./git/ipc"
 import { mcpIpcContribution } from "./mcp/ipc"
@@ -42,6 +43,7 @@ export const allIpcContributions: IpcContribution[] = [
   skillIpcContribution,
   providerIpcContribution,
   clipboardIpcContribution,
+  computerIpcContribution,
   gitIpcContribution,
   mcpIpcContribution,
   channelIpcContribution,

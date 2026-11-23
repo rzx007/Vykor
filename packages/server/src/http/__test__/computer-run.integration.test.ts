@@ -1,0 +1,333 @@
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { expect, it, vi } from "vitest";
+import type { StreamEvent, StreamMessageParams, StreamingMessageClient } from "@vykor/agent-contracts";
+import { ModelRequestFailure } from "@vykor/agent-contracts";
+import { createDefaultNodeAgent } from "@vykor/agent-runtime";
+import { CURRENT_PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER } from "@vykor/protocol";
+import {
+  COMPUTER_HOST_TOKEN_HEADER,
+  parseComputerBridgeEvent,
+  type ComputerBridgeEvent,
+} from "../../application/computer-tools/computer-bridge-protocol.js";
+import type { AdmitPromptResult } from "../../application/session/execution/run-admission-service.js";
+import { VykorHttpServer } from "../server.js";
+
+const headers = {
+  authorization: "Bearer api-test-token",
+  [PROTOCOL_VERSION_HEADER]: String(CURRENT_PROTOCOL_VERSION),
+};
+const computerToken = "ae".repeat(32);
+const desktopHeaders = { ...headers, [COMPUTER_HOST_TOKEN_HEADER]: computerToken };
+const sessionId = "computer-root";
+const text = "Observe this application's status";
+const input = (id: string) => ({ id, items: [{ type: "text", text }] });
+const frame = {
+  mediaType: "image/png",
+  width: 1,
+  height: 1,
+  data: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHuoAAAAASUVORK5CYII=",
+};
+
+async function fixture(
+  mode: "full_access" | "ask",
+  action = "observe",
+  modelResponse?: (params: StreamMessageParams, call: number) => void | AsyncIterable<StreamEvent>,
+) {
+  const directory = mkdtempSync(join(tmpdir(), "vk-computer-run-"));
+  const requests: StreamMessageParams[] = [];
+  const client: StreamingMessageClient = {
+    async *streamMessage(params) {
+      requests.push({ ...params, messages: structuredClone(params.messages) });
+      const simulated = modelResponse?.(params, requests.length);
+      if (simulated) {
+        yield* simulated;
+        return;
+      }
+      const afterPrompt = params.messages.slice(params.messages.findLastIndex(message => message.type === "user") + 1);
+      const toolUseId = "observe-" + params.messages.filter(message => message.type === "user").length;
+      if (params.tools?.some(tool => tool.name === "Computer")
+        && !afterPrompt.some(message => message.type === "tool_result" && message.toolUseId === toolUseId)) {
+        yield { type: "tool_use_start", toolUse: { type: "tool_use", id: toolUseId, name: "Computer", input: { action } } };
+        yield { type: "complete", stopReason: "tool_use" };
+        return;
+      }
+      yield { type: "text_delta", delta: "Finished." };
+      yield { type: "complete", stopReason: "end_turn" };
+    },
+  };
+  const server = new VykorHttpServer({
+    token: "api-test-token",
+    desktopComputerToken: computerToken,
+    storePath: join(directory, "sessions.db"),
+    settings: {
+      model: "test-model", apiFormat: "openai", maxTurns: 3,
+      permission: { mode }, plugins: { enabled: false }, memory: { enabled: false }, sandbox: { enabled: false },
+    },
+    async createAgent({ options }) {
+      const agent = await createDefaultNodeAgent({ ...options, client,
+        ...(action === "capture" ? { resolveModelImageSupport: async () => true } : {}),
+      });
+      return { agent, host: agent.host };
+    },
+    logger: () => {},
+  });
+  const openReaders = new Set<ReadableStreamDefaultReader<Uint8Array>>();
+  const post = (path: string, body: unknown, requestHeaders = headers) => server.app.request(path, {
+    method: "POST",
+    headers: { ...requestHeaders, "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const create = (id: string, extra: Record<string, unknown> = {}) =>
+    post("/sessions", { id, cwd: directory, model: "test-model", ...extra });
+  const run = async (response: Response) => {
+    const admitted = await response.json() as AdmitPromptResult;
+    expect(response.status, JSON.stringify(admitted)).toBe(202);
+    expect(admitted.run?.id).toBeTruthy();
+    return { sessionId: admitted.input.sessionId, runId: admitted.run!.id, inputId: admitted.input.id };
+  };
+  const awaitRun = (identity: Awaited<ReturnType<typeof run>>) =>
+    server.application.runControl.awaitRun(identity.sessionId, identity.runId, { timeoutMs: 10_000 });
+  const open = async () => {
+    const response = await server.app.request("/computer-host/stream", { headers: desktopHeaders });
+    expect(response.status).toBe(200);
+    const reader = response.body!.getReader();
+    openReaders.add(reader);
+    async function next(): Promise<ComputerBridgeEvent> {
+      for (;;) {
+        const chunk = await reader.read();
+        if (chunk.done) throw new Error("Computer stream closed");
+        const event = new TextDecoder().decode(chunk.value);
+        if (event.startsWith("data: ")) return parseComputerBridgeEvent(JSON.parse(event.slice(6).trim()));
+      }
+    }
+    const hello = await next();
+    if (hello.type !== "connected") throw new Error("Expected the new Computer connection");
+    const path = "/computer-host/" + hello.connectionId;
+    return {
+      next,
+      submit: (target: string, prompt: Record<string, unknown>) =>
+        post(path + "/submit", { sessionId: target, input: prompt }, desktopHeaders),
+      result: (requestId: string, result: Record<string, unknown> = { text: "Verified fake window" }) =>
+        post(path + "/" + requestId + "/result", { result }, desktopHeaders),
+      revokeImage: (requestId: string, auth = desktopHeaders) =>
+        post(path + "/" + requestId + "/revoke-image", {}, auth),
+      close: async () => { await reader.cancel(); openReaders.delete(reader); },
+    };
+  };
+  const close = async () => {
+    await Promise.all([...openReaders].map(reader => reader.cancel()));
+    await server.close();
+    rmSync(directory, { recursive: true, force: true });
+  };
+  try {
+    await server.listen();
+    const created = await create(sessionId);
+    expect(created.status, await created.text()).toBe(201);
+    return { server, requests, post, create, run, awaitRun, open, close, directory };
+  } catch (error) {
+    await close();
+    throw error;
+  }
+}
+
+it("attaches a window image to one model request and keeps it out of durable history", async () => {
+  const f = await fixture("full_access", "capture");
+  const { data } = frame;
+  vi.stubEnv("VYKOR_DATA_DIR", f.directory);
+  try {
+    const desktop = await f.open();
+    const trusted = await f.run(await desktop.submit(sessionId, input("image")));
+    const dispatched = await desktop.next();
+    if (dispatched.type !== "execute") throw new Error("Expected the Computer capture");
+    expect(dispatched.action).toEqual({ type: "capture" });
+    expect((await desktop.result(dispatched.requestId, { text: "Captured fixture window", image: frame })).status).toBe(200);
+    expect(await f.awaitRun(trusted)).toMatchObject({ status: "completed" });
+    expect(await desktop.next()).toEqual({ type: "ended", run: trusted });
+    expect(f.requests.at(-1)?.messages.findLast(message => message.type === "tool_result")).toMatchObject({
+      content: expect.arrayContaining([
+        { type: "text", text: "Captured fixture window" }, { type: "image", source: { type: "memory", ...frame } },
+      ]),
+    });
+    const parts = f.server.store.conversations.listMessageParts(sessionId);
+    const events = f.server.store.conversations.listEvents({ sessionId });
+    expect(JSON.stringify(parts)).toContain("Captured fixture window");
+    expect(JSON.stringify([parts, events])).not.toContain(data);
+    expect(f.server.store.conversations.listSessionInputAttachments(sessionId)).toEqual([]);
+    const filename = join(f.directory, "capture-export.json");
+    const exported = await f.post(`/sessions/${sessionId}/export`, { format: "json", filename });
+    expect(exported.status).toBe(200);
+    const history = readFileSync(filename, "utf8");
+    expect(history).toContain("Captured fixture window");
+    expect(history).not.toContain(data);
+    for (const file of readdirSync(f.directory).filter(name => name.startsWith("sessions.db"))) {
+      expect(readFileSync(join(f.directory, file)).includes(data)).toBe(false);
+    }
+    const next = await f.run(await f.post(`/sessions/${sessionId}/prompts`, input("ordinary-after-capture")));
+    expect(await f.awaitRun(next)).toMatchObject({ status: "completed" });
+    expect(JSON.stringify(f.requests.at(-1)?.messages)).not.toContain(data);
+  } finally { vi.unstubAllEnvs(); await f.close(); }
+}, 20_000);
+
+it("revokes an exact capture before its delayed result and leaves a later capture valid", async () => {
+  const f = await fixture("full_access", "capture");
+  try {
+    const desktop = await f.open();
+    const first = await f.run(await desktop.submit(sessionId, input("revoked-image")));
+    const captured = await desktop.next();
+    if (captured.type !== "execute") throw new Error("Expected the Computer capture");
+    expect((await desktop.revokeImage(captured.requestId, headers)).status).toBe(401);
+    expect((await desktop.revokeImage(captured.requestId)).status).toBe(200);
+    expect((await desktop.result(captured.requestId, { text: "Late capture", image: frame })).status).toBe(200);
+    expect(await f.awaitRun(first)).toMatchObject({ status: "completed" });
+    expect(JSON.stringify(f.requests)).not.toContain(frame.data);
+    expect(await desktop.next()).toEqual({ type: "ended", run: first });
+
+    const second = await f.run(await desktop.submit(sessionId, input("new-image")));
+    const newer = await desktop.next();
+    if (newer.type !== "execute") throw new Error("Expected the new Computer capture");
+    expect((await desktop.revokeImage(captured.requestId)).status).toBe(404);
+    expect((await desktop.result(newer.requestId, { text: "Current capture", image: frame })).status).toBe(200);
+    expect(await f.awaitRun(second)).toMatchObject({ status: "completed" });
+    expect(JSON.stringify(f.requests.at(-1)?.messages)).toContain(frame.data);
+  } finally { await f.close(); }
+}, 20_000);
+
+it("keeps an attached capture out of a subsequent provider retry", async () => {
+  const f = await fixture("full_access", "capture", (_params, call) => {
+    if (call === 2) throw new ModelRequestFailure("Temporary upstream failure", {
+      phase: "request", kind: "network", retryable: true,
+    });
+  });
+  try {
+    const desktop = await f.open();
+    const run = await f.run(await desktop.submit(sessionId, input("retry-image")));
+    const captured = await desktop.next();
+    if (captured.type !== "execute") throw new Error("Expected the Computer capture");
+    expect((await desktop.result(captured.requestId, { text: "Capture before retry", image: frame })).status).toBe(200);
+    expect(await f.awaitRun(run)).toMatchObject({ status: "completed" });
+    expect(f.requests.map(request => JSON.stringify(request.messages).includes(frame.data))).toEqual([false, true, false]);
+  } finally { await f.close(); }
+}, 20_000);
+
+it.each([frame.data, frame.data.slice(0, 32)])("keeps an echoed screenshot payload out of durable failures", async echoed => {
+  const sensitive = `data:${frame.mediaType};base64,${echoed}`;
+  const f = await fixture("full_access", "capture", (_params, call) => {
+    if (call !== 2) return;
+    return (async function* (): AsyncIterable<StreamEvent> {
+      // A compatible endpoint may also echo request data in open-ended usage fields.
+      yield { type: "usage", usage: {
+        inputTokens: 4, outputTokens: 0, metering: {
+          knownInputTokens: 4, knownOutputTokens: 0, inputIncludesCache: true, completeness: "partial",
+          raw: { upstreamEcho: sensitive },
+        },
+      } };
+      throw new ModelRequestFailure(`Upstream rejected "${sensitive}"`, {
+        phase: "request", kind: "invalid_request", retryable: false, requestId: sensitive,
+      }, new Error(sensitive));
+    })();
+  });
+  try {
+    const desktop = await f.open();
+    const run = await f.run(await desktop.submit(sessionId, input("failed-image")));
+    const captured = await desktop.next();
+    if (captured.type !== "execute") throw new Error("Expected the Computer capture");
+    expect((await desktop.result(captured.requestId, { text: "Image before failure", image: frame })).status).toBe(200);
+    const settled = await f.awaitRun(run);
+    expect(settled).toMatchObject({ status: "failed" });
+    expect(JSON.stringify(settled)).not.toContain(echoed);
+    const events = f.server.store.conversations.listEvents({ sessionId });
+    expect(events.filter(event => event.type === "session.model.attempt.finished").at(-1)?.payload)
+      .toMatchObject({ attemptUsage: { usage: { inputTokens: 4, outputTokens: 0 } } });
+    expect(JSON.stringify(events)).not.toContain(echoed);
+    for (const file of readdirSync(f.directory).filter(name => name.startsWith("sessions.db"))) {
+      expect(readFileSync(join(f.directory, file)).includes(echoed)).toBe(false);
+    }
+  } finally { await f.close(); }
+}, 20_000);
+
+it("exposes the real Computer tool only to a newly admitted Desktop user run", async () => {
+  const f = await fixture("full_access");
+  try {
+    const desktop = await f.open();
+    expect((await desktop.submit(sessionId, { content: text })).status).toBe(400);
+    const ordinaryInput = { ...input("ordinary"), metadata: { computer: true, computerConnectionId: "spoofed" } };
+    const ordinary = await f.run(await f.post(`/sessions/${sessionId}/prompts`, ordinaryInput));
+    expect(await f.awaitRun(ordinary)).toMatchObject({ status: "completed" });
+    expect(f.requests.at(-1)?.tools?.map(tool => tool.name)).not.toContain("Computer");
+    const duplicate = await f.run(await desktop.submit(sessionId, ordinaryInput));
+    expect(duplicate).toEqual(ordinary);
+
+    const trusted = await f.run(await desktop.submit(sessionId, input("trusted")));
+    const dispatched = await desktop.next();
+    if (dispatched.type !== "execute") throw new Error("Expected the Computer observation");
+    expect(dispatched).toMatchObject({ run: trusted, action: { type: "observe" } });
+    const retry = await f.run(await desktop.submit(sessionId, input("trusted")));
+    expect(retry).toEqual(trusted);
+    expect((await desktop.result(dispatched.requestId)).status).toBe(200);
+    expect(await f.awaitRun(trusted)).toMatchObject({ status: "completed" });
+    expect(await desktop.next()).toEqual({ type: "ended", run: trusted });
+    const settled = f.requests.at(-1)?.messages.findLast(message => message.type === "tool_result");
+    expect(settled).toMatchObject({
+      content: expect.arrayContaining([{ type: "text", text: "Verified fake window" }]),
+    });
+    expect((await desktop.result(dispatched.requestId)).status).toBe(404);
+
+    expect((await f.create("plan", { metadata: { runtime: { workMode: "plan" } } })).status).toBe(201);
+    expect((await desktop.submit("plan", input("plan"))).status).toBe(409);
+    expect((await f.create("channel")).status).toBe(201);
+    f.server.store.channels.upsertConversation({ connector: "test", accountId: "test", chatId: "test", sessionId: "channel" });
+    expect((await desktop.submit("channel", input("channel"))).status).toBe(409);
+    f.server.store.sessions.create({ id: "delegated", model: "test-model", cwd: process.cwd(), parentId: sessionId });
+    expect((await desktop.submit("delegated", input("delegated"))).status).toBe(409);
+    expect((await desktop.submit(sessionId, { ...input("steer"), delivery: "steer" })).status).toBe(409);
+    expect((await f.create("denied", { metadata: { runtime: { disallowedTools: ["Computer"] } } })).status).toBe(201);
+    const denied = await f.run(await desktop.submit("denied", input("denied")));
+    expect(await f.awaitRun(denied)).toMatchObject({ status: "completed" });
+    expect(await desktop.next()).toEqual({ type: "ended", run: denied });
+    expect(f.requests.at(-1)?.tools?.map(tool => tool.name)).not.toContain("Computer");
+
+    const inFlight = await f.run(await desktop.submit(sessionId, input("in-flight")));
+    const pending = await desktop.next();
+    if (pending.type !== "execute") throw new Error("Expected a pending Computer observation");
+    expect(pending.run).toEqual(inFlight);
+    await desktop.close();
+    expect(await f.awaitRun(inFlight)).toMatchObject({ status: "completed" });
+    const reopened = await f.open();
+    expect((await desktop.result(pending.requestId)).status).toBe(404);
+    expect((await reopened.result(pending.requestId)).status).toBe(404);
+    expect(await f.run(await reopened.submit(sessionId, input("in-flight")))).toEqual(inFlight);
+    expect(f.requests.at(-1)?.messages.findLast(message => message.type === "tool_result")).toMatchObject({
+      isError: true, executionState: "unknown",
+    });
+  } finally {
+    await f.close();
+  }
+}, 30_000);
+
+it("lets Desktop handle app consent and still revokes interrupted or disconnected work", async () => {
+  const f = await fixture("ask");
+  try {
+    const desktop = await f.open();
+    const identity = await f.run(await desktop.submit(sessionId, input("pending")));
+    expect(await desktop.next()).toMatchObject({ type: "execute", run: identity });
+    expect(f.server.application.permissions.listRequests({ sessionId, toolName: "Computer" })).toEqual([]);
+    await desktop.close();
+    expect(await f.awaitRun(identity)).toMatchObject({ status: "completed" });
+    const denied = f.requests.at(-1)?.messages.findLast(message => message.type === "tool_result");
+    expect(denied).toMatchObject({ isError: true, executionState: "unknown" });
+
+    const reopened = await f.open();
+    const interrupted = await f.run(await reopened.submit(sessionId, input("interrupt")));
+    expect(await reopened.next()).toMatchObject({ type: "execute", run: interrupted });
+    expect((await f.post(`/sessions/${sessionId}/interrupt`, {})).ok).toBe(true);
+    expect(await f.awaitRun(interrupted)).toMatchObject({ status: "interrupted" });
+    const replay = await f.run(await f.post(`/sessions/${sessionId}/runs/${interrupted.runId}/resume`, { id: "replay" }));
+    expect(replay.runId).not.toBe(interrupted.runId);
+    expect(await f.awaitRun(replay)).toMatchObject({ status: "completed" });
+    expect(f.requests.at(-1)?.tools?.map(tool => tool.name)).not.toContain("Computer");
+  } finally {
+    await f.close();
+  }
+}, 25_000);

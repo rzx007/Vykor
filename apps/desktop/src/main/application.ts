@@ -1,6 +1,6 @@
 import { flushDesktopBusinessData } from "./features/business-data/window-flush"
 import { isDataRootMigrationShutdown } from "./features/settings/data-root-settings-service"
-import { app, BrowserWindow, Menu, session, dialog } from "electron"
+import { app, BrowserWindow, Menu, session, dialog, powerMonitor } from "electron"
 import { resolve } from "node:path"
 import { installDocumentPreviewProtocol } from "./features/workspace/document-preview-protocol"
 import { electronApp, optimizer, is } from "@electron-toolkit/utils"
@@ -100,7 +100,12 @@ function startDesktopApplication(): void {
     desktopSessionService.subscriptions.onOwnerSnapshot((id, view) => pluginApps.observeSession(id, view))
 
     ipcRegistry = new IpcRegistry(ctx)
-    updaterRuntime = startDesktopUpdater()
+    const disconnectComputer = () => { void desktopSessionService.disconnectComputer() }
+    powerMonitor.on("suspend", disconnectComputer)
+    powerMonitor.on("resume", disconnectComputer)
+    powerMonitor.on("lock-screen", disconnectComputer)
+    powerMonitor.on("shutdown", () => { void desktopSessionService.closeComputerAdmission() })
+    updaterRuntime = startDesktopUpdater(() => desktopSessionService.closeComputerAdmission())
     for (const contribution of [...allIpcContributions, updaterRuntime.contribution]) {
       ipcRegistry.register(contribution)
     }
@@ -146,7 +151,12 @@ function startDesktopApplication(): void {
     if (shutdownComplete) return
     event.preventDefault()
     if (shutdown) return
+    const releasedComputer = desktopSessionService.closeComputerAdmission()
     shutdown = (async () => {
+      if (!await releasedComputer) {
+        updaterRuntime?.service.suppressAutoInstall()
+        dialog.showErrorBox("电脑操作已停止", "无法确认自动键鼠已释放。请检查键鼠状态后再打开 Desktop。")
+      }
       if (!isDataRootMigrationShutdown()) await flushDesktopBusinessData()
       await desktopNoteService.close()
       await getDesktopPluginAppService()?.dispose()

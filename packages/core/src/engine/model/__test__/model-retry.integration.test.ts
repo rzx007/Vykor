@@ -4,7 +4,7 @@ import { QueryEngine } from "../../query-engine.js";
 import { ToolRegistry } from "../../tools/tool-registry.js";
 import { ModelRequestFailure } from "@vykor/agent-contracts";
 import { AgentExecutionLimitError, type AgentExecutionContext, type AgentEventInput } from "@vykor/agent-contracts";
-import type { StreamEvent, ToolDefinition } from "@vykor/agent-contracts";
+import type { StreamEvent, StreamMessageParams, ToolDefinition } from "@vykor/agent-contracts";
 
 function allowAll(): any {
   return { checkTool: async () => ({ action: "allow", reason: "test" }) };
@@ -36,6 +36,97 @@ async function collect(
 }
 
 describe("QueryEngine model network retry", () => {
+  it("clears sensitive diagnostics only on the attempt carrying a private capture", async () => {
+    vi.useFakeTimers();
+    try {
+      const requests: StreamMessageParams[] = [];
+      const events: StreamEvent[] = [];
+      const image = { type: "memory", mediaType: "image/png", data: "dGVzdC1pbWFnZQ==", width: 1, height: 1 } as const;
+      const engine = new QueryEngine({ async *streamMessage(params) {
+        requests.push(params);
+        if (requests.length === 1) {
+          yield { type: "tool_use_start", toolUse: { type: "tool_use", name: "Capture", id: "frame", input: {} } };
+          yield { type: "complete", stopReason: "tool_use" };
+          return;
+        }
+        const hasImage = requests.length === 2;
+        yield { type: "usage", usage: {
+          inputTokens: 4, outputTokens: 0, metering: {
+            knownInputTokens: 4, knownOutputTokens: 0, inputIncludesCache: true, completeness: "partial",
+            raw: hasImage ? { upstreamEcho: image.data } : { providerCache: "hit" },
+          },
+        } };
+        if (hasImage) throw new ModelRequestFailure(image.data, { kind: "server", phase: "request", retryable: true });
+        throw new ModelRequestFailure("Provider rejected the API key", {
+          kind: "authentication", phase: "request", retryable: false, statusCode: 401, requestId: "text-attempt",
+        });
+      } }, new ToolRegistry(), allowAll(), noopHooks(), { trajectoryTrackerFactory: false });
+      const execution = {
+        scope: { signal: new AbortController().signal },
+        emit: async () => {},
+        takeSteeredInputs: async () => [],
+        closeSteering() {},
+        contribution: { tools: [{ permission: "host-internal", definition: {
+          ...makeTool("Capture"),
+          async execute(_input, context) {
+            context.attachModelImage?.(image, () => true);
+            return { content: [{ type: "text", text: "Captured" }] };
+          },
+        } satisfies ToolDefinition }] },
+      } as unknown as AgentExecutionContext;
+      const run = (async () => {
+        for await (const event of engine.submitMessage("capture", { execution })) events.push(event);
+      })().catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(await run).toMatchObject({
+        message: "Provider rejected the API key",
+        info: { kind: "authentication", statusCode: 401, requestId: "text-attempt" },
+      });
+      expect(requests.map(params => JSON.stringify(params.messages).includes(image.data))).toEqual([false, true, false]);
+      const attempts = events.filter(event => event.type === "model_attempt_finished");
+      expect(attempts.slice(1).map(event => event.usage?.metering?.raw)).toEqual([{}, { providerCache: "hit" }]);
+      expect(JSON.stringify(events)).not.toContain(image.data);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("drops a revoked capture during model dispatch admission", async () => {
+    const requests: StreamMessageParams[] = [];
+    const image = { type: "memory", mediaType: "image/png", data: "dGVzdC1pbWFnZQ==", width: 1, height: 1 } as const;
+    let current = true;
+    const engine = new QueryEngine({ async *streamMessage(params) {
+      requests.push(params);
+      if (requests.length === 1) {
+        yield { type: "tool_use_start" as const, toolUse: { type: "tool_use" as const, name: "Capture", id: "frame", input: {} } };
+      }
+      yield { type: "complete" as const, stopReason: requests.length === 1 ? "tool_use" : "end_turn" };
+    } }, new ToolRegistry(), allowAll(), noopHooks(), { trajectoryTrackerFactory: false });
+    const execution = {
+      scope: { signal: new AbortController().signal },
+      async emit(event: AgentEventInput) {
+        if (event.type === "model.attempt.started" && requests.length === 1) current = false;
+      },
+      takeSteeredInputs: async () => [],
+      closeSteering() {},
+      contribution: { tools: [{
+        permission: "host-internal",
+        definition: {
+          ...makeTool("Capture"),
+          async execute(_input, context) {
+            expect(current).toBe(true);
+            context.attachModelImage?.(image, () => current);
+            return { content: [{ type: "text", text: "Captured" }] };
+          },
+        } satisfies ToolDefinition,
+      }] },
+    } as unknown as AgentExecutionContext;
+    for await (const _ of engine.submitMessage("capture", { execution })) { /* drain */ }
+    expect(requests).toHaveLength(2);
+    expect(requests[1]?.messages.findLast(message => message.type === "tool_result"))
+      .toMatchObject({ content: [{ type: "text", text: "Captured" }] });
+  });
+
   it("reports bounded stream activity without interrupting a successful response", async () => {
     const emitted: AgentEventInput[] = [];
     const execution = {

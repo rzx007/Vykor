@@ -107,6 +107,8 @@ test("workflow preserves build, publication, verification and rerun ordering", (
   assert.match(workflow, /verify-clean-slate-artifacts:[\s\S]*verify-migration-artifact\.mjs[\s\S]*--verify-inventories[\s\S]*clean-slate-migrations-win\.json[\s\S]*clean-slate-migrations-linux\.json/);
   assert.match(workflow, /--verify-inventories[\s\S]*\$\{\{ github\.workspace \}\}\/release-assets\/clean-slate-migrations-win\.json[\s\S]*\$\{\{ github\.workspace \}\}\/release-assets\/clean-slate-migrations-linux\.json/);
   assert.match(workflow, /create-tag:[\s\S]*needs: \[validate, preflight, build-desktop, verify-clean-slate-artifacts\]/);
+  assert.match(workflow, /if \[ "\$SIGN_WINDOWS" = "true" \] && \[ "\$BUILD_ONLY" != "true" \]; then[\s\S]*?exit 1[\s\S]*?TAG="v\$\{VERSION\}"/);
+  assert.match(workflow, /create-tag:\s+if: \$\{\{ !inputs\.build_only \}\}/);
   assert.match(workflow, /publish-npm:[\s\S]*npm view "@rzx\/ohs@\$\{VERSION\}"/);
   assert.match(workflow, /publish-npm:[\s\S]*for attempt in \$\(seq 1 12\)[\s\S]*npm view "@rzx\/ohs@\$\{VERSION\}" version/);
   assert.match(workflow, /publish-npm:[\s\S]*pnpm --filter @rzx\/ohs publish[\s\S]*for attempt in \$\(seq 1 40\)[\s\S]*test "\$ACTUAL" = "\$VERSION"/);
@@ -116,7 +118,7 @@ test("workflow preserves build, publication, verification and rerun ordering", (
   assert.match(workflow, /normalize-notes release-notes\.md[\s\S]*normalize-notes published-release-notes\.md[\s\S]*diff -u/);
   assert.match(workflow, /gh release view "\$TAG" --json body/);
   assert.match(workflow, /gh release view "\$TAG" --json assets/);
-  assert.match(workflow, /notify:[\s\S]*if: always\(\)/);
+  assert.match(workflow, /notify:[\s\S]*if: always\(\)[\s\S]*Notify by email\s+if: \$\{\{ !inputs\.build_only \}\}/);
   assert.match(workflow, /notify:[\s\S]*needs: \[[^\]]*verify-clean-slate-artifacts[^\]]*\]/);
   assert.deepEqual(
     [...workflow.matchAll(/node scripts\/release-assets\.mjs (write-notes|assert-artifacts)/g)].map((match) => match[1]),

@@ -28,6 +28,7 @@ import type { ProjectDetailsCoordinator } from "./project-details-coordinator"
 export type LoadStatus = "idle" | "loading" | "ready" | "error"
 
 export interface SubmitPromptOptions {
+  computer?: true
   delivery?: "queue" | "steer"
   expectedActiveRunId?: string
   taskLocation?: "current" | "worktree"
@@ -44,6 +45,7 @@ export interface PendingPromptAttachmentSnapshot extends DesktopPromptAttachment
 }
 
 export interface PendingPromptSubmission {
+  computer?: true
   delivery?: "queue" | "steer"
   expectedActiveRunId?: string
   /** Serialized feedback shown in the composer; retries reuse the same snapshot. */

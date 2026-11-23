@@ -11,6 +11,8 @@ import type { AppContext } from "../../core/app-context"
 import { isForceQuit } from "../../core/services/lifecycle"
 import { showPetWindow, syncPetWithMainWindow } from "../pet/window"
 import { clearAttention } from "../tray/attention-badge"
+import { computerAvailability } from "../computer/availability"
+import { COMPUTER_AVAILABLE_ARGUMENT } from "../../../shared/computer-types"
 import { isAllowedWebviewUrl } from "./webview-policy"
 import { browserAgentService } from "../browser/browser-agent-service"
 import { mainWindowChromeOptions } from "./window-chrome"
@@ -96,7 +98,10 @@ export function createMainWindow(ctx: AppContext): BrowserWindow {
         autoplayPolicy: "no-user-gesture-required",
         // renderer 首帧就要知道玻璃是否真的生效，才能一次性画出正确的外壳底色。
         // 走 additionalArguments 而不是 IPC：IPC 只能异步，会在玻璃与不透明之间闪一帧。
-        additionalArguments: windowMaterialArguments(materialState),
+        additionalArguments: [
+          ...windowMaterialArguments(materialState),
+          ...(computerAvailability() === "ready" ? [COMPUTER_AVAILABLE_ARGUMENT] : []),
+        ],
       },
     },
     onCreated: (win) => {

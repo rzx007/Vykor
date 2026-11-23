@@ -28,6 +28,32 @@ describe("composer recovery", () => {
       .toMatchObject({ ...original, phase: "failed" })
   })
 
+  it("checks a recovered Computer submission without using the private route until explicitly opted in again", async () => {
+    const sendPrompt = vi.fn()
+    const sendComputer = vi.fn().mockResolvedValue(undefined)
+    const checkPromptAccepted = vi.fn().mockResolvedValue(false)
+    vi.stubGlobal("window", { desktop: {
+      businessData: businessDataFixture,
+      sessions: { sendPrompt, checkPromptAccepted },
+      computer: { sendPrompt: sendComputer },
+    } })
+    const recovered = decodeComposerRecovery({ version: 1, drafts: {}, submissions: [{
+      id: "original-computer", sessionId: "s", computer: true, createdAt: 1,
+      items: [{ type: "text", text: "打开计算器" }], attachments: [], placement: "transcript",
+    }] })
+    useDesktopSessionStore.setState({
+      activeSessionId: "s", sessionView: emptySessionView("s"), sessionRuntimes: recovered.sessionRuntimes,
+    })
+    await expect(useDesktopSessionStore.getState().retryPromptSubmission("original-computer"))
+      .rejects.toThrow("重新开启电脑操作")
+    expect(checkPromptAccepted).toHaveBeenCalledOnce()
+    expect(sendPrompt).not.toHaveBeenCalled()
+    expect(sendComputer).not.toHaveBeenCalled()
+    await useDesktopSessionStore.getState().sendMessage("打开计算器", { computer: true })
+    expect(sendComputer).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: "original-computer" }))
+    expect(sendPrompt).not.toHaveBeenCalled()
+  })
+
   it("does not revive a new session deleted while its initial snapshot is pending", async () => {
     let resolveOpen!: (view: ReturnType<typeof emptySessionView>) => void
     const sendPrompt = vi.fn()

@@ -35,6 +35,16 @@ function summaryText(container: HTMLElement): string {
 }
 
 describe("PermissionCard", () => {
+  it("shows the exact Computer operation before the one-time decision", () => {
+    const container = renderPermission("Computer", {
+      computerApproval: true,
+      reason: "记事本将覆盖测试文档",
+    })
+    expect(summaryText(container)).toContain("批准这次电脑操作")
+    expect(summaryText(container)).toContain("记事本将覆盖测试文档")
+    expect(summaryText(container)).toContain("允许本次")
+  })
+
   it.each([
     ["Shell", "运行命令"],
     ["Bash", "运行命令"],

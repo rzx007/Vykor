@@ -1,5 +1,6 @@
 import type { DesktopBusinessDataApi } from "./business-data-types"
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
+import type { DesktopComputerActivity, DesktopComputerActivityUpdate, DesktopComputerAppGrant, DesktopComputerControl, DesktopComputerInteractionEvent, DesktopComputerInteractionReply } from "./computer-types"
 import type { DesktopWindowThemeSource } from "./window-theme-types"
 import type { TerminalSettingsAPI } from "./terminal-settings-types"
 import type { GitSettingsAPI } from "./git-settings-types"
@@ -491,6 +492,17 @@ export type DesktopAPI = {
     remove: (input: DesktopSkillRemoveInput) => Promise<DesktopSkillSnapshot>
     marketplace: () => Promise<DesktopSkillMarketplaceCatalog>
     installMarketplace: (input: DesktopSkillMarketplaceInstallInput) => Promise<DesktopSkillSnapshot>
+  }
+  computer: {
+    supported: boolean
+    sendPrompt: (input: SendDesktopPromptInput) => Promise<void>
+    onInteraction: (handler: (event: DesktopComputerInteractionEvent) => void) => () => void
+    reply: (input: DesktopComputerInteractionReply) => Promise<boolean>
+    getActivity: (sessionId: string) => Promise<DesktopComputerActivity | null>
+    onActivity: (handler: (event: DesktopComputerActivityUpdate) => void) => () => void
+    control: (input: DesktopComputerControl) => Promise<boolean>
+    listAppGrants: () => Promise<DesktopComputerAppGrant[]>
+    revokeAppGrant: (id: string) => Promise<DesktopComputerAppGrant[]>
   }
   sessions: {
     readAgentActivity: (input: import("./session-types").ReadDesktopAgentActivityInput) => Promise<import("./session-types").DesktopAgentActivity | null>

@@ -24,25 +24,67 @@ OpenAI 的官方说明明确支持从自然语言或应用提及启动任务、�
 
 ### Windows 实测基线
 
-本机上游 Cua `0.28.2` 已验证 WinForms 目标窗口观察、窗口截图、后台按钮触发、字段赋值和读回。过期控件引用和同进程未授权窗口被拒绝。窗口级 `bounded` 清单只准访问已识别的窗口，经实测会拒绝按 PID 枚举窗口。其目录仍返回 57 个工具，Vykor 自行筛选向模型开放的能力。PoC 由测试脚本启动窗体，冷启动应用、多应用交接、前台键鼠和物理接管均要补实机证据。停止驱动的命令返回后，已进入应用的延迟动作仍继续约 1.9 秒。 [Cua 固定发布](https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.28.2) · [Cua 应用与窗口工具](https://cua.ai/docs/cua-driver/reference/mcp-tools/apps-windows-and-screen)
+本机上游 Cua `0.28.2` 已验证指定窗口观察、截图、后台点击和赋值、过期引用拒绝、常规前台键鼠按下与释放。窗口级 `bounded` 清单会拒绝同进程未授权窗口和按进程 ID 枚举。驱动的工具目录仍返回 57 个工具，Vykor 自行筛选向模型开放的动作。
+
+真实记事本已从关闭状态启动，写入后保存，通过资源管理器重新打开，文件字节和编辑器内容均已核验。现代记事本会恢复上次的标签页，探针用单独的新窗口。另存为的文件名控件需要在明确核对焦点后使用前台输入。测试中驱动关闭后，已进入应用的延迟动作仍继续约 1.9 秒。前台急停、失焦和物理接管的验收保留在阶段 5。 [实机结果和复现方式](../../../apps/desktop/tests/computer-windows/README.md) · [Cua 固定发布](https://github.com/trycua/cua/releases/tag/cua-driver-rs-v0.28.2)
 
 ```mermaid
 flowchart LR
-  A["1 驱动与 Windows 身份"] --> B["2 本机桥与任务授权"]
-  B --> C["3 查找、启动与窗口接续"]
-  C --> D["4 观察、输入与结果核验"]
-  D --> E["5 进度、接管与停止"]
-  E --> F["6 签名安装包与真实场景验收"]
+  A["1 驱动和真实应用探针"] --> B["2 本机桥与任务授权"]
+  B --> C["3 自动选目标与启动"]
+  C --> D["4 结构化观察、语义操作与读回"]
+  D --> E["5 前台输入、预览与接管"]
+  E --> F["6 签名安装包与完整验收"]
 ```
 
-阶段 1 至 5 使用夹具和内部开关合入同一条实现线。发布按完整用户旅程验收。仅有选窗和一次语义点击通过时，能力仍处于内部测试。
+阶段 1 至 5 使用夹具和内部开关合入同一条实现线。阶段 1 提前探测真实应用路径，阶段 5 一次验收前台输入及接管，阶段 6 用签名安装包验收完整用户旅程之后开放。
 
-## 代码落点与状态归属
+## 代码目录与状态归属
 
-- **Desktop 主进程**　拟建 `apps/desktop/src/main/features/computer/`。其中 `app-catalog.ts` 从可信 Windows 目录找应用，`app-launcher.ts` 处理启动和等待，`window-identity.ts` 管窗口归属和失效通知，`windows-driver.ts` 管 Cua，`computer-host.ts` 持有本轮应用许可、当前目标、观察缓存、输入队列、驱动世代和撤销状态。增加 `computer-bridge.ts` 和 `ipc.ts` 接入 [Desktop 会话入口](../../../apps/desktop/src/main/features/session/ipc.ts) 与 [daemon 连接](../../../apps/desktop/src/main/features/session/daemon-connection-service.ts)。Windows 原生系统调用放在 `apps/desktop/native/computer-windows/`。
-- **daemon**　拟建 `packages/server/src/application/computer-tools/` 下的 `computer-tool.ts`、`computer-bridge.ts` 和 `computer-grant.ts`，分别负责模型工具、请求传输和按运行授权。拟建 `packages/server/src/http/routes/computer-host.ts`。从 [HTTP 组装](../../../packages/server/src/http/server.ts)、[运行准入](../../../packages/server/src/application/session/execution/run-admission-service.ts) 和 [单次运行工具贡献](../../../packages/server/src/application/session/execution/session-run-executor.ts) 接入。daemon 持有用户输入和运行 ID、审批记录、请求账本及工具结果。
-- **协议和界面**　拟建 `packages/protocol/src/runtime/computer.ts` 定义请求、结果和事件。在 [运行能力声明](../../../packages/protocol/src/runtime/capabilities.ts) 公布 Computer 桥支持。renderer 组件放在 `apps/desktop/src/renderer/src/components/desktop/tools/computer/`，通过 [预加载 API](../../../apps/desktop/src/preload/desktop-api.ts) 获取状态和发起授权、暂停、继续、停止。优先复用已有组件，需要新组件时按项目约定先查 beUI。 [Desktop 设计约定](../../../apps/desktop/DESIGN.md)
-- **打包和验证**　拟建 `scripts/prepare-cua-driver.mjs`、`apps/desktop/scripts/verify-cua-packaging.mjs` 和 `apps/desktop/tests/computer-windows/`。接入 [资源打包](../../../apps/desktop/electron-builder.yml) 和 [标签发布](../../../.github/workflows/tag-release.yml)。测试放在模块的 `__test__/`，跨模块夹具放共同目录。每个新职责目录加 README，包根 README 加导航。上游许可随资源打包并更新 [第三方许可](../../../THIRD_PARTY_NOTICES.md)。
+沿用现有 Browser 的分工。Desktop 代码归 `apps/desktop`，daemon 代码归 `packages/server`。按阶段新增有实际调用的文件。
+
+```text
+apps/desktop/
+├── src/main/features/computer/
+│   ├── README.md
+│   ├── ipc.ts                     本机用户控制入口，校验所属 Desktop 窗口
+│   ├── computer-bridge.ts         连接 daemon，转发请求、结果和取消
+│   ├── computer-host.ts           选择和切换目标、校验许可、协调单个在途动作
+│   ├── computer-semantics.ts      生成控件引用、判断是否需批准、验证读回
+│   ├── windows-apps.ts            发现和启动应用，核实窗口身份和存续
+│   ├── windows-driver.ts          验签并运行 Cua，合并指定窗口的控件观察
+│   ├── windows-semantic-query.ts  用 Windows 辅助功能接口核对控件并派发
+│   ├── windows-foreground.ts     管理窗口截图及本轮前台输入进程
+│   ├── windows-foreground-query.ts  核对实际焦点、画面和 Windows 键鼠释放
+│   └── __test__/
+├── src/shared/computer-types.ts   主进程、preload 和 renderer 共用的桌面状态及控制参数
+├── src/renderer/src/components/desktop/tools/computer/
+│   ├── README.md
+│   ├── computer-panel.tsx         运行状态、目标选择、窗口预览和接管入口
+│   └── __test__/
+└── tests/computer-windows/
+    ├── README.md
+    ├── fixtures/                 自有测试应用、对照窗口和验收资料
+    └── __test__/                 冷启动、跨应用读回、前台停止的整体验收
+
+packages/server/src/
+├── application/computer-tools/
+│   ├── README.md
+│   ├── computer-tool.ts          Computer 工具定义、入参校验与结果转换
+│   ├── computer-bridge.ts        可信 Desktop 连接、在途请求与断开处理
+│   ├── computer-approval.ts      将单次批准绑定到实际运行和输入修订
+│   ├── computer-bridge-protocol.ts
+│   │                             两端共用的私有桥消息及解析器
+│   └── __test__/
+├── http/routes/computer-host.ts   HTTP 认证、请求尺寸检查与路由包装
+└── http/__test__/computer-host.test.ts
+```
+
+- **调用路径**　用户控制由 `ipc.ts` 进入 Desktop 的 `computer-host.ts`。模型调用由现有 Agent 运行进入 daemon 的 `computer-tool.ts`，经两端的桥到同一个 Desktop 宿主，再由 `windows-apps.ts` 或 `windows-driver.ts` 执行。结果经原请求返回，进入现有工具记录。接线见 [Desktop 会话入口](../../../apps/desktop/src/main/features/session/ipc.ts)、[daemon 连接](../../../apps/desktop/src/main/features/session/daemon-connection-service.ts)、[运行准入](../../../packages/server/src/application/session/execution/run-admission-service.ts) 和 [运行工具装配](../../../packages/server/src/application/session/execution/session-run-executor.ts)。
+- **状态归属**　`computer-host.ts` 持有当前目标、本轮许可、最新观察、前台占用和唯一在途动作。应用的「始终允许」沿用本机 Desktop 设置。daemon 持有运行、审批和工具结果。两端的桥只维护请求关联。renderer 通过已有 [IPC 通道](../../../apps/desktop/src/shared/ipc-channels.ts)、[桌面 API 契约](../../../apps/desktop/src/shared/desktop-api-contract.ts) 和 [preload](../../../apps/desktop/src/preload/desktop-api.ts) 读取本机状态并发起用户操作。聊天进度沿用会话事件，界面沿用现有组件，确需新增时先查 beUI。 [Desktop 设计约定](../../../apps/desktop/DESIGN.md)
+- **协议边界**　私有桥协议和服务端实现放在同一个目录，经现有 `@vykor/server/daemon-host` 导出 Desktop 主进程实际需要的类型和解析器。公开的运行能力接口只公告 Computer 桥是否就绪。renderer 和 preload 使用桌面自己的类型，获取不到配对凭证、窗口句柄和原始驱动引用。 [Browser 现有导出](../../../packages/server/src/daemon-host/index.ts) · [运行能力路由](../../../packages/server/src/http/routes/system.ts)
+- **原生辅助程序与打包**　确需自有原生辅助程序时，将源码放在 `apps/desktop/native/computer-windows/`。固定驱动发布清单放在 `apps/desktop/resources/computer-windows/`。`scripts/prepare-cua-driver.mjs` 准备并核验驱动，Windows x64 构建通过 `extraResources` 将驱动、清单和许可证装入安装包。 [资源打包](../../../apps/desktop/electron-builder.yml) · [标签发布](../../../.github/workflows/tag-release.yml) · [第三方许可](../../../THIRD_PARTY_NOTICES.md)
+- **测试与导航**　模块测试放本模块的 `__test__/`。覆盖多个模块的测试放它们共同所属目录，如 daemon 的 HTTP 测试和 Desktop 的 Windows 实机验收。创建职责目录时同步写 README，说明用途、主要文件、调用入口、关键步骤、状态归属和新增代码应放在哪里。更新所属包 README 的导航。夹具目录有多个独立夹具时再按职责拆分。 [Desktop 包导航](../../../apps/desktop/README.md) · [daemon 应用目录导航](../../../packages/server/src/application/README.md)
 
 ## 共用工具、权限和结果契约
 
@@ -52,14 +94,11 @@ flowchart LR
 
 | 动作 | 输入与返回 | 关键约束 |
 | --- | --- | --- |
-| `find_app` | 输入应用名称或已知别名。返回候选应用引用、名称、是否正在运行及有限状态。 | 启用本轮后才查询。首次许可前的结果只包含应用级元数据。 |
-| `open_app` | 输入 `appRef`。宿主复用符合意图的窗口或启动应用，等待就绪。 | 先获得许可。启动参数由受信任的宿主定义。窗口就绪后独立核实，名字重复时交给用户。 |
-| `select_window` | 输入本轮 `windowRef`。返回当前目标和新的观察世代。 | 唯一合格目标可自动绑定。新应用需要自己的许可，弹窗需证明属于获准任务。 |
+| `open_app` | 输入应用名和可选窗口或文档提示，也可引用本轮已知目标。宿主查找、授权、复用或启动，并绑定就绪窗口。 | 候选歧义时显示选择器，用户选择后续办同一次请求。跨应用或切换到其他合格窗口沿用这个入口。 |
 | `observe` | 返回结构化控件，有许可时可附当前窗口画面。 | 默认结构化信息。限制节点数、深度、文本与图片体积。 |
 | `invoke`、`set_text`、`choose`、`scroll`、`press`、`click_at` | 使用本轮、当前窗口及最近观察产生的元素引用或有限坐标。 | 语义优先。坐标绑定同一窗口的快照。前台输入需要独立许可与已实测的停止能力。 |
-| `verify` | 通过结构化条件或获准的业务读回，给出满足、不满足或未知。 | 条件已在动作前成立时，另行确认变化，或报告原先已满足。 |
 
-`invoke` 包含能证明控件能力的按钮、选项、菜单和状态动作。`set_text` 使用控件的赋值接口。普通文本框无法语义赋值时，才评估目标窗内受控键盘输入。受支持的键和动作按实际验证登记。文件选取用用户在任务中授权的文件或目录；能够提交数据、启动程序或越出目录的输入单独验权限。
+`invoke` 触发按钮和菜单命令，`choose` 设置可读回的选项状态，`set_text` 使用控件的赋值接口。普通文本框无法语义赋值时，才评估目标窗内受控键盘输入。受支持的键和动作按实际验证登记。文件选取用用户在任务中授权的文件或目录。能够提交数据、启动程序或越出目录的输入单独验权限。操作返回直接读回，复杂结果用 `observe` 或现有的获准产物读取核验。在动作前已满足的条件记录为原先已满足。
 
 ### 四层判断
 
@@ -70,70 +109,92 @@ flowchart LR
 
 ### 状态和证据
 
-- 运行状态为查找、启动、等待授权、观察、执行、核验、已暂停、停止中、已停止和完成。状态由 Electron 和 daemon 各管其真实部分，通过现有会话事件显示；本地接管入口在桥断开时仍可用。
-- 工具结果记录 `not_sent`、`sent_unconfirmed` 或 `verified`。已派发结果未知使用 Core 的 `executionState: "unknown"`。回包晚于许可失效时丢弃旧的窗口内容，已派发事实和效果未知仍保留。模型先请求重新观察，恢复写入须通过最新状态检查。派发成功、状态改变和用户目标达到分别核实。
-- 每次请求带 `connectionId/requestId/toolCallId/toolAttemptId/deadlineAt`、任务及宿主世代。每台本机同时只有一个任务可持有输入队列。批次按 deadline 和取消收敛，发出前票据只消费一次，中断或重连不会重放。
-- 本地预览帧、可提交给模型的截图和留在聊天或附件中的证据分别控制。预览默认短时存在且不落盘；模型图片需任务授权并满足模型能力。证据留存遵守会话访问和保留策略。操作日志仅含用来追踪动作的标识、阶段、耗时与结果类别。
+- Electron 是本机窗口、前台占用、暂停、停止和输入释放状态的唯一来源，桥断开时本机接管仍可用。daemon 沿用运行、审批、工具进度和结果的现有记录。查找、启动、核验等由当前工具进度呈现，聊天界面合成这些事实来展示过程。
+- 桥只记录当前连接的在途请求，沿用 `ToolContext` 的工具调用身份、截止时间和取消信号。Core 的 `serialGroup` 负责同一运行中的工具排序。Electron 每次最多接纳一个任务持有输入，最多向驱动发出一个在途动作。冲突时返回占用原因，停止时撤权并取消在途请求，重连从新请求开始。 [轮内串行](../../../packages/core/src/engine/tools/checked-tool-execution.ts) · [现有在途请求管理](../../../packages/server/src/application/browser-tools/browser-bridge.ts)
+- 用现有 ToolResult 返回执行结果。Electron 能证明未向 Windows 派发时，单独保留该事实，即使 Core 已进入工具函数。已派发且效果未知使用 `executionState: "unknown"`，保留重新观察的提示，恢复写入须通过新状态检查。许可失效后的回包丢弃旧窗口内容，派发事实仍记入本轮结果。 [Core 结算](../../../packages/core/src/engine/tools/checked-tool-execution.ts)
+- 一处捕获授权窗口的画面，分别检查谁能预览、发送给模型或保留证据。预览默认短时存在且不落盘。模型图片需任务授权并满足模型能力。证据留存沿用会话访问及保留策略。诊断只记录动作标识、耗时和结果类别。
 
-## 阶段 1 · 固定驱动与 Windows 身份
+## 阶段 1 · 固定驱动并探测真实应用
 
-**交付**　通过上游 Cua 实测回归的 Windows 宿主、可信应用身份和可打包资源。
+**交付**　复现上游 Cua PoC，并在写产品桥接和界面前验证 Windows 应用的真实操作路径。2026-11-23 实机通过，复跑命令、证据和输入限制见 [Windows 实机验证](../../../apps/desktop/tests/computer-windows/README.md)。
 
-- [ ] 将 PoC 的同 PID 双窗、计数、赋值与延迟应用动作移入 `apps/desktop/tests/computer-windows/`。增加检测目标窗重建、已关闭应用的启动、同名应用或文件的测试结构。由夹具内部日志给实测提供基准。
-- [ ] 固定 Cua `0.28.2` Windows x64 ZIP 的 SHA-256 `1f4bfceeab64cb7f56be7aad774c3dc2d2910d1427e4be1d79939c706e8029ba`。核对解包后的必需文件 SHA-256、架构和适用的厂商 Authenticode 签名。将资源路径固定在已核对的安装目录。工具帮助、版本探测和真正启动一律从第一个进程起设 `CUA_DRIVER_RS_TELEMETRY_ENABLED=0`，关闭更新检查和外部 MCP 监听，使用独立的临时数据目录。 [现有固定资源模板](../../../scripts/prepare-office-engine.mjs)
-- [ ] 资格验证候选 `cua-driver mcp --direct` 的父子进程专属标准输入输出。复测窗口清单、旧引用拒绝、截屏、读回、退出和后代进程清理。PoC 的普通同账号管道留作复现。如果候选连接不能证明进程身份或清理，阻断下一阶段，调整驱动生命周期或选用经审查的私有认证传输。
-- [ ] 从本机 Windows 应用注册与开始菜单可识别入口生成应用候选，覆盖传统桌面程序与打包应用。窗口身份复核覆盖当前交互会话、进程创建时间、归属、完整性级别和销毁通知。驱动或窗口监测失效时关闭旧许可。
-- [ ] **阶段通过条件**　重复跑通 PoC，驱动和观察权限精确绑定一窗；切窗或重建使旧目标失效；上游二进制和其退出可核对；已安装应用目录可以区分应用身份与显示名。
+- [x] 将 PoC 的同 PID 双窗、计数、赋值与延迟应用动作移入 `apps/desktop/tests/computer-windows/`。增加检测目标窗重建、已关闭应用的启动、同名应用或文件的测试结构。由夹具内部日志给实测提供基准。
+- [x] 固定 Cua `0.28.2` Windows x64 ZIP 的 SHA-256 `1f4bfceeab64cb7f56be7aad774c3dc2d2910d1427e4be1d79939c706e8029ba`。核对解包后的必需文件 SHA-256、架构和适用的厂商 Authenticode 签名。将资源路径固定在已核对的安装目录。工具帮助、版本探测和真正启动一律从第一个进程起设 `CUA_DRIVER_RS_TELEMETRY_ENABLED=0`，关闭更新检查和外部 MCP 监听，使用独立的临时数据目录。 [现有固定资源模板](../../../scripts/prepare-office-engine.mjs)
+- [x] 用 Desktop 已有 MCP SDK 通过专属标准输入输出验证 `cua-driver mcp --direct`。复测窗口清单、旧引用拒绝、截屏、读回、退出和后代进程清理。先使用这一条产品接入路线，原命名管道保留为 PoC 对照。 [Desktop 依赖](../../../apps/desktop/package.json)
+- [x] 写一个薄脚本，从记事本和目标资源管理器窗口未打开开始。通过 Windows 注册入口启动，限时查找并确认唯一窗口。写入测试文字，经保存对话框另存到专用目录，再由资源管理器打开，核对窗口内容与文件字节。记录每个环节实际使用语义还是画面输入，并在自有夹具单独探测前台键鼠释放。窗口等待先用统一的身份复查和超时，按实测失败补具体分支。
+- [x] 用最小 Windows x64 解包产物确认 Cua 文件字节和原厂签名在打包后可验证。核对 Vykor 安装器与辅助程序签名的实际来源和验证步骤。签名凭据未就绪时，作为阶段 6 的发布依赖记录。 [当前 Windows 发布步骤](../../../.github/workflows/tag-release.yml) · [安装产物检查范例](../../../apps/desktop/scripts/verify-office-packaging.mjs)
+- [x] **阶段通过条件**　PoC 可重复，窗口权限、过期引用和驱动退出有证据。真实冷启动、保存和跨应用读回路径有可复查的结果。发现身份、输入或清理缺口时，先解决对应的驱动或 Windows 系统路径，再扩展产品接口。
 
 ## 阶段 2 · 本机桥与本次运行授权
 
-**交付**　任意普通客户端请求无法领取本机权限，已授权的 Desktop 主任务能装配限域 Computer 工具。
+**交付**　任意普通客户端请求无法领取本机权限，已授权的 Desktop 主任务能装配限域 Computer 工具。2026-11-23 验收通过。
 
-- [ ] 借用 [Browser 宿主路由](../../../packages/server/src/http/routes/browser-host.ts) 的回环绑定、认证、来源头校验、大小限制、超时、连接代换和断开回收。新增独立的 Computer 能力和配对凭证，通过 Desktop 所有的 daemon 私有启动通道传递。普通 API token、用户 metadata、命令行和日志不能发放配对凭证。
-- [ ] 从 Electron IPC 的实际主窗口验证任务发起者。经本机桥提交一次性运行意图，daemon 把它与实际人类输入和运行原子绑定。任务启动无需已有窗口。Desktop 或 daemon 重新配对后清空旧授权，未受 Desktop 管理的现有服务仍可以提供普通会话。
-- [ ] 在 `session-run-executor.ts` 按 `AgentRunToolContribution` 装配 `Computer`，发出前经 `beforeDispatch` 和主进程二次复核。计划模式、远端、CLI、Web、渠道、定时、委派和恢复的请求无法继承授权。 [派发校验入口](../../../packages/server/src/application/session/execution/tool-dispatch-check.ts)
-- [ ] 用实际路由并配合假驱动检查伪造 metadata、跨来源 warm Agent、同一运行重复票据、连接替换和迟到结果。写入动作高影响审批先实现确认与拒绝的服务端授权契约，阶段 4 接到用户可见的审批卡。
-- [ ] **阶段通过条件**　工具目录按本次运行变化。无资格时驱动调用为零。正常聊天、浏览器工具和独立 daemon 的行为通过回归检查。
+**Windows 启动通道探测**　当前项目安装的 Electron 可作为无窗口、分离的子进程，经 `child_process.spawn` 继承的 Node IPC 完成一次挑战应答。测试核对了实际子进程 ID，双方关闭 IPC 后，父进程退出，子进程仍能运行。按需启动已使用这条通道配对。Desktop 核对实际子进程、已登记实例和数据根后关闭启动通道。两端只在内存中保存独立凭证。
+
+**阶段 2 实测**　Windows x64 用隔离数据根运行项目的无窗口 daemon 入口。继承通道完成配对后，普通会话 API 和私有流均可用。只有普通 API 凭证的请求无法接入私有流，未配对启动的 daemon 仍提供普通 API。跨包测试用离线模型和假 Windows 宿主走通 Desktop 私有提交、Computer 派发和结果回传。断线时，一次性审批过期，旧连接的结果被拒绝。重启保护测试覆盖运行中任务、临时聊天、旧端口和安全收尾响应丢失。 [Desktop 集成测试](../../../tests/desktop-integration/README.md) · [daemon 测试入口](../../../packages/server/src/application/computer-tools/README.md)
+
+- [x] 复用 [Browser 宿主路由](../../../packages/server/src/http/routes/browser-host.ts) 的本机绑定、来源头校验、请求上限和断开处理。为 Computer 保留独立凭证。Desktop 按需启动 daemon 时，经继承的私有进程通道交换凭证，核实实际子进程与注册实例、数据根一致后关闭启动通道。凭证只留在双方内存。普通 API token、请求 metadata、命令行和日志均无权发放凭证。 [按需连接](../../../apps/desktop/src/main/features/session/daemon-connection-service.ts) · [后台进程启动](../../../packages/client/src/service/process.ts)
+- [x] 验证 Electron IPC 的实际主窗口后，经可信 Computer 通道提交一次正常的用户消息。复用现有准入，在首次创建输入和运行、尚未入队时绑定资格。重复提交和恢复继续走现有去重分支，且不重新发放许可。任务启动无需已有窗口。按 `AgentRunToolContribution` 装配范围内的工具，`beforeDispatch` 检查运行资格。真实目标窗和前台输入的许可由 Desktop 在后续对应阶段接通。计划模式、远端、CLI、Web、渠道、定时和委派无法继承资格。 [入队前的原子创建](../../../packages/server/src/application/session/execution/run-admission-work.ts) · [派发校验](../../../packages/server/src/application/session/execution/tool-dispatch-check.ts)
+- [x] 同一 Desktop 对同一后台实例在短暂掉线后可以重新认证，清空旧许可、旧审批和旧观察。Desktop 重启后先正常连后台。用户发起 Computer 时，只在当前实例可核实为 Desktop 按需启动、当前仍采用按需启动配置、没有在途或排队运行且通过临时聊天保护时，复用现有的受控重启流程重新配对。无法安全替换时保留原后台和普通会话，Computer 显示不可用原因。 [维护时的重启保护](../../../packages/server/src/application/maintenance/maintenance-application-service.ts) · [已注册进程终止校验](../../../packages/server/src/daemon-host/lifecycle.ts)
+- [x] 用实际路由和假驱动测伪造 metadata、重复和恢复、跨来源运行、待审批断线、旧回复、握手实例竞争以及 Desktop 重开。复用现有审批服务的待决请求、过期、取消和记录。可信真人回复在阶段 4 用于逐次确认高影响动作，在阶段 5 用于同意一段连续前台占用。
+- [x] **阶段通过条件**　一次可信提交即可开跑。未授权或已失效的来源触达驱动为零，旧连接回包不会触发新动作。普通聊天、Browser 和独立 daemon 通过回归。遇到在途任务或临时聊天时保持原后台。
 
 ## 阶段 3 · 找应用、自动启动与窗口接续
 
-**交付**　从聊天开始可处理已运行和未运行的应用，能够找到节奏明确的窗口和受支持的跨应用目标。
+**交付**　从聊天开始可处理已运行和未运行的应用，能够找到节奏明确的窗口和受支持的跨应用目标。2026-11-23 验收通过。
 
-- [ ] 将应用发现结果收敛成最小候选列表。对用户请求中的自然语言名称和别名做确定匹配。对多个同名候选及多个同应用文档显示可辨认的选择，选择时公开最少必要信息。
-- [ ] 打开前检查应用许可，使用 OS 注册的应用 ID 或核实后的本机应用入口启动。只用宿主明确构造的固定启动方式，禁止模型传任意可执行路径、命令、参数、脚本或 URI。唯一的运行实例也要核对具体窗口或文档。启动成功但未产生可操作窗口时给出单独状态，并停止进一步操作。
-- [ ] 内置等待阶段，区分找不到应用、启动被拒绝、窗口尚在启动、存在冲突和目标已就绪。等待正确归属的窗口事件，校验新出现的窗口、启动返回的实例关联和实际选中的文档。对托管进程、单实例复用、启动画面和系统弹框都有超时及人工选择分支。
-- [ ] 同一应用打开新对话框和跨应用切换走同一绑定流程。可验证归属的普通模态窗口可延续本轮应用许可；身份或安全属性含糊时暂停。跨应用先验证已有许可或请求新增许可，停止旧窗口的派发并重新观察。
-- [ ] 使用 Vykor 的本机运行设置支持查看和撤销始终允许的应用。区分应用未安装、隐私或权限限制和应用虽已运行但不可控制。错误信息告诉用户可行的下一步。
-- [ ] **阶段通过条件**　用关闭的夹具和至少一个正常 Windows 应用证明从自然语言意图到应用启动和就绪。已开的文档复用、多个同名窗口歧义、新对话框和跨应用许可分别记录测试结果。整个正常路径无需用户预打开应用或预选窗口。
+Desktop 主聊天的「电脑操作」用于本次发送。发现应用后，先核对应用许可，再复用唯一匹配的窗口，或从 Windows 的应用登记启动并等待就绪。只有多个合格目标时才显示选择。首次应用许可、同名选择与复查都走相同的私有桥。设置中的已保存许可可撤销。 [Desktop 接入与状态](../../../apps/desktop/src/main/features/computer/README.md) · [Windows 实机命令](../../../tests/desktop-integration/README.md)
 
-## 阶段 4 · 观察、输入与结果核验
+**实机结果**　Windows x64 下通过实际 Desktop 私有桥与 daemon，用默认权限模式和离线模型从关闭状态启动计算器与画图。切回计算器时核对了同一窗口句柄、进程和创建时间，未显示选择器。注册的 Win32 夹具也从关闭状态启动，两个同名文档只显示一次选择，随后复用已选文档并自动接续所属的普通模态对话框。验收结束后核对了窗口、测试进程和注册快捷方式均已清理。 [实机用例](../../../tests/desktop-integration/__test__/computer-windows-live.test.ts)
 
-**交付**　Agent 能在获准的任务中连贯地多步操作真实应用，覆盖语义和前台控制路径。
+- [x] 在 `windows-apps.ts` 封装传统桌面程序和打包应用的可信发现、启动和窗口复查。应用候选只提供名称、运行状态和本轮引用，区分应用身份和显示名。用本机注册入口或已核实的应用身份启动，参数由宿主确定。限时确认窗口的登录会话、进程创建时间、归属、实例和实际文档。
+- [x] 贯通 `open_app`。有唯一匹配的窗口时核实并复用。没有时按应用许可启动并等待。多个合格窗口、应用或文档时显示选择器，继续同一个操作。分别报告找不到、等待超时和应用已启动但窗口不可用。用阶段 1 的失败样本补启动分支。
+- [x] 同一应用中的新对话框和跨应用切换复用同一个窗口绑定流程。归属可证的普通模态窗口可以延用本轮应用许可。其他情况暂停核对。跨应用先检查许可，停止向旧窗口派发、废弃旧观察并为新窗口重新观察。
+- [x] 使用 Vykor 的本机运行设置支持查看和撤销始终允许的应用。区分应用未安装、隐私或权限限制和应用虽已运行但不可控制。错误信息告诉用户可行的下一步。
+- [x] **阶段通过条件**　用关闭的夹具和至少一个正常 Windows 应用证明从自然语言意图到应用启动和就绪。已开的文档复用、多个同名窗口歧义、新对话框和跨应用许可分别记录测试结果。整个正常路径无需用户预打开应用或预选窗口。
 
-- [ ] 先接控件树、字段和动作能力，明确无法获知的属性。实现受支持的按钮、选择、滚动、编辑和菜单，按每次操作后获取的新状态决定下一步。目标消失、同名控件冲突和模态变化会废弃旧引用。
-- [ ] 再接目标窗口的屏幕观察和前台输入。仅在应用许可和画面授权下生成裁到目标窗口的图片。点击坐标携带窗口、画面 ID、缩放、窗口边界和显示器身份。键盘输入前验证焦点属于本次选择的控件或受授权的对话框。任何移动、遮挡、焦点漂移或 DPI 变化都会要求重新观测。无法证明前台目标时暂停。与现有 [模型图片处理](../../../packages/server/src/application/browser-tools/browser-tool.ts) 保持一致。
-- [ ] 底层根据实际支持的投递路径选择动作。常规语义操作能后台完成时保持其他窗口的焦点。前台输入只在人明确允许且页面显示占用状态后开启。自动切换前台、向活动桌面任意位置下注入，均不在普通工具权限范围。
-- [ ] 使用现有审批卡显示应用、控件、拟做动作和相关影响。人工票据绑定运行、原始用户输入修订、请求摘要、当前窗口及许可世代，只能消费一次。等批准期间放弃输入占用，获批后执行前重验。日常任务在明确允许的边界中连续执行，无法判断后果的操作暂停。
-- [ ] 根据任务建立可复查的后置条件。赋值读回字段，选项读回状态，窗口跳转验证实际窗口，保存验证用户指定位置和重新打开的内容。计算结果可由当前程序的显示值确认。读回失败时报告已发出但未确认，继续观察或请用户介入。避免把屏幕任意变化当成业务效果。
-- [ ] **阶段通过条件**　测试覆盖任务范围内的连续操作、语义与画面路径、前台开启前不发送输入、窗口/坐标变动拒绝、跨应用转移、已批准动作只派发一次、最初即满足的核验条件，以及 driver 成功但实际未变化的情况。
+## 阶段 4 · 结构化观察、语义操作与读回
 
-## 阶段 5 · 进度、人工接管、停止和数据
+**交付**　Agent 能基于控件树在获准的应用中连续工作，并用真实结果验证动作。2026-11-23 通过阶段验收。
 
-**交付**　用户可看、可介入、可恢复。中断能及时阻止新动作，输入和数据的状态可准确说明。
+签名 Cua 提供窗口观察。控件的动作与字段值由 Windows 辅助功能接口按窗口和控件身份核对。Cua 在指定窗口找不到可操作控件时可能退回同进程枚举，因此派发和结果核验采用 Windows 核实的目标。写入前比对完整旧值。按钮的回包只报告可观察的变化，文件是否写入仍需重新打开或从获准的文件路径读回。 [Desktop 实现](../../../apps/desktop/src/main/features/computer/README.md) · [实机验收入口](../../../tests/desktop-integration/README.md)
 
-- [ ] 在 Desktop 聊天常驻显示当前应用、当前窗口、操作方式、最近的动作与结果。进度区显示查找、等待许可、启动中、前台使用、核验、已暂停和已停止。用户能在聊天里控制，也能通过本机入口停止。前台使用时提供已验证的本机紧急停止方式。
-- [ ] 「暂停 / 接管」立即禁止新的派发并释放当前自动输入。需要人登录或处理安全对话框时关闭对该窗口的自动读取和截图，直到用户显式继续。继续时重新检查用户会话、应用、窗口、界面和新目标的许可，再开下一步。修改任务目标或应用范围时重新授权相关部分。
-- [ ] Stop 先撤销任务许可和单次审批，递增世代、清空队列并停止派发，再通知驱动结束会话与退出。正常关闭须有退出事件和连接关闭，超时只限时回收本轮拥有的进程。验证错 PID 或旧连接不能误停。区分 Stop 接收回执、驱动退出、输入释放和应用行为已完成。
-- [ ] 补真实的前台输入清理验收。用夹具记录键和鼠标的按下与释放事件，在中途暂停、物理接管、焦点切换、断线和 Stop 时检查配对。严格防止无授权的后续输入。有在途动作或无法证明释放时暂停再次输入，相关路由须在发布资格中单独通过。
-- [ ] 在聊天停止、关闭 Desktop、登录会话切换、锁屏/睡眠、窗口退出、daemon 或驱动异常、升级前走撤权。保留 PoC 延迟动作回归，防止把已派发说成从未开始。调试和输出遵循受信任窗口范围，当前应用 UI 中出现的指令不能改变权限。
-- [ ] 文件、字段值、图像和任务内容进入记录前控范围和字节并过滤敏感信息。应用预览只在当前任务和用户可见。关闭捕获许可后停止采集。验证聊天历史、附件、导出和崩溃日志不会把目标窗私密内容泄至其他会话。 [会话结果投影](../../../packages/server/src/application/session/transcript/transcript-projection.ts)
-- [ ] **阶段通过条件**　在前台输入过程中接管或停止，已运行的工作可说明，下一步派发数为零，键鼠释放证据符合路由资格。用户继续时只能基于新观察。无已退出驱动、管道、陈旧许可和预览残留。
+**实机结果**　Windows x64 上用离线模型走实际 Desktop 私有桥和 daemon。测试自动启动一个隔离的记事本测试窗口，写入三行中英文，动作读回和独立观察均对上原文。选择和滚动的结果核验由宿主回归覆盖。WinForms 两个同名窗口中，批准前零点击，单次批准后只触发所选窗口并读到控件变化。夹具未收到模拟键鼠。控件自己的调用有时会让应用取得前台。Stop 在延迟动作已进入应用时撤权，下一次点击未派发，运行进入 `interrupted`，已开始的延迟动作仍自行完成。 [实机用例](../../../tests/desktop-integration/__test__/computer-windows-semantic-live.test.ts)
+
+- [x] 接入控件树、字段值和语义动作。实现受支持的按钮、选择、滚动、编辑和菜单。Desktop 不切换焦点，应用可以自行激活窗口。模型根据每步的新观察决定下一步。目标消失、同名冲突和模态变化废弃旧引用。
+- [x] 接通现有审批服务和卡片。高影响动作只接受通过可信 Computer 通道返回的真人批准。批准绑定本次请求、输入修订、窗口和许可世代，由相应的在途动作消费一次。等待期间关闭驱动，获批后重验。日常授权范围内的动作连续执行，无法判断后果时暂停。 [审批服务](../../../packages/server/src/permissions/permission-broker.ts)
+- [x] 动作回包直接返回可核实的字段或控件变化。跨窗口跳转用 `observe` 确认实际落点。保存通过重新打开或既有获准文件读取能力核对位置和内容。读回失败时如实报告已发送、效果待确认。核心串行调度和 Desktop 单动作在途检查走同一真实路径。
+- [x] 接上聊天 Stop 的本机撤权，在 WinForms 测试夹具中证明先阻止新动作，再取消当前请求与后续轮内动作。PoC 和本阶段都保留延迟按钮回归，分开记录驱动退出和应用效果。
+- [x] **阶段通过条件**　任务范围内的语义操作可连续执行。停用、换窗、重复批准或迟到回复后零新派发。单次批准仅触发一次动作。驱动返回成功但应用状态无变化时，结果仍为待确认。
+
+## 阶段 5 · 窗口画面、前台输入与接管
+
+**交付**　窗口画面和前台输入与占用提示、人工接管、本机急停一起实现、一起验收。2026-11-23 完成审查修复和实机复验。
+
+**实机复验**　离线模型经实际 Desktop 私有桥和 daemon 启动 Windows 计算器。按 Tab 后重新截图，运行结束后确认控制进程退出。两个同名 WinForms 窗口验证了失焦、换窗和外部输入接管，旧占用零新派发。实机主动卸载一个观察钩子，目标窗和对照窗都没有新增输入。键盘和鼠标各在按下已进入目标、抬起尚未入队的同步点走实际聊天 Stop，随后在原窗口各收到一次配对抬起，核对了输入释放与子进程退出。真实 HTTP 桥也验证首步前切走并切回，旧任务零派发。 [实际私有桥](../../../tests/desktop-integration/__test__/computer-windows-foreground-live.test.ts) · [WinForms 原生复验](../../../apps/desktop/src/main/features/computer/__test__/windows-foreground-live.test.ts) · [聊天切换回归](../../../tests/desktop-integration/__test__/computer-bridge.test.ts)
+
+键鼠走经核验的目标窗口消息。应用对定向消息的响应仍需读回，依赖真实硬件键态的快捷键可用语义操作或人工接管。截图关闭或暂停会清除本机画面，并撤销 daemon 中尚未发出的截图，请求重试只带文字。退出和更新先关闭新任务入口，未确认释放时暂停安装。 [Desktop 撤权与清理](../../../apps/desktop/src/main/features/computer/README.md) · [daemon 截图处理](../../../packages/server/src/application/computer-tools/README.md)
+
+整体审查后的实机复验覆盖应用自动启动和复用、记事本多行写入和读回、同一窗口改焦点后拒绝旧按键、识别嵌入式认证界面、暂停时报告已派发动作的结果未知，以及 Stop 补发尚未入队的键盘和鼠标抬起。启用 SDK 调试日志时的截图隐私和纯文字重试通过离线回归。 [Windows 实机入口](../../../tests/desktop-integration/README.md) · [原生焦点与认证实机](../../../apps/desktop/src/main/features/computer/__test__/README.md)
+
+- [x] 同一次窗口捕获用于可展开预览和按需的模型图片。坐标输入携带窗口和最新画面引用，宿主核对缩放、窗口边界、遮挡和显示器。键盘输入复核焦点归属。前台许可绑定本轮、当前窗口和这次连续占用。允许范围内的普通动作连续执行，坐标点击和未知后果的输入逐次确认。目标或画面变化时重新观察，接管、失焦或换窗结束此次占用。 [模型图片处理](../../../packages/server/src/application/computer-tools/README.md)
+- [x] 在聊天里展示当前应用、窗口、操作方式、最近动作和核验结果。查找、等待许可、启动复用工具进度，前台占用、暂停和停止取自 Electron。用户可在聊天停止，或使用本机快捷键 `Ctrl+Alt+Shift+Esc`。
+- [x] 「暂停 / 接管」立即禁止新的派发并释放当前输入。登录或安全对话框交给用户。暂停期间停止读取和截图。继续时重新检查会话、目标和授权，废弃旧窗口及画面引用，重新观察后才打开下一步。
+- [x] Stop 先撤销任务许可、审批与当前窗口占用，再取消在途请求并通知后台。本机控制进程报告释放和退出，超时只限时回收本轮进程。Stop 接收、释放、退出和应用动作实际结果分别记录。
+- [x] 用实际夹具记录键鼠配对。失焦、同名窗口切换、钩子卸载、外部输入接管和抬起尚未入队时的 Stop 有实机证据。暂停、断线、过期请求和迟到回复有定向回归。无法核实释放时暂停接受新占用。实体输入设备和发布机上的急停复验按阶段 6 执行。
+- [x] 聊天停止、关闭 Desktop、锁屏或睡眠、窗口退出、daemon 或控制进程异常、更新安装均撤权。保留 PoC 的延迟动作证据，应用收到的动作效果继续标记为待核验。
+- [x] 图像按窗口限域、大小上限和凭据界面规则处理。预览只发给当前任务所属主聊天，关闭捕获、暂停、切换聊天或结束后清除。模型画面只进入当次请求，验收核对聊天历史、SQLite、附件和 JSON 导出。 [会话结果投影](../../../packages/server/src/application/session/transcript/transcript-projection.ts)
+- [x] **阶段通过条件**　实际前台动作和安全退出通过验收。未授权、换窗、过期画面或停止后零新派发，按下与释放有应用侧证据。继续前要求重新观察。控制、窗口画面与单次许可在任务结束时回收。
 
 ## 阶段 6 · 签名安装包、试点与发布验收
 
 **交付**　从签名的 Windows 安装包完整走通用户旅程，具备升级、停用、排障和回退能力。
 
-- [ ] 在 `extraResources` 放 Windows x64 专用驱动与许可。CI 核对打包前、解包后和实际安装后的文件路径、架构、SHA-256、签名策略及许可证。分别核对驱动厂商签名和 Vykor 安装器、宿主及辅助程序的签名。Linux 安装资源不收进 Windows 驱动。 [资源配置](../../../apps/desktop/electron-builder.yml) · [现有安装验收](../../../apps/desktop/docs/packaging.md)
+Windows x64 安装包随附 Cua 0.28.2。解包和干净 Windows CI runner 的安装验证会核对驱动摘要与原厂签名。Vykor 安装器、宿主、卸载器及升级辅助程序使用各自的签名验证。签名试点只通过 `build_only` 生成工件，正式启用签名前先统一稳定渠道的发布者。签名工件、真实模型、实体输入与升级回退的验收完成后，再开启正式分发。 [打包核验](../../../apps/desktop/docs/packaging.md) · [试点用法](../../computer-capabilities.md)
+
+**本机证据**　Windows x64 NSIS 1.2.31 的解包目录和安装载荷已核对随包驱动。使用解包目录的 Cua 0.28.2 实测了计算器的语义观察、前台批准、截图、Tab、再次截图和清理。静默安装与卸载留在独立 Windows 环境执行。 [复跑入口](../../../tests/desktop-integration/README.md)
+
+- [x] Windows x64 构建预置驱动并核对压缩包和可执行文件的 SHA-256、发布者签名及许可证。CI 检查 Windows 解包和安装后的随包文件，并确认现有 Linux 构建未带入 Windows 驱动。 [资源配置](../../../apps/desktop/electron-builder.yml) · [安装验收](../../../apps/desktop/docs/packaging.md)
 - [ ] 用真实模型、普通 Windows 交互账号和签名安装包跑下列验收脚本。生产流程走同一 Desktop 启用、授权、调度、读回和停止入口，测试夹具另存应用侧事件用来独立核对结果。
 
   - **从无窗口开始**　关掉记事本与资源管理器测试窗，发送自然语言任务。Vykor 查找并启动记事本，填写多行、导航保存对话框、写入用户批准的测试文件，再经资源管理器打开确认。检查文件字节和应用内读回。
@@ -144,21 +205,17 @@ flowchart LR
   - **暂停、继续、停止**　在等待授权、已排队、键鼠在途和应用已收动作四种状态分别测试。暂停后用户可操作、显式继续读取新状态；Stop 后下一步零派发，原动作如继续则准确显示未知或事后读回的实际结果。
 
 - [ ] 验收干净安装、应用升级、立即安装和随退出安装、回退和卸载。服务重启、资源损坏、用户数据目录切换及重新连接时，旧许可和引用不可恢复。保留功能开关，错窗、权限绕过或已停止后仍有新输入时可停用并回退。运行诊断只采集失败类别、是否核验、停止时延与孤儿进程情况。 [更新入口](../../../apps/desktop/src/main/features/updater/updater-service.ts) · [退出流程](../../../apps/desktop/src/main/application.ts)
-- [ ] 补 `docs/computer-capabilities.md` 并更新 [文档索引](../../README.md) 与 [契约测试索引](../../contract-test-index.md)。按应用、控件和后台/前台路线说明已验证范围，说明遇到授权冲突、找不到应用、窗口不明确、需要接管或结果未知时用户会看到什么。
+- [x] 补 [电脑操作说明](../../computer-capabilities.md) 并更新 [文档索引](../../README.md) 与 [契约测试索引](../../contract-test-index.md)。按应用、控件和后台/前台路线说明已验证范围，说明遇到授权冲突、找不到应用、窗口不明确、需要接管或结果未知时用户会看到什么。
 - [ ] **阶段通过条件**　完整操作路径和各临界场景都有安装制品的验收记录。窗口仍关闭的用户能够从一次自然语言任务开始，经必要授权走到已核验结果。用户可接管、继续和停止。已发布的能力和实际支持矩阵一致。
 
 ## 验收命令
 
-以下命令随各阶段新增 Computer 用例接入。在实现前运行已有 Browser 和 Desktop 回归作为基线。Windows 真实 UI 在交互账号单独运行，并保留签名包实测记录。
+Windows 真实窗口命令见 [阶段 1 实机验证](../../../apps/desktop/tests/computer-windows/README.md)。阶段 2 用本机桥和离线模型运行以下定向检查。签名安装包按阶段 6 单独验证。
 
 ```powershell
-pnpm --filter @vykor/server exec vitest run src/application/computer-tools src/http/__test__/computer-host.test.ts src/application/session/execution/__test__/run-admission-service.test.ts
-pnpm --filter @vykor/desktop exec vitest run src/main/features/computer src/preload/desktop-api.test.ts
-pnpm --filter @vykor/desktop typecheck
-pnpm test:desktop-integration
-pnpm --filter @vykor/desktop test:computer-windows
-pnpm --filter @vykor/desktop build
-pnpm --filter @vykor/desktop exec -- electron-builder --win --publish never
+pnpm --filter @vykor/server exec vitest run src/http/__test__/computer-host.test.ts src/http/__test__/computer-run.integration.test.ts src/application/session/execution/__test__/run-admission-service.test.ts
+pnpm --filter @vykor/desktop exec vitest run src/main/features/computer src/main/features/session/daemon-connection-service.test.ts
+pnpm exec vitest run --config tests/desktop-integration/vitest.config.ts tests/desktop-integration/__test__/computer-bridge.test.ts
 pnpm check:retired-ui
 pnpm check-docs
 ```

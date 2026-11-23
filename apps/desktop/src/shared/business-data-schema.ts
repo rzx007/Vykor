@@ -71,6 +71,7 @@ export const composerDraftSchema = z.object({
     .optional(),
 })
 export const composerSubmissionSchema = z.object({
+  computer: z.literal(true).optional(),
   delivery: z.enum(["queue", "steer"]).optional(),
   expectedActiveRunId: string.min(1).optional(),
   browserAnnotationContext: string.nullable().optional(),

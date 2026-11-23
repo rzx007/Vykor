@@ -127,6 +127,7 @@ export function createStartSessionAction(
       startedSessionId = session.id
       // 创建第一个提交
       const firstSubmission: PendingPromptSubmission = {
+        ...(options?.computer ? { computer: true } : {}),
         browserAnnotationContext,
         id: promptSubmissionId,
         sessionId: session.id,
@@ -206,6 +207,8 @@ export function createStartSessionAction(
       }
       // Switching pages keeps the runtime; confirmed deletion removes it.
       if (!get().sessionRuntimes[session.id]) return null
+      if (firstSubmission.computer && openResult !== "applied")
+        throw new Error("会话已切换，请打开新会话后重新发送电脑操作消息。")
       await get().submitPromptSubmission(firstSubmission)
       // 设置会话标题
       const title = prompt

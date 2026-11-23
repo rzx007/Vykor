@@ -14,6 +14,7 @@ import { IpcEvents } from "../../../shared/ipc-channels"
 import type {
   CloseDesktopAuxSessionInput,
   DesktopAuxSessionUpdate,
+  DesktopPermissionRequest,
   DesktopSessionPart,
   DesktopSessionPartDelta,
   DesktopSessionRecord,
@@ -91,11 +92,12 @@ export class SessionSubscriptionService {
     { sessionId: string; promise: Promise<DesktopSessionView> }
   >()
   private readonly liveDeliveries = new WeakMap<SessionSubscription, LiveDeliveryState>()
-  private readonly invalidationListeners = new Set<(ownerId: number) => void>()
+  private readonly invalidationListeners = new Set<(ownerId: number, change?: { nextSessionId?: string; daemonReset?: true }) => void>()
   private readonly sessionInvalidationListeners = new Set<
     (ownerId: number, sessionId: string) => void
   >()
   private readonly primaryTokens = new WeakMap<SessionSubscription, object>()
+  private readonly primarySnapshots = new WeakSet<SessionSubscription>()
   private readonly agentsDetailRoots = new WeakMap<
     SessionSubscription,
     { rootToken: object; childId: string }
@@ -125,6 +127,37 @@ export class SessionSubscriptionService {
     return subscription && !subscription.controller.signal.aborted
       ? subscription.sessionId
       : undefined
+  }
+
+  async waitForPrimarySnapshot(ownerId: number, sessionId: string, signal: AbortSignal): Promise<void> {
+    const hasSnapshot = () => {
+      const primary = this.subscriptions.get(ownerId, primarySubscriptionSlot)
+      return primary?.sessionId === sessionId && !primary.controller.signal.aborted && this.primarySnapshots.has(primary)
+    }
+    signal.throwIfAborted()
+    if (hasSnapshot()) return
+    const waiting = AbortSignal.any([signal, AbortSignal.timeout(15_000)])
+    await new Promise<void>((resolve, reject) => {
+      const unlisten = this.onOwnerSnapshot((id) => {
+        if (id !== ownerId || !hasSnapshot()) return
+        waiting.removeEventListener("abort", abort)
+        unlisten()
+        resolve()
+      })
+      const abort = () => {
+        unlisten()
+        reject(signal.aborted ? signal.reason : new Error("未能重新打开电脑操作所属的聊天，请重试。"))
+      }
+      waiting.addEventListener("abort", abort, { once: true })
+    })
+  }
+
+  getOwnerPermission(ownerId: number, permissionId: string): DesktopPermissionRequest | undefined {
+    const primary = this.subscriptions.get(ownerId, primarySubscriptionSlot)
+    if (!primary || primary.controller.signal.aborted) return
+    const permission = this.liveDeliveries.get(primary)?.latestState
+      ?.buckets[primary.sessionId]?.permissions[permissionId]
+    if (permission?.sessionId === primary.sessionId) return permission
   }
 
   /** A specific open view, never a caller-provided parent/session relationship. */
@@ -188,7 +221,7 @@ export class SessionSubscriptionService {
       for (const listener of this.sessionInvalidationListeners) listener(ownerId, sessionId)
   }
 
-  onOwnerInvalidated(listener: (ownerId: number) => void): () => void {
+  onOwnerInvalidated(listener: (ownerId: number, change?: { nextSessionId?: string; daemonReset?: true }) => void): () => void {
     this.invalidationListeners.add(listener)
     return () => {
       this.invalidationListeners.delete(listener)
@@ -359,7 +392,7 @@ export class SessionSubscriptionService {
     this.workflowRevisions.clear()
     this.subscriptions.clearAll()
     for (const ownerId of ownerIds)
-      for (const listener of this.invalidationListeners) listener(ownerId)
+      for (const listener of this.invalidationListeners) listener(ownerId, { daemonReset: true })
   }
 
   /**
@@ -407,7 +440,7 @@ export class SessionSubscriptionService {
     sessionId: string
   ): Promise<DesktopSessionView> {
     // Retire the primary view's UI bindings without closing auxiliary chats.
-    for (const listener of this.invalidationListeners) listener(webContents.id)
+    for (const listener of this.invalidationListeners) listener(webContents.id, { nextSessionId: sessionId })
 
     const controller = new AbortController()
     const subscriptionId = `primary:${this.nextPrimarySubscriptionId++}`
@@ -450,6 +483,7 @@ export class SessionSubscriptionService {
     }, 0)
 
     const initialView = this.toView(snapshot.state, sessionId, snapshot.source)
+    this.primarySnapshots.add(subscription)
     this.observeAgentTasks(webContents.id, subscription, snapshot.state)
     for (const listener of this.snapshotListeners) listener(webContents.id, initialView)
     return initialView

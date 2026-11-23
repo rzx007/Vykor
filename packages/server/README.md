@@ -8,6 +8,7 @@
 | --- | --- |
 | [src/](./src/README.md) | 公开导出与完整分类导航 |
 | [src/application/](./src/application/README.md) | 应用组装与各项业务服务 |
+| [src/application/computer-tools/](./src/application/computer-tools/README.md) | Computer Use 私有连接、运行授权与工具调用 |
 | [src/application/session/](./src/application/session/README.md) | 会话命令、输入、运行、插件、目标与记录处理 |
 | [src/application/default-services/](./src/application/default-services/README.md) | 配置、模型、扩展、记忆与项目的默认服务 |
 | [src/http/](./src/http/README.md) | HTTP 中间件、按资源划分的路由和返回数据转换 |

@@ -17,6 +17,19 @@ export class DaemonMaintenanceResource {
     return this.transport.request<{ prepared: true }>("/maintenance/prepare-restart", { method: "POST", signal: options.signal });
   }
 
+  async prepareRestartWithTemporaryChatProtection(signal: AbortSignal): Promise<{ prepared: true }> {
+    return this.transport.request<{ prepared: true }>("/maintenance/prepare-root-migration", { method: "POST", signal });
+  }
+
+  async isPreparedRestartComplete(pid: number, signal: AbortSignal): Promise<boolean> {
+    const health = await this.transport.request<{ restartPrepared?: boolean }>("/health", { signal });
+    if (!health.restartPrepared) return false;
+    const state = await this.transport.request<{ phase: string }>("/maintenance/readiness", { signal });
+    if (state.phase !== "closed") return false;
+    const identity = await this.transport.request<{ pid: number }>("/debug/process", { signal });
+    return identity.pid === pid;
+  }
+
   async requestDataSwitch(
     target: { id: string; directory: string; storePath: string },
     options: { signal?: AbortSignal } = {},

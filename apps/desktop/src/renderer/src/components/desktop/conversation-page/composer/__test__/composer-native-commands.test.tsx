@@ -109,10 +109,79 @@ beforeEach(() => {
   document.body.append(container)
   root = createRoot(container)
 })
+
+it("uses a one-message Computer opt-in and queues it instead of steering the active run", async () => {
+  vi.stubGlobal("desktop", { computer: { supported: true } })
+  try {
+    await act(async () => root.render(
+      <Composer
+        id="computer-composer"
+        draft={composerDocument([{ type: "text", text: "打开计算器" }])}
+        sending={false}
+        followUpRunId="active"
+        models={models}
+        selectedModel="test-model"
+        selectedProvider="local"
+        modelLabel="测试模型"
+        permissionMode="full_access"
+        effort={null}
+        onDraftChange={vi.fn()}
+        onSubmit={onSubmit}
+        onSelectModel={onSelectModel}
+        onSelectPermissionMode={vi.fn()}
+        onSelectEffort={onSelectEffort}
+        computerEnabled
+      />
+    ))
+    const button = container.querySelector<HTMLButtonElement>('[aria-label="电脑操作"]')!
+    const form = container.querySelector("form")!
+    const send = () => { form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })) }
+    expect(button.getAttribute("aria-pressed")).toBe("false")
+    await act(async () => button.click())
+    expect(button.getAttribute("aria-pressed")).toBe("true")
+    await act(async () => send())
+    expect(onSubmit).toHaveBeenNthCalledWith(1, "queue", true)
+    expect(button.getAttribute("aria-pressed")).toBe("false")
+    await act(async () => send())
+    expect(onSubmit).toHaveBeenNthCalledWith(2, "steer")
+  } finally {
+    vi.unstubAllGlobals()
+  }
+})
+
+it("keeps the bundled Computer opt-in scoped to the current draft", async () => {
+  vi.stubGlobal("desktop", { computer: { supported: true } })
+  await renderComputerComposer("session:first")
+  const trigger = container.querySelector<HTMLButtonElement>('[aria-label="电脑操作"]')!
+  await act(async () => trigger.click())
+  expect(trigger.getAttribute("aria-pressed")).toBe("true")
+  await renderComputerComposer("session:second")
+  expect(container.querySelector('[aria-label="电脑操作"]')?.getAttribute("aria-pressed")).toBe("false")
+  expect(onSubmit).not.toHaveBeenCalled()
+})
+
+it("keeps ordinary messaging available when Computer Use is unavailable", async () => {
+  vi.stubGlobal("desktop", { computer: { supported: false } })
+  await renderComputerComposer("session:test")
+  expect(container.querySelector('[aria-label="电脑操作"]')).toBeNull()
+  await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })))
+  expect(onSubmit).toHaveBeenCalledExactlyOnceWith(undefined)
+})
+
+async function renderComputerComposer(scope: string) {
+  await act(async () => root.render(<Composer
+    id="computer-composer" composerScope={scope} draft={composerDocument([{ type: "text", text: "打开计算器" }])}
+    sending={false} models={models} selectedModel="test-model" selectedProvider="local" modelLabel="测试模型"
+    permissionMode="ask" effort={null} onDraftChange={vi.fn()} onSubmit={onSubmit} onSelectModel={onSelectModel}
+    onSelectPermissionMode={vi.fn()} onSelectEffort={onSelectEffort} computerEnabled
+  />))
+}
+
 afterEach(async () => {
   await act(async () => root.unmount())
   container.remove()
   Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT")
+  vi.unstubAllGlobals()
 })
 
 async function openCommand(id: string, title: string): Promise<void> {

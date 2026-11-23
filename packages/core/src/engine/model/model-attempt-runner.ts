@@ -15,6 +15,7 @@ import {
 } from "@vykor/agent-contracts";
 import type { ModelRetryPolicy } from "./model-retry";
 import { modelAttemptControl } from "./model-attempt-control";
+import { isPromptTooLongError } from "../compaction/compact-summary";
 import {
   attemptFinishedEvent,
   createAttemptSignal,
@@ -26,6 +27,7 @@ export interface ModelAttemptOptions {
   deferText?: boolean;
   client: StreamingMessageClient;
   request: StreamMessageParams;
+  prepareRequest?(): StreamMessageParams;
   generationId: string;
   attempt: number;
   purpose: ModelAttemptStarted["purpose"];
@@ -54,6 +56,40 @@ export interface ModelAttemptResult {
   progress: import("@vykor/agent-contracts").ToolGenerationProgressEvent[];
 }
 
+function safeImageUsage(usage: UsageSnapshot): UsageSnapshot {
+  const tokenCount = (value: number | undefined) => value !== undefined && Number.isSafeInteger(value) && value >= 0
+    ? value : undefined;
+  const input = tokenCount(usage.inputTokens);
+  const output = tokenCount(usage.outputTokens);
+  const metering = usage.metering;
+  const incomplete = input === undefined || output === undefined || usage.usageIncomplete === true;
+  return {
+    inputTokens: input ?? 0,
+    outputTokens: output ?? 0,
+    cacheCreationTokens: tokenCount(usage.cacheCreationTokens),
+    cacheReadTokens: tokenCount(usage.cacheReadTokens),
+    ...(typeof usage.costUsd === "number" && Number.isFinite(usage.costUsd) ? { costUsd: usage.costUsd } : {}),
+    ...(incomplete ? { usageIncomplete: true } : {}),
+    ...(metering ? { metering: {
+      knownInputTokens: tokenCount(metering.knownInputTokens) ?? 0,
+      knownOutputTokens: tokenCount(metering.knownOutputTokens) ?? 0,
+      completeness: metering.completeness === "complete" && !incomplete ? "complete"
+        : metering.completeness === "unknown" ? "unknown" : "partial",
+      inputIncludesCache: metering.inputIncludesCache === true,
+      raw: {},
+    } } : {}),
+  };
+}
+
+function safeImageFailure(failure: ModelRequestFailure): ModelRequestFailure {
+  // Compatible endpoints can echo the screenshot in their error and request ID.
+  const { requestId: _untrusted, ...info } = failure.info;
+  return new ModelRequestFailure("附有临时窗口截图的模型请求失败", {
+    ...info,
+    ...(info.kind === "invalid_request" ? { contextLengthExceeded: isPromptTooLongError(failure) } : {}),
+  });
+}
+
 /** One provider attempt. The caller owns retries, tool execution and mutable history. */
 export async function* runModelAttempt(
   options: ModelAttemptOptions,
@@ -80,6 +116,7 @@ export async function* runModelAttempt(
   let admitted = false;
   let gateSettled = false;
   let clientInvoked = false;
+  let hasPrivateImage = false;
   let requestExitedNormally = false;
   let nextStreamActivityAt = 0;
   const settleGate = async (status: "completed" | "failed" | "interrupted") => {
@@ -113,9 +150,11 @@ export async function* runModelAttempt(
     });
     registered = true;
     attemptSignal.signal.throwIfAborted();
+    const request = options.prepareRequest?.() ?? options.request;
+    hasPrivateImage = request.isEphemeralImageCurrent !== undefined;
     clientInvoked = true;
     const stream = options.client.streamMessage({
-      ...options.request,
+      ...request,
       abortSignal: attemptSignal.signal,
       requestTimeoutMs: options.policy.requestTimeoutMs,
       streamIdleTimeoutMs: options.policy.streamIdleTimeoutMs,
@@ -169,7 +208,8 @@ export async function* runModelAttempt(
       } else if (event.type === "tool_use_start") {
         attemptToolUses.push(event.toolUse);
       } else if (event.type === "usage") {
-        attemptUsage = event.usage;
+        // Some compatible endpoints echo request fields in arbitrary usage metadata.
+        attemptUsage = hasPrivateImage ? safeImageUsage(event.usage) : event.usage;
       } else if (event.type === "complete") {
         stopReason = event.stopReason;
         completionSeen = true;
@@ -204,6 +244,7 @@ export async function* runModelAttempt(
       throw error;
     }
     attemptFailed = describeModelFailure(error, options.signal, attemptSignal);
+    if (hasPrivateImage) attemptFailed = safeImageFailure(attemptFailed);
   } finally {
     attemptSignal.dispose();
     await settleGate(options.signal?.aborted ? "interrupted"

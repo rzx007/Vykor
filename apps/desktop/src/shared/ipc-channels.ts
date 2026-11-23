@@ -1,5 +1,6 @@
 import { BusinessDataChannels, type BusinessDataIpcMap } from "./business-data-types"
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
+import type { DesktopComputerActivity, DesktopComputerAppGrant, DesktopComputerControl, DesktopComputerInteractionReply } from "./computer-types"
 import type { DesktopWindowThemeSource } from "./window-theme-types"
 import { TerminalSettingsChannels, type TerminalSettingsIpcMap } from "./terminal-settings-types"
 import { GitSettingsChannels, type GitSettingsIpcMap } from "./git-settings-types"
@@ -313,6 +314,12 @@ export const IpcChannels = {
   sessionFork: "session:fork",
   sessionClose: "session:close",
   sessionSendPrompt: "session:send-prompt",
+  computerSendPrompt: "computer:send-prompt",
+  computerReply: "computer:reply",
+  computerActivityGet: "computer:activity-get",
+  computerControl: "computer:control",
+  computerListAppGrants: "computer:list-app-grants",
+  computerRevokeAppGrant: "computer:revoke-app-grant",
   sessionCheckPromptAccepted: "session:check-prompt-accepted",
   sessionEditLatestPrompt: "session:edit-latest-prompt",
   sessionPromoteQueuedPrompt: "session:promote-queued-prompt",
@@ -491,6 +498,8 @@ export const IpcEvents = {
   terminalExit: "terminal:exit",
   terminalError: "terminal:error",
   browserOpenRequest: "browser:open-request",
+  computerInteraction: "computer:interaction",
+  computerActivity: "computer:activity",
 } as const
 
 export type IpcChannel =
@@ -885,6 +894,12 @@ export interface IpcInvokeMap
   }
   [IpcChannels.sessionClose]: { args: []; result: void }
   [IpcChannels.sessionSendPrompt]: { args: [input: SendDesktopPromptInput]; result: void }
+  [IpcChannels.computerSendPrompt]: { args: [input: SendDesktopPromptInput]; result: void }
+  [IpcChannels.computerReply]: { args: [reply: DesktopComputerInteractionReply]; result: boolean }
+  [IpcChannels.computerActivityGet]: { args: [sessionId: string]; result: DesktopComputerActivity | null }
+  [IpcChannels.computerControl]: { args: [input: DesktopComputerControl]; result: boolean }
+  [IpcChannels.computerListAppGrants]: { args: []; result: DesktopComputerAppGrant[] }
+  [IpcChannels.computerRevokeAppGrant]: { args: [id: string]; result: DesktopComputerAppGrant[] }
   [IpcChannels.sessionCheckPromptAccepted]: { args: [input: { sessionId: string; inputId: string }]; result: boolean }
   [IpcChannels.sessionEditLatestPrompt]: {
     args: [input: EditLatestDesktopPromptInput]

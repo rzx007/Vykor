@@ -10,6 +10,7 @@ import type { RunControlService } from "../execution/run-control-service.js";
 import type { SessionOperationRunner } from "../session-operation-runner.js";
 import type { SessionRunExecutorContext } from "../execution/session-run-executor.js";
 import type { SessionPluginCapabilityService } from "../plugins/session-plugin-capability-service.js";
+import type { ComputerPromptAuthorization } from "../../computer-tools/computer-tool.js";
 
 export interface SessionInteractionSessions {
   get(sessionId: string): SessionRecord | undefined;
@@ -43,6 +44,7 @@ export interface SessionInteractionServiceContext {
   operationGate: Pick<DaemonOperationGate, "enter">;
   resolveSkillCatalog?: SessionRunExecutorContext["resolveSkillCatalog"];
   pluginCapabilities?: Pick<SessionPluginCapabilityService, "admit"> & Partial<Pick<SessionPluginCapabilityService, "captureScope">>;
+  authorizeComputerPrompt?(session: SessionRecord, connectionId: string): ComputerPromptAuthorization;
 }
 
 export interface EditLatestPromptInput {

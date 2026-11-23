@@ -30,6 +30,7 @@ export type VykorDaemonOptions = Pick<
   | "browserHost"
   | "enableDesktopBrowser"
   | "enableBrowserDeveloper"
+  | "desktopComputerToken"
   | "registeredDaemonControl"
   | "deferBackgroundActivation"
 >;

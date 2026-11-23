@@ -1,6 +1,7 @@
 import { BusinessDataChannels, type BusinessDataKey } from "../shared/business-data-types"
 import { ipcRenderer, webUtils } from "electron"
 import type { DesktopWindowThemeSource } from "../shared/window-theme-types"
+import { COMPUTER_AVAILABLE_ARGUMENT, type DesktopComputerActivityUpdate, type DesktopComputerControl, type DesktopComputerInteractionEvent, type DesktopComputerInteractionReply } from "../shared/computer-types"
 import {
   TerminalSettingsChannels,
   TerminalSettingsEvents,
@@ -589,6 +590,26 @@ export const desktopAPI = {
       invoke(IpcChannels.skillSnapshot, input),
     remove: (input: IpcInvokeMap[typeof IpcChannels.skillRemove]["args"][0]) =>
       invoke(IpcChannels.skillRemove, input),
+  },
+  computer: {
+    supported: process.argv.includes(COMPUTER_AVAILABLE_ARGUMENT),
+    sendPrompt: (input: IpcInvokeMap[typeof IpcChannels.computerSendPrompt]["args"][0]) =>
+      invoke(IpcChannels.computerSendPrompt, input),
+    onInteraction: (handler: (event: DesktopComputerInteractionEvent) => void) => {
+      const receive = (_event: Electron.IpcRendererEvent, update: DesktopComputerInteractionEvent) => handler(update)
+      ipcRenderer.on(IpcEvents.computerInteraction, receive)
+      return () => { ipcRenderer.removeListener(IpcEvents.computerInteraction, receive) }
+    },
+    reply: (input: DesktopComputerInteractionReply) => invoke(IpcChannels.computerReply, input),
+    getActivity: (sessionId: string) => invoke(IpcChannels.computerActivityGet, sessionId),
+    onActivity: (handler: (update: DesktopComputerActivityUpdate) => void) => {
+      const receive = (_event: Electron.IpcRendererEvent, update: DesktopComputerActivityUpdate) => handler(update)
+      ipcRenderer.on(IpcEvents.computerActivity, receive)
+      return () => { ipcRenderer.removeListener(IpcEvents.computerActivity, receive) }
+    },
+    control: (input: DesktopComputerControl) => invoke(IpcChannels.computerControl, input),
+    listAppGrants: () => invoke(IpcChannels.computerListAppGrants),
+    revokeAppGrant: (id: string) => invoke(IpcChannels.computerRevokeAppGrant, id),
   },
   sessions: {
     readAgentActivity: (input: IpcInvokeMap[typeof IpcChannels.sessionAgentActivity]["args"][0]) =>

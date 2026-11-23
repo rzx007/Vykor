@@ -9,7 +9,9 @@ files:
   # 排除旧构建留下的插件包，避免被 out/** 再次收进应用。
   - '!out/bundled-plugins/**'
   - '!out/office-engine/**'
+  - '!out/computer-windows/**'
   - resources/**
+  - '!resources/computer-windows/**'
   - package.json
   - from: src/renderer/src/components/desktop/shared/aora-bot/upstream
     to: third-party/aora-bot
@@ -35,6 +37,15 @@ asarUnpack:
   - node_modules/sharp/**
 win:
   executableName: Vykor
+  signExts:
+    - '!cua-driver.exe' # Preserve Cua's published signature and digest.
+  extraResources:
+    - from: out/computer-windows/${arch}
+      to: computer-windows
+      filter:
+        - cua-driver.exe
+        - driver-release.json
+        - CUA-LICENSE.txt
 nsis:
   artifactName: ${productName}-${version}-setup.${ext}
   shortcutName: ${productName}

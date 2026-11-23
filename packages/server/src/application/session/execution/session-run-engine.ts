@@ -12,6 +12,7 @@ export interface SessionRunEngineContext {
     recoverRejectedSteer(sessionId: string, input: Parameters<SessionRunCoordinator["steer"]>[1]): string | Promise<string>;
   };
   settleGoalRun?(sessionId: string, runId: string): Promise<void>;
+  releaseComputerRun?(runId: string): void;
 }
 
 /** Owns only the in-memory per-session run lanes and their execution lifecycle. */
@@ -57,7 +58,10 @@ export class SessionRunEngine {
       },
       onSteerRejected: (input) => this.context.execution.recoverRejectedSteer(run.sessionId, input),
     });
-    const tracked = enqueued.promise.catch(() => {}).finally(async () => this.context.settleGoalRun?.(run.sessionId, run.id));
+    const tracked = enqueued.promise.catch(() => {}).finally(async () => {
+      this.context.releaseComputerRun?.(run.id);
+      await this.context.settleGoalRun?.(run.sessionId, run.id);
+    });
     void tracked.catch(() => {});
     this.runCoordinator.trackRunCompletion(run.id, tracked);
     return enqueued.state;

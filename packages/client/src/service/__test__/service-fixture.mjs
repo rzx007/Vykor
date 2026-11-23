@@ -29,7 +29,8 @@ const server = createServer(async (req, res) => {
 await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
 await mkdir(dirname(file), { recursive: true });
 await writeFile(file, JSON.stringify({
-  url: `http://127.0.0.1:${server.address().port}`, pid: process.pid,
+  url: `http://127.0.0.1:${server.address().port}`, pid: Number(process.env.FIXTURE_REPORTED_PID) || process.pid,
   token, version, startedAt: Date.now(), storePath: "fixture.db",
 }));
+if (process.connected) process.once("message", request => process.send?.({ pid: process.pid, request }));
 process.on("SIGTERM", () => server.close(() => process.exit(0)));

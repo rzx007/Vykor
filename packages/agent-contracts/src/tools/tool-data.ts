@@ -8,12 +8,25 @@ export interface ImageBlock {
   source: ImageSource;
 }
 
-export interface ImageSource {
+export type ImageSource = FileImageSource | MemoryImageSource;
+
+export interface FileImageSource {
   type: "file";
   mediaType: string;
   path: string;
   sizeBytes?: number;
   prepared?: VisionImagePreparationMetadata;
+}
+
+/** A host-approved image supplied only when constructing a model request. */
+export interface MemoryImageSource {
+  type: "memory";
+  mediaType: "image/png" | "image/jpeg";
+  data: string;
+  width: number;
+  height: number;
+  sizeBytes?: never;
+  prepared?: never;
 }
 
 export interface VisionImagePreparationMetadata {
@@ -25,6 +38,7 @@ export interface VisionImagePreparationMetadata {
 }
 
 export type ContentBlock = TextBlock | ImageBlock;
+
 /** Opaque handle into an authorized result store; never a filesystem path. */
 export interface ToolResultRef { id: string; toolName: string; totalChars: number }
 export interface ToolResultPage { ref: ToolResultRef; text: string; offset: number; nextOffset?: number }

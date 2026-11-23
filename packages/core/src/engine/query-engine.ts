@@ -11,6 +11,7 @@ import type {
   ToolUseBlock,
   UsageSnapshot,
   ContentBlock,
+  MemoryImageSource,
   ModelAttemptFinishedEvent,
 } from "@vykor/agent-contracts";
 import type { StreamEvent } from "@vykor/agent-contracts";
@@ -75,6 +76,8 @@ const RECOVERY_FINALIZATION_PROMPT =
   "Stop using tools for this response. Explain the blocker, summarize what was attempted, and state what input or external change is needed to continue.";
 const CHILD_FINALIZATION_PROMPT =
   "Stop using tools for this response. This delegated run reached its turn limit. State what was completed, what remains unfinished, and the evidence you have. Do not claim the task is verified.";
+
+type ModelToolImage = { source: MemoryImageSource; isCurrent(): boolean };
 const OUTPUT_CONTINUATION_PROMPT =
   "Continue the previous assistant response from where it was cut off. Do not repeat its existing text. Complete the remaining answer.";
 
@@ -351,6 +354,7 @@ export class QueryEngine implements IQueryEngine {
     }
 
     let turnCount = 0;
+    let nextToolImage: { toolUseId: string; image: ModelToolImage } | undefined;
     let repairTurnLimit: number | undefined;
     let repairToolSucceeded = false;
     const failedToolCalls = new ToolFailureMemory();
@@ -513,6 +517,20 @@ export class QueryEngine implements IQueryEngine {
         ? { type: "assistant", phase: "final_answer", content: unverifiedOutput }
         : undefined;
       const requestHistory = () => continuedDraft ? [...this.messages, continuedDraft] : this.messages;
+      const toolImage = nextToolImage;
+      nextToolImage = undefined;
+      const modelHistory = (includeImage: boolean): Message[] => {
+        const messages = requestHistory();
+        if (!includeImage || !toolImage?.image.isCurrent()) return messages;
+        for (let index = messages.length - 1; index >= 0; index--) {
+          const result = messages[index];
+          if (result?.type !== "tool_result" || result.toolUseId !== toolImage.toolUseId) continue;
+          const projected = [...messages];
+          projected[index] = { ...result, content: [...result.content, { type: "image", source: toolImage.image.source }] };
+          return projected;
+        }
+        return messages;
+      };
       // 历史以外的输入也占用上下文：使用本轮实际系统提示和可见工具定义。
       const inputTokenOverhead = this.compactService.estimateTokens([
         { type: "system", content: system ?? "" },
@@ -521,9 +539,9 @@ export class QueryEngine implements IQueryEngine {
         }))) : "" },
         ...(continuedDraft ? [continuedDraft] : []),
       ]);
-      const buildRequest = () => createTurnRequest({
+      const buildRequest = (includeImage = false) => createTurnRequest({
         model: requestConfiguration.model,
-        messages: requestHistory(),
+        messages: modelHistory(includeImage),
         system,
         tools,
         maxOutputTokens: requestConfiguration.maxOutputTokens,
@@ -531,7 +549,7 @@ export class QueryEngine implements IQueryEngine {
         supportsImageInput: requestConfiguration.supportsImageInput,
       });
       const measuredInputTokens = this.contextInputMeasurement.estimate(
-        buildRequest(), requestConfiguration, requestHistory(),
+        buildRequest(true), requestConfiguration, requestHistory(),
         messages => this.compactService.estimateTokens(messages),
       );
       await this.compactHistory(requestConfiguration, options, "auto", inputTokenOverhead, measuredInputTokens);
@@ -568,9 +586,20 @@ export class QueryEngine implements IQueryEngine {
 
       let request = buildRequest();
       let inputBoundary = this.contextInputMeasurement.capture(request, requestConfiguration, requestHistory());
+      let imagePrepared = false;
+      const prepareRequest = toolImage ? () => {
+        if (imagePrepared || !toolImage.image.isCurrent()) return request;
+        imagePrepared = true;
+        const withImage = buildRequest(true);
+        inputBoundary = this.contextInputMeasurement.capture(withImage, requestConfiguration, requestHistory());
+        const hasPrivateImage = withImage.messages.some(message => message.type === "tool_result"
+          && message.toolUseId === toolImage.toolUseId
+          && message.content.some(block => block.type === "image" && block.source === toolImage.image.source));
+        return hasPrivateImage ? { ...withImage, isEphemeralImageCurrent: toolImage.image.isCurrent } : withImage;
+      } : undefined;
 
       // 网络重试冻结请求；接口明确报超长时，仅允许压缩后重建请求一次。
-      // 工具执行和整个 Run 不重跑。
+      // 临时窗口图像仅在首个实际调用前附上，重试沿用无图的请求。
       while (true) {
         yield { type: "generation_started", generationId, attempt };
 
@@ -578,6 +607,7 @@ export class QueryEngine implements IQueryEngine {
           deferText,
           client: requestConfiguration.client,
           request,
+          prepareRequest,
           generationId, attempt, policy, recoveryDeadlineAt,
           purpose: forcedFinalTurn ? "finalization" : "generation",
           provider: requestConfiguration.provider,
@@ -759,6 +789,7 @@ export class QueryEngine implements IQueryEngine {
         if (!checkingCompletion) resetOutputContinuation();
         // 执行所有请求的工具调用，并将结果作为工具结果消息加入历史记录
         const recoveringAtTurnStart = recoveryToolTurnsRemaining !== null;
+        const modelImages = new Map<string, ModelToolImage>();
         const { results, fatalFailure, discoveryBlockedCalls } =
           await this.executeTools(
             toolUses,
@@ -778,11 +809,14 @@ export class QueryEngine implements IQueryEngine {
             internalTools,
             toolDiscovery,
             generationId,
+            modelImages,
           );
         const deliveredResults: ToolExecutionResult[] = [];
         const preparedResults = results.map((original, i) => {
           const toolUse = toolUses[i]!;
           const tool = requestToolRegistry.get(toolUse.name);
+          const image = modelImages.get(toolUse.id);
+          if (image && !original.isError) nextToolImage = { toolUseId: toolUse.id, image };
           const rawResult = withToolInputReuseHint(
             tool,
             toolUse,
@@ -1330,6 +1364,7 @@ export class QueryEngine implements IQueryEngine {
     internalTools: ReadonlySet<string> = new Set(),
     toolDiscovery?: RunToolDiscovery,
     generationId?: string,
+    modelImages?: Map<string, ModelToolImage>,
   ): Promise<{
     results: ToolExecutionResult[];
     fatalFailure?: { error: unknown };
@@ -1352,8 +1387,8 @@ export class QueryEngine implements IQueryEngine {
       timeoutMs: this.options.toolTimeoutMs,
       internalTools,
       failedToolCalls,
-      createToolContext: (toolUse, toolAttemptId, control) =>
-        this.createToolContext(
+      createToolContext: (toolUse, toolAttemptId, control) => {
+        const context = this.createToolContext(
           toolUse,
           toolAttemptId,
           toolRegistry,
@@ -1368,7 +1403,12 @@ export class QueryEngine implements IQueryEngine {
             },
             ...control,
           },
-        ),
+        );
+        if (modelImages && internalTools.has(toolUse.name)) {
+          context.attachModelImage = (source, isCurrent) => { modelImages.set(toolUse.id, { source, isCurrent }); };
+        }
+        return context;
+      },
       isTrustedSummary: (toolUse, definition) =>
         this.isTrustedSummary(toolUse, definition, toolRegistry, execution),
     });

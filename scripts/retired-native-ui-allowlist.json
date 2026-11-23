@@ -3474,37 +3474,37 @@
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 15,
+      "line": 19,
       "text": "import { PluginUiHistoryService } from \"./session/plugins/plugin-ui-history-service.js\";",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 16,
+      "line": 20,
       "text": "import { retirePluginUiActions } from \"./recovery/retire-plugin-ui-actions.js\";",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 192,
+      "line": 197,
       "text": "  readonly pluginUiHistory?: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 245,
+      "line": 250,
       "text": "  readonly pluginUiHistory: PluginUiHistoryService;",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 431,
+      "line": 436,
       "text": "      this.pluginUiHistory = new PluginUiHistoryService({ store });",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
     {
       "path": "packages/server/src/application/daemon-application.ts",
-      "line": 1132,
+      "line": 1160,
       "text": "        recoverPluginUiActions: () => { retirePluginUiActions(store); this.pluginApps.actions.recover(); },",
       "reason": "Assembles history service and startup settlement, no old activity service."
     },
@@ -3588,25 +3588,25 @@
     },
     {
       "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
-      "line": 391,
+      "line": 438,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
-      "line": 498,
+      "line": 545,
       "text": "    for (const name of [\"pluginUi\", \"uiAction\", \"pluginUiSubmission\"]) {",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
-      "line": 515,
+      "line": 562,
       "text": "    const input = { items: [{ type: \"text\" as const, text: \"hello\" }], [namespace]: { uiAction: {} } };",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
     {
       "path": "packages/server/src/application/session/execution/__test__/run-admission-service.test.ts",
-      "line": 527,
+      "line": 574,
       "text": "    expect(() => service.replayInput(\"i1\", { metadata: { pluginUi: {} } })).toThrow();",
       "reason": "Regression fixture or assertion for read-only history, retired admission, metadata rejection or removal."
     },
@@ -3636,13 +3636,13 @@
     },
     {
       "path": "packages/server/src/application/session/interactions/session-interaction-service.ts",
-      "line": 478,
+      "line": 504,
       "text": "      if (Object.hasOwn(sourceRun.metadata, \"uiAction\") || Object.hasOwn(sourceRun.metadata, \"pluginAppAction\")) {",
       "reason": "Explicit generic-resume refusal for historical actions; no replay."
     },
     {
       "path": "packages/server/src/application/session/interactions/session-interaction-service.ts",
-      "line": 482,
+      "line": 508,
       "text": "          \"plugin_ui_action_not_resumable\",",
       "reason": "Explicit generic-resume refusal for historical actions; no replay."
     },
@@ -4068,13 +4068,13 @@
     },
     {
       "path": "packages/server/src/http/server.ts",
-      "line": 503,
+      "line": 528,
       "text": "    this.app.route(\"/sessions\", createSessionPluginUiHistoryRoutes(this.application.pluginUiHistory));",
       "reason": "Registers read-only history/410 routes only."
     },
     {
       "path": "packages/server/src/http/support.ts",
-      "line": 149,
+      "line": 188,
       "text": "  if (error instanceof ApplicationError && error.code.startsWith(\"plugin_ui_\")) {",
       "reason": "Stable history-not-found, corrupt-history, resume-refusal or retired-410 response codes."
     },

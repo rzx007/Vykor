@@ -91,6 +91,8 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
         markComposerSessionTransient(options.target.sessionId)
       if (sessionId && (get().pendingModeChanges[sessionId] || selectSessionInterrupting(get(), sessionId))) return
       const appContexts = pluginAppModelContexts.forSession(sessionId ?? null)
+      if (options?.computer && (options.delivery === "steer" || options.target || appContexts.length))
+        throw new Error("电脑操作需要从主聊天发起一条新的用户消息。")
       const browserAnnotationContext = formatBrowserAnnotationContext(
         get().composerDraftsByScope[`session:${sessionId}`]?.browserAnnotations ?? []
       )
@@ -131,6 +133,7 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
       const matching = Object.values(runtime.pendingPromptSubmissions).find(
         (submission) =>
           submission.phase !== "accepted" &&
+          submission.computer === options?.computer &&
           (submission.browserAnnotationContext ?? null) === browserAnnotationContext &&
           submission.content === prompt &&
           JSON.stringify(submission.pluginAppContextIds ?? []) ===
@@ -142,11 +145,12 @@ export function createPromptActions(context: PromptActionsContext): PromptAction
         if ((matching.delivery ?? "queue") !== delivery || matching.expectedActiveRunId !== expectedActiveRunId) {
           throw new Error("这条消息还有一次发送待核对，请先处理发送记录。")
         }
-        if (matching.phase === "failed") await get().retryPromptSubmission(matching.id, sessionId)
+        if (matching.phase === "failed" && !matching.computer) await get().retryPromptSubmission(matching.id, sessionId)
         else await get().submitPromptSubmission(matching)
         return
       }
       const submission: PendingPromptSubmission = {
+        ...(options?.computer ? { computer: true } : {}),
         browserAnnotationContext,
         ...(delivery === "steer" ? { delivery, expectedActiveRunId } : {}),
         id: globalThis.crypto.randomUUID(),

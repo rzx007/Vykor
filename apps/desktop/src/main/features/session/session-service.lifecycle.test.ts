@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process"
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { HttpTransport, VykorClient } from "@rzx/client"
+import { HttpTransport, VykorClient, type SessionStateSnapshot } from "@rzx/client"
 import { startVykorDaemon } from "@vykor/server/daemon-host"
 import { gitSettingsService } from "../settings/git-settings-service"
 const send = vi.hoisted(() => vi.fn())
@@ -24,6 +24,100 @@ import { DaemonConnectionService } from "./daemon-connection-service"
 import { ProjectResource } from "./project-resource"
 import { workspaceService } from "../workspace/workspace-service"
 beforeEach(() => vi.clearAllMocks())
+
+it("revokes the exact Computer run synchronously before Chat Stop connects to the daemon", async () => {
+  const { service, connection } = serviceWithConnection()
+  const revoke = vi.spyOn(connection, "revokeComputerRun")
+  const connect = vi.spyOn(service, "agentClient").mockRejectedValue(new Error("daemon offline"))
+  const pending = service.interruptSession({ sessionId: "session", expectedRunId: "run" })
+  expect(revoke).toHaveBeenCalledExactlyOnceWith("session", "run")
+  expect(revoke.mock.invocationCallOrder[0]).toBeLessThan(connect.mock.invocationCallOrder[0]!)
+  await expect(pending).rejects.toThrow(/daemon offline/)
+})
+
+it("does not submit a preparing Computer prompt after an untargeted Chat Stop", async () => {
+  const { service, connection } = serviceWithConnection()
+  vi.spyOn(service.subscriptions, "getOwnerSessionId").mockReturnValue("session")
+  vi.spyOn(service, "agentClient").mockRejectedValue(new Error("daemon offline"))
+  let finishPreparation!: () => void
+  const preparing = new Promise<void>(resolve => { finishPreparation = resolve })
+  const submit = vi.fn()
+  vi.spyOn(connection, "getComputerBridge").mockImplementation(async authorize => {
+    await preparing
+    authorize()
+    return { submit } as never
+  })
+  const request = service.sendComputerPrompt({ id: 43 } as never, {
+    id: "input", sessionId: "session", items: [{ type: "text", text: "打开记事本" }], attachments: [],
+  }, () => {}, new AbortController().signal)
+  await expect(service.interruptSession({ sessionId: "session" })).rejects.toThrow(/daemon offline/)
+  const rejected = expect(request).rejects.toThrow(/电脑操作已停止/)
+  finishPreparation()
+  await rejected
+  expect(submit).not.toHaveBeenCalled()
+})
+
+it("waits for the current chat's replacement snapshot before sending the first paired Computer prompt", async () => {
+  const h = await pairingPrompt()
+  try {
+    await h.reset
+    const opening = h.openReplacement()
+    await Promise.resolve()
+    expect(h.submit).not.toHaveBeenCalled()
+    h.restore.resolve(h.snapshot)
+    await opening
+    await expect(h.request).resolves.toBeUndefined()
+    expect(h.submit).toHaveBeenCalledExactlyOnceWith("session", expect.objectContaining({ id: "input" }), expect.any(Function), expect.any(AbortSignal))
+  } finally {
+    h.cleanup()
+  }
+})
+
+it.each(["switch", "hide", "stop"] as const)("cancels a first paired Computer prompt when the user chooses to %s during reconnect", async action => {
+  const h = await pairingPrompt()
+  try {
+    await h.reset
+    const rejected = expect(h.request).rejects.toThrow(/会话|聊天|停止/)
+    if (action === "stop") {
+      await expect(h.service.interruptSession({ sessionId: "session" })).rejects.toThrow(/daemon offline/)
+    } else if (action === "hide") {
+      h.service.invalidateComputerView()
+    } else {
+      await h.service.subscriptions.openSession({ ...h.client, sessions: { getState: async () => ({
+        ...h.snapshot, session: { ...h.snapshot.session, id: "other" },
+      }) } }, h.owner, "other")
+    }
+    await rejected
+    h.restore.resolve(h.snapshot)
+    await h.openReplacement()
+    expect(h.submit).not.toHaveBeenCalled()
+  } finally {
+    h.cleanup()
+  }
+})
+
+it("uses the private reply only for a Computer approval delivered to the current primary session", async () => {
+  const { service, connection } = serviceWithConnection()
+  const reply = vi.spyOn(connection, "replyComputerApproval").mockResolvedValue()
+  const authorize = vi.fn()
+  const owner = { id: 43 } as never
+  vi.spyOn(service.subscriptions, "getOwnerPermission").mockImplementation((ownerId, permissionId) =>
+    ownerId === 43 && permissionId === "protected" ? {
+      id: "protected", sessionId: "session", toolName: "Computer", status: "pending",
+      payload: { computerApproval: true }, createdAt: 1, updatedAt: 1,
+    } : undefined
+  )
+  const connect = vi.spyOn(service, "agentClient").mockRejectedValue(new Error("ordinary"))
+  const approval = { permissionId: "protected", status: "approved" } as const
+  await expect(service.replyPermission({ ...approval, decision: "session" }, owner, authorize)).rejects.toThrow(/仅接受本次/)
+  await expect(service.replyPermission(approval, owner)).rejects.toThrow(/失效/)
+  await service.replyPermission(approval, owner, authorize)
+  expect(authorize).toHaveBeenCalledOnce()
+  expect(reply).toHaveBeenCalledExactlyOnceWith("session", "protected", "approved")
+  expect(connect).not.toHaveBeenCalled()
+  await expect(service.replyPermission({ ...approval, permissionId: "ordinary" }, owner, authorize)).rejects.toThrow(/ordinary/)
+  expect(reply).toHaveBeenCalledOnce()
+})
 
 it("chooses, lists and previews a real local directory with no daemon connection", async () => {
   const rootPath = await mkdtemp(join(tmpdir(), "vykor-offline-workspace-"))
@@ -168,5 +262,47 @@ function serviceWithConnection() {
     service: new DesktopSessionService(connection),
     connection,
     invalidate: () => { for (const listener of listeners) listener() },
+  }
+}
+
+async function pairingPrompt() {
+  const { service, connection, invalidate } = serviceWithConnection()
+  const owner = { id: 43, once: vi.fn(), isDestroyed: () => false, send: vi.fn() } as never
+  const snapshot: SessionStateSnapshot = {
+    cursor: 1, session: { id: "session", title: "记事本", cwd: "D:/repo", model: "fixture", status: "idle", createdAt: 1, updatedAt: 1, metadata: {} },
+    inputs: [], messages: [], parts: [], runs: [], attempts: [], permissions: [], tasks: [],
+  }
+  const client = {
+    sessions: { getState: async () => snapshot },
+    events: { list: async () => [], stream: async function* () {} },
+  }
+  await service.subscriptions.openSession(client, owner, "session")
+  const removeInvalidation = service.subscriptions.onOwnerInvalidated((_owner, change) => {
+    if (!change?.daemonReset) service.invalidateComputerView(change?.nextSessionId)
+  })
+  const restore = Promise.withResolvers<SessionStateSnapshot>()
+  const reset = Promise.withResolvers<void>()
+  const submit = vi.fn(async (_id: string, _prompt: unknown, authorize: () => void) => { authorize() })
+  const lifetime = new AbortController()
+  vi.spyOn(service, "agentClient").mockRejectedValue(new Error("daemon offline"))
+  vi.spyOn(connection, "getComputerBridge").mockImplementation(async (authorize, _signal, onControlledReset) => {
+    onControlledReset?.()
+    invalidate()
+    authorize()
+    reset.resolve()
+    return { submit } as never
+  })
+  const request = service.sendComputerPrompt(owner, {
+    id: "input", sessionId: "session", items: [{ type: "text", text: "打开记事本" }], attachments: [],
+  }, () => {}, lifetime.signal)
+  void request.catch(() => {})
+  return {
+    service, client, owner, snapshot, restore, reset: reset.promise, submit, request,
+    openReplacement: () => service.subscriptions.openSession({ ...client, sessions: { getState: () => restore.promise } }, owner, "session"),
+    cleanup() {
+      lifetime.abort()
+      removeInvalidation()
+      service.subscriptions.clearAll()
+    },
   }
 }

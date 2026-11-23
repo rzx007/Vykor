@@ -6,6 +6,10 @@ import { createMaintenanceApplicationService, type MaintenanceApplicationContext
 import { ToolResultService } from "./session/execution/tool-result-service.js";
 import { createSessionObservationTool } from "./session/execution/session-observation-tool.js";
 import { createSessionDiscoveryTool } from "./session/execution/session-discovery-tool.js";
+import { ComputerRunAccess } from "./computer-tools/computer-tool.js";
+import type { DesktopComputerBridge } from "./computer-tools/computer-bridge.js";
+import { SessionApplicationError } from "./session/session-application-error.js";
+import { readRuntimeMetadata } from "@vykor/domain-contracts/sessions";
 import { createNodeJobBindings } from "@vykor/agent-runtime";
 import { GoalModelAttemptService } from "./goals/goal-model-attempt-service.js";
 import {hostedContextUsageAgent} from "./context-usage/assemble-session-context-usage.js";
@@ -169,6 +173,7 @@ export interface DaemonApplicationOptions {
   createAgent?: CreateDaemonAgent;
   /** Browser control supplied by the configured host. */
   browserHost?: BrowserHost;
+  computerBridge?: DesktopComputerBridge;
   /** Enable BrowserDeveloper when the configured host implements developer inspection. */
   enableBrowserDeveloper?: boolean;
   /** 提供后 daemon 才构造渠道运行时与接入服务；未提供时渠道路由返回 503。 */
@@ -548,6 +553,21 @@ export class DaemonApplication implements DurableAgentApplication {
       const toolResults = new ToolResultService({ store, ownerLease: () => this.ownerLease,
         accepting: () => this.readyState === "ready" && this.operationGate.accepting });
       const browserHost = options.browserHost;
+      const permitsComputerSession = (session: SessionRecord | undefined): boolean => {
+        if (!session || session.parentId !== undefined || session.status === "closing" || session.status === "archived"
+          || store.channels.hasConversationSession(session.id)) return false;
+        const runtime = readRuntimeMetadata(session.metadata);
+        return runtime.workMode !== "plan" && runtime.permissionMode !== "plan";
+      };
+      const computerRuns = options.computerBridge && new ComputerRunAccess(options.computerBridge, identity => {
+        if (!permitsComputerSession(store.sessions.get(identity.sessionId))) return false;
+        const run = store.runs.getRun(identity.runId);
+        if (!run || run.sessionId !== identity.sessionId || run.inputId !== identity.inputId
+          || (run.status !== "pending" && run.status !== "running")) return false;
+        const applied = run.metadata.appliedInputState;
+        return applied === undefined || (!!applied && typeof applied === "object" && "inputIds" in applied
+          && Array.isArray(applied.inputIds) && applied.inputIds.every(id => id === identity.inputId));
+      });
       const enableBrowserDeveloper = options.enableBrowserDeveloper === true && Boolean(browserHost?.executeDeveloper);
       const loadAgent = createDaemonAgentLoader({
         readAttachment: async (uri, context) => {
@@ -852,6 +872,7 @@ export class DaemonApplication implements DurableAgentApplication {
 
       const runExecution = assembleSessionRunExecutor({
         store, attachmentService: this.attachments, goals: store.goals,
+        ...(computerRuns ? { createComputerTool: input => computerRuns.contribution(input) } : {}),
         createSessionObservationTool: (input, grant) => createSessionObservationTool({
           store, events: this.events, assertApplicationOwner,
           accepting: () => this.readyState === "ready" && this.operationGate.accepting,
@@ -881,6 +902,7 @@ export class DaemonApplication implements DurableAgentApplication {
         attachmentLimits: this.attachments.limits, materializeSteerInput,
         assertReady: () => this.assertReady(),
         settleGoalRun: (sessionId, runId) => this.goals.settleRun(sessionId, runId),
+        ...(computerRuns ? { releaseComputerRun: runId => computerRuns.release(runId) } : {}),
         settleQueuedGoalResume: (sessionId, failed) => this.goals.settleQueuedResume(sessionId, failed),
         checkGoalExecution: (goalId, version) => this.goals.checkExecution(goalId, version),
       });
@@ -1044,6 +1066,12 @@ export class DaemonApplication implements DurableAgentApplication {
         operationGate: this.operationGate,
         resolveSkillCatalog: runtimeDiscovery.resolveSkillCatalog,
         pluginCapabilities,
+        ...(computerRuns ? { authorizeComputerPrompt: (session, connectionId) => {
+          if (!permitsComputerSession(session)) {
+            throw new SessionApplicationError(409, "Computer Use requires a Desktop root session in execution mode");
+          }
+          return computerRuns.authorizePrompt(connectionId);
+        } } : {}),
       });
       this.facts = createProjectFactsService({ control: this.control, sessions: store.sessions, readiness: () => this.diagnosticState });
       this.goals = new SessionGoalService({

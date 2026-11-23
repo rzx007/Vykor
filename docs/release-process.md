@@ -17,7 +17,9 @@
 | Linux `Vykor-X.Y.Z.deb` | GitHub Release Latest，手动安装，不走应用内更新 |
 | `@rzx/ohs@X.Y.Z` | `npm install -g @rzx/ohs` |
 
-macOS 安装包本轮不发布。Windows 当前不签名，首次安装可能被 SmartScreen 拦截。
+macOS 安装包本轮不发布。Windows 稳定渠道目前使用未签名的安装包，首次安装可能被 SmartScreen 拦截。签名试点须同时启用 `sign_windows` 和 `build_only`，验收制品从工作流下载。签名版进入稳定渠道前，须先统一该渠道后续安装包的签名发布者，以保证已安装的签名版能自动更新。Computer Use 在已打包应用内默认关闭。 [Windows 试点](./computer-capabilities.md)
+
+只准备试点制品时勾选 `build_only`。检查和构建照常运行，制品可从 Actions 下载，Tag、npm 与 GitHub Release 不会更新。
 
 ## 版本规则
 
@@ -51,7 +53,7 @@ pnpm --filter @vykor/desktop verify:update-packaging
 
 1. 固定触发时的完整 commit，校验版本格式，以及已有同名 tag 是否指向该 commit。
 2. 在临时工作树同步候选版本，运行类型检查、全量测试、架构边界检查、文档检查和脚本测试，并生成固定的 release notes。
-3. 在 Windows / Ubuntu runner 构建 Desktop；每个平台都会直接读取已打包的 `app.asar`，记录其中 migration 文件及 SHA-256，再上传安装包、更新清单和 inventory。
+3. 在 Windows / Ubuntu runner 构建 Desktop。每个平台都核对 `app.asar` 的迁移文件。Windows 另核对构建前、解包后和静默安装后的 Cua 资源，并验证卸载。Linux 检查 Windows 驱动未被打包。 [打包核验](../apps/desktop/docs/packaging.md)
 4. 汇总任务确认 Windows / Linux 安装包都包含基线与全部增量迁移（journal 与文件一一对应），并且文件内容一致。只有前述检查全部成功，才创建并推送 `vX.Y.Z` tag。已有 tag 指向同一 commit 时复用；指向其他 commit 时直接失败。
 5. 构建并发布 `@rzx/ohs`。已存在的精确版本会跳过上传，但仍通过 `npm view @rzx/ohs@X.Y.Z` 在线确认。
 6. 只有 npm 发布及在线确认成功，才创建或更新 GitHub Release。重跑会同时覆盖资产和 notes，避免页面说明与证据不一致。

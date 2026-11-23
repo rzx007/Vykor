@@ -23,6 +23,7 @@ export interface SessionRunAssemblyOptions {
   materializeSteerInput(sessionId: string, items: readonly SessionUserInputItem[]): Promise<string>;
   assertReady(): void;
   settleGoalRun(sessionId: string, runId: string): Promise<void>;
+  releaseComputerRun?(runId: string): void;
   settleQueuedGoalResume?(sessionId: string, failed: boolean): Promise<void>;
   checkGoalExecution?(goalId: string, objectiveVersion: number): void;
 }
@@ -38,6 +39,7 @@ export function assembleSessionRunServices(options: SessionRunAssemblyOptions): 
     runExecutor: options.runExecutor,
     events: options.events,
     settleGoalRun: options.settleGoalRun,
+    releaseComputerRun: options.releaseComputerRun,
     execution: {
       prepareRunExecution: (runId) => admission.prepareRunExecution(runId),
       recoverRejectedSteer: (sessionId, input) => admission.recoverRejectedSteer(sessionId, input),

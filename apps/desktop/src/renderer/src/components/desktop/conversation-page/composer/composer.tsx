@@ -1,5 +1,5 @@
-import { ChevronDown, Goal, Plus, ShieldCheck, X, Undo2 } from "lucide-react"
-import { useState, useSyncExternalStore, type ReactNode } from "react"
+import { ChevronDown, Goal, Monitor, Plus, ShieldCheck, X, Undo2 } from "lucide-react"
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react"
 
 import { Button } from "@renderer/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@renderer/components/ui/popover"
@@ -83,6 +83,7 @@ export function Composer({
   onOpenContextUsage,
   onDraftChange,
   onSubmit,
+  computerEnabled = false,
   followUpRunId,
   lastAcceptedInputId,
   onCommand,
@@ -141,7 +142,8 @@ export function Composer({
   contextUsage?: DesktopContextUsageSnapshot | null
   onOpenContextUsage?: () => void | Promise<boolean | void>
   onDraftChange: (value: ComposerDocument) => void
-  onSubmit: (delivery?: "queue" | "steer") => void
+  onSubmit: (delivery?: "queue" | "steer", computer?: true) => void
+  computerEnabled?: boolean
   followUpRunId?: string
   lastAcceptedInputId?: string
   onCommand?: (command: ComposerPickerCommand) => Promise<void>
@@ -279,6 +281,14 @@ export function Composer({
   const isFollowUp = Boolean(followUpRunId && !goalMode)
   const fullAccess = permissionMode === "full_access"
   const hasAppContext = appContexts.some(entry => entry.source.sessionId === activeSessionId)
+  const canUseComputer = computerEnabled && window.desktop?.computer?.supported === true &&
+    workMode === "execute" && !goalMode && !hasAppContext
+  const computerScope = composerScope ?? activeSessionId ?? id
+  const [armedComputerScope, setArmedComputerScope] = useState<string | null>(null)
+  const computerArmed = canUseComputer && armedComputerScope === computerScope
+  useEffect(() => {
+    setArmedComputerScope((scope) => canUseComputer && scope === computerScope ? scope : null)
+  }, [canUseComputer, computerScope])
   const hasContent = Boolean(canSubmit || selectComposerDocumentText(draft).trim() ||
     attachments.length || browserAnnotations?.length || hasAppContext)
   const allowSubmit = !preparingAttachments && !modeChangePending && (canSubmit ?? hasContent)
@@ -292,7 +302,12 @@ export function Composer({
   const delivery = queueOnlyReason ? "queue" : fullAccess ? "steer" : manualDelivery ?? "queue"
   const submit = (): void => {
     if (sending || interrupting || !allowSubmit) return
-    onSubmit(isFollowUp ? delivery : undefined)
+    if (computerArmed) {
+      setArmedComputerScope(null)
+      onSubmit("queue", true)
+    } else {
+      onSubmit(isFollowUp ? delivery : undefined)
+    }
   }
 
   return (
@@ -450,6 +465,22 @@ export function Composer({
         >
           <Plus strokeWidth={1.75} />
         </Button>
+        {canUseComputer ? (
+          <Button
+            type="button"
+            variant={computerArmed ? "secondary" : "ghost"}
+            size="sm"
+            shape="pill"
+            aria-label="电脑操作"
+            aria-pressed={computerArmed}
+            title="让下一条消息使用 Windows 应用"
+            disabled={sending || interrupting || modeChangePending}
+            onClick={() => setArmedComputerScope(computerArmed ? null : computerScope)}
+          >
+            <Monitor className="size-3.5" />
+            <span className="@max-[36rem]/composer:sr-only">电脑操作</span>
+          </Button>
+        ) : null}
         {goalMode && !goalEditing ? (
           <div className="ml-1 flex h-8 shrink-0 items-center rounded-full bg-secondary">
             <Button
@@ -617,10 +648,10 @@ export function Composer({
             }}
           />
           <ContextUsageControl snapshot={contextUsage} onOpen={onOpenContextUsage} />
-          {isFollowUp && fullAccess && queueOnlyReason ? (
+          {isFollowUp && !computerArmed && fullAccess && queueOnlyReason ? (
             <span role="status" className="text-xs text-muted-foreground">{queueOnlyReason}</span>
           ) : null}
-          {isFollowUp && !fullAccess ? (
+          {isFollowUp && !computerArmed && !fullAccess ? (
             <Popover open={activePicker === "delivery"} onOpenChange={(open) => setActivePicker(open ? "delivery" : null)}>
               <PopoverTrigger
                 render={<Button type="button" variant="control" shape="pill" size="sm" />}

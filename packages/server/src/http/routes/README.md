@@ -20,6 +20,8 @@
 | [auth.ts](./auth.ts) | `AuthRoutesContext`、`createAuthRoutes` |
 | [background-shell.ts](./background-shell.ts) | `BackgroundShellRoutesContext`、`createBackgroundShellRoutes` |
 | [browser-host.ts](./browser-host.ts) | 注册本机桌面浏览器流，转交操作审批与结果 |
+| [computer-host.ts](./computer-host.ts) | 本机 Computer 桥认证，接收可信输入、真人审批、派发复核和限额内的操作结果 |
+| [desktop-host-stream.ts](./desktop-host-stream.ts) | Desktop 私有事件流，处理队列上限、心跳和断线清理 |
 | [channel-control.ts](./channel-control.ts) | `ChannelControlRoutesContext`、`createChannelControlRoutes` |
 | [channel.ts](./channel.ts) | `createChannelRoutes` |
 | [events.ts](./events.ts) | `HttpEventHub` |

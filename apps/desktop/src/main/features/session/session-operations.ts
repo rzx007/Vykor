@@ -335,7 +335,11 @@ export class SessionOperations {
     return project.path
   }
 
-  async sendPrompt(client: SessionsClient, input: SendDesktopPromptInput, pluginAppContexts?: PluginAppConversationRequest[]): Promise<void> {
+  async sendPrompt(
+    client: { sessions: Pick<VykorClient["sessions"], "admitPrompt"> },
+    input: SendDesktopPromptInput,
+    pluginAppContexts?: PluginAppConversationRequest[],
+  ): Promise<void> {
     const id = requireString(input.id, "输入 ID")
     const sessionId = requireString(input.sessionId, "会话 ID")
     if (input.delivery !== undefined && input.delivery !== "queue" && input.delivery !== "steer")

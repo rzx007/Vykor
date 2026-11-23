@@ -11,6 +11,34 @@ import {
 } from "../openai.js";
 
 describe("OpenAICompatibleClient configuration", () => {
+  it("drops a capture revoked while preparing an outbound request", async () => {
+    const client = new OpenAICompatibleClient({ apiKey: "test" });
+    const create = vi.fn(async (_payload: unknown) => ({ async *[Symbol.asyncIterator]() {
+      yield { choices: [{ delta: {}, finish_reason: "stop" }] };
+    }}));
+    client.client = { chat: { completions: { create } } } as any;
+    const data = "iVBORw0KGgo=";
+    let current = true;
+    const done = (async () => {
+      for await (const _ of client.streamMessage({
+        model: "m",
+        messages: [
+          { type: "tool_result", toolUseId: "capture", content: [
+            { type: "text", text: "Recorded" },
+            { type: "image", source: { type: "memory", mediaType: "image/png", data, width: 1, height: 1 } },
+          ] },
+        ],
+        isEphemeralImageCurrent: () => current,
+      })) { /* drain */ }
+    })();
+    queueMicrotask(() => { current = false; });
+    await done;
+    expect(create).toHaveBeenCalledTimes(1);
+    const payload = JSON.stringify(create.mock.calls[0]?.[0]);
+    expect(payload).toContain("Recorded");
+    expect(payload).not.toContain(data);
+  });
+
   it("reports incoming stream chunks without exposing their contents", async () => {
     const client = new OpenAICompatibleClient({ apiKey: "test" });
     client.client = { chat: { completions: { create: async () => ({ async *[Symbol.asyncIterator]() {
