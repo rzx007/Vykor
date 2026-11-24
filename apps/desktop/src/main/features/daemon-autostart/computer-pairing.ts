@@ -1,7 +1,6 @@
-import type { ChildProcess } from "node:child_process"
 import { randomBytes, randomUUID } from "node:crypto"
 import { isAbsolute, resolve } from "node:path"
-import type { ServiceEndpoint } from "@rzx/client/service"
+import type { ServiceEndpoint, ServiceStartupChannel } from "@rzx/client/service"
 import { resolveUserDataPaths } from "@vykor/host-config/paths"
 
 type PairingIdentity = {
@@ -63,7 +62,7 @@ export function createDesktopComputerPairing(dataRoot: string) {
 
 /** Runs after SDK discovery authenticated the exact spawned child registration. */
 export function pairDesktopComputerDaemon(
-  child: ChildProcess,
+  child: ServiceStartupChannel,
   endpoint: ServiceEndpoint,
   dataRoot: string,
   startupSignal: AbortSignal

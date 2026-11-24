@@ -1,5 +1,4 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { once } from "node:events";
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CURRENT_PROTOCOL_VERSION } from "@vykor/protocol";
-import { Service } from "../index.js";
+import { Service, type EnsureServiceOptions } from "../index.js";
 import { listDataRootWriters, withDataRootLock } from "@vykor/host-config/paths";
 import { acquireStartupLock } from "../startup-lock.js";
 import * as rootWriters from "../../../../host-config/src/storage/data-root-writers.js";
@@ -64,10 +63,10 @@ ${verifyRealGuard ? `const {spawnSync}=await import('node:child_process');const 
 
 describe("local service management", () => {
   it("pairs the registered child only for the caller owning the shared startup", async () => {
-    const paired = vi.fn(async (child: ChildProcess, endpoint: Awaited<ReturnType<typeof Service.ensure>>, signal: AbortSignal) => {
-      const reply = once(child, "message", { signal });
+    const paired = vi.fn<NonNullable<EnsureServiceOptions["pairSpawned"]>>(async (child, endpoint) => {
+      const reply = new Promise<unknown>(resolve => child.once("message", resolve));
       child.send("pair");
-      expect((await reply)[0]).toEqual({ pid: endpoint.pid, request: "pair" });
+      expect(await reply).toEqual({ pid: endpoint.pid, request: "pair" });
     });
     const options = { file, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION), "300"], timeoutMs: 5000 };
     const [first, second] = await Promise.all([

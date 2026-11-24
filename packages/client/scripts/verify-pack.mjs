@@ -83,7 +83,7 @@ import { VykorClient, FilesResource, syncEvents, waitForRun, type SessionRecord,
 import type { NoteRecord } from "@rzx/client";
 // @ts-expect-error UI contracts must not exist in the installed SDK
 import type { PluginAppConversationRequest } from "@rzx/client";
-import { Service, type ServiceEndpoint } from "@rzx/client/service";
+import { Service, type EnsureServiceOptions, type ServiceEndpoint } from "@rzx/client/service";
 const client = new VykorClient({ baseUrl: "http://127.0.0.1:8787" });
 async function consume(endpoint: ServiceEndpoint) {
   const connected = new VykorClient(Service.clientOptions(endpoint));
@@ -125,6 +125,15 @@ async function consume(endpoint: ServiceEndpoint) {
   client.sessions.admitPrompt(session.id, { items: [], pluginAppContexts: [] });
 }
 void consume;
+const pairSpawned: NonNullable<EnsureServiceOptions["pairSpawned"]> = async (channel, endpoint) => {
+  if (!channel.connected || channel.pid !== endpoint.pid) return;
+  const receive = () => {};
+  channel.once("message", receive);
+  channel.send({ type: "pair" }, error => {
+    if (error) channel.removeListener("message", receive);
+  });
+};
+void pairSpawned;
 `);
   for (const resolution of ["NodeNext", "Bundler"]) {
     writeFileSync(join(sandbox, "tsconfig.json"), JSON.stringify({

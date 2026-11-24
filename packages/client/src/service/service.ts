@@ -1,5 +1,4 @@
 import { acquireDataRootWriter, dataRootHome, isCompleteAbsolutePath, readDataRootSelector, resolveDataRootSelection, selectDataRoot, waitForDataRootSelection } from "@vykor/host-config/paths";
-import type { ChildProcess } from "node:child_process";
 import { access, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -20,6 +19,15 @@ export interface DiscoverServiceOptions {
   timeoutMs?: number;
 }
 
+/** The inherited message channel of the child started by Service.ensure. */
+export interface ServiceStartupChannel {
+  readonly pid?: number;
+  readonly connected: boolean;
+  once(event: "message" | "disconnect", listener: (message: unknown) => void): void;
+  removeListener(event: "message" | "disconnect", listener: (message: unknown) => void): void;
+  send(message: string | object, callback?: (error: Error | null) => void): boolean;
+}
+
 export interface EnsureServiceOptions extends DiscoverServiceOptions {
   /** Full executable and arguments, without shell expansion. Must write the selected registry. */
   command?: readonly string[];
@@ -29,7 +37,7 @@ export interface EnsureServiceOptions extends DiscoverServiceOptions {
   /** Append the detached process output to this file when starting a service. */
   logPath?: string;
   /** Use inherited Node IPC to pair only with the child this call started and discovered. */
-  pairSpawned?: (child: ChildProcess, endpoint: ServiceEndpoint, signal: AbortSignal) => Promise<void>;
+  pairSpawned?: (channel: ServiceStartupChannel, endpoint: ServiceEndpoint, signal: AbortSignal) => Promise<void>;
 }
 
 export function clientOptions(endpoint: ServiceEndpoint): { baseUrl: string; token: string } {

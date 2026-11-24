@@ -578,8 +578,8 @@ function sameRegistration(
 }
 
 function sameComputerEndpoint(endpoint: ServiceEndpoint, candidate: Pick<ServiceEndpoint, "pid" | "url" | "token" | "startedAt" | "version" | "storePath"> | undefined): boolean {
-  return sameRegistration(endpoint, candidate) && endpoint.version === candidate?.version &&
-    Boolean(endpoint.storePath && candidate.storePath && !relative(endpoint.storePath, candidate.storePath))
+  return Boolean(candidate && sameRegistration(endpoint, candidate) && endpoint.version === candidate.version &&
+    endpoint.storePath && candidate.storePath && !relative(endpoint.storePath, candidate.storePath))
 }
 
 function errorMessage(error: unknown): string {
