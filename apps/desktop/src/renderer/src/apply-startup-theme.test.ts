@@ -41,6 +41,7 @@ describe("applyStartupTheme", () => {
 
     expect(document.documentElement.classList.contains("dark")).toBe(true)
     expect(document.documentElement.classList.contains("light")).toBe(false)
+    expect(document.documentElement.style.getPropertyValue("--background")).toBe("#1A202A")
   })
 
   it("restores saved colors before React mounts without overriding the glass shell", () => {

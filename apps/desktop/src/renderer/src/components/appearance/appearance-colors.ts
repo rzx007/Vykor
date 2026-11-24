@@ -40,7 +40,7 @@ export type AppearanceColorTokens = {
 
 export const APPEARANCE_SURFACES = {
   light: { background: "#FFFFFF", foreground: "#1A1C1F" },
-  dark: { background: "#181818", foreground: "#F2F2F2" },
+  dark: { background: "#1A202A", foreground: "#F2F2F2" },
 } as const
 
 export const ACCENT_PRESET_COLORS: Record<AccentPresetId, `#${string}`> = {

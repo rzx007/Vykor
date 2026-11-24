@@ -214,7 +214,7 @@
   --annotation: oklch(0.77 0.13 48);
   --control-shadow: 0 2px 8px oklch(0 0 0 / 16%);
   color-scheme: dark;
-  --background: #181818;
+  --background: #1a202a;
   --foreground: #f2f2f2;
   --surface-elevation-target: #ffffff;
   --border: color-mix(in srgb, var(--background), var(--surface-elevation-target) 10%);
