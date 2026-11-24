@@ -1,18 +1,21 @@
-import { statSync } from "node:fs"
-import { join } from "node:path"
 import { app } from "electron"
+import { assertBundledWindowsDriverIntegrity } from "./windows-driver"
 
-export function computerAvailability(): "unsupported" | "disabled" | "missing_driver" | "ready" {
+export function computerPlatformAvailability(): "unsupported" | "disabled" | "enabled" {
   if (process.platform !== "win32" || process.arch !== "x64") return "unsupported"
   const setting = process.env.VYKOR_COMPUTER_USE
   if (setting === "0" || (app.isPackaged && setting !== "1")) return "disabled"
-  const directory = app.isPackaged ? join(process.resourcesPath, "computer-windows")
-    : join(app.getAppPath(), "out", "computer-windows", "x64")
+  return "enabled"
+}
+
+export async function computerAvailability(signal?: AbortSignal): Promise<"unsupported" | "disabled" | "missing_driver" | "ready"> {
+  const platform = computerPlatformAvailability()
+  if (platform !== "enabled") return platform
   try {
-    return ["cua-driver.exe", "driver-release.json", "CUA-LICENSE.txt"].every(file =>
-      statSync(join(directory, file), { throwIfNoEntry: false })?.isFile() === true)
-      ? "ready" : "missing_driver"
+    await assertBundledWindowsDriverIntegrity(signal)
+    return "ready"
   } catch {
+    signal?.throwIfAborted()
     return "missing_driver"
   }
 }

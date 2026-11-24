@@ -1,5 +1,5 @@
 import { ChevronDown, Goal, Plus, ShieldCheck, X, Undo2 } from "lucide-react"
-import { useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 
 import { Button } from "@renderer/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@renderer/components/ui/popover"
@@ -143,7 +143,7 @@ export function Composer({
   contextUsage?: DesktopContextUsageSnapshot | null
   onOpenContextUsage?: () => void | Promise<boolean | void>
   onDraftChange: (value: ComposerDocument) => void
-  onSubmit: (delivery?: "queue" | "steer", computer?: "auto") => void
+  onSubmit: (delivery?: "queue" | "steer") => void
   computerEnabled?: boolean
   followUpRunId?: string
   lastAcceptedInputId?: string
@@ -282,14 +282,26 @@ export function Composer({
   const isFollowUp = Boolean(followUpRunId && !goalMode)
   const fullAccess = permissionMode === "full_access"
   const hasAppContext = appContexts.some(entry => entry.source.sessionId === activeSessionId)
-  const canUseComputer = computerEnabled && window.desktop?.computer?.supported === true &&
-    workMode === "execute" && !goalMode && !hasAppContext
   const windowShareScope = composerScope ?? activeSessionId ?? id
   const windowShare = useRef<AbortController | null>(null)
   const [sharingWindow, setSharingWindow] = useState(false)
+  const [availableWindowShareScope, setAvailableWindowShareScope] = useState<string | null>(null)
+  const canCheckWindowShare = computerEnabled && attachmentInteractionEnabled && Boolean(onPasteFiles) && !attachDisabled
+  const changeContextPickerOpen = (open: boolean) => {
+    setContextPickerOpen(open)
+    if (!open) setAvailableWindowShareScope(null)
+  }
+  useEffect(() => {
+    if (!contextPickerOpen || !canCheckWindowShare) return
+    let current = true
+    void window.desktop?.computer?.isAvailable?.().then(
+      available => { if (current) setAvailableWindowShareScope(available ? windowShareScope : null) },
+      () => { if (current) setAvailableWindowShareScope(null) },
+    )
+    return () => { current = false }
+  }, [canCheckWindowShare, contextPickerOpen, windowShareScope])
   useLayoutEffect(() => () => windowShare.current?.abort(), [windowShareScope])
-  if (computerEnabled && window.desktop?.computer?.supported && attachmentInteractionEnabled &&
-    onPasteFiles && !attachDisabled && !sharingWindow) {
+  if (canCheckWindowShare && contextPickerOpen && availableWindowShareScope === windowShareScope && !sharingWindow) {
     contextItems.push({
       id: "context:window-picture",
       label: "分享窗口截图",
@@ -328,9 +340,7 @@ export function Composer({
   const delivery = queueOnlyReason ? "queue" : fullAccess ? "steer" : manualDelivery ?? "queue"
   const submit = (): void => {
     if (sending || interrupting || !allowSubmit) return
-    const sendDelivery = isFollowUp ? delivery : undefined
-    if (canUseComputer && sendDelivery !== "steer") onSubmit(sendDelivery, "auto")
-    else onSubmit(sendDelivery)
+    onSubmit(isFollowUp ? delivery : undefined)
   }
 
   return (
@@ -462,7 +472,7 @@ export function Composer({
         }
         contextPickerRequest={contextPickerRequest}
         contextPickerOpen={contextPickerOpen}
-        onContextPickerOpenChange={setContextPickerOpen}
+        onContextPickerOpenChange={changeContextPickerOpen}
         onContextAction={(item) => {
           if (item.action.kind === "files" && !attachDisabled) void attachmentAction(() => onPickFiles?.(), "添加附件")
           if (item.action.kind === "window-picture") void shareWindow()
@@ -483,7 +493,7 @@ export function Composer({
           title="添加上下文"
           disabled={attachDisabled}
           onClick={() => {
-            setContextPickerOpen((open) => !open)
+            changeContextPickerOpen(!contextPickerOpen)
             setContextPickerRequest((value) => value + 1)
           }}
         >

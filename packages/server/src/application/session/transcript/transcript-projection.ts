@@ -398,17 +398,21 @@ export class SessionTranscriptProjection {
     delete state.activeTextPhase;
   }
 
-  attachComputerScreenshot(state: ActiveTranscriptProjectionState, asset: {
+  attachComputerScreenshot(state: ActiveTranscriptProjectionState, asset?: {
     id: string;
     displayName: string;
     mediaType: string;
     sizeBytes: number;
   }): boolean {
     if (!state.assistantMessageId) return false;
-    this.store.conversations.upsertMessagePart({
+    const part = {
       id: `computer-screenshot:${state.runId}`,
       sessionId: state.sessionId,
       messageId: state.assistantMessageId,
+      metadata: { source: "computer_screenshot" },
+    };
+    this.store.conversations.upsertMessagePart(asset ? {
+      ...part,
       type: "attachment",
       status: "completed",
       assetId: asset.id,
@@ -416,7 +420,11 @@ export class SessionTranscriptProjection {
       displayName: asset.displayName,
       mediaType: asset.mediaType,
       sizeBytes: asset.sizeBytes,
-      metadata: { source: "computer_screenshot" },
+    } : {
+      ...part,
+      type: "error",
+      status: "failed",
+      text: "这次电脑操作的结果截图未能保存。",
     });
     return true;
   }

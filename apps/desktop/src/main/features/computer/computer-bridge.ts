@@ -18,7 +18,6 @@ export type DesktopComputerApproval = (proposal: ComputerApprovalProposal, signa
 export type DesktopComputerDispatch = (signal?: AbortSignal) => Promise<boolean>
 export type DesktopComputerDriver = (
   request: ExecuteEvent, signal: AbortSignal, connection: AbortSignal, approve: DesktopComputerApproval, dispatch: DesktopComputerDispatch,
-  automatic?: true,
 ) => Promise<ComputerHostResponse>
 
 interface ComputerBridgeOptions {
@@ -39,7 +38,6 @@ interface Submission {
   stopped: boolean
   stoppedRunIds?: Set<string>
   dispatchedRequests: Set<string>
-  automatic?: true
 }
 
 interface Connection {
@@ -69,7 +67,7 @@ function bindRun(submission: Submission, runId: string): void {
   submission.stoppedRunIds = undefined
 }
 
-/** Failure before the private HTTP request can be sent. */
+/** The private path definitively did not admit the prompt. */
 export class ComputerPromptNotSubmittedError extends Error {}
 
 export class DesktopComputerBridge {
@@ -95,7 +93,7 @@ export class DesktopComputerBridge {
   }
 
   async submit(
-    sessionId: string, input: AdmitClientPromptInput, authorize: () => void, signal?: AbortSignal, automatic?: true,
+    sessionId: string, input: AdmitClientPromptInput, authorize: () => void, signal?: AbortSignal,
     admissionSignal = signal,
   ): Promise<PromptResponse> {
     // A caller waits for a handshake, never replays an already-sent submit.
@@ -117,7 +115,7 @@ export class DesktopComputerBridge {
     const inputId = input.id
     if (!inputId) throw new Error("电脑操作需要消息 ID。")
     const remembered = connection.submissions.get(inputId)
-    const submission: Submission = remembered ?? { sessionId, stopped: false, dispatchedRequests: new Set(), automatic }
+    const submission: Submission = remembered ?? { sessionId, stopped: false, dispatchedRequests: new Set() }
     connection.submissions.set(inputId, submission)
     try {
       const response = await this.http.request<PromptResponse>(this.path(connection, "submit"), {
@@ -165,12 +163,9 @@ export class DesktopComputerBridge {
     const active = this.executing
     if (!active || active.connection !== connection || active.signal.aborted ||
       active.event.run.sessionId !== sessionId || (runId && active.event.run.runId !== runId)) return
-    const waitingForApproval = active.awaitingApproval
     active.abort.abort()
-    void this.result(active.event, active.connection, waitingForApproval ? {
-      error: "审批中的电脑操作已取消。", executionState: "not_started",
-    } : {
-      error: "电脑操作已停止，无法确认已派发动作的效果。", executionState: "unknown",
+    void this.result(active.event, active.connection, {
+      error: "电脑操作已停止。", executionState: "unknown",
     }, active.connection.signal).catch(() => {})
   }
 
@@ -355,10 +350,7 @@ export class DesktopComputerBridge {
       }
     }
     try {
-      const action = submission.automatic
-        ? this.options.execute(event, signal, connection.signal, approve, dispatch, true)
-        : this.options.execute(event, signal, connection.signal, approve, dispatch)
-      const body = await action.then(
+      const body = await this.options.execute(event, signal, connection.signal, approve, dispatch).then(
         result => {
           if ("error" in result) return result
           return { result: result.image && connection.capture?.requestId !== event.requestId ? { text: result.text } : result }

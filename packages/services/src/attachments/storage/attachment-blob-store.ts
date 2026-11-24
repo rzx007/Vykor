@@ -143,6 +143,7 @@ export class AttachmentBlobStore {
       const bucket = join(this.blobsRoot, sha256.slice(0, 2));
       const blobPath = join(bucket, sha256);
       await mkdir(bucket, { recursive: true });
+      throwIfAborted(input.signal);
 
       let deduplicated = false;
       try {

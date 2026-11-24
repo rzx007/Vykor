@@ -58,8 +58,8 @@ it("does not submit a preparing Computer prompt after an untargeted Chat Stop", 
   expect(submit).not.toHaveBeenCalled()
 })
 
-it.each([undefined, true] as const)("waits for its replacement snapshot when the first Computer request pairs the daemon (automatic=%s)", async automatic => {
-  const h = await pairingPrompt(automatic)
+it("waits for its replacement snapshot when the first Computer request pairs the daemon", async () => {
+  const h = await pairingPrompt()
   try {
     await h.reset
     const opening = h.openReplacement()
@@ -69,7 +69,7 @@ it.each([undefined, true] as const)("waits for its replacement snapshot when the
     await opening
     await expect(h.request).resolves.toBeUndefined()
     expect(h.submit).toHaveBeenCalledExactlyOnceWith("session", expect.objectContaining({ id: "input" }),
-      expect.any(Function), expect.any(AbortSignal), ...(automatic ? [true, expect.any(AbortSignal)] : []))
+      expect.any(Function), expect.any(AbortSignal), expect.any(AbortSignal))
   } finally {
     h.cleanup()
   }
@@ -84,12 +84,12 @@ it("finishes an automatic message receipt after switching chats while revoking i
   const invalidated = vi.spyOn(connection, "invalidateComputerView")
   const request = service.sendComputerPrompt({ id: 43 } as never, {
     id: "ordinary", sessionId: "session", items: [{ type: "text", text: "打开记事本" }], attachments: [],
-  }, () => {}, new AbortController().signal, undefined, true)
+  }, () => {}, new AbortController().signal)
   await vi.waitFor(() => expect(submit).toHaveBeenCalledOnce())
-  const call = submit.mock.calls[0] as unknown as [unknown, unknown, unknown, AbortSignal, true, AbortSignal]
+  const call = submit.mock.calls[0] as unknown as [unknown, unknown, unknown, AbortSignal, AbortSignal]
   service.invalidateComputerView("other")
   expect(call[3].aborted).toBe(true)
-  expect(call[5].aborted).toBe(false)
+  expect(call[4].aborted).toBe(false)
   expect(invalidated).toHaveBeenCalledExactlyOnceWith("other")
   pending.resolve()
   await expect(request).resolves.toBeUndefined()
@@ -113,7 +113,7 @@ it.each(["hidden", "before-submit", "uncertain-submit", "stop"] as const)(
     })
     const result = service.sendComputerPrompt({ id: 43 } as never, {
       id: "ordinary", sessionId: "session", items: [{ type: "text", text: "打开记事本" }], attachments: [],
-    }, () => { if (phase === "hidden") throw new Error("hidden Desktop") }, new AbortController().signal, undefined, true)
+    }, () => { if (phase === "hidden") throw new Error("hidden Desktop") }, new AbortController().signal)
     if (phase === "uncertain-submit" || phase === "stop") {
       await expect(result).rejects.toThrow(phase === "stop" ? /已停止/ : /admission unknown/)
       expect(plain).not.toHaveBeenCalled()
@@ -129,7 +129,7 @@ it.each(["switch", "hide", "stop"] as const)("cancels a first paired Computer pr
   const h = await pairingPrompt()
   try {
     await h.reset
-    const rejected = expect(h.request).rejects.toThrow(/会话|聊天|停止/)
+    const rejected = expect(h.request).rejects.toThrow(action === "stop" ? /停止/ : /daemon offline/)
     if (action === "stop") {
       await expect(h.service.interruptSession({ sessionId: "session" })).rejects.toThrow(/daemon offline/)
     } else if (action === "hide") {
@@ -317,7 +317,7 @@ function serviceWithConnection() {
   }
 }
 
-async function pairingPrompt(automatic?: true) {
+async function pairingPrompt() {
   const { service, connection, invalidate } = serviceWithConnection()
   const owner = { id: 43, once: vi.fn(), isDestroyed: () => false, send: vi.fn() } as never
   const snapshot: SessionStateSnapshot = {
@@ -346,7 +346,7 @@ async function pairingPrompt(automatic?: true) {
   })
   const request = service.sendComputerPrompt(owner, {
     id: "input", sessionId: "session", items: [{ type: "text", text: "打开记事本" }], attachments: [],
-  }, () => {}, lifetime.signal, undefined, automatic)
+  }, () => {}, lifetime.signal)
   void request.catch(() => {})
   return {
     service, client, owner, snapshot, restore, reset: reset.promise, submit, request,

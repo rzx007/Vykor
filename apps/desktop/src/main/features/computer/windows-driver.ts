@@ -1,12 +1,14 @@
+/// <reference types="vite/client" />
 import { execFile } from "node:child_process"
 import { createHash, randomUUID } from "node:crypto"
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { isAbsolute, join } from "node:path"
-import { promisify } from "node:util"
+import { isDeepStrictEqual, promisify } from "node:util"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import release from "../../../../resources/computer-windows/driver-release.json"
+import bundledLicense from "../../../../resources/computer-windows/CUA-LICENSE.txt?raw"
 import type { WindowsAppWindow } from "./windows-apps"
 import { windowsSemanticQuery } from "./windows-semantic-query"
 
@@ -45,7 +47,7 @@ export type WindowsDriverAction =
   | { type: "scroll"; token: string; direction: "up" | "down" | "left" | "right"; amount?: number }
 
 export interface WindowsDriver {
-  observe(signal: AbortSignal): Promise<WindowsDriverObservation>
+  observe(signal: AbortSignal, readback?: { title: string }): Promise<WindowsDriverObservation>
   act(action: WindowsDriverAction, signal: AbortSignal): Promise<void>
   close(): Promise<void>
 }
@@ -146,14 +148,13 @@ if ($signature.Status -eq 'Valid' -and $signature.SignerCertificate) {
 }
 `
 
-async function bundledDriverPath(): Promise<string> {
+async function bundledDriverDirectory(): Promise<string> {
   const { app } = await import("electron")
-  const root = app.isPackaged ? join(process.resourcesPath, "computer-windows")
+  return app.isPackaged ? join(process.resourcesPath, "computer-windows")
     : join(app.getAppPath(), "out", "computer-windows", "x64")
-  return join(root, release.executable)
 }
 
-async function readVerifiedDriver(source: string, signal: AbortSignal): Promise<Buffer> {
+async function readVerifiedDriver(source: string, signal?: AbortSignal): Promise<Buffer> {
   const bytes = await readFile(source, { signal })
   if (createHash("sha256").update(bytes).digest("hex") !== release.executableSha256) {
     throw new WindowsDriverError("Windows 控制驱动的校验值不符。")
@@ -161,11 +162,18 @@ async function readVerifiedDriver(source: string, signal: AbortSignal): Promise<
   return bytes
 }
 
-export async function assertBundledWindowsDriverIntegrity(signal: AbortSignal): Promise<void> {
+export async function assertBundledWindowsDriverIntegrity(signal?: AbortSignal): Promise<void> {
   try {
-    await readVerifiedDriver(await bundledDriverPath(), signal)
+    const directory = await bundledDriverDirectory()
+    const [manifest, license] = await Promise.all([
+      readFile(join(directory, "driver-release.json"), { encoding: "utf8", signal }),
+      readFile(join(directory, "CUA-LICENSE.txt"), { encoding: "utf8", signal }),
+      readVerifiedDriver(join(directory, release.executable), signal),
+    ])
+    if (!isDeepStrictEqual(JSON.parse(manifest), release) || license !== bundledLicense)
+      throw new WindowsDriverError("Windows 控制驱动的发布清单或许可证不符。")
   } catch (error) {
-    signal.throwIfAborted()
+    signal?.throwIfAborted()
     throw error instanceof WindowsDriverError ? error : new WindowsDriverError("电脑操作驱动无法读取。请重新安装经过核验的版本。")
   }
 }
@@ -199,7 +207,7 @@ export async function createWindowsDriver(window: WindowsAppWindow, signal: Abor
     || !/^\d+$/u.test(window.processStartKey ?? "") || window.blocked) {
     throw new WindowsDriverError("无法确认 Windows 窗口的身份。")
   }
-  source ??= await bundledDriverPath()
+  source ??= join(await bundledDriverDirectory(), release.executable)
   if (!isAbsolute(source)) throw new WindowsDriverError("Windows 控制驱动的安装路径无效。")
   const directory = await mkdtemp(join(tmpdir(), "vykor-cua-"))
   const session = "vykor-control"
@@ -256,20 +264,27 @@ export async function createWindowsDriver(window: WindowsAppWindow, signal: Abor
 
   return {
     close,
-    observe(operationSignal) {
+    observe(operationSignal, readback) {
       return during(operationSignal, async active => {
         controls.clear()
         try {
-          const observation = await nativeQuery(window, active)
+          const title = readback?.title ?? window.title
+          const observation = await nativeQuery({ ...window, title }, active)
           if (observation === "handoff") throw new WindowsDriverHandoffError()
           const native = record(observation)
           if (!Array.isArray(native?.rows)) throw new WindowsDriverError("无法读取已授权窗口内的控件。")
-          const state = await call("get_window_state", { ...scope, include_screenshot: false, max_elements: 240, max_depth: 16 }, active)
-          if (state?.window_id !== scope.window_id || state.pid !== scope.pid || !Array.isArray(state.elements) || state.degraded) {
-            throw new WindowsDriverError("无法确认 Windows 控件来自已授权窗口。")
+          let upstream: unknown[] = []
+          // A post-dispatch readback uses the exact native target rechecked by the host.
+          // The next dispatch checks the upstream scope again before handing out an input token.
+          if (!readback) {
+            const state = await call("get_window_state", { ...scope, include_screenshot: false, max_elements: 240, max_depth: 16 }, active)
+            if (state?.window_id !== scope.window_id || state.pid !== scope.pid || !Array.isArray(state.elements) || state.degraded) {
+              throw new WindowsDriverError("无法确认 Windows 控件来自已授权窗口。")
+            }
+            upstream = state.elements
           }
           active.throwIfAborted()
-          const elements = bindWindowsElements(native.rows as NativeRow[], state.elements).map(row => {
+          const elements = bindWindowsElements(native.rows as NativeRow[], upstream).map(row => {
             const token = randomUUID()
             controls.set(token, row)
             const { frame: _frame, checkedState, selected, expanded,
@@ -278,7 +293,7 @@ export async function createWindowsDriver(window: WindowsAppWindow, signal: Abor
               expanded: expanded ?? undefined, parentIndex: parentIndex ?? undefined,
               horizontalScrollPercent: horizontalScrollPercent ?? undefined, verticalScrollPercent: verticalScrollPercent ?? undefined }
           })
-          return { title: typeof state.window_title === "string" ? state.window_title : window.title, elements,
+          return { title, elements,
             focusIdentity: typeof native.focusIdentity === "string" && elements.some(row => row.identity === native.focusIdentity)
               ? native.focusIdentity : undefined }
         } catch (error) {

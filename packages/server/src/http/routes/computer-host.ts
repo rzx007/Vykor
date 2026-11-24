@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import type { DesktopComputerBridge } from "../../application/computer-tools/computer-bridge.js";
-import { COMPUTER_CAPTURE_MAX_BASE64_BYTES, COMPUTER_HOST_TOKEN_HEADER, parseComputerReply } from "../../application/computer-tools/computer-bridge-protocol.js";
+import { COMPUTER_CAPTURE_MAX_BASE64_BYTES, COMPUTER_HOST_TOKEN_HEADER, COMPUTER_SESSION_UNAVAILABLE, parseComputerReply } from "../../application/computer-tools/computer-bridge-protocol.js";
 import { errorResponse, isBrowserIssuedRequest, isRecord, jsonResponse, MAX_JSON_BODY_BYTES, readDesktopHostJson } from "../support.js";
 import { openDesktopHostStream } from "./desktop-host-stream.js";
 
@@ -21,10 +21,14 @@ interface ComputerHostRoutesOptions {
 export function createComputerHostRoutes({ bridge, token, available, submit }: ComputerHostRoutesOptions): Hono {
   const secret = /^[a-f0-9]{64}$/.test(token) ? Buffer.from(token, "ascii") : undefined;
   const connectionGone = () => errorResponse(404, "Desktop Computer connection is no longer active.");
+  const promptUnavailable = () => jsonResponse({
+    code: COMPUTER_SESSION_UNAVAILABLE, message: "Desktop Computer connection is no longer active.",
+  }, 409);
 
   return new Hono()
     .use("*", async (c, next) => {
-      if (!available()) return errorResponse(404, "Desktop Computer bridge is unavailable.");
+      if (!available() && !(c.req.method === "POST" && c.req.path.endsWith("/submit")))
+        return errorResponse(404, "Desktop Computer bridge is unavailable.");
       if (isBrowserIssuedRequest(c.req.raw)) return errorResponse(403, "Computer host requests must come from Desktop main.");
       const token = c.req.header(COMPUTER_HOST_TOKEN_HEADER);
       if (!secret || !token || !/^[a-f0-9]{64}$/.test(token) || !timingSafeEqual(secret, Buffer.from(token, "ascii"))) {
@@ -36,13 +40,13 @@ export function createComputerHostRoutes({ bridge, token, available, submit }: C
       openDesktopHostStream(bridge, c.req.raw.signal) ?? errorResponse(409, "Desktop Computer is already connected or closed."))
     .post("/:connectionId/submit", async (c) => {
       const connectionId = c.req.param("connectionId");
-      if (!bridge.connectionSignal(connectionId)) return connectionGone();
+      if (!available() || !bridge.connectionSignal(connectionId)) return promptUnavailable();
       const body = await readDesktopHostJson(c.req.raw, maxSubmitBytes, "Computer");
       if (body instanceof Response) {
         if (body.status === 413) body.headers.set("connection", "close");
         return body;
       }
-      if (!bridge.connectionSignal(connectionId)) return connectionGone();
+      if (!available() || !bridge.connectionSignal(connectionId)) return promptUnavailable();
       const { sessionId, input } = body;
       if (typeof sessionId !== "string" || !sessionId.trim() || sessionId.length > 256 || !isRecord(input)
         || Object.keys(body).length !== 2) {
@@ -55,8 +59,8 @@ export function createComputerHostRoutes({ bridge, token, available, submit }: C
       if (!bridge.connectionSignal(connectionId)) return connectionGone();
       const body = await readDesktopHostJson(c.req.raw, maxApprovalBytes, "Computer");
       if (body instanceof Response) return body;
-      const { proposalId, reason, ordinary } = body; // Older Desktop builds may still send ordinary.
-      if (Object.keys(body).length !== (ordinary === true ? 3 : 2) || typeof proposalId !== "string"
+      const { proposalId, reason } = body;
+      if (Object.keys(body).length !== 2 || typeof proposalId !== "string"
         || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(proposalId)
         || typeof reason !== "string" || !reason.trim() || reason.length > 300 || /[\p{Cc}\p{Cf}]/u.test(reason)) {
         return errorResponse(400, "Invalid Computer approval proposal.");

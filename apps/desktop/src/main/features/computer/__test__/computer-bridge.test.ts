@@ -2,14 +2,14 @@ import { once } from "node:events"
 import { createServer, type ServerResponse } from "node:http"
 import { CURRENT_PROTOCOL_VERSION } from "@rzx/client"
 import { afterEach, expect, it, vi } from "vitest"
-import { DesktopComputerBridge } from "../computer-bridge"
+import { ComputerPromptNotSubmittedError, DesktopComputerBridge } from "../computer-bridge"
 
 const cleanups: Array<() => unknown> = []
 afterEach(async () => {
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup()
 })
 
-async function daemon() {
+async function daemon(ineligibleComputer = false) {
   const streams: ServerResponse[] = []
   const posts: Array<{ path: string; body: unknown }> = []
   const approvalRequests: ServerResponse[] = []
@@ -47,7 +47,9 @@ async function daemon() {
     const body = JSON.parse(Buffer.concat(chunks).toString())
     posts.push({ path: request.url!, body })
     if (request.url?.endsWith("/submit") && rejectedInputs.has(body.input?.id)) {
-      response.writeHead(409).end(JSON.stringify({ error: "Not admitted" }))
+      response.writeHead(409).end(JSON.stringify(ineligibleComputer
+        ? { code: "computer_session_unavailable", message: "Computer connection no longer active" }
+        : { error: "Not admitted" }))
       return
     }
     if (request.url?.endsWith("/approval")) {
@@ -66,6 +68,18 @@ async function daemon() {
   if (!address || typeof address === "string") throw new Error("The fake daemon requires a port.")
   return { baseUrl: `http://127.0.0.1:${address.port}`, streams, posts, approvalRequests, rejectedInputs }
 }
+
+it("decodes an explicit no-admission response without replaying the private submit", async () => {
+  const target = await daemon(true)
+  const bridge = new DesktopComputerBridge({
+    ...target, daemonPid: process.pid, daemonToken: "ordinary", computerToken: "private", authorizeDaemon: () => {},
+  })
+  cleanups.push(() => bridge.close())
+  target.rejectedInputs.add("input")
+  await expect(bridge.submit("session", { id: "input", items: [] }, () => {}))
+    .rejects.toBeInstanceOf(ComputerPromptNotSubmittedError)
+  expect(target.posts).toHaveLength(1)
+})
 
 function send(response: ServerResponse, event: object) {
   response.write(`data: ${JSON.stringify(event)}\n\n`)
@@ -319,7 +333,7 @@ it("closes a pending approval on Stop and never dispatches its late decision", a
   await expect(bridge.replyApproval("session", "permission", "approved")).rejects.toThrow(/失效/)
   send(target.streams[0]!, command("late"))
   await vi.waitFor(() => expect(target.posts).toEqual(expect.arrayContaining([
-    { path: "/computer-host/conn-1/waiting/result", body: expect.objectContaining({ executionState: "not_started" }) },
+    { path: "/computer-host/conn-1/waiting/result", body: expect.objectContaining({ executionState: "unknown" }) },
     { path: "/computer-host/conn-1/late/result", body: expect.objectContaining({ executionState: "not_started" }) },
   ])))
   expect(dispatch).not.toHaveBeenCalled()

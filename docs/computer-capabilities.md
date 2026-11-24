@@ -10,7 +10,7 @@ Windows x64 安装包包含固定版本的控制驱动。已打包的 Vykor 默�
 
 ## 已验证范围
 
-- **应用和窗口**。计算器、画图和测试窗口可以从系统登记启动。记事本支持自动打开隔离窗口及多行编辑。窗口有歧义时等待选择。 [应用发现实机](../tests/desktop-integration/__test__/computer-windows-live.test.ts) · [记事本实机](../tests/desktop-integration/__test__/computer-windows-semantic-live.test.ts)
+- **应用和窗口**。计算器、画图和测试窗口走 Windows 登记入口，桌面快捷方式保留登记参数。记事本的已有文档可按标题复用，再读回多行编辑结果。多个窗口符合时由你选择。明确请求新窗口时，Vykor 会尝试启动并等候一个独立窗口。部分应用会复用原窗口或打开标签页，这时会报告未能确认新窗口。 [应用发现实机](../tests/desktop-integration/__test__/computer-windows-live.test.ts) · [记事本实机](../tests/desktop-integration/__test__/computer-windows-semantic-live.test.ts)
 - **控件和读回**。应用公开的按钮、编辑框、选择和滚动可按控件身份操作。写入或选择可按返回值核对，按钮根据界面变化报告结果。确认保存需重新打开文件，或读取获准的位置。 [操作方式](../apps/desktop/src/main/features/computer/README.md)
 - **截图与前台输入**。助手可把核对结果的窗口截图附在最终回答下方。操作中临时预览限于当前聊天。前台许可覆盖按键、输入文字和点击，坐标需要最新画面。计算器和 WinForms 通过实机验证。自绘控件、依赖系统硬件键态的快捷键及 Windows 安全对话框可能需要人工操作。 [前台实机](../tests/desktop-integration/__test__/computer-windows-foreground-live.test.ts)
 

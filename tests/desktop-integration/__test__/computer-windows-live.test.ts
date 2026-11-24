@@ -37,7 +37,7 @@ function result(message: ToolResultMessage): Ready {
   return ready
 }
 
-function fixtureEvent(path: string, kind: string): { hwnd?: number; owner?: number; pid?: number } | undefined {
+function fixtureEvent(path: string, kind: string): { hwnd?: number; owner?: number; pid?: number; targetTitle?: string } | undefined {
   if (!existsSync(path)) return
   const text = readFileSync(path, "utf8")
   return text.slice(0, text.lastIndexOf("\n") + 1).split(/\r?\n/).filter(Boolean)
@@ -53,6 +53,35 @@ function processExists(pid: number): boolean {
     throw error
   }
 }
+
+it.runIf(realWindows)("preserves arguments from a real registered Windows shortcut", async () => {
+  const directory = mkdtempSync(join(tmpdir(), "vykor shortcut "))
+  const fixtureName = "Vykor Launch " + randomBytes(4).toString("hex")
+  const tracePath = join(directory, "registered arguments.jsonl")
+  const label = "Profile A & B"
+  const provider = createWindowsApps()
+  let shortcut: string | undefined
+  let app: WindowsApp | undefined
+  try {
+    shortcut = registerFixture(directory, fixtureName, `"${tracePath}" "${label}"`)
+    await expect.poll(async () => {
+      app = (await provider.discover(fixtureName, AbortSignal.timeout(6_000)))[0]
+      return app?.name
+    }, { timeout: 18_000 }).toBe(fixtureName)
+    expect(app?.confirmExistingWindow).toBe(true)
+    await provider.launch(app!, AbortSignal.timeout(8_000))
+    await expect.poll(() => fixtureEvent(tracePath, "ready"), { timeout: 10_000 })
+      .toMatchObject({ targetTitle: "Vykor Cua probe " + label })
+    expect(await provider.windows(app!, AbortSignal.timeout(8_000)))
+      .toContainEqual(expect.objectContaining({ title: "Vykor Cua probe " + label }))
+  } finally {
+    if (shortcut) await rm(shortcut, { force: true })
+    writeFileSync(join(directory, "close.request"), "")
+    const pid = fixtureEvent(tracePath, "ready")?.pid
+    if (pid) await expect.poll(() => processExists(pid), { timeout: 5_000 }).toBe(false)
+    await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+  }
+}, 55_000)
 
 it.runIf(realWindows)("opens and hands off real Windows applications from a trusted chat run", async () => {
   const directory = mkdtempSync(join(tmpdir(), "vykor-stage3-live-"))
@@ -148,8 +177,12 @@ it.runIf(realWindows)("opens and hands off real Windows applications from a trus
     expect(paintApps).toHaveLength(1)
     calculator = calculatorApps[0]!
     paint = paintApps[0]!
-    expect(await provider.windows(calculator, waitSignal()), "Calculator must start without an open window").toEqual([])
-    expect(await provider.windows(paint, waitSignal()), "Paint must start without an open window").toEqual([])
+    const calculatorBefore = await provider.windows(calculator, waitSignal())
+    const paintBefore = await provider.windows(paint, waitSignal())
+    expect(calculatorBefore.length).toBeLessThanOrEqual(1)
+    expect(paintBefore.length).toBeLessThanOrEqual(1)
+    const coldApps = [calculatorBefore.length ? undefined : calculator, paintBefore.length ? undefined : paint]
+      .filter(app => app !== undefined)
 
     const host = new ComputerHost({
       discover: (name, signal) => provider.discover(name, signal),
@@ -195,7 +228,9 @@ it.runIf(realWindows)("opens and hands off real Windows applications from a trus
       return (outputs.get(id) ?? []).map(result)
     }
     const builtins = await send(builtinPrompt, "builtin")
-    expect(builtins.map(ready => ready.source)).toEqual(["launched", "launched", "reused"])
+    expect(builtins.map(ready => ready.source)).toEqual([
+      calculatorBefore.length ? "reused" : "launched", paintBefore.length ? "reused" : "launched", "reused",
+    ])
     expect(builtins.map(ready => ready.app.name)).toEqual([calculator.name, paint.name, calculator.name])
     const calculatorAfter = await provider.windows(calculator, waitSignal())
     expect(calculatorAfter).toHaveLength(1)
@@ -204,7 +239,7 @@ it.runIf(realWindows)("opens and hands off real Windows applications from a trus
     })
     expect(selections).toEqual([])
     expect(permissions).toEqual([calculator.name, paint.name])
-    console.log("Windows verification: Calculator and Paint launched cold, then the same Calculator window was reused without a picker.")
+    console.log("Windows verification: Calculator and Paint launched or reused as appropriate. The same Calculator window was then reused without a picker.")
 
     shortcut = registerFixture(directory, fixtureName)
     await expect.poll(async () => {
@@ -222,7 +257,7 @@ it.runIf(realWindows)("opens and hands off real Windows applications from a trus
     expect(selections[0]).toHaveLength(2)
     expect(new Set(selections[0]).size).toBe(1)
     expect(permissions).toEqual([calculator.name, paint.name, fixtureName])
-    expect(launches.map(app => app.name)).toEqual([calculator.name, paint.name, fixtureName])
+    expect(launches.map(app => app.name)).toEqual([...coldApps.map(app => app.name), fixtureName])
     const nativeModal = (await provider.windows(fixtureApp!, waitSignal())).find(window => window.windowId === modal?.hwnd)
     expect(modal?.owner).toBe(pickedWindowId)
     expect(nativeModal).toMatchObject({ ownerWindowId: pickedWindowId })

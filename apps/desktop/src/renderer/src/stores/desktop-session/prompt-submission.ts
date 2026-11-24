@@ -75,8 +75,6 @@ export function createPromptSubmissionSender(
           get().sessionRuntimes[pending.sessionId]?.pendingPromptSubmissions[pending.id]
         if (!accepted && current && current.phase !== "accepted") {
           const snapshot = current
-          if (snapshot.computer === true && mode === "retry")
-            throw new Error("请在编辑区重新开启电脑操作后发送这条消息。")
           // A failed write must prevent admission, otherwise a restart could lose the original ID.
           if (
             !isTransientComposerSession(get(), pending.sessionId) &&
@@ -102,10 +100,7 @@ export function createPromptSubmissionSender(
               displayName,
             })),
           }
-          if (snapshot.computer === true) await window.desktop.computer.sendPrompt(request)
-          else if (snapshot.computer === "auto" && window.desktop.computer?.supported && get().activeSessionId === pending.sessionId)
-            await window.desktop.computer.sendPrompt(request, true)
-          else await window.desktop.sessions.sendPrompt(request)
+          await window.desktop.sessions.sendPrompt(request)
         }
         settlePromptSubmission(context, pending)
         if (accepted && get().activeSessionId === pending.sessionId)

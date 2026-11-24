@@ -37,6 +37,14 @@ const action = { type: "observe" } as const;
 
 const frameRef = "frame_00000000-0000-4000-8000-000000000001";
 
+it("accepts an explicit new-window request without shortcut overrides or an existing window hint", () => {
+  const request = { type: "open_app", app: "Notepad", newWindow: true };
+  expect(parseComputerAction(request)).toEqual(request);
+  expect(parseComputerAction({ ...request, windowHint: "notes.txt" })).toBeUndefined();
+  expect(parseComputerAction({ ...request, arguments: ["notes.txt"] })).toBeUndefined();
+  expect(parseComputerAction({ ...request, newWindow: false })).toBeUndefined();
+});
+
 it("bounds foreground input and rejects unsupported wire shapes", () => {
   expect(parseComputerAction({ type: "handoff" })).toEqual({ type: "handoff" });
   expect(parseComputerAction({ type: "click", frameRef, x: 4, y: 30 })).toEqual({ type: "click", frameRef, x: 4, y: 30 });
@@ -145,13 +153,21 @@ function fixture(bridge = new DesktopComputerBridge()) {
   return { bridge, post, stream, submit };
 }
 
+it("explicitly reports a stale private submission before accepting any prompt", async () => {
+  const { post, submit } = fixture();
+  const response = await post("/stale-connection/submit", { sessionId: "session", input: { content: "hello" } });
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ code: "computer_session_unavailable" });
+  expect(submit).not.toHaveBeenCalled();
+});
+
 it("binds submissions and results to the active connection and settles a command once", async () => {
   const { bridge, stream, post, submit } = fixture();
   const connection = await stream();
   const { connectionId } = connection;
   const input = { items: [{ type: "text", text: "Observe" }] };
   try {
-    expect((await post("/old/submit", { sessionId: "session", input })).status).toBe(404);
+    expect((await post("/old/submit", { sessionId: "session", input })).status).toBe(409);
     expect((await post(`/${connectionId}/submit`, { sessionId: "session", input }, headers)).status).toBe(401);
     expect(submit).not.toHaveBeenCalled();
     expect((await post(`/${connectionId}/submit`, { sessionId: "session", input })).status).toBe(202);
@@ -177,7 +193,7 @@ it("aborts old work on disconnect and a replacement receives only fresh commands
   const first = await stream();
   const signal = bridge.connectionSignal(first.connectionId)!;
   const pending = expect(bridge.execute(first.connectionId, run, action))
-    .rejects.toMatchObject({ executionState: "unknown" });
+    .rejects.toMatchObject({ executionState: "not_started" });
   const command = await first.next();
   if (command.type !== "execute") throw new Error("Computer command expected");
   await first.close();
@@ -191,7 +207,7 @@ it("aborts old work on disconnect and a replacement receives only fresh commands
     expect((await post(`/${first.connectionId}/${command.requestId}/result`, { result: { text: "Late" } })).status).toBe(404);
     const cancellation = new AbortController();
     const current = expect(bridge.execute(second.connectionId, run, action, { signal: cancellation.signal }))
-      .rejects.toMatchObject({ executionState: "unknown" });
+      .rejects.toMatchObject({ executionState: "not_started" });
     const dispatched = await second.next();
     if (dispatched.type !== "execute") throw new Error("Computer command expected");
     expect(dispatched.requestId).not.toBe(command.requestId);
@@ -222,7 +238,7 @@ it("revokes a screenshot already returned to the model queue", async () => {
   } finally { await connection.close(); }
 });
 
-it("rejects oversized uploads and settles an oversized dispatched result as unknown", async () => {
+it("rejects oversized uploads without implying an undispatched action changed the app", async () => {
   const { bridge, stream, post, submit } = fixture();
   const connection = await stream();
   const { connectionId } = connection;
@@ -231,7 +247,7 @@ it("rejects oversized uploads and settles an oversized dispatched result as unkn
     expect((await post(`/${connectionId}/submit`, { sessionId: "session", input: { content: "x".repeat(512 * 1024) } })).status).toBe(202);
     expect((await post(`/${connectionId}/submit`, { sessionId: "session", input: { content: oversized } })).status).toBe(413);
     expect(submit).toHaveBeenCalledOnce();
-    const pending = expect(bridge.execute(connectionId, run, action)).rejects.toMatchObject({ executionState: "unknown" });
+    const pending = expect(bridge.execute(connectionId, run, action)).rejects.toMatchObject({ executionState: "not_started" });
     const command = await connection.next();
     if (command.type !== "execute") throw new Error("Computer command expected");
     const response = await post(`/${connectionId}/${command.requestId}/result`, { result: { text: oversized } });
@@ -247,7 +263,7 @@ it("drops a queued command when the stream closes before Desktop reads it", asyn
   const { bridge, stream } = fixture();
   const connection = await stream();
   const pending = expect(bridge.execute(connection.connectionId, run, action))
-    .rejects.toMatchObject({ executionState: "unknown" });
+    .rejects.toMatchObject({ executionState: "not_started" });
   bridge.detach(connection.connectionId);
   await pending;
   await expect(connection.next()).rejects.toThrow("Computer bridge closed");
@@ -299,21 +315,18 @@ async function approvalFixture(
   };
   return {
     close: async () => { await connection.close(); store.close(); await rm(directory, { recursive: true, force: true }); },
-    disconnect: connection.close, post, broker, store, propose, start,
+    disconnect: connection.close, post, broker, store, propose, start, bridge, connectionId,
   };
 }
 
 it("uses full access for semantic operations, foreground entry and coordinate clicks", async () => {
   const { close, post, start, broker } = await approvalFixture("full_access");
   const invoke = { type: "invoke", elementRef: "element_00000000-0000-4000-8000-000000000001" } as const;
-  const proposal = { proposalId: "00000000-0000-4000-8000-000000000001", reason: "Operate the current window." };
   try {
     for (const action of [invoke, { type: "foreground" }, { type: "click", frameRef, x: 4, y: 30 }] as const) {
       const call = await start(action);
-      expect(call.event.fullAccess).toBe(action.type === "click" ? true : undefined);
+      expect(call.event.fullAccess).toBe(true);
       expect((await post(call.requestUrl + "/result", { result: { text: "Done" } })).status).toBe(404);
-      if (action.type === "foreground") expect((await post(call.requestUrl + "/dispatch", {})).status).toBe(404);
-      expect(await (await post(call.requestUrl + "/approval", proposal)).json()).toMatchObject({ approved: true });
       expect((await post(call.requestUrl + "/dispatch", {})).status).toBe(200);
       expect((await post(call.requestUrl + "/result", { result: { text: "Done" } })).status).toBe(200);
       await expect(call.execution).resolves.toMatchObject({ result: { text: "Done" } });
@@ -375,14 +388,12 @@ it("gives the standard reviewer the exact unisolated operation and accepts its d
 it("inherits the daemon default and rechecks the run after loading it", async () => {
   const settings: Settings = { model: "offline", apiFormat: "openai", maxTurns: 5, permission: { mode: "full_access" } };
   const resolveSettings = vi.fn(async () => settings);
-  const { close, post, start, broker, store } = await approvalFixture(null, resolveSettings);
+  const { close, post, start, broker, store, bridge, connectionId } = await approvalFixture(null, resolveSettings);
   const invoke = { type: "invoke", elementRef: "element_00000000-0000-4000-8000-000000000001" } as const;
-  const proposal = { proposalId: "00000000-0000-4000-8000-000000000001", reason: "Press equals." };
   try {
     const button = await start(invoke);
-    const approval = post(button.requestUrl + "/approval", proposal);
-    await vi.waitFor(() => expect(resolveSettings).toHaveBeenCalledOnce());
-    expect(await (await approval).json()).toMatchObject({ approved: true });
+    expect(resolveSettings).toHaveBeenCalledOnce();
+    expect(button.event.fullAccess).toBe(true);
     expect((await post(button.requestUrl + "/dispatch", {})).status).toBe(200);
     await post(button.requestUrl + "/result", { result: { text: "Pressed" } });
     await button.execution;
@@ -393,21 +404,17 @@ it("inherits the daemon default and rechecks the run after loading it", async ()
       reading.resolve();
       return setting.promise;
     });
-    const stale = await start(invoke);
-    const decision = post(stale.requestUrl + "/approval", proposal);
+    const stale = expect(bridge.execute(connectionId, run, invoke)).rejects.toMatchObject({ executionState: "not_started" });
     await reading.promise;
     store.runs.updateRun(run.runId, { status: "interrupted" });
     setting.resolve(settings);
-    expect(await (await decision).json()).toMatchObject({ approved: false });
-    expect((await post(stale.requestUrl + "/dispatch", {})).status).toBe(404);
+    await stale;
     expect(broker.listRequests({ status: "pending" })).toHaveLength(0);
-    await post(stale.requestUrl + "/result", { error: "Stopped", executionState: "not_started" });
-    await stale.execution;
   } finally { await close(); }
 });
 
-it("requires once-approved foreground entry and one fresh private dispatch immediately before input", async () => {
-  const { post, close, propose, start } = await approvalFixture();
+it("requires once-approved foreground entry and input, each with one fresh private dispatch", async () => {
+  const { post, close, propose } = await approvalFixture();
   try {
     const entry = await propose(undefined, { type: "foreground" });
     expect((await post(entry.requestUrl + "/dispatch", {})).status).toBe(404);
@@ -421,7 +428,10 @@ it("requires once-approved foreground entry and one fresh private dispatch immed
     expect((await post(entry.requestUrl + "/result", { result: { text: "Started" } })).status).toBe(200);
     await expect(entry.execution).resolves.toMatchObject({ result: { text: "Started" } });
 
-    const click = await start({ type: "click", frameRef, x: 4, y: 30 });
+    const click = await propose(undefined, { type: "click", frameRef, x: 4, y: 30 });
+    expect((await post(click.requestUrl + "/dispatch", {})).status).toBe(404);
+    expect((await post(click.replyUrl, click.reply)).status).toBe(200);
+    expect(await (await click.decision).json()).toMatchObject({ approved: true });
     expect((await post(click.requestUrl + "/dispatch", {})).status).toBe(200);
     expect((await post(click.requestUrl + "/result", { result: { text: "Clicked" } })).status).toBe(200);
     await expect(click.execution).resolves.toMatchObject({ result: { text: "Clicked" } });
@@ -431,7 +441,7 @@ it("requires once-approved foreground entry and one fresh private dispatch immed
 it.each([{ type: "open_app", app: "Notepad" }, {
   type: "set_text", elementRef: "element_00000000-0000-4000-8000-000000000001", text: "Note",
 }] as const)("requires current dispatch authorization for $type", async action => {
-  const { post, close, start, store } = await approvalFixture();
+  const { post, close, start, store } = await approvalFixture("full_access");
   try {
     const call = await start(action);
     expect((await post(call.requestUrl + "/result", { result: { text: "Done" } })).status).toBe(404);
@@ -464,8 +474,7 @@ it("refuses a full-access dispatch after the session switches to ask without a r
   const { post, close, start, store } = await approvalFixture("full_access");
   try {
     const call = await start({ type: "foreground" });
-    const proposal = { proposalId: "00000000-0000-4000-8000-000000000001", reason: "Activate the current window." };
-    expect(await (await post(call.requestUrl + "/approval", proposal)).json()).toMatchObject({ approved: true });
+    expect(call.event.fullAccess).toBe(true);
     store.sessions.update(run.sessionId, { metadata: { runtime: { model: "offline", approvalMode: "ask" } } });
     expect((await post(call.requestUrl + "/dispatch", {})).status).toBe(404);
     await post(call.requestUrl + "/result", { error: "Mode changed", executionState: "not_started" });
@@ -520,7 +529,7 @@ it("expires protected approval on Stop and rejects the late human reply", async 
     expect(await (await decision).json()).toMatchObject({ approved: false });
     expect(store.permissions.get(reply.requestId)).toMatchObject({ status: "expired" });
     expect((await post(replyUrl, reply)).status).toBe(404);
-    await expect(execution).resolves.toMatchObject({ error: { executionState: "unknown" } });
+    await expect(execution).resolves.toMatchObject({ error: { executionState: "not_started" } });
   } finally { await close(); }
 });
 
@@ -532,6 +541,6 @@ it("expires an unanswered approval when Desktop disconnects", async () => {
     expect(await (await decision).json()).toMatchObject({ approved: false });
     expect(store.permissions.get(reply.requestId)).toMatchObject({ status: "expired" });
     expect((await post(replyUrl, reply)).status).toBe(404);
-    await expect(execution).resolves.toMatchObject({ error: { executionState: "unknown" } });
+    await expect(execution).resolves.toMatchObject({ error: { executionState: "not_started" } });
   } finally { await close(); }
 });

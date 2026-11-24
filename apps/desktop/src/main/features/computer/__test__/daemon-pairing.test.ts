@@ -9,7 +9,7 @@ const state = vi.hoisted(() => ({
   verified: vi.fn(),
   managed: vi.fn(),
   pairing: vi.fn(),
-  checkDriver: vi.fn(),
+  availability: vi.fn(),
   bridge: vi.fn(),
   closed: vi.fn(),
   ensure: vi.fn(),
@@ -42,9 +42,8 @@ vi.mock("@vykor/server/daemon-host", () => ({
 }))
 vi.mock("../../daemon-autostart/daemon-autostart-service", () => ({ createDesktopDaemonSystemService: vi.fn() }))
 vi.mock("../../daemon-autostart/computer-pairing", () => ({ pairDesktopComputerDaemon: state.pairing }))
-vi.mock("../availability", () => ({ computerAvailability: () => "ready" }))
+vi.mock("../availability", () => ({ computerAvailability: state.availability }))
 vi.mock("../windows-driver", () => ({
-  assertBundledWindowsDriverIntegrity: state.checkDriver,
   createWindowsDriver: vi.fn(),
 }))
 vi.mock("../windows-daemon-identity", () => ({ isWindowsOnDemandDaemon: state.verified }))
@@ -81,15 +80,15 @@ beforeEach(() => {
     return replacement
   })
   state.pairing.mockResolvedValue("private")
-  state.checkDriver.mockResolvedValue(undefined)
+  state.availability.mockResolvedValue("ready")
 })
 
 describe.runIf(process.platform === "win32" && process.arch === "x64")("Desktop on-demand daemon pairing", () => {
   it("rejects a damaged bundled driver before connecting to or restarting the daemon", async () => {
     const service = new DaemonConnectionService()
     const connect = vi.spyOn(service, "getClient")
-    state.checkDriver.mockRejectedValueOnce(new Error("Windows 控制驱动的校验值不符。"))
-    await expect(service.getComputerBridge(() => {}, new AbortController().signal)).rejects.toThrow(/校验值不符/)
+    state.availability.mockResolvedValueOnce("missing_driver")
+    await expect(service.getComputerBridge(() => {}, new AbortController().signal)).rejects.toThrow(/驱动不完整/)
     expect(connect).not.toHaveBeenCalled()
     expect(state.prepare).not.toHaveBeenCalled()
     expect(state.bridge).not.toHaveBeenCalled()
@@ -123,10 +122,10 @@ describe.runIf(process.platform === "win32" && process.arch === "x64")("Desktop 
     const service = new DaemonConnectionService()
     const original = await service.getClient()
     state.registry = { ...existing, launcher: "cli" }
-    await expect(service.getComputerBridge(() => {}, new AbortController().signal)).rejects.toThrow(/保持运行/)
+    await expect(service.getComputerBridge(() => {}, new AbortController().signal)).rejects.toThrow(/无法完成电脑操作配对/)
     state.registry = existing
     state.managed.mockResolvedValue(true)
-    await expect(service.getComputerBridge(() => {}, new AbortController().signal)).rejects.toThrow(/保持运行/)
+    await expect(service.getComputerBridge(() => {}, new AbortController().signal)).rejects.toThrow(/无法完成电脑操作配对/)
     expect(state.prepare).not.toHaveBeenCalled()
     expect(state.stop).not.toHaveBeenCalled()
     expect(await service.getClient()).toBe(original)
@@ -136,7 +135,7 @@ describe.runIf(process.platform === "win32" && process.arch === "x64")("Desktop 
     state.registry = { ...existing, launcher: "cli" }
     const service = new DaemonConnectionService()
     const original = await service.getClient()
-    await expect(service.getComputerBridge(() => {}, new AbortController().signal, undefined, undefined, true))
+    await expect(service.getComputerBridge(() => {}, new AbortController().signal))
       .rejects.toThrow(/无法完成电脑操作配对/)
     expect(state.verified).not.toHaveBeenCalled()
     expect(state.prepare).not.toHaveBeenCalled()
@@ -148,7 +147,7 @@ describe.runIf(process.platform === "win32" && process.arch === "x64")("Desktop 
     state.prepare.mockReturnValueOnce(gate.promise)
     const service = new DaemonConnectionService()
     const original = await service.getClient()
-    const paired = service.getComputerBridge(() => {}, new AbortController().signal, undefined, undefined, true)
+    const paired = service.getComputerBridge(() => {}, new AbortController().signal)
     await vi.waitFor(() => expect(state.prepare).toHaveBeenCalledOnce())
     const receipt = vi.fn()
     const waiting = service.getClient().then(receipt)

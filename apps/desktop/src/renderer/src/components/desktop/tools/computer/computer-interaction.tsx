@@ -61,7 +61,7 @@ export function ComputerAppPermissionCard({ sessionId }: { sessionId: string }):
       replyError={state.error}
       onApprove={() => interaction.answer("once")}
       onDeny={() => interaction.answer(null)}
-      onRemember={state.prompt.onceOnly ? undefined : () => interaction.answer("always")}
+      onRemember={() => interaction.answer("always")}
     />
   )
 }

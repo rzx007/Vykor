@@ -4,6 +4,7 @@ import type { AppContext } from "../../../core/app-context"
 import { IpcChannels } from "../../../../shared/ipc-channels"
 
 const service = vi.hoisted(() => ({
+  sendPrompt: vi.fn(),
   sendComputerPrompt: vi.fn(),
   controlComputer: vi.fn(),
   pauseComputer: vi.fn(),
@@ -11,39 +12,67 @@ const service = vi.hoisted(() => ({
   invalidateComputerView: vi.fn(),
   subscriptions: {
     getOwnerSessionId: vi.fn(),
+    getOwnerSessionRecord: vi.fn(),
     onOwnerInvalidated: vi.fn((_listener: (ownerId: number, change?: { nextSessionId?: string }) => void) => () => {}),
     onOwnerSnapshot: vi.fn(() => () => {}),
   },
 }))
 vi.mock("../../session/session-service", () => ({ desktopSessionService: service }))
-vi.mock("../availability", () => ({ computerAvailability: () => "ready" }))
+vi.mock("../../settings/desktop-preferences", () => ({
+  getDesktopPreferences: () => ({ computerAppGrants: [] }),
+  patchDesktopPreferences: vi.fn(),
+}))
+vi.mock("../availability", () => ({
+  computerAvailability: async () => "ready",
+  computerPlatformAvailability: () => "enabled",
+}))
 const shareWindowsPicture = vi.hoisted(() => vi.fn<(window: unknown, signal: AbortSignal) => Promise<{ bytes: Uint8Array } | null>>())
 vi.mock("../window-share", () => ({ shareWindowsPicture }))
 
 import { computerIpcContribution } from "../ipc"
+import { sessionIpcContribution } from "../../session/ipc"
 
 function fixture() {
   service.sendComputerPrompt.mockClear()
+  service.sendPrompt.mockClear()
   service.invalidateComputerView.mockClear()
   service.subscriptions.onOwnerInvalidated.mockClear()
   service.controlComputer.mockReset().mockResolvedValue(true)
   service.subscriptions.getOwnerSessionId.mockReturnValue("session")
+  service.subscriptions.getOwnerSessionRecord.mockReturnValue({ id: "session", status: "idle", metadata: {} })
   const source = "http://127.0.0.1:5173/"
   const frame = { url: source + "#/" }
   const contents = Object.assign(new EventEmitter(), { id: 8, mainFrame: frame, isDestroyed: () => false, send: vi.fn() })
-  const window = Object.assign(new EventEmitter(), { webContents: contents, isVisible: () => true, isMinimized: () => false })
+  const window = Object.assign(new EventEmitter(), { webContents: contents, isVisible: (): boolean => true, isMinimized: () => false })
   const app = { paths: { rendererUrl: source }, windowManager: { getMain: () => window } }
   const registrations = computerIpcContribution.register(app as unknown as AppContext)
-  const [registration] = registrations
+  const registration = sessionIpcContribution.register(app as unknown as AppContext)
+    .find(item => item.channel === IpcChannels.sessionSendPrompt)
   return { registration: registration!, registrations, contents, frame, window }
 }
 
-it("rejects a companion, a subframe, and a navigated main document", () => {
+it("preserves ordinary sends without giving Computer to companion, subframe, or navigated document", async () => {
   const { registration, contents, frame } = fixture()
-  expect(() => registration.handler({ sender: {}, senderFrame: frame } as never, {})).toThrow(/主窗口/)
-  expect(() => registration.handler({ sender: contents, senderFrame: { ...frame } } as never, {})).toThrow(/主窗口/)
+  const input = { sessionId: "session", id: "input", items: [] }
+  await registration.handler({ sender: {}, senderFrame: frame } as never, input)
+  await registration.handler({ sender: contents, senderFrame: { ...frame } } as never, input)
   frame.url = "https://example.test/"
-  expect(() => registration.handler({ sender: contents, senderFrame: frame } as never, {})).toThrow(/主窗口/)
+  await registration.handler({ sender: contents, senderFrame: frame } as never, input)
+  expect(service.sendPrompt).toHaveBeenCalledTimes(3)
+  expect(service.sendComputerPrompt).not.toHaveBeenCalled()
+})
+
+it.each(["steer", "plan", "hidden", "other"] as const)("keeps %s messages on the ordinary path", async scenario => {
+  const { registration, contents, frame, window } = fixture()
+  if (scenario === "plan")
+    service.subscriptions.getOwnerSessionRecord.mockReturnValue({ id: "session", status: "idle", metadata: { runtime: { workMode: "plan" } } })
+  if (scenario === "hidden") window.isVisible = () => false
+  const input = {
+    sessionId: scenario === "other" ? "other" : "session", id: "input", items: [],
+    ...(scenario === "steer" ? { delivery: "steer", expectedActiveRunId: "active" } : {}),
+  }
+  await registration.handler({ sender: contents, senderFrame: frame } as never, input)
+  expect(service.sendPrompt).toHaveBeenCalledExactlyOnceWith(input)
   expect(service.sendComputerPrompt).not.toHaveBeenCalled()
 })
 
@@ -56,7 +85,7 @@ it("shares only from the main chat and drops the picture when the user changes c
   expect(shareWindowsPicture).not.toHaveBeenCalled()
 
   const request = share({ sender: contents, senderFrame: frame } as never)
-  expect(shareWindowsPicture).toHaveBeenCalledOnce()
+  await vi.waitFor(() => expect(shareWindowsPicture).toHaveBeenCalledOnce())
   const signal = shareWindowsPicture.mock.calls[0]![1]
   service.subscriptions.onOwnerInvalidated.mock.calls[0]![0](contents.id, { nextSessionId: "other" })
   expect(signal.aborted).toBe(true)
@@ -87,13 +116,12 @@ it("scopes an app approval to its original chat and rejects the reply after a sw
   const event = { sender: contents, senderFrame: frame } as never
   registration.handler(event, { sessionId: "session", id: "input", items: [] })
   const [, , , , interaction] = service.sendComputerPrompt.mock.calls[0]!
-  const authorization = interaction.authorizeApp({ id: "calculator", name: "计算器" }, new AbortController().signal, "session", true)
+  const authorization = interaction.authorizeApp({ id: "calculator", name: "计算器" }, new AbortController().signal, "session")
   const { prompt } = contents.send.mock.lastCall![1]
-  expect(prompt).toMatchObject({ kind: "authorize", sessionId: "session", appName: "计算器", onceOnly: true })
+  expect(prompt).toMatchObject({ kind: "authorize", sessionId: "session", appName: "计算器" })
   const reply = registrations.find(item => item.channel === IpcChannels.computerReply)!.handler
-  expect(reply(event, { id: prompt.id, choice: "always" })).toBe(false)
   service.subscriptions.getOwnerSessionId.mockReturnValue("other")
-  expect(reply(event, { id: prompt.id, choice: "once" })).toBe(false)
+  expect(reply(event, { id: prompt.id, choice: "always" })).toBe(false)
   await expect(authorization).resolves.toBe(false)
   expect(contents.send.mock.lastCall![1]).toEqual({ type: "dismissed", id: prompt.id })
 })

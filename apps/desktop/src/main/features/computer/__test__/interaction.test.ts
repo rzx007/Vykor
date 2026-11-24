@@ -47,18 +47,13 @@ it("keeps the overlay in the owning chat and forwards an emergency stop once", a
   expect(stop).toHaveBeenCalledTimes(1)
 })
 
-it("requires task approval for automatic Computer calls even with a saved app grant", async () => {
+it("reuses the explicit saved app grant for the next task", async () => {
   preferences.get.mockReturnValue({ computerAppGrants: [app] })
   const { owner, send } = window()
   const signal = new AbortController().signal
   const interaction = createComputerInteraction(owner, signal)
   expect(await interaction.authorizeApp(app, signal, "session")).toBe("remembered")
-  const approval = interaction.authorizeApp(app, signal, "session", true)
-  const { prompt } = send.mock.lastCall?.[1]
-  expect(prompt).toMatchObject({ kind: "authorize", appName: app.name, onceOnly: true })
-  expect(replyToComputerInteraction(owner, { id: prompt.id, choice: "always" })).toBe(false)
-  expect(replyToComputerInteraction(owner, { id: prompt.id, choice: "once" })).toBe(true)
-  await expect(approval).resolves.toBe(true)
+  expect(send).not.toHaveBeenCalled()
   expect(preferences.patch).not.toHaveBeenCalled()
 })
 

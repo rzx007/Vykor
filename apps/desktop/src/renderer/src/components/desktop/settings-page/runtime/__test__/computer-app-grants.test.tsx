@@ -7,7 +7,7 @@ import { ComputerAppGrants } from "../computer-app-grants"
 it("shows and revokes remembered Computer app permissions", async () => {
   const revokeAppGrant = vi.fn(async () => [])
   vi.stubGlobal("desktop", { computer: {
-    supported: true,
+    isAvailable: async () => false,
     listAppGrants: async () => [{ id: "calc", name: "计算器" }],
     revokeAppGrant,
   } })
@@ -20,7 +20,7 @@ it("shows and revokes remembered Computer app permissions", async () => {
     const revoke = container.querySelector<HTMLButtonElement>('[aria-label="撤销 计算器 的访问许可"]')!
     await act(async () => revoke.click())
     expect(revokeAppGrant).toHaveBeenCalledExactlyOnceWith("calc")
-    expect(container.textContent).toContain("没有已授权的应用。")
+    expect(container.textContent).toBe("")
   } finally {
     await act(async () => root.unmount())
     container.remove()

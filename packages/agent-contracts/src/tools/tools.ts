@@ -7,7 +7,7 @@ import type { ExecutionEnvironmentHandle } from "@vykor/environment";
 
 export interface ToolContext {
   /** Host-internal effect for one model request. The image never enters the tool result. */
-  attachModelImage?: (source: MemoryImageSource, isCurrent: () => boolean) => void;
+  attachModelImage?: (source: MemoryImageSource, isCurrent: () => boolean, onPresented?: () => void) => void;
   /** Host-owned visible-history state for lazy, path-scoped project rules. */
   projectInstructions?: {
     claim(key: string): "new" | "pending" | "visible";

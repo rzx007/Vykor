@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PermissionRequestRecord } from "@vykor/domain-contracts/sessions";
 import type { PermissionReplyStatus } from "../../permissions/permission-broker.js";
+import { computerActionNeedsApproval } from "./computer-bridge-protocol.js";
 import type {
   ComputerAction,
   ComputerApprovalProposal,
@@ -15,10 +16,10 @@ const maxExecutionMs = 5 * 60_000;
 
 interface CaptureEvidence {
   requestId: string;
-  revoked: boolean;
+  controller: AbortController;
 }
 
-type DispatchResult = ComputerResult & { isImageCurrent?: () => boolean };
+type DispatchResult = ComputerResult & { isImageCurrent?: () => boolean; imageSignal?: AbortSignal };
 
 interface Connection {
   id: string;
@@ -33,6 +34,7 @@ interface Pending {
   run: ComputerRunIdentity;
   action: ComputerAction;
   dispatched?: boolean;
+  fullAccess: boolean;
   isCurrent(): boolean;
   signal: AbortSignal;
   approvalAccess?: ComputerApprovalAccess;
@@ -85,7 +87,7 @@ export class DesktopComputerBridge {
     const pending = this.pending;
     this.connection = undefined;
     connection.controller.abort();
-    pending?.finish(new ComputerBridgeError("Desktop disconnected after the Computer request was dispatched.", "unknown"));
+    pending?.finish(new ComputerBridgeError("Desktop disconnected before the Computer result arrived.", pending.dispatched ? "unknown" : "not_started"));
     connection.close();
   }
 
@@ -97,10 +99,11 @@ export class DesktopComputerBridge {
   endRun(connectionId: string, run: ComputerRunIdentity): void {
     const connection = this.connection;
     if (connection?.id !== connectionId) return;
+    connection.captures.get(run.runId)?.controller.abort();
     connection.captures.delete(run.runId);
     const pending = this.pending;
     if (pending?.run.runId === run.runId && pending.run.sessionId === run.sessionId && pending.run.inputId === run.inputId) {
-      pending.finish(new ComputerBridgeError("The Computer run ended after dispatch.", "unknown"));
+      pending.finish(new ComputerBridgeError("The Computer run ended before the result arrived.", pending.dispatched ? "unknown" : "not_started"));
     }
     if (!connection.send({ type: "ended", run })) this.detach(connectionId);
   }
@@ -110,7 +113,7 @@ export class DesktopComputerBridge {
     if (connection?.id !== connectionId) return false;
     for (const capture of connection.captures.values()) {
       if (capture.requestId !== requestId) continue;
-      capture.revoked = true;
+      capture.controller.abort();
       return true;
     }
     return false;
@@ -135,7 +138,7 @@ export class DesktopComputerBridge {
 
     const approvalAccess = needsDispatch(action.type) ? this.captureApproval?.(run) : undefined;
     let fullAccess = false;
-    if (approvalAccess && (action.type === "click" || action.type === "key" || action.type === "type_text")) {
+    if (approvalAccess && computerActionNeedsApproval(action)) {
       fullAccess = await approvalAccess.isFullAccess();
       if (this.connection !== connection || signal?.aborted || Date.now() >= deadlineAt
         || !approvalAccess.isOriginalScope() || options.isCurrent?.() === false) {
@@ -144,13 +147,17 @@ export class DesktopComputerBridge {
       if (this.pending) throw new ComputerBridgeError("Desktop Computer is busy.", "not_started");
     }
     const requestId = randomUUID();
-    if (action.type === "capture") connection.captures.set(run.runId, { requestId, revoked: false });
+    if (action.type === "capture") {
+      connection.captures.get(run.runId)?.controller.abort();
+      connection.captures.set(run.runId, { requestId, controller: new AbortController() });
+    }
     return await new Promise<DispatchResult>((resolve, reject) => {
       const finished = new AbortController();
       const pending: Pending = {
         id: requestId,
         run,
         action,
+        fullAccess,
         signal: finished.signal,
         approvalAccess,
         isCurrent: () => this.pending === pending && this.connection === connection
@@ -167,7 +174,7 @@ export class DesktopComputerBridge {
         },
       };
       const cancel = () => {
-        pending.finish(new ComputerBridgeError("The Computer request ended after dispatch.", "unknown"));
+        pending.finish(new ComputerBridgeError("The Computer request ended before the result arrived.", pending.dispatched ? "unknown" : "not_started"));
         if (this.connection === connection && !connection.send({ type: "cancel", requestId })) {
           this.detach(connectionId);
         }
@@ -187,19 +194,27 @@ export class DesktopComputerBridge {
     const connection = this.connection;
     const pending = this.pending;
     if (connection?.id !== connectionId || pending?.id !== requestId) return false;
-    if ("result" in reply && ((reply.result.image && (pending.action.type !== "capture" || !pending.isCurrent()))
-      || (pending.approval && (!pending.approval.approved || !pending.isCurrent()))
-      || (needsDispatch(pending.action.type) && !pending.dispatched))) return false;
     if ("error" in reply) {
-      pending.finish(new ComputerBridgeError(reply.error, reply.executionState));
+      pending.finish(new ComputerBridgeError(reply.error, pending.dispatched ? reply.executionState : "not_started"));
       return true;
     }
-    const { text, image } = reply.result;
+    const { type } = pending.action;
+    const { status, image, ...result } = reply.result;
+    const unchanged = status === "unchanged" && (type === "set_text" || type === "choose")
+      && pending.approvalAccess?.isOriginalScope();
+    if (!pending.isCurrent() || (image && type !== "capture")
+      || (status === "observed" && type !== "observe") || (status === "unchanged" && !unchanged)
+      || (status === "sent" && type !== "click" && type !== "key" && type !== "type_text")
+      || (pending.approval && !pending.approval.approved)
+      || (needsDispatch(type) && !pending.dispatched && !unchanged)) return false;
+    const observedResult = { ...result, ...(status ? { status } : {}) };
     const runId = pending.run.runId;
     const capture = connection.captures.get(runId);
-    const isImageCurrent = () => this.connection === connection && capture?.requestId === requestId && !capture.revoked
+    const isImageCurrent = () => this.connection === connection && capture?.requestId === requestId && !capture.controller.signal.aborted
       && connection.captures.get(runId) === capture;
-    pending.finish(image && isImageCurrent() ? { text, image, isImageCurrent } : { text });
+    pending.finish(image && capture && isImageCurrent()
+      ? { ...observedResult, image, isImageCurrent, imageSignal: capture.controller.signal }
+      : observedResult);
     return true;
   }
 
@@ -207,7 +222,8 @@ export class DesktopComputerBridge {
     const pending = this.pending;
     if (this.connection?.id !== connectionId || pending?.id !== requestId || pending.dispatched || !pending.isCurrent()
       || !pending.approvalAccess?.isOriginalScope()) return false;
-    if ((pending.action.type === "foreground" || pending.approval) && !pending.approval?.approved) return false;
+    if ((pending.approval || (!pending.fullAccess && computerActionNeedsApproval(pending.action)))
+      && !pending.approval?.approved) return false;
     pending.dispatched = true;
     return true;
   }

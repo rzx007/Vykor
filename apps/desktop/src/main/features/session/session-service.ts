@@ -185,7 +185,7 @@ export class DesktopSessionService {
       onConnected: ({ url, token }) => startBrowserBridge({
         baseUrl: url,
         token,
-        beforeCommand: (sessionId) => this.connection.yieldComputerInputToBrowser?.(sessionId),
+        releaseComputerInput: (sessionId) => this.connection.yieldComputerInputToBrowser?.(sessionId),
         getOwnerSessionToken: (ownerId, sessionId) =>
           this.subscriptions.getOwnerSessionToken(ownerId, sessionId),
       }),
@@ -494,13 +494,10 @@ export class DesktopSessionService {
     authorizeWindow: () => void,
     ownerSignal: AbortSignal,
     interaction?: ComputerInteraction,
-    automatic?: true,
   ): Promise<void> {
     const sessionId = requireString(input?.sessionId, "会话 ID")
     if (input.delivery === "steer" || input.expectedActiveRunId !== undefined || input.pluginAppContextIds?.length)
       throw new Error("电脑操作需要从主聊天发起一条新的用户消息。")
-    if (!automatic && this.subscriptions.getOwnerSessionId(owner.id) !== sessionId)
-      throw new Error("请先打开要发送消息的主聊天。")
     const submission = { stop: new AbortController(), view: new AbortController() }
     const ordinarySignal = AbortSignal.any([ownerSignal, submission.stop.signal])
     const signal = AbortSignal.any([ordinarySignal, submission.view.signal])
@@ -522,17 +519,15 @@ export class DesktopSessionService {
             authorize()
             const bridge = await this.connection.getComputerBridge?.(() => authorize(requestedViewWasReset), ownerSignal, () => {
               requestedViewWasReset = this.subscriptions.getOwnerSessionId(owner.id) === sessionId
-            }, interaction, automatic)
+            }, interaction)
             if (!bridge) throw new Error("当前后台不支持电脑操作。")
             // Restore the current chat before admitting a run that can immediately ask for consent.
             if (requestedViewWasReset) await this.subscriptions.waitForPrimarySnapshot(owner.id, sessionId, signal)
             authorize()
             privateSubmit = true
-            return automatic
-              ? await bridge.submit(id, prompt, authorize, signal, true, ordinarySignal)
-              : await bridge.submit(id, prompt, authorize, signal)
+            return await bridge.submit(id, prompt, authorize, signal, ordinarySignal)
           } catch (error) {
-            if (!automatic || privateSubmit && !(error instanceof ComputerPromptNotSubmittedError)) throw error
+            if (privateSubmit && !(error instanceof ComputerPromptNotSubmittedError)) throw error
             // An ordinary message can still be sent when the view moved or the host never received its request.
             ordinarySignal.throwIfAborted()
             const client = await this.agentClient()

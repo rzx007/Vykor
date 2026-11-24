@@ -30,7 +30,7 @@ export type ComputerAction =
   | { type: "capture"; purpose?: "result" }
   | { type: "foreground" }
   | { type: "handoff" }
-  | { type: "open_app"; app: string; windowHint?: string }
+  | { type: "open_app"; app: string; windowHint?: string; newWindow?: true }
   | ComputerSemanticAction
   | ComputerForegroundAction;
 
@@ -41,7 +41,7 @@ export interface ComputerCaptureImage {
   height: number;
 }
 
-export type ComputerResult = { text: string; image?: ComputerCaptureImage };
+export type ComputerResult = { text: string; status?: "observed" | "sent" | "unchanged"; image?: ComputerCaptureImage };
 export type ComputerExecutionState = "not_started" | "unknown";
 export type ComputerReply = { result: ComputerResult } | { error: string; executionState: ComputerExecutionState };
 
@@ -55,9 +55,21 @@ export type ComputerBridgeEvent =
       run: ComputerRunIdentity;
       action: ComputerAction;
       deadlineAt: number;
-      /** Lets Desktop keep the native input lease while automatic approval is being checked. */
+      /** The daemon will authorize direct dispatch while this request's scope remains current. */
       fullAccess?: true;
     };
+
+export function computerActionNeedsApproval(action: ComputerAction): boolean {
+  switch (action.type) {
+    case "foreground": case "click": case "type_text":
+    case "invoke": case "choose": case "set_text":
+      return true;
+    case "key":
+      return Boolean(action.modifiers?.length) || !/^(?:Tab|Arrow(?:Up|Down|Left|Right)|Home|End|PageUp|PageDown)$/iu.test(action.key);
+    default:
+      return false;
+  }
+}
 
 function record(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -106,11 +118,12 @@ export function parseComputerAction(value: unknown): ComputerAction | undefined 
   if (type === "type_text" && keys.length === 2 && typeof text === "string" && text.length > 0
     && text.length <= 1000 && !/\p{Cc}/u.test(text)) return { type, text };
   if (value.type === "open_app") {
-    if (Object.keys(value).some(key => !["type", "app", "windowHint"].includes(key))) return;
+    if (Object.keys(value).some(key => !["type", "app", "windowHint", "newWindow"].includes(key))) return;
     const app = label(value.app);
     const windowHint = label(value.windowHint);
-    if (app && (value.windowHint === undefined || windowHint)) {
-      return { type: "open_app", app, ...(windowHint ? { windowHint } : {}) };
+    if (app && (value.windowHint === undefined || windowHint) &&
+      (value.newWindow === undefined || value.newWindow === true && value.windowHint === undefined)) {
+      return { type: "open_app", app, ...(windowHint ? { windowHint } : {}), ...(value.newWindow ? { newWindow: true } : {}) };
     }
     return;
   }
@@ -180,10 +193,12 @@ function parseCaptureImage(value: unknown): ComputerCaptureImage | undefined {
 export function parseComputerReply(body: Record<string, unknown>): ComputerReply | undefined {
   const { result, error, executionState } = body;
   if (record(result) && typeof result.text === "string" && Object.keys(body).length === 1
-    && Object.keys(result).every(key => key === "text" || key === "image")) {
+    && Object.keys(result).every(key => key === "text" || key === "image" || key === "status")) {
+    const { status } = result;
+    if (status !== undefined && status !== "observed" && status !== "sent" && status !== "unchanged") return;
     const image = parseCaptureImage(result.image);
     if (result.image !== undefined && !image) return;
-    return { result: { text: result.text, ...(image ? { image } : {}) } };
+    return { result: { text: result.text, ...(status ? { status } : {}), ...(image ? { image } : {}) } };
   }
   if (typeof error === "string" && error.length > 0 && error.length <= 4_096
     && (executionState === "not_started" || executionState === "unknown") && Object.keys(body).length === 2) {

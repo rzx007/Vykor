@@ -5,7 +5,7 @@ import { projectObservation } from "../computer-semantics"
 import type { WindowsApp, WindowsAppWindow } from "../windows-apps"
 import { WindowsDriverError, WindowsDriverHandoffError, type WindowsDriver, type WindowsDriverElement } from "../windows-driver"
 
-const app: WindowsApp = { id: "native", name: "Notepad", builtIn: "notepad" }
+const app: WindowsApp = { id: "native", name: "Notepad" }
 const window: WindowsAppWindow = { pid: 7, windowId: 64, sessionId: 1, processStartedAt: 2, title: "Untitled - Notepad" }
 const control: WindowsDriverElement = {
   role: "Document", token: "private", identity: "runtime-id", label: "Text editor", value: "", actions: ["set_value"],
@@ -31,7 +31,7 @@ it("retains the current selection and its control when surrounding text fills th
   ])
 })
 
-function fixture(remember = false, selectedApp = app) {
+function fixture(remember = false, fullAccess?: true) {
   const connection = new AbortController()
   const windows = vi.fn(async () => [window])
   let elements = [control, destructive]
@@ -44,22 +44,23 @@ function fixture(remember = false, selectedApp = app) {
     observe, act, close,
   }))
   const publishActivity = vi.fn()
-  const host = new ComputerHost({ discover: async () => [selectedApp], windows, launch: async () => {} }, {
-    authorizeApp: async () => remember ? "remembered" : true, chooseTarget: async () => undefined, isRememberedApp: () => remember,
+  const chooseTarget = vi.fn<NonNullable<ConstructorParameters<typeof ComputerHost>[1]["chooseTarget"]>>(async () => undefined)
+  const host = new ComputerHost({ discover: async () => [app], windows, launch: async () => {} }, {
+    authorizeApp: async () => remember ? "remembered" : true, chooseTarget, isRememberedApp: () => remember,
     publishActivity,
   }, driver)
   const approve = vi.fn(async (_proposal: ComputerApprovalProposal) => true)
   const dispatch = vi.fn(async () => true)
   const execute = (action: Extract<ComputerBridgeEvent, { type: "execute" }>["action"]) => host.execute({
-    type: "execute", run, requestId: "test", deadlineAt: Date.now() + 20_000, action,
+    type: "execute", run, requestId: "test", deadlineAt: Date.now() + 20_000, action, fullAccess,
   }, connection.signal, connection.signal, approve, dispatch)
   async function open() {
-    await execute({ type: "open_app", app: selectedApp.name })
+    await execute({ type: "open_app", app: app.name })
     const observed = await execute({ type: "observe" }) as ComputerResult
     expect(observed.text).not.toContain("private")
     return JSON.parse(observed.text).observation.elements as { ref: string; label: string }[]
   }
-  return { host, approve, dispatch, windows, execute, act, observe, close, open, publishActivity,
+  return { host, approve, dispatch, windows, execute, act, observe, close, open, publishActivity, chooseTarget,
     changeElements: (rows: WindowsDriverElement[]) => { elements = rows } }
 }
 
@@ -80,8 +81,56 @@ it("keeps an in-flight semantic operation unknown when the user pauses", async (
   expect(await operation).toMatchObject({ executionState: "unknown" })
 })
 
-it("checks the current daemon run before a low-impact semantic write", async () => {
-  const f = fixture()
+it("does not read back a different document after writing in the same window", async () => {
+  const f = fixture(false, true)
+  const [field] = await f.open()
+  f.act.mockImplementationOnce(async () => {
+    f.windows.mockResolvedValue([{ ...window, title: "Other document - Notepad" }])
+    f.changeElements([{ ...control, value: "desired text" }, destructive])
+  })
+
+  const result = await f.execute({ type: "set_text", elementRef: field!.ref, text: "desired text" })
+  expect(result).toMatchObject({ executionState: "unknown" })
+  expect(result).not.toHaveProperty("text")
+  expect(f.observe).toHaveBeenCalledTimes(2)
+  f.chooseTarget.mockImplementationOnce(async choices => choices[0]?.id)
+  expect(await f.execute({ type: "observe" })).toMatchObject({
+    status: "observed",
+    text: expect.stringContaining("Other document - Notepad"),
+  })
+})
+
+it("can read back after a title change when the document path stays verified", async () => {
+  const f = fixture(false, true)
+  const known = { ...window, document: "C:/fixture/document.txt" }
+  f.windows.mockResolvedValue([known])
+  const [field] = await f.open()
+  f.act.mockImplementationOnce(async () => {
+    f.windows.mockResolvedValue([{ ...known, title: "Changed title" }])
+    f.changeElements([{ ...control, value: "desired text" }])
+  })
+  expect(await f.execute({ type: "set_text", elementRef: field!.ref, text: "desired text" })).toMatchObject({
+    text: expect.stringContaining('"evidence":"field_value"'),
+  })
+  expect(f.observe.mock.lastCall?.[1]).toEqual({ title: "Changed title" })
+  expect(f.chooseTarget).not.toHaveBeenCalled()
+})
+
+it("keeps a write uncertain if the surrounding selection changes before readback", async () => {
+  const f = fixture(false, true)
+  const selected = { role: "ListItem", label: "Current record", identity: "record", token: "record-token", actions: [], selected: true }
+  f.changeElements([control, selected])
+  const field = (await f.open()).find(row => row.label === control.label)!
+  f.act.mockImplementationOnce(async () => {
+    f.changeElements([{ ...control, value: "desired text" }, { ...selected, identity: "another-record" }])
+  })
+  const result = await f.execute({ type: "set_text", elementRef: field.ref, text: "desired text" })
+  expect(result).toMatchObject({ executionState: "unknown" })
+  expect(result).not.toHaveProperty("text")
+})
+
+it("checks the current daemon run before a direct semantic write", async () => {
+  const f = fixture(false, true)
   const [field] = await f.open()
   f.dispatch.mockResolvedValueOnce(false)
   expect(await f.execute({ type: "set_text", elementRef: field!.ref, text: "note" })).toMatchObject({ executionState: "not_started" })
@@ -100,7 +149,7 @@ it("prompts manual takeover if an operation opens a credential screen before rea
 })
 
 it("writes using a fresh native token, verifies field value, and invalidates the previous reference", async () => {
-  const f = fixture()
+  const f = fixture(false, true)
   const [field] = await f.open()
   const action: ComputerSemanticAction = { type: "set_text", elementRef: field!.ref, text: "one\r\ntwo" }
   const result = await f.execute(action) as ComputerResult
@@ -128,7 +177,7 @@ it("requires single-use approval and reports no observable effect as unknown", a
   expect(f.act).toHaveBeenCalledOnce()
 })
 
-it("confirms before overwriting existing content in a trusted Notepad editor", async () => {
+it("confirms before changing editor contents in ask mode", async () => {
   const f = fixture()
   f.changeElements([{ ...control, value: "existing note" }])
   const [field] = await f.open()
@@ -137,6 +186,36 @@ it("confirms before overwriting existing content in a trusted Notepad editor", a
     executionState: "not_started",
   })
   expect(f.approve).toHaveBeenCalledOnce()
+  expect(f.act).not.toHaveBeenCalled()
+})
+
+it("allows a semantic write when only an unrelated control changes", async () => {
+  const f = fixture()
+  const [field] = await f.open()
+  f.approve.mockImplementationOnce(async () => {
+    f.changeElements([control, { ...destructive, label: "Another unrelated label" }])
+    return true
+  })
+  expect(await f.execute({ type: "set_text", elementRef: field!.ref, text: "note" })).toMatchObject({
+    text: expect.stringContaining('"evidence":"field_value"'),
+  })
+  expect(f.act).toHaveBeenCalledOnce()
+})
+
+it.each(["invoke", "set_text", "choose"] as const)("refuses approved %s when a separate selected item changes", async type => {
+  const f = fixture()
+  const selected = { role: "ListItem", label: "Current record", identity: "row", token: "row-token", actions: ["select" as const], selected: true }
+  const target = type === "invoke" ? destructive : type === "set_text" ? control
+    : { ...selected, label: "Target setting", identity: "choice", selected: false }
+  f.changeElements([target, selected])
+  const buttons = await f.open()
+  const button = buttons.find(row => row.label === target.label)!
+  f.approve.mockImplementationOnce(async () => {
+    f.changeElements([target, { ...selected, selected: false }])
+    return true
+  })
+  const action = type === "set_text" ? { type, elementRef: button.ref, text: "New note" } : { type, elementRef: button.ref }
+  expect(await f.execute(action)).toMatchObject({ executionState: "not_started" })
   expect(f.act).not.toHaveBeenCalled()
 })
 

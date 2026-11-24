@@ -48,6 +48,7 @@ export {
   COMPUTER_CAPTURE_MAX_BASE64_BYTES,
   COMPUTER_HOST_TOKEN_HEADER,
   COMPUTER_SESSION_UNAVAILABLE,
+  computerActionNeedsApproval,
   parseComputerBridgeEvent,
   type ComputerReply,
   type ComputerApprovalProposal,

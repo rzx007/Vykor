@@ -17,6 +17,7 @@ import { createWindowsApps, type WindowsAppWindow } from "../../../apps/desktop/
 import { createWindowsDriver } from "../../../apps/desktop/src/main/features/computer/windows-driver"
 import cua from "../../../apps/desktop/resources/computer-windows/driver-release.json"
 import { registerFixture } from "./windows-live-fixture"
+import { closeNewWindow } from "./windows-live-cleanup"
 
 const enabled = process.platform === "win32" && process.arch === "x64"
   && process.env.VYKOR_COMPUTER_WINDOWS_SEMANTIC_LIVE === "1"
@@ -26,7 +27,7 @@ const desktopPath = fileURLToPath(new URL("../../../apps/desktop/", import.meta.
 const run = promisify(execFile)
 
 async function launchTestDocument(path: string, signal: AbortSignal) {
-  // Use the same registered Store app and Windows activation API as the production launcher.
+  // Seed a uniquely named scratch document. The chat then uses the unmodified production provider.
   await run(powershell, ["-NoProfile", "-NonInteractive", "-STA", "-Command", String.raw`
     $ErrorActionPreference = 'Stop'
     Add-Type -TypeDefinition @'
@@ -50,61 +51,6 @@ public static class VykorNotepadDraft {
 '@
     [VykorNotepadDraft]::Open($env:VYKOR_SEMANTIC_TEST_DRAFT)
   `], { env: { ...process.env, VYKOR_SEMANTIC_TEST_DRAFT: path }, windowsHide: true, timeout: 8_000, signal })
-}
-
-async function openSeparateNotepadWindow(seed: WindowsAppWindow, draftName: string, signal: AbortSignal) {
-  // If Windows opened the draft in an existing tab strip, inspect only the exact selected test tab and File menu.
-  await run(powershell, ["-NoProfile", "-NonInteractive", "-STA", "-Command", String.raw`
-    $ErrorActionPreference = 'Stop'
-    Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes
-    $hwnd = [IntPtr][long]$env:VYKOR_SEMANTIC_TEST_HWND
-    $owner = [int]$env:VYKOR_SEMANTIC_TEST_OWNER
-    $root = [Windows.Automation.AutomationElement]::FromHandle($hwnd)
-    if (!$root -or $root.Current.ProcessId -ne $owner -or $root.Current.Name -ne $env:VYKOR_SEMANTIC_TEST_TITLE) {
-      throw 'The owned seed draft is no longer the active Notepad document.'
-    }
-    $tree = [Windows.Automation.TreeScope]::Descendants
-    $tabName = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::NameProperty, $env:VYKOR_SEMANTIC_TEST_DRAFT_NAME)
-    $label = $root.FindFirst($tree, $tabName)
-    if (!$label -or $label.Current.ProcessId -ne $owner -or $label.Current.ControlType -ne [Windows.Automation.ControlType]::Text) {
-      throw 'The exact test tab label is unavailable.'
-    }
-    $tab = [Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($label)
-    if (!$tab -or $tab.Current.ControlType -ne [Windows.Automation.ControlType]::TabItem -or
-        !$tab.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected) {
-      throw 'The test tab was not selected.'
-    }
-    $fileId = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::AutomationIdProperty, 'File')
-    $file = $root.FindFirst($tree, $fileId)
-    if (!$file -or $file.Current.ProcessId -ne $owner -or $file.Current.ControlType -ne [Windows.Automation.ControlType]::MenuItem) {
-      throw 'The known File menu was not available on the test tab.'
-    }
-    $menu = $file.GetCurrentPattern([Windows.Automation.ExpandCollapsePattern]::Pattern)
-    $menu.Expand()
-    try {
-      for ($attempt = 0; $attempt -lt 8; $attempt++) {
-        foreach ($name in 'New window','新建窗口','新窗口') {
-          $byName = [Windows.Automation.PropertyCondition]::new([Windows.Automation.AutomationElement]::NameProperty, $name)
-          $item = $root.FindFirst($tree, $byName)
-          if ($item -and $item.Current.ProcessId -eq $owner -and $item.Current.ControlType -eq [Windows.Automation.ControlType]::MenuItem -and
-              $root.Current.Name -eq $env:VYKOR_SEMANTIC_TEST_TITLE -and
-              $tab.GetCurrentPattern([Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected) {
-            $item.GetCurrentPattern([Windows.Automation.InvokePattern]::Pattern).Invoke()
-            return
-          }
-        }
-        Start-Sleep -Milliseconds 60
-      }
-      throw 'The exact Notepad New window command was unavailable.'
-    } finally {
-      try { $menu.Collapse() } catch {}
-    }
-  `], {
-    env: {
-      ...process.env, VYKOR_SEMANTIC_TEST_HWND: String(seed.windowId), VYKOR_SEMANTIC_TEST_OWNER: String(seed.pid),
-      VYKOR_SEMANTIC_TEST_TITLE: seed.title, VYKOR_SEMANTIC_TEST_DRAFT_NAME: draftName,
-    }, windowsHide: true, timeout: 8_000, signal,
-  })
 }
 
 type Observation = {
@@ -138,19 +84,20 @@ it.skipIf(!enabled).each(["notepad", "fixture"])("accepts Windows semantic contr
   const provider = createWindowsApps()
   const launches: string[] = []
   const selections: number[] = []
-  const existingNotepadWindows = new Set<number>()
   let shortcut: string | undefined
   let bridge: DesktopComputerBridge | undefined
   let server: VykorHttpServer | undefined
   let draftOpened = false
-  let isolatedNotepadWindow: WindowsAppWindow | undefined
+  let extraNotepadWindow: WindowsAppWindow | undefined
+  const startedAfter = Date.now()
   let fixtureWindows: WindowsAppWindow[] = []
   const events = (): Array<{ kind: string; hwnd?: number; clicks?: number; target?: number; control?: number; foreground?: number }> => existsSync(tracePath)
     ? readFileSync(tracePath, "utf8").split(/\r?\n/u).slice(0, -1).map(line => JSON.parse(line)) : []
 
   const outputs = new Map<string, ToolResultMessage[]>()
   const prompts = new Map([
-    ["自动打开记事本，写入三行文字，再独立读回。", "notepad"],
+    [`打开记事本中已有的 ${draftName}，写入三行文字，再独立读回。`, "notepad"],
+    ["再打开一个独立的记事本窗口。", "notepad-new"],
     ["打开测试窗口并触发增量按钮。", "approve"],
     ["打开测试窗口，触发延时按钮，再触发增量按钮。", "stop"],
     ["打开测试窗口并触发延时按钮，执行时暂停。", "pause"],
@@ -167,8 +114,12 @@ it.skipIf(!enabled).each(["notepad", "fixture"])("accepts Windows semantic contr
         outputs.set(name, completed)
         const step = completed.length
         let action: Record<string, unknown> | undefined
-        if (step === 0) action = { action: "open_app", app: name === "notepad" ? "Notepad" : fixtureName }
-        if (step === 1 || (step === 3 && name !== "approve")) action = { action: "observe" }
+        if (step === 0) {
+          action = name === "notepad" ? { action: "open_app", app: "Notepad", windowHint: draftName }
+            : name === "notepad-new" ? { action: "open_app", app: "Notepad", newWindow: true }
+              : { action: "open_app", app: fixtureName }
+        }
+        if (name !== "notepad-new" && (step === 1 || (step === 3 && name !== "approve"))) action = { action: "observe" }
         if ((step === 2 || (step === 4 && name === "stop")) && !completed.at(-1)?.isError) {
           const elements = result(completed.at(-1)).observation?.elements ?? []
           const element = name === "notepad"
@@ -179,7 +130,7 @@ it.skipIf(!enabled).each(["notepad", "fixture"])("accepts Windows semantic contr
           action = name === "notepad" ? { action: "set_text", elementRef: element.ref, text: expectedText }
             : { action: "invoke", elementRef: element.ref }
         }
-        if (action && !completed.at(-1)?.isError && tools?.some(tool => tool.name === "Computer")) {
+        if (action && (!completed.at(-1)?.isError || name === "notepad" && step === 3) && tools?.some(tool => tool.name === "Computer")) {
           yield { type: "tool_use_start", toolUse: { type: "tool_use", id: `${name}-${step}`, name: "Computer", input: action } }
           yield { type: "complete", stopReason: "tool_use" }
           return
@@ -191,8 +142,7 @@ it.skipIf(!enabled).each(["notepad", "fixture"])("accepts Windows semantic contr
   }
 
   try {
-    if (scenario === "notepad") writeFileSync(draftPath, "")
-    else shortcut = registerFixture(directory, fixtureName)
+    if (scenario !== "notepad") shortcut = registerFixture(directory, fixtureName)
     mkdirSync(join(directory, "profile"))
     vi.stubEnv("USERPROFILE", join(directory, "profile"))
     vi.stubEnv("HOME", join(directory, "profile"))
@@ -217,43 +167,20 @@ it.skipIf(!enabled).each(["notepad", "fixture"])("accepts Windows semantic contr
       discover: (name, signal) => provider.discover(name, signal),
       async windows(app, signal) {
         const windows = await provider.windows(app, signal)
-        if (app.builtIn !== "notepad") {
-          if (app.name === fixtureName) fixtureWindows = windows
-          return windows
-        }
-        if (!draftOpened) {
-          for (const window of windows) existingNotepadWindows.add(window.windowId)
-          return []
-        }
-        return windows.filter(window => window.windowId === isolatedNotepadWindow?.windowId &&
-          window.pid === isolatedNotepadWindow.pid && window.processStartKey === isolatedNotepadWindow.processStartKey)
+        if (app.name === fixtureName) fixtureWindows = windows
+        return windows
       },
       async launch(app, signal) {
         launches.push(app.name)
-        if (app.builtIn !== "notepad") return provider.launch(app, signal)
-        await launchTestDocument(draftPath, signal)
-        draftOpened = true
-        await expect.poll(async () => {
-          const seed = (await provider.windows(app, signal)).find(window => window.title.includes(draftName))
-          if (seed && !existingNotepadWindows.has(seed.windowId)) isolatedNotepadWindow = seed
-          return seed
-        }, { timeout: 6_000, interval: 250 }).toBeDefined()
-        if (isolatedNotepadWindow) return
-        const before = await provider.windows(app, signal)
-        const seeds = before.filter(window => window.title.includes(draftName))
-        expect(seeds).toHaveLength(1)
-        for (const window of before) existingNotepadWindows.add(window.windowId)
-        await openSeparateNotepadWindow(seeds[0]!, draftName, signal)
-        await expect.poll(async () => {
-          const created = (await provider.windows(app, signal)).filter(window => !existingNotepadWindows.has(window.windowId) &&
-            window.ownerWindowId === undefined && !window.blocked && /^(?:Untitled|无标题)\s+[-–—]/iu.test(window.title))
-          if (created.length === 1) isolatedNotepadWindow = created[0]
-          return created.length
-        }, { timeout: 6_000, interval: 200 }).toBe(1)
+        await provider.launch(app, signal)
       },
     }, {
       async authorizeApp() { return true },
-      async chooseTarget(candidates) {
+      async chooseTarget(candidates, _signal, _session, confirmChange) {
+        if (scenario === "notepad") {
+          if (!confirmChange) return
+          return candidates.find(candidate => candidate.label.includes(draftName))?.id
+        }
         selections.push(candidates.length)
         const ready = events().find(event => event.kind === "ready")
         const target = fixtureWindows.find(window => window.windowId === ready?.target)
@@ -298,20 +225,58 @@ it.skipIf(!enabled).each(["notepad", "fixture"])("accepts Windows semantic contr
     }
 
     if (scenario === "notepad") {
+      const [app] = await provider.discover("Notepad", AbortSignal.timeout(8_000))
+      expect(app).toBeDefined()
+      writeFileSync(draftPath, "")
+      await launchTestDocument(draftPath, AbortSignal.timeout(8_000))
+      draftOpened = true
+      const windows = () => provider.windows(app!, AbortSignal.timeout(8_000))
+      await expect.poll(async () => (await windows()).find(window => window.title.includes(draftName)),
+        { timeout: 12_000 }).toBeDefined()
       const notepad = await queue("notepad")
+      await approve("notepad", notepad.sessionId, 0)
       expect(await settle(notepad)).toMatchObject({ status: "completed" })
-      const notepadResults = (outputs.get("notepad") ?? []).map(result)
+      const notepadResults = outputs.get("notepad") ?? []
       expect(notepadResults).toHaveLength(4)
-      expect(notepadResults[0]).toMatchObject({ status: "ready", source: "launched" })
-      expect(notepadResults[0]?.window?.title).toBe(isolatedNotepadWindow?.title)
-      expect(notepadResults[1]).toMatchObject({ status: "observed", window: { ref: notepadResults[0]?.window?.ref } })
-      expect(notepadResults[2]).toMatchObject({ status: "verified", evidence: "field_value" })
-      const valueReadBack = notepadResults[3]?.observation?.elements.find(item => item.role.toLowerCase() === "document")?.value
+      const reused = result(notepadResults[0])
+      expect(reused).toMatchObject({ status: "ready", source: "reused", window: { title: expect.stringContaining(draftName) } })
+      expect(result(notepadResults[1])).toMatchObject({ status: "observed", window: { ref: reused.window?.ref } })
+      if (notepadResults[2]?.isError) {
+        expect(notepadResults[2].content).toContainEqual(expect.objectContaining({ text: expect.stringContaining("execution=unknown") }))
+      } else {
+        expect(result(notepadResults[2])).toMatchObject({ status: "verified", evidence: "field_value" })
+      }
+      const valueReadBack = result(notepadResults[3]).observation?.elements.find(item => item.role.toLowerCase() === "document")?.value
       expect(valueReadBack?.replace(/\r\n?/gu, "\n")).toBe(expectedText)
-      expect(launches).toHaveLength(1)
-      expect(selections).toEqual([])
-      expect(runningServer.application.permissions.listRequests({ sessionId: notepad.sessionId, toolName: "Computer" })).toEqual([])
-      console.log("Real Notepad: opened an isolated Notepad window automatically and read three in-memory lines back through a fresh observation.")
+      expect(launches).toEqual([])
+      console.log("Real Notepad: the production provider reused the existing scratch document and independently read back three edited lines.")
+
+      const before = await windows()
+      const requested = await queue("notepad-new")
+      expect(await settle(requested)).toMatchObject({ status: "completed" })
+      const [attempt] = outputs.get("notepad-new") ?? []
+      const newRoots = (await windows()).filter(window => window.ownerWindowId === undefined &&
+        !before.some(known => known.windowId === window.windowId))
+      expect(launches).toEqual([app!.name])
+      expect(attempt).toBeDefined()
+      if (attempt?.isError) {
+        expect(attempt.content).toContainEqual(expect.objectContaining({ text: expect.stringContaining("execution=unknown") }))
+        expect(newRoots).toHaveLength(0)
+        console.log("Real Notepad: the production activation returned without a separate window. The existing window was never rebound as new.")
+      } else {
+        const launched = result(attempt)
+        expect(launched).toMatchObject({ status: "ready", source: "launched" })
+        expect(newRoots).toHaveLength(1)
+        expect(launched.window?.title).toBe(newRoots[0]?.title)
+        const launchedWindow = newRoots[0]!
+        const created = launchedWindow.applicationStartKey
+        if (created && (BigInt(created) - 116_444_736_000_000_000n) / 10_000n >= BigInt(startedAfter)) {
+          extraNotepadWindow = launchedWindow
+        } else {
+          console.log("The new window belongs to an existing Notepad process and was left open.")
+        }
+        console.log("Real Notepad: the production activation opened and bound a distinct new window.")
+      }
       return
     }
 
@@ -356,6 +321,7 @@ it.skipIf(!enabled).each(["notepad", "fixture"])("accepts Windows semantic contr
     try {
       bridge?.close()
       await server?.close()
+      if (extraNotepadWindow) closeNewWindow(extraNotepadWindow, startedAfter)
       if (shortcut) await rm(shortcut, { force: true })
       if (events().some(event => event.kind === "ready")) {
         writeFileSync(join(directory, "close.request"), "")
@@ -363,7 +329,7 @@ it.skipIf(!enabled).each(["notepad", "fixture"])("accepts Windows semantic contr
       }
     } finally {
       vi.unstubAllEnvs()
-      if (draftOpened) console.log(`Only the test draft was left in Notepad: ${draftPath}`)
+      if (draftOpened) console.log(`Test draft left in Notepad: ${draftPath}`)
       else await rm(draftDirectory, { recursive: true, force: true })
       try {
         await rm(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })

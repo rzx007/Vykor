@@ -18,7 +18,7 @@ interface BrowserBridgeOptions {
   baseUrl: string
   token: string
   getOwnerSessionToken: BrowserRequestScope["getOwnerSessionToken"]
-  beforeCommand?: (sessionId: string) => Promise<boolean> | undefined
+  releaseComputerInput?: (sessionId: string) => Promise<boolean> | undefined
   browser?: BrowserAgentService
 }
 
@@ -56,13 +56,13 @@ export function startBrowserBridge(options: BrowserBridgeOptions): () => void {
       })
       return response.approved === true
     }
-    const scope = { getOwnerSessionToken: options.getOwnerSessionToken, signal }
     const { sessionId, cwd } = command
+    const scope = {
+      getOwnerSessionToken: options.getOwnerSessionToken, signal,
+      releaseComputerInput: () => options.releaseComputerInput?.(sessionId),
+    }
     let body: object
     try {
-      signal.throwIfAborted()
-      if (await options.beforeCommand?.(sessionId) === false)
-        throw new Error("无法确认电脑键鼠已释放，浏览器操作已取消。")
       signal.throwIfAborted()
       if (command.kind === "browser") {
         const { screenshotBytes, ...result } = await browser.execute(

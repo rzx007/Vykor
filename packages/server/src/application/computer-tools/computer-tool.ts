@@ -1,7 +1,7 @@
 import type { AgentRunToolContribution, ToolContext, ToolResult } from "@vykor/agent-contracts";
 import type { AttachmentAssetRecord } from "@vykor/domain-contracts/attachments";
 import type { AttachmentService } from "../attachments/attachment-service.js";
-import { SessionApplicationError } from "../session/session-application-error.js";
+import { ComputerSessionUnavailableError } from "../session/session-application-error.js";
 import { ComputerBridgeError, type DesktopComputerBridge } from "./computer-bridge.js";
 import { parseComputerAction, type ComputerAction, type ComputerCaptureImage, type ComputerRunIdentity } from "./computer-bridge-protocol.js";
 
@@ -12,7 +12,7 @@ export interface ComputerPromptAuthorization {
 
 const unavailable = "The Computer Use permission for this run is no longer active.";
 const COMPUTER_TOOL_NAME = "Computer";
-const verifyFirst = "The last Computer action may have changed the application. Observe the current window and check the expected result before issuing another action. If you cannot verify it, tell the user what remains uncertain.";
+const verifyFirst = "The last Computer action may have changed the application. Inspect the current window with observe or a visual capture before issuing another action. Check the expected result and report anything you cannot verify.";
 
 function sameRun(expected: ComputerRunIdentity | undefined, actual: ComputerRunIdentity): boolean {
   return expected?.sessionId === actual.sessionId
@@ -43,7 +43,7 @@ export class ComputerRunAccess {
 
   authorizePrompt(connectionId: string): ComputerPromptAuthorization {
     const signal = this.bridge.connectionSignal(connectionId);
-    if (!signal || signal.aborted) throw new SessionApplicationError(409, unavailable);
+    if (!signal || signal.aborted) throw new ComputerSessionUnavailableError(unavailable);
     if (this.binding?.signal !== signal) {
       const binding = {
         id: connectionId, signal, runs: new Map<string, ComputerRunIdentity>(),
@@ -57,7 +57,7 @@ export class ComputerRunAccess {
     const binding = this.binding;
     return {
       assertCurrent: () => {
-        if (signal.aborted || this.binding !== binding) throw new SessionApplicationError(409, unavailable);
+        if (signal.aborted || this.binding !== binding) throw new ComputerSessionUnavailableError(unavailable);
       },
       bind: run => binding.runs.set(run.runId, run),
     };
@@ -91,14 +91,14 @@ export class ComputerRunAccess {
         signal,
       });
     } catch {
-      return; // The verified text answer still completes if its screenshot cannot be saved.
+      return isCurrent() ? { isCurrent } : undefined;
     }
     const discard = () => {
       try { this.attachments.delete(asset.id); } catch { /* Attachment maintenance can reconcile unused assets. */ }
     };
     if (!isCurrent() || asset.status !== "ready" || asset.mediaType !== image.mediaType || asset.sizeBytes === undefined) {
       discard();
-      return;
+      return isCurrent() ? { isCurrent } : undefined;
     }
     return {
       attachment: { id: asset.id, displayName: asset.displayName, mediaType: asset.mediaType, sizeBytes: asset.sizeBytes },
@@ -121,6 +121,7 @@ export class ComputerRunAccess {
       && this.current(run) === binding;
     const permitted = (context: ToolContext) => currentRun(context) && !context.abortSignal?.aborted;
     let needsObservation = false;
+    let currentVisualEvidence: (() => boolean) | undefined;
     const parseInput = (input: Record<string, unknown>) => {
       const { action: type, ...args } = input;
       return Object.hasOwn(args, "type") ? undefined : parseComputerAction({ ...args, type });
@@ -132,7 +133,8 @@ export class ComputerRunAccess {
       if (!action) return input.action === "observe"
         ? 'Observe reads the current window. Omit app and all other fields. Retry with {"action":"observe"}.'
         : "Invalid Computer Use action.";
-      if (needsObservation && (mayChange(action) || (action.type === "capture" && action.purpose === "result"))) return verifyFirst;
+      if (needsObservation && !currentVisualEvidence?.()
+        && (mayChange(action) || (action.type === "capture" && action.purpose === "result"))) return verifyFirst;
     };
     return {
       // The opted-in task is checked here and Desktop owns app consent and target selection.
@@ -151,6 +153,7 @@ export class ComputerRunAccess {
             purpose: { type: "string", enum: ["result"], description: "For capture only. Attach the final window image to the assistant answer. Omit for temporary visual inspection." },
             app: { type: "string", minLength: 1, maxLength: 256, description: "Application name or current app reference, for open_app." },
             windowHint: { type: "string", minLength: 1, maxLength: 256, description: "Optional existing window title or document hint for open_app." },
+            newWindow: { type: "boolean", const: true, description: "Use only when the user explicitly asks for a new window. Omit windowHint. Windows apps decide whether to open another window." },
             elementRef: { type: "string", description: "Current scoped element reference for a semantic action." },
             text: { type: "string", maxLength: 4000, description: "The complete desired value for set_text, including supported line breaks. For foreground type_text, provide up to 1000 characters of plain text for the focused editor. Use a separate key action for Enter or Tab." },
             direction: { type: "string", enum: ["up", "down", "left", "right"] },
@@ -175,6 +178,7 @@ export class ComputerRunAccess {
           // Retain uncertainty even if the runtime stops awaiting a dispatched call first.
           if (changesState) {
             needsObservation = true;
+            currentVisualEvidence = undefined;
             binding.screenshots.delete(run.runId);
           }
           try {
@@ -184,21 +188,23 @@ export class ComputerRunAccess {
               isCurrent: () => permitted(context),
             });
             if (!permitted(context)) return refused(unavailable, "unknown");
-            if (changesState) needsObservation = result.text.startsWith('{"status":"sent",');
-            else if (action.type === "observe" && result.text.startsWith('{"status":"observed",')) needsObservation = false;
+            if (changesState) needsObservation = result.status === "sent";
+            else if (action.type === "observe" && result.status === "observed") needsObservation = false;
             if (action.type === "capture" && action.purpose === "result") {
-              const { image, isImageCurrent } = result;
+              const { image, imageSignal, isImageCurrent } = result;
               const runSignal = context.agent?.scope.signal;
-              if (!image || !runSignal || !isImageCurrent?.()) return refused("The result screenshot is unavailable. Report the verified result in text.");
+              if (!image || !imageSignal || !runSignal || !isImageCurrent?.())
+                return refused("The result screenshot is unavailable. Report the verified result in text.");
               binding.screenshots.set(run.runId, {
-                image, signal: AbortSignal.any([binding.signal, runSignal]),
+                image, signal: AbortSignal.any([binding.signal, runSignal, imageSignal]),
                 isCurrent: () => currentRun(context) && isImageCurrent(),
               });
               return { content: [{ type: "text", text: "Captured the result window for the final answer." }] };
             }
-            if (result.image && result.isImageCurrent) {
+            if (result.image && result.isImageCurrent && context.attachModelImage) {
               const isImageCurrent = result.isImageCurrent;
-              context.attachModelImage?.({ type: "memory", ...result.image }, () => currentRun(context) && isImageCurrent());
+              context.attachModelImage({ type: "memory", ...result.image }, () => currentRun(context) && isImageCurrent(),
+                () => { currentVisualEvidence = isImageCurrent; });
             }
             return { content: [{ type: "text", text: result.text }] };
           } catch (error) {

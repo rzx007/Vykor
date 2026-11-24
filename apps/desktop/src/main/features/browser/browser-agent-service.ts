@@ -41,11 +41,13 @@ import type {
 export interface BrowserRequestScope {
   signal: AbortSignal
   getOwnerSessionToken: (ownerId: number, sessionId: string) => object | undefined
+  releaseComputerInput?: () => Promise<boolean> | undefined
 }
 
 type BrowserRequestGuard = {
   signal: AbortSignal
   assertCurrent: (checkPage?: boolean) => void
+  yieldComputerInput(): Promise<void>
   attachOpenedTab: (tabId: string) => void
   refreshPage: () => void
 }
@@ -320,6 +322,12 @@ export class BrowserAgentService implements BrowserHost {
     return {
       signal: scope.signal,
       assertCurrent,
+      async yieldComputerInput() {
+        assertCurrent()
+        if (await scope.releaseComputerInput?.() === false)
+          throw new Error("无法确认电脑键鼠已释放，浏览器操作已取消。")
+        assertCurrent()
+      },
       refreshPage,
       attachOpenedTab: (openedTabId) => {
         assertOwner()
@@ -405,6 +413,7 @@ export class BrowserAgentService implements BrowserHost {
     }
     if (openingTab && input.action.action === "navigate") {
       await this.requireOrigin(input.action.url, input.sessionId, input.cwd, input.approve)
+      await guard?.yieldComputerInput()
     }
     guard?.assertCurrent()
     const tabId = requestedTabId ?? (await this.openBrowserTab(guard?.signal))
@@ -434,6 +443,9 @@ export class BrowserAgentService implements BrowserHost {
       }
     }
 
+    if (!openingTab && input.action.action !== "click" && input.action.action !== "type") {
+      await guard?.yieldComputerInput()
+    }
     if (input.action.action === "navigate" || input.action.action === "scroll") {
       await this.annotations.pauseForBrowserAction(contents)
       guard?.assertCurrent()
@@ -635,6 +647,8 @@ export class BrowserAgentService implements BrowserHost {
         `Browser developer ${describeDeveloperAction(action.action)} was not approved.`
       )
     }
+    await guard?.yieldComputerInput()
+    this.assertDeveloperSnapshot(snapshot, input.cwd)
 
     if (action.action === "start_diagnostics") {
       const { expiresAt } = await this.developerInspector.startDiagnostics(guest, {
@@ -1003,6 +1017,7 @@ export class BrowserAgentService implements BrowserHost {
       )
       if (!allowed) throw new Error("The browser action was not approved.")
     }
+    await guard?.yieldComputerInput()
     this.assertActiveTab(tabId, contents)
     const selector = JSON.stringify(target.selector)
     await this.annotations.pauseForBrowserAction(contents)

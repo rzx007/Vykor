@@ -494,8 +494,7 @@ export type DesktopAPI = {
     installMarketplace: (input: DesktopSkillMarketplaceInstallInput) => Promise<DesktopSkillSnapshot>
   }
   computer: {
-    supported: boolean
-    sendPrompt: (input: SendDesktopPromptInput, automatic?: true) => Promise<void>
+    isAvailable: () => Promise<boolean>
     onInteraction: (handler: (event: DesktopComputerInteractionEvent) => void) => () => void
     reply: (input: DesktopComputerInteractionReply) => Promise<boolean>
     getActivity: (sessionId: string) => Promise<DesktopComputerActivity | null>

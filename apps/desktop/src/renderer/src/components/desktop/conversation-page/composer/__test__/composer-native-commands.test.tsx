@@ -113,7 +113,7 @@ beforeEach(() => {
 })
 
 it("keeps ordinary follow-up delivery while an agent run is active", async () => {
-  vi.stubGlobal("desktop", { computer: { supported: true } })
+  vi.stubGlobal("desktop", { computer: { isAvailable: async () => true } })
   try {
     await act(async () => root.render(
       <Composer
@@ -145,19 +145,19 @@ it("keeps ordinary follow-up delivery while an agent run is active", async () =>
 })
 
 it("sends a natural desktop task without a Computer toggle or app field", async () => {
-  vi.stubGlobal("desktop", { computer: { supported: true } })
+  vi.stubGlobal("desktop", { computer: { isAvailable: async () => true } })
   await renderComputerComposer("session:test")
   expect(container.querySelector('[aria-label="电脑操作"]')).toBeNull()
   expect(container.querySelector('[aria-label="目标应用（可选）"]')).toBeNull()
   await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })))
-  expect(onSubmit).toHaveBeenCalledExactlyOnceWith(undefined, "auto")
+  expect(onSubmit).toHaveBeenCalledExactlyOnceWith(undefined)
 })
 
 it.each([false, true])("adds a chosen window to the attachment draft only if the chat stays current (switched=%s)", async (switched) => {
   const picture = Promise.withResolvers<{ bytes: Uint8Array }>()
   const shareWindow = vi.fn(() => picture.promise)
   const pasteFiles = vi.fn()
-  vi.stubGlobal("desktop", { computer: { supported: true, shareWindow } })
+  vi.stubGlobal("desktop", { computer: { isAvailable: async () => true, shareWindow } })
   await renderComputerComposer("session:first", pasteFiles)
   await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="添加上下文"]')!.click())
   const share = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')]
@@ -173,7 +173,7 @@ it.each([false, true])("adds a chosen window to the attachment draft only if the
 })
 
 it("keeps ordinary messaging available when Computer Use is unavailable", async () => {
-  vi.stubGlobal("desktop", { computer: { supported: false } })
+  vi.stubGlobal("desktop", { computer: { isAvailable: async () => false } })
   await renderComputerComposer("session:test")
   expect(container.querySelector('[aria-label="电脑操作"]')).toBeNull()
   await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })))

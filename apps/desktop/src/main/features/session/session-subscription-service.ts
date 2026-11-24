@@ -97,7 +97,7 @@ export class SessionSubscriptionService {
     (ownerId: number, sessionId: string) => void
   >()
   private readonly primaryTokens = new WeakMap<SessionSubscription, object>()
-  private readonly primarySnapshots = new WeakSet<SessionSubscription>()
+  private readonly primarySnapshots = new WeakMap<SessionSubscription, SessionRecord>()
   private readonly agentsDetailRoots = new WeakMap<
     SessionSubscription,
     { rootToken: object; childId: string }
@@ -127,6 +127,14 @@ export class SessionSubscriptionService {
     return subscription && !subscription.controller.signal.aborted
       ? subscription.sessionId
       : undefined
+  }
+
+  getOwnerSessionRecord(ownerId: number): SessionRecord | undefined {
+    const primary = this.subscriptions.get(ownerId, primarySubscriptionSlot)
+    if (!primary || primary.controller.signal.aborted) return
+    const live = this.liveDeliveries.get(primary)
+    if (live?.reconnecting) return
+    return live?.latestState?.buckets[primary.sessionId]?.session ?? this.primarySnapshots.get(primary)
   }
 
   async waitForPrimarySnapshot(ownerId: number, sessionId: string, signal: AbortSignal): Promise<void> {
@@ -483,7 +491,8 @@ export class SessionSubscriptionService {
     }, 0)
 
     const initialView = this.toView(snapshot.state, sessionId, snapshot.source)
-    this.primarySnapshots.add(subscription)
+    const session = snapshot.state.buckets[sessionId]?.session
+    if (session) this.primarySnapshots.set(subscription, session)
     this.observeAgentTasks(webContents.id, subscription, snapshot.state)
     for (const listener of this.snapshotListeners) listener(webContents.id, initialView)
     return initialView

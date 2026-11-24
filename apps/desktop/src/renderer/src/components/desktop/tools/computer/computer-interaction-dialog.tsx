@@ -23,7 +23,7 @@ export function ComputerInteractionDialog({ prompt, answering, error, answer }: 
             {prompt.confirmChange ? "确认继续使用这个窗口？" : "选择要使用的目标"}
           </DialogTitle>
           <DialogDescription>
-            {prompt.confirmChange ? "窗口标题已变更，确认后再读取内容。" : "当前有多个匹配项，选中后继续本次任务。"}
+            {prompt.confirmChange ? "请确认这个窗口是本次任务的目标，再读取内容。" : "当前有多个匹配项，选中后继续本次任务。"}
           </DialogDescription>
         </DialogHeader>
         <div className="grid max-h-[50vh] gap-1 overflow-y-auto" aria-label="匹配目标">

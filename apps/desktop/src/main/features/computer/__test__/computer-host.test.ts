@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest"
 import { ComputerHost } from "../computer-host"
-import type { WindowsAppWindow } from "../windows-apps"
+import type { WindowsApp, WindowsAppWindow } from "../windows-apps"
 
 const editor = { id: "editor", name: "Notepad" }
 const calc = { id: "calculator", name: "Calculator" }
@@ -15,7 +15,7 @@ function fixture(isRememberedApp?: (id: string) => boolean) {
   const windows = vi.fn(async (app: typeof editor, _signal: AbortSignal): Promise<WindowsAppWindow[]> =>
     app.id === editor.id ? [root] : [])
   const launch = vi.fn(async (_app: typeof editor, _signal: AbortSignal) => {})
-  const discover = vi.fn(async (name: string, _signal: AbortSignal) =>
+  const discover = vi.fn(async (name: string, _signal: AbortSignal): Promise<WindowsApp[]> =>
     [editor, calc].filter(app => app.name === name))
   const authorizeApp = vi.fn(async (_app: typeof editor, _signal: AbortSignal): Promise<boolean | "remembered"> => true)
   const chooseTarget = vi.fn(async (candidates: readonly { id: string; label: string }[], _signal: AbortSignal): Promise<string | undefined> => candidates[0]?.id)
@@ -23,9 +23,9 @@ function fixture(isRememberedApp?: (id: string) => boolean) {
   const connection = new AbortController()
   const dispatch = vi.fn(async () => true)
   const run = { sessionId: "s", runId: "r", inputId: "i" }
-  const open = (app: string, windowHint?: string, signal = connection.signal) =>
+  const open = (app: string, windowHint?: string, signal = connection.signal, newWindow?: true) =>
     host.execute({ type: "execute", run, requestId: "open", deadlineAt: Date.now() + 5_000,
-      action: { type: "open_app", app, windowHint } }, signal, connection.signal, undefined, dispatch)
+      action: { type: "open_app", app, windowHint, newWindow } }, signal, connection.signal, undefined, dispatch)
   const observe = (scope = run, generation = connection.signal) =>
     host.execute({ type: "execute", run: scope, requestId: "observe", deadlineAt: Date.now() + 5_000,
       action: { type: "observe" } }, generation, generation)
@@ -47,6 +47,47 @@ it("observes a window that appeared after an uncertain launch without launching 
   expect(await f.observe()).toHaveProperty("text", expect.stringContaining("Calculator"))
   expect(f.launch).toHaveBeenCalledOnce()
   expect(f.authorizeApp).toHaveBeenCalledOnce()
+})
+
+it("binds a unique fresh window after launching a registered shortcut with parameters", async () => {
+  const f = fixture()
+  f.discover.mockResolvedValue([{ ...editor, confirmExistingWindow: true }])
+  f.windows.mockResolvedValue([])
+  f.launch.mockImplementationOnce(async () => { f.windows.mockResolvedValue([root]) })
+  expect(await f.open("Notepad")).toHaveProperty("text", expect.stringContaining('"source":"launched"'))
+  expect(f.chooseTarget).not.toHaveBeenCalled()
+})
+
+it("binds only a new window after an explicit launch, even if a running window changes its title", async () => {
+  const f = fixture()
+  f.launch.mockImplementation(async () => {
+    f.windows.mockResolvedValue([{ ...root, title: "Retitled existing window" }, { ...reading, title: "New document" }])
+  })
+  const opened = await f.open("Notepad", undefined, undefined, true)
+  expect(opened).toHaveProperty("text", expect.stringContaining('"title":"New document"'))
+  expect(opened).toHaveProperty("text", expect.stringContaining('"source":"launched"'))
+  expect(f.launch).toHaveBeenCalledOnce()
+  expect(f.chooseTarget).not.toHaveBeenCalled()
+})
+
+it("excludes prior windows from observation after an uncertain new-window launch", async () => {
+  const f = fixture()
+  f.launch.mockRejectedValueOnce(new Error("launch reply lost"))
+  expect(await f.open("Notepad", undefined, undefined, true)).toMatchObject({ executionState: "unknown" })
+  f.windows.mockResolvedValue([{ ...root, title: "Retitled existing window" }])
+  expect(await f.observe()).toMatchObject({ executionState: "not_started" })
+  f.windows.mockResolvedValue([root, { ...reading, title: "New document" }])
+  expect(await f.observe()).toHaveProperty("text", expect.stringContaining('"title":"New document"'))
+  expect(f.launch).toHaveBeenCalledOnce()
+})
+
+it("confirms an existing window that Windows cannot attribute to a parameterized shortcut", async () => {
+  const f = fixture()
+  f.discover.mockResolvedValue([{ ...editor, confirmExistingWindow: true }])
+  expect(await f.open("Notepad")).toHaveProperty("text")
+  expect(f.chooseTarget).toHaveBeenCalledWith([expect.objectContaining({ label: root.title })],
+    expect.any(AbortSignal), f.run.sessionId, true)
+  expect(f.launch).not.toHaveBeenCalled()
 })
 
 it("observes a retitled instance again and excludes a different document in that window", async () => {

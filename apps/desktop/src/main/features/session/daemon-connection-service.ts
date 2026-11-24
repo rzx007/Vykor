@@ -25,7 +25,7 @@ import { isLoopbackDaemonUrl } from "../daemon-autostart/daemon-surface"
 import { DesktopComputerBridge } from "../computer/computer-bridge"
 import { ComputerHost } from "../computer/computer-host"
 import { createWindowsApps } from "../computer/windows-apps"
-import { assertBundledWindowsDriverIntegrity, createWindowsDriver } from "../computer/windows-driver"
+import { createWindowsDriver } from "../computer/windows-driver"
 import type { ComputerInteraction } from "../computer/interaction"
 import { computerAvailability } from "../computer/availability"
 import { isWindowsOnDemandDaemon } from "../computer/windows-daemon-identity"
@@ -70,7 +70,7 @@ export class DaemonConnectionService {
   }
 
   yieldComputerInputToBrowser(sessionId: string): Promise<boolean> {
-    return this.computerHost?.yieldInputToBrowser(sessionId) ?? this.computerInputCleanup
+    return this.computerHost?.yieldInputToBrowser(sessionId) ?? Promise.resolve(true)
   }
 
   getClient(): Promise<VykorClient> {
@@ -139,35 +139,31 @@ export class DaemonConnectionService {
     ownerSignal: AbortSignal,
     onControlledReset?: () => void,
     interaction?: ComputerInteraction,
-    automatic?: true,
   ): Promise<DesktopComputerBridge> {
     const assertOpen = () => {
       if (this.computerAdmissionClosed) throw new Error("Desktop 正在退出或更新，电脑操作已关闭。")
     }
     const authorize = () => {
       assertOpen()
-      const availability = computerAvailability()
-      if (availability !== "ready") throw new Error({
-        unsupported: "此电脑操作需要 Windows x64 Desktop。",
-        disabled: "当前 Desktop 未启用电脑操作。",
-        missing_driver: "电脑操作驱动不完整。请重新安装经过核验的版本。",
-      }[availability])
       authorizeOwner()
     }
     authorize()
-    if (!automatic || !this.computerBridge) await assertBundledWindowsDriverIntegrity(ownerSignal)
+    const availability = await computerAvailability(ownerSignal)
+    if (availability !== "ready") throw new Error({
+      unsupported: "此电脑操作需要 Windows x64 Desktop。",
+      disabled: "当前 Desktop 未启用电脑操作。",
+      missing_driver: "电脑操作驱动不完整。请重新安装经过核验的版本。",
+    }[availability])
     authorize()
     const client = await this.getClient()
     authorize()
     const connection = this.connection
     if (!connection || connection.client !== client) throw new Error("后台连接已变化，请重试。")
     if (!this.computerPairing) {
-      if (automatic) {
-        const registry = this.requireLocalRegistry(connection.endpoint)
-        if (registry.launcher !== "desktop" || registry.supervised !== false || await shouldStartManagedDaemon())
-          throw new Error("当前后台无法完成电脑操作配对。")
-        authorize()
-      }
+      const registry = this.requireLocalRegistry(connection.endpoint)
+      if (registry.launcher !== "desktop" || registry.supervised !== false || await shouldStartManagedDaemon())
+        throw new Error("当前后台无法完成电脑操作配对。")
+      authorize()
       if (!this.computerPairing) {
         this.pairingRestart ??= this.restartForComputerPairing(connection.endpoint, authorize, onControlledReset)
           .finally(() => { this.pairingRestart = undefined })
@@ -203,8 +199,8 @@ export class DaemonConnectionService {
         authorizeDaemon,
         onDaemonIdentityMismatch: () => this.invalidateComputerPairing(pairing),
         ...(host ? {
-          execute: (event, signal, connection, approve, authorizeDispatch, automatic) =>
-            host.execute(event, signal, connection, approve, authorizeDispatch, automatic),
+          execute: (event, signal, connection, approve, authorizeDispatch) =>
+            host.execute(event, signal, connection, approve, authorizeDispatch),
           cancel: (sessionId, runId) => { host.pause(sessionId, runId) },
           revoke: (sessionId, runId) => host.revoke(sessionId, runId),
         } : {}),

@@ -8,7 +8,7 @@ import { windowsActivatePackagedApp, windowsWindowQuery } from "./windows-window
 export interface WindowsApp {
   id: string
   name: string
-  builtIn?: "notepad" | "calculator"
+  confirmExistingWindow?: true
   /** Local application chooser only. Never include native details in a model result. */
   detail?: string
 }
@@ -49,11 +49,13 @@ interface RegistryEntry {
   name: string
   registration: string
   target: string
+  arguments?: string
 }
 
 interface ResolvedApp extends WindowsApp {
   registration: string
   executable?: string
+  arguments?: string
   explorer: boolean
 }
 
@@ -78,7 +80,8 @@ $catalog = @(
     $registration = $entry.ExtendedProperty('System.AppUserModel.ID')
     if (!$registration) { $registration = $entry.Path }
     $target = $entry.ExtendedProperty('System.Link.TargetParsingPath')
-    [pscustomobject]@{ name = [string]$entry.Name; registration = [string]$registration; target = [string]$target }
+    $arguments = $entry.ExtendedProperty('System.Link.Arguments')
+    [pscustomobject]@{ name = [string]$entry.Name; registration = [string]$registration; target = [string]$target; arguments = [string]$arguments }
   }
 )
 ConvertTo-Json -InputObject $catalog -Compress
@@ -128,7 +131,8 @@ function isUsableEntry(value: unknown): value is RegistryEntry {
   const entry = value as Partial<RegistryEntry>
   return typeof entry.name === "string" && entry.name.trim().length > 0 && entry.name.length <= 256 &&
     typeof entry.registration === "string" && entry.registration.trim().length > 0 && entry.registration.length <= 512 &&
-    typeof entry.target === "string"
+    typeof entry.target === "string" && (entry.arguments === undefined ||
+      typeof entry.arguments === "string" && !entry.arguments.includes("\x00"))
 }
 
 function isUsableWindow(value: unknown): value is WindowsAppWindow {
@@ -145,13 +149,15 @@ function isLocalExecutable(candidate: string): boolean {
   return /^[a-z]:[/\\]/i.test(candidate) && /\.exe$/i.test(candidate) && !candidate.includes("\x00")
 }
 
-async function classicAppId(registration: string, executable: string): Promise<string | undefined> {
+async function classicAppId(registration: string, executable: string, argumentsText: string): Promise<string | undefined> {
   try {
     const file = await stat(executable, { bigint: true })
     if (!file.isFile()) return
     return createHash("sha256").update(JSON.stringify([
       "desktop", normalized(registration), normalized(executable),
       String(file.ino), String(file.birthtimeNs), String(file.mtimeNs), String(file.size),
+      // Keep previous permission IDs for shortcuts with no extra arguments.
+      ...(argumentsText ? [argumentsText] : []),
     ])).digest("hex")
   } catch {
     return
@@ -170,20 +176,25 @@ async function resolveEntry(entry: RegistryEntry, systemRoot: string): Promise<R
   try {
     const executable = await realpath(target)
     if (!isLocalExecutable(executable)) return
-    const id = await classicAppId(registration, executable)
+    const argumentsText = explorer ? "" : entry.arguments ?? ""
+    if (executable.length + argumentsText.length + 4 > 32_767) return
+    const id = await classicAppId(registration, executable, argumentsText)
     if (!id) return
-    return { id, name: entry.name, registration, executable, explorer }
+    return { id, name: entry.name, registration, executable, arguments: argumentsText, explorer }
   } catch {
     // A stale or unreachable Start menu registration is not a launch candidate.
     return
   }
 }
 
-function localLaunch(executable: string, signal: AbortSignal): Promise<void> {
+function localLaunch(executable: string, argumentsText: string, signal: AbortSignal): Promise<void> {
   signal.throwIfAborted()
   return new Promise((success, fail) => {
-    const child = spawn(executable, [], {
+    // The shortcut already supplies a Windows command-line tail. Keep its quoting
+    // for the registered executable's own parser and never route through a shell.
+    const child = spawn(executable, argumentsText ? [argumentsText] : [], {
       cwd: path.dirname(executable), detached: true, windowsHide: false, stdio: "ignore", shell: false,
+      ...(argumentsText ? { argv0: '"' + executable + '"', windowsVerbatimArguments: true } : {}),
     })
     child.once("error", fail)
     child.once("spawn", () => { child.unref(); success() })
@@ -217,7 +228,7 @@ export function createWindowsApps(): WindowsApps & { visibleWindows(signal: Abor
     return known
   }
   const assertExecutable = async (known: ResolvedApp): Promise<void> => {
-    if (known.executable && await classicAppId(known.registration, known.executable) !== known.id) {
+    if (known.executable && await classicAppId(known.registration, known.executable, known.arguments ?? "") !== known.id) {
       throw new WindowsAppUnavailableError("The Windows application changed after it was selected.", "app_changed")
     }
   }
@@ -268,11 +279,9 @@ export function createWindowsApps(): WindowsApps & { visibleWindows(signal: Abor
         signal.throwIfAborted()
         const known = await resolveEntry(candidate, systemRoot)
         if (!known || apps.has(known.id)) continue
-        const registration = normalized(known.registration)
-        const builtIn = known.executable ? undefined
-          : registration === notepadId ? "notepad" : registration === calculatorId ? "calculator" : undefined
         const app: WindowsApp = Object.freeze({
-          id: known.id, name: known.name, detail: known.executable ?? known.registration, builtIn,
+          id: known.id, name: known.name, detail: known.executable ?? known.registration,
+          ...(known.arguments ? { confirmExistingWindow: true } : {}),
         })
         issued.set(app, known)
         apps.set(app.id, app)
@@ -299,7 +308,7 @@ export function createWindowsApps(): WindowsApps & { visibleWindows(signal: Abor
         throw new WindowsAppUnavailableError("The Windows application changed after it was selected.", "app_changed")
       }
       if (known.executable) {
-        await localLaunch(known.executable, signal)
+        await localLaunch(known.executable, known.arguments ?? "", signal)
       } else {
         await runPowerShell(activateScript, {
           VYKOR_COMPUTER_ACTIVATE_CODE: windowsActivatePackagedApp,

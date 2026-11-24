@@ -12,6 +12,14 @@ internal static class Fixture
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr window, IntPtr process);
+    [DllImport("user32.dll")]
+    private static extern bool AttachThreadInput(uint from, uint to, bool attach);
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr window);
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+    [DllImport("user32.dll")]
     private static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
 
     private static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
@@ -20,6 +28,22 @@ internal static class Fixture
     private static void Log(object value)
     {
         File.AppendAllText(eventPath, Json.Serialize(value) + Environment.NewLine, new UTF8Encoding(false));
+    }
+
+    private static void RequestFixtureFocus(ProbeWindow window)
+    {
+        // The test runner is a background console. Move focus only to our fixture,
+        // without sending a keystroke to whichever application Windows left active.
+        uint current = GetCurrentThreadId();
+        uint foreground = GetWindowThreadProcessId(GetForegroundWindow(), IntPtr.Zero);
+        bool attached = foreground != 0 && foreground != current && AttachThreadInput(current, foreground, true);
+        try {
+            SetForegroundWindow(window.Handle);
+            window.Activate();
+        } finally {
+            if (attached) AttachThreadInput(current, foreground, false);
+        }
+        Log(new { kind = "focus-request", target = window.Handle.ToInt64(), foreground = GetForegroundWindow().ToInt64() });
     }
 
     private sealed class ProbeWindow : Form
@@ -150,8 +174,8 @@ internal static class Fixture
             if (File.Exists(focusPath)) {
                 string name = File.ReadAllText(focusPath);
                 File.Delete(focusPath);
-                if (name == "target") target.Activate();
-                if (name == "control") control.Activate();
+                if (name == "target") RequestFixtureFocus(target);
+                if (name == "control") RequestFixtureFocus(control);
                 if (name == "target-editor") target.FocusControl(true);
                 if (name == "target-button") target.FocusControl(false);
             }

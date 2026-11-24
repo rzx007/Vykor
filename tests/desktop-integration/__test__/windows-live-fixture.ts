@@ -6,7 +6,7 @@ const windowsRoot = process.env.SystemRoot ?? String.raw`C:\Windows`
 const powershell = join(windowsRoot, "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
 const desktopPath = fileURLToPath(new URL("../../../apps/desktop/", import.meta.url))
 
-export function registerFixture(directory: string, name: string) {
+export function registerFixture(directory: string, name: string, argumentsText = "") {
   const compiler = join(windowsRoot, "Microsoft.NET", "Framework64", "v4.0.30319", "csc.exe")
   const exe = join(directory, `${name}.exe`)
   execFileSync(compiler, [
@@ -27,12 +27,13 @@ export function registerFixture(directory: string, name: string) {
       if (Test-Path -LiteralPath $path) { throw 'The fixture shortcut already exists' }
       $entry = (New-Object -ComObject WScript.Shell).CreateShortcut($path)
       $entry.TargetPath = $env:VYKOR_WINDOWS_TEST_EXE
+      $entry.Arguments = $env:VYKOR_WINDOWS_TEST_ARGUMENTS
       $entry.WorkingDirectory = Split-Path -LiteralPath $env:VYKOR_WINDOWS_TEST_EXE
       $entry.Save()
       [Console]::WriteLine($path)
     `,
   ], {
-    env: { ...process.env, VYKOR_WINDOWS_TEST_NAME: name, VYKOR_WINDOWS_TEST_EXE: exe },
+    env: { ...process.env, VYKOR_WINDOWS_TEST_NAME: name, VYKOR_WINDOWS_TEST_EXE: exe, VYKOR_WINDOWS_TEST_ARGUMENTS: argumentsText },
     encoding: "utf8", windowsHide: true, timeout: 12_000,
   }).trim()
 }

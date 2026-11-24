@@ -314,7 +314,7 @@ export const IpcChannels = {
   sessionFork: "session:fork",
   sessionClose: "session:close",
   sessionSendPrompt: "session:send-prompt",
-  computerSendPrompt: "computer:send-prompt",
+  computerAvailability: "computer:availability",
   computerReply: "computer:reply",
   computerActivityGet: "computer:activity-get",
   computerShareWindow: "computer:share-window",
@@ -895,7 +895,7 @@ export interface IpcInvokeMap
   }
   [IpcChannels.sessionClose]: { args: []; result: void }
   [IpcChannels.sessionSendPrompt]: { args: [input: SendDesktopPromptInput]; result: void }
-  [IpcChannels.computerSendPrompt]: { args: [input: SendDesktopPromptInput, automatic?: true]; result: void }
+  [IpcChannels.computerAvailability]: { args: []; result: boolean }
   [IpcChannels.computerReply]: { args: [reply: DesktopComputerInteractionReply]; result: boolean }
   [IpcChannels.computerActivityGet]: { args: [sessionId: string]; result: DesktopComputerActivity | null }
   [IpcChannels.computerShareWindow]: { args: []; result: { bytes: Uint8Array } | null }

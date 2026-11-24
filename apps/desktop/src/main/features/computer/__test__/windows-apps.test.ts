@@ -23,10 +23,13 @@ const stats = (modified: bigint) => ({
   ino: 1n, birthtimeNs: 2n, mtimeNs: modified, size: 4n, isFile: () => true,
 })
 
-function mockShell(windows: Record<string, unknown> = { desktopAvailable: true, windows: [] }) {
+function mockShell(
+  windows: Record<string, unknown> = { desktopAvailable: true, windows: [] },
+  entries: Array<(typeof catalog)[number] & { arguments?: string }> = catalog,
+) {
   mocks.shell.mockImplementation((_file, args: string[], _options, finish) => {
     const script = args.at(-1)!
-    const stdout = script.includes("$catalog =") ? JSON.stringify(catalog) : JSON.stringify(windows)
+    const stdout = script.includes("$catalog =") ? JSON.stringify(entries) : JSON.stringify(windows)
     finish(null, { stdout })
   })
 }
@@ -59,6 +62,20 @@ describe("Windows application identity", () => {
     await expect(native.launch({ ...app! }, signal)).rejects.toMatchObject({ reason: "app_changed" })
     await native.launch(app!, signal)
     expect(mocks.launch).toHaveBeenCalledExactlyOnceWith(classic, [], expect.objectContaining({ shell: false }))
+  })
+
+  it("launches the registered arguments verbatim and rejects a shortcut changed after selection", async () => {
+    const argumentsText = '--profile "With spaces" "A & B"'
+    mockShell(undefined, [{ ...catalog[0]!, target: "C:\\Program Files\\Editor.exe", arguments: argumentsText }])
+    const native = createWindowsApps()
+    const [app] = await native.discover("Example", signal)
+    await native.launch(app!, signal)
+    expect(mocks.launch).toHaveBeenCalledExactlyOnceWith("C:\\Program Files\\Editor.exe", [argumentsText],
+      expect.objectContaining({ shell: false, argv0: '"C:\\Program Files\\Editor.exe"', windowsVerbatimArguments: true }))
+
+    mockShell(undefined, [{ ...catalog[0]!, target: "C:\\Program Files\\Editor.exe", arguments: "--changed" }])
+    await expect(native.launch(app!, signal)).rejects.toMatchObject({ reason: "app_changed" })
+    expect(mocks.launch).toHaveBeenCalledOnce()
   })
 
   it("rejects approval bound to an executable replaced before window reuse", async () => {

@@ -14,7 +14,7 @@ import { showComputerControlOverlay } from "./computer-control-overlay"
 
 export interface ComputerInteraction {
   isRememberedApp?(id: string): boolean
-  authorizeApp(app: DesktopComputerAppGrant, signal: AbortSignal, sessionId: string, onceOnly?: true): Promise<boolean | "remembered">
+  authorizeApp(app: DesktopComputerAppGrant, signal: AbortSignal, sessionId: string): Promise<boolean | "remembered">
   chooseTarget(candidates: readonly DesktopComputerCandidate[], signal: AbortSignal, sessionId?: string, confirmChange?: true): Promise<string | undefined>
   emergencyStop?(sessionId: string, runId: string): void
   showForeground?(sessionId: string, runId: string, signal: AbortSignal): Promise<void>
@@ -126,12 +126,12 @@ export function createComputerInteraction(
         if (!signal.aborted) emergencyStop(sessionId, runId)
       })
     },
-    async authorizeApp(app: DesktopComputerAppGrant, operationSignal: AbortSignal, sessionId: string, onceOnly?: true): Promise<boolean | "remembered"> {
+    async authorizeApp(app: DesktopComputerAppGrant, operationSignal: AbortSignal, sessionId: string): Promise<boolean | "remembered"> {
       const signal = AbortSignal.any([ownerSignal, operationSignal])
       if (signal.aborted || replyCheck(sessionId)?.() === false) return false
-      if (!onceOnly && isRememberedApp(app.id)) return "remembered"
-      const choice = await ask(owner, { id: randomUUID(), kind: "authorize", sessionId, appName: app.name, ...(onceOnly ? { onceOnly } : {}) },
-        onceOnly ? ["once"] : ["once", "always"], signal, replyCheck(sessionId))
+      if (isRememberedApp(app.id)) return "remembered"
+      const choice = await ask(owner, { id: randomUUID(), kind: "authorize", sessionId, appName: app.name },
+        ["once", "always"], signal, replyCheck(sessionId))
       if (signal.aborted) return false
       if (choice === "always") {
         const grants = listComputerAppGrants().filter((grant) => grant.id !== app.id)

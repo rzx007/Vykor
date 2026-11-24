@@ -77,7 +77,7 @@ const RECOVERY_FINALIZATION_PROMPT =
 const CHILD_FINALIZATION_PROMPT =
   "Stop using tools for this response. This delegated run reached its turn limit. State what was completed, what remains unfinished, and the evidence you have. Do not claim the task is verified.";
 
-type ModelToolImage = { source: MemoryImageSource; isCurrent(): boolean };
+type ModelToolImage = { source: MemoryImageSource; isCurrent(): boolean; onPresented?(): void };
 const OUTPUT_CONTINUATION_PROMPT =
   "Continue the previous assistant response from where it was cut off. Do not repeat its existing text. Complete the remaining answer.";
 
@@ -587,20 +587,22 @@ export class QueryEngine implements IQueryEngine {
       let request = buildRequest();
       let inputBoundary = this.contextInputMeasurement.capture(request, requestConfiguration, requestHistory());
       let imagePrepared = false;
+      let imageInAttempt = false;
       const prepareRequest = toolImage ? () => {
         if (imagePrepared || !toolImage.image.isCurrent()) return request;
         imagePrepared = true;
         const withImage = buildRequest(true);
         inputBoundary = this.contextInputMeasurement.capture(withImage, requestConfiguration, requestHistory());
-        const hasPrivateImage = withImage.messages.some(message => message.type === "tool_result"
+        imageInAttempt = withImage.messages.some(message => message.type === "tool_result"
           && message.toolUseId === toolImage.toolUseId
           && message.content.some(block => block.type === "image" && block.source === toolImage.image.source));
-        return hasPrivateImage ? { ...withImage, isEphemeralImageCurrent: toolImage.image.isCurrent } : withImage;
+        return imageInAttempt ? { ...withImage, isEphemeralImageCurrent: toolImage.image.isCurrent } : withImage;
       } : undefined;
 
       // 网络重试冻结请求；接口明确报超长时，仅允许压缩后重建请求一次。
       // 临时窗口图像仅在首个实际调用前附上，重试沿用无图的请求。
       while (true) {
+        imageInAttempt = false;
         yield { type: "generation_started", generationId, attempt };
 
         const modelAttempt = yield* runModelAttempt({
@@ -683,6 +685,7 @@ export class QueryEngine implements IQueryEngine {
           continue;
         }
 
+        if (clientInvoked && imageInAttempt && toolImage?.image.isCurrent()) toolImage.image.onPresented?.();
         // Settle before yielding buffered output: cancellation at those yields
         // must not strand a request whose provider has already returned.
         toolUses = attemptToolUses;
@@ -1405,7 +1408,7 @@ export class QueryEngine implements IQueryEngine {
           },
         );
         if (modelImages && internalTools.has(toolUse.name)) {
-          context.attachModelImage = (source, isCurrent) => { modelImages.set(toolUse.id, { source, isCurrent }); };
+          context.attachModelImage = (source, isCurrent, onPresented) => { modelImages.set(toolUse.id, { source, isCurrent, onPresented }); };
         }
         return context;
       },

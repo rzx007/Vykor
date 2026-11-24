@@ -1,4 +1,3 @@
-export const COMPUTER_AVAILABLE_ARGUMENT = "--vykor-computer-ready"
 
 export interface DesktopComputerAppGrant {
   id: string
@@ -12,7 +11,7 @@ export interface DesktopComputerCandidate {
 }
 
 export type DesktopComputerPrompt = { id: string } & (
-  | { kind: "authorize"; sessionId: string; appName: string; onceOnly?: true }
+  | { kind: "authorize"; sessionId: string; appName: string }
   | { kind: "choose"; candidates: readonly DesktopComputerCandidate[]; confirmChange?: true }
 )
 

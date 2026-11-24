@@ -7,6 +7,7 @@ type ElementFacts = Omit<WindowsDriverElement, "token">
 export interface ComputerObservation {
   windowRef: string
   digest: string
+  selection: string
   focusIdentity?: string
   elements: Map<string, ElementFacts>
   display: {
@@ -62,6 +63,11 @@ export function observationDigest(state: WindowsDriverObservation): string {
   ]))).digest("hex")
 }
 
+export function selectionContext(state: WindowsDriverObservation): string {
+  return JSON.stringify(state.elements.filter(element => eligible(element) && element.selected === true)
+    .map(({ identity, automationId, label, role }) => [identity, automationId, label, role]))
+}
+
 export function projectObservation(windowRef: string, state: WindowsDriverObservation): ComputerObservation {
   const elements = new Map<string, ElementFacts>()
   const display: ComputerObservation["display"] = { elements: [], limited: false }
@@ -98,7 +104,7 @@ export function projectObservation(windowRef: string, state: WindowsDriverObserv
     elements.set(row.ref, element)
   }
   display.elements = candidates.flatMap(({ row }) => elements.has(row.ref) ? [row] : [])
-  return { windowRef, digest: observationDigest(state), focusIdentity: state.focusIdentity, elements, display }
+  return { windowRef, digest: observationDigest(state), selection: selectionContext(state), focusIdentity: state.focusIdentity, elements, display }
 }
 
 export function supportsAction(element: ElementFacts, action: ComputerSemanticAction): boolean {
@@ -124,16 +130,14 @@ export function alreadySatisfied(action: ComputerSemanticAction, control: Elemen
   return action.type === "choose" && (control.actions.includes("select") ? control.selected : control.checked) === true
 }
 
-export function needsApproval(action: ComputerSemanticAction, control: ElementFacts, notepad: boolean): boolean {
-  if (action.type === "scroll") return false
-  if (!notepad) return true
-  const label = control.label.replaceAll("&", "").trim().toLowerCase()
-  const role = controlType(control.role)
-  if (action.type === "set_text" && role === "document" && /^(?:text editor|文本编辑器)$/iu.test(label)) {
-    return control.value === undefined || control.valueTruncated === true || !normalizedText(action.text).includes(normalizedText(control.value))
-  }
-  return !(action.type === "invoke" && role === "menuitem"
-    && /^(?:file|edit|view|文件|编辑|查看|new window|新建窗口)$/iu.test(label))
+export function sameActionState(action: ComputerSemanticAction, before: ElementFacts, after: ElementFacts): boolean {
+  if (before.automationId !== after.automationId) return false
+  if (action.type === "scroll") return action.direction === "left" || action.direction === "right"
+    ? before.horizontalScrollPercent === after.horizontalScrollPercent : before.verticalScrollPercent === after.verticalScrollPercent
+  return before.value === after.value && before.valueDigest === after.valueDigest
+    && before.valueTruncated === after.valueTruncated && before.checked === after.checked
+    && before.selected === after.selected && before.expanded === after.expanded
+    && before.actions.join("\n") === after.actions.join("\n")
 }
 
 export function approvalReason(app: string, title: string, action: ComputerSemanticAction, control: ElementFacts): string {

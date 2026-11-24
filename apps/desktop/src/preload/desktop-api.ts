@@ -1,7 +1,7 @@
 import { BusinessDataChannels, type BusinessDataKey } from "../shared/business-data-types"
 import { ipcRenderer, webUtils } from "electron"
 import type { DesktopWindowThemeSource } from "../shared/window-theme-types"
-import { COMPUTER_AVAILABLE_ARGUMENT, type DesktopComputerActivityUpdate, type DesktopComputerControl, type DesktopComputerInteractionEvent, type DesktopComputerInteractionReply } from "../shared/computer-types"
+import type { DesktopComputerActivityUpdate, DesktopComputerControl, DesktopComputerInteractionEvent, DesktopComputerInteractionReply } from "../shared/computer-types"
 import {
   TerminalSettingsChannels,
   TerminalSettingsEvents,
@@ -592,9 +592,7 @@ export const desktopAPI = {
       invoke(IpcChannels.skillRemove, input),
   },
   computer: {
-    supported: process.argv.includes(COMPUTER_AVAILABLE_ARGUMENT),
-    sendPrompt: (input: IpcInvokeMap[typeof IpcChannels.computerSendPrompt]["args"][0], automatic?: true) =>
-      invoke(IpcChannels.computerSendPrompt, input, automatic),
+    isAvailable: () => invoke(IpcChannels.computerAvailability),
     onInteraction: (handler: (event: DesktopComputerInteractionEvent) => void) => {
       const receive = (_event: Electron.IpcRendererEvent, update: DesktopComputerInteractionEvent) => handler(update)
       ipcRenderer.on(IpcEvents.computerInteraction, receive)

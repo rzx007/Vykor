@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { assertSupportedOutputSchema } from "@vykor/agent-runtime";
-import { SessionApplicationError } from "../session-application-error.js";
+import { ComputerSessionUnavailableError, SessionApplicationError } from "../session-application-error.js";
 import { readSessionObservationGrant } from "./session-observation-grant.js";
 import { normalizeSessionUserInputItems, sessionUserInputText } from "@vykor/domain-contracts/inputs";
 import type { SessionUserInputItem } from "@vykor/domain-contracts/inputs";
@@ -149,7 +149,7 @@ export async function admitPromptWork(
 
   if (computer) {
     if (delivery !== "queue" || !options.runtimeQueue.hasRuntime) {
-      throw new SessionApplicationError(409, "Computer Use requires a new queued Run with a configured model");
+      throw new ComputerSessionUnavailableError("Computer Use requires a new queued Run with a configured model");
     }
     computer.assertCurrent();
   }

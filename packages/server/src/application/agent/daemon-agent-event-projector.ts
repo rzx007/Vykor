@@ -918,7 +918,7 @@ export class DaemonAgentEventProjector {
       attachedScreenshot = false;
       throw projectionError;
     } finally {
-      if (!attachedScreenshot) screenshot?.discard();
+      if (!attachedScreenshot) screenshot?.discard?.();
     }
     this.context.log({
       level: failed ? "error" : interrupted ? "warn" : "info",

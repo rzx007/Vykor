@@ -136,20 +136,20 @@ function send(response: ServerResponse, event: object) {
   response.write("data: " + JSON.stringify(event) + "\n\n")
 }
 
-it.each([true, false])("waits for Computer input release before Browser approval and inspection (released=%s)", async (released) => {
+it.each([true, false])("waits for Computer input release after Browser approval and before inspection (released=%s)", async (released) => {
   const { browser, page } = createBrowser()
   const daemon = await createDaemon()
   const handoff = Promise.withResolvers<boolean>()
-  const beforeCommand = vi.fn(() => handoff.promise)
+  const releaseComputerInput = vi.fn(() => handoff.promise)
   const ownerToken = {}
   cleanups.push(startBrowserBridge({
-    browser, baseUrl: daemon.baseUrl, token: "registry-token", beforeCommand,
+    browser, baseUrl: daemon.baseUrl, token: "registry-token", releaseComputerInput,
     getOwnerSessionToken: () => ownerToken,
   }))
   await vi.waitFor(() => expect(daemon.streams).toHaveLength(1))
   send(daemon.streams[0]!, { ...command, requestId: "handoff", deadlineAt: Date.now() + 5_000 })
-  await vi.waitFor(() => expect(beforeCommand).toHaveBeenCalledExactlyOnceWith("session-1"))
-  expect(daemon.requests).toEqual([])
+  await vi.waitFor(() => expect(releaseComputerInput).toHaveBeenCalledExactlyOnceWith("session-1"))
+  expect(daemon.requests.map(request => request.path)).toEqual(["/browser-host/connection-1/handoff/approval"])
   expect(page.executeJavaScript).not.toHaveBeenCalled()
   handoff.resolve(released)
   await vi.waitFor(() => expect(daemon.requests.at(-1)?.path).toMatch(/handoff\/result$/u))
@@ -157,10 +157,28 @@ it.each([true, false])("waits for Computer input release before Browser approval
     expect(daemon.requests[0]?.path).toMatch(/handoff\/approval$/u)
     expect(daemon.requests.at(-1)?.body).toMatchObject({ result: { pageText: "Page text" } })
   } else {
-    expect(daemon.requests).toHaveLength(1)
-    expect(daemon.requests[0]?.body).toMatchObject({ error: expect.stringContaining("键鼠已释放") })
+    expect(daemon.requests).toHaveLength(2)
+    expect(daemon.requests.at(-1)?.body).toMatchObject({ error: expect.stringContaining("键鼠已释放") })
     expect(page.executeJavaScript).not.toHaveBeenCalled()
   }
+})
+
+it("does not release Computer input for an unowned or stale Browser target", async () => {
+  const { browser, page } = createBrowser()
+  const daemon = await createDaemon()
+  const releaseComputerInput = vi.fn(async () => true)
+  const ownerToken = {}
+  cleanups.push(startBrowserBridge({
+    browser, baseUrl: daemon.baseUrl, token: "registry-token", releaseComputerInput,
+    getOwnerSessionToken: (_owner, session) => session === "session-1" ? ownerToken : undefined,
+  }))
+  await vi.waitFor(() => expect(daemon.streams).toHaveLength(1))
+  send(daemon.streams[0]!, { ...command, sessionId: "unowned", requestId: "unowned", deadlineAt: Date.now() + 5_000 })
+  await vi.waitFor(() => expect(daemon.requests.at(-1)?.path).toMatch(/unowned\/result$/u))
+  send(daemon.streams[0]!, { ...command, action: { action: "type", text: "x", elementId: "missing" }, requestId: "stale", deadlineAt: Date.now() + 5_000 })
+  await vi.waitFor(() => expect(daemon.requests.at(-1)?.path).toMatch(/stale\/result$/u))
+  expect(releaseComputerInput).not.toHaveBeenCalled()
+  expect(page.executeJavaScript).not.toHaveBeenCalled()
 })
 
 it("posts approval and the screenshot result under the stream connection and command IDs", async () => {

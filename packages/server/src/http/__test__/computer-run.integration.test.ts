@@ -37,6 +37,7 @@ async function fixture(
   action: string | { action: "capture"; purpose: "result" } = "observe",
   modelResponse?: (params: StreamMessageParams, call: number) => void | AsyncIterable<StreamEvent>,
   browserHost?: BrowserHost,
+  supportsImage = action === "capture",
 ) {
   const toolInput = typeof action === "string" ? { action } : action;
   const directory = mkdtempSync(join(tmpdir(), "vk-computer-run-"));
@@ -72,7 +73,7 @@ async function fixture(
     },
     async createAgent({ options }) {
       const agent = await createDefaultNodeAgent({ ...options, client,
-        ...(toolInput.action === "capture" ? { resolveModelImageSupport: async () => true } : {}),
+        resolveModelImageSupport: async () => supportsImage,
       });
       return { agent, host: agent.host };
     },
@@ -116,6 +117,7 @@ async function fixture(
         post(path + "/submit", { sessionId: target, input: prompt }, desktopHeaders),
       result: (requestId: string, result: Record<string, unknown> = { text: "Verified fake window" }) =>
         post(path + "/" + requestId + "/result", { result }, desktopHeaders),
+      dispatch: (requestId: string) => post(path + "/" + requestId + "/dispatch", {}, desktopHeaders),
       error: (requestId: string, executionState: "unknown" | "not_started") =>
         post(path + "/" + requestId + "/result", { error: "Windows fixture outcome", executionState }, desktopHeaders),
       revokeImage: (requestId: string, auth = desktopHeaders) =>
@@ -167,7 +169,7 @@ it("corrects redundant observe parameters without dispatching them to Desktop", 
   } finally { await f.close(); }
 });
 
-it.each(["deliver", "revoke", "stop"] as const)("handles a result screenshot before final delivery: %s", async outcome => {
+it.each(["deliver", "revoke", "stop", "import-failed", "revoke-during-import"] as const)("handles a result screenshot before final delivery: %s", async outcome => {
   const finishAnswer = Promise.withResolvers<void>();
   const f = await fixture("full_access", { action: "capture", purpose: "result" }, (_params, call) => {
     if (call !== 2) return;
@@ -177,7 +179,24 @@ it.each(["deliver", "revoke", "stop"] as const)("handles a result screenshot bef
       yield { type: "complete", stopReason: "end_turn" };
     })();
   });
+  const importStarted = Promise.withResolvers<AbortSignal>();
+  const releaseImport = Promise.withResolvers<void>();
   try {
+    if (outcome === "import-failed") {
+      vi.spyOn(f.server.application.attachments, "import").mockRejectedValueOnce(new Error("fixture import failed"));
+    } else if (outcome === "revoke-during-import") {
+      const attachments = f.server.application.attachments;
+      const actualImport = attachments.import.bind(attachments);
+      vi.spyOn(attachments, "import").mockImplementationOnce(input => {
+        const content = input.content.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+          async flush() {
+            importStarted.resolve(input.signal!);
+            await releaseImport.promise;
+          },
+        }));
+        return actualImport({ ...input, content });
+      });
+    }
     const desktop = await f.open();
     const run = await f.run(await desktop.submit(sessionId, input("result-screenshot")));
     const captured = await desktop.next();
@@ -189,6 +208,13 @@ it.each(["deliver", "revoke", "stop"] as const)("handles a result screenshot bef
     if (outcome === "revoke") expect((await desktop.revokeImage(captured.requestId)).status).toBe(200);
     if (outcome === "stop") expect((await f.post(`/sessions/${sessionId}/interrupt`, { expectedRunId: run.runId })).ok).toBe(true);
     finishAnswer.resolve();
+    if (outcome === "revoke-during-import") {
+      const signal = await importStarted.promise;
+      try {
+        expect((await desktop.revokeImage(captured.requestId)).status).toBe(200);
+        expect(signal.aborted).toBe(true);
+      } finally { releaseImport.resolve(); }
+    }
     expect(await f.awaitRun(run)).toMatchObject({ status: outcome === "stop" ? "interrupted" : "completed" });
     expect(JSON.stringify(f.requests)).not.toContain(frame.data);
     const parts = f.server.store.conversations.listMessageParts(sessionId);
@@ -203,7 +229,16 @@ it.each(["deliver", "revoke", "stop"] as const)("handles a result screenshot bef
     } else {
       expect(attachments).toEqual([]);
     }
-  } finally { finishAnswer.resolve(); await f.close(); }
+    const screenshotError = parts.find(part => part.type === "error" && part.id === `computer-screenshot:${run.runId}`);
+    if (outcome === "import-failed") {
+      expect(screenshotError?.text).toContain("截图未能保存");
+    } else {
+      expect(screenshotError).toBeUndefined();
+    }
+    if (outcome === "revoke-during-import") {
+      expect(f.server.store.attachments.listAttachments()).toMatchObject([{ status: "failed", failureCode: "attachment_aborted" }]);
+    }
+  } finally { finishAnswer.resolve(); releaseImport.resolve(); await f.close(); }
 }, 20_000);
 
 it("attaches a window image to one model request and keeps it out of durable history", async () => {
@@ -321,6 +356,61 @@ it.each([frame.data, frame.data.slice(0, 32)])("keeps an echoed screenshot paylo
   } finally { await f.close(); }
 }, 20_000);
 
+it("lets a fresh visual observation verify foreground input without a semantic read", async () => {
+  const steps = [{ action: "key", key: "Enter" }, { action: "capture" }, { action: "capture", purpose: "result" }];
+  const f = await fixture("full_access", "capture", async function* (_params, call) {
+    const input = steps[call - 1];
+    if (!input) {
+      yield { type: "text_delta", delta: "Here is the result." };
+      yield { type: "complete", stopReason: "end_turn" };
+      return;
+    }
+    yield { type: "tool_use_start", toolUse: { type: "tool_use", id: `visual-${call}`, name: "Computer", input } };
+    yield { type: "complete", stopReason: "tool_use" };
+  });
+  try {
+    const desktop = await f.open();
+    const run = await f.run(await desktop.submit(sessionId, input("visual-verify")));
+    const key = await desktop.next();
+    if (key.type !== "execute") throw new Error("Expected foreground input");
+    expect(await desktop.dispatch(key.requestId)).toMatchObject({ ok: true });
+    expect(await desktop.result(key.requestId, { status: "sent", text: "Enter was sent" })).toMatchObject({ ok: true });
+    for (const action of [{ type: "capture" }, { type: "capture", purpose: "result" }]) {
+      const capture = await desktop.next();
+      if (capture.type !== "execute") throw new Error("Expected visual capture");
+      expect(capture.action).toEqual(action);
+      expect(await desktop.result(capture.requestId, { text: "Visible result", image: frame })).toMatchObject({ ok: true });
+    }
+    expect(await f.awaitRun(run)).toMatchObject({ status: "completed" });
+  } finally { await f.close(); }
+});
+
+it.each(["text-only", "same generation"] as const)("does not count an unseen visual capture as verification (%s)", async mode => {
+  const f = await fixture("full_access", "capture", async function* (_params, call) {
+    const actions = call === 1 ? [{ action: "key", key: "Enter" }]
+      : call === 2 ? [{ action: "capture" }, ...(mode === "same generation" ? [{ action: "capture", purpose: "result" }] : [])]
+        : call === 3 && mode === "text-only" ? [{ action: "capture", purpose: "result" }]
+          : [];
+    for (const [index, input] of actions.entries())
+      yield { type: "tool_use_start", toolUse: { type: "tool_use", id: `verify-${call}-${index}`, name: "Computer", input } };
+    yield { type: "complete", stopReason: actions.length ? "tool_use" : "end_turn" };
+  }, undefined, mode !== "text-only");
+  try {
+    const desktop = await f.open();
+    const run = await f.run(await desktop.submit(sessionId, input("unseen-visual")));
+    const key = await desktop.next();
+    if (key.type !== "execute") throw new Error("Expected foreground input");
+    expect((await desktop.dispatch(key.requestId)).ok).toBe(true);
+    expect((await desktop.result(key.requestId, { status: "sent", text: "Key sent" })).ok).toBe(true);
+    const capture = await desktop.next();
+    if (capture.type !== "execute") throw new Error("Expected visual capture");
+    expect((await desktop.result(capture.requestId, { text: "Window captured", image: frame })).ok).toBe(true);
+    expect(await desktop.next()).toEqual({ type: "ended", run });
+    const blocked = f.requests.at(-1)?.messages.findLast(message => message.type === "tool_result");
+    expect(blocked).toMatchObject({ isError: true, executionState: "not_started" });
+  } finally { await f.close(); }
+});
+
 it("keeps an uncertain action in history, blocks another mutation and still permits observation", async () => {
   const steps = [
     { action: "open_app", app: "Notepad" },
@@ -343,11 +433,12 @@ it("keeps an uncertain action in history, blocks another mutation and still perm
     const first = await desktop.next();
     if (first.type !== "execute") throw new Error("Expected the first Computer action");
     expect(first.action).toEqual({ type: "open_app", app: "Notepad" });
+    expect((await desktop.dispatch(first.requestId)).ok).toBe(true);
     expect((await desktop.error(first.requestId, "unknown")).status).toBe(200);
     const observation = await desktop.next();
     if (observation.type !== "execute") throw new Error("Expected a Computer observation");
     expect(observation.action).toEqual({ type: "observe" });
-    await desktop.result(observation.requestId, { text: '{"status":"observed","observation":[]}' });
+    await desktop.result(observation.requestId, { status: "observed", text: "Current control state" });
     const next = await desktop.next();
     if (next.type !== "execute") throw new Error("Expected a Computer action after observation");
     expect(next.action).toEqual({ type: "open_app", app: "Paint" });
@@ -462,7 +553,7 @@ it("exposes the real Computer tool only to a newly admitted Desktop user run", a
     expect((await reopened.result(pending.requestId)).status).toBe(404);
     expect(await f.run(await reopened.submit(sessionId, input("in-flight")))).toEqual(inFlight);
     expect(f.requests.at(-1)?.messages.findLast(message => message.type === "tool_result")).toMatchObject({
-      isError: true, executionState: "unknown",
+      isError: true, executionState: "not_started",
     });
   } finally {
     await f.close();
@@ -479,7 +570,7 @@ it("lets Desktop handle app consent and still revokes interrupted or disconnecte
     await desktop.close();
     expect(await f.awaitRun(identity)).toMatchObject({ status: "completed" });
     const denied = f.requests.at(-1)?.messages.findLast(message => message.type === "tool_result");
-    expect(denied).toMatchObject({ isError: true, executionState: "unknown" });
+    expect(denied).toMatchObject({ isError: true, executionState: "not_started" });
 
     const reopened = await f.open();
     const interrupted = await f.run(await reopened.submit(sessionId, input("interrupt")));

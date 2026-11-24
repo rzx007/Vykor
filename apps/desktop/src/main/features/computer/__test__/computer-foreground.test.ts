@@ -87,7 +87,7 @@ it("keeps the foreground notice and Esc active through a full-access click", asy
   await f.execute({ type: "foreground" })
   const { ref } = await f.snapshot()
   expect(await f.execute({ type: "click", frameRef: ref, x: 20, y: 30 })).toMatchObject({ text: expect.stringContaining('"sent"') })
-  expect(f.approve).toHaveBeenCalledTimes(2)
+  expect(f.approve).not.toHaveBeenCalled()
   expect(f.showForeground).toHaveBeenCalledOnce()
   expect(f.enter).toHaveBeenCalledOnce()
   expect(f.release).not.toHaveBeenCalled()
@@ -179,6 +179,28 @@ it("yields the keyboard and mouse to Browser and requires a fresh window frame o
   await f.execute({ type: "foreground" })
   expect(await f.execute({ type: "click", frameRef: ref, x: 3, y: 4 })).toMatchObject({ executionState: "not_started" })
   expect(f.perform).not.toHaveBeenCalled()
+})
+
+it("releases foreground for Browser without revoking the result capture", async () => {
+  const f = fixture()
+  await f.execute({ type: "open_app", app: "First" })
+  await f.execute({ type: "foreground" })
+  await f.execute({ type: "capture", purpose: "result" })
+  f.invalidateCapturedImage.mockClear()
+  await expect(f.host.yieldInputToBrowser(run.sessionId)).resolves.toBe(true)
+  expect(f.invalidateCapturedImage).not.toHaveBeenCalled()
+  expect(f.release).toHaveBeenCalledOnce()
+})
+
+it("confines an unverified release to the native input lease", async () => {
+  const f = fixture()
+  await f.execute({ type: "open_app", app: "First" })
+  await f.execute({ type: "foreground" })
+  f.release.mockResolvedValueOnce({ released: false, exited: false })
+  await expect(f.host.yieldInputToBrowser(run.sessionId)).resolves.toBe(false)
+  await expect(f.host.yieldInputToBrowser(run.sessionId)).resolves.toBe(false)
+  await expect(f.host.yieldInputToBrowser("another-chat")).resolves.toBe(true)
+  expect(await f.execute({ type: "foreground" })).toMatchObject({ executionState: "not_started" })
 })
 
 it("retires input and images on switch, pause, capture opt-out, and Stop", async () => {

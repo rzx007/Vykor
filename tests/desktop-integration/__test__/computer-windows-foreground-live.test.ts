@@ -168,6 +168,7 @@ it.skipIf(!realWindows).each([["key", "ask"], ["click", "ask"], ["click", "full_
   const up = kind === "key" ? "key-up-F7" : "mouse-up-Left"
   const held = Promise.withResolvers<boolean>()
   const showForeground = vi.fn(async () => {})
+  const outcomes: string[] = []
   type Event = { kind: string; target?: number; hwnd?: number; foreground?: number; buttonX?: number; buttonY?: number }
   const events = (): Event[] => existsSync(tracePath)
     ? readFileSync(tracePath, "utf8").split(/\r?\n/u).slice(0, -1).map(line => JSON.parse(line)) : []
@@ -232,7 +233,7 @@ it.skipIf(!realWindows).each([["key", "ask"], ["click", "ask"], ["click", "full_
         await apps.launch(app, signal)
         await expect.poll(target, { timeout: 6_000 }).toBeDefined()
         writeFileSync(join(directory, "focus.request"), "target")
-        await expect.poll(() => events().filter(event => event.kind === "activate").at(-1)?.foreground,
+        await expect.poll(() => events().filter(event => event.kind === "focus-request").at(-1)?.foreground,
           { timeout: 4_000 }).toBe(target()!.target)
       },
       windows: async (app, signal) => (await apps.windows(app, signal)).filter(window => window.windowId === target()?.target),
@@ -245,7 +246,12 @@ it.skipIf(!realWindows).each([["key", "ask"], ["click", "ask"], ["click", "full_
       capture: async (...args) => { frame = await native.capture(...args); return frame },
     })
     const desktop = new DesktopComputerBridge({ baseUrl, daemonPid: process.pid, daemonToken, computerToken, authorizeDaemon: () => {},
-      execute: (...args) => host.execute(...args), revoke: (session, run) => host.revoke(session, run),
+      async execute(...args) {
+        const result = await host.execute(...args)
+        outcomes.push(args[0].action.type + " " + ("error" in result ? result.error : result.text))
+        return result
+      },
+      revoke: (session, run) => host.revoke(session, run),
       cancel: (session, run) => { host.pause(session, run) },
     })
     bridge = desktop
@@ -277,6 +283,8 @@ it.skipIf(!realWindows).each([["key", "ask"], ["click", "ask"], ["click", "full_
     await expect.poll(() => events().filter(event => event.kind === up), { timeout: 4_000 })
       .toMatchObject([{ hwnd: target()!.target }])
     expect(events().filter(event => event.kind === down)).toMatchObject([{ hwnd: target()!.target }])
+  } catch (error) {
+    throw new Error(`Foreground fixture failed. ${outcomes.join(" | ")}`, { cause: error })
   } finally {
     bridge?.close()
     await server?.close()

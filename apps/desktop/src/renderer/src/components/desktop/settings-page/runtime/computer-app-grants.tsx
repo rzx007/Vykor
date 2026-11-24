@@ -6,12 +6,17 @@ import { SettingsGroup, SettingsRow } from "../shared/settings-group"
 
 export function ComputerAppGrants(): React.JSX.Element | null {
   const computer = window.desktop?.computer
+  const [available, setAvailable] = useState(false)
   const [grants, setGrants] = useState<DesktopComputerAppGrant[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [revoking, setRevoking] = useState(false)
   useEffect(() => {
-    if (!computer?.supported) return
+    if (!computer) return
     let active = true
+    void computer.isAvailable?.().then(
+      (result) => { if (active) setAvailable(result) },
+      () => {},
+    )
     void computer.listAppGrants().then(
       (result) => { if (active) setGrants(result) },
       (failure) => { if (active) setError(errorMessage(failure)) },
@@ -19,7 +24,7 @@ export function ComputerAppGrants(): React.JSX.Element | null {
     return () => { active = false }
   }, [computer])
 
-  if (!computer?.supported) return null
+  if (!available && !grants?.length) return null
   async function revoke(id: string) {
     setRevoking(true)
     setError(null)

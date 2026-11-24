@@ -181,7 +181,7 @@ public static class VykorWindowsSemanticQuery
             if (!WindowMatches(hwnd, owner, pid, thread, session, started, app, appStarted)) return "refused";
             var currentTitle = Title(hwnd);
             if (VykorWindowsAuthentication.SensitiveCaption(currentTitle)) return "handoff";
-            if (currentTitle == null || (operation != "observe" && currentTitle != title)) return "refused";
+            if (currentTitle == null || currentTitle != title) return "refused";
             var controls = new List<Control>();
             var root = AutomationElement.FromHandle(new IntPtr(hwnd));
             if (root == null || root.Current.NativeWindowHandle != hwnd) return "refused";
