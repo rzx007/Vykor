@@ -55,14 +55,14 @@ export function createComputerHostRoutes({ bridge, token, available, submit }: C
       if (!bridge.connectionSignal(connectionId)) return connectionGone();
       const body = await readDesktopHostJson(c.req.raw, maxApprovalBytes, "Computer");
       if (body instanceof Response) return body;
-      const { proposalId, reason, ordinary } = body;
+      const { proposalId, reason, ordinary } = body; // Older Desktop builds may still send ordinary.
       if (Object.keys(body).length !== (ordinary === true ? 3 : 2) || typeof proposalId !== "string"
         || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(proposalId)
         || typeof reason !== "string" || !reason.trim() || reason.length > 300 || /[\p{Cc}\p{Cf}]/u.test(reason)) {
         return errorResponse(400, "Invalid Computer approval proposal.");
       }
       const approved = await bridge.requestApproval(
-        connectionId, requestId, { proposalId, reason: reason.trim(), ...(ordinary === true ? { ordinary } : {}) }, c.req.raw.signal,
+        connectionId, requestId, { proposalId, reason: reason.trim() }, c.req.raw.signal,
       );
       return approved === undefined
         ? errorResponse(404, "Computer approval proposal is no longer available.")

@@ -4,7 +4,7 @@
 
 - 官方插件的构建和单测由 `vykor-plugins` 仓库负责。宿主不再包含或准备这些插件的源码；需要跨仓库兼容性检查时，显式设置测试环境变量 `VYKOR_OFFICIAL_PLUGINS_DIR` 指向该仓库的 `plugins` 目录。
 - `prepare-office-engine.mjs`：按宿主 Office 模块的固定摘要准备引擎并复制该模块的许可证；下载和缓存均独立于插件，不分发或安装插件。插件发行准备由独立的插件市场仓库负责。
-- `prepare-cua-driver.mjs` 准备 Windows x64 的 Cua 驱动。先验发布压缩包，再验可执行文件的摘要、架构和厂商签名，输出到 Desktop 构建目录。 [运行方式](../apps/desktop/resources/computer-windows/README.md)
+- `prepare-cua-driver.mjs` 准备 Windows x64 的 Cua 驱动。先验发布压缩包，再验可执行文件的摘要、架构和厂商签名，输出到 Desktop 构建目录。开发启动用 `--dev` 复用有效驱动，缺失时自动准备。 [运行方式](../apps/desktop/resources/computer-windows/README.md)
 - `check-docs.mjs`：检查根说明、全部 docs Markdown 和各模块 README 的链接与章节、当前源码入口、状态、总目录及协议版本声明。根 `pnpm check-docs` 先运行检查器回归测试，再扫描文档；`documentation-policy.mjs` 负责状态分类、协议版本比较和模块 README 收集。
 - `sync-plugin-app-client.mjs`：从 `packages/plugins/src/app-client/client.ts` 生成独立插件使用的浏览器模块和类型声明；`--check` 核对示例、参考资产和天气模板中的副本，不改文件。
 - `architecture-boundaries.mjs`：检查跨模块依赖和旧 Store 业务调用数量，`architecture-baseline.json` 只允许数量下降。仅精确路径 `packages/server/src/application/daemon-application.ts` 与 `packages/server/src/application/default-node-application.ts` 的 `store.close()` 属于组装根的数据库生命周期，不计入旧业务调用；同文件其他 Store 方法、其他文件的 `close()` 仍计数，Windows 路径分隔符先归一化。分类移出已有调用时等量降低基线，不保留新增业务调用余量。回归测试使用 `node --test scripts/architecture-boundaries.test.mjs`，覆盖精确路径、非根调用、业务方法和增长门禁。

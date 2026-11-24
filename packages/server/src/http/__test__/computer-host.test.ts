@@ -3,6 +3,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { get, type IncomingMessage } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createConfiguredApprovalReviewer } from "@vykor/agent-runtime";
+import type { Settings } from "@vykor/host-config";
 import { CURRENT_PROTOCOL_VERSION, PROTOCOL_VERSION_HEADER } from "@vykor/protocol";
 import { SessionStore } from "@vykor/services";
 import { expect, it, vi } from "vitest";
@@ -18,6 +20,11 @@ import { StorePermissionBroker } from "../../permissions/permission-broker.js";
 import { createComputerHostRoutes } from "../routes/computer-host.js";
 import { createPermissionRoutes } from "../routes/permission.js";
 import { VykorHttpServer } from "../server.js";
+
+vi.mock("@vykor/agent-runtime", async importOriginal => {
+  const actual = await importOriginal<typeof import("@vykor/agent-runtime")>();
+  return { ...actual, createConfiguredApprovalReviewer: vi.fn(actual.createConfiguredApprovalReviewer) };
+});
 
 const token = "a1".repeat(32);
 const headers = {
@@ -247,8 +254,8 @@ it("drops a queued command when the stream closes before Desktop reads it", asyn
 });
 
 async function approvalFixture(
-  approvalMode: "ask" | "full_access" | null = "ask",
-  resolveDefaultApprovalMode?: () => Promise<string>,
+  approvalMode: "ask" | "auto_review" | "full_access" | null = "ask",
+  resolveSettings?: () => Promise<Settings>,
 ) {
   const directory = await mkdtemp(join(tmpdir(), "vykor-computer-approval-"));
   const store = new SessionStore({ path: join(directory, "sessions.db") });
@@ -264,7 +271,7 @@ async function approvalFixture(
     getSession: id => store.sessions.get(id),
     latestEventSeq: () => store.conversations.latestEventSeq(),
   });
-  const bridge = new DesktopComputerBridge(scope => captureComputerApproval(store, broker, scope, resolveDefaultApprovalMode));
+  const bridge = new DesktopComputerBridge(scope => captureComputerApproval(store, broker, scope, resolveSettings));
   const { post, stream } = fixture(bridge);
   const connection = await stream();
   const { connectionId } = connection;
@@ -274,15 +281,14 @@ async function approvalFixture(
     const event = await connection.next();
     if (event.type !== "execute") throw new Error("Computer command expected");
     const requestUrl = `/${connectionId}/${event.requestId}`;
-    return { execution, requestUrl };
+    return { execution, requestUrl, event };
   };
   const propose = async (signal?: AbortSignal, action: Parameters<typeof bridge.execute>[2] = {
     type: "invoke", elementRef: "element_00000000-0000-4000-8000-000000000001",
-  }, ordinary?: true) => {
+  }) => {
     const { execution, requestUrl } = await start(action, signal);
     const proposal = {
       proposalId: "00000000-0000-4000-8000-000000000001", reason: "Change the selected Windows setting.",
-      ...(ordinary ? { ordinary } : {}),
     };
     const decision = post(requestUrl + "/approval", proposal);
     await vi.waitFor(() => expect(broker.listRequests({ status: "pending" })).toHaveLength(1));
@@ -297,39 +303,30 @@ async function approvalFixture(
   };
 }
 
-it("uses full access for ordinary control invocations and keeps foreground and high-impact approval", async () => {
-  const { close, post, start, propose, broker } = await approvalFixture("full_access");
+it("uses full access for semantic operations, foreground entry and coordinate clicks", async () => {
+  const { close, post, start, broker } = await approvalFixture("full_access");
   const invoke = { type: "invoke", elementRef: "element_00000000-0000-4000-8000-000000000001" } as const;
-  const ordinary = { proposalId: "00000000-0000-4000-8000-000000000001", reason: "Press multiply.", ordinary: true };
+  const proposal = { proposalId: "00000000-0000-4000-8000-000000000001", reason: "Operate the current window." };
   try {
-    const button = await start(invoke);
-    expect(await (await post(button.requestUrl + "/approval", ordinary)).json()).toMatchObject({ approved: true });
-    expect(broker.listRequests({ status: "pending" })).toHaveLength(0);
-    expect((await post(button.requestUrl + "/result", { result: { text: "Pressed" } })).status).toBe(404);
-    expect((await post(button.requestUrl + "/dispatch", {})).status).toBe(200);
-    expect((await post(button.requestUrl + "/result", { result: { text: "Pressed" } })).status).toBe(200);
-    await expect(button.execution).resolves.toMatchObject({ result: { text: "Pressed" } });
-
-    const foreground = await start({ type: "foreground" });
-    expect((await post(foreground.requestUrl + "/approval", ordinary)).status).toBe(404);
-    expect((await post(foreground.requestUrl + "/dispatch", {})).status).toBe(404);
-    await post(foreground.requestUrl + "/result", { error: "Cancelled", executionState: "not_started" });
-    await foreground.execution;
-
-    const highImpact = await propose(undefined, invoke);
-    expect(highImpact.approval).toMatchObject({ status: "pending" });
-    await post(highImpact.replyUrl, { ...highImpact.reply, status: "denied" });
-    expect(await (await highImpact.decision).json()).toMatchObject({ approved: false });
-    await post(highImpact.requestUrl + "/result", { error: "Declined", executionState: "not_started" });
-    await highImpact.execution;
+    for (const action of [invoke, { type: "foreground" }, { type: "click", frameRef, x: 4, y: 30 }] as const) {
+      const call = await start(action);
+      expect(call.event.fullAccess).toBe(action.type === "click" ? true : undefined);
+      expect((await post(call.requestUrl + "/result", { result: { text: "Done" } })).status).toBe(404);
+      if (action.type === "foreground") expect((await post(call.requestUrl + "/dispatch", {})).status).toBe(404);
+      expect(await (await post(call.requestUrl + "/approval", proposal)).json()).toMatchObject({ approved: true });
+      expect((await post(call.requestUrl + "/dispatch", {})).status).toBe(200);
+      expect((await post(call.requestUrl + "/result", { result: { text: "Done" } })).status).toBe(200);
+      await expect(call.execution).resolves.toMatchObject({ result: { text: "Done" } });
+    }
+    expect(broker.listRequests()).toHaveLength(0);
   } finally { await close(); }
 });
 
-it("still requests one-time approval for ordinary controls in ask mode", async () => {
+it("still requests one-time approval for control actions in ask mode", async () => {
   const { close, post, propose } = await approvalFixture();
   try {
-    const call = await propose(undefined, undefined, true);
-    expect(call.approval).toMatchObject({ status: "pending" });
+    const call = await propose();
+    expect(call.approval).toMatchObject({ status: "pending", payload: { approvalMode: "ask" } });
     await post(call.replyUrl, { ...call.reply, status: "denied" });
     expect(await (await call.decision).json()).toMatchObject({ approved: false });
     await post(call.requestUrl + "/result", { error: "Declined", executionState: "not_started" });
@@ -337,23 +334,62 @@ it("still requests one-time approval for ordinary controls in ask mode", async (
   } finally { await close(); }
 });
 
-it("inherits the daemon default for ordinary controls and rechecks the run after loading it", async () => {
-  const resolveDefaultApprovalMode = vi.fn(async () => "full_access");
-  const { close, post, start, broker, store } = await approvalFixture(null, resolveDefaultApprovalMode);
+it("uses the shared automatic review and falls back to the original Desktop chat when evidence is unavailable", async () => {
+  const { close, post, propose, broker } = await approvalFixture("auto_review");
+  try {
+    const call = await propose(undefined, { type: "foreground" });
+    await vi.waitFor(() => expect(broker.getRequest(call.approval!.id)).toMatchObject({
+      status: "pending", payload: { approvalMode: "auto_review", approvalReview: { status: "ask_user" } },
+    }));
+    expect((await post(call.requestUrl + "/dispatch", {})).status).toBe(404);
+    expect((await post(call.replyUrl, call.reply)).status).toBe(200);
+    expect(await (await call.decision).json()).toMatchObject({ approved: true });
+    expect((await post(call.requestUrl + "/dispatch", {})).status).toBe(200);
+    await post(call.requestUrl + "/result", { result: { text: "Controlled" } });
+    await expect(call.execution).resolves.toMatchObject({ result: { text: "Controlled" } });
+  } finally { await close(); }
+});
+
+it("gives the standard reviewer the exact unisolated operation and accepts its decision", async () => {
+  const { close, post, start, store, broker } = await approvalFixture("auto_review", async () => ({
+    model: "offline", apiFormat: "openai", maxTurns: 5, permission: { mode: "auto_review" }, sandbox: { enabled: true },
+  }));
+  const review = vi.fn(async () => ({ decision: "approve", risk: "low", authorization: "explicit", reason: "Reviewed" } as const));
+  vi.mocked(createConfiguredApprovalReviewer).mockResolvedValueOnce({ review });
+  try {
+    store.runs.updateRun(run.runId, { metadata: { appliedInputState: { revision: 1, inputIds: [run.inputId] } } });
+    const call = await start({ type: "type_text", text: "Exact operation text" });
+    const proposal = { proposalId: "00000000-0000-4000-8000-000000000001", reason: "Type in the current Windows editor." };
+    expect(await (await post(call.requestUrl + "/approval", proposal)).json()).toMatchObject({ approved: true });
+    expect(review).toHaveBeenCalledWith(expect.objectContaining({
+      input: { action: "type_text", text: "Exact operation text" },
+      evidence: expect.objectContaining({ reliableIsolation: false, userInstruction: "Change a Windows setting." }),
+    }), expect.any(AbortSignal));
+    expect(broker.listRequests()).toMatchObject([{ status: "approved", decision: "once" }]);
+    expect((await post(call.requestUrl + "/dispatch", {})).status).toBe(200);
+    await post(call.requestUrl + "/result", { result: { text: "Typed" } });
+    await call.execution;
+  } finally { await close(); }
+});
+
+it("inherits the daemon default and rechecks the run after loading it", async () => {
+  const settings: Settings = { model: "offline", apiFormat: "openai", maxTurns: 5, permission: { mode: "full_access" } };
+  const resolveSettings = vi.fn(async () => settings);
+  const { close, post, start, broker, store } = await approvalFixture(null, resolveSettings);
   const invoke = { type: "invoke", elementRef: "element_00000000-0000-4000-8000-000000000001" } as const;
-  const proposal = { proposalId: "00000000-0000-4000-8000-000000000001", reason: "Press equals.", ordinary: true };
+  const proposal = { proposalId: "00000000-0000-4000-8000-000000000001", reason: "Press equals." };
   try {
     const button = await start(invoke);
     const approval = post(button.requestUrl + "/approval", proposal);
-    await vi.waitFor(() => expect(resolveDefaultApprovalMode).toHaveBeenCalledOnce());
+    await vi.waitFor(() => expect(resolveSettings).toHaveBeenCalledOnce());
     expect(await (await approval).json()).toMatchObject({ approved: true });
     expect((await post(button.requestUrl + "/dispatch", {})).status).toBe(200);
     await post(button.requestUrl + "/result", { result: { text: "Pressed" } });
     await button.execution;
 
     const reading = Promise.withResolvers<void>();
-    const setting = Promise.withResolvers<string>();
-    resolveDefaultApprovalMode.mockImplementationOnce(() => {
+    const setting = Promise.withResolvers<Settings>();
+    resolveSettings.mockImplementationOnce(() => {
       reading.resolve();
       return setting.promise;
     });
@@ -361,7 +397,7 @@ it("inherits the daemon default for ordinary controls and rechecks the run after
     const decision = post(stale.requestUrl + "/approval", proposal);
     await reading.promise;
     store.runs.updateRun(run.runId, { status: "interrupted" });
-    setting.resolve("full_access");
+    setting.resolve(settings);
     expect(await (await decision).json()).toMatchObject({ approved: false });
     expect((await post(stale.requestUrl + "/dispatch", {})).status).toBe(404);
     expect(broker.listRequests({ status: "pending" })).toHaveLength(0);
@@ -420,6 +456,19 @@ it("blocks dispatch when input changes after a private approval has already arri
     store.runs.updateRun(run.runId, { metadata: { appliedInputState: { revision: 2, inputIds: [run.inputId, "new-input"] } } });
     expect((await post(call.requestUrl + "/dispatch", {})).status).toBe(404);
     expect((await post(call.requestUrl + "/result", { error: "Stale", executionState: "not_started" })).status).toBe(200);
+    await expect(call.execution).resolves.toMatchObject({ error: { executionState: "not_started" } });
+  } finally { await close(); }
+});
+
+it("refuses a full-access dispatch after the session switches to ask without a runtime revision change", async () => {
+  const { post, close, start, store } = await approvalFixture("full_access");
+  try {
+    const call = await start({ type: "foreground" });
+    const proposal = { proposalId: "00000000-0000-4000-8000-000000000001", reason: "Activate the current window." };
+    expect(await (await post(call.requestUrl + "/approval", proposal)).json()).toMatchObject({ approved: true });
+    store.sessions.update(run.sessionId, { metadata: { runtime: { model: "offline", approvalMode: "ask" } } });
+    expect((await post(call.requestUrl + "/dispatch", {})).status).toBe(404);
+    await post(call.requestUrl + "/result", { error: "Mode changed", executionState: "not_started" });
     await expect(call.execution).resolves.toMatchObject({ error: { executionState: "not_started" } });
   } finally { await close(); }
 });

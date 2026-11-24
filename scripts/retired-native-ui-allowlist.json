@@ -4068,7 +4068,7 @@
     },
     {
       "path": "packages/server/src/http/server.ts",
-      "line": 535,
+      "line": 533,
       "text": "    this.app.route(\"/sessions\", createSessionPluginUiHistoryRoutes(this.application.pluginUiHistory));",
       "reason": "Registers read-only history/410 routes only."
     },

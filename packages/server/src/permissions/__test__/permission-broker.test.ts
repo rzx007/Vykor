@@ -52,6 +52,22 @@ describe("StorePermissionBroker", () => {
     });
   });
 
+  it.each(["approve", "deny"] as const)("accepts a shared automatic review that decides to %s a Computer operation", async decision => {
+    await withBroker(async ({ broker, store }) => {
+      let requestId = "";
+      const waiting = broker.askComputer({
+        sessionId: "s1", runId: "r1", inputId: "i1", approvalMode: "auto_review",
+        review: async () => ({ decision, risk: "low", authorization: "explicit", reason: "Reviewed operation" }),
+      }, id => { requestId = id; });
+      expect(store.permissions.get(requestId)).toMatchObject({ status: "pending", payload: {
+        computerApproval: true, confirmation: "once", approvalReview: { status: "reviewing" },
+      } });
+      expect(() => broker.reply({ requestId, status: "approved" })).toThrow(/Desktop Computer/);
+      await expect(waiting).resolves.toMatchObject({ status: decision === "approve" ? "approved" : "denied" });
+      expect(broker.listApprovals()).toHaveLength(0);
+    });
+  });
+
   it("keeps ordinary permissions outside the trusted Computer reply channel", async () => {
     await withBroker(async ({ broker, store }) => {
       const waiting = broker.ask({ sessionId: "s1", toolName: "Computer", input: { computerApproval: true } });

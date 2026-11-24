@@ -196,11 +196,9 @@ export class VykorHttpServer {
     if (this.token && computerToken && computerToken !== this.token && /^[a-f0-9]{64}$/.test(computerToken)
       && !options.application) {
       this.computerBridge = new DesktopComputerBridge(run => captureComputerApproval(
-        this.store, this.application.permissions, run, async session => {
-          const settings = await options.getSettingsForCwd?.(sessionSettingsRoot(session))
-            ?? options.getSettings?.() ?? options.settings;
-          return settings?.permission.mode;
-        },
+        this.store, this.application.permissions, run, async session =>
+          await options.getSettingsForCwd?.(sessionSettingsRoot(session))
+            ?? options.getSettings?.() ?? options.settings,
       ));
     }
     this.allowedOrigins = normalizeAllowedOrigins(options.allowedOrigins ?? []);

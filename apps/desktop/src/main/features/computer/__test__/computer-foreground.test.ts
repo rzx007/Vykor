@@ -13,7 +13,7 @@ const frame: WindowsForegroundFrame = {
   focusIdentity: "1,21,2",
 }
 
-function fixture() {
+function fixture(fullAccess?: true) {
   const connection = new AbortController()
   const emergencyStop = vi.fn()
   const showForeground = vi.fn<(_sessionId: string, _runId: string, _signal: AbortSignal) => Promise<void>>(async () => {})
@@ -38,7 +38,7 @@ function fixture() {
   const approve = vi.fn(async () => true)
   const dispatch = vi.fn(async () => true)
   const execute = (action: Extract<ComputerBridgeEvent, { type: "execute" }>["action"], controller = connection) => host.execute({
-    type: "execute", requestId: "operation", run, action, deadlineAt: Date.now() + 5000,
+    type: "execute", requestId: "operation", run, action, deadlineAt: Date.now() + 5000, fullAccess,
   }, controller.signal, connection.signal, approve, dispatch)
   const snapshot = async () => {
     const result = await execute({ type: "capture" }) as ComputerResult
@@ -79,6 +79,21 @@ it("captures the result without acquiring input or revealing a preview or coordi
   expect(result.image).toMatchObject({ data: frame.data })
   expect(f.publishActivity.mock.lastCall?.[1]?.preview).toBeUndefined()
   expect(f.enter).not.toHaveBeenCalled()
+})
+
+it("keeps the foreground notice and Esc active through a full-access click", async () => {
+  const f = fixture(true)
+  await f.execute({ type: "open_app", app: "First" })
+  await f.execute({ type: "foreground" })
+  const { ref } = await f.snapshot()
+  expect(await f.execute({ type: "click", frameRef: ref, x: 20, y: 30 })).toMatchObject({ text: expect.stringContaining('"sent"') })
+  expect(f.approve).toHaveBeenCalledTimes(2)
+  expect(f.showForeground).toHaveBeenCalledOnce()
+  expect(f.enter).toHaveBeenCalledOnce()
+  expect(f.release).not.toHaveBeenCalled()
+  f.pressEscape()
+  expect(f.release).toHaveBeenCalledOnce()
+  expect(f.emergencyStop).toHaveBeenCalledExactlyOnceWith(run.sessionId, run.runId)
 })
 
 it("releases on focus loss, parks further work, and requires a new occupation and observation", async () => {

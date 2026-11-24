@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from "node:crypto"
 import type { ComputerSemanticAction } from "@vykor/server/daemon-host"
-import type { WindowsApp } from "./windows-apps"
 import type { WindowsDriverElement, WindowsDriverObservation } from "./windows-driver"
 
 type ElementFacts = Omit<WindowsDriverElement, "token">
@@ -135,14 +134,6 @@ export function needsApproval(action: ComputerSemanticAction, control: ElementFa
   }
   return !(action.type === "invoke" && role === "menuitem"
     && /^(?:file|edit|view|文件|编辑|查看|new window|新建窗口)$/iu.test(label))
-}
-
-/** Only the system Calculator's known local arithmetic keys qualify. */
-export function isOrdinarySemanticAction(action: ComputerSemanticAction, control: ElementFacts, app: WindowsApp): boolean {
-  return app.builtIn === "calculator" && action.type === "invoke" && controlType(control.role) === "button"
-    && control.actions.includes("invoke")
-    && /^(?:num[0-9]|plus|minus|multiply|divide|equal|decimalSeparator|negate|percent|clear|clearEntry|backSpace)Button$/u
-      .test(control.automationId ?? "")
 }
 
 export function approvalReason(app: string, title: string, action: ComputerSemanticAction, control: ElementFacts): string {

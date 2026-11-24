@@ -27,6 +27,7 @@ export function sessionPermissionRequest(input: {
   settings?: Settings;
   request: AgentPermissionRequest;
   context: AgentEffectContext;
+  outsideSandbox?: true;
 }): PermissionAskInput {
   const { store, settings, request, context } = input;
   const session = store.sessions.get(context.sessionId);
@@ -116,7 +117,7 @@ export function sessionPermissionRequest(input: {
         };
       }
       const reliableIsolation =
-        settings.agentEnvironment?.kind !== "wsl" &&
+        !input.outsideSandbox && settings.agentEnvironment?.kind !== "wsl" &&
         getSandboxAvailability(settings.sandbox).active;
       // Isolation is evidence for this exact invocation, not a prerequisite for review.
       // The service separately rejects delegated runs without a direct user instruction.
@@ -201,7 +202,7 @@ export function sessionPermissionRequest(input: {
             agentId: context.agentId,
             accessBoundary: JSON.stringify({
               cwd: context.cwd,
-              sandbox: settings.sandbox ?? { enabled: false },
+              sandbox: input.outsideSandbox ? { enabled: false } : settings.sandbox ?? { enabled: false },
               workMode: runtime.workMode,
             }),
             denyRules: [

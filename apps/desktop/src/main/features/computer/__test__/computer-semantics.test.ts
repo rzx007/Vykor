@@ -63,22 +63,6 @@ function fixture(remember = false, selectedApp = app) {
     changeElements: (rows: WindowsDriverElement[]) => { elements = rows } }
 }
 
-it("marks only verified Calculator keys as ordinary semantic actions", async () => {
-  const multiply = { ...destructive, label: "乘以", automationId: "multiplyButton" }
-  for (const builtIn of ["calculator", undefined] as const) {
-    const f = fixture(false, { id: "app", name: "计算器", builtIn })
-    f.changeElements([multiply, { ...destructive, identity: "other" }])
-    for (const index of [0, 1]) {
-      const buttons = await f.open()
-      await f.execute({ type: "invoke", elementRef: buttons[index]!.ref })
-      const proposal = f.approve.mock.lastCall?.[0]
-      expect(proposal).toMatchObject({ reason: expect.any(String) })
-      if (builtIn && index === 0) expect(proposal).toMatchObject({ ordinary: true })
-      else expect(proposal).not.toHaveProperty("ordinary")
-    }
-  }
-})
-
 it("keeps an in-flight semantic operation unknown when the user pauses", async () => {
   const f = fixture()
   const [field] = await f.open()

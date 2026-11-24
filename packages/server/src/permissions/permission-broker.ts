@@ -29,7 +29,8 @@ export interface PermissionAskInput {
   review?: PermissionApprovalReviewHook;
 }
 
-export type ComputerPermissionAskInput = Pick<PermissionAskInput, "reason" | "signal" | "runtimeRevision" | "traceId" | "isCurrent">
+export type ComputerPermissionAskInput = Pick<PermissionAskInput,
+  "reason" | "signal" | "runtimeRevision" | "traceId" | "isCurrent" | "approvalMode" | "input" | "review">
   & { sessionId: string; runId: string; inputId: string };
 
 export type PermissionApprovalReviewHook = (context: {
@@ -98,7 +99,7 @@ export class StorePermissionBroker implements PermissionBroker {
   }
 
   async askComputer(input: ComputerPermissionAskInput, register: (requestId: string) => void): Promise<AgentPermissionDecision> {
-    return this.request({ ...input, toolName: "Computer", approvalMode: "ask", confirmation: "once" }, register);
+    return this.request({ ...input, toolName: "Computer", approvalMode: input.approvalMode ?? "ask", confirmation: "once" }, register);
   }
 
   private async request(input: PermissionAskInput, registerComputer?: (requestId: string) => void): Promise<AgentPermissionDecision> {
@@ -322,7 +323,8 @@ export class StorePermissionBroker implements PermissionBroker {
       return;
     }
     if (decision === "approve" || decision === "deny") {
-      this.reply({ requestId: request.id, status: decision === "approve" ? "approved" : "denied", decision: "once" });
+      this.replyFrom({ requestId: request.id, status: decision === "approve" ? "approved" : "denied", decision: "once" },
+        request.payload.computerApproval === true);
     }
   }
 

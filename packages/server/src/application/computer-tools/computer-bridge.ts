@@ -31,7 +31,7 @@ interface Connection {
 interface Pending {
   id: string;
   run: ComputerRunIdentity;
-  action: ComputerAction["type"];
+  action: ComputerAction;
   dispatched?: boolean;
   isCurrent(): boolean;
   signal: AbortSignal;
@@ -42,7 +42,9 @@ interface Pending {
 
 export interface ComputerApprovalAccess {
   isOriginalScope(): boolean;
-  ask(proposal: ComputerApprovalProposal, signal: AbortSignal, isCurrent: () => boolean, register: (requestId: string) => void): Promise<boolean>;
+  isFullAccess(): Promise<boolean>;
+  ask(proposal: ComputerApprovalProposal, action: ComputerAction, signal: AbortSignal,
+    isCurrent: () => boolean, register: (requestId: string) => void): Promise<boolean>;
   reply(input: { requestId: string; status: PermissionReplyStatus }): PermissionRequestRecord;
 }
 
@@ -132,6 +134,15 @@ export class DesktopComputerBridge {
     if (this.pending) throw new ComputerBridgeError("Desktop Computer is busy.", "not_started");
 
     const approvalAccess = needsDispatch(action.type) ? this.captureApproval?.(run) : undefined;
+    let fullAccess = false;
+    if (approvalAccess && (action.type === "click" || action.type === "key" || action.type === "type_text")) {
+      fullAccess = await approvalAccess.isFullAccess();
+      if (this.connection !== connection || signal?.aborted || Date.now() >= deadlineAt
+        || !approvalAccess.isOriginalScope() || options.isCurrent?.() === false) {
+        throw new ComputerBridgeError("The Computer request ended before dispatch.", "not_started");
+      }
+      if (this.pending) throw new ComputerBridgeError("Desktop Computer is busy.", "not_started");
+    }
     const requestId = randomUUID();
     if (action.type === "capture") connection.captures.set(run.runId, { requestId, revoked: false });
     return await new Promise<DispatchResult>((resolve, reject) => {
@@ -139,7 +150,7 @@ export class DesktopComputerBridge {
       const pending: Pending = {
         id: requestId,
         run,
-        action: action.type,
+        action,
         signal: finished.signal,
         approvalAccess,
         isCurrent: () => this.pending === pending && this.connection === connection
@@ -165,7 +176,7 @@ export class DesktopComputerBridge {
       timer.unref();
       this.pending = pending;
       signal?.addEventListener("abort", cancel, { once: true });
-      if (!connection.send({ type: "execute", requestId, run, action, deadlineAt })) {
+      if (!connection.send({ type: "execute", requestId, run, action, deadlineAt, ...(fullAccess ? { fullAccess: true } : {}) })) {
         pending.finish(new ComputerBridgeError("The Desktop Computer stream is busy.", "not_started"));
         this.detach(connectionId);
       }
@@ -176,9 +187,9 @@ export class DesktopComputerBridge {
     const connection = this.connection;
     const pending = this.pending;
     if (connection?.id !== connectionId || pending?.id !== requestId) return false;
-    if ("result" in reply && ((reply.result.image && (pending.action !== "capture" || !pending.isCurrent()))
+    if ("result" in reply && ((reply.result.image && (pending.action.type !== "capture" || !pending.isCurrent()))
       || (pending.approval && (!pending.approval.approved || !pending.isCurrent()))
-      || (needsDispatch(pending.action) && !pending.dispatched))) return false;
+      || (needsDispatch(pending.action.type) && !pending.dispatched))) return false;
     if ("error" in reply) {
       pending.finish(new ComputerBridgeError(reply.error, reply.executionState));
       return true;
@@ -196,7 +207,7 @@ export class DesktopComputerBridge {
     const pending = this.pending;
     if (this.connection?.id !== connectionId || pending?.id !== requestId || pending.dispatched || !pending.isCurrent()
       || !pending.approvalAccess?.isOriginalScope()) return false;
-    if ((pending.action === "foreground" || pending.approval) && !pending.approval?.approved) return false;
+    if ((pending.action.type === "foreground" || pending.approval) && !pending.approval?.approved) return false;
     pending.dispatched = true;
     return true;
   }
@@ -204,13 +215,12 @@ export class DesktopComputerBridge {
   async requestApproval(connectionId: string, requestId: string, proposal: ComputerApprovalProposal, requestSignal: AbortSignal): Promise<boolean | undefined> {
     const pending = this.pending;
     const access = pending?.approvalAccess;
-    if (this.connection?.id !== connectionId || pending?.id !== requestId || !access || pending.action === "open_app"
-      || (proposal.ordinary && pending.action !== "invoke")
+    if (this.connection?.id !== connectionId || pending?.id !== requestId || !access || pending.action.type === "open_app"
       || pending.approval || requestSignal.aborted || !pending.isCurrent()) return;
     const approval: NonNullable<Pending["approval"]> = {};
     pending.approval = approval;
     const signal = AbortSignal.any([requestSignal, pending.signal, this.connection.controller.signal]);
-    const approved = await access.ask(proposal, signal, pending.isCurrent, id => { approval.requestId = id; });
+    const approved = await access.ask(proposal, pending.action, signal, pending.isCurrent, id => { approval.requestId = id; });
     approval.approved = approved && !signal.aborted && pending.isCurrent();
     return approval.approved;
   }

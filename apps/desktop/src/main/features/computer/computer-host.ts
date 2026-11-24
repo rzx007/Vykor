@@ -6,7 +6,7 @@ import type {
 import type { DesktopComputerActivity } from "../../../shared/computer-types"
 import type { ComputerHostResponse, DesktopComputerApproval, DesktopComputerDispatch } from "./computer-bridge"
 import {
-  alreadySatisfied, approvalReason, findControl, isOrdinarySemanticAction, needsApproval, observationDigest, projectObservation,
+  alreadySatisfied, approvalReason, findControl, needsApproval, observationDigest, projectObservation,
   supportsAction, verifiedEffect,
   type ComputerObservation,
 } from "./computer-semantics"
@@ -216,7 +216,7 @@ export class ComputerHost {
       }
       await this.waitUntilResumed(task, signal)
       work = AbortSignal.any([signal, task.work.signal])
-      return await this.perform(task, event.action, work, approve, authorizeDispatch, () => { launchAttempted = true })
+      return await this.perform(task, event.action, work, approve, authorizeDispatch, () => { launchAttempted = true }, event.fullAccess)
     } catch (error) {
       if (signal.aborted || connection.aborted) throw error
       if (task && error instanceof WindowsDriverHandoffError) {
@@ -249,13 +249,13 @@ export class ComputerHost {
 
   private async perform(
     task: Task, action: Exclude<ComputerAction, { type: "handoff" }>, signal: AbortSignal,
-    approve: ApproveAction | undefined, authorizeDispatch: ApproveDispatch | undefined, onLaunch: () => void,
+    approve: ApproveAction | undefined, authorizeDispatch: ApproveDispatch | undefined, onLaunch: () => void, fullAccess?: true,
   ): Promise<ComputerHostResponse> {
     let launchAttempted = false
     if (action.type === "capture") return this.captureWindow(task, signal, action.purpose === "result")
     if (action.type === "foreground") return this.beginForeground(task, signal, approve, authorizeDispatch)
     if (action.type === "click" || action.type === "key" || action.type === "type_text") {
-      return this.foregroundAction(task, action, signal, approve, authorizeDispatch)
+      return this.foregroundAction(task, action, signal, approve, authorizeDispatch, fullAccess)
     }
     if (action.type === "observe") {
       const target = task.target
@@ -572,6 +572,7 @@ export class ComputerHost {
 
   private async foregroundAction(
     task: Task, action: InputAction, signal: AbortSignal, approve?: ApproveAction, dispatch?: ApproveDispatch,
+    fullAccess?: true,
   ): Promise<ComputerHostResponse> {
     const occupied = task.occupation
     const target = task.target
@@ -596,7 +597,7 @@ export class ComputerHost {
     let attempted = false
     try {
       if (foregroundNeedsApproval(action, target.app)) {
-        if (!await this.releaseInput(task, true)) throw new TargetError("无法确认输入已释放。")
+        if (!fullAccess && !await this.releaseInput(task, true)) throw new TargetError("无法确认输入已释放。")
         task.activity = { action: "等待操作确认" }
         this.publish(task)
         const verb = action.type === "click" ? `${action.button === "right" ? "右击" : "点击"}画面中的 (${action.x}, ${action.y})`
@@ -606,7 +607,7 @@ export class ComputerHost {
         }, operationSignal)) throw new TargetError("该操作没有获得本次批准。")
         if (!isFresh()) throw new TargetError("目标画面已变化，请重新截图后再操作。")
         await this.liveTarget(task, target, operationSignal)
-        lease = await this.enterInput(task, occupied, operationSignal)
+        if (!fullAccess) lease = await this.enterInput(task, occupied, operationSignal)
         if (frame && action.type !== "click") {
           const latest = await this.foreground.capture(target.window, operationSignal)
           if (!sameCaptureEvidence(frame.image, latest)) throw new TargetError("窗口内容在确认期间已变化，请重新观察。")
@@ -840,7 +841,6 @@ export class ComputerHost {
       }
       if (!approve || !await approve({
         proposalId: randomUUID(), reason: approvalReason(target.app.name, target.window.title, action, expected),
-        ...(isOrdinarySemanticAction(action, prior.control, target.app) ? { ordinary: true } : {}),
       }, signal)) throw new TargetError("该操作没有获得本次批准。")
       signal.throwIfAborted()
     }

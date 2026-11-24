@@ -20,13 +20,13 @@ import { registerFixture } from "./windows-live-fixture"
 const realWindows = process.platform === "win32" && process.arch === "x64"
   && process.env.VYKOR_COMPUTER_WINDOWS_FOREGROUND_LIVE === "1"
 
-it.runIf(realWindows)("observes and safely drives a real Calculator through the private chat bridge", async () => {
+it.runIf(realWindows)("observes and safely drives a real Calculator through the private chat bridge", async context => {
   const apps = createWindowsApps()
   const windows = () => AbortSignal.timeout(8_000)
   const [calculator] = await apps.discover("Calculator", windows())
   expect(calculator).toBeDefined()
   // This test must be the owner of every window it reads or changes.
-  expect(await apps.windows(calculator!, windows())).toEqual([])
+  if ((await apps.windows(calculator!, windows())).length) context.skip()
   const started = Date.now()
   const directory = mkdtempSync(join(tmpdir(), "vykor-stage5-live-"))
   const daemonToken = randomBytes(24).toString("hex")
@@ -111,10 +111,8 @@ it.runIf(realWindows)("observes and safely drives a real Calculator through the 
     const request = resourcesPath ? "打开计算器，算出 7 × 8，核对结果并给我一张截图。" : "打开计算器，观察窗口并按 Tab。"
     const admitted = await desktop.submit(session.id, { id: "calculator", items: [{ type: "text", text: request }] }, () => {})
     expect(admitted.run?.id).toBeTruthy()
-    const pending = () => server.application.permissions.listRequests({ sessionId: session.id, toolName: "Computer", status: "pending" })
-    await expect.poll(() => pending()[0]?.payload.reason, { timeout: 90_000 }).toMatch(/暂时使用键鼠/)
-    await desktop.replyApproval(session.id, pending()[0]!.id, "approved")
     expect(await server.application.runControl.awaitRun(session.id, admitted.run!.id, { timeoutMs: 70_000 })).toMatchObject({ status: "completed" })
+    expect(server.application.permissions.listRequests({ sessionId: session.id, toolName: "Computer" })).toHaveLength(0)
     const values = results.map((result, index) => {
       const body = result.content.find(item => item.type === "text")
       if (body?.type !== "text" || result.isError) throw new Error(`Calculator step failed: ${desktopOutcomes.join(" | ")}`)
@@ -158,7 +156,8 @@ it.runIf(realWindows)("observes and safely drives a real Calculator through the 
   }
 }, 175_000)
 
-it.skipIf(!realWindows).each(["key", "click"] as const)("releases a held %s through actual chat Stop before an up is queued", async kind => {
+it.skipIf(!realWindows).each([["key", "ask"], ["click", "ask"], ["click", "full_access"]] as const)(
+  "releases a held %s in %s mode through actual chat Stop before an up is queued", async (kind, mode) => {
   const directory = mkdtempSync(join(tmpdir(), "vykor-chat-stop-live-"))
   const appName = `Vykor Stop ${randomBytes(4).toString("hex")}`
   const tracePath = join(directory, "fixture.jsonl")
@@ -168,6 +167,7 @@ it.skipIf(!realWindows).each(["key", "click"] as const)("releases a held %s thro
   const down = kind === "key" ? "key-down-F7" : "mouse-down-Left"
   const up = kind === "key" ? "key-up-F7" : "mouse-up-Left"
   const held = Promise.withResolvers<boolean>()
+  const showForeground = vi.fn(async () => {})
   type Event = { kind: string; target?: number; hwnd?: number; foreground?: number; buttonX?: number; buttonY?: number }
   const events = (): Event[] => existsSync(tracePath)
     ? readFileSync(tracePath, "utf8").split(/\r?\n/u).slice(0, -1).map(line => JSON.parse(line)) : []
@@ -210,7 +210,7 @@ it.skipIf(!realWindows).each(["key", "click"] as const)("releases a held %s thro
     vi.stubEnv("VYKOR_DISABLE_MODELS_FETCH", "1")
     const daemon = new VykorHttpServer({
       token: daemonToken, desktopComputerToken: computerToken, storePath: join(directory, "sessions.db"),
-      settings: { model: "test-model", apiFormat: "openai", maxTurns: 7, permission: { mode: "ask" },
+      settings: { model: "test-model", apiFormat: "openai", maxTurns: 7, permission: { mode },
         plugins: { enabled: false }, memory: { enabled: false }, sandbox: { enabled: false } },
       async createAgent({ options }) {
         const agent = await createDefaultNodeAgent({ ...options, client: model, resolveModelImageSupport: async () => true })
@@ -239,7 +239,7 @@ it.skipIf(!realWindows).each(["key", "click"] as const)("releases a held %s thro
     }, {
       authorizeApp: async () => true, chooseTarget: async () => { throw new Error("Expected the exact test window") },
       emergencyStop: () => {},
-      showForeground: async () => {},
+      showForeground,
     }, undefined, {
       enter: native.enter,
       capture: async (...args) => { frame = await native.capture(...args); return frame },
@@ -253,13 +253,21 @@ it.skipIf(!realWindows).each(["key", "click"] as const)("releases a held %s thro
     const admitted = await desktop.submit(session.id, { id: `stop-${kind}`, items: [{ type: "text", text: "操作测试窗口。" }] }, () => {})
     const runId = admitted.run!.id
     const pending = () => daemon.application.permissions.listRequests({ sessionId: session.id, toolName: "Computer", status: "pending" })
-    for (let approval = 0; approval < 2; approval++) {
-      await expect.poll(() => pending().length, { timeout: 20_000 }).toBe(1)
-      await desktop.replyApproval(session.id, pending()[0]!.id, "approved")
+    if (mode === "ask") {
+      for (let approval = 0; approval < 2; approval++) {
+        await expect.poll(() => pending().length, { timeout: 20_000 }).toBe(1)
+        await desktop.replyApproval(session.id, pending()[0]!.id, "approved")
+      }
+    } else {
+      await expect.poll(() => showForeground.mock.calls.length, { timeout: 20_000 }).toBe(1)
     }
     expect(await Promise.race([held.promise, new Promise<undefined>(resolve => setTimeout(resolve, 8_000).unref())])).toBe(false)
     await expect.poll(() => events().filter(event => event.kind === down), { timeout: 4_000 })
       .toMatchObject([{ hwnd: target()!.target }])
+    if (mode === "full_access") {
+      expect(daemon.application.permissions.listRequests({ sessionId: session.id, toolName: "Computer" })).toHaveLength(0)
+      expect(showForeground).toHaveBeenCalledOnce()
+    }
     expect(events().filter(event => event.kind === up)).toEqual([])
     // Use the same order as Electron's chat Stop IPC handler.
     desktop.revoke(session.id, runId)

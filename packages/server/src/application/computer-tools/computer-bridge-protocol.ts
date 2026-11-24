@@ -18,8 +18,6 @@ export type ComputerSemanticAction =
 export interface ComputerApprovalProposal {
   proposalId: string;
   reason: string;
-  /** Classification by authenticated Desktop main, never from Computer tool input. */
-  ordinary?: true;
 }
 
 export type ComputerForegroundAction =
@@ -57,6 +55,8 @@ export type ComputerBridgeEvent =
       run: ComputerRunIdentity;
       action: ComputerAction;
       deadlineAt: number;
+      /** Lets Desktop keep the native input lease while automatic approval is being checked. */
+      fullAccess?: true;
     };
 
 function record(value: unknown): value is Record<string, unknown> {
@@ -134,7 +134,7 @@ export function parseComputerBridgeEvent(value: unknown): ComputerBridgeEvent {
     const action = parseComputerAction(value.action);
     if (type === "execute" && id(requestId) && run && action
       && typeof deadlineAt === "number" && Number.isFinite(deadlineAt)) {
-      return { type, requestId, run, action, deadlineAt };
+      return { type, requestId, run, action, deadlineAt, ...(value.fullAccess === true ? { fullAccess: true } : {}) };
     }
   }
   throw new Error("Invalid Computer bridge event.");
