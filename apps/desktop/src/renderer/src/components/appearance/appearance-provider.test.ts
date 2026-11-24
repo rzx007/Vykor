@@ -156,7 +156,7 @@ describe("AppearanceProvider", () => {
     expect(document.documentElement.style.getPropertyValue("--background")).toBe("#282A36")
     expect(document.documentElement.style.getPropertyValue("--foreground")).toBe("#F8F8F2")
     act(() => latest!.resetAppearance())
-    expect(document.documentElement.style.getPropertyValue("--background")).toBe("#181818")
+    expect(document.documentElement.style.getPropertyValue("--background")).toBe("#1A202A")
   })
 
   it("resolves the three reduced-motion modes", async () => {
