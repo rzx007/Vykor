@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest"
-import { cropFromFrame, foregroundInput, type WindowsForegroundFrame } from "../windows-foreground"
+import { cropFromFrame, type ComputerForegroundFrame } from "../computer-platform"
+import { foregroundInput } from "../windows-foreground"
 
-const frame: WindowsForegroundFrame = {
+const frame: ComputerForegroundFrame = {
   mimeType: "image/png", data: "", width: 400, height: 300, signature: "sample",
   geometry: { left: -900, top: 10, width: 800, height: 600, dpi: 144, monitor: "DISPLAY2" },
 }

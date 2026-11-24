@@ -6,8 +6,9 @@ import sharp from "sharp"
 import type { ComputerAction, ComputerResult } from "@vykor/server/daemon-host"
 import { expect, it } from "vitest"
 import { ComputerHost } from "../computer-host"
-import { createWindowsApps, type WindowsAppWindow } from "../windows-apps"
-import { createWindowsForeground, type WindowsForegroundFrame } from "../windows-foreground"
+import type { ComputerForegroundFrame } from "../computer-platform"
+import type { WindowsAppWindow } from "../windows-apps"
+import { createWindowsComputerPlatform } from "../windows-computer-platform"
 
 const enabled = process.env.VYKOR_COMPUTER_WINDOWS_POINTER_LIVE === "1" && process.platform === "win32" && process.arch === "x64"
 const system = process.env.SystemRoot ?? "C:\\Windows"
@@ -104,21 +105,24 @@ function closeOwnedPaint(window: WindowsAppWindow) {
 }
 
 function fixture() {
-  const apps = createWindowsApps()
-  const native = createWindowsForeground()
+  const platform = createWindowsComputerPlatform()
+  const { apps, foreground: native } = platform
   const run = { sessionId: "pointer-live", runId: "pointer-run", inputId: "pointer-request" }
   const connection = new AbortController()
-  let image: WindowsForegroundFrame | undefined
+  let image: ComputerForegroundFrame | undefined
   let revoked: string | undefined
-  const host = new ComputerHost(apps, {
+  const host = new ComputerHost({
+    ...platform,
+    foreground: {
+      enter(window, notify, signal) {
+        return native.enter(window, reason => { revoked = reason; notify(reason) }, signal)
+      },
+      async capture(...args) { image = await native.capture(...args); return image },
+    },
+  }, {
     authorizeApp: async () => true,
     chooseTarget: async () => { throw new Error("Expected a single test window") },
     showForeground: async () => {}, emergencyStop: () => {},
-  }, undefined, {
-    enter(window, notify, signal) {
-      return native.enter(window, reason => { revoked = reason; notify(reason) }, signal)
-    },
-    async capture(...args) { image = await native.capture(...args); return image },
   })
   return {
     apps,
@@ -133,7 +137,7 @@ function fixture() {
   }
 }
 
-function imagePoint(frame: WindowsForegroundFrame, x: number, y: number) {
+function imagePoint(frame: ComputerForegroundFrame, x: number, y: number) {
   return { x: Math.floor((x - frame.geometry.left) * frame.width / frame.geometry.width),
     y: Math.floor((y - frame.geometry.top) * frame.height / frame.geometry.height) }
 }
@@ -143,7 +147,7 @@ async function readFrame(f: ReturnType<typeof fixture>) {
   return { image: f.image(), frameRef: JSON.parse(reply.text).frame.ref as string }
 }
 
-async function darkPixels(frame: WindowsForegroundFrame) {
+async function darkPixels(frame: ComputerForegroundFrame) {
   const pixels = await sharp(Buffer.from(frame.data, "base64")).greyscale().raw().toBuffer()
   return pixels.reduce((count, value) => count + Number(value < 110), 0)
 }

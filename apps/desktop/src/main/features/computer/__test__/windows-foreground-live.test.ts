@@ -7,7 +7,8 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { expect, it } from "vitest"
 import type { WindowsAppWindow } from "../windows-apps"
-import { createWindowsForeground, type WindowsForegroundLease } from "../windows-foreground"
+import type { ComputerForegroundLease } from "../computer-platform"
+import { createWindowsForeground } from "../windows-foreground"
 import { windowsSemanticQuery } from "../windows-semantic-query"
 import { windowsWindowQuery } from "../windows-window-query"
 
@@ -32,7 +33,7 @@ it.runIf(process.env.VYKOR_WINDOWS_FOREGROUND_LIVE === "1" && process.platform =
     const fixture = spawn(fixtureExe, [logfile, dir.slice(-6)], { stdio: "ignore" })
     const exited = once(fixture, "exit")
     const foreground = createWindowsForeground()
-    let lease: WindowsForegroundLease | undefined
+    let lease: ComputerForegroundLease | undefined
     try {
       await expect.poll(() => events().find(row => row.kind === "ready"), { timeout: 5_000 }).toBeDefined()
       const ready = events().find(row => row.kind === "ready")!

@@ -13,9 +13,10 @@ import { closeNewWindow } from "./windows-live-cleanup"
 import { registerFixture } from "./windows-live-fixture"
 import { DesktopComputerBridge } from "../../../apps/desktop/src/main/features/computer/computer-bridge"
 import { ComputerHost } from "../../../apps/desktop/src/main/features/computer/computer-host"
+import type { ComputerApp } from "../../../apps/desktop/src/main/features/computer/computer-platform"
+import { createWindowsComputerPlatform } from "../../../apps/desktop/src/main/features/computer/windows-computer-platform"
 import {
   createWindowsApps,
-  type WindowsApp,
   type WindowsAppWindow,
 } from "../../../apps/desktop/src/main/features/computer/windows-apps"
 
@@ -61,7 +62,7 @@ it.runIf(realWindows)("preserves arguments from a real registered Windows shortc
   const label = "Profile A & B"
   const provider = createWindowsApps()
   let shortcut: string | undefined
-  let app: WindowsApp | undefined
+  let app: ComputerApp | undefined
   try {
     shortcut = registerFixture(directory, fixtureName, `"${tracePath}" "${label}"`)
     await expect.poll(async () => {
@@ -89,16 +90,17 @@ it.runIf(realWindows)("opens and hands off real Windows applications from a trus
   const tracePath = join(directory, "fixture.jsonl")
   const daemonToken = randomBytes(24).toString("hex")
   const computerToken = randomBytes(32).toString("hex")
-  const provider = createWindowsApps()
+  const platform = createWindowsComputerPlatform()
+  const provider = platform.apps
   const waitSignal = () => AbortSignal.timeout(10_000)
   const permissions: string[] = []
   const selections: string[][] = []
-  const launches: WindowsApp[] = []
+  const launches: ComputerApp[] = []
   const startedAfter = Date.now()
   let firstCalculator: WindowsAppWindow | undefined
-  let calculator: WindowsApp | undefined
-  let paint: WindowsApp | undefined
-  let fixtureApp: WindowsApp | undefined
+  let calculator: ComputerApp | undefined
+  let paint: ComputerApp | undefined
+  let fixtureApp: ComputerApp | undefined
   let modal: { hwnd?: number; owner?: number } | undefined
   let fixtureCandidates: WindowsAppWindow[] = []
   let pickedWindowId: number | undefined
@@ -185,13 +187,18 @@ it.runIf(realWindows)("opens and hands off real Windows applications from a trus
       .filter(app => app !== undefined)
 
     const host = new ComputerHost({
-      discover: (name, signal) => provider.discover(name, signal),
-      async windows(app, signal) {
-        const windows = await provider.windows(app, signal)
-        if (app.id === fixtureApp?.id) fixtureCandidates = windows
-        return windows
+      ...platform,
+      openDriver: undefined,
+      foreground: undefined,
+      apps: {
+        ...provider,
+        async windows(app, signal) {
+          const windows = await provider.windows(app, signal)
+          if (app.id === fixtureApp?.id) fixtureCandidates = windows
+          return windows
+        },
+        launch: async (app, signal) => { launches.push(app); await provider.launch(app, signal) },
       },
-      launch: async (app, signal) => { launches.push(app); await provider.launch(app, signal) },
     }, {
       async authorizeApp(app, signal) {
         permissions.push(app.name)

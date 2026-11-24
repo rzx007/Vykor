@@ -23,13 +23,10 @@ import { createDesktopDaemonSystemService } from "../daemon-autostart/daemon-aut
 import { pairDesktopComputerDaemon } from "../daemon-autostart/computer-pairing"
 import { isLoopbackDaemonUrl } from "../daemon-autostart/daemon-surface"
 import { DesktopComputerBridge } from "../computer/computer-bridge"
-import { ComputerHost } from "../computer/computer-host"
-import { createWindowsApps } from "../computer/windows-apps"
-import { createWindowsDriver } from "../computer/windows-driver"
+import { createDesktopComputerHost } from "../computer/windows-computer-platform"
 import type { ComputerInteraction } from "../computer/interaction"
 import { computerAvailability } from "../computer/availability"
 import { isWindowsOnDemandDaemon } from "../computer/windows-daemon-identity"
-import { createWindowsForeground } from "../computer/windows-foreground"
 import { TerminalResource } from "../terminal/terminal-resource"
 import { IpcEvents } from "../../../shared/ipc-channels"
 import type { DesktopDaemonStatus, DesktopDaemonStatusPhase } from "../../../shared/session-types"
@@ -53,7 +50,7 @@ export class DaemonConnectionService {
   private computerPairing?: ComputerPairing
   private pairingRestart?: Promise<void>
   private computerBridge?: DesktopComputerBridge
-  private computerHost?: ComputerHost
+  private computerHost?: ReturnType<typeof createDesktopComputerHost>
   private computerInputCleanup = Promise.resolve(true)
   private computerAdmissionClosed = false
   private computerOwner?: { signal: AbortSignal; revoke: () => void }
@@ -184,12 +181,10 @@ export class DaemonConnectionService {
       this.computerOwner = { signal: ownerSignal, revoke }
     }
     if (!this.computerBridge) {
-      const host = interaction && new ComputerHost(
-        createWindowsApps(), {
-          ...interaction,
-          invalidateCapturedImage: (sessionId, runId) => this.computerBridge?.invalidateCapturedImage(sessionId, runId),
-        }, createWindowsDriver, createWindowsForeground(), this.computerInputCleanup,
-      )
+      const host = interaction && createDesktopComputerHost({
+        ...interaction,
+        invalidateCapturedImage: (sessionId, runId) => this.computerBridge?.invalidateCapturedImage(sessionId, runId),
+      }, this.computerInputCleanup)
       this.computerHost = host
       this.computerBridge = new DesktopComputerBridge({
         baseUrl: pairing.endpoint.url,

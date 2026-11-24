@@ -10,8 +10,9 @@ import { VykorHttpServer } from "@vykor/server"
 import { expect, it, vi } from "vitest"
 import { DesktopComputerBridge } from "../../../apps/desktop/src/main/features/computer/computer-bridge"
 import { ComputerHost } from "../../../apps/desktop/src/main/features/computer/computer-host"
-import { createWindowsApps } from "../../../apps/desktop/src/main/features/computer/windows-apps"
-import { createWindowsForeground, type WindowsForegroundFrame } from "../../../apps/desktop/src/main/features/computer/windows-foreground"
+import { createWindowsComputerPlatform } from "../../../apps/desktop/src/main/features/computer/windows-computer-platform"
+import type { ComputerForegroundFrame } from "../../../apps/desktop/src/main/features/computer/computer-platform"
+import { createWindowsForeground } from "../../../apps/desktop/src/main/features/computer/windows-foreground"
 import { createWindowsDriver } from "../../../apps/desktop/src/main/features/computer/windows-driver"
 import type { DesktopComputerActivity } from "../../../apps/desktop/src/shared/computer-types"
 import { closeNewWindow } from "./windows-live-cleanup"
@@ -21,7 +22,8 @@ const realWindows = process.platform === "win32" && process.arch === "x64"
   && process.env.VYKOR_COMPUTER_WINDOWS_FOREGROUND_LIVE === "1"
 
 it.runIf(realWindows)("observes and safely drives a real Calculator through the private chat bridge", async context => {
-  const apps = createWindowsApps()
+  const platform = createWindowsComputerPlatform()
+  const { apps } = platform
   const windows = () => AbortSignal.timeout(8_000)
   const [calculator] = await apps.discover("Calculator", windows())
   expect(calculator).toBeDefined()
@@ -88,14 +90,18 @@ it.runIf(realWindows)("observes and safely drives a real Calculator through the 
   try {
     const baseUrl = (await server.listen()).url
     const client = new VykorClient({ baseUrl, token: daemonToken })
-    const host = new ComputerHost(apps, {
+    const host = new ComputerHost({
+      ...platform,
+      openDriver: resourcesPath ?
+        (target, signal) => createWindowsDriver(target, signal, join(resourcesPath, "computer-windows", "cua-driver.exe")) :
+        undefined,
+    }, {
       authorizeApp: async () => true,
       chooseTarget: async () => { throw new Error("Expected one test-owned Calculator window") },
       emergencyStop: () => {},
       showForeground: async () => {},
       publishActivity: (_session, state) => { activity = state },
-    }, resourcesPath ? (target, signal) => createWindowsDriver(target, signal, join(resourcesPath, "computer-windows", "cua-driver.exe")) : undefined,
-    createWindowsForeground())
+    })
     const desktop = new DesktopComputerBridge({ baseUrl, daemonPid: process.pid, daemonToken, computerToken, authorizeDaemon: () => {},
       async execute(...args) {
         const result = await host.execute(...args)
@@ -163,7 +169,8 @@ it.skipIf(!realWindows).each([["key", "ask"], ["click", "ask"], ["click", "full_
   const tracePath = join(directory, "fixture.jsonl")
   const daemonToken = randomBytes(24).toString("hex")
   const computerToken = randomBytes(32).toString("hex")
-  const apps = createWindowsApps()
+  const platform = createWindowsComputerPlatform()
+  const { apps } = platform
   const down = kind === "key" ? "key-down-F7" : "mouse-down-Left"
   const up = kind === "key" ? "key-up-F7" : "mouse-up-Left"
   const held = Promise.withResolvers<boolean>()
@@ -173,7 +180,7 @@ it.skipIf(!realWindows).each([["key", "ask"], ["click", "ask"], ["click", "full_
   const events = (): Event[] => existsSync(tracePath)
     ? readFileSync(tracePath, "utf8").split(/\r?\n/u).slice(0, -1).map(line => JSON.parse(line)) : []
   const target = () => events().find(event => event.kind === "ready")
-  let frame: WindowsForegroundFrame | undefined
+  let frame: ComputerForegroundFrame | undefined
   let bridge: DesktopComputerBridge | undefined
   let server: VykorHttpServer | undefined
   let shortcut: string | undefined
@@ -229,22 +236,27 @@ it.skipIf(!realWindows).each([["key", "ask"], ["click", "ask"], ["click", "full_
     expect(await apps.windows(app!, AbortSignal.timeout(9_000))).toEqual([])
     const native = createWindowsForeground({ fault: "hold-release", onHeld: held.resolve })
     const host = new ComputerHost({
-      discover: (name, signal) => apps.discover(name, signal),
-      async launch(app, signal) {
-        await apps.launch(app, signal)
-        await expect.poll(target, { timeout: 6_000 }).toBeDefined()
-        writeFileSync(join(directory, "focus.request"), "target")
-        await expect.poll(() => events().filter(event => event.kind === "focus-request").at(-1)?.foreground,
-          { timeout: 4_000 }).toBe(target()!.target)
+      ...platform,
+      openDriver: undefined,
+      apps: {
+        discover: (name, signal) => apps.discover(name, signal),
+        async launch(app, signal) {
+          await apps.launch(app, signal)
+          await expect.poll(target, { timeout: 6_000 }).toBeDefined()
+          writeFileSync(join(directory, "focus.request"), "target")
+          await expect.poll(() => events().filter(event => event.kind === "focus-request").at(-1)?.foreground,
+            { timeout: 4_000 }).toBe(target()!.target)
+        },
+        windows: async (app, signal) => (await apps.windows(app, signal)).filter(window => window.windowId === target()?.target),
       },
-      windows: async (app, signal) => (await apps.windows(app, signal)).filter(window => window.windowId === target()?.target),
+      foreground: {
+        enter: native.enter,
+        capture: async (...args) => { frame = await native.capture(...args); return frame },
+      },
     }, {
       authorizeApp: async () => true, chooseTarget: async () => { throw new Error("Expected the exact test window") },
       emergencyStop: () => {},
       showForeground,
-    }, undefined, {
-      enter: native.enter,
-      capture: async (...args) => { frame = await native.capture(...args); return frame },
     })
     const desktop = new DesktopComputerBridge({ baseUrl, daemonPid: process.pid, daemonToken, computerToken, authorizeDaemon: () => {},
       async execute(...args) {

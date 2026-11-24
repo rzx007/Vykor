@@ -1,6 +1,8 @@
 import { expect, it, vi } from "vitest"
 import { ComputerHost } from "../computer-host"
-import type { WindowsApp, WindowsAppWindow } from "../windows-apps"
+import type { ComputerApp } from "../computer-platform"
+import type { WindowsAppWindow } from "../windows-apps"
+import { sameWindowsWindowInstance } from "../windows-computer-platform"
 
 const editor = { id: "editor", name: "Notepad" }
 const calc = { id: "calculator", name: "Calculator" }
@@ -11,15 +13,38 @@ const reading = { ...root, windowId: 14 }
 const dialog = { ...root, windowId: 15, ownerWindowId: root.windowId, title: "Save As" }
 const calculator = { ...root, windowId: 20, pid: 72, title: "Calculator" }
 
+it("uses the platform's window identity to reject a document in a recycled window", async () => {
+  const app = { id: "editor", name: "Editor" }
+  const window = { windowId: "editor-window", title: "Notes", instance: "one" }
+  const windows = vi.fn(async () => [window])
+  const host = new ComputerHost({
+    apps: { discover: async () => [app], windows, launch: async () => {} },
+    sameWindowInstance: (expected: typeof window, actual: typeof window) =>
+      expected.windowId === actual.windowId && expected.instance === actual.instance,
+  }, { authorizeApp: async () => true, chooseTarget: async () => undefined })
+  const run = { sessionId: "session", runId: "run", inputId: "input" }
+  const signal = new AbortController().signal
+  const event = { type: "execute" as const, run, requestId: "request", deadlineAt: Date.now() + 5_000 }
+
+  expect(await host.execute({ ...event, action: { type: "open_app", app: app.name } }, signal, signal, undefined, async () => true))
+    .toHaveProperty("text", expect.stringContaining("Notes"))
+  windows.mockResolvedValue([{ ...window, instance: "two" }])
+  expect(await host.execute({ ...event, action: { type: "observe" } }, signal, signal))
+    .toMatchObject({ executionState: "not_started" })
+})
+
 function fixture(isRememberedApp?: (id: string) => boolean) {
   const windows = vi.fn(async (app: typeof editor, _signal: AbortSignal): Promise<WindowsAppWindow[]> =>
     app.id === editor.id ? [root] : [])
   const launch = vi.fn(async (_app: typeof editor, _signal: AbortSignal) => {})
-  const discover = vi.fn(async (name: string, _signal: AbortSignal): Promise<WindowsApp[]> =>
+  const discover = vi.fn(async (name: string, _signal: AbortSignal): Promise<ComputerApp[]> =>
     [editor, calc].filter(app => app.name === name))
   const authorizeApp = vi.fn(async (_app: typeof editor, _signal: AbortSignal): Promise<boolean | "remembered"> => true)
   const chooseTarget = vi.fn(async (candidates: readonly { id: string; label: string }[], _signal: AbortSignal): Promise<string | undefined> => candidates[0]?.id)
-  const host = new ComputerHost({ windows, discover, launch }, { authorizeApp, chooseTarget, isRememberedApp })
+  const host = new ComputerHost({
+    apps: { catalogName: "开始菜单", windows, discover, launch },
+    sameWindowInstance: sameWindowsWindowInstance,
+  }, { authorizeApp, chooseTarget, isRememberedApp })
   const connection = new AbortController()
   const dispatch = vi.fn(async () => true)
   const run = { sessionId: "s", runId: "r", inputId: "i" }
@@ -36,6 +61,12 @@ it("does not launch after the daemon withdrew the run permission", async () => {
   const f = fixture()
   f.dispatch.mockResolvedValueOnce(false)
   expect(await f.open("Calculator")).toMatchObject({ executionState: "not_started" })
+  expect(f.launch).not.toHaveBeenCalled()
+})
+
+it("uses the platform's application catalog in the lookup error", async () => {
+  const f = fixture()
+  expect(await f.open("Missing")).toMatchObject({ error: expect.stringContaining("开始菜单"), executionState: "not_started" })
   expect(f.launch).not.toHaveBeenCalled()
 })
 

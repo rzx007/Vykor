@@ -9,70 +9,22 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js"
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import release from "../../../../resources/computer-windows/driver-release.json"
 import bundledLicense from "../../../../resources/computer-windows/CUA-LICENSE.txt?raw"
+import {
+  ComputerDriverError, ComputerDriverHandoffError,
+  type ComputerDriver, type ComputerDriverAction, type ComputerDriverElement,
+} from "./computer-platform"
 import type { WindowsAppWindow } from "./windows-apps"
 import { windowsSemanticQuery } from "./windows-semantic-query"
 
-export interface WindowsDriverElement {
-  token: string
-  role: string
-  label: string
-  automationId?: string
-  actions: string[]
-  value?: string
-  /** Proof of the complete native field value, including text outside the preview. */
-  valueDigest?: string
-  valueTruncated?: boolean
-  enabled?: boolean
-  protected?: boolean
-  selected?: boolean
-  checked?: boolean
-  expanded?: boolean
-  identity?: string
-  index?: number
-  parentIndex?: number
-  depth?: number
-  horizontalScrollPercent?: number
-  verticalScrollPercent?: number
-}
-
-export interface WindowsDriverObservation {
-  title: string
-  elements: WindowsDriverElement[]
-  focusIdentity?: string
-}
-
-export type WindowsDriverAction =
-  | { type: "invoke" | "choose"; token: string }
-  | { type: "set_text"; token: string; text: string }
-  | { type: "scroll"; token: string; direction: "up" | "down" | "left" | "right"; amount?: number }
-
-export interface WindowsDriver {
-  observe(signal: AbortSignal, readback?: { title: string }): Promise<WindowsDriverObservation>
-  act(action: WindowsDriverAction, signal: AbortSignal): Promise<void>
-  close(): Promise<void>
-}
-
-export class WindowsDriverError extends Error {
-  constructor(message: string, readonly executionState: "not_started" | "unknown" = "not_started") {
-    super(message)
-    this.name = "WindowsDriverError"
-  }
-}
-
-export class WindowsDriverHandoffError extends WindowsDriverError {
-  constructor() {
-    super("请在 Windows 中处理身份验证或受保护界面，再回到聊天继续。")
-  }
-}
-
 interface Frame { x: number; y: number; w: number; h: number }
 
-interface NativeRow extends Omit<WindowsDriverElement, "token" | "checked" | "identity"> {
+interface NativeRow extends Omit<ComputerDriverElement, "token" | "checked" | "identity"> {
   identity: string
   frame?: Frame | null
   checkedState?: boolean
 }
 
+const handoffReason = "请在 Windows 中处理身份验证或受保护界面，再回到聊天继续。"
 const privateLabel = /password|passcode|credential|recovery (?:phrase|key|code)|one.time code|otp code|密码|口令|验证码|助记词|恢复(?:码|密钥)/iu
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -128,7 +80,7 @@ $result = [VykorWindowsSemanticQuery]::Run($q.hwnd, $q.owner, $q.pid, $q.thread,
 ConvertTo-Json -InputObject $result -Depth 6 -Compress
 `
 
-function nativeQuery(window: WindowsAppWindow, signal: AbortSignal, control?: NativeRow, action?: WindowsDriverAction): Promise<unknown> {
+function nativeQuery(window: WindowsAppWindow, signal: AbortSignal, control?: NativeRow, action?: ComputerDriverAction): Promise<unknown> {
   const request = {
     hwnd: window.windowId, owner: window.ownerWindowId ?? 0, pid: window.pid, thread: window.threadId ?? 0, session: window.sessionId,
     started: window.processStartKey, app: window.applicationPid ?? window.pid, appStarted: window.applicationStartKey ?? "",
@@ -157,7 +109,7 @@ async function bundledDriverDirectory(): Promise<string> {
 async function readVerifiedDriver(source: string, signal?: AbortSignal): Promise<Buffer> {
   const bytes = await readFile(source, { signal })
   if (createHash("sha256").update(bytes).digest("hex") !== release.executableSha256) {
-    throw new WindowsDriverError("Windows 控制驱动的校验值不符。")
+    throw new ComputerDriverError("Windows 控制驱动的校验值不符。")
   }
   return bytes
 }
@@ -171,10 +123,10 @@ export async function assertBundledWindowsDriverIntegrity(signal?: AbortSignal):
       readVerifiedDriver(join(directory, release.executable), signal),
     ])
     if (!isDeepStrictEqual(JSON.parse(manifest), release) || license !== bundledLicense)
-      throw new WindowsDriverError("Windows 控制驱动的发布清单或许可证不符。")
+      throw new ComputerDriverError("Windows 控制驱动的发布清单或许可证不符。")
   } catch (error) {
     signal?.throwIfAborted()
-    throw error instanceof WindowsDriverError ? error : new WindowsDriverError("电脑操作驱动无法读取。请重新安装经过核验的版本。")
+    throw error instanceof ComputerDriverError ? error : new ComputerDriverError("电脑操作驱动无法读取。请重新安装经过核验的版本。")
   }
 }
 
@@ -184,7 +136,7 @@ async function prepareExecutable(source: string, directory: string, signal: Abor
   const executable = join(directory, release.executable)
   await writeFile(executable, bytes, { flag: "wx", signal })
   if (await powershell(authenticodeScript, { VYKOR_CUA_VERIFY_FILE: executable }, signal) !== release.publisher) {
-    throw new WindowsDriverError("Windows 控制驱动的发布者签名验证失败。")
+    throw new ComputerDriverError("Windows 控制驱动的发布者签名验证失败。")
   }
   return executable
 }
@@ -200,15 +152,15 @@ class OwnedTransport extends StdioClientTransport {
 const tools = ["start_session", "get_window_state"] as const
 type Tool = (typeof tools)[number]
 
-export async function createWindowsDriver(window: WindowsAppWindow, signal: AbortSignal, source?: string): Promise<WindowsDriver> {
+export async function createWindowsDriver(window: WindowsAppWindow, signal: AbortSignal, source?: string): Promise<ComputerDriver> {
   signal.throwIfAborted()
-  if (process.platform !== "win32" || process.arch !== "x64") throw new WindowsDriverError("Windows 控制驱动当前需要 Windows x64。")
+  if (process.platform !== "win32" || process.arch !== "x64") throw new ComputerDriverError("Windows 控制驱动当前需要 Windows x64。")
   if (!Number.isSafeInteger(window.pid) || window.pid <= 0 || !Number.isSafeInteger(window.windowId) || window.windowId <= 0
     || !/^\d+$/u.test(window.processStartKey ?? "") || window.blocked) {
-    throw new WindowsDriverError("无法确认 Windows 窗口的身份。")
+    throw new ComputerDriverError("无法确认 Windows 窗口的身份。")
   }
   source ??= join(await bundledDriverDirectory(), release.executable)
-  if (!isAbsolute(source)) throw new WindowsDriverError("Windows 控制驱动的安装路径无效。")
+  if (!isAbsolute(source)) throw new ComputerDriverError("Windows 控制驱动的安装路径无效。")
   const directory = await mkdtemp(join(tmpdir(), "vykor-cua-"))
   const session = "vykor-control"
   const scope = { pid: window.pid, window_id: window.windowId }
@@ -230,7 +182,7 @@ export async function createWindowsDriver(window: WindowsAppWindow, signal: Abor
   const call = async (name: Tool, args: Record<string, unknown>, operationSignal: AbortSignal): Promise<Record<string, unknown> | undefined> => {
     operationSignal.throwIfAborted()
     const result = await client.callTool({ name, arguments: { session, ...args } }, undefined, { signal: operationSignal, timeout: 12_000 })
-    if (result.isError) throw new WindowsDriverError("Windows 控制驱动拒绝了本次请求。")
+    if (result.isError) throw new ComputerDriverError("Windows 控制驱动拒绝了本次请求。")
     return record(result.structuredContent)
   }
 
@@ -254,12 +206,12 @@ export async function createWindowsDriver(window: WindowsAppWindow, signal: Abor
       CUA_DRIVER_PERMISSION_MODE: "bounded", CUA_DRIVER_CAPABILITY_MANIFEST_FILE: manifest, CUA_DRIVER_CAPABILITY_MANIFEST_APPROVED: "1",
     } })
     await client.connect(transport, { signal, timeout: 10_000 })
-    if (client.getServerVersion()?.version !== release.version) throw new WindowsDriverError("Windows 控制驱动版本不符。")
+    if (client.getServerVersion()?.version !== release.version) throw new ComputerDriverError("Windows 控制驱动版本不符。")
     await call("start_session", {}, signal)
   } catch (error) {
     await close().catch(() => undefined)
     signal.throwIfAborted()
-    throw error instanceof WindowsDriverError ? error : new WindowsDriverError("无法启动已签名的 Windows 控制驱动。")
+    throw error instanceof ComputerDriverError ? error : new ComputerDriverError("无法启动已签名的 Windows 控制驱动。")
   }
 
   return {
@@ -270,16 +222,16 @@ export async function createWindowsDriver(window: WindowsAppWindow, signal: Abor
         try {
           const title = readback?.title ?? window.title
           const observation = await nativeQuery({ ...window, title }, active)
-          if (observation === "handoff") throw new WindowsDriverHandoffError()
+          if (observation === "handoff") throw new ComputerDriverHandoffError(handoffReason)
           const native = record(observation)
-          if (!Array.isArray(native?.rows)) throw new WindowsDriverError("无法读取已授权窗口内的控件。")
+          if (!Array.isArray(native?.rows)) throw new ComputerDriverError("无法读取已授权窗口内的控件。")
           let upstream: unknown[] = []
           // A post-dispatch readback uses the exact native target rechecked by the host.
           // The next dispatch checks the upstream scope again before handing out an input token.
           if (!readback) {
             const state = await call("get_window_state", { ...scope, include_screenshot: false, max_elements: 240, max_depth: 16 }, active)
             if (state?.window_id !== scope.window_id || state.pid !== scope.pid || !Array.isArray(state.elements) || state.degraded) {
-              throw new WindowsDriverError("无法确认 Windows 控件来自已授权窗口。")
+              throw new ComputerDriverError("无法确认 Windows 控件来自已授权窗口。")
             }
             upstream = state.elements
           }
@@ -298,7 +250,7 @@ export async function createWindowsDriver(window: WindowsAppWindow, signal: Abor
               ? native.focusIdentity : undefined }
         } catch (error) {
           active.throwIfAborted()
-          throw error instanceof WindowsDriverError ? error : new WindowsDriverError("读取 Windows 控件失败。")
+          throw error instanceof ComputerDriverError ? error : new ComputerDriverError("读取 Windows 控件失败。")
         }
       })
     },
@@ -306,15 +258,15 @@ export async function createWindowsDriver(window: WindowsAppWindow, signal: Abor
       return during(operationSignal, async active => {
         const control = controls.get(action.token)
         controls.clear()
-        if (!control?.enabled) throw new WindowsDriverError("控件已变更，请重新观察窗口。")
+        if (!control?.enabled) throw new ComputerDriverError("控件已变更，请重新观察窗口。")
         if (action.type === "set_text" && !control.actions.includes("set_value")) {
-          throw new WindowsDriverError("此控件未提供可验证的文字写入能力。")
+          throw new ComputerDriverError("此控件未提供可验证的文字写入能力。")
         }
         const status = await nativeQuery(window, active, control, action).catch(() => "unknown")
         if (status === "sent") return
-        if (status === "handoff") throw new WindowsDriverHandoffError()
-        if (status === "refused") throw new WindowsDriverError("该控件已变更或不支持此操作。")
-        throw new WindowsDriverError("无法确认 Windows 操作结果。", "unknown")
+        if (status === "handoff") throw new ComputerDriverHandoffError(handoffReason)
+        if (status === "refused") throw new ComputerDriverError("该控件已变更或不支持此操作。")
+        throw new ComputerDriverError("无法确认 Windows 操作结果。", "unknown")
       })
     },
   }

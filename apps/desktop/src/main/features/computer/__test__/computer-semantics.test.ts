@@ -2,15 +2,16 @@ import { expect, it, vi } from "vitest"
 import type { ComputerApprovalProposal, ComputerBridgeEvent, ComputerResult, ComputerSemanticAction } from "@vykor/server/daemon-host"
 import { ComputerHost } from "../computer-host"
 import { projectObservation } from "../computer-semantics"
-import type { WindowsApp, WindowsAppWindow } from "../windows-apps"
-import { WindowsDriverError, WindowsDriverHandoffError, type WindowsDriver, type WindowsDriverElement } from "../windows-driver"
+import type { WindowsAppWindow } from "../windows-apps"
+import { sameWindowsWindowInstance } from "../windows-computer-platform"
+import { ComputerDriverError, type ComputerApp, ComputerDriverHandoffError, type ComputerDriver, type ComputerDriverElement } from "../computer-platform"
 
-const app: WindowsApp = { id: "native", name: "Notepad" }
+const app: ComputerApp = { id: "native", name: "Notepad" }
 const window: WindowsAppWindow = { pid: 7, windowId: 64, sessionId: 1, processStartedAt: 2, title: "Untitled - Notepad" }
-const control: WindowsDriverElement = {
+const control: ComputerDriverElement = {
   role: "Document", token: "private", identity: "runtime-id", label: "Text editor", value: "", actions: ["set_value"],
 }
-const destructive: WindowsDriverElement = {
+const destructive: ComputerDriverElement = {
   role: "Button", token: "private-delete", identity: "runtime-delete", label: "Delete entry", actions: ["invoke"],
 }
 const run = { sessionId: "s", runId: "r", inputId: "i" }
@@ -35,20 +36,24 @@ function fixture(remember = false, fullAccess?: true) {
   const connection = new AbortController()
   const windows = vi.fn(async () => [window])
   let elements = [control, destructive]
-  const act = vi.fn<WindowsDriver["act"]>(async action => {
+  const act = vi.fn<ComputerDriver["act"]>(async action => {
     if (action.type === "set_text") elements = [{ ...control, value: action.text }, destructive]
   })
   const close = vi.fn(async () => {})
-  const observe = vi.fn<WindowsDriver["observe"]>(async () => ({ title: window.title, elements: elements.map(node => ({ ...node })) }))
-  const driver = vi.fn(async (): Promise<WindowsDriver> => ({
+  const observe = vi.fn<ComputerDriver["observe"]>(async () => ({ title: window.title, elements: elements.map(node => ({ ...node })) }))
+  const driver = vi.fn(async (): Promise<ComputerDriver> => ({
     observe, act, close,
   }))
   const publishActivity = vi.fn()
   const chooseTarget = vi.fn<NonNullable<ConstructorParameters<typeof ComputerHost>[1]["chooseTarget"]>>(async () => undefined)
-  const host = new ComputerHost({ discover: async () => [app], windows, launch: async () => {} }, {
+  const host = new ComputerHost({
+    apps: { discover: async () => [app], windows, launch: async () => {} },
+    sameWindowInstance: sameWindowsWindowInstance,
+    openDriver: driver,
+  }, {
     authorizeApp: async () => remember ? "remembered" : true, chooseTarget, isRememberedApp: () => remember,
     publishActivity,
-  }, driver)
+  })
   const approve = vi.fn(async (_proposal: ComputerApprovalProposal) => true)
   const dispatch = vi.fn(async () => true)
   const execute = (action: Extract<ComputerBridgeEvent, { type: "execute" }>["action"]) => host.execute({
@@ -61,7 +66,7 @@ function fixture(remember = false, fullAccess?: true) {
     return JSON.parse(observed.text).observation.elements as { ref: string; label: string }[]
   }
   return { host, approve, dispatch, windows, execute, act, observe, close, open, publishActivity, chooseTarget,
-    changeElements: (rows: WindowsDriverElement[]) => { elements = rows } }
+    changeElements: (rows: ComputerDriverElement[]) => { elements = rows } }
 }
 
 it("keeps an in-flight semantic operation unknown when the user pauses", async () => {
@@ -73,7 +78,7 @@ it("keeps an in-flight semantic operation unknown when the user pauses", async (
       signal.addEventListener("abort", () => resolve(), { once: true })
       started.resolve()
     })
-    throw new WindowsDriverError("Application response missing", "unknown")
+    throw new ComputerDriverError("Application response missing", "unknown")
   })
   const operation = f.execute({ type: "set_text", elementRef: field!.ref, text: "note" })
   await started.promise
@@ -142,7 +147,7 @@ it("prompts manual takeover if an operation opens a credential screen before rea
   const f = fixture()
   const [, button] = await f.open()
   f.act.mockImplementationOnce(async () => {
-    f.observe.mockRejectedValueOnce(new WindowsDriverHandoffError())
+    f.observe.mockRejectedValueOnce(new ComputerDriverHandoffError("请在目标应用中处理身份验证后继续。"))
   })
   expect(await f.execute({ type: "invoke", elementRef: button!.ref })).toMatchObject({ executionState: "unknown" })
   expect(f.publishActivity.mock.lastCall?.[1]).toMatchObject({ phase: "paused", preview: undefined })
@@ -282,10 +287,10 @@ it("identifies only the live run that uses a revoked remembered app grant", asyn
 
 it("proves selection and scroll with current values and omits protected controls", async () => {
   const f = fixture()
-  const option: WindowsDriverElement = {
+  const option: ComputerDriverElement = {
     role: "CheckBox", token: "private-option", identity: "option", label: "Wrap lines", checked: false, actions: ["toggle"],
   }
-  const pane: WindowsDriverElement = {
+  const pane: ComputerDriverElement = {
     role: "Pane", token: "private-pane", identity: "pane", label: "Notes", verticalScrollPercent: 20, actions: ["scroll"],
   }
   f.changeElements([option, pane, { ...control, protected: true, value: "secret" }])

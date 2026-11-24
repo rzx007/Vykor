@@ -3,17 +3,10 @@ import { createHash } from "node:crypto"
 import { realpath, stat } from "node:fs/promises"
 import { win32 as path } from "node:path"
 import { promisify } from "node:util"
+import { ComputerAppUnavailableError, type ComputerApp, type ComputerApps, type ComputerWindow } from "./computer-platform"
 import { windowsActivatePackagedApp, windowsWindowQuery } from "./windows-window-query"
 
-export interface WindowsApp {
-  id: string
-  name: string
-  confirmExistingWindow?: true
-  /** Local application chooser only. Never include native details in a model result. */
-  detail?: string
-}
-
-export interface WindowsAppWindow {
+export interface WindowsAppWindow extends ComputerWindow {
   windowId: number
   ownerWindowId?: number
   pid: number
@@ -22,27 +15,9 @@ export interface WindowsAppWindow {
   processStartKey?: string
   threadId?: number
   sessionId: number
-  /** A blocked root has no safe dialog the host may inherit from this scan. */
-  blocked?: boolean
   /** Packaged apps can be hosted inside a separate Windows frame process. */
   applicationPid?: number
   applicationStartKey?: string
-  title: string
-  document?: string
-  /** Desktop chooser only. Input geometry is captured and verified separately. */
-  position?: { left: number; top: number }
-}
-
-export interface WindowsApps {
-  discover(name: string, signal: AbortSignal): Promise<WindowsApp[]>
-  windows(app: WindowsApp, signal: AbortSignal): Promise<WindowsAppWindow[]>
-  launch(app: WindowsApp, signal: AbortSignal): Promise<void>
-}
-
-export class WindowsAppUnavailableError extends Error {
-  constructor(message: string, readonly reason: "desktop_unavailable" | "window_restricted" | "app_changed") {
-    super(message)
-  }
 }
 
 interface RegistryEntry {
@@ -52,13 +27,14 @@ interface RegistryEntry {
   arguments?: string
 }
 
-interface ResolvedApp extends WindowsApp {
+interface ResolvedApp extends ComputerApp {
   registration: string
   executable?: string
   arguments?: string
   explorer: boolean
 }
 
+const appChanged = "Windows 应用的身份已变化。请按应用名称重新查找。"
 const run = promisify(execFile)
 const explorerId = "microsoft.windows.explorer"
 const notepadId = "microsoft.windowsnotepad_8wekyb3d8bbwe!app"
@@ -201,11 +177,11 @@ function localLaunch(executable: string, argumentsText: string, signal: AbortSig
   })
 }
 
-export function createWindowsApps(): WindowsApps & { visibleWindows(signal: AbortSignal): Promise<WindowsAppWindow[]> } {
+export function createWindowsApps(): ComputerApps<WindowsAppWindow> & { visibleWindows(signal: AbortSignal): Promise<WindowsAppWindow[]> } {
   const systemRoot = process.env.SystemRoot ?? "C:\\Windows"
   const system32 = path.join(systemRoot, "System32")
   const powershell = path.join(system32, "WindowsPowerShell", "v1.0", "powershell.exe")
-  const issued = new WeakMap<WindowsApp, ResolvedApp>()
+  const issued = new WeakMap<ComputerApp, ResolvedApp>()
 
   const runPowerShell = async (script: string, env: Record<string, string>, signal: AbortSignal): Promise<string> => {
     signal.throwIfAborted()
@@ -222,14 +198,14 @@ export function createWindowsApps(): WindowsApps & { visibleWindows(signal: Abor
     if (!Array.isArray(value)) throw new Error("Windows returned an invalid application catalog")
     return value.filter(isUsableEntry)
   }
-  const resolved = (app: WindowsApp): ResolvedApp => {
+  const resolved = (app: ComputerApp): ResolvedApp => {
     const known = issued.get(app)
-    if (!known) throw new WindowsAppUnavailableError("This Windows application reference is no longer available.", "app_changed")
+    if (!known) throw new ComputerAppUnavailableError(appChanged, "app_changed")
     return known
   }
   const assertExecutable = async (known: ResolvedApp): Promise<void> => {
     if (known.executable && await classicAppId(known.registration, known.executable, known.arguments ?? "") !== known.id) {
-      throw new WindowsAppUnavailableError("The Windows application changed after it was selected.", "app_changed")
+      throw new ComputerAppUnavailableError(appChanged, "app_changed")
     }
   }
   const scan = async (signal: AbortSignal, application?: ResolvedApp) => {
@@ -241,7 +217,7 @@ export function createWindowsApps(): WindowsApps & { visibleWindows(signal: Abor
       VYKOR_COMPUTER_APP_EXPLORER: application?.explorer ? "1" : "0",
     }, signal)) as { desktopAvailable?: boolean; restricted?: boolean; windows?: unknown[] }
     if (!result.desktopAvailable)
-      throw new WindowsAppUnavailableError("The Windows desktop is locked or unavailable.", "desktop_unavailable")
+      throw new ComputerAppUnavailableError("Windows 桌面当前不可用。请解锁或回到桌面后重试。", "desktop_unavailable")
     if (!Array.isArray(result.windows)) throw new Error("Windows returned an invalid window inventory")
     const windows = result.windows.filter(isUsableWindow).map(window => ({
       windowId: window.windowId,
@@ -262,6 +238,7 @@ export function createWindowsApps(): WindowsApps & { visibleWindows(signal: Abor
     return { windows, restricted: result.restricted }
   }
   return {
+    catalogName: "开始菜单",
     async visibleWindows(signal) {
       const { windows } = await scan(signal)
       const withDialog = new Set(windows.map(window => window.ownerWindowId))
@@ -274,12 +251,12 @@ export function createWindowsApps(): WindowsApps & { visibleWindows(signal: Abor
       const entries = await catalog(signal)
       const exact = entries.filter(entry => applicationNames(entry).includes(query))
       const candidates = exact.length ? exact : entries.filter(entry => applicationNames(entry).some(alias => alias.includes(query)))
-      const apps = new Map<string, WindowsApp>()
+      const apps = new Map<string, ComputerApp>()
       for (const candidate of candidates) {
         signal.throwIfAborted()
         const known = await resolveEntry(candidate, systemRoot)
         if (!known || apps.has(known.id)) continue
-        const app: WindowsApp = Object.freeze({
+        const app: ComputerApp = Object.freeze({
           id: known.id, name: known.name, detail: known.executable ?? known.registration,
           ...(known.arguments ? { confirmExistingWindow: true } : {}),
         })
@@ -294,7 +271,7 @@ export function createWindowsApps(): WindowsApps & { visibleWindows(signal: Abor
       const { windows, restricted } = await scan(signal, known)
       await assertExecutable(known)
       if (!windows.length && restricted) {
-        throw new WindowsAppUnavailableError("Windows restricts access to this application's window.", "window_restricted")
+        throw new ComputerAppUnavailableError("Windows 限制了当前窗口。请检查应用是否以管理员身份运行，或是否显示系统安全提示。", "window_restricted")
       }
       return windows
     },
@@ -305,7 +282,7 @@ export function createWindowsApps(): WindowsApps & { visibleWindows(signal: Abor
         normalized(entry.registration) === normalized(known.registration))
       const current = await Promise.all(currentEntries.map(entry => resolveEntry(entry, systemRoot)))
       if (!current.some(candidate => candidate?.id === known.id)) {
-        throw new WindowsAppUnavailableError("The Windows application changed after it was selected.", "app_changed")
+        throw new ComputerAppUnavailableError(appChanged, "app_changed")
       }
       if (known.executable) {
         await localLaunch(known.executable, known.arguments ?? "", signal)

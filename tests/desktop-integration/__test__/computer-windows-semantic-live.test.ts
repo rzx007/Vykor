@@ -13,7 +13,8 @@ import { VykorHttpServer } from "@vykor/server"
 import { expect, it, vi } from "vitest"
 import { DesktopComputerBridge } from "../../../apps/desktop/src/main/features/computer/computer-bridge"
 import { ComputerHost } from "../../../apps/desktop/src/main/features/computer/computer-host"
-import { createWindowsApps, type WindowsAppWindow } from "../../../apps/desktop/src/main/features/computer/windows-apps"
+import type { WindowsAppWindow } from "../../../apps/desktop/src/main/features/computer/windows-apps"
+import { createWindowsComputerPlatform } from "../../../apps/desktop/src/main/features/computer/windows-computer-platform"
 import { createWindowsDriver } from "../../../apps/desktop/src/main/features/computer/windows-driver"
 import cua from "../../../apps/desktop/resources/computer-windows/driver-release.json"
 import { registerFixture } from "./windows-live-fixture"
@@ -81,7 +82,8 @@ it.skipIf(!enabled).each(["notepad", "fixture"])("accepts Windows semantic contr
   const driver = join(desktopPath, "out", "computer-windows", "x64", cua.executable)
   const daemonToken = randomBytes(24).toString("hex")
   const computerToken = randomBytes(32).toString("hex")
-  const provider = createWindowsApps()
+  const platform = createWindowsComputerPlatform()
+  const provider = platform.apps
   const launches: string[] = []
   const selections: number[] = []
   let shortcut: string | undefined
@@ -164,15 +166,20 @@ it.skipIf(!enabled).each(["notepad", "fixture"])("accepts Windows semantic contr
     })
     server = runningServer
     const host = new ComputerHost({
-      discover: (name, signal) => provider.discover(name, signal),
-      async windows(app, signal) {
-        const windows = await provider.windows(app, signal)
-        if (app.name === fixtureName) fixtureWindows = windows
-        return windows
-      },
-      async launch(app, signal) {
-        launches.push(app.name)
-        await provider.launch(app, signal)
+      ...platform,
+      foreground: undefined,
+      openDriver: (window, signal) => createWindowsDriver(window, signal, driver),
+      apps: {
+        ...provider,
+        async windows(app, signal) {
+          const windows = await provider.windows(app, signal)
+          if (app.name === fixtureName) fixtureWindows = windows
+          return windows
+        },
+        async launch(app, signal) {
+          launches.push(app.name)
+          await provider.launch(app, signal)
+        },
       },
     }, {
       async authorizeApp() { return true },
@@ -188,7 +195,7 @@ it.skipIf(!enabled).each(["notepad", "fixture"])("accepts Windows semantic contr
         const { left, top } = target.position
         return candidates.find(candidate => candidate.detail?.includes(`屏幕位置 ${left}, ${top}`))?.id
       },
-    }, (window, signal) => createWindowsDriver(window, signal, driver))
+    })
     const baseUrl = (await runningServer.listen()).url
     const client = new VykorClient({ baseUrl, token: daemonToken })
     const desktop = new DesktopComputerBridge({

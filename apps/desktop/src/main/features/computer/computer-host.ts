@@ -18,67 +18,47 @@ import {
   type ComputerObservation,
 } from "./computer-semantics"
 import type { ComputerInteraction } from "./interaction"
-import { WindowsAppUnavailableError, type WindowsApp, type WindowsApps, type WindowsAppWindow } from "./windows-apps"
-import { WindowsDriverError, WindowsDriverHandoffError, type WindowsDriver, type WindowsDriverObservation } from "./windows-driver"
 import {
-  cropFromFrame,
-  frameContainsPoint,
-  WindowsForegroundStartError,
-  type WindowsForeground,
-  type WindowsForegroundAction,
-  type WindowsForegroundFrame,
-  type WindowsForegroundLease,
-} from "./windows-foreground"
+  ComputerAppUnavailableError, ComputerDriverError, ComputerDriverHandoffError, ComputerForegroundStartError,
+  cropFromFrame, frameContainsPoint, sameCaptureEvidence,
+  type ComputerApp, type ComputerDriver, type ComputerDriverObservation, type ComputerForegroundFrame,
+  type ComputerForegroundLease, type ComputerInputAction, type ComputerPlatform, type ComputerWindow,
+} from "./computer-platform"
 
 const launchWaitMs = 15_000
 const frameLifetimeMs = 30_000
 
 type ExecuteEvent = Extract<ComputerBridgeEvent, { type: "execute" }>
-type Target = { app: WindowsApp; root: WindowsAppWindow; window: WindowsAppWindow; appRef: string; ref: string }
+type Target<Window extends ComputerWindow> = { app: ComputerApp; root: Window; window: Window; appRef: string; ref: string }
 type ApproveAction = DesktopComputerApproval
 type ApproveDispatch = DesktopComputerDispatch
-type CurrentFrame = { ref: string; target: Target; image: WindowsForegroundFrame; capturedAt: number }
-type Occupation = {
+type CurrentFrame<Window extends ComputerWindow> = { ref: string; target: Target<Window>; image: ComputerForegroundFrame; capturedAt: number }
+type Occupation<Window extends ComputerWindow> = {
   grant: AbortController
-  target: Target
-  input?: { stop: AbortController; opening?: Promise<WindowsForegroundLease>; lease?: WindowsForegroundLease }
+  target: Target<Window>
+  input?: { stop: AbortController; opening?: Promise<ComputerForegroundLease>; lease?: ComputerForegroundLease }
 }
-type Task = {
+type Task<Window extends ComputerWindow> = {
   run: ComputerRunIdentity
   stop: AbortController
   work: AbortController
   capture: AbortController
   paused?: AbortController
-  frame?: CurrentFrame
+  frame?: CurrentFrame<Window>
   imageRevocation?: Promise<boolean>
   captureRevocation?: DesktopComputerActivity["captureRevocation"]
   inputRelease?: DesktopComputerActivity["inputRelease"]
-  occupation?: Occupation
+  occupation?: Occupation<Window>
   activity?: Pick<DesktopComputerActivity, "action" | "evidence" | "reason">
   allowed: Map<string, "task" | "remembered">
-  apps: Map<string, WindowsApp>
-  target?: Target
-  launchToVerify?: { app: WindowsApp; windowHint?: string; previousWindows?: WindowsAppWindow[] }
+  apps: Map<string, ComputerApp>
+  target?: Target<Window>
+  launchToVerify?: { app: ComputerApp; windowHint?: string; previousWindows?: Window[] }
   observation?: ComputerObservation
 }
 
 class TargetError extends Error {}
 class TargetPausedError extends TargetError {}
-
-function sameWindowInstance(expected: WindowsAppWindow, actual: WindowsAppWindow): boolean {
-  return expected.windowId === actual.windowId && expected.ownerWindowId === actual.ownerWindowId &&
-    expected.pid === actual.pid && expected.threadId === actual.threadId && expected.sessionId === actual.sessionId &&
-    expected.processStartedAt === actual.processStartedAt && expected.processStartKey === actual.processStartKey &&
-    expected.applicationPid === actual.applicationPid && expected.applicationStartKey === actual.applicationStartKey
-}
-
-function sameWindow(expected: WindowsAppWindow, actual: WindowsAppWindow): boolean {
-  return sameWindowInstance(expected, actual) && expected.title === actual.title && expected.document === actual.document
-}
-
-function sameKnownDocument(expected: WindowsAppWindow, actual: WindowsAppWindow): boolean {
-  return Boolean(expected.document) && expected.document === actual.document && sameWindowInstance(expected, actual)
-}
 
 function sameRun(expected: ComputerRunIdentity, actual: ComputerRunIdentity): boolean {
   return expected.sessionId === actual.sessionId && expected.runId === actual.runId && expected.inputId === actual.inputId
@@ -88,7 +68,7 @@ function compareLabel(value: string): string {
   return value.normalize("NFKC").trim().toLowerCase()
 }
 
-function matchDocuments(windows: WindowsAppWindow[], hint: string): WindowsAppWindow[] {
+function matchDocuments<Window extends ComputerWindow>(windows: Window[], hint: string): Window[] {
   const needle = compareLabel(hint)
   const exact = windows.filter(window =>
     compareLabel(window.document ?? "") === needle ||
@@ -97,12 +77,7 @@ function matchDocuments(windows: WindowsAppWindow[], hint: string): WindowsAppWi
   return exact.length ? exact : windows.filter(window => compareLabel(window.title).includes(needle))
 }
 
-function primaryWindows(windows: WindowsAppWindow[], previousWindows?: WindowsAppWindow[]): WindowsAppWindow[] {
-  return windows.filter(window => window.ownerWindowId === undefined &&
-    !previousWindows?.some(previous => sameWindowInstance(previous, window)))
-}
-
-function displayTitle(window: WindowsAppWindow): string {
+function displayTitle(window: ComputerWindow): string {
   return window.title.replace(/\p{Cc}/gu, "").slice(0, 256)
 }
 
@@ -135,7 +110,7 @@ function inputDescription(action: ComputerForegroundAction): string {
   }
 }
 
-function freshFrame(frame: CurrentFrame, target: Target): boolean {
+function freshFrame(frame: CurrentFrame<ComputerWindow>, target: Target<ComputerWindow>): boolean {
   const age = Date.now() - frame.capturedAt
   return frame.target.ref === target.ref && age >= 0 && age <= frameLifetimeMs
 }
@@ -143,7 +118,7 @@ function freshFrame(frame: CurrentFrame, target: Target): boolean {
 function nativeInput(
   action: ComputerForegroundAction,
   focusIdentity: string | undefined
-): WindowsForegroundAction {
+): ComputerInputAction {
   if ("frameRef" in action) {
     const { frameRef: _reference, ...gesture } = action
     return gesture
@@ -152,31 +127,21 @@ function nativeInput(
   return { ...action, focusIdentity }
 }
 
-function sameCaptureEvidence(saved: WindowsForegroundFrame, latest: WindowsForegroundFrame): boolean {
-  const before = saved.geometry
-  const after = latest.geometry
-  return saved.focusIdentity === latest.focusIdentity && saved.data === latest.data && saved.width === latest.width && saved.height === latest.height &&
-    before.left === after.left && before.top === after.top && before.width === after.width && before.height === after.height &&
-    before.monitor === after.monitor && before.dpi === after.dpi
-}
-
 async function requireDispatch(dispatch: ApproveDispatch | undefined, signal: AbortSignal): Promise<void> {
   if (!dispatch || !await dispatch(signal)) throw new TargetError("本次电脑操作的运行授权已失效。")
   signal.throwIfAborted()
 }
 
 /** The current Desktop connection owns one active run's application grants and window. */
-export class ComputerHost {
+export class ComputerHost<Window extends ComputerWindow> {
   private connection?: AbortSignal
-  private task?: Task
+  private task?: Task<Window>
   // An unresolved release blocks a new input lease even after a new run or connection.
   private inputCleanup: Promise<boolean>
 
   constructor(
-    private readonly apps: Pick<WindowsApps, "discover" | "windows" | "launch">,
+    private readonly platform: ComputerPlatform<Window>,
     private readonly interaction: ComputerInteraction,
-    private readonly openDriver?: (target: WindowsAppWindow, signal: AbortSignal) => Promise<WindowsDriver>,
-    private readonly foreground?: WindowsForeground,
     previousInputCleanup = Promise.resolve(true),
   ) { this.inputCleanup = previousInputCleanup }
 
@@ -257,7 +222,7 @@ export class ComputerHost {
     event: ExecuteEvent, signal: AbortSignal, connection: AbortSignal, approve?: ApproveAction, authorizeDispatch?: ApproveDispatch,
   ): Promise<ComputerHostResponse> {
     let launchAttempted = false
-    let task: Task | undefined
+    let task: Task<Window> | undefined
     let work: AbortSignal | undefined
     try {
       connection.throwIfAborted()
@@ -274,36 +239,34 @@ export class ComputerHost {
       return await this.perform(task, event.action, work, approve, authorizeDispatch, () => { launchAttempted = true }, event.fullAccess)
     } catch (error) {
       if (signal.aborted || connection.aborted) throw error
-      if (task && error instanceof WindowsDriverHandoffError) {
+      if (task && error instanceof ComputerDriverHandoffError) {
         this.pauseTask(task, error.message)
         return { error: error.message, executionState: error.executionState }
       }
       if (work?.aborted) {
-        const unknown = launchAttempted || error instanceof WindowsDriverError && error.executionState === "unknown"
+        const unknown = launchAttempted || error instanceof ComputerDriverError && error.executionState === "unknown"
         return { error: unknown ? "电脑操作已暂停，结果仍需核对。请在继续后重新观察窗口。"
           : "电脑操作已暂停。请在继续后重新观察窗口。", executionState: unknown ? "unknown" : "not_started" }
       }
-      if (task && this.foreground && (error instanceof TargetPausedError ||
-        error instanceof WindowsAppUnavailableError && error.reason !== "app_changed")) {
-        const reason = error instanceof TargetPausedError ? error.message : this.unavailableMessage(error)
-        this.pauseTask(task, reason)
-        return { error: reason, executionState: launchAttempted ? "unknown" : "not_started" }
+      if (task && this.platform.foreground && (error instanceof TargetPausedError ||
+        error instanceof ComputerAppUnavailableError && error.reason !== "app_changed")) {
+        this.pauseTask(task, error.message)
+        return { error: error.message, executionState: launchAttempted ? "unknown" : "not_started" }
       }
       if (task && error instanceof TargetError) {
         task.activity = { reason: error.message }
         this.publish(task)
       }
-      if (error instanceof WindowsDriverError) return { error: error.message, executionState: error.executionState }
-      const message = error instanceof TargetError ? error.message
-        : error instanceof WindowsAppUnavailableError ? this.unavailableMessage(error)
+      if (error instanceof ComputerDriverError) return { error: error.message, executionState: error.executionState }
+      const message = error instanceof TargetError || error instanceof ComputerAppUnavailableError ? error.message
         : launchAttempted ? "无法确认应用是否已启动。请查看桌面后再试。"
-        : "无法核对 Windows 应用或窗口。请重试。"
+        : "无法核对目标应用或窗口。请重试。"
       return { error: message, executionState: launchAttempted ? "unknown" : "not_started" }
     }
   }
 
   private async perform(
-    task: Task,
+    task: Task<Window>,
     action: Exclude<ComputerAction, { type: "handoff" }>,
     signal: AbortSignal,
     approve: ApproveAction | undefined,
@@ -324,11 +287,11 @@ export class ComputerHost {
       try {
         this.assertPermission(task, app)
         const root = target?.root ?? await this.selectRoot(task,
-          primaryWindows(await this.apps.windows(app, signal), task.launchToVerify?.previousWindows),
+          this.primaryWindows(await this.platform.apps.windows(app, signal), task.launchToVerify?.previousWindows),
           task.launchToVerify?.windowHint, true, signal, app.confirmExistingWindow)
         const bound = await this.bind(task, app, root, signal, target !== undefined)
         this.publish(task, "observing")
-        if (!this.openDriver) return this.ready(bound, "reused")
+        if (!this.platform.openDriver) return this.ready(bound, "reused")
         return await this.useDriver(task, bound, signal, async driver => {
           const state = await driver.observe(signal)
           await this.liveTarget(task, bound, signal)
@@ -336,7 +299,7 @@ export class ComputerHost {
           return this.observed(task, bound, state, { status: "observed" })
         })
       } catch (error) {
-        if (error instanceof WindowsDriverHandoffError) throw error
+        if (error instanceof ComputerDriverHandoffError) throw error
         task.target = target
         task.observation = undefined
         this.invalidateTaskImage(task)
@@ -357,10 +320,13 @@ export class ComputerHost {
     this.publish(task)
     const { app: name, windowHint, newWindow } = action
     const known = task.apps.get(name)
-    const apps = known ? [known] : /^app_[a-f\d-]{36}$/u.test(name) ? [] : await this.apps.discover(name, signal)
-    if (!apps.length) throw new TargetError("找不到已注册的 Windows 应用。请确认应用已安装，并使用它在开始菜单中的名称。")
+    const apps = known ? [known] : /^app_[a-f\d-]{36}$/u.test(name) ? [] : await this.platform.apps.discover(name, signal)
+    if (!apps.length) {
+      const catalog = this.platform.apps.catalogName ?? "系统应用列表"
+      throw new TargetError(`找不到已注册的应用。请确认应用已安装，并使用它在${catalog}中的名称。`)
+    }
     const app = await this.choose(apps, (candidate, index) => ({
-      label: candidate.name, detail: candidate.detail ?? `Windows 应用 ${index + 1}`,
+      label: candidate.name, detail: candidate.detail ?? `应用 ${index + 1}`,
     }), signal, task.run.sessionId)
     if (!this.hasPermission(task, app)) {
       const choice = await this.interaction.authorizeApp(app, signal, task.run.sessionId)
@@ -373,9 +339,9 @@ export class ComputerHost {
     if (task.target?.app.id !== app.id) task.target = undefined
     task.observation = undefined
     const current = task.target
-    const windows = await this.apps.windows(app, signal)
+    const windows = await this.platform.apps.windows(app, signal)
     signal.throwIfAborted()
-    let roots = primaryWindows(windows)
+    let roots = this.primaryWindows(windows)
     if (newWindow || !roots.length) {
       task.target = undefined
       if (!roots.length && windows.length)
@@ -386,11 +352,11 @@ export class ComputerHost {
       onLaunch()
       const previousWindows = newWindow ? roots : undefined
       task.launchToVerify = { app, windowHint, previousWindows }
-      await this.apps.launch(app, signal)
+      await this.platform.apps.launch(app, signal)
       roots = await this.waitForWindow(app, signal, previousWindows)
     }
-    const pinned = current && windowHint === undefined ? roots.find(window => sameWindow(current.root, window)) : undefined
-    let root: WindowsAppWindow
+    const pinned = current && windowHint === undefined ? roots.find(window => this.sameWindow(current.root, window)) : undefined
+    let root: Window
     try {
       root = await this.selectRoot(task, pinned ? [pinned] : roots, windowHint, launchAttempted, signal,
         pinned || launchAttempted ? undefined : app.confirmExistingWindow)
@@ -414,7 +380,7 @@ export class ComputerHost {
   }
 
   private selectRoot(
-    task: Task, roots: WindowsAppWindow[], windowHint: string | undefined, launchAttempted: boolean,
+    task: Task<Window>, roots: Window[], windowHint: string | undefined, launchAttempted: boolean,
     signal: AbortSignal, confirmWindow?: true,
   ) {
     const matches = windowHint ? matchDocuments(roots, windowHint) : roots
@@ -423,25 +389,19 @@ export class ComputerHost {
       : "应用正在运行，但没有与提示匹配的窗口或已打开文档。")
     const usable = matches.filter(window => !window.blocked)
     if (!usable.length)
-      throw new TargetPausedError("目标窗口被对话框阻挡。请先在 Windows 中处理该对话框，再继续。")
+      throw new TargetPausedError("目标窗口被对话框阻挡。请先处理该对话框，再继续。")
     return this.choose(
       usable, (candidate, index) => this.windowLabel(candidate, index), signal, task.run.sessionId,
       usable.length === 1 ? confirmWindow : undefined,
     )
   }
 
-  private unavailableMessage(error: WindowsAppUnavailableError): string {
-    if (error.reason === "app_changed") return "Windows 应用的身份已变化。请按应用名称重新查找。"
-    if (error.reason === "desktop_unavailable") return "Windows 桌面当前不可用。请解锁或回到桌面后重试。"
-    return "Windows 限制了当前窗口。请检查应用是否以管理员身份运行，或是否显示系统安全提示。"
-  }
-
-  private findTask(sessionId: string, runId?: string): Task | undefined {
+  private findTask(sessionId: string, runId?: string): Task<Window> | undefined {
     const task = this.task
     return task?.run.sessionId === sessionId && (runId === undefined || task.run.runId === runId) ? task : undefined
   }
 
-  private publish(task: Task, phase?: DesktopComputerActivity["phase"]): void {
+  private publish(task: Task<Window>, phase?: DesktopComputerActivity["phase"]): void {
     if (phase !== "stopped" && this.task !== task) return
     const { frame, target, occupation, run, paused } = task
     this.interaction.publishActivity?.(run.sessionId, {
@@ -455,7 +415,7 @@ export class ComputerHost {
     })
   }
 
-  private stopTask(task: Task): void {
+  private stopTask(task: Task<Window>): void {
     this.task = undefined
     task.stop.abort()
     task.observation = undefined
@@ -473,7 +433,7 @@ export class ComputerHost {
     })
   }
 
-  private pauseTask(task: Task, reason?: string): void {
+  private pauseTask(task: Task<Window>, reason?: string): void {
     if (this.task !== task) return
     const previousPause = task.paused
     task.paused = new AbortController()
@@ -494,7 +454,7 @@ export class ComputerHost {
     })
   }
 
-  private invalidateTaskImage(task: Task): void {
+  private invalidateTaskImage(task: Task<Window>): void {
     task.frame = undefined
     const confirmation = this.interaction.invalidateCapturedImage?.(task.run.sessionId, task.run.runId)
     if (!confirmation || task.imageRevocation === confirmation) return
@@ -508,7 +468,7 @@ export class ComputerHost {
     })
   }
 
-  private async waitUntilResumed(task: Task, signal: AbortSignal): Promise<void> {
+  private async waitUntilResumed(task: Task<Window>, signal: AbortSignal): Promise<void> {
     while (task.paused) {
       const waiting = AbortSignal.any([signal, task.paused.signal])
       if (!waiting.aborted) await new Promise<void>(resolve => waiting.addEventListener("abort", () => resolve(), { once: true }))
@@ -517,7 +477,7 @@ export class ComputerHost {
     signal.throwIfAborted()
   }
 
-  private releaseInput(task: Task, keepGrant = false): Promise<boolean> {
+  private releaseInput(task: Task<Window>, keepGrant = false): Promise<boolean> {
     const occupied = task.occupation
     const input = occupied?.input
     if (occupied) occupied.input = undefined
@@ -527,7 +487,7 @@ export class ComputerHost {
     }
     if (input) {
       const closing = input.lease?.release() ?? input.opening?.then(lease => lease.release(), (error: unknown) =>
-        error instanceof WindowsForegroundStartError ? error.cleanup : undefined)
+        error instanceof ComputerForegroundStartError ? error.cleanup : undefined)
       input.stop.abort()
       const previous = this.inputCleanup
       this.inputCleanup = Promise.all([previous, closing]).then(([clean, result]) =>
@@ -537,21 +497,21 @@ export class ComputerHost {
   }
 
   private async enterInput(
-    task: Task,
-    occupied: Occupation,
+    task: Task<Window>,
+    occupied: Occupation<Window>,
     signal: AbortSignal
-  ): Promise<WindowsForegroundLease> {
-    if (!this.foreground || !this.interaction.showForeground || !await this.inputCleanup || task.occupation !== occupied) {
+  ): Promise<ComputerForegroundLease> {
+    if (!this.platform.foreground || !this.interaction.showForeground || !await this.inputCleanup || task.occupation !== occupied) {
       throw new TargetError("前台控制尚未就绪，或上次的输入释放未能确认。")
     }
     signal.throwIfAborted()
-    const input: NonNullable<Occupation["input"]> = { stop: new AbortController() }
+    const input: NonNullable<Occupation<Window>["input"]> = { stop: new AbortController() }
     occupied.input = input
     const lifetime = AbortSignal.any([task.stop.signal, occupied.grant.signal, input.stop.signal])
     const cancelStartup = () => input.stop.abort()
     signal.addEventListener("abort", cancelStartup, { once: true })
     try {
-      input.opening = this.foreground.enter(
+      input.opening = this.platform.foreground.enter(
         occupied.target.window,
         (reason) => {
           if (task.occupation !== occupied || occupied.input !== input) return
@@ -585,17 +545,17 @@ export class ComputerHost {
     }
   }
 
-  private requireTarget(task: Task): Target {
+  private requireTarget(task: Task<Window>): Target<Window> {
     if (!task.target) throw new TargetError("请先找到并打开本次任务的目标应用。")
     return task.target
   }
 
   private async captureWindow(
-    task: Task,
+    task: Task<Window>,
     signal: AbortSignal,
     action: ComputerCaptureAction
   ): Promise<ComputerResult> {
-    if (!this.foreground || task.capture.signal.aborted) throw new TargetError("本次任务的窗口画面未启用。")
+    if (!this.platform.foreground || task.capture.signal.aborted) throw new TargetError("本次任务的窗口画面未启用。")
     if (await task.imageRevocation === false) throw new TargetError("无法确认上一次截图已撤回。")
     const target = this.requireTarget(task)
     const previous = task.frame
@@ -609,7 +569,7 @@ export class ComputerHost {
     task.frame = undefined
     await this.liveTarget(task, target, active)
     this.publish(task, task.occupation?.input?.lease ? "foreground" : "observing")
-    const image = await this.foreground.capture(target.window, active, crop).catch(() => {
+    const image = await this.platform.foreground.capture(target.window, active, crop).catch(() => {
       active.throwIfAborted()
       if (crop) throw new TargetError("无法获取原尺寸局部截图。请重新截图或选择更小的范围。")
       throw new TargetPausedError("当前画面无法安全读取。请先检查目标窗口，再继续。")
@@ -633,8 +593,8 @@ export class ComputerHost {
     }
   }
 
-  private async beginForeground(task: Task, signal: AbortSignal, fullAccess?: true, approve?: ApproveAction, dispatch?: ApproveDispatch): Promise<ComputerResult> {
-    if (!this.foreground || !this.interaction.emergencyStop || !this.interaction.showForeground)
+  private async beginForeground(task: Task<Window>, signal: AbortSignal, fullAccess?: true, approve?: ApproveAction, dispatch?: ApproveDispatch): Promise<ComputerResult> {
+    if (!this.platform.foreground || !this.interaction.emergencyStop || !this.interaction.showForeground)
       throw new TargetError("当前 Desktop 未提供可用的前台提示和本机急停。")
     if (task.occupation) throw new TargetError("目标窗口的前台控制已获准。请先观察当前界面。")
     const target = this.requireTarget(task)
@@ -642,7 +602,7 @@ export class ComputerHost {
     if (!await this.inputCleanup) throw new TargetError("无法确认上次输入已释放，继续前请重启 Desktop。")
     task.frame = undefined
     task.observation = undefined
-    const occupied: Occupation = { grant: new AbortController(), target }
+    const occupied: Occupation<Window> = { grant: new AbortController(), target }
     task.occupation = occupied
     const requestSignal = AbortSignal.any([signal, occupied.grant.signal])
     try {
@@ -667,7 +627,7 @@ export class ComputerHost {
   }
 
   private async foregroundAction(
-    task: Task,
+    task: Task<Window>,
     action: ComputerForegroundAction,
     signal: AbortSignal,
     approve?: ApproveAction,
@@ -680,7 +640,7 @@ export class ComputerHost {
     const pointer = "frameRef" in action
     const frame = pointer || !task.frame?.image.region ? task.frame : undefined
     const observation = task.observation
-    if (!this.foreground || !occupied || !target || !lease || target.ref !== occupied.target.ref) {
+    if (!this.platform.foreground || !occupied || !target || !lease || target.ref !== occupied.target.ref) {
       throw new TargetError("请先为当前窗口取得前台控制许可，再重新观察。")
     }
     if (!frame && observation?.windowRef !== target.ref) throw new TargetError("请先重新观察前台窗口。")
@@ -721,7 +681,7 @@ export class ComputerHost {
         await this.liveTarget(task, target, operationSignal)
         lease = await this.enterInput(task, occupied, operationSignal)
         if (frame && !pointer) {
-          const latest = await this.foreground.capture(target.window, operationSignal)
+          const latest = await this.platform.foreground.capture(target.window, operationSignal)
           if (!sameCaptureEvidence(frame.image, latest))
             throw new TargetError("窗口内容在确认期间已变化，请重新观察。")
         }
@@ -763,12 +723,12 @@ export class ComputerHost {
         await this.releaseInput(task)
       }
       if (attempted) return { error: "前台输入可能已经派发，应用结果仍需核对。", executionState: "unknown" }
-      if (error instanceof TargetError || error instanceof WindowsDriverHandoffError) throw error
+      if (error instanceof TargetError || error instanceof ComputerDriverHandoffError) throw error
       throw new TargetError("前台窗口或输入状态已变化，请重新观察。")
     }
   }
 
-  private currentTask(run: ComputerRunIdentity, connection: AbortSignal): Task {
+  private currentTask(run: ComputerRunIdentity, connection: AbortSignal): Task<Window> {
     if (this.connection !== connection) {
       if (this.task) this.stopTask(this.task)
       this.connection = connection
@@ -787,22 +747,35 @@ export class ComputerHost {
     return this.task
   }
 
-  private hasPermission(task: Task, app: WindowsApp): boolean {
+  private hasPermission(task: Task<Window>, app: ComputerApp): boolean {
     const grant = task.allowed.get(app.id)
     return grant === "task" || (grant === "remembered" && this.interaction.isRememberedApp?.(app.id) === true)
   }
 
-  private assertPermission(task: Task, app: WindowsApp): void {
+  private assertPermission(task: Task<Window>, app: ComputerApp): void {
     if (!this.hasPermission(task, app)) throw new TargetError("此应用的许可已撤销。请重新授权后继续。")
   }
 
-  private async waitForWindow(app: WindowsApp, signal: AbortSignal, previousWindows?: WindowsAppWindow[]): Promise<WindowsAppWindow[]> {
+  private sameWindow(expected: Window, actual: Window): boolean {
+    return this.platform.sameWindowInstance(expected, actual) && expected.title === actual.title && expected.document === actual.document
+  }
+
+  private sameKnownDocument(expected: Window, actual: Window): boolean {
+    return Boolean(expected.document) && expected.document === actual.document && this.platform.sameWindowInstance(expected, actual)
+  }
+
+  private primaryWindows(windows: Window[], previousWindows?: Window[]): Window[] {
+    return windows.filter(window => window.ownerWindowId === undefined &&
+      !previousWindows?.some(previous => this.platform.sameWindowInstance(previous, window)))
+  }
+
+  private async waitForWindow(app: ComputerApp, signal: AbortSignal, previousWindows?: Window[]): Promise<Window[]> {
     const deadline = AbortSignal.timeout(launchWaitMs)
     const waiting = AbortSignal.any([deadline, signal])
     try {
       for (;;) {
         waiting.throwIfAborted()
-        const windows = primaryWindows(await this.apps.windows(app, waiting), previousWindows)
+        const windows = this.primaryWindows(await this.platform.apps.windows(app, waiting), previousWindows)
         if (windows.length) return windows
         await delay(250, undefined, { signal: waiting })
       }
@@ -817,24 +790,24 @@ export class ComputerHost {
   }
 
   private async bind(
-    task: Task, app: WindowsApp, root: WindowsAppWindow, signal: AbortSignal,
+    task: Task<Window>, app: ComputerApp, root: Window, signal: AbortSignal,
     allowRetitle = false,
-  ): Promise<Target> {
+  ): Promise<Target<Window>> {
     const previous = task.target
     task.target = undefined
     task.observation = undefined
     this.assertPermission(task, app)
-    let fresh = await this.apps.windows(app, signal)
+    let fresh = await this.platform.apps.windows(app, signal)
     signal.throwIfAborted()
-    let refreshedRoot = fresh.find(window => sameWindow(root, window))
+    let refreshedRoot = fresh.find(window => this.sameWindow(root, window))
     if (!refreshedRoot && allowRetitle) {
-      const renamed = fresh.find(window => sameKnownDocument(root, window) ||
-        (!root.document && !window.document && sameWindowInstance(root, window)))
-      if (renamed && !renamed.blocked && !sameKnownDocument(root, renamed)) {
+      const renamed = fresh.find(window => this.sameKnownDocument(root, window) ||
+        (!root.document && !window.document && this.platform.sameWindowInstance(root, window)))
+      if (renamed && !renamed.blocked && !this.sameKnownDocument(root, renamed)) {
         await this.choose([renamed], (candidate, index) => this.windowLabel(candidate, index), signal, task.run.sessionId, true)
-        fresh = await this.apps.windows(app, signal)
+        fresh = await this.platform.apps.windows(app, signal)
         signal.throwIfAborted()
-        refreshedRoot = fresh.find(window => sameWindow(renamed, window))
+        refreshedRoot = fresh.find(window => this.sameWindow(renamed, window))
       } else {
         refreshedRoot = renamed
       }
@@ -846,16 +819,16 @@ export class ComputerHost {
     const owned = fresh.filter(window => window.ownerWindowId === root.windowId)
     const usable = owned.filter(window => !window.blocked)
     if (owned.length && !usable.length) throw new TargetPausedError("目标对话框需要你接管。处理后请在聊天中继续。")
-    const pinned = previous && sameWindow(previous.root, root)
-      ? usable.find(window => sameWindow(previous.window, window)) : undefined
+    const pinned = previous && this.sameWindow(previous.root, root)
+      ? usable.find(window => this.sameWindow(previous.window, window)) : undefined
     const selected = pinned ?? (usable.length
       ? await this.choose(usable, (window, index) => this.windowLabel(window, index), signal, task.run.sessionId)
       : refreshedRoot)
     if (!pinned && usable.length > 1) {
-      const confirmed = await this.apps.windows(app, signal)
+      const confirmed = await this.platform.apps.windows(app, signal)
       signal.throwIfAborted()
-      if (!confirmed.some(window => !window.blocked && sameWindow(refreshedRoot, window)) ||
-          !confirmed.some(window => !window.blocked && sameWindow(selected, window))) {
+      if (!confirmed.some(window => !window.blocked && this.sameWindow(refreshedRoot, window)) ||
+          !confirmed.some(window => !window.blocked && this.sameWindow(selected, window))) {
         throw new TargetError("所选对话框已变化。请重新查找目标。")
       }
     }
@@ -865,7 +838,7 @@ export class ComputerHost {
       appRef = `app_${randomUUID()}`
       task.apps.set(appRef, app)
     }
-    const ref = previous && sameWindow(previous.window, selected) ? previous.ref : `window_${randomUUID()}`
+    const ref = previous && this.sameWindow(previous.window, selected) ? previous.ref : `window_${randomUUID()}`
     if (previous && previous.ref !== ref) {
       this.invalidateTaskImage(task)
       if (await task.imageRevocation === false) throw new TargetError("无法确认上一次截图已撤回。")
@@ -880,11 +853,11 @@ export class ComputerHost {
     return target
   }
 
-  private ready(target: Target, source: "reused" | "launched"): ComputerResult {
+  private ready(target: Target<Window>, source: "reused" | "launched"): ComputerResult {
     return { text: JSON.stringify({ status: "ready", ...this.targetDetails(target), source, next: { action: "observe" } }) }
   }
 
-  private targetDetails(target: Target) {
+  private targetDetails(target: Target<Window>) {
     return {
       app: { name: target.app.name, ref: target.appRef },
       window: { title: displayTitle(target.window), ref: target.ref, kind: target.window.ownerWindowId === undefined ? "window" : "dialog" },
@@ -892,7 +865,7 @@ export class ComputerHost {
   }
 
   private observed(
-    task: Task, target: Target, state: WindowsDriverObservation, details: { status: string; evidence?: string },
+    task: Task<Window>, target: Target<Window>, state: ComputerDriverObservation, details: { status: string; evidence?: string },
   ): ComputerResult {
     const snapshot = projectObservation(target.ref, state)
     task.observation = snapshot
@@ -906,15 +879,15 @@ export class ComputerHost {
     }) }
   }
 
-  private async liveTarget(task: Task, target: Target, signal: AbortSignal, allowRetitle = false): Promise<Target> {
+  private async liveTarget(task: Task<Window>, target: Target<Window>, signal: AbortSignal, allowRetitle = false): Promise<Target<Window>> {
     signal.throwIfAborted()
     if (this.task !== task || task.target !== target) throw new TargetError("窗口许可已变化。请重新观察。")
     this.assertPermission(task, target.app)
-    const windows = await this.apps.windows(target.app, signal)
+    const windows = await this.platform.apps.windows(target.app, signal)
     signal.throwIfAborted()
     this.assertPermission(task, target.app)
-    const match = (expected: WindowsAppWindow, actual: WindowsAppWindow) =>
-      sameWindow(expected, actual) || (allowRetitle && sameKnownDocument(expected, actual))
+    const match = (expected: Window, actual: Window) =>
+      this.sameWindow(expected, actual) || (allowRetitle && this.sameKnownDocument(expected, actual))
     const root = windows.find(current => !current.blocked && match(target.root, current))
     const window = windows.find(current => !current.blocked && match(target.window, current))
     if (!root || !window || (window.ownerWindowId === undefined &&
@@ -925,11 +898,11 @@ export class ComputerHost {
   }
 
   private async useDriver<T>(
-    task: Task, target: Target, signal: AbortSignal, work: (driver: WindowsDriver) => Promise<T>,
+    task: Task<Window>, target: Target<Window>, signal: AbortSignal, work: (driver: ComputerDriver) => Promise<T>,
   ): Promise<T> {
-    if (!this.openDriver) throw new TargetError("Windows 控件驱动不可用。")
+    if (!this.platform.openDriver) throw new TargetError("控件驱动不可用。")
     await this.liveTarget(task, target, signal)
-    const driver = await this.openDriver(target.window, signal)
+    const driver = await this.platform.openDriver(target.window, signal)
     try {
       signal.throwIfAborted()
       await this.liveTarget(task, target, signal)
@@ -940,7 +913,7 @@ export class ComputerHost {
   }
 
   private async applySemanticAction(
-    task: Task, action: ComputerSemanticAction, signal: AbortSignal, fullAccess?: true, approve?: ApproveAction, authorizeDispatch?: ApproveDispatch,
+    task: Task<Window>, action: ComputerSemanticAction, signal: AbortSignal, fullAccess?: true, approve?: ApproveAction, authorizeDispatch?: ApproveDispatch,
   ): Promise<ComputerHostResponse> {
     const { target, observation } = task
     const expected = observation?.elements.get(action.elementRef)
@@ -948,7 +921,7 @@ export class ComputerHost {
       throw new TargetError("控件引用已过期或不支持该操作。请重新观察窗口。")
     }
     task.observation = undefined
-    const prepare = async (driver: WindowsDriver) => {
+    const prepare = async (driver: ComputerDriver) => {
       const state = await driver.observe(signal)
       const control = findControl(expected, state)
       // Buttons may act on other controls, and the same editor can serve different selected records.
@@ -986,7 +959,7 @@ export class ComputerHost {
         const live = await this.liveTarget(task, target, signal, action.type === "set_text")
         const result = await driver.observe(signal, { title: live.window.title })
         const verified = await this.liveTarget(task, target, signal, action.type === "set_text")
-        if (!sameWindow(live.window, verified.window) ||
+        if (!this.sameWindow(live.window, verified.window) ||
           (action.type === "set_text" && selectionContext(result) !== observation.selection)) {
           throw new TargetError("读回期间目标窗口或选中记录已变化。")
         }
@@ -996,11 +969,11 @@ export class ComputerHost {
         return this.observed(task, verified, result, { status: evidence === "controls_changed" ? "observed_change" : "verified", evidence })
       })
     } catch (error) {
-      if (error instanceof WindowsDriverHandoffError && accepted) {
+      if (error instanceof ComputerDriverHandoffError && accepted) {
         this.pauseTask(task, error.message)
         return { error: error.message + " 已派发的动作仍需核对结果。", executionState: "unknown" }
       }
-      if (!dispatched || (error instanceof WindowsDriverError && !accepted)) throw error
+      if (!dispatched || (error instanceof ComputerDriverError && !accepted)) throw error
       return {
         error: error instanceof TargetError ? error.message : "已派发操作，但无法核实结果。请重新观察窗口。",
         executionState: "unknown",
@@ -1008,7 +981,7 @@ export class ComputerHost {
     }
   }
 
-  private windowLabel(window: WindowsAppWindow, index: number) {
+  private windowLabel(window: Window, index: number) {
     const position = window.position && `屏幕位置 ${window.position.left}, ${window.position.top}`
     return {
       label: displayTitle(window),

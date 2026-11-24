@@ -4,48 +4,14 @@ import { join } from "node:path"
 import { createInterface } from "node:readline"
 import { setTimeout as delay } from "node:timers/promises"
 import sharp from "sharp"
-import type { ComputerCaptureRegion, ComputerPointerGesture } from "@vykor/server/daemon-host"
+import type { ComputerPointerGesture } from "@vykor/server/daemon-host"
+import {
+  ComputerForegroundStartError, frameContainsPoint, nativeRegion,
+  type ComputerForeground, type ComputerForegroundCrop, type ComputerForegroundFrame,
+  type ComputerForegroundRelease, type ComputerForegroundResult, type ComputerForegroundRevokeReason, type ComputerInputAction,
+} from "./computer-platform"
 import type { WindowsAppWindow } from "./windows-apps"
 import { windowsForegroundQuery } from "./windows-foreground-query"
-
-export type WindowsForegroundAction =
-  | ComputerPointerGesture
-  | { type: "key"; key: string; modifiers?: ("ctrl" | "alt" | "shift")[]; focusIdentity?: string }
-  | { type: "text"; text: string; focusIdentity?: string }
-
-export interface WindowsForegroundFrame {
-  mimeType: "image/png"
-  data: string
-  width: number
-  height: number
-  geometry: { left: number; top: number; width: number; height: number; dpi: number; monitor: string }
-  /** Native pixels relative to the captured window, when only part of it was captured. */
-  region?: ComputerCaptureRegion
-  signature?: string
-  focusIdentity?: string
-}
-
-export type WindowsForegroundRevokeReason = "focus_lost" | "physical_input" | "emergency_stop" |
-  "window_changed" | "desktop_unavailable" | "driver_lost" | "release_unverified"
-
-export interface WindowsForegroundRelease { released: boolean; exited: boolean }
-export interface WindowsForegroundResult { state: "sent" | "refused" | "unknown"; released: boolean }
-export interface WindowsForegroundLease {
-  perform(action: WindowsForegroundAction, frame: WindowsForegroundFrame | undefined, signal: AbortSignal): Promise<WindowsForegroundResult>
-  release(): Promise<WindowsForegroundRelease>
-}
-export type WindowsForegroundCrop = {
-  geometry: WindowsForegroundFrame["geometry"]
-  region: ComputerCaptureRegion
-}
-export interface WindowsForeground {
-  capture(
-    window: WindowsAppWindow,
-    signal: AbortSignal,
-    crop?: WindowsForegroundCrop
-  ): Promise<WindowsForegroundFrame>
-  enter(window: WindowsAppWindow, onRevoked: (reason: WindowsForegroundRevokeReason) => void, signal: AbortSignal): Promise<WindowsForegroundLease>
-}
 
 const virtualKeys: Record<string, number> = {
   backspace: 8, tab: 9, enter: 13, escape: 27, space: 32, pageup: 33, pagedown: 34,
@@ -55,55 +21,8 @@ const virtualKeys: Record<string, number> = {
 const modifiers = { ctrl: 17, alt: 18, shift: 16 }
 const pinnedDownKeys = new Set([16, 17, 18])
 
-export function frameContainsPoint(
-  frame: { width: number; height: number },
-  x: number,
-  y: number
-): boolean {
-  return (
-    Number.isSafeInteger(x) &&
-    Number.isSafeInteger(y) &&
-    x >= 0 &&
-    y >= 0 &&
-    x < frame.width &&
-    y < frame.height
-  )
-}
-
-function nativeRegion(frame: WindowsForegroundFrame): ComputerCaptureRegion {
-  return frame.region ?? { x: 0, y: 0, width: frame.geometry.width, height: frame.geometry.height }
-}
-
-export function cropFromFrame(
-  frame: WindowsForegroundFrame,
-  selection: ComputerCaptureRegion
-): WindowsForegroundCrop | undefined {
-  if (
-    selection.width < 1 ||
-    selection.height < 1 ||
-    !frameContainsPoint(frame, selection.x, selection.y) ||
-    !frameContainsPoint(
-      frame,
-      selection.x + selection.width - 1,
-      selection.y + selection.height - 1
-    )
-  )
-    return
-  const region = nativeRegion(frame)
-  const scaleX = region.width / frame.width,
-    scaleY = region.height / frame.height
-  const left = Math.floor(selection.x * scaleX),
-    top = Math.floor(selection.y * scaleY)
-  const width = Math.min(region.width, Math.ceil((selection.x + selection.width) * scaleX)) - left
-  const height = Math.min(region.height, Math.ceil((selection.y + selection.height) * scaleY)) - top
-  return {
-    geometry: frame.geometry,
-    region: { x: region.x + left, y: region.y + top, width, height },
-  }
-}
-
 /** Convert model-visible pixels to physical coordinates in the original capture. */
-export function foregroundInput(action: WindowsForegroundAction, frame?: WindowsForegroundFrame) {
+export function foregroundInput(action: ComputerInputAction, frame?: ComputerForegroundFrame) {
   if ("x" in action) {
     if (
       !frame?.geometry.monitor ||
@@ -163,7 +82,7 @@ export function foregroundInput(action: WindowsForegroundAction, frame?: Windows
 }
 
 /** Compare only the observed pixels around where input will land. */
-async function pointerEvidence(action: ComputerPointerGesture, frame: WindowsForegroundFrame) {
+async function pointerEvidence(action: ComputerPointerGesture, frame: ComputerForegroundFrame) {
   const image = sharp(Buffer.from(frame.data, "base64")).removeAlpha().toColourspace("srgb")
   const points =
     action.type === "drag"
@@ -217,11 +136,11 @@ function windowIdentity(window: WindowsAppWindow): string {
 type NativeReply = {
   event?: "prepared" | "ready" | "revoked" | "released" | "frame" | "unavailable" | "test-held"
   upQueued?: boolean
-  reason?: WindowsForegroundRevokeReason
+  reason?: ComputerForegroundRevokeReason
   id?: number
-  state?: WindowsForegroundResult["state"]
+  state?: ComputerForegroundResult["state"]
   released?: boolean
-  frame?: WindowsForegroundFrame
+  frame?: ComputerForegroundFrame
 }
 
 type ForegroundFixtureGate = {
@@ -230,18 +149,12 @@ type ForegroundFixtureGate = {
   onPrepared?: () => void
 }
 
-export class WindowsForegroundStartError extends Error {
-  constructor(message: string, readonly cleanup: WindowsForegroundRelease) {
-    super(message)
-  }
-}
-
 function startNative(
   command: "capture" | "enter",
   window: WindowsAppWindow,
   onReply: (reply: NativeReply) => void,
   fault = "",
-  crop?: WindowsForegroundCrop
+  crop?: ComputerForegroundCrop
 ) {
   const shell = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
   const child = spawn(
@@ -276,15 +189,15 @@ function startNative(
   return { child, exited }
 }
 
-const notStarted: WindowsForegroundResult = { state: "refused", released: true }
+const notStarted: ComputerForegroundResult = { state: "refused", released: true }
 
-export function createWindowsForeground(fixture?: ForegroundFixtureGate): WindowsForeground {
+export function createWindowsForeground(fixture?: ForegroundFixtureGate): ComputerForeground<WindowsAppWindow> {
   let occupied = false
   let releaseUnverified = false
   return {
     async capture(window, signal, crop) {
       signal.throwIfAborted()
-      let result: WindowsForegroundFrame | undefined
+      let result: ComputerForegroundFrame | undefined
       const native = startNative(
         "capture",
         window,
@@ -311,11 +224,11 @@ export function createWindowsForeground(fixture?: ForegroundFixtureGate): Window
       let ready = false
       let revoked = false
       let acknowledged = false
-      let closing: Promise<WindowsForegroundRelease> | undefined
+      let closing: Promise<ComputerForegroundRelease> | undefined
       let nextId = 0
-      let pending: { id: number; finish: (result: WindowsForegroundResult) => void } | undefined
+      let pending: { id: number; finish: (result: ComputerForegroundResult) => void } | undefined
       const started = Promise.withResolvers<boolean>()
-      function revoke(reason: WindowsForegroundRevokeReason) {
+      function revoke(reason: ComputerForegroundRevokeReason) {
         if (revoked || closing) return
         revoked = true
         try { onRevoked(reason) }
@@ -363,7 +276,7 @@ export function createWindowsForeground(fixture?: ForegroundFixtureGate): Window
         }
       } catch (error) {
         const cleanup = await release()
-        if (!cleanup.released || !cleanup.exited) throw new WindowsForegroundStartError("无法确认前台助手已经退出。", cleanup)
+        if (!cleanup.released || !cleanup.exited) throw new ComputerForegroundStartError("无法确认前台助手已经退出。", cleanup)
         signal.throwIfAborted()
         throw error
       }
@@ -386,7 +299,7 @@ export function createWindowsForeground(fixture?: ForegroundFixtureGate): Window
           if (revoked || pending)
             return { state: "refused", released: closing ? (await closing).released : !pending }
           const id = ++nextId
-          const reply = Promise.withResolvers<WindowsForegroundResult>()
+          const reply = Promise.withResolvers<ComputerForegroundResult>()
           const interrupt = () => { void release() }
           active.addEventListener("abort", interrupt, { once: true })
           pending = { id, finish: result => { pending = undefined; reply.resolve(result) } }

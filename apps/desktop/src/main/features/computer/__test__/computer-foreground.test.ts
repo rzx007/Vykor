@@ -1,13 +1,14 @@
 import { expect, it, vi } from "vitest"
 import type { ComputerBridgeEvent, ComputerResult } from "@vykor/server/daemon-host"
 import { ComputerHost } from "../computer-host"
-import type { WindowsApps, WindowsAppWindow } from "../windows-apps"
-import { WindowsForegroundStartError, type WindowsForeground, type WindowsForegroundFrame, type WindowsForegroundRevokeReason } from "../windows-foreground"
+import type { WindowsAppWindow } from "../windows-apps"
+import { sameWindowsWindowInstance } from "../windows-computer-platform"
+import { ComputerForegroundStartError, type ComputerApps, type ComputerForeground, type ComputerForegroundFrame, type ComputerForegroundRevokeReason } from "../computer-platform"
 
 const run = { sessionId: "session", runId: "run", inputId: "input" }
 const window: WindowsAppWindow = { windowId: 21, pid: 1, sessionId: 1, processStartedAt: 1, title: "Test Window" }
 const secondWindow = { ...window, windowId: 22, title: "Other Window" }
-const frame: WindowsForegroundFrame = {
+const frame: ComputerForegroundFrame = {
   mimeType: "image/png", data: "aW1hZ2U=", width: 100, height: 80,
   geometry: { left: 0, top: 0, width: 100, height: 80, dpi: 96, monitor: "main" },
   focusIdentity: "1,21,2",
@@ -23,18 +24,19 @@ function fixture(fullAccess?: true) {
   const release = vi.fn(async () => ({ released: true, exited: true }))
   const capture = vi.fn(async () => frame)
   const launch = vi.fn(async () => {})
-  const windows = vi.fn<WindowsApps["windows"]>(async app => [app.id === "Second" ? secondWindow : window])
-  let lost: undefined | ((reason: WindowsForegroundRevokeReason) => void)
-  const enter = vi.fn<WindowsForeground["enter"]>(async (_window, onRevoked) => {
+  const windows = vi.fn<ComputerApps<WindowsAppWindow>["windows"]>(async app => [app.id === "Second" ? secondWindow : window])
+  let lost: undefined | ((reason: ComputerForegroundRevokeReason) => void)
+  const enter = vi.fn<ComputerForeground<WindowsAppWindow>["enter"]>(async (_window, onRevoked) => {
     lost = onRevoked
     return { perform, release }
   })
   const host = new ComputerHost({
-    discover: async name => [{ id: name, name }], windows,
-    launch,
+    apps: { discover: async name => [{ id: name, name }], windows, launch },
+    sameWindowInstance: sameWindowsWindowInstance,
+    foreground: { capture, enter },
   }, {
     authorizeApp: async () => true, chooseTarget: async () => undefined, emergencyStop, showForeground, publishActivity, invalidateCapturedImage,
-  }, undefined, { capture, enter })
+  })
   const approve = vi.fn(async () => true)
   const dispatch = vi.fn(async () => true)
   const execute = (action: Extract<ComputerBridgeEvent, { type: "execute" }>["action"], controller = connection) => host.execute({
@@ -45,7 +47,7 @@ function fixture(fullAccess?: true) {
     return { result, ref: JSON.parse(result.text).frame.ref as string }
   }
   return { approve, emergencyStop, showForeground, capture, dispatch, enter, execute, host, perform, publishActivity, release, windows, launch, invalidateCapturedImage,
-    revokeForeground: (reason: WindowsForegroundRevokeReason) => lost?.(reason), pressEscape: () => lost?.("emergency_stop"), snapshot }
+    revokeForeground: (reason: ComputerForegroundRevokeReason) => lost?.(reason), pressEscape: () => lost?.("emergency_stop"), snapshot }
 }
 
 it("makes a window image available only for capture and guards a coordinate with a fresh frame", async () => {
@@ -323,13 +325,13 @@ it("does not report not_started if paused after application launch began", async
 it("retains unknown input release when a foreground startup is cancelled before it returns a lease", async () => {
   const f = fixture()
   const began = Promise.withResolvers<void>()
-  const entered = Promise.withResolvers<Awaited<ReturnType<WindowsForeground["enter"]>>>()
+  const entered = Promise.withResolvers<Awaited<ReturnType<ComputerForeground<WindowsAppWindow>["enter"]>>>()
   f.enter.mockImplementationOnce(() => { began.resolve(); return entered.promise })
   await f.execute({ type: "open_app", app: "First" })
   const opening = f.execute({ type: "foreground" })
   await began.promise
   expect(f.host.pause(run.sessionId, run.runId)).toBe(true)
-  entered.reject(new WindowsForegroundStartError("aborted", { released: false, exited: false }))
+  entered.reject(new ComputerForegroundStartError("aborted", { released: false, exited: false }))
   await opening
   expect(await f.host.waitForInputRelease()).toBe(false)
   expect(await f.host.resume(run.sessionId, run.runId)).toBe(false)

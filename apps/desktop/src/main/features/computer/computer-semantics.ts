@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from "node:crypto"
 import type { ComputerSemanticAction } from "@vykor/server/daemon-host"
-import type { WindowsDriverElement, WindowsDriverObservation } from "./windows-driver"
+import type { ComputerDriverElement, ComputerDriverObservation } from "./computer-platform"
 
-type ElementFacts = Omit<WindowsDriverElement, "token">
+type ElementFacts = Omit<ComputerDriverElement, "token">
 
 export interface ComputerObservation {
   windowRef: string
@@ -55,7 +55,7 @@ function offeredActions(element: ElementFacts): string[] {
   return result
 }
 
-export function observationDigest(state: WindowsDriverObservation): string {
+export function observationDigest(state: ComputerDriverObservation): string {
   return createHash("sha256").update(JSON.stringify(state.elements.filter(eligible).map(element => [
     element.identity, element.index, element.parentIndex, element.depth, element.role, element.label, element.automationId,
     element.value, element.valueDigest, element.valueTruncated, element.enabled, element.actions, element.selected, element.checked, element.expanded,
@@ -63,12 +63,12 @@ export function observationDigest(state: WindowsDriverObservation): string {
   ]))).digest("hex")
 }
 
-export function selectionContext(state: WindowsDriverObservation): string {
+export function selectionContext(state: ComputerDriverObservation): string {
   return JSON.stringify(state.elements.filter(element => eligible(element) && element.selected === true)
     .map(({ identity, automationId, label, role }) => [identity, automationId, label, role]))
 }
 
-export function projectObservation(windowRef: string, state: WindowsDriverObservation): ComputerObservation {
+export function projectObservation(windowRef: string, state: ComputerDriverObservation): ComputerObservation {
   const elements = new Map<string, ElementFacts>()
   const display: ComputerObservation["display"] = { elements: [], limited: false }
   const candidates: Array<{
@@ -111,7 +111,7 @@ export function supportsAction(element: ElementFacts, action: ComputerSemanticAc
   return offeredActions(element).includes(action.type)
 }
 
-export function findControl(expected: ElementFacts, state: WindowsDriverObservation): WindowsDriverElement | undefined {
+export function findControl(expected: ElementFacts, state: ComputerDriverObservation): ComputerDriverElement | undefined {
   const matching = state.elements.filter(element => eligible(element)
     && element.role === expected.role && element.label === expected.label
     && (expected.identity ? element.identity === expected.identity
@@ -148,8 +148,8 @@ export function approvalReason(app: string, title: string, action: ComputerSeman
 export function verifiedEffect(
   action: ComputerSemanticAction,
   control: ElementFacts,
-  before: WindowsDriverObservation,
-  after: WindowsDriverObservation,
+  before: ComputerDriverObservation,
+  after: ComputerDriverObservation,
 ): "field_value" | "selection" | "scroll_position" | "controls_changed" | undefined {
   const updated = findControl(control, after)
   switch (action.type) {
