@@ -65,7 +65,7 @@ it("uses the exact visible run for pause, continue, and local stop", async () =>
   expect(control.mock.calls).toEqual(["pause", "resume", "stop"].map(action => [{ sessionId: "original", runId: "run", action }]))
 })
 
-it("waits for cleanup confirmation before saying the user can take over", async () => {
+it("shows cleanup until paused and keeps the target in the status line once", async () => {
   await act(async () => root.render(<ComputerActivityMenu sessionId="original" />))
   await act(async () => button("电脑操作选项").click())
   await act(async () => listener({ sessionId: "original", activity: {
@@ -73,11 +73,13 @@ it("waits for cleanup confirmation before saying the user can take over", async 
   } }))
   expect(document.body.textContent).toContain("正在释放键鼠")
   expect(document.body.textContent).toContain("正在撤回后台待发送的截图")
-  expect(document.body.textContent).not.toContain("你可以操作窗口")
   expect(button("继续").disabled).toBe(true)
-  await act(async () => listener({ sessionId: "original", activity: { ...activity, phase: "paused", preview: undefined } }))
-  expect(document.body.textContent).toContain("你可以操作窗口")
+  await act(async () => listener({ sessionId: "original", activity: { ...activity, phase: "paused", title: activity.app, preview: undefined } }))
+  expect(document.body.querySelector("[data-slot=popover-content] [role=status]")?.textContent).toBe("已暂停 记事本")
   expect(button("继续").disabled).toBe(false)
+  const handoff = "请在目标应用中完成需要手动操作的步骤，然后回到聊天继续。"
+  await act(async () => listener({ sessionId: "original", activity: { ...activity, phase: "paused", reason: handoff, preview: undefined } }))
+  expect(document.body.querySelector("[data-slot=popover-content]")?.textContent).toContain(handoff)
 })
 
 it("hides routine observation and successful completion while keeping cleanup problems visible", async () => {

@@ -7,8 +7,8 @@ import type { DesktopComputerActivity, DesktopComputerControl } from "@shared/co
 const statusText: Record<Exclude<DesktopComputerActivity["phase"], "stopped">, string> = {
   ready: "电脑操作",
   observing: "电脑操作",
-  foreground: "正在使用鼠标和键盘",
-  paused: "已暂停，你可以操作窗口",
+  foreground: "正在使用键鼠",
+  paused: "已暂停",
 }
 
 export function ComputerActivityMenu({ sessionId }: { sessionId: string }): React.JSX.Element | null {
@@ -60,7 +60,10 @@ function ComputerActivityControls({ activity }: { activity: DesktopComputerActiv
   const captureEnabled = activity.captureEnabled !== false
   const canShowPreview = captureEnabled && phase !== "paused" && phase !== "stopped" && Boolean(preview)
   const expanded = canShowPreview && showPreview
-  const target = [activity.app, activity.title].filter(Boolean).join(" · ")
+  const target =
+    activity.title && activity.title !== activity.app
+      ? [activity.app, activity.title].filter(Boolean).join(" · ")
+      : activity.app
   const captureStatus = captureRevocation === "pending" ? "正在撤回后台待发送的截图" : "无法确认后台截图已撤回"
   const status = inputRelease === "pending" ? "正在释放键鼠"
     : inputRelease === "failed" ? "无法确认键鼠已释放"
@@ -96,48 +99,133 @@ function ComputerActivityControls({ activity }: { activity: DesktopComputerActiv
         <MonitorCog className="size-3.5" aria-hidden="true" />
         {phase === "paused" ? "已暂停" : null}
       </PopoverTrigger>
-      <PopoverContent aria-label="电脑操作" side="top" align="start" className="w-80">
-        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
-          <div className="flex min-w-0 flex-1 items-center gap-2" role="status">
-            <div className="min-w-0">
-              <p className="text-xs font-medium">{status}</p>
-              {target ? <p className="truncate text-xs text-muted-foreground" title={target}>{target}</p> : null}
+      <PopoverContent
+        aria-label="电脑操作"
+        side="top"
+        align="start"
+        sideOffset={8}
+        className="w-80 max-w-(--available-width) gap-2 motion-reduce:data-open:animate-none motion-reduce:data-closed:animate-none"
+      >
+        <div className="flex min-w-0 items-baseline gap-2 px-2" role="status">
+          <span className="max-w-full shrink-0 text-sm font-medium break-words">{status}</span>
+          {target ? (
+            <>
+              {" "}
+              <span
+                className="min-w-0 flex-1 truncate text-xs text-muted-foreground"
+                title={target}
+              >
+                {target}
+              </span>
+            </>
+          ) : null}
+        </div>
+        {phase === "paused" && activity.reason ? (
+          <p className="px-2 text-xs break-words text-muted-foreground">{activity.reason}</p>
+        ) : null}
+        {captureRevocation && (phase !== "stopped" || inputRelease) ? (
+          <p role="status" className="px-2 text-xs text-muted-foreground">
+            {captureStatus}
+          </p>
+        ) : null}
+        {error ? (
+          <p role="alert" className="px-2 text-xs text-destructive">
+            {error}
+          </p>
+        ) : null}
+        {phase !== "stopped" ? (
+          <div className="flex flex-wrap items-center gap-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-1">
+              {canShowPreview ? (
+                <Button
+                  type="button"
+                  shape="pill"
+                  size="sm"
+                  variant="ghost"
+                  aria-expanded={expanded}
+                  aria-controls={previewId}
+                  onClick={() => setShowPreview(!expanded)}
+                >
+                  {expanded ? "收起预览" : "窗口预览"}
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                shape="pill"
+                size="sm"
+                variant="ghost"
+                disabled={captureRevocation !== undefined || pending !== null}
+                onClick={() => void request(captureEnabled ? "disable_capture" : "enable_capture")}
+              >
+                {captureEnabled ? "关闭截图" : "允许截图"}
+              </Button>
+            </div>
+            <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1">
+              {phase === "paused" ? (
+                <Button
+                  type="button"
+                  shape="pill"
+                  size="sm"
+                  disabled={
+                    inputRelease !== undefined ||
+                    captureRevocation !== undefined ||
+                    pending !== null
+                  }
+                  onClick={() => void request("resume")}
+                >
+                  <CirclePlay data-icon="inline-start" />
+                  继续
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  shape="pill"
+                  size="sm"
+                  variant="ghost"
+                  aria-label="暂停并接管"
+                  disabled={pending !== null}
+                  onClick={() => void request("pause")}
+                >
+                  <CirclePause data-icon="inline-start" />
+                  暂停
+                </Button>
+              )}
+              <Button
+                type="button"
+                shape="pill"
+                size="sm"
+                variant="destructive"
+                aria-label="停止电脑操作"
+                disabled={pending === "stop"}
+                onClick={() => void request("stop")}
+              >
+                <CircleStop data-icon="inline-start" />
+                停止
+              </Button>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-1">
-            {canShowPreview ? (
-              <Button type="button" shape="pill" size="sm" variant="ghost" aria-expanded={expanded} aria-controls={previewId}
-                onClick={() => setShowPreview(!expanded)}>{expanded ? "收起预览" : "窗口预览"}</Button>
-            ) : canDismiss ? (
-              <Button type="button" shape="pill" size="sm" variant="ghost" onClick={() => setDismissed(true)}>关闭提示</Button>
-            ) : null}
-            {phase !== "stopped" ? (
-              <>
-                <Button type="button" shape="pill" size="sm" variant="ghost" disabled={captureRevocation !== undefined || pending !== null}
-                  onClick={() => void request(captureEnabled ? "disable_capture" : "enable_capture")}>
-                  {captureEnabled ? "关闭截图" : "允许截图"}
-                </Button>
-                {phase === "paused" ? (
-                  <Button type="button" shape="pill" size="sm" variant="outline" disabled={inputRelease !== undefined || captureRevocation !== undefined || pending !== null}
-                    onClick={() => void request("resume")}><CirclePlay data-icon="inline-start" />继续</Button>
-                ) : (
-                  <Button type="button" shape="pill" size="sm" variant="ghost" disabled={pending !== null}
-                    onClick={() => void request("pause")}><CirclePause data-icon="inline-start" />暂停并接管</Button>
-                )}
-                <Button type="button" shape="pill" size="sm" variant="destructive" disabled={pending === "stop"}
-                  onClick={() => void request("stop")}><CircleStop data-icon="inline-start" />停止电脑操作</Button>
-              </>
-            ) : null}
-          </div>
-        </div>
-        {phase === "paused" && activity.reason ? <p className="mt-1 break-words text-xs text-muted-foreground">{activity.reason}</p> : null}
-        {captureRevocation && (phase !== "stopped" || inputRelease) ? <p role="status" className="mt-1 text-xs text-muted-foreground">
-          {captureStatus}
-        </p> : null}
-        {error ? <p role="alert" className="mt-1 text-xs text-destructive">{error}</p> : null}
+        ) : canDismiss ? (
+          <Button
+            type="button"
+            shape="pill"
+            size="sm"
+            variant="ghost"
+            className="self-end"
+            onClick={() => setDismissed(true)}
+          >
+            关闭提示
+          </Button>
+        ) : null}
         {expanded && preview ? (
-          <img id={previewId} className="mt-2 max-h-[35vh] w-auto max-w-full rounded-lg border border-border object-contain"
-            src={preview.dataUrl} width={preview.width} height={preview.height} alt="当前目标窗口画面" draggable={false} />
+          <img
+            id={previewId}
+            className="max-h-[35vh] w-auto max-w-full rounded-lg border border-border object-contain"
+            src={preview.dataUrl}
+            width={preview.width}
+            height={preview.height}
+            alt="当前目标窗口画面"
+            draggable={false}
+          />
         ) : null}
       </PopoverContent>
     </Popover>

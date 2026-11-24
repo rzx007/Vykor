@@ -156,7 +156,7 @@ it.runIf(realWindows)("observes and safely drives a real Calculator through the 
   }
 }, 175_000)
 
-it.skipIf(!realWindows).each([["key", "ask"], ["click", "ask"], ["click", "full_access"]] as const)(
+it.skipIf(!realWindows).each([["key", "ask"], ["click", "ask"], ["click", "full_access"], ["drag", "ask"]] as const)(
   "releases a held %s in %s mode through actual chat Stop before an up is queued", async (kind, mode) => {
   const directory = mkdtempSync(join(tmpdir(), "vykor-chat-stop-live-"))
   const appName = `Vykor Stop ${randomBytes(4).toString("hex")}`
@@ -191,9 +191,10 @@ it.skipIf(!realWindows).each([["key", "ask"], ["click", "ask"], ["click", "full_
           const text = latest?.content.find(item => item.type === "text")
           const current = frame!
           const geometry = current.geometry
-          action = { action: "click", frameRef: JSON.parse(text?.type === "text" ? text.text : "{}").frame.ref,
-            x: Math.round((evidence.buttonX! - geometry.left) * current.width / geometry.width),
-            y: Math.round((evidence.buttonY! - geometry.top) * current.height / geometry.height) }
+          const x = Math.round((evidence.buttonX! - geometry.left) * current.width / geometry.width)
+          const y = Math.round((evidence.buttonY! - geometry.top) * current.height / geometry.height)
+          action = { action: kind, frameRef: JSON.parse(text?.type === "text" ? text.text : "{}").frame.ref,
+            x, y, ...(kind === "drag" ? { toX: x + 48, toY: y } : {}) }
         }
       }
       if (action && !latest?.isError && tools?.some(tool => tool.name === "Computer")) {
@@ -275,6 +276,8 @@ it.skipIf(!realWindows).each([["key", "ask"], ["click", "ask"], ["click", "full_
       expect(showForeground).toHaveBeenCalledOnce()
     }
     expect(events().filter(event => event.kind === up)).toEqual([])
+    if (kind === "drag") await expect.poll(() => events().filter(event => event.kind === "mouse-drag"))
+      .toMatchObject([{ hwnd: target()!.target }])
     // Use the same order as Electron's chat Stop IPC handler.
     desktop.revoke(session.id, runId)
     await client.sessions.interrupt(session.id, { expectedRunId: runId, source: "user" })
@@ -283,6 +286,7 @@ it.skipIf(!realWindows).each([["key", "ask"], ["click", "ask"], ["click", "full_
     await expect.poll(() => events().filter(event => event.kind === up), { timeout: 4_000 })
       .toMatchObject([{ hwnd: target()!.target }])
     expect(events().filter(event => event.kind === down)).toMatchObject([{ hwnd: target()!.target }])
+    if (kind === "drag") expect(events().filter(event => event.kind === "mouse-drag")).toHaveLength(1)
   } catch (error) {
     throw new Error(`Foreground fixture failed. ${outcomes.join(" | ")}`, { cause: error })
   } finally {

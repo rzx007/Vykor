@@ -8,7 +8,7 @@
 2. [computer-tool.ts](computer-tool.ts) 在新输入与运行入队前绑定会话、运行和输入的真实 ID。执行时再次核对当前连接、本次运行和调用来源，并遵守会话工具策略。Desktop 负责应用和窗口许可，动作审批沿用当前会话的授权模式。
 3. [computer-bridge.ts](computer-bridge.ts) 通过事件流发出命令，并用同一连接和请求编号接收结果。`open_app` 接收应用名称或本轮引用，可用窗口提示定位已有文档，或用 `newWindow` 明确请求独立窗口。应用启动来源、就绪窗口和选择都由 Desktop 核对。 [私有消息定义](computer-bridge-protocol.ts)
 4. [computer-approval.ts](computer-approval.ts) 在发起命令时记住运行、输入和配置修订。桌面和后台共用动作审批规则。完全访问的动作可直接申请派发，后台仍须在私有 `dispatch` 核对当前运行与权限。需要等待的审批只绑定到当前命令，回复需要同一连接和会话。
-5. `capture` 的结果包含范围和大小已经核对的窗口图像。普通捕获仅在内存为通过检查的一次模型请求附图。Desktop 通过私有 `revoke-image` 按截图请求编号撤销，迟到的撤销只影响这张截图。 [模型图片处理](../../../../api/src/providers/media/native-image-payload.ts) · [模型请求构造](../../../../core/src/engine/query-engine.ts)
+5. `capture` 返回整窗图像，或者用当前 `frameRef` 加 `region` 读取一块原始分辨率的图像。返回的引用可用于 `click`、`drag`、`scroll_at` 或 `hover`。Desktop 核对引用和坐标，每种前台鼠标动作走同一套运行审批与派发许可。普通捕获仅在内存为通过检查的一次模型请求附图。Desktop 通过私有 `revoke-image` 按截图请求编号撤销，迟到的撤销只影响这张截图。 [模型图片处理](../../../../api/src/providers/media/native-image-payload.ts) · [模型请求构造](../../../../core/src/engine/query-engine.ts)
 6. `capture` 指定 `purpose: "result"` 时暂存本轮的结果图。运行完成且截图仍有效时，通过现有附件服务保存并追加到最终助手消息。中断、断线或撤销会取消转存。有效截图因存储出错未能保存时，助手消息显示失败提示，文字回答继续保留。 [会话投影](../session/transcript/transcript-projection.ts)
 
 ## 状态归属

@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto"
 import { setTimeout as delay } from "node:timers/promises"
 import type {
-  ComputerAction, ComputerBridgeEvent, ComputerResult, ComputerRunIdentity, ComputerSemanticAction,
+  ComputerAction,
+  ComputerBridgeEvent,
+  ComputerCaptureAction,
+  ComputerForegroundAction,
+  ComputerResult,
+  ComputerRunIdentity,
+  ComputerSemanticAction,
 } from "@vykor/server/daemon-host"
 import { computerActionNeedsApproval } from "@vykor/server/daemon-host"
 import type { DesktopComputerActivity } from "../../../shared/computer-types"
@@ -14,7 +20,15 @@ import {
 import type { ComputerInteraction } from "./interaction"
 import { WindowsAppUnavailableError, type WindowsApp, type WindowsApps, type WindowsAppWindow } from "./windows-apps"
 import { WindowsDriverError, WindowsDriverHandoffError, type WindowsDriver, type WindowsDriverObservation } from "./windows-driver"
-import { WindowsForegroundStartError, type WindowsForeground, type WindowsForegroundFrame, type WindowsForegroundLease } from "./windows-foreground"
+import {
+  cropFromFrame,
+  frameContainsPoint,
+  WindowsForegroundStartError,
+  type WindowsForeground,
+  type WindowsForegroundAction,
+  type WindowsForegroundFrame,
+  type WindowsForegroundLease,
+} from "./windows-foreground"
 
 const launchWaitMs = 15_000
 const frameLifetimeMs = 30_000
@@ -23,7 +37,6 @@ type ExecuteEvent = Extract<ComputerBridgeEvent, { type: "execute" }>
 type Target = { app: WindowsApp; root: WindowsAppWindow; window: WindowsAppWindow; appRef: string; ref: string }
 type ApproveAction = DesktopComputerApproval
 type ApproveDispatch = DesktopComputerDispatch
-type InputAction = Extract<ComputerAction, { type: "click" | "key" | "type_text" }>
 type CurrentFrame = { ref: string; target: Target; image: WindowsForegroundFrame; capturedAt: number }
 type Occupation = {
   grant: AbortController
@@ -93,6 +106,52 @@ function displayTitle(window: WindowsAppWindow): string {
   return window.title.replace(/\p{Cc}/gu, "").slice(0, 256)
 }
 
+const inputLabels: Record<ComputerForegroundAction["type"], string> = {
+  click: "点击",
+  drag: "拖拽",
+  scroll_at: "滚轮",
+  hover: "悬停",
+  key: "按键",
+  type_text: "输入文字",
+}
+
+function inputDescription(action: ComputerForegroundAction): string {
+  switch (action.type) {
+    case "click": {
+      const gesture = action.count === 2 ? "双击" : action.button === "right" ? "右击" : "点击"
+      const modifiers = action.modifiers?.length ? `${action.modifiers.join("+")}＋` : ""
+      return `${modifiers}${gesture}画面中的 (${action.x}, ${action.y})`
+    }
+    case "drag":
+      return `从 (${action.x}, ${action.y}) 拖拽到 (${action.toX}, ${action.toY})`
+    case "scroll_at":
+      return `在 (${action.x}, ${action.y}) 滚动滚轮`
+    case "hover":
+      return `将鼠标悬停在 (${action.x}, ${action.y})`
+    case "key":
+      return `按下 ${[...(action.modifiers ?? []), action.key].join("+")}`
+    case "type_text":
+      return "输入文字"
+  }
+}
+
+function freshFrame(frame: CurrentFrame, target: Target): boolean {
+  const age = Date.now() - frame.capturedAt
+  return frame.target.ref === target.ref && age >= 0 && age <= frameLifetimeMs
+}
+
+function nativeInput(
+  action: ComputerForegroundAction,
+  focusIdentity: string | undefined
+): WindowsForegroundAction {
+  if ("frameRef" in action) {
+    const { frameRef: _reference, ...gesture } = action
+    return gesture
+  }
+  if (action.type === "type_text") return { type: "text", text: action.text, focusIdentity }
+  return { ...action, focusIdentity }
+}
+
 function sameCaptureEvidence(saved: WindowsForegroundFrame, latest: WindowsForegroundFrame): boolean {
   const before = saved.geometry
   const after = latest.geometry
@@ -155,7 +214,7 @@ export class ComputerHost {
   pause(sessionId: string, runId?: string): boolean {
     const task = this.findTask(sessionId, runId)
     if (!task) return false
-    this.pauseTask(task, "电脑操作已暂停。")
+    this.pauseTask(task)
     return true
   }
 
@@ -244,13 +303,18 @@ export class ComputerHost {
   }
 
   private async perform(
-    task: Task, action: Exclude<ComputerAction, { type: "handoff" }>, signal: AbortSignal,
-    approve: ApproveAction | undefined, authorizeDispatch: ApproveDispatch | undefined, onLaunch: () => void, fullAccess?: true,
+    task: Task,
+    action: Exclude<ComputerAction, { type: "handoff" }>,
+    signal: AbortSignal,
+    approve: ApproveAction | undefined,
+    authorizeDispatch: ApproveDispatch | undefined,
+    onLaunch: () => void,
+    fullAccess?: true
   ): Promise<ComputerHostResponse> {
     let launchAttempted = false
-    if (action.type === "capture") return this.captureWindow(task, signal, action.purpose === "result")
+    if (action.type === "capture") return this.captureWindow(task, signal, action)
     if (action.type === "foreground") return this.beginForeground(task, signal, fullAccess, approve, authorizeDispatch)
-    if (action.type === "click" || action.type === "key" || action.type === "type_text") {
+    if ("frameRef" in action || action.type === "key" || action.type === "type_text") {
       return this.foregroundAction(task, action, signal, approve, authorizeDispatch, fullAccess)
     }
     if (action.type === "observe") {
@@ -409,7 +473,7 @@ export class ComputerHost {
     })
   }
 
-  private pauseTask(task: Task, reason: string): void {
+  private pauseTask(task: Task, reason?: string): void {
     if (this.task !== task) return
     const previousPause = task.paused
     task.paused = new AbortController()
@@ -472,7 +536,11 @@ export class ComputerHost {
     return this.inputCleanup
   }
 
-  private async enterInput(task: Task, occupied: Occupation, signal: AbortSignal): Promise<WindowsForegroundLease> {
+  private async enterInput(
+    task: Task,
+    occupied: Occupation,
+    signal: AbortSignal
+  ): Promise<WindowsForegroundLease> {
     if (!this.foreground || !this.interaction.showForeground || !await this.inputCleanup || task.occupation !== occupied) {
       throw new TargetError("前台控制尚未就绪，或上次的输入释放未能确认。")
     }
@@ -483,15 +551,23 @@ export class ComputerHost {
     const cancelStartup = () => input.stop.abort()
     signal.addEventListener("abort", cancelStartup, { once: true })
     try {
-      input.opening = this.foreground.enter(occupied.target.window, reason => {
-        if (task.occupation !== occupied || occupied.input !== input) return
-        if (reason === "emergency_stop") {
-          this.stopTask(task)
-          this.interaction.emergencyStop?.(task.run.sessionId, task.run.runId)
-          return
-        }
-        this.pauseTask(task, reason === "focus_lost" ? "目标窗口已失焦。" : "前台控制已结束，请确认目标窗口后继续。")
-      }, lifetime)
+      input.opening = this.foreground.enter(
+        occupied.target.window,
+        (reason) => {
+          if (task.occupation !== occupied || occupied.input !== input) return
+          if (reason === "emergency_stop") {
+            this.stopTask(task)
+            this.interaction.emergencyStop?.(task.run.sessionId, task.run.runId)
+            return
+          }
+          if (reason === "physical_input") {
+            this.pauseTask(task)
+            return
+          }
+          this.pauseTask(task, reason === "focus_lost" ? "目标窗口已失焦。" : "前台控制已中断。")
+        },
+        lifetime
+      )
       const lease = await input.opening
       try {
         await this.interaction.showForeground(task.run.sessionId, task.run.runId, lifetime)
@@ -514,22 +590,34 @@ export class ComputerHost {
     return task.target
   }
 
-  private async captureWindow(task: Task, signal: AbortSignal, resultOnly: boolean): Promise<ComputerResult> {
+  private async captureWindow(
+    task: Task,
+    signal: AbortSignal,
+    action: ComputerCaptureAction
+  ): Promise<ComputerResult> {
     if (!this.foreground || task.capture.signal.aborted) throw new TargetError("本次任务的窗口画面未启用。")
     if (await task.imageRevocation === false) throw new TargetError("无法确认上一次截图已撤回。")
     const target = this.requireTarget(task)
+    const previous = task.frame
+    const crop =
+      "region" in action && previous?.ref === action.frameRef && freshFrame(previous, target)
+        ? cropFromFrame(previous.image, action.region)
+        : undefined
+    if ("region" in action && !crop)
+      throw new TargetError("局部截图需要当前窗口最新画面内的有效范围。")
     const active = AbortSignal.any([signal, task.capture.signal])
     task.frame = undefined
     await this.liveTarget(task, target, active)
     this.publish(task, task.occupation?.input?.lease ? "foreground" : "observing")
-    const image = await this.foreground.capture(target.window, active).catch(() => {
+    const image = await this.foreground.capture(target.window, active, crop).catch(() => {
       active.throwIfAborted()
+      if (crop) throw new TargetError("无法获取原尺寸局部截图。请重新截图或选择更小的范围。")
       throw new TargetPausedError("当前画面无法安全读取。请先检查目标窗口，再继续。")
     })
     await this.liveTarget(task, target, active)
     active.throwIfAborted()
     const { mimeType, data, width, height } = image
-    if (resultOnly) {
+    if ("purpose" in action && action.purpose === "result") {
       return {
         text: JSON.stringify({ status: "captured", ...this.targetDetails(target) }),
         image: { mediaType: mimeType, data, width, height },
@@ -579,69 +667,94 @@ export class ComputerHost {
   }
 
   private async foregroundAction(
-    task: Task, action: InputAction, signal: AbortSignal, approve?: ApproveAction, dispatch?: ApproveDispatch,
-    fullAccess?: true,
+    task: Task,
+    action: ComputerForegroundAction,
+    signal: AbortSignal,
+    approve?: ApproveAction,
+    dispatch?: ApproveDispatch,
+    fullAccess?: true
   ): Promise<ComputerHostResponse> {
     const occupied = task.occupation
     const target = task.target
     let lease = occupied?.input?.lease
-    const frame = task.frame
+    const pointer = "frameRef" in action
+    const frame = pointer || !task.frame?.image.region ? task.frame : undefined
     const observation = task.observation
     if (!this.foreground || !occupied || !target || !lease || target.ref !== occupied.target.ref) {
       throw new TargetError("请先为当前窗口取得前台控制许可，再重新观察。")
     }
     if (!frame && observation?.windowRef !== target.ref) throw new TargetError("请先重新观察前台窗口。")
-    const isFresh = () => !frame || (task.frame === frame && frame.target.ref === target.ref &&
-      Date.now() >= frame.capturedAt && Date.now() - frame.capturedAt <= frameLifetimeMs)
+    const isFresh = () => !frame || (task.frame === frame && freshFrame(frame, target))
     if (!isFresh()) throw new TargetError("目标画面已变化，请重新截图后再操作。")
-    if (action.type === "click" && (!frame || frame.ref !== action.frameRef || action.x < 0 || action.y < 0 ||
-      action.x >= frame.image.width || action.y >= frame.image.height)) {
-      throw new TargetError("点击需要当前窗口最新画面中的有效坐标。")
+    if (
+      pointer &&
+      (!frame ||
+        frame.ref !== action.frameRef ||
+        !frameContainsPoint(frame.image, action.x, action.y) ||
+        (action.type === "drag" && !frameContainsPoint(frame.image, action.toX, action.toY)))
+    ) {
+      throw new TargetError("鼠标操作需要当前窗口最新画面中的有效坐标。")
     }
     const focusIdentity = frame ? frame.image.focusIdentity : observation?.focusIdentity
-    if (action.type !== "click" && !focusIdentity) throw new TargetError("无法核实观察时的键盘焦点。请重新观察后再操作。")
+    if (!pointer && !focusIdentity)
+      throw new TargetError("无法核实观察时的键盘焦点。请重新观察后再操作。")
     const operationSignal = AbortSignal.any([signal, occupied.grant.signal, ...(frame ? [task.capture.signal] : [])])
     task.observation = undefined
     let attempted = false
     try {
       if (!fullAccess && computerActionNeedsApproval(action)) {
-        if (!await this.releaseInput(task, true)) throw new TargetError("无法确认输入已释放。")
+        if (!(await this.releaseInput(task, true))) throw new TargetError("无法确认输入已释放。")
         task.activity = { action: "等待操作确认" }
         this.publish(task)
-        const verb = action.type === "click" ? `${action.button === "right" ? "右击" : "点击"}画面中的 (${action.x}, ${action.y})`
-          : action.type === "key" ? `按下 ${[...action.modifiers ?? [], action.key].join("+")}` : "输入文字"
-        if (!approve || !await approve({ proposalId: randomUUID(), reason:
-          `允许在「${displayTitle(target.window).slice(0, 150)}」窗口${verb}吗？该操作可能改变应用状态。`,
-        }, operationSignal)) throw new TargetError("该操作没有获得本次批准。")
+        if (
+          !approve ||
+          !(await approve(
+            {
+              proposalId: randomUUID(),
+              reason: `允许在「${displayTitle(target.window).slice(0, 150)}」窗口${inputDescription(action)}吗？该操作可能改变应用状态。`,
+            },
+            operationSignal
+          ))
+        )
+          throw new TargetError("该操作没有获得本次批准。")
         if (!isFresh()) throw new TargetError("目标画面已变化，请重新截图后再操作。")
         await this.liveTarget(task, target, operationSignal)
         lease = await this.enterInput(task, occupied, operationSignal)
-        if (frame && action.type !== "click") {
+        if (frame && !pointer) {
           const latest = await this.foreground.capture(target.window, operationSignal)
-          if (!sameCaptureEvidence(frame.image, latest)) throw new TargetError("窗口内容在确认期间已变化，请重新观察。")
+          if (!sameCaptureEvidence(frame.image, latest))
+            throw new TargetError("窗口内容在确认期间已变化，请重新观察。")
         }
-        if (!frame && observation) await this.useDriver(task, target, operationSignal, async driver => {
-          const current = await driver.observe(operationSignal)
-          if (current.focusIdentity !== focusIdentity || observationDigest(current) !== observation.digest) {
-            throw new TargetError("控件状态已变化，请重新观察后再操作。")
-          }
-        })
+        if (!frame && observation)
+          await this.useDriver(task, target, operationSignal, async (driver) => {
+            const current = await driver.observe(operationSignal)
+            if (
+              current.focusIdentity !== focusIdentity ||
+              observationDigest(current) !== observation.digest
+            ) {
+              throw new TargetError("控件状态已变化，请重新观察后再操作。")
+            }
+          })
       }
       if (!isFresh()) throw new TargetError("目标画面已变化，请重新截图后再操作。")
       task.frame = undefined
       await this.liveTarget(task, target, operationSignal)
       await requireDispatch(dispatch, operationSignal)
-      const input = action.type === "click" ? { type: "click" as const, x: action.x, y: action.y, ...(action.button ? { button: action.button } : {}) }
-        : action.type === "type_text" ? { type: "text" as const, text: action.text, focusIdentity } : { ...action, focusIdentity }
       attempted = true
-      const result = await lease.perform(input, action.type === "click" ? frame?.image : undefined, operationSignal)
+      const result = await lease.perform(
+        nativeInput(action, focusIdentity),
+        pointer ? frame?.image : undefined,
+        operationSignal
+      )
       if (!result.released || result.state !== "sent") {
         this.pauseTask(task, result.released ? "目标已变化或无法核实按键鼠标输入。" : "未能核实键鼠已释放。")
         return { error: "前台输入未通过核验，请检查目标窗口。", executionState: result.state === "refused" ? "not_started" : "unknown" }
       }
       if (operationSignal.aborted) return { error: "已停止前台操作，应用结果仍需核对。", executionState: "unknown" }
-      task.activity = { action: action.type === "click" ? "点击" : action.type === "key" ? "按键" : "输入文字",
-        evidence: "已派发成对输入，请重新观察应用结果" }
+      task.activity = {
+        action: inputLabels[action.type],
+        evidence: "已派发输入，请重新观察应用结果",
+      }
       this.publish(task)
       return { status: "sent", text: JSON.stringify({ status: "sent", inputReleased: true, ...this.targetDetails(target), next: "inspect the application result" }) }
     } catch (error) {

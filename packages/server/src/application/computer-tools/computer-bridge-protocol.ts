@@ -20,14 +20,27 @@ export interface ComputerApprovalProposal {
   reason: string;
 }
 
+export type ComputerPointerGesture = { x: number; y: number } & (
+  | { type: "click"; button?: "left" | "right"; count?: 1 | 2; modifiers?: Array<"ctrl" | "shift"> }
+  | { type: "drag"; toX: number; toY: number }
+  | { type: "scroll_at"; direction: "up" | "down" | "left" | "right"; amount?: number }
+  | { type: "hover" }
+);
+
+export type ComputerCaptureRegion = { x: number; y: number; width: number; height: number };
+export type ComputerCaptureAction = { type: "capture" } & (
+  | { purpose?: "result" }
+  | { frameRef: string; region: ComputerCaptureRegion }
+);
+
 export type ComputerForegroundAction =
-  | { type: "click"; frameRef: string; x: number; y: number; button?: "left" | "right" }
+  | (ComputerPointerGesture & { frameRef: string })
   | { type: "key"; key: string; modifiers?: Array<"ctrl" | "shift" | "alt"> }
   | { type: "type_text"; text: string };
 
 export type ComputerAction =
   | { type: "observe" }
-  | { type: "capture"; purpose?: "result" }
+  | ComputerCaptureAction
   | { type: "foreground" }
   | { type: "handoff" }
   | { type: "open_app"; app: string; windowHint?: string; newWindow?: true }
@@ -61,7 +74,7 @@ export type ComputerBridgeEvent =
 
 export function computerActionNeedsApproval(action: ComputerAction): boolean {
   switch (action.type) {
-    case "foreground": case "click": case "type_text":
+    case "foreground": case "click": case "drag": case "scroll_at": case "hover": case "type_text":
     case "invoke": case "choose": case "set_text":
       return true;
     case "key":
@@ -92,6 +105,52 @@ function coordinate(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < maxCaptureSide;
 }
 
+function scrollDirection(value: unknown): value is "up" | "down" | "left" | "right" {
+  return value === "up" || value === "down" || value === "left" || value === "right";
+}
+
+function scrollAmount(value: unknown): value is number | undefined {
+  return value === undefined || (typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 5);
+}
+
+function frameReference(value: unknown): value is string {
+  return typeof value === "string" && /^frame_[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/u.test(value);
+}
+
+function modifierList<T extends string>(value: unknown, allowed: readonly T[]): value is T[] | undefined {
+  return value === undefined || (Array.isArray(value) && value.length <= allowed.length &&
+    new Set(value).size === value.length && value.every(item => allowed.includes(item)));
+}
+
+function parsePointerAction(value: Record<string, unknown>): ComputerForegroundAction | undefined {
+  const { type, frameRef, x, y, button, count, toX, toY, modifiers, direction, amount } = value;
+  if (!frameReference(frameRef) || !coordinate(x) || !coordinate(y)) return;
+  const extraKeys = Object.keys(value).filter(key => key !== "type" && key !== "frameRef" && key !== "x" && key !== "y");
+  const point = { frameRef, x, y };
+  if (type === "click" && extraKeys.every(key => key === "button" || key === "count" || key === "modifiers") &&
+    (button === undefined || button === "left" || button === "right") &&
+    (count === undefined || count === 1 || (count === 2 && button !== "right")) &&
+    modifierList(modifiers, ["ctrl", "shift"] as const)) {
+    return { type, ...point, ...(button ? { button } : {}), ...(count ? { count } : {}), ...(modifiers ? { modifiers } : {}) };
+  }
+  if (type === "drag" && extraKeys.length === 2 && coordinate(toX) && coordinate(toY) && (x !== toX || y !== toY)) {
+    return { type, ...point, toX, toY };
+  }
+  if (type === "scroll_at" && extraKeys.every(key => key === "direction" || key === "amount") && scrollDirection(direction) && scrollAmount(amount)) {
+    return { type, ...point, direction, ...(amount === undefined ? {} : { amount }) };
+  }
+  if (type === "hover" && extraKeys.length === 0) return { type, ...point };
+}
+
+function captureRegion(value: unknown): ComputerCaptureRegion | undefined {
+  if (!record(value) || Object.keys(value).length !== 4) return;
+  const { x, y, width, height } = value;
+  if (!coordinate(x) || !coordinate(y) || typeof width !== "number" || typeof height !== "number" ||
+    !Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 ||
+    x + width > maxCaptureSide || y + height > maxCaptureSide) return;
+  return { x, y, width, height };
+}
+
 function parseRun(value: unknown): ComputerRunIdentity | undefined {
   if (record(value) && id(value.sessionId) && id(value.runId) && id(value.inputId)) {
     return { sessionId: value.sessionId, runId: value.runId, inputId: value.inputId };
@@ -100,19 +159,22 @@ function parseRun(value: unknown): ComputerRunIdentity | undefined {
 
 export function parseComputerAction(value: unknown): ComputerAction | undefined {
   if (!record(value)) return;
-  const { type, elementRef, text, direction, amount, frameRef, x, y, button, key, modifiers } = value;
+  const { type, elementRef, text, direction, amount, key, modifiers } = value;
   const keys = Object.keys(value);
-  if ((type === "observe" || type === "capture" || type === "foreground" || type === "handoff") && keys.length === 1) return { type };
-  if (type === "capture" && value.purpose === "result" && keys.length === 2) return { type, purpose: "result" };
-  if (type === "click" && keys.every(name => ["type", "frameRef", "x", "y", "button"].includes(name))
-    && typeof frameRef === "string" && /^frame_[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/u.test(frameRef)
-    && coordinate(x) && coordinate(y) && (button === undefined || button === "left" || button === "right")) {
-    return { type, frameRef, x, y, ...(button ? { button } : {}) };
+  if ((type === "observe" || type === "foreground" || type === "handoff") && keys.length === 1) return { type };
+  if (type === "capture") {
+    if (keys.length === 1) return { type };
+    if (value.purpose === "result" && keys.length === 2) return { type, purpose: "result" };
+    if (keys.length === 3 && frameReference(value.frameRef)) {
+      const region = captureRegion(value.region);
+      if (region) return { type, frameRef: value.frameRef, region };
+    }
+    return;
   }
+  if (type === "click" || type === "drag" || type === "scroll_at" || type === "hover") return parsePointerAction(value);
   if (type === "key" && keys.every(name => name === "type" || name === "key" || name === "modifiers")
     && typeof key === "string" && /^[a-z\d][a-z\d_-]{0,23}$/iu.test(key)
-    && (modifiers === undefined || (Array.isArray(modifiers) && modifiers.length <= 3
-      && new Set(modifiers).size === modifiers.length && modifiers.every(modifier => modifier === "ctrl" || modifier === "shift" || modifier === "alt")))) {
+    && modifierList(modifiers, ["ctrl", "shift", "alt"] as const)) {
     return { type, key, ...(modifiers ? { modifiers } : {}) };
   }
   if (type === "type_text" && keys.length === 2 && typeof text === "string" && text.length > 0
@@ -131,8 +193,7 @@ export function parseComputerAction(value: unknown): ComputerAction | undefined 
   if ((type === "invoke" || type === "choose") && Object.keys(value).length === 2) return { type, elementRef };
   if (type === "set_text" && keys.length === 3 && validActionText(text)) return { type, elementRef, text };
   if (type === "scroll" && Object.keys(value).every(key => ["type", "elementRef", "direction", "amount"].includes(key))
-    && (direction === "up" || direction === "down" || direction === "left" || direction === "right")
-    && (amount === undefined || (typeof amount === "number" && Number.isInteger(amount) && amount >= 1 && amount <= 5))) {
+    && scrollDirection(direction) && scrollAmount(amount)) {
     return { type, elementRef, direction, ...(typeof amount === "number" ? { amount } : {}) };
   }
 }

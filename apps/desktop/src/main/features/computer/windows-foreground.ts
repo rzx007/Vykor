@@ -1,12 +1,15 @@
 import { spawn } from "node:child_process"
+import { createHash } from "node:crypto"
 import { join } from "node:path"
 import { createInterface } from "node:readline"
 import { setTimeout as delay } from "node:timers/promises"
+import sharp from "sharp"
+import type { ComputerCaptureRegion, ComputerPointerGesture } from "@vykor/server/daemon-host"
 import type { WindowsAppWindow } from "./windows-apps"
 import { windowsForegroundQuery } from "./windows-foreground-query"
 
 export type WindowsForegroundAction =
-  | { type: "click"; x: number; y: number; button?: "left" | "right" }
+  | ComputerPointerGesture
   | { type: "key"; key: string; modifiers?: ("ctrl" | "alt" | "shift")[]; focusIdentity?: string }
   | { type: "text"; text: string; focusIdentity?: string }
 
@@ -16,6 +19,8 @@ export interface WindowsForegroundFrame {
   width: number
   height: number
   geometry: { left: number; top: number; width: number; height: number; dpi: number; monitor: string }
+  /** Native pixels relative to the captured window, when only part of it was captured. */
+  region?: ComputerCaptureRegion
   signature?: string
   focusIdentity?: string
 }
@@ -29,8 +34,16 @@ export interface WindowsForegroundLease {
   perform(action: WindowsForegroundAction, frame: WindowsForegroundFrame | undefined, signal: AbortSignal): Promise<WindowsForegroundResult>
   release(): Promise<WindowsForegroundRelease>
 }
+export type WindowsForegroundCrop = {
+  geometry: WindowsForegroundFrame["geometry"]
+  region: ComputerCaptureRegion
+}
 export interface WindowsForeground {
-  capture(window: WindowsAppWindow, signal: AbortSignal): Promise<WindowsForegroundFrame>
+  capture(
+    window: WindowsAppWindow,
+    signal: AbortSignal,
+    crop?: WindowsForegroundCrop
+  ): Promise<WindowsForegroundFrame>
   enter(window: WindowsAppWindow, onRevoked: (reason: WindowsForegroundRevokeReason) => void, signal: AbortSignal): Promise<WindowsForegroundLease>
 }
 
@@ -42,16 +55,95 @@ const virtualKeys: Record<string, number> = {
 const modifiers = { ctrl: 17, alt: 18, shift: 16 }
 const pinnedDownKeys = new Set([16, 17, 18])
 
+export function frameContainsPoint(
+  frame: { width: number; height: number },
+  x: number,
+  y: number
+): boolean {
+  return (
+    Number.isSafeInteger(x) &&
+    Number.isSafeInteger(y) &&
+    x >= 0 &&
+    y >= 0 &&
+    x < frame.width &&
+    y < frame.height
+  )
+}
+
+function nativeRegion(frame: WindowsForegroundFrame): ComputerCaptureRegion {
+  return frame.region ?? { x: 0, y: 0, width: frame.geometry.width, height: frame.geometry.height }
+}
+
+export function cropFromFrame(
+  frame: WindowsForegroundFrame,
+  selection: ComputerCaptureRegion
+): WindowsForegroundCrop | undefined {
+  if (
+    selection.width < 1 ||
+    selection.height < 1 ||
+    !frameContainsPoint(frame, selection.x, selection.y) ||
+    !frameContainsPoint(
+      frame,
+      selection.x + selection.width - 1,
+      selection.y + selection.height - 1
+    )
+  )
+    return
+  const region = nativeRegion(frame)
+  const scaleX = region.width / frame.width,
+    scaleY = region.height / frame.height
+  const left = Math.floor(selection.x * scaleX),
+    top = Math.floor(selection.y * scaleY)
+  const width = Math.min(region.width, Math.ceil((selection.x + selection.width) * scaleX)) - left
+  const height = Math.min(region.height, Math.ceil((selection.y + selection.height) * scaleY)) - top
+  return {
+    geometry: frame.geometry,
+    region: { x: region.x + left, y: region.y + top, width, height },
+  }
+}
+
 /** Convert model-visible pixels to physical coordinates in the original capture. */
 export function foregroundInput(action: WindowsForegroundAction, frame?: WindowsForegroundFrame) {
-  if (action.type === "click") {
-    if (!frame?.geometry.monitor || !frame.signature || !Number.isSafeInteger(action.x) || !Number.isSafeInteger(action.y) ||
-        action.x < 0 || action.y < 0 || action.x >= frame.width || action.y >= frame.height) return
-    const { left, top, width, height } = frame.geometry
-    return {
-      type: action.type, x: left + Math.floor(action.x * width / frame.width),
-      y: top + Math.floor(action.y * height / frame.height), button: action.button ?? "left", geometry: frame.geometry,
+  if ("x" in action) {
+    if (
+      !frame?.geometry.monitor ||
+      !frame.signature ||
+      !frameContainsPoint(frame, action.x, action.y)
+    )
+      return
+    const { left, top } = frame.geometry
+    const region = nativeRegion(frame)
+    const screenX = (x: number) => left + region.x + Math.floor((x * region.width) / frame.width)
+    const screenY = (y: number) => top + region.y + Math.floor((y * region.height) / frame.height)
+    const point = {
+      x: screenX(action.x),
+      y: screenY(action.y),
+      geometry: frame.geometry,
       signature: frame.signature,
+      ...(frame.region ? { region: frame.region } : {}),
+    }
+    if (action.type === "drag") {
+      if (
+        !frameContainsPoint(frame, action.toX, action.toY) ||
+        (action.x === action.toX && action.y === action.toY)
+      )
+        return
+      return { type: action.type, ...point, toX: screenX(action.toX), toY: screenY(action.toY) }
+    }
+    if (action.type === "scroll_at") {
+      const horizontal = action.direction === "left" || action.direction === "right"
+      const delta =
+        (action.amount ?? 1) *
+        (action.direction === "down" || action.direction === "left" ? -120 : 120)
+      return { type: action.type, ...point, horizontal, delta }
+    }
+    if (action.type === "hover") return { type: action.type, ...point }
+    return {
+      type: action.type,
+      ...point,
+      button: action.button ?? "left",
+      ...(action.count ? { count: action.count } : {}),
+      ...(action.modifiers ? { modifiers: action.modifiers.map((key) => modifiers[key]) } : {}),
     }
   }
   const { focusIdentity } = action
@@ -70,6 +162,34 @@ export function foregroundInput(action: WindowsForegroundAction, frame?: Windows
   return { type: action.type, key, modifiers: chord.map(modifier => modifiers[modifier]), focusIdentity }
 }
 
+/** Compare only the observed pixels around where input will land. */
+async function pointerEvidence(action: ComputerPointerGesture, frame: WindowsForegroundFrame) {
+  const image = sharp(Buffer.from(frame.data, "base64")).removeAlpha().toColourspace("srgb")
+  const points =
+    action.type === "drag"
+      ? [
+          { x: action.x, y: action.y },
+          { x: action.toX, y: action.toY },
+        ]
+      : [action]
+  return Promise.all(
+    points.map(async ({ x, y }) => {
+      const left = Math.max(0, x - 16),
+        top = Math.max(0, y - 16)
+      const width = Math.min(frame.width, x + 17) - left,
+        height = Math.min(frame.height, y + 17) - top
+      const pixels = await image.clone().extract({ left, top, width, height }).raw().toBuffer()
+      return {
+        left,
+        top,
+        width,
+        height,
+        digest: createHash("sha256").update(pixels).digest("base64"),
+      }
+    })
+  )
+}
+
 const nativeScript = String.raw`
 $ErrorActionPreference = 'Stop'
 [Console]::InputEncoding = [Text.UTF8Encoding]::new($false)
@@ -79,8 +199,8 @@ Add-Type -AssemblyName $assemblies
 $references = @([System.Drawing.Bitmap].Assembly.Location, [System.Windows.Forms.Application].Assembly.Location,
   [System.Web.Script.Serialization.JavaScriptSerializer].Assembly.Location, [System.Windows.Automation.AutomationElement].Assembly.Location,
   [System.Windows.Automation.AutomationElementIdentifiers].Assembly.Location, [System.Windows.Point].Assembly.Location)
-Add-Type -ReferencedAssemblies $references -TypeDefinition $env:VYKOR_FOREGROUND_SOURCE
-[VykorWindowsForeground]::Run($env:VYKOR_FOREGROUND_COMMAND, $env:VYKOR_FOREGROUND_WINDOW, $env:VYKOR_FOREGROUND_TEST_FAULT)
+Add-Type -ReferencedAssemblies $references -TypeDefinition ($env:VYKOR_FOREGROUND_SOURCE + $env:VYKOR_FOREGROUND_SOURCE_TAIL)
+[VykorWindowsForeground]::Run($env:VYKOR_FOREGROUND_COMMAND, $env:VYKOR_FOREGROUND_WINDOW, $env:VYKOR_FOREGROUND_TEST_FAULT, $env:VYKOR_FOREGROUND_CROP)
 `
 
 function windowIdentity(window: WindowsAppWindow): string {
@@ -116,13 +236,31 @@ export class WindowsForegroundStartError extends Error {
   }
 }
 
-function startNative(command: "capture" | "enter", window: WindowsAppWindow, onReply: (reply: NativeReply) => void, fault = "") {
+function startNative(
+  command: "capture" | "enter",
+  window: WindowsAppWindow,
+  onReply: (reply: NativeReply) => void,
+  fault = "",
+  crop?: WindowsForegroundCrop
+) {
   const shell = join(process.env.SystemRoot ?? "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe")
-  const child = spawn(shell, ["-NoLogo", "-NoProfile", "-NonInteractive", "-STA", "-Command", nativeScript], {
-    windowsHide: true, stdio: ["pipe", "pipe", "ignore"],
-    env: { ...process.env, VYKOR_FOREGROUND_COMMAND: command, VYKOR_FOREGROUND_WINDOW: windowIdentity(window),
-      VYKOR_FOREGROUND_SOURCE: windowsForegroundQuery, VYKOR_FOREGROUND_TEST_FAULT: fault },
-  })
+  const child = spawn(
+    shell,
+    ["-NoLogo", "-NoProfile", "-NonInteractive", "-STA", "-Command", nativeScript],
+    {
+      windowsHide: true,
+      stdio: ["pipe", "pipe", "ignore"],
+      env: {
+        ...process.env,
+        VYKOR_FOREGROUND_COMMAND: command,
+        VYKOR_FOREGROUND_WINDOW: windowIdentity(window),
+        VYKOR_FOREGROUND_SOURCE: windowsForegroundQuery.slice(0, 20_000),
+        VYKOR_FOREGROUND_SOURCE_TAIL: windowsForegroundQuery.slice(20_000),
+        VYKOR_FOREGROUND_TEST_FAULT: fault,
+        VYKOR_FOREGROUND_CROP: crop ? JSON.stringify(crop) : "",
+      },
+    }
+  )
   const reader = createInterface({ input: child.stdout })
   reader.on("line", (line) => {
     if (line.length > 1_500_000) return
@@ -144,10 +282,18 @@ export function createWindowsForeground(fixture?: ForegroundFixtureGate): Window
   let occupied = false
   let releaseUnverified = false
   return {
-    async capture(window, signal) {
+    async capture(window, signal, crop) {
       signal.throwIfAborted()
       let result: WindowsForegroundFrame | undefined
-      const native = startNative("capture", window, reply => { if (reply.event === "frame") result = reply.frame })
+      const native = startNative(
+        "capture",
+        window,
+        (reply) => {
+          if (reply.event === "frame") result = reply.frame
+        },
+        "",
+        crop
+      )
       const captureSignal = AbortSignal.any([signal, AbortSignal.timeout(7_000)])
       const stop = () => { native.child.kill() }
       captureSignal.addEventListener("abort", stop, { once: true })
@@ -228,12 +374,23 @@ export function createWindowsForeground(fixture?: ForegroundFixtureGate): Window
           if (pending) return { state: "refused", released: false }
           const input = foregroundInput(action, frame)
           if (!input) return notStarted
+          const evidence =
+            "x" in action && frame
+              ? {
+                  patches: await pointerEvidence(action, frame),
+                  imageWidth: frame.width,
+                  imageHeight: frame.height,
+                }
+              : undefined
+          active.throwIfAborted()
+          if (revoked || pending)
+            return { state: "refused", released: closing ? (await closing).released : !pending }
           const id = ++nextId
           const reply = Promise.withResolvers<WindowsForegroundResult>()
           const interrupt = () => { void release() }
           active.addEventListener("abort", interrupt, { once: true })
           pending = { id, finish: result => { pending = undefined; reply.resolve(result) } }
-          native.child.stdin.write(JSON.stringify({ id, ...input }) + "\n")
+          native.child.stdin.write(JSON.stringify({ id, ...input, ...evidence }) + "\n")
           try {
             const result = await Promise.race([reply.promise, delay(5_000, undefined, { ref: false })])
             if (!result || !result.released) {

@@ -14,6 +14,8 @@
 
 [`windows-foreground.test.ts`](windows-foreground.test.ts) 验证截图坐标换算，拒绝缺少签名或超出画面的点击，并检查跨窗口系统快捷键不会作为前台动作执行。[`windows-foreground-live.test.ts`](windows-foreground-live.test.ts) 使用两个同名 WinForms 窗口，核对实际截图、失焦和外部输入接管。还检查同一窗口切换焦点后的旧按键、窗口归属变化，以及嵌入认证控件后的截图和语义操作。测试真实卸载输入观察钩子，验证两个窗口均未收到新按下事件。测试专用闸门分别在键盘和鼠标的抬起入队前等待 Stop，核对原窗口随后收到一次对应释放且控制进程已退出。另测启动许可发送前取消时保留当前前台窗口。
 
+[`windows-pointer-apps-live.test.ts`](windows-pointer-apps-live.test.ts) 通过 Desktop 宿主操作真实画图和资源管理器。画图测试在自己启动的窗口悬停、选椭圆、拖拽和读回原始分辨率的局部画布。资源管理器测试在临时目录核对组合选择、滚轮和双击导航。设 `VYKOR_COMPUTER_WINDOWS_POINTER_LIVE=1` 后单独运行此文件。关闭已有画图窗口可运行画图用例。
+
 从仓库根目录运行 `pnpm --filter @vykor/desktop exec vitest run src/main/features/computer`。
 
 在已解锁的 Windows x64 交互桌面复跑原生前台实机用例：

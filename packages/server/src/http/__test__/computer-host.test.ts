@@ -49,9 +49,23 @@ it("bounds foreground input and rejects unsupported wire shapes", () => {
   expect(parseComputerAction({ type: "handoff" })).toEqual({ type: "handoff" });
   expect(parseComputerAction({ type: "click", frameRef, x: 4, y: 30 })).toEqual({ type: "click", frameRef, x: 4, y: 30 });
   expect(parseComputerAction({ type: "click", frameRef, x: 4, y: 30, button: "right" })).toMatchObject({ button: "right" });
+  const point = { frameRef, x: 4, y: 30 };
+  const crop = { type: "capture", frameRef, region: { x: 10, y: 15, width: 20, height: 25 } };
+  for (const action of [
+    { type: "click", ...point, count: 2, modifiers: ["ctrl", "shift"] },
+    { type: "drag", ...point, toX: 80, toY: 100 },
+    { type: "scroll_at", ...point, direction: "left", amount: 4 },
+    { type: "hover", ...point },
+    crop,
+  ]) expect(parseComputerAction(action)).toEqual(action);
   expect(parseComputerAction({ type: "key", key: "A", modifiers: ["ctrl", "shift"] })).toEqual({ type: "key", key: "A", modifiers: ["ctrl", "shift"] });
   for (const invalid of [
     { type: "capture", desktop: true }, { type: "handoff", message: "agent text" },
+    { ...crop, purpose: "result" }, { ...crop, region: { ...crop.region, width: 2000 } },
+    { type: "click", ...point, count: 2, button: "right" },
+    { type: "click", ...point, modifiers: ["alt"] }, { type: "click", ...point, modifiers: ["ctrl", "ctrl"] },
+    { type: "drag", ...point, toX: -1, toY: 31 }, { type: "drag", ...point, toX: point.x, toY: point.y },
+    { type: "scroll_at", ...point, direction: "down", amount: 6 }, { type: "hover", ...point, toX: 9 },
     { type: "click", frameRef, x: -1, y: 30 }, { type: "click", frameRef, x: 4.5, y: 30 },
     { type: "click", frameRef, x: 4, y: 30, button: "middle" },
     { type: "click", frameRef: "latest", x: 4, y: 30 }, { type: "key", key: "a", modifiers: ["win"] },

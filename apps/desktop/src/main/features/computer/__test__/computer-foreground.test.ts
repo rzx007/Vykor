@@ -45,7 +45,7 @@ function fixture(fullAccess?: true) {
     return { result, ref: JSON.parse(result.text).frame.ref as string }
   }
   return { approve, emergencyStop, showForeground, capture, dispatch, enter, execute, host, perform, publishActivity, release, windows, launch, invalidateCapturedImage,
-    loseFocus: () => lost?.("focus_lost"), pressEscape: () => lost?.("emergency_stop"), snapshot }
+    revokeForeground: (reason: WindowsForegroundRevokeReason) => lost?.(reason), pressEscape: () => lost?.("emergency_stop"), snapshot }
 }
 
 it("makes a window image available only for capture and guards a coordinate with a fresh frame", async () => {
@@ -96,14 +96,17 @@ it("keeps the foreground notice and Esc active through a full-access click", asy
   expect(f.emergencyStop).toHaveBeenCalledExactlyOnceWith(run.sessionId, run.runId)
 })
 
-it("releases on focus loss, parks further work, and requires a new occupation and observation", async () => {
+it.each([
+  ["focus_lost", "目标窗口已失焦。"],
+  ["physical_input", undefined],
+] as const)("releases, parks work, and requires a new occupation and observation after %s", async (cause, reason) => {
   const f = fixture()
   await f.execute({ type: "open_app", app: "First" })
   await f.execute({ type: "foreground" })
   const { ref } = await f.snapshot()
-  f.loseFocus()
+  f.revokeForeground(cause)
   expect(f.release).toHaveBeenCalledOnce()
-  expect(f.publishActivity.mock.lastCall?.[1]).toMatchObject({ phase: "paused" })
+  expect(f.publishActivity.mock.lastCall?.[1]).toMatchObject({ phase: "paused", reason })
   const staleClick = f.execute({ type: "click", frameRef: ref, x: 3, y: 4 })
   await expect(f.host.resume(run.sessionId, "wrong")).resolves.toBe(false)
   expect(f.perform).not.toHaveBeenCalled()

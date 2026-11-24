@@ -62,6 +62,9 @@ it.runIf(process.env.VYKOR_WINDOWS_FOREGROUND_LIVE === "1" && process.platform =
       expect(frame.width).toBeLessThanOrEqual(frame.geometry.width)
       const x = Math.round((ready.buttonX! - frame.geometry.left) * frame.width / frame.geometry.width)
       const y = Math.round((ready.buttonY! - frame.geometry.top) * frame.height / frame.geometry.height)
+      writeFileSync(join(dir, "pixels.request"), "elsewhere")
+      await expect.poll(() => events().some(row => row.kind === "other-pixels")).toBe(true)
+      expect((await foreground.capture(target, signal)).signature).not.toBe(frame.signature)
       const click = await lease.perform({ type: "click", x, y }, frame, signal)
       expect({ click, reasons, events: events().filter(row => ["click", "mouse-down-Left", "mouse-up-Left"].includes(row.kind)) })
         .toMatchObject({ click: { state: "sent", released: true }, reasons: [] })
@@ -79,6 +82,10 @@ it.runIf(process.env.VYKOR_WINDOWS_FOREGROUND_LIVE === "1" && process.platform =
       for (const kind of ["click", "mouse-down-Left", "mouse-up-Left", "key-down-F8", "key-up-F8"]) {
         expect(events().filter(row => row.kind === kind)).toEqual([expect.objectContaining({ window: "target", hwnd: target.windowId })])
       }
+      const stale = await foreground.capture(target, signal)
+      writeFileSync(join(dir, "pixels.request"), "target")
+      await expect.poll(() => events().some(row => row.kind === "target-pixels")).toBe(true)
+      expect(await lease.perform({ type: "click", x, y }, stale, signal)).toEqual({ state: "refused", released: true })
       const evidence = events().filter(row => row.kind.includes("-down-") || row.kind.includes("-up-")).length
       writeFileSync(join(dir, "focus.request"), "control")
       await expect.poll(() => reasons, { timeout: 3_000 }).toEqual(["focus_lost"])
@@ -153,6 +160,21 @@ it.runIf(process.env.VYKOR_WINDOWS_FOREGROUND_LIVE === "1" && process.platform =
       expect((await mouse).released).toBe(true)
       await expect.poll(() => events().filter(row => row.kind === "mouse-up-Left"), { timeout: 3_000 })
         .toEqual([expect.objectContaining({ hwnd: target.windowId }), expect.objectContaining({ hwnd: target.windowId })])
+
+      const moving = Promise.withResolvers<boolean>()
+      lease = await createWindowsForeground({ fault: "hold-release", onHeld: moving.resolve })
+        .enter(target, reason => reasons.push(reason), signal)
+      const dragFrame = await foreground.capture(target, signal)
+      const drag = lease.perform({ type: "drag", x, y, toX: x + 48, toY: y }, dragFrame, signal)
+      expect(await moving.promise).toBe(false)
+      await expect.poll(() => events().filter(row => row.kind === "mouse-drag")).toHaveLength(1)
+      expect(events().filter(row => row.kind === "mouse-up-Left")).toHaveLength(2)
+      writeFileSync(join(dir, "external.request"), "target-esc")
+      await expect.poll(() => reasons.at(-1)).toBe("emergency_stop")
+      expect(await drag).toEqual({ state: "unknown", released: true })
+      expect(await lease.release()).toEqual({ released: true, exited: true })
+      await expect.poll(() => events().filter(row => row.kind === "mouse-up-Left")).toHaveLength(3)
+      expect(events().filter(row => row.kind === "mouse-drag")).toEqual([expect.objectContaining({ hwnd: target.windowId })])
 
       writeFileSync(join(dir, "auth.request"), "")
       await expect.poll(() => events().find(row => row.kind === "authentication")).toBeDefined()

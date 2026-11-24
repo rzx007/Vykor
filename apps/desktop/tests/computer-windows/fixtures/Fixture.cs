@@ -97,6 +97,7 @@ internal static class Fixture
             {
                 control.MouseDown += (_, evt) => Record("mouse-down-" + evt.Button);
                 control.MouseUp += (_, evt) => Record("mouse-up-" + evt.Button);
+                control.MouseMove += (_, evt) => { if (evt.Button == MouseButtons.Left) Record("mouse-drag"); };
             }
 
             UpdateState(null);
@@ -134,6 +135,13 @@ internal static class Fixture
         {
             field.AccessibleName = "Verification code";
             Record("authentication");
+        }
+
+        internal void ChangePixels(bool atPointer)
+        {
+            if (atPointer) increment.Text = "Changed target";
+            else state.Text = "Updated elsewhere";
+            Record(atPointer ? "target-pixels" : "other-pixels");
         }
 
         protected override bool ProcessDialogKey(Keys keyData)
@@ -184,13 +192,19 @@ internal static class Fixture
                 File.Delete(authPath);
                 target.ShowAuthenticationField();
             }
+            var dynamicPath = Path.Combine(directory, "pixels.request");
+            if (File.Exists(dynamicPath)) {
+                bool atPointer = File.ReadAllText(dynamicPath) == "target";
+                File.Delete(dynamicPath);
+                target.ChangePixels(atPointer);
+            }
             var externalPath = Path.Combine(directory, "external.request");
             if (File.Exists(externalPath)) {
                 string name = File.ReadAllText(externalPath);
                 File.Delete(externalPath);
-                var exact = name == "target" ? target : name == "control" || name == "control-esc" ? control : null;
+                var exact = name == "target" || name == "target-esc" ? target : name == "control" || name == "control-esc" ? control : null;
                 if (exact != null && GetForegroundWindow() == exact.Handle) {
-                    byte key = name == "control-esc" ? (byte)0x1B : (byte)0x78;
+                    byte key = name.EndsWith("-esc", StringComparison.Ordinal) ? (byte)0x1B : (byte)0x78;
                     keybd_event(key, 0, 0, UIntPtr.Zero);
                     keybd_event(key, 0, 2, UIntPtr.Zero);
                 }
