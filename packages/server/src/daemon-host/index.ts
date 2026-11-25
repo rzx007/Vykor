@@ -49,6 +49,7 @@ export {
   COMPUTER_HOST_TOKEN_HEADER,
   COMPUTER_SESSION_UNAVAILABLE,
   computerActionNeedsApproval,
+  isComputerForegroundInput,
   parseComputerBridgeEvent,
   type ComputerReply,
   type ComputerApprovalProposal,

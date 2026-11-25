@@ -9,7 +9,7 @@ import type {
   ComputerRunIdentity,
   ComputerSemanticAction,
 } from "@vykor/server/daemon-host"
-import { computerActionNeedsApproval } from "@vykor/server/daemon-host"
+import { computerActionNeedsApproval, isComputerForegroundInput } from "@vykor/server/daemon-host"
 import type { DesktopComputerActivity } from "../../../shared/computer-types"
 import type { ComputerHostResponse, DesktopComputerApproval, DesktopComputerDispatch } from "./computer-bridge"
 import {
@@ -278,7 +278,7 @@ export class ComputerHost<Window extends ComputerWindow> {
     let launchAttempted = false
     if (action.type === "capture") return this.captureWindow(task, signal, action)
     if (action.type === "foreground") return this.beginForeground(task, signal, fullAccess, approve, authorizeDispatch)
-    if ("frameRef" in action || action.type === "key" || action.type === "type_text") {
+    if (isComputerForegroundInput(action)) {
       return this.foregroundAction(task, action, signal, approve, authorizeDispatch, fullAccess)
     }
     if (action.type === "observe") {

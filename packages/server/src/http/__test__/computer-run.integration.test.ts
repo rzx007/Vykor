@@ -141,6 +141,70 @@ async function fixture(
   }
 }
 
+it("verifies a click and drag with fresh screenshots before delivering the drawing result", async () => {
+  const frames = [
+    "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAADklEQVR4nGP4DwYMEAoAU7oL9ZisIGcAAAAASUVORK5CYII=",
+    "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAADklEQVR4nGPgAgMGCAUAA1YAeWtYhwQAAAAASUVORK5CYII=",
+    "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAD0lEQVR4nGNgaPoPQhAKACYuBgWt4619AAAAAElFTkSuQmCC",
+  ].map(data => ({ mediaType: "image/png", width: 2, height: 2, data }));
+  const frameRef = (index: number) => `frame_00000000-0000-4000-8000-00000000000${index}`;
+  const capture = { action: "capture" };
+  const batches = [
+    [{ action: "open_app", app: "Paint" }],
+    [{ action: "foreground" }],
+    [capture],
+    [{ action: "click", frameRef: frameRef(0), x: 0, y: 0 }, capture],
+    [{ action: "drag", frameRef: frameRef(1), x: 0, y: 0, toX: 1, toY: 1 }, capture],
+    [{ action: "capture", purpose: "result" }],
+  ];
+  let turn = 0;
+  const snapshots: string[] = [];
+  const f = await fixture("full_access", "capture", async function* ({ tools, messages }) {
+    expect(tools?.some(tool => tool.name === "Computer")).toBe(true);
+    const image = messages.findLast(message => message.type === "tool_result")?.content
+      .find(block => block.type === "image");
+    if (image?.type === "image" && image.source.type === "memory") snapshots.push(image.source.data);
+    const actions = batches[turn++];
+    for (const [index, input] of (actions ?? []).entries()) {
+      yield { type: "tool_use_start", toolUse: { type: "tool_use", id: `draw-${turn}-${index}`, name: "Computer", input } };
+    }
+    if (!actions) yield { type: "text_delta", delta: "Drawing verified." };
+    yield { type: "complete", stopReason: actions ? "tool_use" : "end_turn" };
+  });
+  try {
+    const desktop = await f.open();
+    const drawing = { id: "draw", items: [{ type: "text", text: "Open Paint, click the blank canvas, draw a circle and show the result." }] };
+    const run = await f.run(await desktop.submit(sessionId, drawing));
+
+    let canvas = 0;
+    for (const { action: type, ...args } of batches.flat()) {
+      const pending = await desktop.next();
+      expect(pending).toMatchObject({ type: "execute", action: { type, ...args }, run });
+      if (pending.type !== "execute") throw new Error(`Expected ${type}`);
+      if (type === "capture") {
+        const text = JSON.stringify({ status: "captured", frame: { ref: frameRef(canvas), width: 2, height: 2 } });
+        expect((await desktop.result(pending.requestId, { text, image: frames[canvas] })).ok).toBe(true);
+      } else {
+        expect((await desktop.dispatch(pending.requestId)).ok).toBe(true);
+        const inputSent = type === "click" || type === "drag";
+        if (inputSent) canvas++;
+        const result = await desktop.result(pending.requestId, { text: type, ...(inputSent ? { status: "sent" } : {}) });
+        expect(result.ok, `${type} result status: ${result.status}`).toBe(true);
+      }
+    }
+    expect(await desktop.next()).toEqual({ type: "ended", run });
+    expect(await f.awaitRun(run)).toMatchObject({ status: "completed" });
+    expect(snapshots).toEqual(frames.map(frame => frame.data));
+    const parts = f.server.store.conversations.listMessageParts(sessionId);
+    const answer = parts.find(part => part.type === "text" && part.text === "Drawing verified.");
+    const attachment = parts.find(part => part.type === "attachment");
+    expect(attachment?.messageId).toBe(answer?.messageId);
+    expect(attachment?.assetId).toBeTruthy();
+    const saved = await f.server.application.attachments.openContent(attachment!.assetId!);
+    expect(Buffer.from(await new Response(saved.content).arrayBuffer()).toString("base64")).toBe(frames[2]!.data);
+  } finally { await f.close(); }
+}, 30_000);
+
 it("corrects redundant observe parameters without dispatching them to Desktop", async () => {
   const f = await fixture("full_access", "observe", async function* (_params, call) {
     if (call === 1) {
@@ -384,6 +448,52 @@ it("lets a fresh visual observation verify foreground input without a semantic r
     expect(await f.awaitRun(run)).toMatchObject({ status: "completed" });
   } finally { await f.close(); }
 });
+
+it.each(["image received", "text-only", "same generation"] as const)(
+  "requires the model to receive the frame before the first coordinate click (%s)",
+  async mode => {
+    const frameRef = "frame_00000000-0000-4000-8000-000000000001";
+    const capture = { action: "capture" };
+    const click = { action: "click", frameRef, x: 0, y: 0 };
+    const f = await fixture("full_access", "capture", async function* (_params, call) {
+      const actions = call === 1 ? [capture, ...(mode === "same generation" ? [click] : [])]
+        : call === 2 && mode !== "same generation" ? [click] : [];
+      for (const [index, input] of actions.entries()) {
+        yield {
+          type: "tool_use_start",
+          toolUse: { type: "tool_use", id: `pointer-${call}-${index}`, name: "Computer", input },
+        };
+      }
+      yield { type: "complete", stopReason: actions.length ? "tool_use" : "end_turn" };
+    }, undefined, mode !== "text-only");
+    try {
+      const desktop = await f.open();
+      const run = await f.run(await desktop.submit(sessionId, input("pointer-image")));
+      const captured = await desktop.next();
+      expect(captured).toMatchObject({ type: "execute", action: { type: "capture" } });
+      if (captured.type !== "execute") throw new Error("Expected the capture");
+      const captureText = JSON.stringify({ status: "captured", frame: { ref: frameRef, width: 1, height: 1 } });
+      expect((await desktop.result(captured.requestId, { text: captureText, image: frame })).ok).toBe(true);
+
+      const next = await desktop.next();
+      if (mode === "image received") {
+        expect(next).toMatchObject({ type: "execute", action: { type: "click", frameRef, x: 0, y: 0 } });
+        if (next.type !== "execute") throw new Error("Expected the click after delivery");
+        expect(f.requests[1]?.messages.findLast(message => message.type === "tool_result")?.content)
+          .toContainEqual({ type: "image", source: { type: "memory", ...frame } });
+        expect((await desktop.dispatch(next.requestId)).ok).toBe(true);
+        expect((await desktop.result(next.requestId, { status: "sent", text: "Click sent" })).ok).toBe(true);
+        expect(await desktop.next()).toEqual({ type: "ended", run });
+      } else {
+        expect(next).toEqual({ type: "ended", run });
+        const blocked = f.requests.at(-1)?.messages.findLast(message => message.type === "tool_result");
+        expect(blocked).toMatchObject({ isError: true, executionState: "not_started" });
+        expect(blocked?.content).toContainEqual({ type: "text", text: expect.stringContaining("fresh capture") });
+      }
+      expect(await f.awaitRun(run)).toMatchObject({ status: "completed" });
+    } finally { await f.close(); }
+  },
+);
 
 it.each(["text-only", "same generation"] as const)("does not count an unseen visual capture as verification (%s)", async mode => {
   const f = await fixture("full_access", "capture", async function* (_params, call) {

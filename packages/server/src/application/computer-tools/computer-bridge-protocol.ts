@@ -72,15 +72,19 @@ export type ComputerBridgeEvent =
       fullAccess?: true;
     };
 
+export function isComputerForegroundInput(action: ComputerAction): action is ComputerForegroundAction {
+  return action.type === "key" || action.type === "type_text" || (action.type !== "capture" && "frameRef" in action);
+}
+
 export function computerActionNeedsApproval(action: ComputerAction): boolean {
   switch (action.type) {
-    case "foreground": case "click": case "drag": case "scroll_at": case "hover": case "type_text":
+    case "foreground":
     case "invoke": case "choose": case "set_text":
       return true;
     case "key":
       return Boolean(action.modifiers?.length) || !/^(?:Tab|Arrow(?:Up|Down|Left|Right)|Home|End|PageUp|PageDown)$/iu.test(action.key);
     default:
-      return false;
+      return isComputerForegroundInput(action);
   }
 }
 

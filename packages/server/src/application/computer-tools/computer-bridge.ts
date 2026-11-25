@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PermissionRequestRecord } from "@vykor/domain-contracts/sessions";
 import type { PermissionReplyStatus } from "../../permissions/permission-broker.js";
-import { computerActionNeedsApproval } from "./computer-bridge-protocol.js";
+import { computerActionNeedsApproval, isComputerForegroundInput } from "./computer-bridge-protocol.js";
 import type {
   ComputerAction,
   ComputerApprovalProposal,
@@ -204,7 +204,7 @@ export class DesktopComputerBridge {
       && pending.approvalAccess?.isOriginalScope();
     if (!pending.isCurrent() || (image && type !== "capture")
       || (status === "observed" && type !== "observe") || (status === "unchanged" && !unchanged)
-      || (status === "sent" && type !== "click" && type !== "key" && type !== "type_text")
+      || (status === "sent" && !isComputerForegroundInput(pending.action))
       || (pending.approval && !pending.approval.approved)
       || (needsDispatch(type) && !pending.dispatched && !unchanged)) return false;
     const observedResult = { ...result, ...(status ? { status } : {}) };
