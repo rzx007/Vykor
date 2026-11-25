@@ -68,6 +68,37 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+it("offers the shared new conversation action in the header only when the sidebar is collapsed", async () => {
+  const view = emptySessionView("chat")
+  useDesktopSessionStore.setState({
+    activeSessionId: view.session.id,
+    sessions: [view.session],
+    sessionView: view,
+    refreshGoal: vi.fn(async () => {}),
+  })
+  const onNewConversation = vi.fn()
+  const render = (showNewConversation: boolean) => act(async () => root.render(
+    <ConversationPane
+      onNewConversation={showNewConversation ? onNewConversation : undefined}
+      panelOpen
+      canOpenReview={false}
+      onTogglePanel={vi.fn()}
+      onOpenFile={vi.fn()}
+      onOpenReview={vi.fn()}
+      onOpenTerminal={vi.fn()}
+      onOpenAgents={vi.fn()}
+    />
+  ))
+  const newConversation = () => host.querySelector<HTMLButtonElement>('header button[aria-label="新对话"]')
+  await render(false)
+  expect(newConversation()).toBeNull()
+  await render(true)
+  const button = newConversation()
+  expect(button).not.toBeNull()
+  await act(async () => button!.click())
+  expect(onNewConversation).toHaveBeenCalledOnce()
+})
+
 it("passes observation candidates and live activity for a saved root chat only outside Goal mode", async () => {
   const view = emptySessionView("chat")
   const target = emptySessionView("target").session

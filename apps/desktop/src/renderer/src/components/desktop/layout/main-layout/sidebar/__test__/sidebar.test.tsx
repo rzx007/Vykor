@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from "react"
+import { act, useState, type ComponentProps } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
@@ -9,7 +9,7 @@ import { createActivityState } from "@renderer/stores/desktop-session/activity-s
 import { emptySessionView } from "@renderer/stores/desktop-session/store-test-fixtures"
 import type { DesktopSessionRecord } from "@shared/session-types"
 import { SIDEBAR_SECTIONS_STORAGE_KEY } from "../sidebar-section-expansion"
-import { Sidebar } from "../sidebar"
+import { Sidebar as DesktopSidebar } from "../sidebar"
 import { SessionRow } from "../sidebar-session-groups"
 import { SidebarNavigationButton } from "../sidebar-controls"
 import { Clock3 } from "lucide-react"
@@ -52,6 +52,23 @@ vi.mock("@renderer/components/appearance/appearance-provider", () => ({
 vi.mock("../../daemon-autostart-card", () => ({
   DaemonAutoStartCard: () => null,
 }))
+
+function Sidebar(
+  props: Omit<
+    ComponentProps<typeof DesktopSidebar>,
+    "archiveMode" | "onArchiveModeChange" | "onNewConversation"
+  >
+) {
+  const [archiveMode, setArchiveMode] = useState(false)
+  return (
+    <DesktopSidebar
+      {...props}
+      archiveMode={archiveMode}
+      onArchiveModeChange={setArchiveMode}
+      onNewConversation={() => {}}
+    />
+  )
+}
 
 describe("Sidebar collapsible sections and empty states", () => {
   let container: HTMLDivElement

@@ -182,6 +182,29 @@ it("opens the existing location picker and accepts working outside a project", a
   expect(send().disabled).toBe(false)
 })
 
+it("clears a selected project directly and returns keyboard focus to the picker", async () => {
+  const onSelectOutsideProject = vi.fn(() => {
+    props = { ...props, selectedProject: null, workspaceMode: "outside_project" }
+    root.render(<NewConversationStart {...props} />)
+  })
+  await render({ onSelectOutsideProject })
+  const clear = container.querySelector<HTMLButtonElement>('[aria-label="取消选择项目"]')!
+  const picker = clear.parentElement!.querySelector<HTMLButtonElement>("button[aria-expanded]")!
+  expect(picker.textContent).toBe(project.name)
+  await act(async () => {
+    clear.focus()
+    clear.click()
+  })
+  expect(onSelectOutsideProject).toHaveBeenCalledOnce()
+  expect(picker.textContent).toBe("不在项目中工作")
+  expect(picker.getAttribute("aria-expanded")).toBe("false")
+  expect(document.activeElement).toBe(picker)
+  expect(clear.isConnected).toBe(false)
+  expect(container.querySelector('[role="textbox"]')?.textContent).toBe("保留这份草稿")
+  await act(async () => picker.click())
+  expect(picker.getAttribute("aria-expanded")).toBe("true")
+})
+
 it("offers a new directory when the selected project is unavailable", async () => {
   await render({ selectedProject: { ...project, available: false } })
   expect(send().disabled).toBe(true)

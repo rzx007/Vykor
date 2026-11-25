@@ -1,5 +1,5 @@
 import { Box, Folder, GitBranch, Monitor, PanelRight, Plus, Search, X } from "lucide-react"
-import { useState } from "react"
+import { useRef, useState } from "react"
 
 import { AoraAvatar } from "@renderer/components/desktop/shared/aora-bot/aora-avatar"
 import { Popover, PopoverContent, PopoverTrigger } from "@renderer/components/ui/popover"
@@ -174,6 +174,7 @@ export function NewConversationStart({
   const [activePicker, setActivePicker] = useState<StartPicker | "model" | null>(null)
   const [avatarName] = useState(() => crypto.randomUUID())
   const [projectQuery, setProjectQuery] = useState("")
+  const projectPickerTriggerRef = useRef<HTMLButtonElement>(null)
   const [branchQuery, setBranchQuery] = useState("")
   const [creatingBranch, setCreatingBranch] = useState(false)
   const visibleProjects = projects.filter((project) =>
@@ -190,6 +191,13 @@ export function NewConversationStart({
   const modelLabel = resolveModelLabel(models, selectedModel, selectedProvider)
 
   const closePicker = (): void => setActivePicker(null)
+  const canClearProject =
+    workspaceMode === "project" && selectedProject !== null && loadStatus !== "loading"
+  const clearProjectSelection = (): void => {
+    onSelectOutsideProject()
+    setProjectQuery("")
+    closePicker()
+  }
   let setupStep: { message: string; action: SetupAction } | null = null
   if (loadStatus === "error") {
     setupStep = { message: "工作区加载失败，草稿已保留。", action: "retry" }
@@ -306,7 +314,25 @@ export function NewConversationStart({
             ) : null}
           </div>
           <div className="mx-3 flex h-10 min-w-0 items-center gap-0.5 overflow-hidden rounded-t-2xl bg-muted-foreground/5 px-2.5 pt-1">
-            <div className="min-w-0">
+            <div className="group/project relative min-w-0">
+              {canClearProject ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  shape="circle"
+                  size="icon-sm"
+                  aria-label="取消选择项目"
+                  title="取消选择项目"
+                  className="absolute inset-y-0 left-0.75 my-auto text-muted-foreground"
+                  onClick={() => {
+                    clearProjectSelection()
+                    projectPickerTriggerRef.current?.focus()
+                  }}
+                >
+                  <Folder className="group-hover/project:hidden group-focus-visible/button:hidden [@media(hover:none)]:hidden" />
+                  <X className="hidden group-hover/project:block group-focus-visible/button:block [@media(hover:none)]:block" />
+                </Button>
+              ) : null}
               <Popover
                 open={activePicker === "project"}
                 onOpenChange={(open) => setActivePicker(open ? "project" : null)}
@@ -314,6 +340,8 @@ export function NewConversationStart({
                 <PopoverTrigger
                   render={
                     <StartPickerButton
+                      ref={projectPickerTriggerRef}
+                      className={canClearProject ? "pl-7.5" : undefined}
                       label={
                         loadStatus === "loading"
                           ? "加载项目..."
@@ -323,7 +351,7 @@ export function NewConversationStart({
                       }
                       expanded={activePicker === "project"}
                     >
-                      {workspaceMode === "outside_project" ? <X /> : <Folder />}
+                      {workspaceMode === "outside_project" ? <X /> : !canClearProject && <Folder />}
                     </StartPickerButton>
                   }
                 />
@@ -384,11 +412,7 @@ export function NewConversationStart({
                     <Separator className="my-1" />
                     <PickerMenuItem
                       selected={workspaceMode === "outside_project"}
-                      onClick={() => {
-                        onSelectOutsideProject()
-                        setProjectQuery("")
-                        closePicker()
-                      }}
+                      onClick={clearProjectSelection}
                     >
                       <X />
                       <span>不在项目中工作</span>

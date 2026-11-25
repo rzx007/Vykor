@@ -68,6 +68,9 @@ import {
 
 type SidebarProps = {
   open: boolean
+  archiveMode: boolean
+  onArchiveModeChange: (open: boolean) => void
+  onNewConversation: (project?: DesktopProject) => void
   onOpenSearch?: () => void
   onOpenSettings: () => void
   onOpenNotes?: () => void
@@ -84,6 +87,9 @@ const secondaryNavigation = [
 
 export function Sidebar({
   open,
+  archiveMode,
+  onArchiveModeChange,
+  onNewConversation,
   onOpenSearch,
   onOpenSettings,
   onOpenNotes,
@@ -111,15 +117,12 @@ export function Sidebar({
   const imGroups = useMemo(() => groupImSessions(sessions), [sessions])
   const activeSessionId = useDesktopSessionStore(selectActiveSessionId)
   const loadStatus = useDesktopSessionStore(selectLoadStatus)
-  const startNewConversation = useDesktopSessionStore((state) => state.startNewConversation)
   const selectOutsideProject = useDesktopSessionStore((state) => state.selectOutsideProject)
-  const selectProject = useDesktopSessionStore((state) => state.selectProject)
   const renameProject = useDesktopSessionStore((state) => state.renameProject)
   const togglePinProject = useDesktopSessionStore((state) => state.togglePinProject)
   const removeProject = useDesktopSessionStore((state) => state.removeProject)
   const rebindProject = useDesktopSessionStore((state) => state.rebindProject)
   const sessionActionsDialogs = useSessionActionDialogs()
-  const [archiveMode, setArchiveMode] = useState(false)
   const [renameProjectTarget, setRenameProjectTarget] = useState<DesktopProject | null>(null)
   const [removeProjectTarget, setRemoveProjectTarget] = useState<DesktopProject | null>(null)
   const [projectName, setProjectName] = useState("")
@@ -181,18 +184,9 @@ export function Sidebar({
     })
   }
 
-  const beginNewConversation = (project?: DesktopProject): void => {
-    setArchiveMode(false)
-    void (async () => {
-      await startNewConversation()
-      if (project) void selectProject(project).catch(() => undefined)
-      onOpenConversation(null)
-    })()
-  }
-
   const beginRecentNewConversation = (): void => {
     selectOutsideProject()
-    beginNewConversation()
+    onNewConversation()
   }
 
   const beginProjectRename = (project: DesktopProject): void => {
@@ -227,7 +221,7 @@ export function Sidebar({
     onFork: sessionActionsDialogs.beginFork,
   }
   const projectActions: ProjectActions = {
-    onNewConversation: (project) => beginNewConversation(project),
+    onNewConversation,
     onRename: beginProjectRename,
     onTogglePin: (project) => void togglePinProject(project.path),
     onRemove: setRemoveProjectTarget,
@@ -287,7 +281,7 @@ export function Sidebar({
               <SidebarNavigationButton
                 icon={SquarePen}
                 label="新对话"
-                onClick={() => beginNewConversation()}
+                onClick={() => onNewConversation()}
               />
             </div>
             {secondaryNavigation.map(({ id, icon, label }) => {
@@ -309,17 +303,17 @@ export function Sidebar({
                     onClick={
                       isNotes
                         ? () => {
-                            setArchiveMode(false)
+                            onArchiveModeChange(false)
                             onOpenNotes?.()
                           }
                         : isScheduled
                           ? () => {
-                              setArchiveMode(false)
+                              onArchiveModeChange(false)
                               onOpenScheduled()
                             }
                           : isPlugins
                             ? () => {
-                                setArchiveMode(false)
+                                onArchiveModeChange(false)
                                 onOpenPlugins()
                               }
                             : undefined
@@ -335,7 +329,7 @@ export function Sidebar({
                 selected={archiveMode && !scheduledSelected}
                 onClick={() => {
                   onOpenConversation()
-                  setArchiveMode((current) => !current)
+                  onArchiveModeChange(!archiveMode)
                 }}
               />
             </div>

@@ -1,7 +1,7 @@
 import { ConversationFind } from "./transcript/conversation-find"
 import { submitConversationDraft } from "./session/submit-conversation-draft"
 import { pluginAppModelContexts } from "../shell/plugin-apps/plugin-app-model-context"
-import { MoreHorizontal, PanelRight } from "lucide-react"
+import { MoreHorizontal, PanelRight, SquarePen } from "lucide-react"
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { useNavigate } from "@tanstack/react-router"
 
@@ -97,6 +97,7 @@ function ConversationPane({
   panelOpen,
   searchTarget,
   onSearchTargetConsumed,
+  onNewConversation,
   onTogglePanel,
   onOpenFile,
   canOpenReview,
@@ -556,6 +557,11 @@ function ConversationPane({
         {hasSession ? (
           <header className="flex h-12 shrink-0 items-center border-b bg-background px-3">
             <div className="flex min-w-0 items-center gap-2">
+              {onNewConversation ? (
+                <HeaderIconButton label="新对话" onClick={onNewConversation}>
+                  <SquarePen strokeWidth={1.75} />
+                </HeaderIconButton>
+              ) : null}
               <ProjectInfoButton
                 selectedProject={selectedProject}
                 projects={projects}

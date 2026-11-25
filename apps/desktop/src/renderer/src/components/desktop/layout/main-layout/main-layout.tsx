@@ -24,6 +24,7 @@ import { DesktopSearchDialog } from "@renderer/components/desktop/search/desktop
 import { PanelResizeHandle } from "@renderer/components/ui/panel-resize-handle"
 import { useActiveWorkspaceIsGit } from "@renderer/hooks/use-active-workspace-is-git"
 import type { DesktopGitDiffScope } from "@shared/git-types"
+import type { DesktopProject } from "@shared/session-types"
 import { cn } from "@renderer/lib/utils"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
 import {
@@ -63,6 +64,7 @@ export function MainLayout(): React.JSX.Element {
     select: (state) => state.location.state.__TSR_index,
   })
   const startNewConversation = useDesktopSessionStore((state) => state.startNewConversation)
+  const selectProject = useDesktopSessionStore((state) => state.selectProject)
   const chooseProject = useDesktopSessionStore((state) => state.chooseProject)
   const sessions = useDesktopSessionStore(selectSessions)
   const activeSessionId = useDesktopSessionStore(selectActiveSessionId)
@@ -87,6 +89,7 @@ export function MainLayout(): React.JSX.Element {
   )
   const sessionIds = useMemo(() => sessions.map((session) => session.id), [sessions])
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarArchiveMode, setSidebarArchiveMode] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [messageSearchTarget, setMessageSearchTarget] = useState<ConversationSearchTarget>()
   const consumeMessageSearchTarget = useCallback(() => setMessageSearchTarget(undefined), [])
@@ -231,6 +234,17 @@ export function MainLayout(): React.JSX.Element {
   const startNewConversationRoute = useCallback((): void => {
     void startNewConversation().then(() => navigate({ to: "/" }))
   }, [navigate, startNewConversation])
+
+  const beginSidebarConversation = useCallback(
+    (project?: DesktopProject): void => {
+      setSidebarArchiveMode(false)
+      void startNewConversation().then(() => {
+        if (project) void selectProject(project).catch(() => undefined)
+        openConversationRoute(null)
+      })
+    },
+    [openConversationRoute, selectProject, startNewConversation]
+  )
 
   const showCurrentConversation = useCallback((): void => {
     openConversationRoute(undefined)
@@ -415,6 +429,7 @@ export function MainLayout(): React.JSX.Element {
           <ConversationPane
             searchTarget={messageSearchTarget}
             onSearchTargetConsumed={consumeMessageSearchTarget}
+            onNewConversation={sidebarOpen ? undefined : () => beginSidebarConversation()}
             panelOpen={panelOpen}
             onTogglePanel={togglePanel}
             onOpenFile={openMessageFile}
@@ -477,6 +492,7 @@ export function MainLayout(): React.JSX.Element {
       messageSearchTarget,
       consumeMessageSearchTarget,
       activeWorkspaceIsGit,
+      beginSidebarConversation,
       conversationPanelRef,
       innerGroupElementRef,
       openTerminal,
@@ -485,6 +501,7 @@ export function MainLayout(): React.JSX.Element {
       openUtilityTool,
       panelOpen,
       requestOpenReview,
+      sidebarOpen,
       togglePanel,
       utilityMaximized,
       collapseUtilityPanel,
@@ -569,6 +586,9 @@ export function MainLayout(): React.JSX.Element {
               {renderPage(
                 <Sidebar
                   open={sidebarOpen}
+                  archiveMode={sidebarArchiveMode}
+                  onArchiveModeChange={setSidebarArchiveMode}
+                  onNewConversation={beginSidebarConversation}
                   onOpenSearch={() => setSearchOpen(true)}
                   onOpenNotes={() => void navigate({ to: "/notes" })}
                   onOpenScheduled={() => void navigate({ to: "/scheduled" })}
