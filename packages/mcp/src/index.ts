@@ -112,7 +112,9 @@ export class McpClientManager {
   async prepareConnection(
     name: string,
     config: McpServerConfig,
+    signal?: AbortSignal,
   ): Promise<PreparedMcpConnection> {
+    signal?.throwIfAborted();
     const kind = resolveTransportKind(config);
     if (typeof kind !== "string") throw new Error(kind.error);
 
@@ -147,10 +149,21 @@ export class McpClientManager {
       this.transports.delete(name);
     };
 
+    let abortStartup: (() => void) | undefined;
     try {
-      await client.connect(transport);
+      const request = signal ? { signal: AbortSignal.any([signal]) } : undefined;
+      if (signal) {
+        const cancelled = new Promise<never>((_, reject) => {
+          abortStartup = () => reject(signal.reason);
+          signal.addEventListener("abort", abortStartup, { once: true });
+        });
+        await Promise.race([client.connect(transport, request), cancelled]);
+      } else {
+        await client.connect(transport);
+      }
 
-      const toolsResult = await client.listTools().catch((err) => {
+      const toolsResult = await client.listTools(undefined, request).catch((err) => {
+        signal?.throwIfAborted();
         const message = err instanceof Error ? err.message : String(err);
         if (
           !/Method not found/i.test(message) ||
@@ -161,7 +174,8 @@ export class McpClientManager {
         }
         return { tools: [] };
       });
-      const resourcesResult = await client.listResources().catch((err) => {
+      const resourcesResult = await client.listResources(undefined, request).catch((err) => {
+        signal?.throwIfAborted();
         const message = err instanceof Error ? err.message : String(err);
         // "Method not found" => server simply does not support resources.
         if (!/Method not found/i.test(message)) {
@@ -189,6 +203,7 @@ export class McpClientManager {
         description: r.description ?? "",
       }));
 
+      signal?.throwIfAborted();
       if (closed)
         throw connection.error ?? new Error(`MCP connection closed: ${name}`);
       connection.status = "connected";
@@ -204,6 +219,8 @@ export class McpClientManager {
     } catch (err) {
       await client.close().catch(() => undefined);
       throw err instanceof Error ? err : new Error(String(err));
+    } finally {
+      if (abortStartup) signal?.removeEventListener("abort", abortStartup);
     }
   }
 

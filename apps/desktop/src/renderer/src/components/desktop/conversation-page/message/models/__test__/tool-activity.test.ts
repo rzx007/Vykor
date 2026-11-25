@@ -17,7 +17,7 @@ const run: DesktopSessionRun = {
   id: "run",
   sessionId: "s",
   status: "running",
-  metadata: {},
+  metadata: { toolGeneration: [] },
   createdAt: 1,
   updatedAt: 1,
 }
@@ -497,6 +497,16 @@ describe("real tool activity labels", () => {
       label: "等待执行",
       orb: "breathing",
     })
+  })
+  it("shows session preparation until the first model generation begins", () => {
+    const userMessage = { ...message, role: "user" as const }
+    for (const status of ["pending", "running"] as const) {
+      expect(conversationActivity([{ ...run, status, metadata: {} }], [userMessage], [])?.label).toBe(
+        "正在准备会话"
+      )
+    }
+    const generating = { ...run, metadata: { toolGeneration: [] } }
+    expect(conversationActivity([generating], [userMessage], [])?.label).toBe("等待模型响应")
   })
   it("stops reporting activity once no run is active", () => {
     expect(conversationActivity([], [message], [part])).toBeUndefined()

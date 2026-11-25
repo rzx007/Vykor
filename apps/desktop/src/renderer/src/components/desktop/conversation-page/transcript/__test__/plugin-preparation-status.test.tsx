@@ -297,3 +297,17 @@ it("switches from plugin preparation to tool generation before a tool call is pr
   expect(html.match(/data-task-duration[\s\S]*?<\/div>/)?.[0]).toContain("正在处理")
   expect(html).not.toContain("正在准备 Quality")
 })
+
+it("switches from plugin preparation when model generation begins", () => {
+  const html = render({
+    ...running,
+    runs: [
+      {
+        ...running.runs[0]!,
+        metadata: { ...running.runs[0]!.metadata, toolGeneration: [] },
+      },
+    ],
+  })
+  expect(html).toContain("等待模型响应")
+  expect(html).not.toContain("正在准备 Quality")
+})

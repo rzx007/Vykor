@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ActiveMcpRuntimeHandle, McpRuntimeRegistry } from "@vykor/mcp";
 import type { McpOAuthCredentialRecord, McpServerConfig, McpServerIdentity } from "@vykor/host-config";
-import { McpOAuthRuntime, type McpClientManager } from "@vykor/mcp";
+import { McpClientManager, McpOAuthRuntime } from "@vykor/mcp";
 
 import {
   createMcpRuntimeHandle,
@@ -24,6 +24,52 @@ it("resolves exact plugin workspace/session placeholders without interpolating a
 });
 
 describe("MCP execution domains", () => {
+  it("starts an ordinary daemon run before a slow optional MCP finishes", async () => {
+    const slow = Promise.withResolvers<never>();
+    const prepare = vi.spyOn(McpClientManager.prototype, "prepareConnection")
+      .mockImplementation(() => slow.promise);
+    const recordFailure = vi.spyOn(McpClientManager.prototype, "recordFailedConnection");
+    const streamMessage = vi.fn(async function* () {
+      yield { type: "text_delta" as const, delta: "ready" };
+      yield { type: "complete" as const, stopReason: "end_turn" as const };
+    });
+    const registry = {
+      register: () => () => undefined,
+      currentGeneration: () => 0,
+      currentNamedGeneration: () => 0,
+    } as McpRuntimeRegistry;
+    const creating = createDefaultNodeAgent({
+      cwd: process.cwd(),
+      pluginsEnabled: false,
+      client: { streamMessage },
+      settings: { model: "test", apiFormat: "anthropic", maxTurns: 1, permission: { mode: "default" } },
+      mcpServers: { slow: SERVERS.remote },
+      mcpRuntimeRegistry: registry,
+      capabilityOverrides: { terminal: false, memory: false },
+    });
+    try {
+      await vi.waitFor(() => expect(prepare).toHaveBeenCalledOnce(), { timeout: 10_000 });
+      const agent = await Promise.race([
+        creating,
+        new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error("Agent waited for optional MCP")), 3_000).unref();
+        }),
+      ]);
+      expect((await agent.runMessage("hello")).status).toBe("completed");
+      expect(streamMessage).toHaveBeenCalledOnce();
+      await agent.close();
+      slow.reject(new Error("late failure"));
+      await expect(slow.promise).rejects.toThrow("late failure");
+      expect(recordFailure).not.toHaveBeenCalled();
+    } finally {
+      // Release the simulated connection even if startup still blocks on MCP.
+      slow.reject(new Error("fixture closed"));
+      await (await creating).close();
+      recordFailure.mockRestore();
+      prepare.mockRestore();
+    }
+  });
+
   it("does not classify an explicitly supplied host server as global", async () => {
     let handle: ActiveMcpRuntimeHandle | undefined;
     const registry = {

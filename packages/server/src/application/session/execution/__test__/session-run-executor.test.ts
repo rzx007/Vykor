@@ -46,11 +46,28 @@ describe("SessionRunExecutor", () => {
   it("exposes multiple eligible plugins without a selection request or a manual session selection", async () => {
     const f = autoSelectionFixture();
     await f.execute();
+    expect(f.waitForPluginMcp).not.toHaveBeenCalled();
     expect(f.observed).toEqual([[["office", "knowledge"], "Public", "Office", "Knowledge"]]);
     expect(f.requests).toBe(0);
     expect(f.store.spies.getRun()).toMatchObject({ metadata: { pluginId: null, pluginSelection: { status: "resolved", source: "auto", scopeVersion: 2, pluginIds: ["office", "knowledge"] } } });
     expect(f.store.spies.getSession().metadata).not.toHaveProperty("activePluginId");
     expect(f.store.spies.getInput().metadata).not.toHaveProperty("pluginId");
+  });
+  it("waits for the explicitly selected plugin before building the run view", async () => {
+    const f = autoSelectionFixture();
+    const ready = Promise.withResolvers<void>();
+    f.waitForPluginMcp.mockReturnValueOnce(ready.promise);
+    Object.assign(f.store.spies.getRun(), { metadata: { pluginId: "knowledge" } });
+    const run = f.execute();
+    try {
+      await vi.waitFor(() => expect(f.waitForPluginMcp).toHaveBeenCalledExactlyOnceWith(["knowledge"], f.controller.signal));
+      expect(f.createView).not.toHaveBeenCalled();
+      expect(f.observed).toEqual([]);
+    } finally {
+      ready.resolve();
+      await run;
+    }
+    expect(f.observed).toEqual([[["knowledge"], "Public", "Knowledge"]]);
   });
   it("reuses a resolved no-plugin result instead of selecting again on retry", async () => {
     const f = autoSelectionFixture(null);
@@ -906,24 +923,30 @@ function autoSelectionFixture(pluginId: string | null = "office") {
   let requests = 0;
   const preparationFailures = new Set<string>();
   const observed: unknown[][] = [];
+  const waitForPluginMcp = vi.fn(async (_ids: readonly string[], _signal: AbortSignal) => {});
+  const createView = vi.fn((id?: string | readonly string[]) => createRunCapabilityView({ toolRegistry: registry,
+    pluginIds: new Set(["office", "knowledge"]),
+    pluginPreparationErrors: new Map([...preparationFailures].map(pluginId => [pluginId, [`prepare failed: ${pluginId}`]])),
+  }, id));
   const executor = new SessionRunExecutor({
     data: store.data, attachments: store.attachments, goals: store.goals,
-    agentPool: { configured: true, acquireHostedSession: async function(...args:any[]){return hostedAgentFixture(await (this.acquireSession as any)(...args));},
+    agentPool: { configured: true, acquireHostedSession: async function(...args:any[]){
+      const hosted = hostedAgentFixture(await (this.acquireSession as any)(...args));
+      if (hosted.host) hosted.host.plugins.waitForPluginMcp = waitForPluginMcp;
+      return hosted;
+    },
 acquireSession: async () => ({
       getHistory: () => [],
       getPluginCandidates: () => candidates,
       validatePluginScope: async () => {},
       selectPluginForRun: async () => { requests++; return { pluginId, reason: pluginId ? "matched" : "no_match", version: "1", behaviorDigest: "digest" }; },
-      createRunCapabilityView: (id?: string | readonly string[]) => createRunCapabilityView({ toolRegistry: registry,
-        pluginIds: new Set(["office", "knowledge"]),
-        pluginPreparationErrors: new Map([...preparationFailures].map(pluginId => [pluginId, [`prepare failed: ${pluginId}`]])),
-      }, id),
+      createRunCapabilityView: createView,
       submitMessage: (_content: unknown, options: any) => { observed.push([[...options.preparation.fixtureView.pluginIds], ...options.preparation.fixtureView.tools.keys()]); return completedHandle(); },
     }), close: async () => {}, closeIfStale: async () => {} } as any,
     events: { checkpoint: () => 1, publishSince: () => {} },
     transcriptProjection: { finalizeRunParts: () => {} } as any, traceIdForRun: () => "trace-1", log: () => {},
   });
-  return { store, controller, observed, preparationFailures, get requests() { return requests; },
+  return { store, controller, observed, preparationFailures, waitForPluginMcp, createView, get requests() { return requests; },
     execute: () => executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" }, { signal: controller.signal, registerHandle: async () => {} }) };
 }
 

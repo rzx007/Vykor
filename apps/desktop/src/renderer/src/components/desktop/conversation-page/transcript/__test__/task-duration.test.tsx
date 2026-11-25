@@ -166,7 +166,11 @@ it("restores live elapsed time from the stored start instead of the mount time",
 })
 
 it("keeps the pre-token status only in TaskDuration for an empty assistant message", () => {
-  const html = render([{ ...run, status: "running", finishedAt: undefined }], true, [])
+  const html = render(
+    [{ ...run, status: "running", finishedAt: undefined, metadata: { toolGeneration: [] } }],
+    true,
+    []
+  )
   expect(html.match(/data-task-duration/g)).toHaveLength(1)
   expect(html).toContain('aria-label="等待模型响应"')
   expect(html).not.toContain("正在生成回复...")

@@ -127,6 +127,7 @@ export interface NodeAgentHost {
     createRunCapabilityView(
       pluginId?: string | readonly string[],
     ): RunCapabilityView;
+    waitForPluginMcp?(pluginIds: readonly string[], signal: AbortSignal): Promise<void>;
     getPluginCandidates(): readonly PluginSelectionCandidate[];
     validatePluginScope(
       candidates: readonly PluginSelectionCandidate[],
@@ -298,6 +299,7 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
             this.prepare(scope, { capabilityView: view, explicitView: true }),
         }),
         createRunCapabilityView: this.createRunCapabilityView.bind(this),
+        waitForPluginMcp: this.runtime.waitForPluginMcp,
         getPluginCandidates: this.getPluginCandidates.bind(this),
         validatePluginScope: this.validatePluginScope.bind(this),
         runPluginAppTool: this.runPluginAppTool.bind(this),
@@ -675,6 +677,7 @@ class NodeAgent extends KernelAgent implements DefaultNodeAgent {
       options.scope.agentId !== this.id
     )
       throw new Error("plugin_app_scope_invalid");
+    await this.runtime.waitForPluginMcp?.([app.pluginId], options.signal ?? options.scope.signal);
     const prepared = await this.appRuntime.prepare(
       invocation,
       this.createRunCapabilityView(app.pluginId),

@@ -2,10 +2,12 @@ import { type AgentEventInput } from "@vykor/agent-contracts";
 import { mkdtempSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { afterEach, expect, it, vi } from "vitest";
 import { getInstalledPluginStorePath } from "@vykor/host-config";
 import { QueryEngine } from "@vykor/core";
 import { HookExecutor } from "@vykor/hooks";
+import { McpClientManager, type McpRuntimeRegistry } from "@vykor/mcp";
 import { nativeToolResultToAppResult } from "../native-plugin-app-backend.js";
 import { updateInstalledPluginStore } from "@vykor/plugins";
 import type { PluginAppHostBinding, PluginAppHostInvocation } from "@vykor/plugin-contracts/runtime";
@@ -14,24 +16,57 @@ import { installAppFixture, appFixtureSettings } from "../../../../test-helpers/
 
 const cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => { for (const fn of cleanup.splice(0).reverse()) await fn(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
-async function fixture(kind: "native-tools" | "mcp-server", autosave = false, mode: "default" | "plan" | "full_auto" = "full_auto") {
+async function createFixture(kind: "native-tools" | "mcp-server", autosave = false, mode: "default" | "plan" | "full_auto" = "full_auto", mcpRuntimeRegistry?: McpRuntimeRegistry) {
   const root = mkdtempSync(join(tmpdir(), "app-agent-")); cleanup.push(() => rmSync(root, { recursive: true, force: true }));
   vi.stubEnv("VYKOR_CONFIG_DIR", join(root, "config"));
   const installed = await installAppFixture(root, kind, undefined, false, autosave);
   const model = vi.fn();
   const requestPermission = vi.fn(async () => ({ status: "denied" as const }));
   const agent = await createDefaultNodeAgent({ cwd: root, sessionId: "session", settings: { ...appFixtureSettings, permission: { mode } }, effects: { requestPermission },
-    capabilityOverrides: { terminal: false, memory: false },
+    capabilityOverrides: { terminal: false, memory: false }, mcpRuntimeRegistry,
     client: { async *streamMessage() { model(); throw new Error("Unexpected model"); } } });
   cleanup.push(() => agent.close());
   const descriptor = agent.host.plugins.pluginApps.list()[0]!;
   const app: PluginAppHostBinding = { instanceId: "app", agentId: agent.id, sessionId: agent.id, ...descriptor, resourceUri: "ui://fixture/panel.html" };
+  const scope = { agentId: agent.id, sessionId: agent.id, runId: "run", inputId: "run", traceId: "run", cwd: root, signal: new AbortController().signal };
+  return { agent, app, scope, model, requestPermission, ...installed, effects: () => existsSync(installed.effectFile) ? Number(readFileSync(installed.effectFile, "utf8")) : 0 };
+}
+async function fixture(kind: "native-tools" | "mcp-server", autosave = false, mode: "default" | "plan" | "full_auto" = "full_auto") {
+  const h = await createFixture(kind, autosave, mode);
+  const { agent, app } = h;
   const facts = await agent.host.plugins.pluginApps.refresh(app);
   const lease = agent.host.plugins.pluginApps.issue(app, facts.backendGeneration!);
-  const request: PluginAppHostInvocation = { binding: app, lease, toolName: installed.toolName, args: { value: "approved" } };
-  const scope = { agentId: agent.id, sessionId: agent.id, runId: "run", inputId: "run", traceId: "run", cwd: root, signal: new AbortController().signal };
-  return { agent, app, request, scope, model, requestPermission, ...installed, effects: () => existsSync(installed.effectFile) ? Number(readFileSync(installed.effectFile, "utf8")) : 0 };
+  const request: PluginAppHostInvocation = { binding: app, lease, toolName: h.toolName, args: { value: "approved" } };
+  return { ...h, request };
 }
+
+it("opens an MCP plugin app while its backend is still starting", async () => {
+  const backend = Promise.withResolvers<void>();
+  const prepare = McpClientManager.prototype.prepareConnection;
+  const prepareConnection = vi.spyOn(McpClientManager.prototype, "prepareConnection")
+    .mockImplementation(async function (this: McpClientManager, ...args: Parameters<typeof prepare>) {
+      await backend.promise;
+      return prepare.apply(this, args);
+    });
+  const registry: McpRuntimeRegistry = {
+    register: () => () => undefined,
+    currentGeneration: () => 0,
+    currentNamedGeneration: () => 0,
+  };
+  try {
+    const { agent, app } = await createFixture("mcp-server", false, "full_auto", registry);
+    expect(prepareConnection).toHaveBeenCalledOnce();
+    const refreshing = agent.host.plugins.pluginApps.refresh(app);
+    expect(await Promise.race([refreshing, delay(1_000, "pending")])).toBe("pending");
+    backend.resolve();
+    await expect(refreshing).resolves.toMatchObject({
+      resourceAvailable: true,
+      toolsAvailable: true,
+    });
+  } finally {
+    backend.resolve();
+  }
+}, 30_000);
 it("rejects non-object app arguments with a structured code before executing", async () => {
   const h = await fixture("native-tools");
   for (const args of [null, [], true]) {

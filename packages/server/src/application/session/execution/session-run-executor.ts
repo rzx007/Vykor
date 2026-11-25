@@ -323,12 +323,20 @@ export class SessionRunExecutor {
 
       // 先拿到实际 Agent，路由才能看见 allow/deny 过滤后的工具和真实宿主能力。
       agentTouched = true;
+      const preparationTraceId = this.context.traceIdForRun(runId);
+      const recordPreparation = (event: string, started: number) => {
+        this.context.log({ level: "info", event, sessionId, runId, traceId: preparationTraceId,
+          durationMs: Math.round(performance.now() - started) });
+      };
+      const acquiringAgent = performance.now();
       const hosted =
         await this.context.agentPool.acquireHostedSession(sessionId);
+      recordPreparation("session.run.agent_acquired", acquiringAgent);
       const { agent, host } = hosted;
       const hadResolvedSelection =
         (storedRun.metadata?.pluginSelection as { status?: string } | undefined)
           ?.status === "resolved";
+      const validatingPlugins = performance.now();
       let selection = await resolveRunPluginSelection({
         session,
         run: storedRun,
@@ -338,6 +346,7 @@ export class SessionRunExecutor {
         traceId: this.context.traceIdForRun(runId),
         limits,
       });
+      recordPreparation("session.run.plugin_scope_validated", validatingPlugins);
       this.context.data.runs.updateRun(runId, {
         metadata: {
           pluginId: selection.pluginId,
@@ -345,6 +354,12 @@ export class SessionRunExecutor {
         },
       });
       const pluginId = selection.pluginId ?? undefined;
+      const requiredPluginIds = pluginId ? [pluginId] : hadResolvedSelection ? selection.pluginIds ?? [] : [];
+      if (requiredPluginIds.length && host?.plugins.waitForPluginMcp) {
+        const waitingForMcp = performance.now();
+        await host.plugins.waitForPluginMcp(requiredPluginIds, workContext.signal);
+        recordPreparation("session.run.required_mcp_wait_finished", waitingForMcp);
+      }
       const automaticScope =
         selection.scopeVersion === 2 && selection.source === "auto";
       const capabilityView = host?.plugins.createRunCapabilityView(

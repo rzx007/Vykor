@@ -86,6 +86,7 @@ export class NodeRuntimeResources {
   >[0];
   mcpManager?: import("@vykor/mcp").McpClientManager;
   mcpAuth?: import("@vykor/tools").McpAuthHost;
+  waitForPluginMcp?: (pluginIds: readonly string[], signal: AbortSignal) => Promise<void>;
   private cleanupCallbacks: Array<() => Promise<void> | void> = [];
   private syncCleanupCallbacks: Array<() => void> = [];
   sandboxStatus?: RuntimeSandboxStatus;

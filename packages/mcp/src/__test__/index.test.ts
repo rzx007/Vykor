@@ -426,6 +426,21 @@ describe("McpClientManager", () => {
   });
 
   describe("staged connections", () => {
+    it("closes the client when transport startup is still pending at cancellation", async () => {
+      const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+      const close = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(Client).mockImplementationOnce(() => ({
+        connect: () => new Promise<void>(() => {}),
+        close,
+      } as any));
+      const controller = new AbortController();
+      const pending = manager.prepareConnection("slow", { type: "stdio", command: "node" }, controller.signal);
+      controller.abort(new Error("runtime closed"));
+      await expect(pending).rejects.toThrow("runtime closed");
+      expect(close).toHaveBeenCalledOnce();
+      expect(manager.getConnection("slow")).toBeUndefined();
+    });
+
     it("prepareConnection discovers tools without publishing the connection", async () => {
       const prepared = await manager.prepareConnection("linear", { type: "stdio", command: "node" });
 

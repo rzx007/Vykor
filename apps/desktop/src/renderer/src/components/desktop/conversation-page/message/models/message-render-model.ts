@@ -476,6 +476,9 @@ export function conversationActivity(
         recordValue(entry) && Number.isSafeInteger(entry.receivedChars) && entry.receivedChars >= 0
     )
   if (generating.length) return { label: "正在处理", orb: "composing" }
+  // The server initializes toolGeneration when the first model generation begins.
+  if (!activeRuns.some((run) => Array.isArray(run.metadata.toolGeneration)))
+    return { label: "正在准备会话", orb: "working" }
   return { label: "等待模型响应", orb: "working" }
 }
 

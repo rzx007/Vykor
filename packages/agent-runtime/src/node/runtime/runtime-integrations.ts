@@ -2,6 +2,7 @@ import type { NodeRuntimeResources as RuntimeBundle } from "./node-runtime-resou
 import type { RunToolBinding, ToolDefinition } from "@vykor/agent-contracts";
 import { createHash, randomUUID } from "node:crypto";
 import { join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import type { ActiveMcpRuntimeHandle, McpRuntimeRegistry } from "@vykor/mcp";
 import type {
   McpServerConfig,
@@ -184,7 +185,12 @@ export async function installRuntimeIntegrations(
     processExecutor: runtime.processExecutor ?? options.executionEnvironment?.process,
     oauthRuntime: mcpOAuthRuntime,
   });
-  runtime.addCleanup(() => mcpManager.disconnectAll());
+  const mcpLifetime = new AbortController();
+  const stopMcpStartup = () => mcpLifetime.abort();
+  runtime.addCleanup(() => {
+    stopMcpStartup();
+    return mcpManager.disconnectAll();
+  }, stopMcpStartup);
   const mcpServers = selectMcpServersForEnvironment(
     options.mcpServers ?? options.discovery.mcpServers,
     options.executionEnvironment?.info,
@@ -293,7 +299,7 @@ export async function installRuntimeIntegrations(
     if (!guard()) return;
     let prepared;
     try {
-      prepared = await mcpManager.prepareConnection(name, config);
+      prepared = await mcpManager.prepareConnection(name, config, mcpLifetime.signal);
     } catch (error) {
       // Connection setup failures are isolated per server and never fatal.
       throw new McpConnectionStageError(error);
@@ -355,33 +361,56 @@ export async function installRuntimeIntegrations(
     }
   }
 
-  await Promise.all(
-    Object.entries(enabledMcpServers).map(async ([name, config]) => {
-      const identity = identityFor(name);
-      const generation =
-        runtimeRegistry && identity
-          ? runtimeRegistry.currentGeneration(identity)
-          : 0;
-      const namedGeneration = installNamedGenerations.get(name) ?? 0;
-      const guard = runtimeRegistry
-        ? () =>
-            runtimeRegistry.currentNamedGeneration(name) === namedGeneration &&
-            (!identity ||
-              runtimeRegistry.currentGeneration(identity) === generation)
-        : () => true;
-      try {
-        await stageAndActivate(name, config, guard);
-      } catch (error) {
-        if (error instanceof McpConnectionStageError) {
-          connectionErrors.set(name, error.message);
-          // Keep the failed attempt observable for plugin readiness diagnostics.
-          mcpManager.recordFailedConnection(name, config, error.cause);
-          return;
-        }
-        throw error;
-      }
-    }),
+  const startConnection = async (name: string, config: McpServerConfig) => {
+    const previousConnection = mcpManager.getConnection(name);
+    const identity = identityFor(name);
+    const generation = runtimeRegistry && identity
+      ? runtimeRegistry.currentGeneration(identity)
+      : 0;
+    const namedGeneration = installNamedGenerations.get(name) ?? 0;
+    const guard = () => !mcpLifetime.signal.aborted &&
+      mcpManager.getConnection(name) === previousConnection && (!runtimeRegistry ||
+      (runtimeRegistry.currentNamedGeneration(name) === namedGeneration &&
+        (!identity || runtimeRegistry.currentGeneration(identity) === generation)));
+    try {
+      await stageAndActivate(name, config, guard);
+    } catch (error) {
+      if (!guard()) return;
+      if (!(error instanceof McpConnectionStageError) && !runtimeRegistry) throw error;
+      connectionErrors.set(name, error instanceof Error ? error.message : String(error));
+      mcpManager.recordFailedConnection(name, config,
+        error instanceof McpConnectionStageError ? error.cause : error);
+    }
+  };
+  const starting = new Map(
+    Object.entries(enabledMcpServers).map(([name, config]) => [name, startConnection(name, config)] as const),
   );
+  const initialConnections = Promise.all(starting.values());
+  if (runtimeRegistry && starting.size) {
+    // Only daemon sessions need to return before optional connections finish.
+    await Promise.race([initialConnections, delay(1_000, undefined, { ref: false })]);
+    runtime.waitForPluginMcp = async (pluginIds, signal) => {
+      signal.throwIfAborted();
+      const ids = new Set(pluginIds);
+      const connections = [...starting].flatMap(([name, connection]) => {
+        const owner = serverOwners.get(name);
+        return owner && ids.has(owner.pluginId) ? [connection] : [];
+      });
+      if (!connections.length) return;
+      let abort!: () => void;
+      const cancelled = new Promise<never>((_, reject) => {
+        abort = () => reject(signal.reason);
+        signal.addEventListener("abort", abort, { once: true });
+      });
+      try {
+        await Promise.race([Promise.all(connections), cancelled]);
+      } finally {
+        signal.removeEventListener("abort", abort);
+      }
+    };
+  } else {
+    await initialConnections;
+  }
 
   runtime.mcpManager = mcpManager;
   runtime.mcpAuth = createMcpAuthHost({
@@ -564,6 +593,11 @@ export async function installRuntimeIntegrations(
       );
       const pluginDigest = inventory.plugins.get(pluginId)?.behaviorDigest;
       if (!metadata || !definition || !pluginDigest) return undefined;
+      if (definition.kind === "mcp-server" &&
+          serverOwners.get(definition.server)?.pluginId === pluginId &&
+          connectionSource(definition.server) === "plugin") {
+        await starting.get(definition.server);
+      }
       // Re-verify installed approval, winner and bytes without selecting/injecting this plugin into a model Run.
       const snapshotKey = `${pluginId}:${backendId}`;
       try {
