@@ -1,6 +1,6 @@
 import { BusinessDataChannels, type BusinessDataIpcMap } from "./business-data-types"
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
-import type { DesktopComputerActivity, DesktopComputerAppGrant, DesktopComputerControl, DesktopComputerInteractionReply } from "./computer-types"
+import type { DesktopComputerActivity, DesktopComputerAppGrant, DesktopComputerAvailability, DesktopComputerControl, DesktopComputerInteractionReply, DesktopComputerSettings, DesktopComputerSettingsUpdate } from "./computer-types"
 import type { DesktopWindowThemeSource } from "./window-theme-types"
 import { TerminalSettingsChannels, type TerminalSettingsIpcMap } from "./terminal-settings-types"
 import { GitSettingsChannels, type GitSettingsIpcMap } from "./git-settings-types"
@@ -315,6 +315,8 @@ export const IpcChannels = {
   sessionClose: "session:close",
   sessionSendPrompt: "session:send-prompt",
   computerAvailability: "computer:availability",
+  computerSettingsGet: "computer:settings-get",
+  computerSettingsUpdate: "computer:settings-update",
   computerReply: "computer:reply",
   computerActivityGet: "computer:activity-get",
   computerShareWindow: "computer:share-window",
@@ -895,7 +897,9 @@ export interface IpcInvokeMap
   }
   [IpcChannels.sessionClose]: { args: []; result: void }
   [IpcChannels.sessionSendPrompt]: { args: [input: SendDesktopPromptInput]; result: void }
-  [IpcChannels.computerAvailability]: { args: []; result: boolean }
+  [IpcChannels.computerAvailability]: { args: []; result: DesktopComputerAvailability }
+  [IpcChannels.computerSettingsGet]: { args: []; result: DesktopComputerSettings }
+  [IpcChannels.computerSettingsUpdate]: { args: [update: DesktopComputerSettingsUpdate]; result: DesktopComputerSettings }
   [IpcChannels.computerReply]: { args: [reply: DesktopComputerInteractionReply]; result: boolean }
   [IpcChannels.computerActivityGet]: { args: [sessionId: string]; result: DesktopComputerActivity | null }
   [IpcChannels.computerShareWindow]: { args: []; result: { bytes: Uint8Array } | null }

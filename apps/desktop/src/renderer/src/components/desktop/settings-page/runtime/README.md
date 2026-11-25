@@ -11,7 +11,6 @@
 ## 主要文件
 
 - [runtime-settings.tsx](runtime-settings.tsx)
-- [computer-app-grants.tsx](computer-app-grants.tsx) 查看和撤销电脑操作中选择始终允许的应用。许可保存在本机的桌面偏好中。
 - [runtime-setting-control.tsx](runtime-setting-control.tsx)
 - [runtime-setting-model.ts](runtime-setting-model.ts)
 

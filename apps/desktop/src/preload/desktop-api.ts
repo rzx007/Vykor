@@ -592,7 +592,10 @@ export const desktopAPI = {
       invoke(IpcChannels.skillRemove, input),
   },
   computer: {
-    isAvailable: () => invoke(IpcChannels.computerAvailability),
+    isAvailable: async () => (await invoke(IpcChannels.computerAvailability)) === "ready",
+    getAvailability: () => invoke(IpcChannels.computerAvailability),
+    getSettings: () => invoke(IpcChannels.computerSettingsGet),
+    updateSettings: (update) => invoke(IpcChannels.computerSettingsUpdate, update),
     onInteraction: (handler: (event: DesktopComputerInteractionEvent) => void) => {
       const receive = (_event: Electron.IpcRendererEvent, update: DesktopComputerInteractionEvent) => handler(update)
       ipcRenderer.on(IpcEvents.computerInteraction, receive)

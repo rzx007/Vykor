@@ -53,6 +53,18 @@ describe("desktop preferences", () => {
     })
   })
 
+  it("preserves an explicit computer disable and foreground preference through other local writes", async () => {
+    const { patchDesktopPreferences } = await import("./desktop-preferences")
+    patchDesktopPreferences({ computerEnabled: false, computerAlwaysForeground: true })
+    patchDesktopPreferences({ computerAppGrants: [{ id: "calc", name: "计算器" }] })
+    vi.resetModules()
+    const { getDesktopPreferences } = await import("./desktop-preferences")
+    expect(getDesktopPreferences()).toMatchObject({
+      computerEnabled: false, computerAlwaysForeground: true,
+      computerAppGrants: [{ id: "calc", name: "计算器" }],
+    })
+  })
+
   it("defaults notification mode when the preferences file does not exist", async () => {
     const { getDesktopPreferences } = await import("./desktop-preferences")
 

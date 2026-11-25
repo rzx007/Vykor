@@ -40,6 +40,7 @@ type Occupation<Window extends ComputerWindow> = {
 }
 type Task<Window extends ComputerWindow> = {
   run: ComputerRunIdentity
+  alwaysForeground: boolean
   stop: AbortController
   work: AbortController
   capture: AbortController
@@ -310,7 +311,9 @@ export class ComputerHost<Window extends ComputerWindow> {
     if (action.type !== "open_app") {
       task.frame = undefined
       // An action that may open a dialog or request human approval ends the current front input interval.
-      await this.releaseInput(task)
+      const released = await this.releaseInput(task)
+      if (task.alwaysForeground && !released)
+        throw new TargetPausedError("无法确认上次输入已释放，请重启 Desktop 后再继续。")
       return await this.applySemanticAction(task, action, signal, fullAccess, approve, authorizeDispatch)
     }
     this.invalidateTaskImage(task)
@@ -593,17 +596,22 @@ export class ComputerHost<Window extends ComputerWindow> {
     }
   }
 
-  private async beginForeground(task: Task<Window>, signal: AbortSignal, fullAccess?: true, approve?: ApproveAction, dispatch?: ApproveDispatch): Promise<ComputerResult> {
+  private reserveForeground(task: Task<Window>, target: Target<Window>): Occupation<Window> {
     if (!this.platform.foreground || !this.interaction.emergencyStop || !this.interaction.showForeground)
       throw new TargetError("当前 Desktop 未提供可用的前台提示和本机急停。")
     if (task.occupation) throw new TargetError("目标窗口的前台控制已获准。请先观察当前界面。")
+    const occupied: Occupation<Window> = { grant: new AbortController(), target }
+    task.occupation = occupied
+    return occupied
+  }
+
+  private async beginForeground(task: Task<Window>, signal: AbortSignal, fullAccess?: true, approve?: ApproveAction, dispatch?: ApproveDispatch): Promise<ComputerResult> {
     const target = this.requireTarget(task)
     await this.liveTarget(task, target, signal)
     if (!await this.inputCleanup) throw new TargetError("无法确认上次输入已释放，继续前请重启 Desktop。")
+    const occupied = this.reserveForeground(task, target)
     task.frame = undefined
     task.observation = undefined
-    const occupied: Occupation<Window> = { grant: new AbortController(), target }
-    task.occupation = occupied
     const requestSignal = AbortSignal.any([signal, occupied.grant.signal])
     try {
       if (!fullAccess) {
@@ -742,7 +750,10 @@ export class ComputerHost<Window extends ComputerWindow> {
     }
     if (this.task && !sameRun(this.task.run, run)) throw new TargetError("另一个运行仍拥有电脑操作许可。")
     if (!this.task) {
-      this.task = { run, stop: new AbortController(), work: new AbortController(), capture: new AbortController(), allowed: new Map(), apps: new Map() }
+      this.task = {
+        run, alwaysForeground: this.interaction.alwaysForeground?.() === true,
+        stop: new AbortController(), work: new AbortController(), capture: new AbortController(), allowed: new Map(), apps: new Map(),
+      }
     }
     return this.task
   }
@@ -932,26 +943,38 @@ export class ComputerHost<Window extends ComputerWindow> {
       }
       return { state, control }
     }
-    const requiresApproval = !fullAccess && computerActionNeedsApproval(action)
+    const requiresApproval = !fullAccess && (task.alwaysForeground || computerActionNeedsApproval(action))
     if (requiresApproval) {
       const prior = await this.useDriver(task, target, signal, prepare)
       if (alreadySatisfied(action, prior.control)) {
         return this.observed(task, target, prior.state, { status: "already_satisfied" })
       }
-      if (!approve || !await approve({
-        proposalId: randomUUID(), reason: approvalReason(target.app.name, target.window.title, action, expected),
-      }, signal)) throw new TargetError("该操作没有获得本次批准。")
+      const reason = approvalReason(target.app.name, target.window.title, action, expected)
+      const foregroundNote = task.alwaysForeground ? " 操作时会短暂接管前台。按 Esc 可停止。" : ""
+      if (!approve || !await approve({ proposalId: randomUUID(), reason: reason + foregroundNote }, signal))
+        throw new TargetError("该操作没有获得本次批准。")
       signal.throwIfAborted()
     }
 
     let dispatched = false
     let accepted = false
+    let occupied: Occupation<Window> | undefined
     try {
       return await this.useDriver(task, target, signal, async driver => {
-        const { state, control } = await prepare(driver)
+        let prepared = await prepare(driver)
         await this.liveTarget(task, target, signal)
-        if (alreadySatisfied(action, control)) return this.observed(task, target, state, { status: "already_satisfied" })
+        if (alreadySatisfied(action, prepared.control))
+          return this.observed(task, target, prepared.state, { status: "already_satisfied" })
         await requireDispatch(authorizeDispatch, signal)
+        if (task.alwaysForeground) {
+          occupied = this.reserveForeground(task, target)
+          await this.enterInput(task, occupied, signal)
+          // Focusing the window can change its contents and control tokens.
+          prepared = await prepare(driver)
+          await this.liveTarget(task, target, signal)
+          signal.throwIfAborted()
+        }
+        const { state, control } = prepared
         const { elementRef: _ref, ...operation } = action
         dispatched = true
         await driver.act({ ...operation, token: control.token }, signal)
@@ -977,6 +1000,14 @@ export class ComputerHost<Window extends ComputerWindow> {
       return {
         error: error instanceof TargetError ? error.message : "已派发操作，但无法核实结果。请重新观察窗口。",
         executionState: "unknown",
+      }
+    } finally {
+      if (occupied && task.occupation === occupied) {
+        const released = await this.releaseInput(task)
+        if (this.task === task && !task.paused) {
+          if (released) this.publish(task)
+          else this.pauseTask(task, "无法确认前台键鼠已释放，请重启 Desktop。")
+        }
       }
     }
   }

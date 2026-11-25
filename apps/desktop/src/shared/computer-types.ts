@@ -1,3 +1,17 @@
+export type DesktopComputerAvailability = "unsupported" | "disabled" | "missing_driver" | "ready"
+
+export interface DesktopComputerSettings {
+  availability: DesktopComputerAvailability
+  enabled: boolean
+  alwaysForeground: boolean
+  locked?: "unsupported" | "launch_disabled"
+  inputRelease?: "unconfirmed"
+}
+
+export interface DesktopComputerSettingsUpdate {
+  setting: "enabled" | "alwaysForeground"
+  value: boolean
+}
 
 export interface DesktopComputerAppGrant {
   id: string

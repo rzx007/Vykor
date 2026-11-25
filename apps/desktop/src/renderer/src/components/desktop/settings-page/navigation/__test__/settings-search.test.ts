@@ -39,4 +39,13 @@ describe("real settings search", () => {
     expect(searchSettings("   ")).toEqual([])
     expect(searchSettings("不存在的设置项")).toEqual([])
   })
+
+  it("finds computer controls and opens the saved application permissions", () => {
+    expect(searchSettings("电脑操作")).toContainEqual(
+      expect.objectContaining({ section: "computer", label: "电脑控制" })
+    )
+    expect(searchSettings("应用授权")).toContainEqual(
+      expect.objectContaining({ section: "computer", target: "computer-app-grants" })
+    )
+  })
 })

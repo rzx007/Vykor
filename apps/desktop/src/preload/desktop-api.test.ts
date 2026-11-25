@@ -325,3 +325,11 @@ it("checks a prompt identity through the read-only recovery channel", async () =
   await desktopAPI.sessions.checkPromptAccepted(input)
   expect(electron.invoke).toHaveBeenCalledWith(IpcChannels.sessionCheckPromptAccepted, input)
 })
+
+it("gives settings the host status and keeps availability a boolean for chat", async () => {
+  electron.invoke.mockResolvedValueOnce("missing_driver")
+  await expect(desktopAPI.computer.getAvailability()).resolves.toBe("missing_driver")
+  electron.invoke.mockResolvedValueOnce("disabled").mockResolvedValueOnce("ready")
+  await expect(desktopAPI.computer.isAvailable()).resolves.toBe(false)
+  await expect(desktopAPI.computer.isAvailable()).resolves.toBe(true)
+})

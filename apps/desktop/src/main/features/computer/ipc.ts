@@ -1,12 +1,13 @@
 import { pathToFileURL } from "node:url"
 import type { IpcMainInvokeEvent, WebFrameMain } from "electron"
 import { readRuntimeMetadata } from "@vykor/protocol"
-import type { DesktopComputerControl } from "../../../shared/computer-types"
+import type { DesktopComputerControl, DesktopComputerSettings } from "../../../shared/computer-types"
 import { IpcChannels } from "../../../shared/ipc-channels"
 import type { AppContext } from "../../core/app-context"
 import type { IpcContribution } from "../../core/ipc/types"
 import { desktopSessionService } from "../session/session-service"
-import { computerAvailability, computerPlatformAvailability } from "./availability"
+import { patchDesktopPreferences } from "../settings/desktop-preferences"
+import { computerAvailability, computerDriverAvailability, computerPlatformAvailability, computerSettingsPolicy } from "./availability"
 import { createComputerInteraction, listComputerAppGrants, replyToComputerInteraction, revokeComputerAppGrant } from "./interaction"
 import { shareWindowsPicture } from "./window-share"
 
@@ -54,6 +55,7 @@ export function computerPromptOwner(ctx: AppContext, event: IpcMainInvokeEvent, 
   if (runtime.workMode === "plan" || runtime.permissionMode === "plan") return
   const authorize = () => {
     assertComputerSender(ctx, event, frame)
+    if (computerPlatformAvailability() !== "enabled") throw new Error("电脑控制已停用。")
     const main = ctx.windowManager.getMain()
     if (main?.isVisible() === false || main?.isMinimized()) throw new Error("请先恢复电脑操作的主窗口。")
   }
@@ -122,12 +124,73 @@ export function computerPromptOwner(ctx: AppContext, event: IpcMainInvokeEvent, 
 export const computerIpcContribution: IpcContribution = {
   id: "computer",
   register(ctx) {
-    let sharePending = false
+    let windowShare: AbortController | undefined
+    let updatingSettings = false
+    let inputRelease: DesktopComputerSettings["inputRelease"]
+    let releasingInput: Promise<void> | undefined
+
+    const readSettings = async (): Promise<DesktopComputerSettings> => {
+      const availability = await computerAvailability()
+      await releasingInput
+      const settings = computerSettingsPolicy()
+      return {
+        ...settings,
+        availability: settings.locked === "unsupported" ? "unsupported" : settings.enabled ? availability : "disabled",
+        inputRelease,
+      }
+    }
+
     return [{
       channel: IpcChannels.computerAvailability,
       async handler(event) {
         assertComputerSender(ctx, event, event.senderFrame)
-        return await computerAvailability() === "ready"
+        return computerAvailability()
+      },
+    }, {
+      channel: IpcChannels.computerSettingsGet,
+      async handler(event) {
+        assertComputerSender(ctx, event, event.senderFrame)
+        return readSettings()
+      },
+    }, {
+      channel: IpcChannels.computerSettingsUpdate,
+      async handler(event, update) {
+        const frame = event.senderFrame
+        assertComputerSender(ctx, event, frame)
+        if (!update || typeof update !== "object" || !("setting" in update) || !("value" in update))
+          throw new Error("无效的电脑控制设置。")
+        const { setting, value } = update
+        if (typeof value !== "boolean" || (setting !== "enabled" && setting !== "alwaysForeground"))
+          throw new Error("无效的电脑控制设置。")
+        if (updatingSettings) throw new Error("正在更新电脑控制设置，请稍后再试。")
+        const settings = computerSettingsPolicy()
+        if (settings.locked) throw new Error("当前启动配置或平台不支持修改电脑控制设置。")
+        updatingSettings = true
+        try {
+          if (setting === "alwaysForeground") {
+            if (!settings.enabled) throw new Error("请先启用电脑控制。")
+            patchDesktopPreferences({ computerAlwaysForeground: value })
+          } else if (value) {
+            if (inputRelease === "unconfirmed") throw new Error("无法确认键鼠已释放。请重启 Vykor 后再启用。")
+            const availability = await computerDriverAvailability()
+            if (availability !== "ready") throw new Error("驱动不可用。请重新安装经过核验的版本后再启用。")
+            assertComputerSender(ctx, event, frame)
+            patchDesktopPreferences({ computerEnabled: true })
+            return { ...computerSettingsPolicy(), availability }
+          } else {
+            patchDesktopPreferences({ computerEnabled: false })
+            windowShare?.abort()
+            owners.get(ctx)?.interaction.clearPreview()
+            releasingInput = desktopSessionService.disconnectComputer().catch(() => false).then(released => {
+              inputRelease = released ? undefined : "unconfirmed"
+            })
+            await releasingInput
+            releasingInput = undefined
+          }
+          return await readSettings()
+        } finally {
+          updatingSettings = false
+        }
       },
     }, {
       channel: IpcChannels.computerReply,
@@ -151,9 +214,9 @@ export const computerIpcContribution: IpcContribution = {
         const main = ctx.windowManager.getMain()
         if (!main?.isVisible() || main.isMinimized())
           throw new Error("请在支持电脑操作的 Windows 主窗口里分享截图。")
-        if (sharePending) return null
-        sharePending = true
+        if (windowShare) return null
         const controller = new AbortController()
+        windowShare = controller
         const contents = event.sender
         const abort = (): void => controller.abort()
         const navigate = (details: { isMainFrame: boolean; isSameDocument: boolean }): void => {
@@ -178,7 +241,7 @@ export const computerIpcContribution: IpcContribution = {
           if (controller.signal.aborted) return null
           throw error
         } finally {
-          sharePending = false
+          windowShare = undefined
           contents.removeListener("destroyed", abort)
           contents.removeListener("render-process-gone", abort)
           contents.removeListener("did-start-navigation", navigate)

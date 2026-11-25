@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  agentSettingsNavigation,
   defaultSettingsSection,
   isSettingsSection,
   settingsSectionLabel,
@@ -26,5 +27,12 @@ describe("settings navigation", () => {
     expect(isSettingsSection("missing")).toBe(false)
     expect(settingsSectionLabel("missing")).toBe("常规")
     expect(settingsSectionSlug("不存在")).toBe(defaultSettingsSection)
+  })
+
+  it("places computer control directly after permissions in the agent settings", () => {
+    const permissions = agentSettingsNavigation.findIndex((item) => item.slug === "permissions")
+    expect(permissions).toBeGreaterThanOrEqual(0)
+    expect(agentSettingsNavigation[permissions + 1]).toMatchObject({ slug: "computer", label: "电脑控制" })
+    expect(settingsSectionSlug("电脑控制")).toBe("computer")
   })
 })

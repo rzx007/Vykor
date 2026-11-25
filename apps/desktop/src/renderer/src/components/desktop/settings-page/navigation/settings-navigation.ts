@@ -8,6 +8,7 @@ import {
   HardDrive,
   Keyboard,
   Link2,
+  MousePointer2,
   Palette,
   Settings2,
   ShieldCheck,
@@ -32,6 +33,7 @@ export const personalSettingsNavigation: SettingsNavigationItem[] = [
 export const agentSettingsNavigation: SettingsNavigationItem[] = [
   { label: "模型供应商", slug: "providers", icon: BrainCircuit },
   { label: "权限", slug: "permissions", icon: ShieldCheck },
+  { label: "电脑控制", slug: "computer", icon: MousePointer2 },
   { label: "个性化", slug: "personalization", icon: Sparkles },
   { label: "用量统计", slug: "billing", icon: ChartNoAxesCombined },
 ]

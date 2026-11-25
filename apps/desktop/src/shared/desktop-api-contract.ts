@@ -1,6 +1,6 @@
 import type { DesktopBusinessDataApi } from "./business-data-types"
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
-import type { DesktopComputerActivity, DesktopComputerActivityUpdate, DesktopComputerAppGrant, DesktopComputerControl, DesktopComputerInteractionEvent, DesktopComputerInteractionReply } from "./computer-types"
+import type { DesktopComputerActivity, DesktopComputerActivityUpdate, DesktopComputerAppGrant, DesktopComputerAvailability, DesktopComputerControl, DesktopComputerInteractionEvent, DesktopComputerInteractionReply, DesktopComputerSettings, DesktopComputerSettingsUpdate } from "./computer-types"
 import type { DesktopWindowThemeSource } from "./window-theme-types"
 import type { TerminalSettingsAPI } from "./terminal-settings-types"
 import type { GitSettingsAPI } from "./git-settings-types"
@@ -495,6 +495,9 @@ export type DesktopAPI = {
   }
   computer: {
     isAvailable: () => Promise<boolean>
+    getAvailability: () => Promise<DesktopComputerAvailability>
+    getSettings: () => Promise<DesktopComputerSettings>
+    updateSettings: (update: DesktopComputerSettingsUpdate) => Promise<DesktopComputerSettings>
     onInteraction: (handler: (event: DesktopComputerInteractionEvent) => void) => () => void
     reply: (input: DesktopComputerInteractionReply) => Promise<boolean>
     getActivity: (sessionId: string) => Promise<DesktopComputerActivity | null>

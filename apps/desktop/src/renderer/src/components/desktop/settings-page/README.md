@@ -16,6 +16,7 @@
 ## 子分类
 
 - [账户设置](account/README.md)：个人资料和账户相关设置展示。
+- [电脑控制设置](computer/README.md)：本机状态、已保存的应用授权与使用说明。
 - [配置迁移设置](configuration/README.md)：配置导入、导出和导入预览。
 - [外部连接设置](connections/README.md)：连接渠道、飞书连接详情和配置弹层。
 - [诊断设置](diagnostics/README.md)：诊断信息、日志查看与展示格式。

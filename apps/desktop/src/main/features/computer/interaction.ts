@@ -13,6 +13,7 @@ import { getDesktopPreferences, patchDesktopPreferences } from "../settings/desk
 import { showComputerControlOverlay } from "./computer-control-overlay"
 
 export interface ComputerInteraction {
+  alwaysForeground?(): boolean
   isRememberedApp?(id: string): boolean
   authorizeApp(app: DesktopComputerAppGrant, signal: AbortSignal, sessionId: string): Promise<boolean | "remembered">
   chooseTarget(candidates: readonly DesktopComputerCandidate[], signal: AbortSignal, sessionId?: string, confirmChange?: true): Promise<string | undefined>
@@ -117,6 +118,7 @@ export function createComputerInteraction(
   }, { once: true })
 
   return {
+    alwaysForeground: () => getDesktopPreferences().computerAlwaysForeground === true,
     isRememberedApp,
     emergencyStop,
     async showForeground(sessionId: string, runId: string, lifetime: AbortSignal): Promise<void> {

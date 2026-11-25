@@ -25,7 +25,6 @@ import { toast } from "@renderer/lib/toast"
 import { SettingsGroup, SettingsRow, SettingsSelect, SettingsFoldout } from "../shared/settings-group"
 import { SettingsStatus } from "../shared/settings-status"
 import { errorMessage } from "../shared/settings-error-message"
-import { ComputerAppGrants } from "./computer-app-grants"
 
 type Variable = { name: string; value: string; secret: boolean }
 function variables(config: RuntimeEnvironmentConfig): Variable[] {
@@ -563,7 +562,6 @@ export function RuntimeSettings() {
           重新读取
         </Button>
       ) : null}
-      <ComputerAppGrants />
       <AlertDialog
         open={pendingScope !== null}
         onOpenChange={(open) => {

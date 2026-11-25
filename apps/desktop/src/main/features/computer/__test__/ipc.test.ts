@@ -9,6 +9,7 @@ const service = vi.hoisted(() => ({
   controlComputer: vi.fn(),
   pauseComputer: vi.fn(),
   revokeComputerRun: vi.fn(),
+  disconnectComputer: vi.fn(async (): Promise<boolean> => true),
   invalidateComputerView: vi.fn(),
   subscriptions: {
     getOwnerSessionId: vi.fn(),
@@ -18,13 +19,19 @@ const service = vi.hoisted(() => ({
   },
 }))
 vi.mock("../../session/session-service", () => ({ desktopSessionService: service }))
+const preferences = vi.hoisted(() => ({ computerEnabled: true, computerAlwaysForeground: false }))
 vi.mock("../../settings/desktop-preferences", () => ({
-  getDesktopPreferences: () => ({ computerAppGrants: [] }),
-  patchDesktopPreferences: vi.fn(),
+  getDesktopPreferences: () => ({ ...preferences, computerAppGrants: [] }),
+  patchDesktopPreferences: (patch: Partial<typeof preferences>) => Object.assign(preferences, patch),
 }))
+const computerAvailability = vi.hoisted(() => vi.fn(async () => "ready"))
 vi.mock("../availability", () => ({
-  computerAvailability: async () => "ready",
-  computerPlatformAvailability: () => "enabled",
+  computerAvailability,
+  computerDriverAvailability: computerAvailability,
+  computerPlatformAvailability: () => preferences.computerEnabled ? "enabled" : "disabled",
+  computerSettingsPolicy: () => ({
+    enabled: preferences.computerEnabled, alwaysForeground: preferences.computerAlwaysForeground,
+  }),
 }))
 const shareWindowsPicture = vi.hoisted(() => vi.fn<(window: unknown, signal: AbortSignal) => Promise<{ bytes: Uint8Array } | null>>())
 vi.mock("../window-share", () => ({ shareWindowsPicture }))
@@ -33,6 +40,8 @@ import { computerIpcContribution } from "../ipc"
 import { sessionIpcContribution } from "../../session/ipc"
 
 function fixture() {
+  preferences.computerEnabled = true
+  preferences.computerAlwaysForeground = false
   service.sendComputerPrompt.mockClear()
   service.sendPrompt.mockClear()
   service.invalidateComputerView.mockClear()
@@ -50,6 +59,35 @@ function fixture() {
     .find(item => item.channel === IpcChannels.sessionSendPrompt)
   return { registration: registration!, registrations, contents, frame, window }
 }
+
+it("returns the host's reason for unavailable computer control only to the main document", async () => {
+  const { registrations, contents, frame } = fixture()
+  const getAvailability = registrations.find(item => item.channel === IpcChannels.computerAvailability)!.handler
+  await expect(getAvailability({ sender: contents, senderFrame: { ...frame } } as never)).rejects.toThrow(/主窗口/)
+  computerAvailability.mockResolvedValueOnce("missing_driver")
+  await expect(getAvailability({ sender: contents, senderFrame: frame } as never)).resolves.toBe("missing_driver")
+})
+
+it("waits for input release on disable and reports if release could not be confirmed", async () => {
+  const { registration, registrations, contents, frame } = fixture()
+  const update = registrations.find(item => item.channel === "computer:settings-update")?.handler
+  const read = registrations.find(item => item.channel === "computer:settings-get")!.handler
+  expect(update).toBeTypeOf("function")
+  const cleanup = Promise.withResolvers<boolean>()
+  service.disconnectComputer.mockReturnValueOnce(cleanup.promise)
+  const event = { sender: contents, senderFrame: frame } as never
+  const disable = update!(event, { setting: "enabled", value: false })
+  const reopened = read(event)
+  const prompt = { sessionId: "session", id: "during-disable", items: [] }
+  await registration.handler(event, prompt)
+  expect(service.sendPrompt).toHaveBeenCalledWith(prompt)
+  expect(service.sendComputerPrompt).not.toHaveBeenCalled()
+  await expect(update!(event, { setting: "enabled", value: true })).rejects.toThrow(/正在更新/)
+  cleanup.resolve(false)
+  await expect(disable).resolves.toMatchObject({ enabled: false, availability: "disabled", inputRelease: "unconfirmed" })
+  await expect(reopened).resolves.toMatchObject({ enabled: false, inputRelease: "unconfirmed" })
+  await expect(update!(event, { setting: "enabled", value: true })).rejects.toThrow(/重启/)
+})
 
 it("preserves ordinary sends without giving Computer to companion, subframe, or navigated document", async () => {
   const { registration, contents, frame } = fixture()

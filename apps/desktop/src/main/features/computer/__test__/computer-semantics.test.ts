@@ -32,7 +32,7 @@ it("retains the current selection and its control when surrounding text fills th
   ])
 })
 
-function fixture(remember = false, fullAccess?: true) {
+function fixture(remember = false, fullAccess?: true, alwaysForeground = false) {
   const connection = new AbortController()
   const windows = vi.fn(async () => [window])
   let elements = [control, destructive]
@@ -45,14 +45,18 @@ function fixture(remember = false, fullAccess?: true) {
     observe, act, close,
   }))
   const publishActivity = vi.fn()
+  const release = vi.fn(async () => ({ released: true, exited: true }))
+  const enter = vi.fn(async () => ({ perform: vi.fn(), release }))
+  const showForeground = vi.fn(async () => {})
   const chooseTarget = vi.fn<NonNullable<ConstructorParameters<typeof ComputerHost>[1]["chooseTarget"]>>(async () => undefined)
   const host = new ComputerHost({
     apps: { discover: async () => [app], windows, launch: async () => {} },
     sameWindowInstance: sameWindowsWindowInstance,
     openDriver: driver,
+    ...(alwaysForeground ? { foreground: { enter, capture: vi.fn() } } : {}),
   }, {
     authorizeApp: async () => remember ? "remembered" : true, chooseTarget, isRememberedApp: () => remember,
-    publishActivity,
+    publishActivity, alwaysForeground: () => alwaysForeground, showForeground, emergencyStop: vi.fn(),
   })
   const approve = vi.fn(async (_proposal: ComputerApprovalProposal) => true)
   const dispatch = vi.fn(async () => true)
@@ -65,9 +69,34 @@ function fixture(remember = false, fullAccess?: true) {
     expect(observed.text).not.toContain("private")
     return JSON.parse(observed.text).observation.elements as { ref: string; label: string }[]
   }
-  return { host, approve, dispatch, windows, execute, act, observe, close, open, publishActivity, chooseTarget,
+  return { host, approve, dispatch, windows, execute, act, observe, close, open, publishActivity, chooseTarget, enter, release, showForeground,
     changeElements: (rows: ComputerDriverElement[]) => { elements = rows } }
 }
+
+it("gets approved foreground control before writing, and releases it after the verified action", async () => {
+  const f = fixture(false, undefined, true)
+  const [field] = await f.open()
+  expect(f.enter).not.toHaveBeenCalled()
+  const result = await f.execute({ type: "set_text", elementRef: field!.ref, text: "note" })
+  expect(result).toMatchObject({ text: expect.stringContaining('"status":"verified"') })
+  expect(f.approve).toHaveBeenCalledWith(expect.objectContaining({ reason: expect.stringContaining("前台") }), expect.any(AbortSignal))
+  expect(f.act).toHaveBeenCalledOnce()
+  expect(f.enter).toHaveBeenCalledOnce()
+  expect(f.showForeground.mock.invocationCallOrder[0]).toBeLessThan(f.act.mock.invocationCallOrder[0]!)
+  expect(f.release).toHaveBeenCalledOnce()
+  expect(f.release.mock.invocationCallOrder[0]).toBeGreaterThan(f.act.mock.invocationCallOrder[0]!)
+})
+
+it("does not write in the background when the foreground prompt fails", async () => {
+  const f = fixture(false, true, true)
+  const [field] = await f.open()
+  f.showForeground.mockRejectedValueOnce(new Error("overlay unavailable"))
+  await expect(f.execute({ type: "set_text", elementRef: field!.ref, text: "note" })).resolves.toMatchObject({
+    executionState: "not_started",
+  })
+  expect(f.act).not.toHaveBeenCalled()
+  expect(f.release).toHaveBeenCalledOnce()
+})
 
 it("keeps an in-flight semantic operation unknown when the user pauses", async () => {
   const f = fixture()

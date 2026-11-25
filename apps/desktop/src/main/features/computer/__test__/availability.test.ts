@@ -13,15 +13,29 @@ vi.mock("node:fs/promises", async (original) => ({
   ...(await original<object>()), readFile,
 }))
 vi.mock("electron", () => ({ app }))
+const getDesktopPreferences = vi.hoisted(() => vi.fn<() => { computerEnabled?: boolean }>(() => ({})))
+vi.mock("../../settings/desktop-preferences", () => ({ getDesktopPreferences }))
 vi.mock("../../../../../resources/computer-windows/driver-release.json", () => ({ default: release }))
 vi.mock("../../../../../resources/computer-windows/CUA-LICENSE.txt?raw", () => ({ default: license }))
 
-import { computerAvailability } from "../availability"
+import { computerAvailability, computerPlatformAvailability } from "../availability"
 
 afterEach(() => {
   vi.unstubAllEnvs()
   readFile.mockReset()
+  getDesktopPreferences.mockReset().mockReturnValue({})
   app.isPackaged = true
+})
+
+it.runIf(process.platform === "win32" && process.arch === "x64")("uses the saved switch over the launch default and honors forced disable", () => {
+  vi.stubEnv("VYKOR_COMPUTER_USE", undefined)
+  getDesktopPreferences.mockReturnValue({ computerEnabled: true })
+  expect(computerPlatformAvailability()).toBe("enabled")
+  vi.stubEnv("VYKOR_COMPUTER_USE", "0")
+  expect(computerPlatformAvailability()).toBe("disabled")
+  vi.stubEnv("VYKOR_COMPUTER_USE", "1")
+  getDesktopPreferences.mockReturnValue({ computerEnabled: false })
+  expect(computerPlatformAvailability()).toBe("disabled")
 })
 
 function fixtureResources(invalid?: "exe" | "json" | "txt") {
