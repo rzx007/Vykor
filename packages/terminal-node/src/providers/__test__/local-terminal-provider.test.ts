@@ -201,6 +201,47 @@ describe("LocalTerminalProvider", () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
+  it.skipIf(process.platform === "win32").each([true, false])(
+    "only force-kills a cancelled PTY if it has not exited (exits promptly: %s)",
+    async (exitsPromptly) => {
+      let onExit!: (event: { exitCode: number }) => void;
+      const kill = vi.fn();
+      const provider = new LocalTerminalProvider({
+        resolveCwd: async () => process.cwd(),
+        spawnPty: () => ({
+          kill,
+          onData() { return { dispose() {} }; },
+          onExit(listener: typeof onExit) { onExit = listener; return { dispose() {} }; },
+        } as any),
+      });
+      const { id: terminalId } = await provider.create({
+        scope: { kind: "session", sessionId: "s1" }, runtime: "local", cols: 80, rows: 24,
+      });
+
+      vi.useFakeTimers();
+      try {
+        await provider.kill(terminalId);
+        await provider.kill(terminalId);
+        expect(kill.mock.calls).toEqual([[]]);
+        expect(await provider.get(terminalId)).toMatchObject({ status: "stopping" });
+
+        const waiting = provider.wait({ terminalId, timeoutMs: 2_000 });
+        if (exitsPromptly) onExit({ exitCode: 0 });
+        await vi.advanceTimersByTimeAsync(1_000);
+        expect(kill.mock.calls).toEqual(exitsPromptly ? [[]] : [[], ["SIGKILL"]]);
+        if (!exitsPromptly) {
+          expect(await provider.get(terminalId)).toMatchObject({ status: "stopping" });
+          onExit({ exitCode: 0 });
+        }
+        await expect(waiting).resolves.toMatchObject({ timedOut: false, terminal: { status: "killed" } });
+      } finally {
+        if ((await provider.get(terminalId))?.status === "stopping") onExit({ exitCode: 0 });
+        await provider.dispose();
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it("observes an exit that happens while wait subscribes", async () => {
     const provider = new LocalTerminalProvider({ resolveCwd: async () => "/repo" });
     const info: TerminalSessionInfo = {

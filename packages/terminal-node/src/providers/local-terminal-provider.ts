@@ -25,6 +25,8 @@ import { createTerminalEnv, resolveDefaultShell, terminalCommandArgs } from "./s
 import { TerminalOutputStore } from "../output/terminal-output-store";
 import { createHostTerminalTarget } from "./environment-terminal-target.js";
 
+const PTY_KILL_GRACE_MS = 500;
+
 export interface LocalTerminalProviderOptions {
   resolveCwd: (input: TerminalCreateRequest) => Promise<string>;
   resolveSessionInfo?: (
@@ -50,6 +52,7 @@ interface PtyTerminalSession {
   output: OutputBuffer;
   transcript: TerminalOutputStore;
   cancelRequested: boolean;
+  forceKillTimer?: ReturnType<typeof setTimeout>;
 }
 
 export class LocalTerminalProvider implements TerminalProvider {
@@ -164,19 +167,21 @@ export class LocalTerminalProvider implements TerminalProvider {
     try {
       pty.onData((data) => output.push(data));
       pty.onExit(({ exitCode }) => {
-      output.dispose();
-      const session = this.sessions.get(id);
-      if (!session) return;
-      session.pty = null;
-      const status = session.cancelRequested ? "killed" : exitCode === 0 ? "completed" : "failed";
-      session.info = {
-        ...session.info,
-        status,
-        exitedAt: new Date().toISOString(),
-        exitCode,
-      };
-      if (status === "killed") this.events.emit({ type: "status", terminalId: id, status });
-      this.events.emit({ type: "exit", terminalId: id, exitCode });
+        output.dispose();
+        const session = this.sessions.get(id);
+        if (!session) return;
+        clearTimeout(session.forceKillTimer);
+        session.forceKillTimer = undefined;
+        session.pty = null;
+        const status = session.cancelRequested ? "killed" : exitCode === 0 ? "completed" : "failed";
+        session.info = {
+          ...session.info,
+          status,
+          exitedAt: new Date().toISOString(),
+          exitCode,
+        };
+        if (status === "killed") this.events.emit({ type: "status", terminalId: id, status });
+        this.events.emit({ type: "exit", terminalId: id, exitCode });
         void this.closeTarget(session);
       });
     } catch (error) {
@@ -265,6 +270,14 @@ export class LocalTerminalProvider implements TerminalProvider {
     session.info = { ...session.info, status: "stopping" };
     this.events.emit({ type: "status", terminalId, status: "stopping" });
     session.pty?.kill();
+    // Unix shells can survive node-pty's default SIGHUP, including during startup.
+    if (process.platform !== "win32" && session.pty) {
+      session.forceKillTimer = setTimeout(() => {
+        session.forceKillTimer = undefined;
+        session.pty?.kill("SIGKILL");
+      }, PTY_KILL_GRACE_MS);
+      session.forceKillTimer.unref();
+    }
     await session.target.signal("terminate").catch(() => {});
     await this.closeTarget(session);
   }
