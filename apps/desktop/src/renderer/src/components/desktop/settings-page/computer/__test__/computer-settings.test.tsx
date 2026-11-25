@@ -104,8 +104,8 @@ it("reflects confirmed changes to both switches", async () => {
     .mockResolvedValueOnce({ availability: "ready", enabled: true, alwaysForeground: true })
   vi.stubGlobal("desktop", { computer: { getSettings, updateSettings, listAppGrants: async () => [] } })
   await act(async () => root.render(<SettingsContent selectedSection="电脑控制" />))
-  const enable = container.querySelector<HTMLButtonElement>("#computer-enabled")!
-  const foreground = container.querySelector<HTMLButtonElement>("#computer-always-foreground")!
+  const enable = container.querySelector<HTMLButtonElement>('#computer-enabled[data-slot="switch"]')!
+  const foreground = container.querySelector<HTMLButtonElement>('#computer-always-foreground[data-slot="switch"]')!
   expect(enable?.getAttribute("aria-checked")).toBe("false")
   expect(foreground.disabled).toBe(true)
 
@@ -119,7 +119,7 @@ it("reflects confirmed changes to both switches", async () => {
   expect(foreground.getAttribute("aria-checked")).toBe("true")
 })
 
-it("copies the full prompt for each example", async () => {
+it("copies each full prompt from an icon-only button", async () => {
   const writeText = vi.fn(async () => {})
   vi.stubGlobal("navigator", Object.assign(Object.create(window.navigator), { clipboard: { writeText } }))
   vi.stubGlobal("desktop", { computer: {
@@ -129,7 +129,11 @@ it("copies the full prompt for each example", async () => {
   await act(async () => root.render(<SettingsContent selectedSection="电脑控制" />))
   const buttons = container.querySelectorAll<HTMLButtonElement>('button[aria-label^="复制"][aria-label$="示例"]')
   expect(buttons).toHaveLength(3)
-  for (const button of buttons) await act(async () => button.click())
+  for (const button of buttons) {
+    expect(button.textContent).toBe("")
+    expect(button.querySelector("svg")).not.toBeNull()
+    await act(async () => button.click())
+  }
   expect(writeText.mock.calls).toEqual([
     ["打开计算器，算一下 7 × 8，并告诉我结果。"],
     ["打开记事本，在空白文档里输入「今天完成了电脑操作测试」，然后读回确认。"],

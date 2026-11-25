@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react"
 import { Copy } from "lucide-react"
-import { MotionSwitch } from "@renderer/components/motion/switch"
 import { Button } from "@renderer/components/ui/button"
 import { Kbd } from "@renderer/components/ui/kbd"
+import { Switch } from "@renderer/components/ui/switch"
 import { toast } from "@renderer/lib/toast"
 import type { DesktopComputerAppGrant, DesktopComputerAvailability, DesktopComputerSettings, DesktopComputerSettingsUpdate } from "@shared/computer-types"
 import { errorMessage } from "../shared/settings-error-message"
@@ -13,7 +13,7 @@ type LocalStatus = DesktopComputerAvailability | "checking" | "check_failed" | "
 
 const localStatus: Record<LocalStatus, { label: string; tone: SettingsStatusTone; detail?: string }> = {
   checking: { label: "正在检查本机状态…", tone: "neutral" },
-  ready: { label: "驱动已就绪", tone: "success", detail: "发起电脑操作时会核对后台连接和应用授权。" },
+  ready: { label: "驱动已就绪", tone: "success" },
   disabled: { label: "电脑控制已停用", tone: "neutral" },
   missing_driver: { label: "驱动不可用", tone: "warning", detail: "驱动资源缺失或校验失败。请重新安装经过核验的版本。" },
   unsupported: { label: "当前平台暂不支持", tone: "neutral", detail: "目前仅支持 Windows x64 桌面版。" },
@@ -121,21 +121,32 @@ export function ComputerSettings(): React.JSX.Element {
         </div>
         <SettingsRow
           title="允许电脑控制"
-          description="允许助手在主聊天中按任务操作本机应用。关闭会结束正在进行的电脑控制。"
+          description="关闭会结束正在进行的电脑控制。"
           labelFor="computer-enabled"
           control={
-            <MotionSwitch id="computer-enabled" checked={settings?.enabled ?? false} disabled={switchDisabled}
-              onCheckedChange={(value) => void updateSetting("enabled", value)} />
+            <Switch
+              id="computer-enabled"
+              render={<button type="button" />}
+              nativeButton
+              checked={settings?.enabled ?? false}
+              disabled={switchDisabled}
+              onCheckedChange={(value) => void updateSetting("enabled", value)}
+            />
           }
         />
         <SettingsRow
           title="始终前台接管"
-          description="下次电脑操作任务起，执行控件操作前也会把目标窗口切到前台。只读查看时保持原有方式。"
+          description="从下次任务起，执行控件操作前会切到前台。"
           labelFor="computer-always-foreground"
           control={
-            <MotionSwitch id="computer-always-foreground" checked={settings?.alwaysForeground ?? false}
+            <Switch
+              id="computer-always-foreground"
+              render={<button type="button" />}
+              nativeButton
+              checked={settings?.alwaysForeground ?? false}
               disabled={switchDisabled || status !== "ready"}
-              onCheckedChange={(value) => void updateSetting("alwaysForeground", value)} />
+              onCheckedChange={(value) => void updateSetting("alwaysForeground", value)}
+            />
           }
         />
         {settingsError ? <p role="alert" className="py-3 text-sm text-destructive">{settingsError}</p> : null}
@@ -144,7 +155,7 @@ export function ComputerSettings(): React.JSX.Element {
       <SettingsGroup
         title="始终允许的应用"
         id="computer-app-grants"
-        description="访问这些应用时会沿用已保存的应用授权。具体操作仍遵循当前聊天的批准方式。"
+        description="具体操作仍遵循当前聊天的批准方式。"
         separated
       >
         {grantError ? <p role="alert" className="py-3 text-sm text-destructive">{grantError}</p> : null}
@@ -173,18 +184,26 @@ export function ComputerSettings(): React.JSX.Element {
         ))}
       </SettingsGroup>
 
-      <SettingsGroup title="使用方法" id="computer-usage" description="复制一条示例，或在主聊天里直接描述任务。" separated>
+      <SettingsGroup title="使用方法" id="computer-usage" separated>
         {examples.map(({ title, prompt }) => (
-          <SettingsRow key={title} title={title} description={prompt} control={
-            <Button type="button" variant="ghost" size="sm" shape="pill"
-              aria-label={`复制${title}示例`} onClick={() => void copyExample(prompt)}>
-              <Copy strokeWidth={1.75} data-icon="inline-start" />
-              复制
-            </Button>
-          } />
+          <div key={title} className="group/example">
+            <SettingsRow title={title} description={prompt} control={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                shape="circle"
+                aria-label={`复制${title}示例`}
+                className="pointer-events-none opacity-0 transition-opacity group-hover/example:pointer-events-auto group-hover/example:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100 motion-reduce:transition-none [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:opacity-100"
+                onClick={() => void copyExample(prompt)}
+              >
+                <Copy aria-hidden="true" strokeWidth={1.75} />
+              </Button>
+            } />
+          </div>
         ))}
         <p className="py-3 text-xs leading-5 text-muted-foreground">
-          前台控制时按 <Kbd>Esc</Kbd> 停止电脑操作。
+          在主聊天发送示例。前台控制时按 <Kbd>Esc</Kbd> 停止。
         </p>
       </SettingsGroup>
     </>

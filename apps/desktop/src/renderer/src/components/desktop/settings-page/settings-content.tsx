@@ -88,9 +88,6 @@ export function SettingsContent({ selectedSection }: SettingsContentProps): Reac
         <div className="settings-content-column">
           <header className="flex flex-col gap-2">
             <h1 className="font-heading text-xl tracking-tight">{selectedSection}</h1>
-            {selectedSection === "电脑控制" ? (
-              <p className="text-sm leading-6 text-muted-foreground">管理助手如何操作这台电脑上的应用，以及哪些应用已获准访问。</p>
-            ) : null}
           </header>
           {Page ? <Page /> : <p className="text-sm text-muted-foreground">未找到此设置页面。</p>}
         </div>
