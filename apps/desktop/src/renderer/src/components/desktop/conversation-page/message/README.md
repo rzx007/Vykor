@@ -9,6 +9,7 @@
 | [activity](activity/README.md)         | 工具调用、智能体活动、终端卡片和耗时展示                     |
 | [attachments](attachments/README.md)   | 附件、图片结果和读取图片的展示                               |
 | [markdown](markdown/README.md)         | Markdown、代码块、图表和流式渲染适配                         |
+| [interactive-ui](interactive-ui/README.md) | 交互表格的参数校验、数据展示与本地操作                |
 | [notices](notices/README.md)           | 重试、模型切换、用量、压缩和错误提示                         |
 | [tool-details](tool-details/README.md) | 工具调用详情、完整内容按需读取和历史结果展示                 |
 

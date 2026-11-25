@@ -27,6 +27,8 @@
 
 会话订阅从公开 SDK 读取消息片段摘要，需要原文时按会话、消息和片段 ID 单独读取。用户引用的插件页面内容由主进程附在同一次输入提交中，由 daemon 校验应用租约和会话归属。
 
+普通提交从桌面待发送记录取得本机交互界面开关的快照，`session-operations.ts` 在开启时随输入提交 `replyPresentation`。重新发送使用原快照，已经入队的请求沿用后台保存的输入。插入当前运行的消息沿用该运行已有的说明。
+
 `bootstrap()` 把进程已固定的用户根交给工作区文件访问列表；工作区服务没有显式 `allowedRoots` 时也使用同一个根，避免启动后的环境变量变化把受保护配置当成普通外部文件。`outside-project-workspace.ts` 直接接收 `workspacesDir`，以用户本地日期和独占 mkdir 分配 `workspaces/YYYY-MM-DD/xN`，失败只清理这次分配且仍为空的目录。bootstrap 返回同一个 workspaces 根，并隐藏规范 workspaces/channels、显式历史受管映射、已知渠道会话 cwd 和映射中的暂存/保留根。会话分类使用同一历史映射，不再永久识别 Documents/Vykor。
 
 bootstrap 的项目列表也隐藏旧版在系统文档目录下分配的 `Vykor/YYYY-MM-DD/xN`。这条兼容规则只用于项目列表显示，历史目录即使没有迁移映射或关联会话也能识别。

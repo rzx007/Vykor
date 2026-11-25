@@ -16,6 +16,8 @@
 
 “消息链接打开方式”提供每次询问、Vykor 内置浏览器和系统默认浏览器；初始询问时预选内置。记住选择后可在这里切换浏览器或恢复每次询问，保存到本机桌面偏好，立即生效。
 
+「高级选项 → 实验功能」中的「生成交互界面（Beta）」默认关闭并保存在本机。开关立即控制聊天中表格的展示，之后发送的消息按提交时的开关值决定是否附带生成说明。
+
 - [general-settings.tsx](general-settings.tsx)
 - [general-display-controls.tsx](general-display-controls.tsx)
 - [editor-settings.tsx](editor-settings.tsx)

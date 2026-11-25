@@ -30,6 +30,7 @@ import { DefaultOpenerControl } from "./default-opener-control"
 import { DefaultTerminalShellControl } from "../terminal/default-terminal-shell-control"
 import { DaemonAutoStartControl } from "./daemon-autostart-control"
 import { ConfigurationSettings } from "../configuration/configuration-settings"
+import { InteractiveUiControl } from "./interactive-ui-control"
 
 export function GeneralSettings() {
   const [appInfo, setAppInfo] = useState<DesktopAppInfo | null>(null)
@@ -162,6 +163,14 @@ export function GeneralSettings() {
                 control={<BrowserDeveloperControl />}
               />
             </div>
+          </SettingsGroup>
+          <SettingsGroup title="实验功能" separated>
+            <SettingsRow
+              title="生成交互界面（Beta）"
+              labelFor="general-interactive-ui"
+              description="开启后，可在聊天中要求生成可筛选、排序的表格。"
+              control={<InteractiveUiControl />}
+            />
           </SettingsGroup>
           <SettingsGroup title="配置迁移">
             <div className="py-4">

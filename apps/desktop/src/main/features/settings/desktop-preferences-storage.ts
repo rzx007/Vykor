@@ -37,6 +37,7 @@ export interface DesktopPreferences {
   notifiedEventIds?: string[]
   notificationTargets?: DesktopNotificationTarget[]
   browserDeveloperMode?: boolean
+  interactiveUiEnabled?: boolean
   computerEnabled?: boolean
   computerAlwaysForeground?: boolean
   computerAppGrants?: DesktopComputerAppGrant[]
@@ -81,6 +82,7 @@ export function getDesktopPreferencesAt(userDataDir: string): DesktopPreferences
       ...(Array.isArray(raw.notifiedEventIds) ? { notifiedEventIds: raw.notifiedEventIds.filter((value): value is string => typeof value === "string").slice(-1000) } : {}),
       ...(raw.notificationTargets ? { notificationTargets: normalizeNotificationTargets(raw.notificationTargets) } : {}),
       ...(raw.browserDeveloperMode === true ? { browserDeveloperMode: true } : {}),
+      ...(raw.interactiveUiEnabled === true ? { interactiveUiEnabled: true } : {}),
       ...(typeof raw.computerEnabled === "boolean" ? { computerEnabled: raw.computerEnabled } : {}),
       ...(typeof raw.computerAlwaysForeground === "boolean" ? { computerAlwaysForeground: raw.computerAlwaysForeground } : {}),
       ...(raw.computerAppGrants ? { computerAppGrants: normalizeComputerAppGrants(raw.computerAppGrants) } : {}),
@@ -118,6 +120,7 @@ export function patchDesktopPreferencesAt(
     ...(Array.isArray(next.notifiedEventIds) ? { notifiedEventIds: next.notifiedEventIds.filter((value): value is string => typeof value === "string").slice(-1000) } : {}),
     ...(next.notificationTargets ? { notificationTargets: normalizeNotificationTargets(next.notificationTargets) } : {}),
     ...(next.browserDeveloperMode === true ? { browserDeveloperMode: true } : {}),
+    ...(next.interactiveUiEnabled === true ? { interactiveUiEnabled: true } : {}),
     ...(typeof next.computerEnabled === "boolean" ? { computerEnabled: next.computerEnabled } : {}),
     ...(typeof next.computerAlwaysForeground === "boolean" ? { computerAlwaysForeground: next.computerAlwaysForeground } : {}),
     ...(next.computerAppGrants ? { computerAppGrants: normalizeComputerAppGrants(next.computerAppGrants) } : {}),

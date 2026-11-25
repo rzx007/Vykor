@@ -436,6 +436,9 @@ importers:
       '@open-file-viewer/core':
         specifier: 1.0.0
         version: 1.0.0(lodash-es@4.18.1)(pdfjs-dist@5.4.624)
+      '@openuidev/lang-core':
+        specifier: 1.2.0
+        version: 1.2.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(zod@3.25.76)
       '@paper-design/shaders-react':
         specifier: ^0.0.81
         version: 0.0.81(@types/react@19.2.17)(react@19.2.7)
@@ -3722,6 +3725,15 @@ packages:
       lodash-es:
         optional: true
       pdfjs-dist:
+        optional: true
+
+  '@openuidev/lang-core@1.2.0':
+    resolution: {integrity: sha512-95O9k8oKo4GVuFddTECPCuAH7ossi1AsHXEqqeulXARDahHHTs1MHlbErg9uiDJ4OL1EWuyNWVWZSJJKwTtkwg==}
+    peerDependencies:
+      '@modelcontextprotocol/sdk': '>=1.0.0'
+      zod: ^3.25.0 || ^4.0.0
+    peerDependenciesMeta:
+      '@modelcontextprotocol/sdk':
         optional: true
 
   '@opentui/core-darwin-arm64@0.4.5':
@@ -13645,6 +13657,13 @@ snapshots:
     transitivePeerDependencies:
       - '@napi-rs/canvas'
       - geotiff
+
+  '@openuidev/lang-core@1.2.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(zod@3.25.76)':
+    dependencies:
+      ci-info: 4.4.0
+      zod: 3.25.76
+    optionalDependencies:
+      '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
 
   '@opentui/core-darwin-arm64@0.4.5':
     optional: true

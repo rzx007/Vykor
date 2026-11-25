@@ -69,6 +69,7 @@
     "@modelcontextprotocol/ext-apps": "1.1.2",
     "@modelcontextprotocol/sdk": "catalog:",
     "@open-file-viewer/core": "1.0.0",
+    "@openuidev/lang-core": "1.2.0",
     "@paper-design/shaders-react": "^0.0.81",
     "@pierre/diffs": "^1.5.2",
     "@pierre/trees": "1.0.0-beta.6",

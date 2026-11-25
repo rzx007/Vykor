@@ -475,6 +475,8 @@ export const IpcChannels = {
   settingsUpdateBrowserDeveloperMode: "settings:update-browser-developer-mode",
   settingsGetLinkOpeningMode: "settings:get-link-opening-mode",
   settingsUpdateLinkOpeningMode: "settings:update-link-opening-mode",
+  settingsGetInteractiveUiEnabled: "settings:get-interactive-ui-enabled",
+  settingsUpdateInteractiveUiEnabled: "settings:update-interactive-ui-enabled",
   settingsUpdateDefaultOpener: "settings:update-default-opener",
   settingsUpdateDefaultTerminalShell: "settings:update-default-terminal-shell",
   daemonAutoStartSnapshot: "daemon-autostart:snapshot",
@@ -484,6 +486,7 @@ export const IpcChannels = {
 } as const
 
 export const IpcEvents = {
+  interactiveUiEnabledChanged: "settings:interactive-ui-enabled-changed",
   trayNotificationClicked: "tray:notification-clicked",
   updateStateChanged: "update:state-changed",
   windowMaximizedChanged: "window:maximized-changed",
@@ -703,6 +706,8 @@ export interface IpcInvokeMap
     args: []
     result: DesktopLinkOpeningMode
   }
+  [IpcChannels.settingsGetInteractiveUiEnabled]: { args: []; result: boolean }
+  [IpcChannels.settingsUpdateInteractiveUiEnabled]: { args: [enabled: boolean]; result: boolean }
   [IpcChannels.settingsUpdateDefaultOpener]: {
     args: [input: UpdateDesktopDefaultOpenerInput]
     result: DesktopSettingsSnapshot

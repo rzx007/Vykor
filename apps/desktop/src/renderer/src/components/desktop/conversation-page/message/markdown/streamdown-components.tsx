@@ -14,10 +14,12 @@ export function createStreamdownComponents({
   onOpenFile,
   codeBlockVariant = "default",
   fileLinkMode = "open",
+  showInteractiveUi = false,
 }: {
   onOpenFile?: (path: string, line?: number) => void
   codeBlockVariant?: "default" | "conversation"
   fileLinkMode?: "open" | "text"
+  showInteractiveUi?: boolean
 } = {}): StreamdownComponents {
   return {
     strong: ({ children, className, ...props }) => {
@@ -68,7 +70,9 @@ export function createStreamdownComponents({
         </code>
       )
     },
-    code: codeBlockVariant === "conversation" ? ConversationCodeBlock : StreamdownCodeBlock,
+    code: showInteractiveUi
+      ? (props) => <ConversationCodeBlock {...props} interactiveUi />
+      : codeBlockVariant === "conversation" ? ConversationCodeBlock : StreamdownCodeBlock,
   }
 }
 

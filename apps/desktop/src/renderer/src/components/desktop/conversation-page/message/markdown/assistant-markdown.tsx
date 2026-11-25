@@ -2,7 +2,7 @@ import { memo, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore 
 import { Streamdown } from "streamdown"
 import { useStreamingTextAnimation } from "@renderer/components/appearance/appearance-provider"
 import { createStreamdownComponents } from "./streamdown-components"
-import { streamdownPlugins, streamdownRehypePlugins } from "./streamdown-plugins"
+import { interactiveUiRehypePlugins, streamdownPlugins, streamdownRehypePlugins } from "./streamdown-plugins"
 import { createIncrementalMarkdownParser } from "./incremental-markdown"
 import { useStreamingMarkdown } from "./use-streaming-markdown"
 import {
@@ -11,9 +11,11 @@ import {
   type StreamingAnimationState,
 } from "./streaming-markdown-block"
 import { CodeFenceActivityContext, createCodeFenceActivity } from "../activity/code-fence-activity"
+import { INTERACTIVE_UI_REPLY_FORMAT } from "@vykor/protocol"
 
 // 行首（最多缩进三个空格）的三反引号或三波浪号表示代码围栏。
 const codeFence = /(?:^|\n)[ \t]{0,3}(?:`{3,}|~{3,})/
+const interactiveUiOpeningLine = new RegExp("^```" + INTERACTIVE_UI_REPLY_FORMAT + "[ \\t]*\\r?$", "gm")
 
 export const AssistantMarkdown = memo(function AssistantMarkdown({
   text,
@@ -25,6 +27,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
   onOpenFile,
   fileLinkMode = "open",
   messageLinks = false,
+  showInteractiveUi = false,
 }: {
   text: string
   searchMessageId?: string
@@ -35,7 +38,12 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
   onOpenFile: (path: string, line?: number) => void
   fileLinkMode?: "open" | "text"
   messageLinks?: boolean
+  showInteractiveUi?: boolean
 }): React.JSX.Element {
+  const renderInteractiveUi = useMemo(
+    () => showInteractiveUi && !streaming && text.match(interactiveUiOpeningLine)?.length === 1,
+    [showInteractiveUi, streaming, text]
+  )
   const textAnimationEnabled = useStreamingTextAnimation()
   const openFileRef = useRef(onOpenFile)
   useLayoutEffect(() => {
@@ -48,8 +56,9 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
         onOpenFile: (path, line) => openFileRef.current(path, line),
         codeBlockVariant: "conversation",
         fileLinkMode,
+        showInteractiveUi: renderInteractiveUi,
       }),
-    [fileLinkMode]
+    [fileLinkMode, renderInteractiveUi]
   )
   const [codeActivity] = useState(createCodeFenceActivity)
   const liveCode = useSyncExternalStore(
@@ -84,6 +93,8 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
   // ——否则相同文字的收尾渲染不会提交，字符动画的 <span> 包裹会残留在正式回复里。
   const keepStreamingTree =
     hasStreamed && !fullDocument && (streaming || codeFence.test(rendered.text))
+  // Streamdown memoizes unchanged text even when the display mode changes.
+  const streamdownKey = `${rendered.revision}:${renderInteractiveUi}`
 
   return (
     <div
@@ -102,7 +113,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
       >
         <CodeFenceActivityContext value={codeActivity}>
           <Streamdown
-            key={rendered.revision}
+            key={streamdownKey}
             className="desktop-streamdown space-y-0"
             animated={false}
             BlockComponent={StreamingMarkdownBlock}
@@ -113,7 +124,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
             parseIncompleteMarkdown={streaming}
             parseMarkdownIntoBlocksFn={parseBlocks}
             plugins={streamdownPlugins}
-            rehypePlugins={streamdownRehypePlugins}
+            rehypePlugins={renderInteractiveUi ? interactiveUiRehypePlugins : streamdownRehypePlugins}
             components={components}
           >
             {rendered.text}

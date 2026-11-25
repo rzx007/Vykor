@@ -8,7 +8,7 @@ import {
   parseUpdateSessionGoalInput,
   parseGoalActionInput,
 } from "@rzx/client"
-import type { PluginAppConversationRequest } from "@vykor/protocol"
+import { INTERACTIVE_UI_REPLY_FORMAT, type PluginAppConversationRequest } from "@vykor/protocol"
 import type { SystemResource } from "@vykor/daemon-admin/configuration"
 import type { KnowledgeResource } from "@vykor/daemon-admin/knowledge"
 import type { CommandCatalogResource, DevelopmentResource } from "@vykor/daemon-admin/workspace"
@@ -359,6 +359,9 @@ export class SessionOperations {
       delivery: input.delivery ?? "queue",
       ...(input.expectedActiveRunId === undefined ? {} : { expectedActiveRunId: input.expectedActiveRunId }),
       metadata: {
+        ...(input.delivery !== "steer" && input.interactiveUiEnabled === true
+          ? { replyPresentation: INTERACTIVE_UI_REPLY_FORMAT }
+          : {}),
         origin: {
           client: "desktop",
           component: "composer",

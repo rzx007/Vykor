@@ -429,6 +429,9 @@ export type DesktopAPI = {
       input: UpdateDesktopBrowserDeveloperModeInput
     ) => Promise<DesktopSettingsSnapshot>
     getLinkOpeningMode: () => Promise<DesktopLinkOpeningMode>
+    getInteractiveUiEnabled: () => Promise<boolean>
+    updateInteractiveUiEnabled: (enabled: boolean) => Promise<boolean>
+    onInteractiveUiEnabledChanged: (listener: (enabled: boolean) => void) => () => void
     updateLinkOpeningMode: (
       input: UpdateDesktopLinkOpeningModeInput
     ) => Promise<DesktopLinkOpeningMode>

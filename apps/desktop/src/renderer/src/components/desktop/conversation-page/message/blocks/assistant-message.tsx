@@ -70,6 +70,7 @@ type AssistantMessageProps = {
   /** 到本轮结束或下一轮为纯文本时，工具组标题才切换为完成摘要。 */
   showToolSummary?: boolean
   streaming: boolean
+  interactiveUiMessageIds?: ReadonlySet<string>
   /** 打开聊天时已有的内容，不重复播放入场。 */
   initialPartIds?: ReadonlySet<string>
   tasks?: DesktopSessionTask[]
@@ -87,6 +88,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   showObservations = true,
   showToolSummary = true,
   streaming,
+  interactiveUiMessageIds,
   initialPartIds,
   tasks = emptyAgentTasks,
   onOpenAgents,
@@ -209,6 +211,9 @@ export const AssistantMessage = memo(function AssistantMessage({
               searchMessageId={unit.source.messageId}
               searchPartIdsJson={JSON.stringify(unit.source.partIds)}
               phase={unit.phase}
+              showInteractiveUi={
+                unit.phase !== "commentary" && interactiveUiMessageIds?.has(unit.source.messageId)
+              }
               streaming={streaming && index === blocks.length - 1}
               animateInitialText={Boolean(initialPartIds && !initialPartIds.has(unit.id))}
               onOpenFile={onOpenFile}

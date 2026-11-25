@@ -64,6 +64,10 @@ export function createPromptSubmissionSender(
 
     async function send(): Promise<void> {
       try {
+        const enableInteractiveUi = pending.delivery !== "steer" && (
+          pending.interactiveUiEnabled === true || (mode !== "retry" &&
+            (await window.desktop.settings?.getInteractiveUiEnabled?.().catch(() => false)) === true)
+        )
         const accepted =
           mode === "retry" &&
           (await window.desktop.sessions.checkPromptAccepted({
@@ -74,7 +78,24 @@ export function createPromptSubmissionSender(
         const current =
           get().sessionRuntimes[pending.sessionId]?.pendingPromptSubmissions[pending.id]
         if (!accepted && current && current.phase !== "accepted") {
-          const snapshot = current
+          if (enableInteractiveUi && !current.interactiveUiEnabled) {
+            set((state) => {
+              const runtime = state.sessionRuntimes[pending.sessionId]!
+              return {
+                sessionRuntimes: {
+                  ...state.sessionRuntimes,
+                  [pending.sessionId]: {
+                    ...runtime,
+                    pendingPromptSubmissions: updatePendingPromptSubmission(
+                      runtime.pendingPromptSubmissions,
+                      pending.id,
+                      (submission) => ({ ...submission, interactiveUiEnabled: true })
+                    ),
+                  },
+                },
+              }
+            })
+          }
           // A failed write must prevent admission, otherwise a restart could lose the original ID.
           if (
             !isTransientComposerSession(get(), pending.sessionId) &&
@@ -86,11 +107,12 @@ export function createPromptSubmissionSender(
           const request: Parameters<typeof window.desktop.sessions.sendPrompt>[0] = {
             id: pending.id,
             sessionId: pending.sessionId,
-            ...(snapshot.delivery === undefined ? {} : { delivery: snapshot.delivery }),
-            ...(snapshot.expectedActiveRunId === undefined ? {} : { expectedActiveRunId: snapshot.expectedActiveRunId }),
-            items: snapshot.browserAnnotationContext
-              ? [...snapshot.items, { type: "text", text: snapshot.browserAnnotationContext }]
-              : snapshot.items,
+            ...(enableInteractiveUi ? { interactiveUiEnabled: true } : {}),
+            ...(current.delivery === undefined ? {} : { delivery: current.delivery }),
+            ...(current.expectedActiveRunId === undefined ? {} : { expectedActiveRunId: current.expectedActiveRunId }),
+            items: current.browserAnnotationContext
+              ? [...current.items, { type: "text", text: current.browserAnnotationContext }]
+              : current.items,
             ...(pending.pluginAppContextIds?.length
               ? { pluginAppContextIds: pending.pluginAppContextIds }
               : {}),

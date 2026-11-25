@@ -5,6 +5,7 @@ import { resolveGitRepository } from "@vykor/host-config";
 import { buildResponseLanguageInstruction } from "@vykor/agent-contracts";
 import { buildReplyStyleSection } from "./reply-styles.js";
 export { buildReplyStyleSection } from "./reply-styles.js";
+export { buildInteractiveUiPrompt } from "./interactive-ui-prompt.js";
 import type { EffectiveEnvironmentInfo } from "@vykor/environment";
 import {
   describeHostShellLauncher,

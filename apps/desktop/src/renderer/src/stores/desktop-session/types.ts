@@ -44,6 +44,7 @@ export interface PendingPromptAttachmentSnapshot extends DesktopPromptAttachment
 }
 
 export interface PendingPromptSubmission {
+  interactiveUiEnabled?: true
   delivery?: "queue" | "steer"
   expectedActiveRunId?: string
   /** Serialized feedback shown in the composer; retries reuse the same snapshot. */

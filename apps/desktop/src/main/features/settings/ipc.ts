@@ -1,4 +1,5 @@
-import { IpcChannels } from "../../../shared/ipc-channels"
+import { BrowserWindow } from "electron"
+import { IpcChannels, IpcEvents } from "../../../shared/ipc-channels"
 import type {
   UpdateDesktopBrowserDeveloperModeInput,
   UpdateDesktopLinkOpeningModeInput,
@@ -85,6 +86,20 @@ export const settingsIpcContribution: IpcContribution = {
       {
         channel: IpcChannels.settingsGetLinkOpeningMode,
         handler: () => desktopSettingsService.getLinkOpeningMode(),
+      },
+      {
+        channel: IpcChannels.settingsGetInteractiveUiEnabled,
+        handler: () => desktopSettingsService.getInteractiveUiEnabled(),
+      },
+      {
+        channel: IpcChannels.settingsUpdateInteractiveUiEnabled,
+        handler: (_event, input) => {
+          const enabled = desktopSettingsService.updateInteractiveUiEnabled(input)
+          for (const window of BrowserWindow.getAllWindows()) {
+            if (!window.isDestroyed()) window.webContents.send(IpcEvents.interactiveUiEnabledChanged, enabled)
+          }
+          return enabled
+        },
       },
       {
         channel: IpcChannels.settingsUpdateDefaultOpener,

@@ -14,6 +14,23 @@ import {
 } from "../session-run-executor.js";
 
 describe("SessionRunExecutor", () => {
+  it.each(["vykor-ui-v1", undefined, "unknown-version"])("uses the admitted reply presentation %s for this run only", async (replyPresentation) => {
+    const store = createStore({ metadata: { replyPresentation } });
+    const submitMessage = vi.fn((_content: unknown, _options: { contribution?: AgentRunContribution }) => completedHandle());
+    const executor = new SessionRunExecutor({
+      data: store.data, attachments: store.attachments,
+      agentPool: { configured: true, acquireHostedSession: async () => hostedAgentFixture({ setModel: () => {}, submitMessage }), close: async () => {}, closeIfStale: async () => {} } as any,
+      events: { checkpoint: () => 0, publishSince: () => {} },
+      transcriptProjection: { finalizeRunParts: () => {} } as any,
+      traceIdForRun: () => "trace-1", log: () => {},
+    });
+    await executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" },
+      { signal: new AbortController().signal, registerHandle: async () => {} });
+    expect(submitMessage).toHaveBeenCalledOnce();
+    const guidance = submitMessage.mock.calls[0]?.[1].contribution?.systemGuidance;
+    if (replyPresentation === "vykor-ui-v1") expect(guidance ?? "").toContain('root = FilterableTable(');
+    else expect(guidance).toBeUndefined();
+  });
   it.each(["run", "input"])("passes the persisted %s output schema to the actual submit entry", async source => {
     const schema = { type: "object", properties: { path: { type: "string" } }, required: ["path"] };
     const store = createStore(source === "input" ? { metadata: { outputSchema: schema } } : {});

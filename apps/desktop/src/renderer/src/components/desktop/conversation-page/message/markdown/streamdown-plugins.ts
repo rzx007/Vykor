@@ -4,6 +4,7 @@ import { defaultRehypePlugins, type CustomRenderer, type PluginConfig } from "st
 import { MermaidDiagram } from "./mermaid-diagram"
 import { rehypeCjkEmphasis } from "./markdown-emphasis"
 import { parseFileReference } from "../models/message-render-model"
+import { markClosedInteractiveUiFences } from "./interactive-ui-fence"
 
 type LinkNode = {
   type: string
@@ -121,3 +122,5 @@ export const streamdownPlugins: PluginConfig = {
   code: cspSafeCodeHighlighter,
   renderers: customRenderers,
 }
+
+export const interactiveUiRehypePlugins = [...streamdownRehypePlugins, markClosedInteractiveUiFences]

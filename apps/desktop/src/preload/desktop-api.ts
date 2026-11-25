@@ -429,6 +429,13 @@ export const desktopAPI = {
       input: IpcInvokeMap[typeof IpcChannels.settingsUpdateBrowserDeveloperMode]["args"][0]
     ) => invoke(IpcChannels.settingsUpdateBrowserDeveloperMode, input),
     getLinkOpeningMode: () => invoke(IpcChannels.settingsGetLinkOpeningMode),
+    getInteractiveUiEnabled: () => invoke(IpcChannels.settingsGetInteractiveUiEnabled),
+    updateInteractiveUiEnabled: (enabled: boolean) => invoke(IpcChannels.settingsUpdateInteractiveUiEnabled, enabled),
+    onInteractiveUiEnabledChanged: (listener) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, enabled: boolean) => listener(enabled)
+      ipcRenderer.on(IpcEvents.interactiveUiEnabledChanged, wrapped)
+      return () => ipcRenderer.removeListener(IpcEvents.interactiveUiEnabledChanged, wrapped)
+    },
     updateLinkOpeningMode: (
       input: IpcInvokeMap[typeof IpcChannels.settingsUpdateLinkOpeningMode]["args"][0]
     ) => invoke(IpcChannels.settingsUpdateLinkOpeningMode, input),

@@ -7,6 +7,8 @@ import {
   readWorkspaceChangesMetadata,
 } from "@rzx/client"
 import type { ComposerDocument } from "@renderer/stores/desktop-session/composer-document"
+import { useInteractiveUiPreference } from "@renderer/stores/interactive-ui-preference"
+import { INTERACTIVE_UI_REPLY_FORMAT } from "@vykor/protocol"
 import type { DesktopSessionInput } from "@shared/session-types"
 
 import { messageTextContent } from "../message/models/message-content"
@@ -96,6 +98,7 @@ export const ConversationTranscript = memo(function ConversationTranscript({
   onRunErrorAction,
 }: ConversationTranscriptProps): React.JSX.Element {
   usePluginAppResults(parts)
+  const showInteractiveUi = useInteractiveUiPreference().enabled === true
   const workflowScroller = useConversationScroller()
   const hasComputerAppApproval = Boolean(pendingComputerAppApproval)
   const previousContent = useRef({ messages, parts, runs, hasComputerAppApproval })
@@ -300,6 +303,7 @@ export const ConversationTranscript = memo(function ConversationTranscript({
           return (
             <TranscriptTurn
               data={data}
+              showInteractiveUi={showInteractiveUi}
               streamingPart={entry === lastTurn ? streamingPart : undefined}
               userMessageIsAnchor={userMessageIsAnchor}
               canEditUserMessage={canEditLastUserMessage && userMessageIsAnchor}
@@ -335,6 +339,7 @@ interface TranscriptTurnData {
   turnUsageRuns: DesktopSessionRun[]
   timing: ReturnType<typeof taskTiming>
   finished: boolean
+  interactiveUiMessageIds?: ReadonlySet<string>
   observations: NonNullable<ReturnType<typeof readWorkspaceChangesMetadata>>[]
 }
 
@@ -374,6 +379,13 @@ function buildTurnData(
     )
     for (const run of noticesByInputId.get(turn.inputId ?? "") ?? []) failures.set(run.id, run)
     const timing = taskTiming(turnRuns)
+    const interactiveUiMessageIds = turn.assistantMessages.flatMap((message) => {
+      const run = message.runId ? runsById.get(message.runId)?.run : undefined
+      const input = run?.inputId ? inputsById.get(run.inputId) : undefined
+      return run?.status === "completed" && input?.metadata.replyPresentation === INTERACTIVE_UI_REPLY_FORMAT
+        ? [message.id]
+        : []
+    })
     result.set(turn.id, {
       turn,
       plan: planTurnBlocks(turn, { streaming: running && entry === lastTurn }),
@@ -387,6 +399,7 @@ function buildTurnData(
         : [],
       timing,
       finished: Boolean(timing && timing.status !== "pending" && timing.status !== "running"),
+      ...(interactiveUiMessageIds.length ? { interactiveUiMessageIds: new Set(interactiveUiMessageIds) } : {}),
       observations: turnRuns.flatMap((run) => {
         const observation = readWorkspaceChangesMetadata(run.metadata.workspaceChanges)
         return observation ? [observation] : []
@@ -424,6 +437,7 @@ type TranscriptTurnProps = Pick<
   | "onRunErrorAction"
 > & {
   data: TranscriptTurnData
+  showInteractiveUi: boolean
   streamingPart?: DesktopSessionPart
   userMessageIsAnchor: boolean
   canEditUserMessage: boolean
@@ -437,6 +451,7 @@ type TranscriptTurnProps = Pick<
 
 const TranscriptTurn = memo(function TranscriptTurn({
   data,
+  showInteractiveUi,
   streamingPart,
   userMessageIsAnchor,
   canEditUserMessage,
@@ -555,6 +570,7 @@ const TranscriptTurn = memo(function TranscriptTurn({
                     nextAssistantIsTextOnly(items, itemIndex)
                   }
                   streaming={item.streaming}
+                  interactiveUiMessageIds={showInteractiveUi ? data.interactiveUiMessageIds : undefined}
                   initialPartIds={animationBaseline}
                   tasks={tasks}
                   onOpenAgents={onOpenAgents}

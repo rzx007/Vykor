@@ -7,14 +7,18 @@ import { cn } from "@renderer/lib/utils"
 
 import { MermaidDiagram } from "./mermaid-diagram"
 import { CodeFenceActivityContext } from "../activity/code-fence-activity"
+import { closedInteractiveUiFences, InteractiveUiFence } from "./interactive-ui-fence"
 
 export function StreamdownCodeBlock({
   className,
   children,
+  node,
+  interactiveUi = false,
   variant = "default",
 }: React.HTMLAttributes<HTMLElement> &
   ExtraProps & {
     variant?: "default" | "conversation"
+    interactiveUi?: boolean
   }): React.JSX.Element {
   const isIncomplete = useIsCodeFenceIncomplete()
   const codeActivity = useContext(CodeFenceActivityContext)
@@ -31,7 +35,7 @@ export function StreamdownCodeBlock({
   }
 
   const codeType = language || "text"
-  return (
+  const fallback = (
     <CodeBlock
       variant={variant}
       className="my-4"
@@ -42,6 +46,9 @@ export function StreamdownCodeBlock({
       streaming={isIncomplete}
     />
   )
+  return interactiveUi && !isIncomplete && node && closedInteractiveUiFences.has(node)
+    ? <InteractiveUiFence code={code} fallback={fallback} />
+    : fallback
 }
 
 export function ConversationCodeBlock(

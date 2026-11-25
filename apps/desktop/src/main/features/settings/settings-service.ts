@@ -141,6 +141,15 @@ export class DesktopSettingsService {
     return isDesktopLinkOpeningMode(mode) ? mode : "ask"
   }
 
+  getInteractiveUiEnabled(): boolean {
+    return this.dependencies.getPreferences().interactiveUiEnabled === true
+  }
+
+  updateInteractiveUiEnabled(enabled: unknown): boolean {
+    if (typeof enabled !== "boolean") throw new Error("生成交互界面的设置必须是开关值。")
+    return this.dependencies.patchPreferences({ interactiveUiEnabled: enabled }).interactiveUiEnabled === true
+  }
+
   async updateLinkOpeningMode(
     input: UpdateDesktopLinkOpeningModeInput
   ): Promise<DesktopLinkOpeningMode> {

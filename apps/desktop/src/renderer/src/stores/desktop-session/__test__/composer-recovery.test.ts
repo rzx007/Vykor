@@ -17,6 +17,25 @@ import {
 } from "../composer-recovery"
 
 describe("composer recovery", () => {
+  it("retries a restored prompt with its original interactive UI choice", async () => {
+    let enabled = true
+    const sendPrompt = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValue(undefined)
+    vi.stubGlobal("window", { desktop: {
+      businessData: businessDataFixture,
+      settings: { getInteractiveUiEnabled: async () => enabled },
+      sessions: { sendPrompt, checkPromptAccepted: async () => false },
+    } })
+    const store = useDesktopSessionStore.getState
+    useDesktopSessionStore.setState({ activeSessionId: "s", sessionView: emptySessionView("s") })
+    await expect(store().sendMessage("做成可筛选的表格")).rejects.toThrow("offline")
+    const original = sendPrompt.mock.calls[0]![0]
+    expect(original.interactiveUiEnabled).toBe(true)
+    enabled = false
+    useDesktopSessionStore.setState({ sessionRuntimes: (await readComposerRecovery()).sessionRuntimes })
+    await store().retryPromptSubmission(original.id)
+    expect(sendPrompt.mock.calls[1]![0]).toEqual(original)
+  })
+
   it("uses ordinary chat to retry a recovered prompt from the prior automatic Computer path", async () => {
     const sendPrompt = vi.fn()
     const checkPromptAccepted = vi.fn().mockResolvedValue(false)

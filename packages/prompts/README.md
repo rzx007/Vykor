@@ -19,6 +19,7 @@
 | [src/personal-prompt-files.ts](src/personal-prompt-files.ts) | `SOUL.md`、`USER.md` 的检查、加载与更新 |
 | [src/ledger-segments.ts](src/ledger-segments.ts) | 供上下文用量估算使用的分类片段 |
 | [src/reply-styles.ts](src/reply-styles.ts) | 统一的回复沟通规则 |
+| [src/interactive-ui-prompt.ts](src/interactive-ui-prompt.ts) | 单次运行中可选的交互表格规则和示例 |
 | [src/__test__](src/__test__) | 提示词层次、规则加载和分类统计测试 |
 
 宿主调用构建函数后，模块读取环境与文件来源，整理为稳定、项目上下文、易变内容三组，再按顺序渲染为字符串返回。组装结果由调用方保存；个人提示词和待确认更新保存在配置目录，项目事实由 personalization 包保存，项目记忆正文由宿主传入。

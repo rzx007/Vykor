@@ -35,6 +35,9 @@ export interface ClearSessionWorktreeBindingInput {
   branch: string;
 }
 
+/** Optional Input.metadata.replyPresentation value and its Markdown fence language. */
+export const INTERACTIVE_UI_REPLY_FORMAT = "vykor-ui-v1";
+
 export interface AdmitPromptInput {
   pluginAppContexts?: import("../extensions/plugin-apps.js").PluginAppConversationRequest[];
   id?: string;
