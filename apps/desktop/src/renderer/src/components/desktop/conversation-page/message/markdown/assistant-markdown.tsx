@@ -40,15 +40,22 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
   messageLinks?: boolean
   showInteractiveUi?: boolean
 }): React.JSX.Element {
-  const renderInteractiveUi = useMemo(
-    () => showInteractiveUi && !streaming && text.match(interactiveUiOpeningLine)?.length === 1,
-    [showInteractiveUi, streaming, text]
-  )
   const textAnimationEnabled = useStreamingTextAnimation()
   const openFileRef = useRef(onOpenFile)
   useLayoutEffect(() => {
     openFileRef.current = onOpenFile
   }, [onOpenFile])
+  const [codeActivity] = useState(createCodeFenceActivity)
+  const liveCode = useSyncExternalStore(
+    codeActivity.subscribe,
+    codeActivity.getSnapshot,
+    codeActivity.getSnapshot
+  )
+  const rendered = useStreamingMarkdown(text, streaming, liveCode)
+  const renderInteractiveUi = useMemo(
+    () => showInteractiveUi && rendered.text.match(interactiveUiOpeningLine)?.length === 1,
+    [showInteractiveUi, rendered.text]
+  )
   // Streamdown 会据此创建代码渲染组件。回调更新不能重建组件、丢掉颜色并重排后台任务。
   const components = useMemo(
     () =>
@@ -60,13 +67,6 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
       }),
     [fileLinkMode, renderInteractiveUi]
   )
-  const [codeActivity] = useState(createCodeFenceActivity)
-  const liveCode = useSyncExternalStore(
-    codeActivity.subscribe,
-    codeActivity.getSnapshot,
-    codeActivity.getSnapshot
-  )
-  const rendered = useStreamingMarkdown(text, streaming, liveCode)
   const [animationBlocks] = useState<StreamingAnimationState>(() => ({
     lastBlockIndex: -1,
     initialBlocks: null,

@@ -7,7 +7,8 @@ import { cn } from "@renderer/lib/utils"
 
 import { MermaidDiagram } from "./mermaid-diagram"
 import { CodeFenceActivityContext } from "../activity/code-fence-activity"
-import { closedInteractiveUiFences, InteractiveUiFence } from "./interactive-ui-fence"
+import { InteractiveUiFence } from "./interactive-ui-fence"
+import { interactiveUiFences } from "./streamdown-plugins"
 
 export function StreamdownCodeBlock({
   className,
@@ -46,9 +47,12 @@ export function StreamdownCodeBlock({
       streaming={isIncomplete}
     />
   )
-  return interactiveUi && !isIncomplete && node && closedInteractiveUiFences.has(node)
-    ? <InteractiveUiFence code={code} fallback={fallback} />
-    : fallback
+  const fence = interactiveUi && node ? interactiveUiFences.get(node) : undefined
+  return fence === "closed" || (fence === "open" && isIncomplete) ? (
+    <InteractiveUiFence code={code} closed={fence === "closed"} fallback={fallback} />
+  ) : (
+    fallback
+  )
 }
 
 export function ConversationCodeBlock(

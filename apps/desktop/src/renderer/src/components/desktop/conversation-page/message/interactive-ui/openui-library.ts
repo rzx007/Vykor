@@ -1,5 +1,6 @@
-import { createParser } from "@openuidev/lang-core"
+import { createStreamingParser } from "@openuidev/lang-core"
 import { z } from "zod/v4"
+import { readFilterableTablePrefix } from "./filterable-table-stream"
 
 const cell = z.union([z.string().max(160), z.number(), z.boolean(), z.null()])
 const tableProps = z.object({
@@ -11,24 +12,51 @@ const tableProps = z.object({
 export type FilterableTableProps = z.infer<typeof tableProps>
 
 const tableName = "FilterableTable"
-const parser = createParser({
+const librarySchema = {
   $defs: { [tableName]: z.toJSONSchema(tableProps) },
   properties: { [tableName]: { $ref: `#/$defs/${tableName}` } },
-}, tableName)
+}
 const tableCall = `root = ${tableName}(`
 
-export function readInteractiveTable(source: string): FilterableTableProps | null {
-  const program = source.trim()
-  if (source.length > 16_000 || !program.startsWith(tableCall) || !program.endsWith(")") || /[\r\n]/.test(program)) return null
+export function createInteractiveTableReader() {
+  const parser = createStreamingParser(librarySchema, tableName)
+  return (source: string, closed: boolean): FilterableTableProps | null => {
+    const program = source.trim()
+    if (source.length > 16_000 || !program.startsWith(tableCall) || /[\r\n]/.test(program))
+      return null
+    if (closed && !program.endsWith(")")) return null
 
-  // ponytail: v1 accepts a single literal component. Add composition only once a second component needs it.
-  // The streaming parser repairs some invalid inputs. Preserve the original literal values here.
-  const args: unknown[] = JSON.parse(`[${program.slice(tableCall.length, -1)}]`)
-  if (args.length !== 3) return null
-  const parsed = tableProps.safeParse({ title: args[0], columns: args[1], rows: args[2] })
-  if (!parsed.success || parsed.data.rows.some((row) => row.length !== parsed.data.columns.length)) return null
-  const { root, meta } = parser.parse(program)
-  if (root?.typeName !== tableName || root.partial || root.hasDynamicProps !== false ||
-      meta.statementCount !== 1 || meta.incomplete || meta.errors.length || meta.unresolved.length) return null
-  return parsed.data
+    // ponytail: v1 accepts one literal component, so only the outer rows array needs repairing.
+    const argsSource = closed
+      ? program.slice(tableCall.length, -1)
+      : readFilterableTablePrefix(program.slice(tableCall.length))
+    if (argsSource === null) return null
+
+    try {
+      // Check the original literals before OpenUI can coerce or repair them.
+      const args: unknown[] = JSON.parse(`[${argsSource}${closed ? "" : "]"}]`)
+      if (args.length !== 3) return null
+      const [title, columns, rows] = args
+      const parsed = tableProps.safeParse({ title, columns, rows })
+      if (
+        !parsed.success ||
+        parsed.data.rows.some((row) => row.length !== parsed.data.columns.length)
+      )
+        return null
+
+      const { root, meta } = parser.set(closed ? program : tableCall + argsSource, closed)
+      if (
+        root?.typeName !== tableName ||
+        root.hasDynamicProps !== false ||
+        meta.statementCount !== 1 ||
+        meta.errors.length ||
+        meta.unresolved.length ||
+        (closed && (root.partial || meta.incomplete))
+      )
+        return null
+      return parsed.data
+    } catch {
+      return null
+    }
+  }
 }

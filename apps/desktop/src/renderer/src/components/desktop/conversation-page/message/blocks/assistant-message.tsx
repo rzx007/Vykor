@@ -307,6 +307,7 @@ function areAssistantMessagePropsEqual(
 
   return (
     previous.streaming === next.streaming &&
+    previous.interactiveUiMessageIds === next.interactiveUiMessageIds &&
     (previous.showToolSummary ?? true) === (next.showToolSummary ?? true) &&
     previousShowsObservations === nextShowsObservations &&
     previous.initialPartIds === next.initialPartIds &&

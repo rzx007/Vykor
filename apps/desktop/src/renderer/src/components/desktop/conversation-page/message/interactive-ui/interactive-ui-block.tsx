@@ -1,14 +1,17 @@
-import { useMemo, type ReactNode } from "react"
+import { useMemo, useState, type ReactNode } from "react"
 import { FilterableTable } from "./filterable-table"
-import { readInteractiveTable } from "./openui-library"
+import { createInteractiveTableReader } from "./openui-library"
 
-export default function InteractiveUiBlock({ code, fallback }: { code: string; fallback: ReactNode }) {
-  const table = useMemo(() => {
-    try {
-      return readInteractiveTable(code)
-    } catch {
-      return null
-    }
-  }, [code])
-  return table ? <FilterableTable key={code} {...table} /> : fallback
+export default function InteractiveUiBlock({
+  code,
+  closed,
+  fallback,
+}: {
+  code: string
+  closed: boolean
+  fallback: ReactNode
+}) {
+  const [readTable] = useState(createInteractiveTableReader)
+  const table = useMemo(() => readTable(code, closed), [readTable, code, closed])
+  return table ? <FilterableTable {...table} streaming={!closed} /> : fallback
 }

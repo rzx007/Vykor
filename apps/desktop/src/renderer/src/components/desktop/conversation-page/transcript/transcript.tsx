@@ -382,7 +382,8 @@ function buildTurnData(
     const interactiveUiMessageIds = turn.assistantMessages.flatMap((message) => {
       const run = message.runId ? runsById.get(message.runId)?.run : undefined
       const input = run?.inputId ? inputsById.get(run.inputId) : undefined
-      return run?.status === "completed" && input?.metadata.replyPresentation === INTERACTIVE_UI_REPLY_FORMAT
+      return (run?.status === "running" || run?.status === "completed") &&
+        input?.metadata.replyPresentation === INTERACTIVE_UI_REPLY_FORMAT
         ? [message.id]
         : []
     })

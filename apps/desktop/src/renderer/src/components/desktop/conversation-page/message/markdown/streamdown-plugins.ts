@@ -1,10 +1,10 @@
 import { cjk } from "@streamdown/cjk"
+import { INTERACTIVE_UI_REPLY_FORMAT } from "@vykor/protocol"
 import { defaultRehypePlugins, type CustomRenderer, type PluginConfig } from "streamdown"
 
 import { MermaidDiagram } from "./mermaid-diagram"
 import { rehypeCjkEmphasis } from "./markdown-emphasis"
 import { parseFileReference } from "../models/message-render-model"
-import { markClosedInteractiveUiFences } from "./interactive-ui-fence"
 
 type LinkNode = {
   type: string
@@ -123,4 +123,33 @@ export const streamdownPlugins: PluginConfig = {
   renderers: customRenderers,
 }
 
-export const interactiveUiRehypePlugins = [...streamdownRehypePlugins, markClosedInteractiveUiFences]
+type FenceNode = {
+  tagName?: string
+  position?: { start: { offset?: number }; end: { offset?: number } }
+  children?: FenceNode[]
+}
+
+export const interactiveUiFences = new WeakMap<FenceNode, "open" | "closed">()
+const fenceStart = "```" + INTERACTIVE_UI_REPLY_FORMAT
+const fenceEnd = /\r?\n[ \t]*`{3,}[ \t]*$/
+
+function markInteractiveUiFences() {
+  return (tree: FenceNode, file: { value: string | Uint8Array }) => {
+    const source = String(file.value)
+    function visit(node: FenceNode) {
+      if (node.tagName === "pre" && node.children?.[0]?.tagName === "code") {
+        const start = node.position?.start.offset
+        const end = node.position?.end.offset
+        const block = start === undefined || end === undefined ? "" : source.slice(start, end)
+        const newline = block.indexOf("\n")
+        if (newline >= 0 && block.slice(0, newline).trimEnd() === fenceStart) {
+          interactiveUiFences.set(node.children[0], fenceEnd.test(block) ? "closed" : "open")
+        }
+      }
+      node.children?.forEach(visit)
+    }
+    visit(tree)
+  }
+}
+
+export const interactiveUiRehypePlugins = [...streamdownRehypePlugins, markInteractiveUiFences]

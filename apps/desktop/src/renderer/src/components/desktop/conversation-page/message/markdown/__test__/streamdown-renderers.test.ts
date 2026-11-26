@@ -2,9 +2,6 @@ import { describe, expect, it, vi } from "vitest"
 import { createElement, type ReactElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 
-vi.mock("streamdown", () => ({
-  useIsCodeFenceIncomplete: () => false,
-}))
 vi.mock("@renderer/components/ui/code-block", () => ({ CodeBlock: vi.fn(() => null) }))
 
 import { CodeBlock } from "@renderer/components/ui/code-block"
