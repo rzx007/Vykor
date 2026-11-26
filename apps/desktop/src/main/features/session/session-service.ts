@@ -86,6 +86,7 @@ import { resolveDesktopRuntimeSnapshot } from "./runtime-selection"
 import { DaemonConnectionService } from "./daemon-connection-service"
 import { browserAgentService } from "../browser/browser-agent-service"
 import { startBrowserBridge } from "../browser/browser-bridge"
+import { getDesktopPreferences } from "../settings/desktop-preferences"
 import type { ComputerInteraction } from "../computer/interaction"
 import { ComputerPromptNotSubmittedError } from "../computer/computer-bridge"
 import type { DesktopComputerControl } from "../../../shared/computer-types"
@@ -543,8 +544,9 @@ export class DesktopSessionService {
   }
 
   async editLatestPrompt(input: EditLatestDesktopPromptInput): Promise<void> {
+    const interactiveUiEnabled = getDesktopPreferences().interactiveUiEnabled === true
     const client = await this.agentClient()
-    await this.operations.editLatestPrompt(client, input)
+    await this.operations.editLatestPrompt(client, input, interactiveUiEnabled)
   }
 
   async promoteQueuedPrompt(input: PromoteDesktopQueuedPromptInput): Promise<void> {

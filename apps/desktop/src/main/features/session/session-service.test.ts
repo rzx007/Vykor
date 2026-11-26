@@ -11,6 +11,11 @@ import { DesktopSessionService } from "./session-service"
 import { DaemonConnectionService } from "./daemon-connection-service"
 import { resolveProviderForModel } from "./session-operations"
 
+vi.mock("../settings/desktop-preferences", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../settings/desktop-preferences")>()),
+  getDesktopPreferences: () => ({ notificationMode: "when_unfocused" }),
+}))
+
 const models: DesktopModel[] = [
   {
     id: "gpt-5.3-codex-spark",

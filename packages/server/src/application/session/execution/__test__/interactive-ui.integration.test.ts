@@ -7,7 +7,7 @@ import { createDefaultNodeAgent } from "@vykor/agent-runtime";
 import { SessionStore } from "@vykor/services";
 import { DaemonApplication } from "../../../daemon-application.js";
 
-it("uses the admitted reply format for one run and saves its answer as ordinary text", async () => {
+it("uses the original reply format on replay and saves the answer as ordinary text", async () => {
   const directory = mkdtempSync(join(tmpdir(), "vykor-interactive-ui-run-"));
   const store = new SessionStore({ path: join(directory, "sessions.db") });
   const table = 'Two results.\n\n```vykor-ui-v1\nroot = FilterableTable("Results", ["Name"], [["Alpha"], ["Beta"]])\n```';
@@ -42,6 +42,19 @@ it("uses the admitted reply format for one run and saves its answer as ordinary 
     expect(ordinary).toMatchObject({ status: "completed", output: "Ordinary reply" });
     expect(store.conversations.getInput(first.input.id)?.metadata.replyPresentation).toBe("vykor-ui-v1");
     expect(store.conversations.listMessageParts(session.id)).toContainEqual(expect.objectContaining({ type: "text", text: table }));
+
+    const interrupted = store.conversationTransactions.admitPromptWithRun({
+      prompt: {
+        sessionId: session.id,
+        items: [{ type: "text", text: "Make another interactive table" }],
+        metadata: { replyPresentation: "vykor-ui-v1" },
+      },
+    });
+    store.runs.updateRun(interrupted.run.id, { status: "interrupted" });
+    const replay = await app.interactions.resumeRun(session.id, interrupted.run.id, {});
+    expect(replay.input.id).toBe(interrupted.input.id);
+    expect(await app.runControl.awaitRun(session.id, replay.run!.id))
+      .toMatchObject({ status: "completed", output: table });
   } finally {
     await app.close();
     store.close();

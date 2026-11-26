@@ -485,7 +485,7 @@ export class SessionRunExecutor {
         contribution = { completionCheckCommand,
           systemGuidance: "本轮已设置用户指定的验收命令，宿主会在你准备交付时执行。交付前说明已做的工作，勿提前声称验收通过。收到验收失败的 Shell 结果时，依据实际输出修复，再准备交付。" };
       }
-      if (admitted.metadata.replyPresentation === INTERACTIVE_UI_REPLY_FORMAT) {
+      if (outputSchema === undefined && admitted.metadata.replyPresentation === INTERACTIVE_UI_REPLY_FORMAT) {
         const guidance = buildInteractiveUiPrompt(INTERACTIVE_UI_REPLY_FORMAT);
         contribution = {
           ...contribution,

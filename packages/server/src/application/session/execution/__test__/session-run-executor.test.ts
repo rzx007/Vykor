@@ -31,11 +31,14 @@ describe("SessionRunExecutor", () => {
     if (replyPresentation === "vykor-ui-v1") expect(guidance ?? "").toContain('root = FilterableTable(');
     else expect(guidance).toBeUndefined();
   });
-  it.each(["run", "input"])("passes the persisted %s output schema to the actual submit entry", async source => {
+  it.each(["run", "input"])("passes the persisted %s output schema without interactive reply guidance", async source => {
     const schema = { type: "object", properties: { path: { type: "string" } }, required: ["path"] };
-    const store = createStore(source === "input" ? { metadata: { outputSchema: schema } } : {});
+    const store = createStore({ metadata: {
+      replyPresentation: "vykor-ui-v1",
+      ...(source === "input" ? { outputSchema: schema } : {}),
+    } });
     if (source === "run") Object.assign(store.spies.getRun(), { metadata: { outputSchema: schema } });
-    const submitMessage = vi.fn(() => completedHandle());
+    const submitMessage = vi.fn((_content: unknown, _options: { contribution?: AgentRunContribution }) => completedHandle());
     const executor = new SessionRunExecutor({
       data: store.data, attachments: store.attachments,
       agentPool: { configured: true, acquireHostedSession: async () => hostedAgentFixture({ setModel: () => {}, submitMessage }), close: async () => {}, closeIfStale: async () => {} } as any,
@@ -46,6 +49,7 @@ describe("SessionRunExecutor", () => {
     await executor.execute({ sessionId: "s1", inputId: "input-1", runId: "run-1" },
       { signal: new AbortController().signal, registerHandle: async () => {} });
     expect(submitMessage).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ outputContract: { schema } }));
+    expect(submitMessage.mock.calls[0]?.[1].contribution?.systemGuidance).toBeUndefined();
   });
   it("rejects conflicting stored Input and Run schemas before submitting to the agent", async () => {
     const store = createStore({ metadata: { outputSchema: { type: "string" } } });

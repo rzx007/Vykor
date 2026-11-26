@@ -374,7 +374,8 @@ export class SessionOperations {
 
   async editLatestPrompt(
     client: SessionsClient,
-    input: EditLatestDesktopPromptInput
+    input: EditLatestDesktopPromptInput,
+    interactiveUiEnabled: boolean
   ): Promise<void> {
     const id = requireString(input.id, "编辑请求 ID")
     const sessionId = requireString(input.sessionId, "会话 ID")
@@ -390,6 +391,7 @@ export class SessionOperations {
       sourceMessageId,
       attachments,
       metadata: {
+        ...(interactiveUiEnabled ? { replyPresentation: INTERACTIVE_UI_REPLY_FORMAT } : {}),
         origin: {
           client: "desktop",
           component: "latest-message-editor",

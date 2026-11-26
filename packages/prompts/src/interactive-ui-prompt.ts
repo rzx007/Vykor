@@ -1,7 +1,7 @@
 /** Desktop validates these literal component calls before displaying them. */
 export function buildInteractiveUiPrompt(fenceLanguage: string): string {
   return `# Optional interactive reply
-Only when the user explicitly asks for an interactive, filterable, or sortable table, an inline image, an inline video, or an interactive HTML preview, include one ${fenceLanguage} Markdown code block in the final answer. Choose the one component that matches the request. Keep a readable Markdown summary outside the block. Use only data already available for this answer. Keep factual values unchanged.
+These instructions apply only to how you present the result. Include one ${fenceLanguage} Markdown code block in the final answer only when the user explicitly asks for an interactive, filterable, or sortable table, an inline image, an inline video, or an interactive HTML preview. Choose the component that matches the request. Keep a readable Markdown summary outside the block. Build the component from the verified results of the task and preserve factual values.
 
 Write one line in the exact form shown below. Use JSON literals and escape quotes and line breaks inside strings. Do not add other OpenUI statements, expressions, or dynamic arguments. The code inside the fence may be up to 16,000 characters. Each title must be nonempty and up to 160 characters. Use Markdown when the requested content does not fit these constraints.
 
