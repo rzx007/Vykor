@@ -5,7 +5,8 @@ import {
   type ModelsDevCatalog,
   type ModelsDevModel,
 } from "@vykor/api";
-import { CredentialStorage, describeCodexAuthState } from "@vykor/auth";
+import { CredentialStorage } from "@vykor/auth";
+import { createCodexModelList } from "./codex-model-list.js";
 import type { CustomProviderModelSettings } from "@vykor/host-config";
 
 import type {
@@ -29,6 +30,7 @@ export function createDefaultModelService(
   ref?: DaemonSettingsRef,
 ): ModelService {
   const catalogService = createModelCatalogService();
+  const listCodexModels = createCodexModelList();
   return {
     async list(options = {}): Promise<ModelProviderInfo[]> {
       // Auth/provider mutations use separate instances; do not retain their old credentials across requests.
@@ -37,6 +39,13 @@ export function createDefaultModelService(
       const result: ModelProviderInfo[] = [];
 
       for (const spec of PROVIDERS) {
+        if (spec.name === "codex") {
+          const models = (await listCodexModels()).map(model =>
+            toModelInfo(spec.name, spec.displayName, model.id, model),
+          );
+          if (models.length) result.push({ name: spec.name, displayName: spec.displayName, models });
+          continue;
+        }
         if (!(await isProviderConnected(spec.name, storage))) continue;
         const catalogProvider = readCatalogProvider(catalog, spec.name);
         if (!catalogProvider?.models) continue;
@@ -198,8 +207,6 @@ async function isProviderConnected(
   const spec = findByName(providerName);
   if (!spec) return false;
   if (spec.isLocal) return true;
-  if (providerName === "codex")
-    return (await describeCodexAuthState()).configured;
   if (await storage.loadApiKey(providerName)) return true;
   return !!(spec.envKey && process.env[spec.envKey]);
 }
