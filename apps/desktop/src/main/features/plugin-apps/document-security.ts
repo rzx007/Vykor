@@ -3,6 +3,7 @@ import type { Session } from "electron"
 export interface IsolatedDocumentPolicy {
   authorizeRequest(request: IsolatedDocumentRequest): boolean
   isPluginFrame(ownerId: number, frameTreeNodeId: number): boolean
+  authorizeFrameRequest?(request: IsolatedDocumentRequest, isolatedFrameId: number): boolean
 }
 const policies = new WeakMap<Session, Map<string, IsolatedDocumentPolicy>>()
 /** Electron permits one listener per session. All isolated schemes share this owner. */
@@ -22,26 +23,19 @@ export function registerIsolatedDocumentPolicy(
         const frame = details.frame
         const owner = details.webContentsId
         const target = registered.get(new URL(details.url).protocol.slice(0, -1))
-        // A registered app frame cannot load another app's scheme or a nested frame.
-        const isolated =
-          owner !== undefined &&
-          frame &&
-          [...registered.values()].some(
-            (value) =>
-              value.isPluginFrame(owner, frame.frameTreeNodeId) ||
-              (frame.parent && value.isPluginFrame(owner, frame.parent.frameTreeNodeId))
-          )
-        if (isolated) cancel = true
-        else if (target)
-          cancel = !target.authorizeRequest({
-            ownerId: owner,
-            url: details.url,
-            method: details.method,
-            resourceType: details.resourceType,
-            frameTreeNodeId: frame?.frameTreeNodeId,
-            parentFrameTreeNodeId: frame?.parent?.frameTreeNodeId,
-            mainFrameTreeNodeId: details.webContents?.mainFrame.frameTreeNodeId,
-          })
+        const request = isolatedDocumentRequest(details)
+        let isolated: IsolatedDocumentPolicy | undefined
+        let isolatedFrameId: number | undefined
+        if (owner !== undefined) {
+          for (let current = frame; current && !isolated; current = current.parent) {
+            const frameId = current.frameTreeNodeId
+            isolated = [...registered.values()].find(policy => policy.isPluginFrame(owner, frameId))
+            if (isolated) isolatedFrameId = frameId
+          }
+        }
+        if (isolated && isolatedFrameId !== undefined)
+          cancel = !!target || isolated.authorizeFrameRequest?.(request, isolatedFrameId) !== true
+        else if (target) cancel = !target.authorizeRequest(request)
       } catch {
         cancel = true
       }
@@ -65,4 +59,18 @@ export interface IsolatedDocumentRequest {
   frameTreeNodeId?: number
   parentFrameTreeNodeId?: number
   mainFrameTreeNodeId?: number
+}
+
+export function isolatedDocumentRequest(details: Pick<Electron.OnBeforeRequestListenerDetails,
+  "webContentsId" | "url" | "method" | "resourceType" | "frame" | "webContents"
+>): IsolatedDocumentRequest {
+  return {
+    ownerId: details.webContentsId,
+    url: details.url,
+    method: details.method,
+    resourceType: details.resourceType,
+    frameTreeNodeId: details.frame?.frameTreeNodeId,
+    parentFrameTreeNodeId: details.frame?.parent?.frameTreeNodeId,
+    mainFrameTreeNodeId: details.webContents?.mainFrame.frameTreeNodeId,
+  }
 }

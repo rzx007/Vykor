@@ -11,6 +11,7 @@ import { mcpIpcContribution } from "./mcp/ipc"
 import { petIpcContribution } from "./pet/ipc"
 import { pluginIpcContribution } from "./plugin/ipc"
 import { pluginAppsIpcContribution } from "./plugin-apps/ipc"
+import { chatRichUiIpcContribution } from "./chat-rich-ui/ipc"
 import { providerIpcContribution } from "./provider/ipc"
 import { sessionIpcContribution } from "./session/ipc"
 import { scheduleIpcContribution } from "./schedule/ipc"
@@ -40,6 +41,7 @@ export const allIpcContributions: IpcContribution[] = [
   petIpcContribution,
   pluginIpcContribution,
   pluginAppsIpcContribution,
+  chatRichUiIpcContribution,
   skillIpcContribution,
   providerIpcContribution,
   clipboardIpcContribution,

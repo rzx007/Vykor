@@ -150,6 +150,15 @@ export class DesktopSettingsService {
     return this.dependencies.patchPreferences({ interactiveUiEnabled: enabled }).interactiveUiEnabled === true
   }
 
+  getRichUiEnabled(): boolean {
+    return this.dependencies.getPreferences().richUiEnabled === true
+  }
+
+  updateRichUiEnabled(enabled: unknown): boolean {
+    if (typeof enabled !== "boolean") throw new Error("聊天富内容的设置必须是开关值。")
+    return this.dependencies.patchPreferences({ richUiEnabled: enabled }).richUiEnabled === true
+  }
+
   async updateLinkOpeningMode(
     input: UpdateDesktopLinkOpeningModeInput
   ): Promise<DesktopLinkOpeningMode> {

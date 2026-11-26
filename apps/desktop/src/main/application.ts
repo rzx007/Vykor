@@ -3,6 +3,7 @@ import { isDataRootMigrationShutdown } from "./features/settings/data-root-setti
 import { app, BrowserWindow, Menu, session, dialog, powerMonitor } from "electron"
 import { resolve } from "node:path"
 import { installDocumentPreviewProtocol } from "./features/workspace/document-preview-protocol"
+import { installYouTubeReferrer } from "./features/chat-rich-ui/video"
 import { electronApp, optimizer, is } from "@electron-toolkit/utils"
 
 import { createAppContext, type AppContext } from "./core/app-context"
@@ -62,6 +63,7 @@ function startDesktopApplication(): void {
     })
     installDocumentPreviewProtocol(session.defaultSession, resolve(__dirname, "../document-preview"))
     installPluginAppDocumentProtocol(desktopPluginAppDocuments, session.defaultSession)
+    installYouTubeReferrer(session.defaultSession)
     electronApp.setAppUserModelId(is.dev ? "dev.vykor.desktop" : "app.vykor.desktop")
     app.setName("Vykor")
     Menu.setApplicationMenu(null)

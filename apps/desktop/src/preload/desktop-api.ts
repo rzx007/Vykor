@@ -436,6 +436,13 @@ export const desktopAPI = {
       ipcRenderer.on(IpcEvents.interactiveUiEnabledChanged, wrapped)
       return () => ipcRenderer.removeListener(IpcEvents.interactiveUiEnabledChanged, wrapped)
     },
+    getRichUiEnabled: () => invoke(IpcChannels.settingsGetRichUiEnabled),
+    updateRichUiEnabled: (enabled) => invoke(IpcChannels.settingsUpdateRichUiEnabled, enabled),
+    onRichUiEnabledChanged: (listener) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, enabled: boolean) => listener(enabled)
+      ipcRenderer.on(IpcEvents.richUiEnabledChanged, wrapped)
+      return () => ipcRenderer.removeListener(IpcEvents.richUiEnabledChanged, wrapped)
+    },
     updateLinkOpeningMode: (
       input: IpcInvokeMap[typeof IpcChannels.settingsUpdateLinkOpeningMode]["args"][0]
     ) => invoke(IpcChannels.settingsUpdateLinkOpeningMode, input),
@@ -445,6 +452,10 @@ export const desktopAPI = {
     updateDefaultTerminalShell: (
       input: IpcInvokeMap[typeof IpcChannels.settingsUpdateDefaultTerminalShell]["args"][0]
     ) => invoke(IpcChannels.settingsUpdateDefaultTerminalShell, input),
+  },
+  richUi: {
+    load: (input) => invoke(IpcChannels.richUiLoad, input),
+    release: (mountId) => invoke(IpcChannels.richUiRelease, mountId),
   },
   terminalSettings: {
     snapshot: () => invoke(TerminalSettingsChannels.terminalSettingsSnapshot),

@@ -1,4 +1,5 @@
 import { BusinessDataChannels, type BusinessDataIpcMap } from "./business-data-types"
+import type { RichUiContent, RichUiLoadResult } from "./rich-ui-content"
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
 import type { DesktopComputerActivity, DesktopComputerAppGrant, DesktopComputerAvailability, DesktopComputerControl, DesktopComputerInteractionReply, DesktopComputerSettings, DesktopComputerSettingsUpdate } from "./computer-types"
 import type { DesktopWindowThemeSource } from "./window-theme-types"
@@ -477,6 +478,10 @@ export const IpcChannels = {
   settingsUpdateLinkOpeningMode: "settings:update-link-opening-mode",
   settingsGetInteractiveUiEnabled: "settings:get-interactive-ui-enabled",
   settingsUpdateInteractiveUiEnabled: "settings:update-interactive-ui-enabled",
+  settingsGetRichUiEnabled: "settings:get-rich-ui-enabled",
+  settingsUpdateRichUiEnabled: "settings:update-rich-ui-enabled",
+  richUiLoad: "rich-ui:load",
+  richUiRelease: "rich-ui:release",
   settingsUpdateDefaultOpener: "settings:update-default-opener",
   settingsUpdateDefaultTerminalShell: "settings:update-default-terminal-shell",
   daemonAutoStartSnapshot: "daemon-autostart:snapshot",
@@ -487,6 +492,7 @@ export const IpcChannels = {
 
 export const IpcEvents = {
   interactiveUiEnabledChanged: "settings:interactive-ui-enabled-changed",
+  richUiEnabledChanged: "settings:rich-ui-enabled-changed",
   trayNotificationClicked: "tray:notification-clicked",
   updateStateChanged: "update:state-changed",
   windowMaximizedChanged: "window:maximized-changed",
@@ -708,6 +714,10 @@ export interface IpcInvokeMap
   }
   [IpcChannels.settingsGetInteractiveUiEnabled]: { args: []; result: boolean }
   [IpcChannels.settingsUpdateInteractiveUiEnabled]: { args: [enabled: boolean]; result: boolean }
+  [IpcChannels.settingsGetRichUiEnabled]: { args: []; result: boolean }
+  [IpcChannels.settingsUpdateRichUiEnabled]: { args: [enabled: boolean]; result: boolean }
+  [IpcChannels.richUiLoad]: { args: [input: RichUiContent]; result: RichUiLoadResult }
+  [IpcChannels.richUiRelease]: { args: [mountId: string]; result: void }
   [IpcChannels.settingsUpdateDefaultOpener]: {
     args: [input: UpdateDesktopDefaultOpenerInput]
     result: DesktopSettingsSnapshot

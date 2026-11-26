@@ -38,6 +38,7 @@ export interface DesktopPreferences {
   notificationTargets?: DesktopNotificationTarget[]
   browserDeveloperMode?: boolean
   interactiveUiEnabled?: boolean
+  richUiEnabled?: boolean
   computerEnabled?: boolean
   computerAlwaysForeground?: boolean
   computerAppGrants?: DesktopComputerAppGrant[]
@@ -83,6 +84,7 @@ export function getDesktopPreferencesAt(userDataDir: string): DesktopPreferences
       ...(raw.notificationTargets ? { notificationTargets: normalizeNotificationTargets(raw.notificationTargets) } : {}),
       ...(raw.browserDeveloperMode === true ? { browserDeveloperMode: true } : {}),
       ...(raw.interactiveUiEnabled === true ? { interactiveUiEnabled: true } : {}),
+      ...(raw.richUiEnabled === true ? { richUiEnabled: true } : {}),
       ...(typeof raw.computerEnabled === "boolean" ? { computerEnabled: raw.computerEnabled } : {}),
       ...(typeof raw.computerAlwaysForeground === "boolean" ? { computerAlwaysForeground: raw.computerAlwaysForeground } : {}),
       ...(raw.computerAppGrants ? { computerAppGrants: normalizeComputerAppGrants(raw.computerAppGrants) } : {}),
@@ -121,6 +123,7 @@ export function patchDesktopPreferencesAt(
     ...(next.notificationTargets ? { notificationTargets: normalizeNotificationTargets(next.notificationTargets) } : {}),
     ...(next.browserDeveloperMode === true ? { browserDeveloperMode: true } : {}),
     ...(next.interactiveUiEnabled === true ? { interactiveUiEnabled: true } : {}),
+    ...(next.richUiEnabled === true ? { richUiEnabled: true } : {}),
     ...(typeof next.computerEnabled === "boolean" ? { computerEnabled: next.computerEnabled } : {}),
     ...(typeof next.computerAlwaysForeground === "boolean" ? { computerAlwaysForeground: next.computerAlwaysForeground } : {}),
     ...(next.computerAppGrants ? { computerAppGrants: normalizeComputerAppGrants(next.computerAppGrants) } : {}),

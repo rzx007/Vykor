@@ -1,4 +1,5 @@
 import type { DesktopBusinessDataApi } from "./business-data-types"
+import type { RichUiContent, RichUiLoadResult } from "./rich-ui-content"
 import type { DesktopTextMenuAction, DesktopTextMenuInput } from "./clipboard-types"
 import type { DesktopComputerActivity, DesktopComputerActivityUpdate, DesktopComputerAppGrant, DesktopComputerAvailability, DesktopComputerControl, DesktopComputerInteractionEvent, DesktopComputerInteractionReply, DesktopComputerSettings, DesktopComputerSettingsUpdate } from "./computer-types"
 import type { DesktopWindowThemeSource } from "./window-theme-types"
@@ -432,6 +433,9 @@ export type DesktopAPI = {
     getInteractiveUiEnabled: () => Promise<boolean>
     updateInteractiveUiEnabled: (enabled: boolean) => Promise<boolean>
     onInteractiveUiEnabledChanged: (listener: (enabled: boolean) => void) => () => void
+    getRichUiEnabled: () => Promise<boolean>
+    updateRichUiEnabled: (enabled: boolean) => Promise<boolean>
+    onRichUiEnabledChanged: (listener: (enabled: boolean) => void) => () => void
     updateLinkOpeningMode: (
       input: UpdateDesktopLinkOpeningModeInput
     ) => Promise<DesktopLinkOpeningMode>
@@ -441,6 +445,10 @@ export type DesktopAPI = {
     updateDefaultTerminalShell: (
       input: UpdateDesktopDefaultTerminalShellInput
     ) => Promise<DesktopSettingsSnapshot>
+  }
+  richUi: {
+    load: (input: RichUiContent) => Promise<RichUiLoadResult>
+    release: (mountId: string) => Promise<void>
   }
   permissionSettings: {
     snapshot: () => Promise<IpcInvokeMap[typeof IpcChannels.permissionSettingsSnapshot]["result"]>

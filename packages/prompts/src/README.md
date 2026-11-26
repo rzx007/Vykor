@@ -9,6 +9,7 @@
 | [ledger-segments.ts](ledger-segments.ts) | `buildPromptLedgerSegments()`，为上下文用量估算提供片段 |
 | [personal-prompt-files.ts](personal-prompt-files.ts) | 个人提示词检查、初始化、加载和用户资料更新 |
 | [reply-styles.ts](reply-styles.ts) | 统一的回复沟通规则 |
+| [interactive-ui-prompt.ts](interactive-ui-prompt.ts) | 桌面交互界面的回复格式，按本轮能力附加到模型提示 |
 | [__test__](__test__) | 提示词组装、文件行为和分类统计测试 |
 
 构建时读取身份、环境、权限与技能清单，向上发现项目规则，再加载用户资料与项目事实，形成 `stable`、`context`、`volatile` 三层。`buildPromptLayers()` 追加调用方传入的项目记忆，`renderPromptLayers()` 按层拼成最终文本。用量估算片段使用同一组装来源，按设计排除完整项目记忆预览，可另加当轮记忆提醒。

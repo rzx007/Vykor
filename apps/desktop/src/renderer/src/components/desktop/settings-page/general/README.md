@@ -18,6 +18,8 @@
 
 「高级选项 → 实验功能」中的「生成交互界面（Beta）」默认关闭并保存在本机。开关立即控制聊天中表格的展示，之后发送的消息按提交时的开关值决定是否附带生成说明。
 
+同组的「聊天富内容（Beta）」默认关闭，独立保存在本机。开启后，用户逐张点击卡片来加载图片、视频或 HTML。关闭后，已加载的内容仍可查看。
+
 - [general-settings.tsx](general-settings.tsx)
 - [general-display-controls.tsx](general-display-controls.tsx)
 - [editor-settings.tsx](editor-settings.tsx)

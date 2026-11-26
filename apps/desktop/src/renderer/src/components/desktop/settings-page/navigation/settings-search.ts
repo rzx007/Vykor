@@ -14,6 +14,7 @@ const entries: Array<[string, string, string, string?]> = [
   ["general", "开发习惯", "默认 终端 Shell 本机 WSL 运行环境"],
   ["general", "任务轮数上限", "高级 maxTurns 推进 模型请求", "general-max-turns"],
   ["general", "浏览器开发者模式", "高级 页面诊断 DOM", "general-browser-developer"],
+  ["general", "聊天富内容（Beta）", "实验功能 高级 富内容预览 图片 视频 HTML", "general-rich-ui"],
   ["general", "生成交互界面（Beta）", "实验功能 高级 交互表格 排序 筛选", "general-interactive-ui"],
   ["general", "思考过程展示", "推理 展开 隐藏"],
   ["general", "后台持续运行", "daemon 自启动 常驻 登录 恢复"],

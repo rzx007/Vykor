@@ -13,6 +13,7 @@ import type {
   UpdateDesktopReasoningVisibilityInput,
 } from "../../../shared/settings-types"
 import type { IpcContribution } from "../../core/ipc/types"
+import { assertMainRenderer } from "../../core/ipc/main-renderer"
 import { desktopSettingsService } from "./settings-service"
 import { desktopPermissionSettingsService } from "./permission-settings-service"
 import type { CheckDesktopPermissionInput, DesktopIsolationSettings, RevokeDesktopApprovalInput,
@@ -20,7 +21,7 @@ import type { CheckDesktopPermissionInput, DesktopIsolationSettings, RevokeDeskt
 
 export const settingsIpcContribution: IpcContribution = {
   id: "settings",
-  register() {
+  register(ctx) {
     return [
       { channel: IpcChannels.permissionSettingsSnapshot, handler: () => desktopPermissionSettingsService.snapshot() },
       { channel: IpcChannels.permissionSettingsUpdate, handler: (_event, input) => desktopPermissionSettingsService.update(input as UpdateDesktopPermissionSettingsInput) },
@@ -98,6 +99,19 @@ export const settingsIpcContribution: IpcContribution = {
           for (const window of BrowserWindow.getAllWindows()) {
             if (!window.isDestroyed()) window.webContents.send(IpcEvents.interactiveUiEnabledChanged, enabled)
           }
+          return enabled
+        },
+      },
+      {
+        channel: IpcChannels.settingsGetRichUiEnabled,
+        handler: () => desktopSettingsService.getRichUiEnabled(),
+      },
+      {
+        channel: IpcChannels.settingsUpdateRichUiEnabled,
+        handler: (event, input) => {
+          assertMainRenderer(ctx, event)
+          const enabled = desktopSettingsService.updateRichUiEnabled(input)
+          event.sender.send(IpcEvents.richUiEnabledChanged, enabled)
           return enabled
         },
       },

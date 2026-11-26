@@ -166,6 +166,12 @@ export function GeneralSettings() {
           </SettingsGroup>
           <SettingsGroup title="实验功能" separated>
             <SettingsRow
+              title="聊天富内容（Beta）"
+              labelFor="general-rich-ui"
+              description="开启后，需逐张点击卡片才能加载图片、视频或 HTML。关闭后，已加载的内容仍可查看。"
+              control={<InteractiveUiControl preference="rich" />}
+            />
+            <SettingsRow
               title="生成交互界面（Beta）"
               labelFor="general-interactive-ui"
               description="开启后，可在聊天中要求生成可筛选、排序的表格。"

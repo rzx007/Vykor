@@ -1,21 +1,24 @@
 import { createHash, randomUUID } from "node:crypto"
 import type { IsolatedDocumentRequest } from "./document-security"
 import { ISOLATED_DOCUMENT_DOCUMENT_CSP, ISOLATED_DOCUMENT_PERMISSIONS_POLICY } from "./document-security"
+import { isPublicHttpsUrl } from "../../core/public-network"
 export const PLUGIN_APP_SCHEME = "vykor-plugin-app"
-interface DocumentInput { ownerId: number; connection: object; sessionId: string; appId: string; html: string; sha256: string }
-interface Document extends DocumentInput { mountId: string; url: string; phase: "registered" | "authorized" | "served" }
+interface DocumentInput { ownerId: number; connection: object; sessionId: string | null; appId: string; html: string; sha256: string }
+interface Document extends DocumentInput { mountId: string; url: string; phase: "registered" | "authorized" | "served"; frameOrigin?: string }
 export class PluginAppDocumentStore {
   private readonly documents = new Map<string, Document>()
   private readonly frames = new Map<string, string>()
   constructor(private readonly onRevoke: (mountId: string, ownerId: number) => void = () => {}) {}
-  register(input: DocumentInput): { mountId: string; url: string } {
+  register(input: DocumentInput, frameOrigin?: string): { mountId: string; url: string } {
     if (Buffer.byteLength(input.html) > 16 * 1024 * 1024 || createHash("sha256").update(input.html).digest("hex") !== input.sha256)
       throw new Error("plugin_app_invalid_document")
-    const owned = [...this.documents.values()].filter(doc => doc.ownerId === input.ownerId)
+    // Local previews have no plugin session and use their own mount quota.
+    const owned = [...this.documents.values()].filter(doc => doc.ownerId === input.ownerId &&
+      (doc.sessionId === null) === (input.sessionId === null))
     if (owned.some(doc => doc.appId === input.appId && doc.sessionId === input.sessionId)) throw new Error("plugin_app_already_mounted")
     if (owned.length >= 8 || owned.filter(doc => doc.sessionId === input.sessionId).length >= 4) throw new Error("plugin_app_capacity_reached")
     const mountId = randomUUID(), url = `${PLUGIN_APP_SCHEME}://frame/${mountId}`
-    this.documents.set(mountId, { ...input, mountId, url, phase: "registered" })
+    this.documents.set(mountId, { ...input, mountId, url, phase: "registered", frameOrigin })
     return { mountId, url }
   }
   authorizeRequest(request: IsolatedDocumentRequest): boolean {
@@ -32,8 +35,24 @@ export class PluginAppDocumentStore {
     const doc = this.byUrl(request.url)
     if (!doc || doc.phase !== "authorized" || request.method !== "GET") return new Response(null, { status: 404 })
     doc.phase = "served"
-    return new Response(doc.html, { headers: { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": ISOLATED_DOCUMENT_DOCUMENT_CSP,
-      "Permissions-Policy": ISOLATED_DOCUMENT_PERMISSIONS_POLICY + ", usb=(), serial=(), hid=(), midi=(), bluetooth=(), accelerometer=(), gyroscope=(), magnetometer=(), display-capture=(), xr-spatial-tracking=()", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } })
+    const csp = doc.frameOrigin
+      ? `default-src 'none'; style-src 'unsafe-inline'; frame-src ${doc.frameOrigin}; base-uri 'none'; form-action 'none'`
+      : ISOLATED_DOCUMENT_DOCUMENT_CSP
+    return new Response(doc.html, { headers: { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": csp,
+      "Permissions-Policy": ISOLATED_DOCUMENT_PERMISSIONS_POLICY + ", usb=(), serial=(), hid=(), midi=(), bluetooth=(), accelerometer=(), gyroscope=(), magnetometer=(), display-capture=(), xr-spatial-tracking=(), local-network-access=(), local-network=(), loopback-network=()", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } })
+  }
+  authorizeFrameRequest(request: IsolatedDocumentRequest, isolatedFrameId: number): boolean {
+    const id = this.frames.get(`${request.ownerId}:${isolatedFrameId}`)
+    const doc = id ? this.documents.get(id) : undefined
+    if (!doc?.frameOrigin || doc.phase !== "served" || request.frameTreeNodeId === undefined ||
+      request.frameTreeNodeId === isolatedFrameId) return false
+    const url = URL.parse(request.url)
+    if (!url || !isPublicHttpsUrl(url)) return false
+    // The wrapper can open only the registered origin. The nested page can use other public HTTPS hosts.
+    if (request.resourceType === "subFrame" && request.parentFrameTreeNodeId === isolatedFrameId) {
+      return request.method === "GET" && url.origin === doc.frameOrigin
+    }
+    return request.resourceType !== "mainFrame"
   }
   owns(mountId: string, ownerId: number, connection?: object, served = false): boolean {
     const doc = this.documents.get(mountId)
@@ -59,7 +78,9 @@ export class PluginAppDocumentStore {
   }
   revoke(mountId: string): void {
     const doc = this.documents.get(mountId)
-    if (doc) { this.documents.delete(mountId); this.onRevoke(mountId, doc.ownerId) }
+    if (!doc) return
+    this.documents.delete(mountId)
+    if (doc.sessionId !== null) this.onRevoke(mountId, doc.ownerId)
   }
   revokeOwner(ownerId: number): void { for (const doc of this.documents.values()) if (doc.ownerId === ownerId) this.revoke(doc.mountId) }
   clear(): void { for (const doc of this.documents.values()) this.revoke(doc.mountId) }

@@ -10,6 +10,16 @@ describe("real settings search", () => {
     }
   })
 
+  it("opens the rich-content switch when searching for HTML previews", () => {
+    expect(searchSettings("HTML 富内容")).toContainEqual(
+      expect.objectContaining({
+        section: "general",
+        title: "聊天富内容（Beta）",
+        target: "general-rich-ui",
+      })
+    )
+  })
+
   it("does not offer removed communication settings", () => {
     expect(searchSettings("回复风格")).not.toContainEqual(expect.objectContaining({ title: "回复风格" }))
     expect(searchSettings("进度通知")).not.toContainEqual(expect.objectContaining({ title: "进度通知" }))
