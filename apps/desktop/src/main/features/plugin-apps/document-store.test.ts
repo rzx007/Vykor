@@ -43,6 +43,7 @@ it("allows any public HTTPS player and its CDN inside the mounted video frame on
   })).toBe(true)
   const csp = store.respond(new Request(mounted.url)).headers.get("Content-Security-Policy")
   expect(csp).toContain("frame-src https://player.example.test")
+  expect(csp).toContain("media-src https://player.example.test")
   expect(csp).toContain("default-src 'none'")
   const child = { ownerId: 42, frameTreeNodeId: 8, parentFrameTreeNodeId: 7, method: "GET" }
   const navigation = { ...child, resourceType: "subFrame", url: embed.href }
@@ -51,6 +52,9 @@ it("allows any public HTTPS player and its CDN inside the mounted video frame on
   const media = { ...child, resourceType: "media", url: "https://cdn.other.test/video.mp4" }
   expect(store.authorizeFrameRequest(media, 7)).toBe(true)
   expect(store.authorizeFrameRequest({ ...media, frameTreeNodeId: 7 }, 7)).toBe(false)
+  const direct = { ...media, frameTreeNodeId: 7, url: "https://player.example.test/video.mp4" }
+  expect(store.authorizeFrameRequest(direct, 7)).toBe(true)
+  expect(store.authorizeFrameRequest({ ...direct, resourceType: "xhr" }, 7)).toBe(false)
   expect(store.authorizeFrameRequest({ ...media, url: "https://127.0.0.1/video" }, 7)).toBe(false)
   store.revoke(mounted.mountId)
   expect(store.authorizeFrameRequest(navigation, 7)).toBe(false)

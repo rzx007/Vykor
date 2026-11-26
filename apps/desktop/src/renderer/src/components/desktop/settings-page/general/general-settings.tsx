@@ -168,7 +168,7 @@ export function GeneralSettings() {
             <SettingsRow
               title="聊天富内容（Beta）"
               labelFor="general-rich-ui"
-              description="开启后，需逐张点击卡片才能加载图片、视频或 HTML。关闭后，已加载的内容仍可查看。"
+              description="开启后，聊天里的图片、视频播放器和 HTML 预览会自动加载。关闭后，已加载的内容仍可查看。"
               control={<InteractiveUiControl preference="rich" />}
             />
             <SettingsRow

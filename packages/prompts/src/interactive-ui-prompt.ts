@@ -10,7 +10,7 @@ For a table, use 1–8 columns and up to 100 rows. Header labels must be nonempt
 root = FilterableTable("Results", ["Name", "Score"], [["Alpha", 10], ["Beta", 2]])
 \`\`\`
 
-For the other components, use the same fence with one of these literal calls. The user controls whether they load.
+For the other components, use the same fence with one of these literal calls.
 - root = Image("Photo", "https://example.com/photo.png")
   Use a known direct public HTTP or HTTPS URL (up to 2,048 characters) for a JPEG, PNG, GIF, WebP, or AVIF image. Avoid credentials, access tokens, and private or local addresses. Do not repeat the image as a remote Markdown embed.
 - root = Video("Video", "https://example.com/embed/video")

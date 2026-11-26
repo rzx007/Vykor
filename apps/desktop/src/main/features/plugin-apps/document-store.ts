@@ -36,7 +36,7 @@ export class PluginAppDocumentStore {
     if (!doc || doc.phase !== "authorized" || request.method !== "GET") return new Response(null, { status: 404 })
     doc.phase = "served"
     const csp = doc.frameOrigin
-      ? `default-src 'none'; style-src 'unsafe-inline'; frame-src ${doc.frameOrigin}; base-uri 'none'; form-action 'none'`
+      ? `default-src 'none'; style-src 'unsafe-inline'; frame-src ${doc.frameOrigin}; media-src ${doc.frameOrigin}; base-uri 'none'; form-action 'none'`
       : ISOLATED_DOCUMENT_DOCUMENT_CSP
     return new Response(doc.html, { headers: { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": csp,
       "Permissions-Policy": ISOLATED_DOCUMENT_PERMISSIONS_POLICY + ", usb=(), serial=(), hid=(), midi=(), bluetooth=(), accelerometer=(), gyroscope=(), magnetometer=(), display-capture=(), xr-spatial-tracking=(), local-network-access=(), local-network=(), loopback-network=()", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } })
@@ -44,10 +44,12 @@ export class PluginAppDocumentStore {
   authorizeFrameRequest(request: IsolatedDocumentRequest, isolatedFrameId: number): boolean {
     const id = this.frames.get(`${request.ownerId}:${isolatedFrameId}`)
     const doc = id ? this.documents.get(id) : undefined
-    if (!doc?.frameOrigin || doc.phase !== "served" || request.frameTreeNodeId === undefined ||
-      request.frameTreeNodeId === isolatedFrameId) return false
+    if (!doc?.frameOrigin || doc.phase !== "served" || request.frameTreeNodeId === undefined) return false
     const url = URL.parse(request.url)
     if (!url || !isPublicHttpsUrl(url)) return false
+    if (request.frameTreeNodeId === isolatedFrameId) {
+      return request.resourceType === "media" && request.method === "GET" && url.origin === doc.frameOrigin
+    }
     // The wrapper can open only the registered origin. The nested page can use other public HTTPS hosts.
     if (request.resourceType === "subFrame" && request.parentFrameTreeNodeId === isolatedFrameId) {
       return request.method === "GET" && url.origin === doc.frameOrigin

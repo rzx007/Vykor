@@ -55,10 +55,13 @@ export async function resolveVideoEmbed(source: string): Promise<URL> {
 
 export function videoPreviewHtml(url: URL): string {
   const src = url.href.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;")
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
-html,body,iframe{width:100%;height:100%;margin:0;border:0;display:block}
-</style></head><body><iframe title="视频播放器" src="${src}" credentialless
+  const player = /\.(mp4|webm|og[gv])$/i.test(url.pathname)
+    ? `<video aria-label="视频播放器" controls preload="metadata" src="${src}"></video>`
+    : `<iframe title="视频播放器" src="${src}" credentialless
  sandbox="allow-scripts allow-same-origin allow-presentation"
  referrerpolicy="no-referrer" allow="encrypted-media; picture-in-picture"
-></iframe></body></html>`
+></iframe>`
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+html,body,video,iframe{width:100%;height:100%;margin:0;border:0;display:block}
+</style></head><body>${player}</body></html>`
 }

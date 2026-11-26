@@ -65,17 +65,21 @@ afterEach(async () => {
   container.remove()
   load.mockReset()
   vi.clearAllMocks()
+  vi.unstubAllGlobals()
   Reflect.deleteProperty(window, "desktop")
   Reflect.deleteProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT")
 })
 
-async function render(code: string, { closed = true, streaming = false, beta = true } = {}) {
+async function render(
+  code: string,
+  { closed = true, streaming = false, beta = true, trailingText = "" } = {}
+) {
   const fence = "```"
   await act(async () => {
     root.render(
       <RouterContextProvider router={router}>
         <AssistantMarkdown
-          text={`可读摘要。\n\n${fence}vykor-ui-v1\n${code}${closed ? "\n" + fence : ""}`}
+          text={`可读摘要。\n\n${fence}vykor-ui-v1\n${code}${closed ? "\n" + fence : ""}${trailingText}`}
           showInteractiveUi={beta}
           streaming={streaming}
           animateInitialText={false}
@@ -104,7 +108,7 @@ async function clickButton(label: string) {
   await act(async () => button!.click())
 }
 
-it("links to settings and waits for an explicit click before loading a remote image", async () => {
+it("links to settings while disabled and loads the image automatically after enabling it", async () => {
   load.mockResolvedValue({ kind: "image", src: imageSrc })
   await render(image)
   expect(container.textContent).toContain("可读摘要。")
@@ -115,8 +119,7 @@ it("links to settings and waits for an explicit click before loading a remote im
 
   await setRichPreference(true)
   expect(container.textContent).toContain("example.com")
-  expect(load).not.toHaveBeenCalled()
-  await clickButton("加载图片")
+  expect(container.querySelector("button")).toBeNull()
   expect(load).toHaveBeenCalledExactlyOnceWith({
     kind: "image",
     title: "测试图片",
@@ -125,9 +128,32 @@ it("links to settings and waits for an explicit click before loading a remote im
   expect(container.querySelector("img")?.getAttribute("src")).toBe(imageSrc)
 })
 
+it("leaves previews outside the viewport as placeholders until they come into view", async () => {
+  enabled = true
+  let enter!: () => void
+  vi.stubGlobal(
+    "IntersectionObserver",
+    class {
+      constructor(report: (entries: { isIntersecting: boolean }[]) => void) {
+        enter = () => report([{ isIntersecting: true }])
+      }
+      observe = vi.fn()
+      disconnect = vi.fn()
+    }
+  )
+  load.mockResolvedValue({ kind: "image", src: imageSrc })
+  await render(image)
+  expect(load).not.toHaveBeenCalled()
+  await act(async () => enter())
+  expect(load).toHaveBeenCalledOnce()
+  expect(container.querySelector("img")?.getAttribute("src")).toBe(imageSrc)
+})
+
 it.each([
   [image, { closed: false, streaming: true }],
   [image, { closed: false }],
+  ['root = HtmlView("未完成", "<button', { closed: false }],
+  ['root = Video("未完成", "https://example.com/', { closed: false }],
   [image, { beta: false }],
   ['root = Image("图片", "file:///C:/private.png")', {}],
   ['root = YouTube("视频", "dQw4w9WgXcQ")', {}],
@@ -142,27 +168,34 @@ it.each([
     expect(container.querySelector("pre")?.textContent).toBe(code)
     expect(container.querySelector("button")).toBeNull()
     expect(container.querySelector("iframe")).toBeNull()
+    expect(load).not.toHaveBeenCalled()
   }
 )
 
-it("plays a managed video on request, preserves the frame when turned off, and releases it on replacement", async () => {
+it("loads the player automatically, preserves it when turned off, and releases it on replacement", async () => {
   enabled = true
-  load.mockResolvedValue(frame)
+  const result = Promise.withResolvers<RichUiLoadResult>()
+  load.mockReturnValue(result.promise)
   await render(video, { streaming: true })
   expect(container.querySelector("iframe")).toBeNull()
-  expect(container.textContent).toContain("播放时将连接 example.com。")
+  expect(container.textContent).toContain("正在加载视频…")
+  expect(container.textContent).toContain("example.com")
+  expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toEqual([
+    "在浏览器打开",
+  ])
   await clickButton("在浏览器打开")
   expect(openExternal).toHaveBeenCalledExactlyOnceWith("https://example.com/player/video")
-  expect(load).not.toHaveBeenCalled()
-  await clickButton("播放视频")
   expect(load).toHaveBeenCalledExactlyOnceWith({
     kind: "video",
     title: "测试视频",
     url: "https://example.com/player/video",
   })
+  await act(async () => result.resolve(frame))
   const player = container.querySelector("iframe")
   expect(player?.getAttribute("sandbox")).toBe("allow-scripts allow-same-origin allow-presentation")
   expect(player?.getAttribute("src")).toBe(frameUrl)
+  expect(player?.getAttribute("allow")).toContain("autoplay 'none'")
+  expect(player?.hasAttribute("credentialless")).toBe(true)
   await setRichPreference(false)
   expect(container.querySelector("iframe")).toBe(player)
   expect(release).not.toHaveBeenCalled()
@@ -171,15 +204,12 @@ it("plays a managed video on request, preserves the frame when turned off, and r
   expect(release).toHaveBeenCalledExactlyOnceWith(mountId)
 })
 
-it("isolates HTML after explicitly running it", async () => {
+it("mounts HTML automatically in the offline sandbox", async () => {
   enabled = true
   load.mockResolvedValue(frame)
   await render(html)
   expect(container.textContent).toContain("此页面仅在本机隔离运行，不能联网。")
-  expect(container.querySelector("iframe")).toBeNull()
-  expect(container.querySelector("button")?.textContent).toBe("运行 HTML")
-  expect(load).not.toHaveBeenCalled()
-  await clickButton("运行 HTML")
+  expect(container.querySelector("button")).toBeNull()
   expect(load).toHaveBeenCalledExactlyOnceWith({
     kind: "html",
     title: "本机示例",
@@ -189,19 +219,64 @@ it("isolates HTML after explicitly running it", async () => {
   expect(container.querySelector("iframe")?.getAttribute("src")).toBe(frameUrl)
 })
 
+it.each([
+  [
+    "HtmlView",
+    'root = HtmlView("本机示例", "<button',
+    html,
+    "正在生成 HTML 预览…",
+    "正在加载 HTML 预览…",
+    "h-[min(24rem,55dvh)]",
+  ],
+  [
+    "Video",
+    'root = Video("测试视频", "https://example.com/',
+    video,
+    "正在生成视频预览…",
+    "正在加载视频…",
+    "aspect-video",
+  ],
+])(
+  "keeps the %s preview area sized from generation through loading",
+  async (component, partial, complete, generatingLabel, loadingLabel, sizeClass) => {
+    enabled = true
+    const result = Promise.withResolvers<RichUiLoadResult>()
+    load.mockReturnValue(result.promise)
+    await render(`root = ${component}(`, { closed: false, streaming: true })
+    const placeholder = container.querySelector('[role="status"]')
+    expect(placeholder?.textContent).toBe(generatingLabel)
+    expect(placeholder?.classList.contains(sizeClass)).toBe(true)
+    expect(container.querySelector("pre")).toBeNull()
+    expect(load).not.toHaveBeenCalled()
+
+    await render(partial, { closed: false, streaming: true })
+    expect(container.textContent).toContain(generatingLabel)
+    expect(container.querySelector("iframe")).toBeNull()
+    expect(load).not.toHaveBeenCalled()
+
+    await render(complete, { streaming: true, trailingText: "\n\n后续说明仍在生成。" })
+    const loading = container.querySelector('[role="status"]')
+    expect(loading?.textContent).toBe(loadingLabel)
+    expect(loading?.className).toBe(placeholder?.className)
+    expect(container.querySelector("iframe")).toBeNull()
+    expect(container.textContent).toContain("后续说明仍在生成。")
+    expect(load).toHaveBeenCalledOnce()
+
+    await act(async () => result.resolve(frame))
+    const iframe = container.querySelector("iframe")
+    expect(iframe?.getAttribute("src")).toBe(frameUrl)
+    expect(iframe?.parentElement?.classList.contains(sizeClass)).toBe(true)
+  }
+)
+
 it("releases a frame when its request finishes after the original card is replaced", async () => {
   enabled = true
-  let complete!: (result: RichUiLoadResult) => void
-  load.mockImplementation(
-    () =>
-      new Promise((resolve) => {
-        complete = resolve
-      })
-  )
+  const result = Promise.withResolvers<RichUiLoadResult>()
+  load.mockReturnValueOnce(result.promise).mockResolvedValue({ kind: "image", src: imageSrc })
   await render(html)
-  await clickButton("运行 HTML")
+  expect(load).toHaveBeenCalledOnce()
   await render(image)
-  await act(async () => complete(frame))
+  await act(async () => result.resolve(frame))
   expect(container.querySelector("iframe")).toBeNull()
   expect(release).toHaveBeenCalledExactlyOnceWith(mountId)
 })
@@ -210,7 +285,6 @@ it("retains the settings hint when the desktop rejects a request made with a sta
   enabled = true
   load.mockResolvedValue({ kind: "disabled" })
   await render(youtube)
-  await clickButton("播放视频")
   expect(load).toHaveBeenCalledExactlyOnceWith({
     kind: "video",
     title: "测试视频",
@@ -218,17 +292,21 @@ it("retains the settings hint when the desktop rejects a request made with a sta
   })
   expect(container.querySelector("iframe")).toBeNull()
   expect(container.querySelector(settingsLink)).not.toBeNull()
+
+  await setRichPreference(false)
+  load.mockResolvedValue(frame)
+  await setRichPreference(true)
+  expect(load).toHaveBeenCalledTimes(2)
+  expect(container.querySelector("iframe")?.getAttribute("src")).toBe(frameUrl)
 })
 
-it("shows a retry action when loading fails", async () => {
+it("shows a placeholder when the automatic request fails", async () => {
   enabled = true
   load.mockRejectedValue(new Error("preview failed"))
   await render(html)
-  await clickButton("运行 HTML")
   expect(container.querySelector("iframe")).toBeNull()
   expect(container.querySelector('[role="alert"]')).not.toBeNull()
-
-  load.mockResolvedValue(frame)
-  await clickButton("运行 HTML")
-  expect(container.querySelector("iframe")?.getAttribute("src")).toBe(frameUrl)
+  expect(container.querySelector("button")).toBeNull()
+  await render(html)
+  expect(load).toHaveBeenCalledOnce()
 })
