@@ -852,7 +852,6 @@ function ConversationPane({
                   sending={sending}
                   running={Boolean(activeRun)}
                   followUpRunId={activeRun?.id}
-                  lastAcceptedInputId={sessionView?.inputs.at(-1)?.id}
                   interrupting={interrupting}
                   models={models}
                   selectedModel={currentModel}

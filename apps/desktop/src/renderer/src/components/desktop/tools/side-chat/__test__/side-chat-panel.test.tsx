@@ -276,9 +276,7 @@ it.each([
   store.setComposerDraftText("session:main", "main draft")
   store.setComposerDraftText("session:side-main", "side follow-up")
   await mount()
-  const choice = container.querySelector('[aria-label="本条消息的发送方式"]')
-  if (permissionMode === "full_access") expect(choice).toBeNull()
-  else expect(choice?.textContent).toContain("排队")
+  expect(container.querySelector('[aria-label="本条消息的发送方式"]')).toBeNull()
   expect(container.querySelector('[aria-label="停止生成"]')).toBeNull()
   await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="发送"]')!.click())
   const request = sendPrompt.mock.calls[0]?.[0] as SendDesktopPromptInput
@@ -288,7 +286,7 @@ it.each([
   expect(selectDraftText(useDesktopSessionStore.getState(), "session:main")).toBe("main draft")
 })
 
-it("uses a manual side-chat choice once and restores the default on admission", async () => {
+it("uses the side chat's updated permission mode for the next follow-up after admission", async () => {
   sideChatTargets.set("main", "side-main")
   const view = sideView()
   view.session.metadata = { runtime: { approvalMode: "ask", workMode: "plan" } }
@@ -297,24 +295,29 @@ it("uses a manual side-chat choice once and restores the default on admission", 
     createdAt: 1, updatedAt: 1, metadata: {},
   }]
   openAux.mockResolvedValueOnce(view)
-  useDesktopSessionStore.getState().setComposerDraftText("session:side-main", "send this now")
+  useDesktopSessionStore.getState().setComposerDraftText("session:side-main", "queued follow-up")
   await mount()
-  const choice = () => container.querySelector<HTMLButtonElement>('[aria-label="本条消息的发送方式"]')!
-  expect(choice().textContent).toContain("排队")
-  await act(async () => choice().click())
-  const steerOption = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
-    .find(button => button.textContent?.trim() === "现在补充")
-  expect(steerOption).toBeDefined()
-  await act(async () => steerOption!.click())
-  expect(choice().textContent).toContain("现在补充")
+  expect(container.querySelector('[aria-label="本条消息的发送方式"]')).toBeNull()
   await submit()
   const sent = sendPrompt.mock.calls[0]?.[0] as SendDesktopPromptInput
-  expect(sent).toMatchObject({ sessionId: "side-main", delivery: "steer", expectedActiveRunId: "side-run" })
-  await emit({ ...view, cursor: 1, inputs: [{
-    id: sent.id, sessionId: "side-main", seq: 1, delivery: "steer", items: sent.items,
-    content: "send this now", attachments: [], createdAt: 1, metadata: { steerTargetRunId: "side-run" },
-  }] })
-  expect(choice().textContent).toContain("排队")
+  expect(sent.sessionId).toBe("side-main")
+  expect(sent.delivery).toBeUndefined()
+  expect(sent.expectedActiveRunId).toBeUndefined()
+  await emit({
+    ...view, cursor: 1,
+    session: { ...view.session, metadata: { runtime: { approvalMode: "full_access", workMode: "plan" } } },
+    inputs: [{
+      id: sent.id, sessionId: "side-main", seq: 1, delivery: "queue", items: sent.items,
+      content: "queued follow-up", attachments: [], createdAt: 1, metadata: {},
+    }],
+  })
+  await act(async () => useDesktopSessionStore.getState().setComposerDraftText("session:side-main", "new follow-up"))
+  expect(container.querySelector('[aria-label="本条消息的发送方式"]')).toBeNull()
+  await submit()
+  expect(sendPrompt).toHaveBeenCalledTimes(2)
+  expect(sendPrompt.mock.calls[1]?.[0]).toMatchObject({
+    sessionId: "side-main", delivery: "steer", expectedActiveRunId: "side-run",
+  })
 })
 
 it.each(["applied", "failed"] as const)("keeps a full-access follow-up visible until the side Run reports it %s", async (outcome) => {

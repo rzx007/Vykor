@@ -905,7 +905,6 @@ export function SideChatPanel({
               sending={sending || creating}
               running={Boolean(activeRun)}
               followUpRunId={activeRun?.id}
-              lastAcceptedInputId={view?.inputs.at(-1)?.id}
               interrupting={interrupting}
               models={models}
               selectedModel={model}

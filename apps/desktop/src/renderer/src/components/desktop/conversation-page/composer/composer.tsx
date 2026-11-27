@@ -86,7 +86,6 @@ export function Composer({
   onSubmit,
   computerEnabled = false,
   followUpRunId,
-  lastAcceptedInputId,
   onCommand,
   onInterrupt,
   onSelectModel,
@@ -146,7 +145,6 @@ export function Composer({
   onSubmit: (delivery?: "queue" | "steer") => void
   computerEnabled?: boolean
   followUpRunId?: string
-  lastAcceptedInputId?: string
   onCommand?: (command: ComposerPickerCommand) => Promise<void>
   onInterrupt?: () => void
   onSelectModel: (model: DesktopModel) => void
@@ -179,7 +177,7 @@ export function Composer({
     }
   }
   const [activePicker, setActivePicker] = useState<
-    "model" | "permission" | "effort" | "goal" | "delivery" | null
+    "model" | "permission" | "effort" | "goal" | null
   >(null)
   const [contextPickerRequest, setContextPickerRequest] = useState(0)
   const [contextPickerOpen, setContextPickerOpen] = useState(false)
@@ -269,11 +267,6 @@ export function Composer({
     })
   }
 
-  const [deliveryChoice, setDeliveryChoice] = useState<{
-    delivery: "queue" | "steer"
-    runId?: string
-    afterInputId?: string
-  } | null>(null)
   const appContexts = useSyncExternalStore(
     pluginAppModelContexts.subscribe,
     pluginAppModelContexts.snapshot,
@@ -335,9 +328,7 @@ export function Composer({
     pluginContext: hasAppContext,
     observation: firstDraftItem?.type === "text" && /^\s*observe-session(?:\s|$)/u.test(firstDraftItem.text),
   })
-  const manualDelivery = deliveryChoice && deliveryChoice.runId === followUpRunId &&
-    deliveryChoice.afterInputId === lastAcceptedInputId ? deliveryChoice.delivery : undefined
-  const delivery = queueOnlyReason ? "queue" : fullAccess ? "steer" : manualDelivery ?? "queue"
+  const delivery = fullAccess && !queueOnlyReason ? "steer" : "queue"
   const submit = (): void => {
     if (sending || interrupting || !allowSubmit) return
     onSubmit(isFollowUp ? delivery : undefined)
@@ -669,37 +660,6 @@ export function Composer({
           <ContextUsageControl snapshot={contextUsage} onOpen={onOpenContextUsage} />
           {isFollowUp && fullAccess && queueOnlyReason ? (
             <span role="status" className="text-xs text-muted-foreground">{queueOnlyReason}</span>
-          ) : null}
-          {isFollowUp && !fullAccess ? (
-            <Popover open={activePicker === "delivery"} onOpenChange={(open) => setActivePicker(open ? "delivery" : null)}>
-              <PopoverTrigger
-                render={<Button type="button" variant="control" shape="pill" size="sm" />}
-                disabled={sending || interrupting}
-                aria-label="本条消息的发送方式"
-                title={queueOnlyReason}
-              >
-                {delivery === "steer" ? "现在补充" : "排队"}
-                <ChevronDown className="size-3" />
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-40 p-1">
-                <Button type="button" variant="ghost" size="sm" className="w-full justify-start"
-                  disabled={Boolean(queueOnlyReason)}
-                  onClick={() => {
-                    setDeliveryChoice({ delivery: "steer", runId: followUpRunId, afterInputId: lastAcceptedInputId })
-                    closePicker()
-                  }}>
-                  现在补充
-                </Button>
-                <Button type="button" variant="ghost" size="sm" className="w-full justify-start"
-                  onClick={() => {
-                    setDeliveryChoice({ delivery: "queue", runId: followUpRunId, afterInputId: lastAcceptedInputId })
-                    closePicker()
-                  }}>
-                  排队
-                </Button>
-                {queueOnlyReason ? <p className="px-2 py-1 text-xs text-muted-foreground">{queueOnlyReason}</p> : null}
-              </PopoverContent>
-            </Popover>
           ) : null}
           {goalEditing ? (
             <Button type="submit" size="sm" shape="pill" disabled={sending || !allowSubmit}>
