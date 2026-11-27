@@ -7,7 +7,7 @@ import { toComposerCommands } from "../../conversation-page/composer/composer-co
 import { pluginMentionsEnabled } from "../../conversation-page/composer/plugin-mentions-feature"
 import { PermissionStack } from "@renderer/components/desktop/conversation-page/message/blocks/permission-stack"
 import { requiresPermissionReply } from "@renderer/components/desktop/conversation-page/message/blocks/permission-presentation"
-import { useComputerAppPermission } from "../computer/computer-interaction"
+import { useComputerAppPermissionId } from "../computer/computer-interaction"
 import { ConversationTranscript } from "../../conversation-page/transcript/transcript"
 import { mergeSessionOptimisticTranscript } from "../../conversation-page/transcript/optimistic-transcript"
 import { resolveScrollerAgentStatus } from "../../conversation-page/transcript/scroller-agent-status"
@@ -375,9 +375,9 @@ export function SideChatPanel({
   const activeRun = view?.runs.find(run => run.status === "running")
   const archived = view?.session.status === "archived"
   const approvalView = verifiedTargetId && !archived ? view : null
-  const hasComputerAppPermission = useComputerAppPermission(approvalView?.session.id)
+  const computerPermissionId = useComputerAppPermissionId(approvalView?.session.id)
   const permissions = approvalView?.permissions.filter(requiresPermissionReply) ?? []
-  const pendingPermissionCount = permissions.length + Number(hasComputerAppPermission)
+  const pendingPermissionCount = permissions.length + (computerPermissionId ? 1 : 0)
   const submissions = Object.values(runtime.pendingPromptSubmissions)
   const runtimeError = Object.values(runtime.operations)
     .filter((operation) => operation.phase === "failed" && operation.kind !== "reply-permission")
@@ -800,6 +800,7 @@ export function SideChatPanel({
           <PermissionStack
             key={verifiedTargetId}
             sessionId={verifiedTargetId}
+            computerPermissionId={computerPermissionId}
             permissions={permissions}
             replies={permissionReplies}
             onReply={(id, status, decision, answer) => {

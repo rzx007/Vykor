@@ -49,10 +49,6 @@ export function useComputerAppPermissionId(sessionId?: string | null): string | 
   return prompt?.kind === "authorize" && prompt.sessionId === sessionId ? prompt.id : undefined
 }
 
-export function useComputerAppPermission(sessionId?: string | null): boolean {
-  return !!useComputerAppPermissionId(sessionId)
-}
-
 export function ComputerAppPermissionCard({ sessionId }: { sessionId: string }): React.JSX.Element | null {
   const interaction = useContext(ComputerInteractionContext)
   const state = interaction?.state

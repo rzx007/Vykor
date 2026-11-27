@@ -1,9 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Activity, useState } from "react"
-import {
-  ComputerAppPermissionCard,
-  useComputerAppPermissionId,
-} from "@renderer/components/desktop/tools/computer/computer-interaction"
+import { ComputerAppPermissionCard } from "@renderer/components/desktop/tools/computer/computer-interaction"
 import { Button } from "@renderer/components/ui/button"
 import { cn } from "@renderer/lib/utils"
 import type { PermissionReplyState } from "@renderer/stores/desktop-session/selectors"
@@ -14,6 +11,7 @@ import { PermissionCard } from "./permission-card"
 
 interface PermissionStackProps {
   sessionId: string
+  computerPermissionId: string | undefined
   permissions: DesktopPermissionRequest[]
   replies: Record<string, PermissionReplyState>
   onReply: (
@@ -27,13 +25,13 @@ interface PermissionStackProps {
 
 export function PermissionStack({
   sessionId,
+  computerPermissionId,
   permissions,
   replies,
   onReply,
   className,
 }: PermissionStackProps) {
-  const computerId = useComputerAppPermissionId(sessionId)
-  const computerKey = computerId ? `computer:${computerId}` : undefined
+  const computerKey = computerPermissionId ? `computer:${computerPermissionId}` : undefined
   const keys = permissions.map((permission) => `permission:${permission.id}`)
   if (computerKey) keys.push(computerKey)
 

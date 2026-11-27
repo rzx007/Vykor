@@ -28,10 +28,32 @@ function renderPermission(toolName: string, payload: Record<string, unknown>): H
   return container
 }
 
-function summaryText(container: HTMLElement): string {
-  const summary = container.cloneNode(true) as HTMLElement
-  summary.querySelector("details")?.remove()
-  return summary.textContent ?? ""
+function requestBlock(container: HTMLElement): HTMLElement {
+  const block = container.querySelector<HTMLElement>('[aria-label="请求内容"]')
+  expect(block).not.toBeNull()
+  return block!
+}
+
+async function withInteractiveCard(
+  toolName: string,
+  payload: Record<string, unknown>,
+  inspect: (container: HTMLElement, onReply: ReturnType<typeof vi.fn>) => Promise<void>
+): Promise<void> {
+  const container = document.body.appendChild(document.createElement("div"))
+  const root = createRoot(container)
+  const onReply = vi.fn()
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
+  try {
+    await act(async () => root.render(createElement(PermissionCard, {
+      permission: { ...pendingPermission, toolName, payload },
+      onReply,
+    })))
+    await inspect(container, onReply)
+  } finally {
+    await act(async () => root.unmount())
+    container.remove()
+    vi.unstubAllGlobals()
+  }
 }
 
 describe("PermissionCard", () => {
@@ -40,14 +62,16 @@ describe("PermissionCard", () => {
       computerApproval: true,
       reason: "记事本将覆盖测试文档",
     })
-    expect(summaryText(container)).toContain("批准这次电脑操作")
-    expect(summaryText(container)).toContain("记事本将覆盖测试文档")
-    expect(summaryText(container)).toContain("允许本次")
+    expect(container.textContent).toContain("批准这次电脑操作")
+    expect(container.textContent).toContain("记事本将覆盖测试文档")
+    expect(container.textContent).toContain("允许本次")
   })
 
   it.each([
     ["Shell", "运行命令"],
     ["Bash", "运行命令"],
+    ["WebSearch", "搜索网页"],
+    ["ToolSearch", "搜索工具"],
     ["Write", "写入文件"],
     ["Edit", "修改文件"],
     ["ApplyPatch", "应用文件补丁"],
@@ -57,8 +81,8 @@ describe("PermissionCard", () => {
     ["JobCancel", "停止任务"],
   ])("keeps the actual %s permission summary", (toolName, label) => {
     const container = renderPermission(toolName, {})
-    expect(summaryText(container)).toContain(label)
-    expect(summaryText(container)).toContain(toolName)
+    expect(container.textContent).toContain(label)
+    expect(container.textContent).toContain(toolName)
   })
 
   it.each([
@@ -75,8 +99,8 @@ describe("PermissionCard", () => {
     "constructor",
   ])("does not describe a third-party permission as a built-in operation: %s", (toolName) => {
     const container = renderPermission(toolName, {})
-    expect(summaryText(container)).toContain("运行工具")
-    expect(summaryText(container)).toContain(toolName)
+    expect(container.textContent).toContain("运行工具")
+    expect(container.textContent).toContain(toolName)
   })
 
   it.each([
@@ -106,9 +130,10 @@ describe("PermissionCard", () => {
       expect(html).not.toContain("<script>")
       const container = document.createElement("div")
       container.innerHTML = html
-      expect(summaryText(container)).toContain("<script>reason</script>")
-      expect(container.querySelector("details p")?.textContent).not.toBe("<script>reason</script>")
-      expect(container.querySelector("details")?.hasAttribute("open")).toBe(false)
+      expect(container.textContent).toContain("<script>reason</script>")
+      requestBlock(container).remove()
+      expect(container.textContent).toContain(title)
+      expect(container.textContent).toContain("<script>reason</script>")
     }
   )
 
@@ -211,6 +236,8 @@ describe("PermissionCard", () => {
 
     expect(html).toContain("https://example.org/account")
     expect(html).toContain("inspect_dom")
+    expect(html).toContain("DOM 结构")
+    expect(html).toContain("第三方资源")
     expect(html).toContain("允许本次")
     expect(html).not.toContain("<script>")
     expect(html).toContain("&lt;script&gt;")
@@ -240,228 +267,85 @@ describe("PermissionCard", () => {
     }
   )
 
-  it("shows the command, working directory, and reason before the one-time decision", () => {
-    const container = renderPermission("Shell", {
-      reason: "需要确认部署命令",
-      input: { command: "pnpm deploy --tag release", workdir: "C:/projects/vykor" },
-    })
-
-    expect(container.querySelector("h3")?.textContent).toBe("运行命令")
-    expect(summaryText(container)).toContain("pnpm deploy --tag release")
-    expect(summaryText(container)).toContain("C:/projects/vykor")
-    expect(summaryText(container)).toContain("需要确认部署命令")
-    expect(summaryText(container)).not.toContain("展开完整命令")
-    expect(container.querySelector('[role="checkbox"]')).toBeNull()
-    expect(container.textContent).toContain("允许本次")
-    expect(container.textContent).not.toContain("检查类别")
+  it("shows the entire short WebSearch payload directly in a single content block", () => {
+    const payload = { input: { query: "天气" } }
+    const container = renderPermission("WebSearch", payload)
+    const block = requestBlock(container)
+    expect(container.querySelectorAll("pre")).toHaveLength(1)
+    expect(block.querySelector("pre")?.textContent).toBe(JSON.stringify(payload, null, 2))
+    expect(block.querySelector("dl, button")).toBeNull()
+    expect(container.querySelector("details")).toBeNull()
   })
 
-  it.each([
-    ["Write", "写入文件"],
-    ["Edit", "修改文件"],
-  ])(
-    "shows the actual file path for %s without copying its full body into the summary",
-    (toolName, summary) => {
-      const container = renderPermission(toolName, {
-        input: { file_path: "C:/work/config.json", content: "private file body" },
-      })
-
-      expect(container.textContent).toContain(summary)
-      expect(summaryText(container)).toContain("C:/work/config.json")
-      expect(summaryText(container)).not.toContain("private file body")
-      expect(summaryText(container)).not.toContain("预计变更")
-      expect(container.querySelector("details pre")?.textContent ?? "").toContain(
-        "private file body"
-      )
+  it("keeps the ToolSearch request intact, including its metadata, without repeating the policy reason", async () => {
+    const payload = {
+      input: { query: "current weather forecast by city 武汉 天气 实时 预报", limit: 5 },
+      reason: "No matching rule found",
+      traceId: "request-trace",
+      approvalMode: "ask",
+      runtimeRevision: 3,
+      inputId: "input-1",
     }
-  )
-
-  it("summarizes paths and proposed line changes from complete patch hunks", () => {
-    const patch = [
-      "diff --git a/app/form.tsx b/app/form.tsx",
-      "--- a/app/form.tsx",
-      "+++ b/app/form.tsx",
-      "@@ -1,2 +1,3 @@",
-      " context",
-      "-old",
-      "+new",
-      "+second",
-      "diff --git a/app/label.ts b/app/label.ts",
-      "--- a/app/label.ts",
-      "+++ b/app/label.ts",
-      "@@ -1 +1 @@",
-      "-before",
-      "+after",
-    ].join("\n")
-    const visible = summaryText(renderPermission("ApplyPatch", { input: { patch } }))
-    expect(visible).toContain("app/form.tsx")
-    expect(visible).toContain("app/label.ts")
-    expect(visible).toContain("预计变更")
-    expect(visible).toContain("+3")
-    expect(visible).toContain("−2")
-    expect(visible).not.toContain("context")
-    const truncated = patch.replace("+second\n", "")
-    expect(
-      summaryText(renderPermission("ApplyPatch", { input: { patch: truncated } }))
-    ).not.toContain("预计变更")
-  })
-
-  it.each(["", "diff --git a/b/real.ts b/b/real.ts\n"])(
-    "shows the actual target path for both unified and Git patches",
-    (gitHeader) => {
-      const patch = gitHeader + "--- a/b/real.ts\n+++ b/b/real.ts\n@@ -1 +1 @@\n-before\n+after\n"
-      const container = renderPermission("ApplyPatch", { input: { patch } })
-      expect(container.querySelector("dl dd")?.textContent).toBe("b/real.ts")
-    }
-  )
-
-  it("shows supplied action, URL, and target fields for an unfamiliar tool without inventing a scope", () => {
-    const container = renderPermission("RemoteTool", {
-      input: { action: "publish", url: "https://example.org/release", target: "production" },
-    })
-
-    expect(container.querySelector("dl")?.textContent ?? "").toContain("publish")
-    expect(container.querySelector("dl")?.textContent ?? "").toContain(
-      "https://example.org/release"
-    )
-    expect(container.querySelector("dl")?.textContent ?? "").toContain("production")
-    expect(container.textContent).not.toContain("整个会话")
-    expect(container.textContent).not.toContain("工作目录")
-  })
-
-  it("shows a structured job target from the actual job payload", () => {
-    const container = renderPermission("JobCancel", {
-      input: { target: { kind: "shell", jobId: "shell-17" }, reason: "finished" },
-    })
-
-    expect(container.querySelector("dl")?.textContent ?? "").toContain("shell: shell-17")
-  })
-
-  it("preserves browser approval context when its URL exists only in the request reason", () => {
-    const container = renderPermission("Browser", {
-      reason: "允许访问 https://example.org/account 吗？",
-      input: { action: "navigate" },
-    })
-
-    expect(summaryText(container)).toContain("https://example.org/account")
-    expect(container.querySelector("details")?.textContent).toContain("https://example.org/account")
-    expect(container.querySelector("dl")?.textContent ?? "").toContain("navigate")
-    expect(container.querySelector("dl")?.textContent ?? "").not.toContain(
-      "https://example.org/account"
-    )
-  })
-
-  it.each([null, [], "not an object", { command: 42, workdir: {}, file_path: false, target: [] }])(
-    "does not derive operation fields from malformed input %j",
-    (input) => {
-      const container = renderPermission("Shell", { reason: 4, input })
-
-      expect(container.querySelector("dl")).toBeNull()
-      expect(container.querySelector("details pre")?.textContent ?? "").toContain('"input"')
-      expect(container.textContent).not.toContain("undefined")
-      expect(container.textContent).not.toContain("[object Object]")
-    }
-  )
-
-  it("keeps original details collapsed and renders hostile strings as text", () => {
-    const reason = "<img src=x onerror=alert(1)>"
-    const input = { command: "echo '<script>alert(1)</script>'", unknown: { nested: "original" } }
-    const payload = { reason, input, traceId: "trace-1" }
-    const container = renderPermission("Shell", payload)
-    const details = container.querySelector("details")!
-
-    expect(details).not.toBeNull()
-    expect(details.open).toBe(false)
-    expect(details.querySelector("summary")?.textContent).toContain("查看详情")
-    expect(JSON.parse(details.querySelector("pre")!.textContent!)).toEqual(payload)
-    expect(container.querySelector("script, img")).toBeNull()
-    expect(container.querySelector("dl")?.textContent).toContain(input.command)
-  })
-
-  it("bounds long summaries and raw details while clearly marking omitted content", () => {
-    const container = renderPermission("Shell", {
-      reason: "reason ".repeat(500),
-      input: { command: "command ".repeat(500), content: "body ".repeat(10000) },
-    })
-
-    expect(container.querySelector("dl")).not.toBeNull()
-    expect(container.querySelector("details pre")).not.toBeNull()
-    expect(container.querySelector("dl")!.textContent!.length).toBeLessThan(1500)
-    expect(container.querySelector("details pre")!.textContent!.length).toBeLessThanOrEqual(12000)
-    expect(container.querySelector("details")?.textContent ?? "").toContain("已截断")
-    expect(container.textContent!.length).toBeLessThan(15000)
-  })
-
-  it.each([
-    "Write-Output '" + "很长的中文参数".repeat(2500) + "'",
-    "  echo '开头'\r\necho two\r\necho three\r\necho \"最后一行\"  ",
-  ])(
-    "folds long commands and reveals the entire original text without replying",
-    async (command) => {
-      const container = document.body.appendChild(document.createElement("div"))
-      const root = createRoot(container)
-      const onReply = vi.fn()
-      vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
-      try {
-        await act(async () =>
-          root.render(
-            createElement(PermissionCard, {
-              permission: { ...pendingPermission, payload: { input: { command } } },
-              onReply,
-            })
-          )
-        )
-        const toggle = [...container.querySelectorAll("button")].find(
-          (button) => button.textContent === "展开完整命令"
-        )
-        expect(toggle?.getAttribute("aria-expanded")).toBe("false")
-        const code = container.querySelector("dl code")!
-        expect(code.textContent).toContain(command.slice(0, 10))
-        expect(code.textContent).not.toBe(command)
-        await act(async () => toggle!.click())
-        expect(toggle!.getAttribute("aria-expanded")).toBe("true")
-        expect(toggle!.textContent).toBe("收起命令")
-        expect(code.textContent).toBe(command)
-        await act(async () => toggle!.click())
-        expect(code.textContent).not.toBe(command)
-        expect(onReply).not.toHaveBeenCalled()
-      } finally {
-        await act(async () => root.unmount())
-        container.remove()
-        vi.unstubAllGlobals()
-      }
-    }
-  )
-
-  it("expands details without replying and retains the once-only approval and rejection callbacks", async () => {
-    const container = document.createElement("div")
-    document.body.append(container)
-    const root = createRoot(container)
-    const onReply = vi.fn()
-    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-    try {
-      await act(async () =>
-        root.render(
-          createElement(PermissionCard, {
-            permission: { ...pendingPermission, payload: { input: { command: "pnpm deploy" } } },
-            onReply,
-          })
-        )
-      )
-      const details = container.querySelector("details")!
-      expect(details).not.toBeNull()
-      await act(async () => details.querySelector("summary")!.click())
-      expect(details.open).toBe(true)
+    await withInteractiveCard("ToolSearch", payload, async (container, onReply) => {
+      const block = requestBlock(container)
+      expect(block.querySelector("dl")).toBeNull()
+      const toggle = block.querySelector("button")
+      if (toggle) await act(async () => toggle.click())
+      expect(block.querySelector("pre")?.textContent).toBe(JSON.stringify(payload, null, 2))
+      const card = container.cloneNode(true) as HTMLElement
+      requestBlock(card).remove()
+      expect(card.textContent).toContain("搜索工具")
+      expect(card.textContent).not.toContain(payload.reason)
+      expect(card.textContent).not.toContain("未匹配到授权规则")
       expect(onReply).not.toHaveBeenCalled()
-      const buttons = [...container.querySelectorAll("button")]
-      await act(async () => buttons.find((button) => button.textContent === "允许本次")!.click())
-      expect(onReply).toHaveBeenNthCalledWith(1, "approved", "once")
-      await act(async () => buttons.find((button) => button.textContent === "拒绝")!.click())
-      expect(onReply).toHaveBeenNthCalledWith(2, "denied")
-    } finally {
-      act(() => root.unmount())
-      container.remove()
-      delete (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT
+    })
+  })
+
+  it.each([null, [], "not an object", { args: [1, false], nested: { key: "value" } }])(
+    "keeps unfamiliar input %j in its original JSON form",
+    async (input) => {
+      const payload = { input }
+      await withInteractiveCard("ExternalTool", payload, async (container) => {
+        const block = requestBlock(container)
+        const toggle = block.querySelector("button")
+        if (toggle) await act(async () => toggle.click())
+        expect(JSON.parse(block.querySelector("pre")!.textContent!)).toEqual(payload)
+      })
     }
+  )
+
+  it("expands and collapses the full raw request independently of its approval actions", async () => {
+    const command = '  echo "<script>alert(1)</script>"\r\n' + "很长的中文参数".repeat(2500) + "正文末尾  "
+    const payload = { input: { command }, reason: "<img src=x onerror=alert(1)>", traceId: "trace-1" }
+    await withInteractiveCard("Shell", payload, async (container, onReply) => {
+      const block = requestBlock(container)
+      const raw = JSON.stringify(payload, null, 2)
+      const preview = block.querySelector("pre")?.textContent
+      expect(preview).toContain("echo")
+      expect(container.textContent).not.toContain("正文末尾")
+      expect(block.querySelectorAll("button")).toHaveLength(1)
+      const toggle = block.querySelector("button")!
+      expect(toggle.textContent).toBe("展开全部")
+      expect(toggle.getAttribute("aria-expanded")).toBe("false")
+      const decisions = [...container.querySelectorAll("button")].filter((button) => !block.contains(button))
+      expect(decisions.map((button) => button.textContent)).toEqual(["拒绝", "允许本次"])
+
+      await act(async () => toggle.click())
+      expect(toggle.textContent).toBe("收起")
+      expect(toggle.getAttribute("aria-expanded")).toBe("true")
+      const expanded = block.querySelector("pre")!.textContent!
+      expect(expanded).toBe(raw)
+      expect(JSON.parse(expanded).input.command).toBe(command)
+      expect(container.querySelector("script, img")).toBeNull()
+      await act(async () => toggle.click())
+      expect(block.querySelector("pre")?.textContent).toBe(preview)
+      expect(container.textContent).not.toContain("正文末尾")
+      expect(onReply).not.toHaveBeenCalled()
+
+      await act(async () => decisions[1]!.click())
+      expect(onReply).toHaveBeenNthCalledWith(1, "approved", "once")
+      await act(async () => decisions[0]!.click())
+      expect(onReply).toHaveBeenNthCalledWith(2, "denied")
+    })
   })
 })

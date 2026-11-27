@@ -1,4 +1,3 @@
-import { processPatch } from "@pierre/diffs"
 import {
   CircleStop,
   FileDiff,
@@ -6,6 +5,7 @@ import {
   FileText,
   Globe,
   Monitor,
+  Search,
   ShieldCheck,
   SquareTerminal,
   type LucideIcon,
@@ -19,112 +19,31 @@ const operations: Record<string, { summary: string; icon: LucideIcon }> = {
   Edit: { summary: "修改文件", icon: FilePenLine },
   ApplyPatch: { summary: "应用文件补丁", icon: FileDiff },
   Read: { summary: "读取文件", icon: FileText },
+  WebSearch: { summary: "搜索网页", icon: Search },
+  ToolSearch: { summary: "搜索工具", icon: Search },
   Browser: { summary: "操作浏览器", icon: Globe },
   Computer: { summary: "操作 Windows 应用", icon: Monitor },
   BrowserDeveloper: { summary: "检查网页", icon: Globe },
   JobCancel: { summary: "停止任务", icon: CircleStop },
 }
 
-const operationFields = [
-  ["command", "命令"],
-  ["workdir", "工作目录"],
-  ["file_path", "文件路径"],
-  ["path", "路径"],
-  ["url", "网址"],
-  ["target", "目标"],
-  ["action", "操作"],
-] as const
-
-function boundedPermissionText(value: unknown, limit: number): string {
-  if (typeof value !== "string") return ""
-  const text = value.trim()
-  return text.length > limit ? `${text.slice(0, limit - 1)}…` : text
-}
-
-interface OperationField {
-  key: string
-  label: string
-  value: string
-}
-
-function patchFields(patch: unknown): OperationField[] {
-  // Only summarize complete patches that fit within the inspectable request preview.
-  if (typeof patch !== "string" || patch.length > 12000) return []
-  try {
-    const { files } = processPatch(patch, undefined, true)
-    if (!files.length || files.some((file) => !file.name || !file.hunks.length)) return []
-    // Git headers are normalized by the parser. Plain unified headers retain their a/ or b/ prefix.
-    const hasGitHeaders = /^diff --git/m.test(patch)
-    const paths = files.map((file) => hasGitHeaders ? file.name : file.name.replace(/^[ab]\//, ""))
-    let additions = 0
-    let deletions = 0
-    for (const file of files) {
-      for (const hunk of file.hunks) {
-        additions += hunk.additionLines
-        deletions += hunk.deletionLines
-      }
-    }
-    return [
-      {
-        key: "patchPaths",
-        label: "文件路径",
-        value: boundedPermissionText(paths.join("\n"), 600),
-      },
-      { key: "patchStats", label: "预计变更", value: `+${additions}  −${deletions}` },
-    ]
-  } catch {
-    return []
-  }
-}
-
-/** Summarizes supplied operation fields only; missing paths and scopes stay missing. */
 export function readPermissionOperation(permission: DesktopPermissionRequest): {
   summary: string
   icon: LucideIcon
   toolName: string
-  reason: string
-  fields: OperationField[]
   details: string
-  detailsTruncated: boolean
 } {
-  const rawInput = permission.payload.input
-  const input =
-    rawInput && typeof rawInput === "object" && !Array.isArray(rawInput)
-      ? (rawInput as Record<string, unknown>)
-      : {}
-  const fields: OperationField[] = operationFields.flatMap(([key, label]) => {
-    let rawValue = input[key]
-    if (key === "target" && rawValue && typeof rawValue === "object" && !Array.isArray(rawValue)) {
-      const target = rawValue as Record<string, unknown>
-      rawValue =
-        typeof target.kind === "string" && typeof target.jobId === "string"
-          ? `${target.kind}: ${target.jobId}`
-          : undefined
-    }
-    const value =
-      key === "command" && typeof rawValue === "string" && rawValue.trim()
-        ? rawValue
-        : boundedPermissionText(rawValue, 600)
-    return value ? [{ key, label, value }] : []
-  })
-  if (permission.toolName === "ApplyPatch") fields.push(...patchFields(input.patch))
+  const toolName = permission.toolName
+  const operation = Object.hasOwn(operations, toolName)
+    ? operations[toolName]!
+    : { summary: "运行工具", icon: ShieldCheck }
   let details: string
   try {
     details = JSON.stringify(permission.payload, null, 2)
   } catch {
     details = "无法显示原始详情"
   }
-  const toolName = boundedPermissionText(permission.toolName, 120)
-  return {
-    ...(Object.hasOwn(operations, permission.toolName)
-      ? operations[permission.toolName]!
-      : { summary: "运行工具", icon: ShieldCheck }),
-    toolName,
-    reason: boundedPermissionText(permission.payload.reason, 1000),
-    fields,
-    details: details.slice(0, 12000),
-    detailsTruncated: details.length > 12000,
-  }
+  return { ...operation, toolName, details }
 }
 
 const developerActionLabels: Record<string, string> = {
@@ -181,7 +100,10 @@ export function readPermissionReview(
   return {
     status: record.status as keyof typeof approvalReviewLabels,
     label,
-    reason: typeof reason === "string" ? reason.slice(0, 1000) : "",
+    reason:
+      typeof reason === "string" && reason !== "No matching rule found"
+        ? reason.trim().slice(0, 1000)
+        : "",
   }
 }
 

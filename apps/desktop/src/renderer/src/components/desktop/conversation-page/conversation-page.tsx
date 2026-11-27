@@ -7,7 +7,7 @@ import { useNavigate } from "@tanstack/react-router"
 
 import { OpenWithSplitButton } from "@renderer/components/desktop/open-with"
 import { SideChatSelectionActions } from "@renderer/components/desktop/tools/side-chat/side-chat-selection-actions"
-import { useComputerAppPermission } from "@renderer/components/desktop/tools/computer/computer-interaction"
+import { useComputerAppPermissionId } from "@renderer/components/desktop/tools/computer/computer-interaction"
 import {
   ConversationScroller as MessageScroller,
   ConversationScrollerButton as MessageScrollerButton,
@@ -319,9 +319,9 @@ function ConversationPane({
   const pendingPrompts = queuedPrompts(sessionView, queuedPromptActions)
   const approvalView = sessionView?.session.id === activeSessionId && !archived ? sessionView : null
   const approvalSessionId = approvalView?.session.id
-  const hasComputerAppPermission = useComputerAppPermission(approvalSessionId)
+  const computerPermissionId = useComputerAppPermissionId(approvalSessionId)
   const pendingPermissions = approvalView?.permissions.filter(requiresPermissionReply) ?? []
-  const pendingPermissionCount = pendingPermissions.length + Number(hasComputerAppPermission)
+  const pendingPermissionCount = pendingPermissions.length + (computerPermissionId ? 1 : 0)
   const localPromptSubmissions = Object.values(pendingPromptSubmissions)
     .filter((submission) => submission.sessionId === activeSessionId)
     .sort((left, right) => left.createdAt - right.createdAt)
@@ -757,6 +757,7 @@ function ConversationPane({
                 key={approvalSessionId}
                 className="conversation-composer-column mb-2 shrink-0"
                 sessionId={approvalSessionId}
+                computerPermissionId={computerPermissionId}
                 permissions={pendingPermissions}
                 replies={permissionReplies}
                 onReply={(id, status, decision, answer) => {

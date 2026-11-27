@@ -108,7 +108,8 @@ it("keeps the selected approval when the main chat receives a new queue and repl
     payload: { input: { command: `pnpm test ${id}` } }, createdAt: 1, updatedAt: 1,
   })
   const first = request("first")
-  const second = request("second")
+  const query = "武汉 实时天气 今天 2026年 当前气温"
+  const second = { ...request("second"), toolName: "WebSearch", payload: { input: { query } } }
   const third = request("third")
   const fourth = request("fourth")
   const reply = vi.fn().mockResolvedValue(undefined)
@@ -129,6 +130,9 @@ it("keeps the selected approval when the main chat receives a new queue and repl
   expect(region().textContent).toContain("1 / 3")
   await act(async () => region().querySelector<HTMLButtonElement>('button[aria-label="下一个请求"]')!.click())
   expect(region().textContent).toContain("2 / 3")
+  const content = region().querySelector<HTMLElement>('[aria-label="请求内容"]')!
+  expect(content.querySelector("pre")?.textContent).toBe(JSON.stringify(second.payload, null, 2))
+  expect(content.contains(allowButtons()[0]!)).toBe(false)
   await act(async () => useDesktopSessionStore.getState().applySessionUpdate({
     ...view, cursor: 1, permissions: [fourth, first, second, third],
   }))

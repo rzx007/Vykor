@@ -8,8 +8,6 @@ import {
   selectActiveWorkspaceProject,
   selectCommandCatalogCwd,
   selectImSessionGroups,
-  selectPermissionReplyError,
-  selectPermissionReplyPending,
   selectActiveSessionPromptSubmissions,
   selectActiveSessionSending,
   selectActiveSessionInterrupting,
@@ -18,6 +16,7 @@ import {
   selectNewConversationSending,
   selectProjectOperationError,
   selectSessionComposerError,
+  selectSessionPermissionReplies,
   selectSessionSending,
   selectSessionInterrupting,
 } from "./selectors"
@@ -330,8 +329,9 @@ describe("desktop session selectors", () => {
     expect(selectSessionComposerError(state, "session-a")).toBeNull()
   })
 
-  it("selects pending and failed replies for one permission only", () => {
+  it("selects pending and failed replies by request within the chosen session", () => {
     const state = stateWith({
+      activeSessionId: "session-a",
       sessionRuntimes: {
         "session-a": {
           ...createEmptySessionRuntime(),
@@ -359,13 +359,13 @@ describe("desktop session selectors", () => {
       },
     })
 
-    expect(selectPermissionReplyPending(state, "session-a", "permission-pending")).toBe(true)
-    expect(selectPermissionReplyPending(state, "session-a", "permission-failed")).toBe(false)
-    expect(selectPermissionReplyError(state, "session-a", "permission-failed")).toBe("授权回复失败")
-    expect(selectPermissionReplyError(state, "session-a", "permission-pending")).toBeNull()
-    expect(selectActiveSessionPermissionReplies(state)).toBe(
-      selectActiveSessionPermissionReplies(state)
-    )
+    const replies = selectSessionPermissionReplies(state, "session-a")
+    expect(replies).toEqual({
+      "permission-pending": { pending: true, error: null },
+      "permission-failed": { pending: false, error: "授权回复失败" },
+    })
+    expect(selectActiveSessionPermissionReplies(state)).toBe(replies)
+    expect(selectSessionPermissionReplies(state, "session-b")).toEqual({})
   })
 
   it.each(["open-session", "edit-prompt", "interrupt-run"] as const)(

@@ -261,23 +261,6 @@ export function selectActiveSessionQueuedPromptActions(
   return selectActiveSessionRuntime(state).queuedPromptActions
 }
 
-export function selectPermissionReplyPending(
-  state: DesktopSessionState,
-  sessionId: string,
-  permissionId: string
-): boolean {
-  return selectPermissionReplyOperation(state, sessionId, permissionId)?.phase === "pending"
-}
-
-export function selectPermissionReplyError(
-  state: DesktopSessionState,
-  sessionId: string,
-  permissionId: string
-): string | null {
-  const operation = selectPermissionReplyOperation(state, sessionId, permissionId)
-  return operation?.phase === "failed" ? (operation.error ?? null) : null
-}
-
 export function selectActiveSessionPermissionReplies(
   state: DesktopSessionState
 ): Record<string, PermissionReplyState> {
@@ -342,17 +325,6 @@ export function selectProjectOperationError(
 
 function hasPendingComposerOperation(runtime: DesktopSessionRuntime): boolean {
   return hasPendingOperation(runtime, (kind) => composerOperationKinds.has(kind))
-}
-
-function selectPermissionReplyOperation(
-  state: DesktopSessionState,
-  sessionId: string,
-  permissionId: string
-): DesktopOperation | undefined {
-  const operation = selectSessionRuntime(state, sessionId).operations[
-    `${sessionId}:${permissionId}`
-  ]
-  return operation?.kind === "reply-permission" ? operation : undefined
 }
 
 function hasSubmittingPrompt(runtime: DesktopSessionRuntime): boolean {

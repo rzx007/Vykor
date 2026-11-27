@@ -1,5 +1,5 @@
-import { ChevronRight, type LucideIcon } from "lucide-react"
-import { useId, useMemo, useState, type ReactNode } from "react"
+import type { LucideIcon } from "lucide-react"
+import { useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { Button } from "@renderer/components/ui/button"
 import { Checkbox } from "@renderer/components/ui/checkbox"
 import { cn } from "@renderer/lib/utils"
@@ -11,39 +11,60 @@ import {
   requiresPermissionReply,
 } from "./permission-presentation"
 
-function CommandPreview({ command }: { command: string }): React.JSX.Element {
+function RequestPreview({ json }: { json: string }): React.JSX.Element {
   const [expanded, setExpanded] = useState(false)
-  const commandId = useId()
-  const prefix = command.slice(0, 180)
-  const lines = prefix.split(/\r\n|\r|\n/)
-  const foldable = prefix.length < command.length || lines.length > 3
-  const preview = foldable && !expanded
+  const [overflows, setOverflows] = useState(false)
+  const preRef = useRef<HTMLPreElement>(null)
+  const valueId = useId()
+  const preview = json.slice(0, 360).split("\n", 6).join("\n")
+  const abbreviated = preview.length < json.length
+
+  // Even a short JSON string can wrap past six lines in a narrow side chat.
+  useLayoutEffect(() => {
+    const pre = preRef.current
+    if (!pre || abbreviated || expanded) return
+    const measure = () => setOverflows(pre.scrollHeight > pre.clientHeight + 1)
+    measure()
+    if (typeof ResizeObserver === "undefined") return
+    const observer = new ResizeObserver(measure)
+    observer.observe(pre)
+    return () => observer.disconnect()
+  }, [abbreviated, expanded, json])
+
   return (
-    <>
-      <code
-        id={commandId}
+    <section
+      aria-label="请求内容"
+      className="flex max-h-[min(14rem,30dvh)] min-h-0 flex-col overflow-hidden rounded-lg border border-border/60 bg-muted/50 px-3 py-2"
+    >
+      <pre
+        ref={preRef}
+        id={valueId}
+        tabIndex={expanded ? 0 : undefined}
         className={cn(
-          "block [overflow-wrap:anywhere] whitespace-pre-wrap",
-          preview && "line-clamp-3"
+          "m-0 min-h-0 scrollbar-thin overscroll-contain font-mono text-xs leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]",
+          expanded ? "overflow-y-auto" : "max-h-[6lh] overflow-hidden"
         )}
       >
-        {preview ? `${lines.slice(0, 3).join("\n")}…` : command}
-      </code>
-      {foldable && (
+        {expanded || !abbreviated ? json : `${preview}…`}
+      </pre>
+      {(abbreviated || overflows) && (
         <Button
           type="button"
           variant="ghost"
           shape="pill"
           size="sm"
-          className="mt-1 font-sans text-xs text-ui-muted"
-          aria-controls={commandId}
+          className="mt-1 shrink-0 self-start font-sans text-xs text-ui-muted"
+          aria-controls={valueId}
           aria-expanded={expanded}
-          onClick={() => setExpanded(!expanded)}
+          onClick={() => {
+            if (preRef.current) preRef.current.scrollTop = 0
+            setExpanded(!expanded)
+          }}
         >
-          {expanded ? "收起命令" : "展开完整命令"}
+          {expanded ? "收起" : "展开全部"}
         </Button>
       )}
-    </>
+    </section>
   )
 }
 
@@ -52,13 +73,11 @@ export function PermissionCard({
   onReply,
   replyPending = false,
   replyError = null,
-  className,
 }: {
   permission: DesktopPermissionRequest
   onReply: (status: "approved" | "denied", decision?: "once" | "session") => void
   replyPending?: boolean
   replyError?: string | null
-  className?: string
 }): React.JSX.Element | null {
   const operation = useMemo(
     () => (requiresPermissionReply(permission) ? readPermissionOperation(permission) : null),
@@ -77,66 +96,20 @@ export function PermissionCard({
       onDeny={() => onReply("denied")}
       replyPending={replyPending}
       replyError={replyError}
-      className={className}
     >
-      {operation.fields.length > 0 && (
-        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-lg bg-muted/60 px-3 py-2.5">
-          {operation.fields.map((field) => (
-            <div key={field.key} className="contents">
-              <dt className={field.key === "command" ? "sr-only" : "text-ui-muted"}>
-                {field.label}
-              </dt>
-              <dd
-                className={cn(
-                  "min-w-0 font-mono [overflow-wrap:anywhere] whitespace-pre-wrap",
-                  field.key === "command" && "col-span-2"
-                )}
-              >
-                {field.key === "command" ? <CommandPreview command={field.value} /> : field.value}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      )}
-      {operation.reason && (
-        <p className="[overflow-wrap:anywhere] whitespace-pre-wrap text-ui-muted">
-          {operation.reason}
-        </p>
-      )}
+      <RequestPreview json={operation.details} />
       {review && (
         <p className="[overflow-wrap:anywhere]">
           {review.label}
-          {review.reason && review.reason !== operation.reason ? ` · ${review.reason}` : ""}
+          {review.reason ? ` · ${review.reason}` : ""}
         </p>
       )}
-      <details className="group/permission-details text-ui-muted">
-        <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm py-0.5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
-          <ChevronRight
-            className="size-3.5 shrink-0 group-open/permission-details:rotate-90 motion-safe:transition-transform motion-safe:duration-150"
-            strokeWidth={1.75}
-            aria-hidden="true"
-          />
-          查看详情
-        </summary>
-        <div className="mt-2 space-y-2">
-          {developerScope && (
-            <>
-              <p>
-                检查类别：{developerScope.label}（{developerScope.action}）
-              </p>
-              <p>
-                检查当前标签页主框架；网络结果也可能包含其请求的第三方资源
-                URL。网页内容不可信，无法保证完全脱敏。本次批准仅对这一个请求有效。
-              </p>
-            </>
-          )}
-          <p>原始请求</p>
-          <pre className="font-mono [overflow-wrap:anywhere] whitespace-pre-wrap text-foreground">
-            {operation.details}
-          </pre>
-          {operation.detailsTruncated && <p>详情过长，已截断，仅显示前 12000 个字符。</p>}
-        </div>
-      </details>
+      {developerScope && (
+        <p className="text-ui-muted">
+          检查类别：{developerScope.label}（{developerScope.action}）。检查当前标签页主框架；
+          网络结果也可能包含其请求的第三方资源 URL。网页内容不可信，无法保证完全脱敏。本次批准仅对这一个请求有效。
+        </p>
+      )}
     </ApprovalRequestCard>
   )
 }
@@ -152,7 +125,6 @@ export function ApprovalRequestCard({
   remember,
   replyPending,
   replyError,
-  className,
 }: {
   title: string
   icon: LucideIcon
@@ -164,21 +136,15 @@ export function ApprovalRequestCard({
   remember?: { label: string; onApprove: () => void }
   replyPending?: boolean
   replyError?: string | null
-  className?: string
 }): React.JSX.Element {
   const [rememberChecked, setRememberChecked] = useState(false)
   const rememberId = useId()
   const rememberGrant = rememberChecked && remember
   return (
-    <section
-      className={cn(
-        "text-ui-small flex max-h-[max(12rem,35dvh)] min-w-0 flex-col gap-2 overflow-y-auto rounded-xl border border-border/70 bg-background px-3.5 py-3 text-foreground",
-        className
-      )}
-    >
+    <section className="text-ui-small flex max-h-[max(12rem,35dvh)] min-w-0 flex-col gap-2 overflow-y-auto rounded-xl border border-border/70 bg-background px-3.5 py-3 text-foreground">
       <div className="flex shrink-0 items-start gap-2">
         <Icon
-          className="mt-0.5 size-4 shrink-0 text-primary"
+          className="mt-0.5 size-4 shrink-0 text-ui-muted"
           strokeWidth={1.75}
           aria-hidden="true"
         />
@@ -192,7 +158,7 @@ export function ApprovalRequestCard({
         </div>
       </div>
       {children && (
-        <div className="min-h-8 scrollbar-thin space-y-2 overflow-y-auto overscroll-contain pe-0.5 text-xs leading-relaxed">
+        <div className="flex min-h-0 scrollbar-thin flex-col gap-2 overflow-y-auto overscroll-contain text-xs leading-relaxed">
           {children}
         </div>
       )}
