@@ -51,6 +51,7 @@ export type { AgentRememberResult, AgentRememberOptions, AgentMemoryExecution } 
 export { createRememberTool, type RememberToolOptions } from "./node/memory/remember-tool.js";
 export type { VykorAgentExtension, VykorExtensionContext } from "./node/plugins/extensions.js";
 export { discoverVykorExtensions } from "./node/plugins/extensions.js";
+export { withSharedExtensionDiscovery } from "./node/plugins/plugin-discovery.js";
 export { activateDiscoveredPlugins, type ActivateDiscoveredPluginsOptions } from "./node/plugins/plugin-activation.js";
 export {
   createPluginCapabilityInventory,

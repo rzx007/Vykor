@@ -295,7 +295,10 @@ export class DaemonConnectionService {
   private connectedTransport(client: VykorClient): HttpTransport {
     const connection = this.connection
     if (connection?.client !== client) throw new Error("后台连接已变化，请重新连接后重试。")
-    return connection.transport ??= new HttpTransport(Service.clientOptions(connection.endpoint))
+    return connection.transport ??= new HttpTransport({
+      ...Service.clientOptions(connection.endpoint),
+      handshakeTimeoutMs: probeTimeoutMs,
+    })
   }
 
   private getOrConnectClient(): Promise<VykorClient> {
@@ -473,14 +476,27 @@ export class DaemonConnectionService {
   private async connect(signal: AbortSignal): Promise<VykorClient> {
     this.setDaemonStatus("discovering", "正在查找 daemon")
     const file = getDaemonRegistryPath()
+    const probe = async () => {
+      const timeout = AbortSignal.timeout(probeTimeoutMs)
+      try {
+        const endpoint = await Service.discover({ file, timeoutMs: probeTimeoutMs, signal: AbortSignal.any([signal, timeout]) })
+        return { endpoint, timeout }
+      } catch (error) {
+        if (signal.aborted || !timeout.aborted) throw error
+        return { endpoint: undefined, timeout }
+      }
+    }
     const beforeProbe = readDaemonRegistry()
-    const existing = await Service.discover({ file, timeoutMs: probeTimeoutMs, signal })
-    if (existing) return await this.useEndpoint(existing, signal)
+    const existing = await probe()
+    if (existing.endpoint) return await this.useEndpoint(existing.endpoint, signal)
     const registry = readDaemonRegistry()
     if (registry && daemonPidAlive(registry.pid)) {
       if (!beforeProbe || !sameRegistration(beforeProbe, registry)) {
-        const published = await Service.discover({ file, timeoutMs: probeTimeoutMs, signal })
-        if (published) return this.useEndpoint(published, signal)
+        const published = await probe()
+        if (published.endpoint) return this.useEndpoint(published.endpoint, signal)
+        published.timeout.throwIfAborted()
+      } else {
+        existing.timeout.throwIfAborted()
       }
       throw new Error("已登记的后台暂时不可达，请稍后重试。")
     }
@@ -548,7 +564,7 @@ export class DaemonConnectionService {
     } catch (error) {
       if (!timeout.aborted) throw error
     }
-    throw new Error("等待后台就绪超时，请重新连接。")
+    throw new DOMException("等待后台就绪超时，请重新连接。", "TimeoutError")
   }
 
   private setDaemonStatus(

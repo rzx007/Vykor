@@ -19,6 +19,7 @@ export interface HttpTransportOptions {
   baseUrl: string;
   token?: string;
   fetch?: typeof fetch;
+  handshakeTimeoutMs?: number;
 }
 
 export interface HttpRequestOptions {
@@ -170,6 +171,7 @@ export async function throwResponseError(response: Response): Promise<never> {
 
 export class HttpTransport {
   private protocolHandshake?: Promise<ServerCapabilities>;
+  private readonly handshakeTimeoutMs?: number;
   readonly baseUrl: string;
   readonly token?: string;
   readonly fetchImpl: typeof fetch;
@@ -178,6 +180,7 @@ export class HttpTransport {
     this.baseUrl = normalizeDaemonBaseUrl(options.baseUrl);
     this.token = options.token;
     this.fetchImpl = options.fetch ?? fetch;
+    this.handshakeTimeoutMs = options.handshakeTimeoutMs;
   }
 
   isHandshakeExempt(pathname: string): boolean {
@@ -187,7 +190,10 @@ export class HttpTransport {
 
   ensureProtocol(signal?: AbortSignal): Promise<ServerCapabilities> {
     signal?.throwIfAborted();
-    this.protocolHandshake ??= this.requestUnknown("/capabilities", { auth: false })
+    this.protocolHandshake ??= this.requestUnknown("/capabilities", {
+      auth: false,
+      signal: this.handshakeTimeoutMs === undefined ? undefined : AbortSignal.timeout(this.handshakeTimeoutMs),
+    })
       .then((value) => {
         const capabilities = parseServerCapabilities(value);
         const result = checkProtocolCompatibility(capabilities, { version: CURRENT_PROTOCOL_VERSION });

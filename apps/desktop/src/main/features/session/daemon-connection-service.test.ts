@@ -71,14 +71,14 @@ describe("desktop daemon connection", () => {
     const client = await service.getClient()
     const transport = await service.getTransport(client)
     await expect(service.getTransport()).resolves.toBe(transport)
-    expect(state.transportCreated).toHaveBeenCalledExactlyOnceWith({ baseUrl: endpoint.url, token: endpoint.token })
+    expect(state.transportCreated).toHaveBeenCalledExactlyOnceWith({ baseUrl: endpoint.url, token: endpoint.token, handshakeTimeoutMs: 15_000 })
 
     const replacement = { ...endpoint, token: "new-token" }
     sdk.discover.mockResolvedValue(replacement)
     const next = await service.refreshClient()
     await expect(service.getTransport(client)).rejects.toThrow(/连接已变化/)
     await expect(service.getTransport(next)).resolves.not.toBe(transport)
-    expect(state.transportCreated).toHaveBeenLastCalledWith({ baseUrl: replacement.url, token: replacement.token })
+    expect(state.transportCreated).toHaveBeenLastCalledWith({ baseUrl: replacement.url, token: replacement.token, handshakeTimeoutMs: 15_000 })
   })
 
   it("passes the desktop profile to the Windows Electron daemon when no daemon is registered", async () => {
@@ -168,6 +168,27 @@ describe("desktop daemon connection", () => {
     expect(sdk.ensure).not.toHaveBeenCalled()
     sdk.discover.mockResolvedValue(endpoint)
     await expect(service.getClient()).resolves.toBeDefined()
+  })
+
+  it("preserves a discovery timeout from a live registered daemon", async () => {
+    host.readDaemonRegistry.mockReturnValue(endpoint)
+    host.daemonPidAlive.mockReturnValue(true)
+    const nativeTimeout = AbortSignal.timeout.bind(AbortSignal)
+    const deadline = vi.spyOn(AbortSignal, "timeout").mockImplementation(() => nativeTimeout(30))
+    sdk.discover.mockImplementationOnce(({ signal }) => new Promise((resolve, reject) => {
+      const timer = setTimeout(() => resolve(undefined), 100)
+      signal.addEventListener("abort", () => {
+        clearTimeout(timer)
+        reject(signal.reason)
+      }, { once: true })
+    }))
+    try {
+      const service = new DaemonConnectionService()
+      await expect(service.getClient()).rejects.toMatchObject({ name: "TimeoutError" })
+      expect(sdk.ensure).not.toHaveBeenCalled()
+    } finally {
+      deadline.mockRestore()
+    }
   })
 
   it("reads sessions from a compatible daemon with no browser bridge", async () => {

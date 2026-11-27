@@ -632,7 +632,8 @@ export const desktopAPI = {
     readLocalProjectDirectory: (path: string) => invoke(IpcChannels.sessionReadLocalProjectDirectory, path),
     inspectProject: (path: string) => invoke(IpcChannels.sessionInspectProject, path),
     listCommands: (cwd: string) => invoke(IpcChannels.sessionListCommands, cwd),
-    listContextPlugins: (cwd: string) => invoke(IpcChannels.sessionListContextPlugins, cwd),
+    getComposerCatalog: (cwd: string, sessionId?: string) =>
+      invoke(IpcChannels.sessionGetComposerCatalog, cwd, sessionId),
     compact: (input: IpcInvokeMap[typeof IpcChannels.sessionCompact]["args"][0]) =>
       invoke(IpcChannels.sessionCompact, input),
     getGoal: (input: IpcInvokeMap[typeof IpcChannels.sessionGoalGet]["args"][0]) =>

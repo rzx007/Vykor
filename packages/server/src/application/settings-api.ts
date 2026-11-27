@@ -1,6 +1,8 @@
 import type { PluginInfo } from "@vykor/domain-contracts/plugin-apps";
+import type { PluginCatalogEntry } from "@vykor/domain-contracts/inputs";
 import type { SkillMarketplaceEntry, SkillMarketplaceInstallInput, SkillMarketplaceSelection } from "@vykor/domain-contracts/skills";
 import type { MemoryEntryRecord, UpdateMemoryEntryInput, ClearMemoryInput } from "@vykor/domain-contracts/memory";
+import type { CommandCatalogEntry } from "../commands/commands.js";
 export type { MemoryEntryRecord } from "@vykor/domain-contracts/memory";
 
 /**
@@ -172,7 +174,12 @@ export interface AuthService {
 }
 
 export interface ContextService {
-  plugins?(input: { cwd: string }): Promise<{ plugins: import("@vykor/domain-contracts/inputs").PluginCatalogEntry[] }>;
+  composerCatalog?(input: { cwd: string; sessionId?: string }): Promise<{
+    commands: CommandCatalogEntry[];
+    plugins: PluginCatalogEntry[];
+    contextUsage?: import("@vykor/core").ContextUsageSnapshot | null;
+  }>;
+  plugins?(input: { cwd: string }): Promise<{ plugins: PluginCatalogEntry[] }>;
   preview(input: {
     cwd: string;
   }): Promise<{ report: string }> | { report: string };

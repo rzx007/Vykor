@@ -194,7 +194,6 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
           }
         }
       }
-      void get().refreshContextUsage()
       return "applied"
     } catch (error) {
       let failed = false
@@ -581,7 +580,12 @@ export function createSessionActions(context: SessionActionsContext): SessionAct
       const request = (async (): Promise<boolean | void> => {
         let parsed: ReturnType<typeof parseDesktopContextUsageSnapshot> = null
         try {
-          if (cwd && typeof window.desktop.sessions.getContextUsage === "function") {
+          const fromCatalog = options?.fromCatalog ? await options.fromCatalog : undefined
+          if ((get().activeSessionId ?? undefined) !== sessionId) return
+          if (generation !== contextUsageGeneration) return latestContextUsageRequest
+          if (fromCatalog !== undefined) {
+            parsed = parseDesktopContextUsageSnapshot(fromCatalog)
+          } else if (cwd && typeof window.desktop.sessions.getContextUsage === "function") {
             parsed = parseDesktopContextUsageSnapshot(
               await window.desktop.sessions.getContextUsage({
                 cwd,

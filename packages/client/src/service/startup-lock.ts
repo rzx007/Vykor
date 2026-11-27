@@ -27,5 +27,5 @@ export async function acquireStartupLock(file: string, end: number, signal?: Abo
       await sleep(Math.max(1, Math.min(50, end - Date.now())), undefined, { signal });
     }
   }
-  throw new Error("Vykor service startup timed out waiting for the registry lock.");
+  throw new DOMException("Vykor service startup timed out waiting for the registry lock.", "TimeoutError");
 }

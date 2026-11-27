@@ -42,7 +42,7 @@ const results: Record<string, (...args:any[]) => any> = {
   "sessions.open":()=>view,"sessions.inspectProject":()=>({project,git:false,branch:null,branches:[]}),
   "sessions.getContextUsage":()=>null,"sessions.getGoal":()=>null,
   "sessions.getRuntimeConfig":()=>({model:"demo-model",provider:"demo",permissionMode:"ask",workMode:"build"}),
-  "sessions.listCommands":()=>[],"sessions.listContextPlugins":()=>[],
+  "sessions.listCommands":()=>[],"sessions.getComposerCatalog":()=>({commands:[],plugins:[]}),
   "activity.open":()=>({cursor:0,delivery:"baseline",sessions:[],scheduled:[]}),
   "updates.getState":()=>({phase:"idle",status:"idle"}),
   "workspace.readFile":(input:any)=>preview(input.path),

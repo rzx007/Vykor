@@ -10,6 +10,28 @@ const capabilities = (version = CURRENT_PROTOCOL_VERSION) => Response.json({
 });
 
 describe("mandatory protocol handshake", () => {
+  it("cancels a stalled shared handshake and negotiates again on the next request", async () => {
+    let stalledSignal: AbortSignal | undefined;
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockImplementationOnce(async (_url, init) => {
+        stalledSignal = init?.signal ?? undefined;
+        if (!stalledSignal) throw new Error("Expected the handshake to have its own deadline");
+        return new Promise<Response>((_resolve, reject) => {
+          stalledSignal!.addEventListener("abort", () => reject(stalledSignal!.reason), { once: true });
+        });
+      })
+      .mockResolvedValueOnce(capabilities())
+      .mockResolvedValueOnce(Response.json({ ok: true }));
+    const transport = new HttpTransport({ baseUrl: "http://daemon", fetch: fetchImpl, handshakeTimeoutMs: 30 });
+
+    await expect(transport.request("/business")).rejects.toMatchObject({ name: "TimeoutError" });
+    expect(stalledSignal?.aborted).toBe(true);
+    await expect(transport.request("/business")).resolves.toEqual({ ok: true });
+    expect(fetchImpl.mock.calls.map(([url]) => new URL(String(url)).pathname)).toEqual([
+      "/capabilities", "/capabilities", "/business",
+    ]);
+  });
+
   it("shares one handshake across concurrent HTTP, event and attachment downloads", async () => {
     const calls: Array<{ path: string; headers: Headers }> = [];
     let release!: (response: Response) => void;

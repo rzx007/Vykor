@@ -11,7 +11,7 @@ import {
 import { INTERACTIVE_UI_REPLY_FORMAT, type PluginAppConversationRequest } from "@vykor/protocol"
 import type { SystemResource } from "@vykor/daemon-admin/configuration"
 import type { KnowledgeResource } from "@vykor/daemon-admin/knowledge"
-import type { CommandCatalogResource, DevelopmentResource } from "@vykor/daemon-admin/workspace"
+import type { CommandCatalogEntry, CommandCatalogResource, DevelopmentResource } from "@vykor/daemon-admin/workspace"
 import type { ProjectResource } from "./project-resource"
 
 import type {
@@ -92,6 +92,18 @@ export {
 
 const DESKTOP_SESSION_COMMAND_NAMES = new Set(["/compact", "/goal", "/status", "/skills"])
 
+export function toDesktopCommandCatalog(commands: CommandCatalogEntry[]): DesktopCommandCatalogEntry[] {
+  return commands.flatMap((command): DesktopCommandCatalogEntry[] => {
+    if (command.kind === "template") {
+      if (!command.path) return []
+      return [{ ...command, kind: "template", path: command.path }]
+    }
+    return DESKTOP_SESSION_COMMAND_NAMES.has(command.name)
+      ? [{ ...command, kind: "session" }]
+      : []
+  })
+}
+
 export class SessionOperations {
   async readLocalProjectDirectory(inputPath: string) {
     const path = resolveRequiredPath(inputPath)
@@ -145,19 +157,7 @@ export class SessionOperations {
   ): Promise<DesktopCommandCatalogEntry[]> {
     const cwd = resolveRequiredPath(cwdInput)
     const commands = await client.system.listCommands({ cwd })
-    return commands.flatMap((command): DesktopCommandCatalogEntry[] => {
-      if (command.kind === "template") {
-        if (!command.path) return []
-        return [{ ...command, kind: "template", path: command.path }]
-      }
-      return DESKTOP_SESSION_COMMAND_NAMES.has(command.name)
-        ? [{ ...command, kind: "session" }]
-        : []
-    })
-  }
-
-  async listContextPlugins(client: { system: Pick<KnowledgeResource, "listContextPlugins"> }, cwdInput: string) {
-    return client.system.listContextPlugins({ cwd: resolveRequiredPath(cwdInput) })
+    return toDesktopCommandCatalog(commands)
   }
 
   async compactSession(

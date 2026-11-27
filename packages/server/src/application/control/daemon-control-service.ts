@@ -6,7 +6,7 @@ import type { HookInfo } from "../settings-api.js";
 import type { RunControlService } from "../session/execution/run-control-service.js";
 import type { AgentPool } from "../agent/agent-pool.js";
 import type { ExecutionObservationService } from "../observability/execution-observation-service.js";
-import type { DaemonOperationGate, DaemonOperationLease } from "./daemon-operation-gate.js";
+import { DaemonOperationUnavailableError, type DaemonOperationGate, type DaemonOperationLease } from "./daemon-operation-gate.js";
 import { countByStatus, type VykorRuntimeSnapshot } from "../support.js";
 import { buildRuntimeMetricsSnapshot } from "../../shared/runtime-metrics.js";
 import { inspectDurableRun, listProjectionDiagnostics } from "./run-inspector.js";
@@ -144,6 +144,17 @@ export class DaemonControlService {
       this.runControl.hasActiveRunsForCwd(cwd) ||
       this.context.agentPool.hasActiveWorkForCwd(cwd)
     );
+  }
+
+  acquireComposerCatalogUsage(sessionId: string, cwd: string): DaemonOperationLease | undefined {
+    const session = this.context.store.sessions.get(sessionId);
+    if (!session) return undefined;
+    try {
+      return this.context.operationGate.enter({ sessionId: session.id, cwd: session.cwd || cwd });
+    } catch (error) {
+      if (!(error instanceof DaemonOperationUnavailableError)) throw error;
+      return undefined;
+    }
   }
 
   acquireGlobalMutation(): DaemonOperationLease | undefined {

@@ -31,7 +31,7 @@ import type {
   DesktopBootstrapData,
   DesktopAuxSessionUpdate,
   DesktopCommandCatalogEntry,
-  DesktopPluginCatalogEntry,
+  DesktopComposerCatalog,
   CompactDesktopSessionInput,
   DesktopCompactSessionResult,
   DesktopDaemonStatus,
@@ -520,7 +520,7 @@ export type DesktopAPI = {
     readLocalProjectDirectory: (path: string) => Promise<DesktopProjectDirectory>
     inspectProject: (path: string) => Promise<DesktopProjectDetails>
     listCommands: (cwd: string) => Promise<DesktopCommandCatalogEntry[]>
-    listContextPlugins: (cwd: string) => Promise<DesktopPluginCatalogEntry[]>
+    getComposerCatalog: (cwd: string, sessionId?: string) => Promise<DesktopComposerCatalog>
     compact: (input: CompactDesktopSessionInput) => Promise<DesktopCompactSessionResult>
     getGoal: (input: GetDesktopSessionGoalInput) => Promise<SessionGoal | null>
     getMessagePart: (

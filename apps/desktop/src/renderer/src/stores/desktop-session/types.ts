@@ -188,6 +188,7 @@ export interface SessionActions {
   refreshContextUsage: (options?: {
     refresh?: boolean
     previousContextWindow?: number
+    fromCatalog?: Promise<DesktopContextUsageSnapshot | null | undefined>
   }) => Promise<boolean | void>
 }
 

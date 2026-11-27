@@ -6,7 +6,7 @@ import type {
 } from "./commands.js";
 import { normalizeCommandName } from "./commands.js";
 import { discoverVykorExtensions } from "@vykor/agent-runtime";
-import type { SkillDefinition } from "@vykor/skills";
+import type { SkillDefinition, SkillRegistry } from "@vykor/skills";
 
 function skillToCatalogEntry(skill: SkillDefinition): CommandCatalogEntry {
   const name = normalizeCommandName(skill.commandName ?? skill.name);
@@ -22,8 +22,10 @@ function skillToCatalogEntry(skill: SkillDefinition): CommandCatalogEntry {
   };
 }
 
-async function loadSkillRegistry(cwd: string, settings: Settings) {
-  return (await discoverVykorExtensions(cwd, settings)).skillRegistry;
+export function listSkillCommands(skillRegistry: SkillRegistry): CommandCatalogEntry[] {
+  return skillRegistry.getAll()
+    .filter((skill) => skill.userInvocable)
+    .map(skillToCatalogEntry);
 }
 
 /**
@@ -36,11 +38,8 @@ export function createDefaultCommandCatalog(
   const getSettings = typeof settings === "function" ? settings : () => settings;
   return {
     async list(input: ListCommandsInput): Promise<CommandCatalogEntry[]> {
-      const skillRegistry = await loadSkillRegistry(input.cwd, getSettings());
-      return skillRegistry
-        .getAll()
-        .filter((skill) => skill.userInvocable)
-        .map(skillToCatalogEntry);
+      const { skillRegistry } = await discoverVykorExtensions(input.cwd, getSettings());
+      return listSkillCommands(skillRegistry);
     },
   };
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { DaemonControlService, type DaemonControlServiceContext } from "../../../application/control/daemon-control-service.js";
 import { DaemonOperationGate } from "../../../application/control/daemon-operation-gate.js";
 import { createServiceRoutes } from "../service.js";
 
@@ -158,6 +159,58 @@ function createPluginControl() {
     inspectRuntimeHooks: vi.fn(async () => []), sessionExists: vi.fn(() => false),
   };
 }
+
+it("keeps plugin revocation out of a paired catalog load while allowing catalog-only reads", async () => {
+  const gate = new DaemonOperationGate();
+  const session = { id: "s1", cwd: "/session-workspace" };
+  const control = new DaemonControlService({
+    operationGate: gate,
+    store: { sessions: { get: (id: string) => id === session.id ? session : undefined } },
+    runControl: { hasAnyActiveRuns: () => false },
+    agentPool: { hasActiveWork: () => false },
+  } as DaemonControlServiceContext);
+  const usageStarted = Promise.withResolvers<void>();
+  const usageFinished = Promise.withResolvers<void>();
+  const composerCatalog = vi.fn(async ({ sessionId }: { cwd: string; sessionId?: string }) => {
+    if (sessionId) {
+      usageStarted.resolve();
+      await usageFinished.promise;
+    }
+    return { commands: [], plugins: [] };
+  });
+  const setEnabled = vi.fn(async () => ({ message: "disabled" }));
+  const routes = createServiceRoutes({
+    contextService: { composerCatalog, usage: vi.fn(), preview: vi.fn(), status: vi.fn() },
+    pluginService: { list: vi.fn(), setEnabled },
+    control,
+  });
+  const disable = () => routes.request("/plugins/fixture/disable", {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ cwd: session.cwd }),
+  });
+  const path = `/context/composer-catalog?cwd=/catalog&sessionId=${session.id}`;
+  const paired = routes.request(path);
+  try {
+    expect(await Promise.race([usageStarted.promise.then(() => "started"), Promise.resolve(paired).then(() => "response")])).toBe("started");
+    expect((await disable()).status).toBe(409);
+    expect(setEnabled).not.toHaveBeenCalled();
+    expect(gate.tryEnterBarrier({ kind: "session", sessionId: session.id, cwd: session.cwd }, () => true)).toBeUndefined();
+    expect(gate.tryEnterBarrier({ kind: "cwd", cwd: session.cwd }, () => true)).toBeUndefined();
+  } finally {
+    usageFinished.resolve();
+    await paired;
+  }
+  expect((await disable()).status).toBe(200);
+
+  const mutating = control.acquireGlobalMutation()!;
+  try {
+    expect(await (await routes.request(path)).json()).toEqual({ commands: [], plugins: [], contextUsage: null });
+    expect(composerCatalog).toHaveBeenLastCalledWith({ cwd: "/catalog" });
+    expect(await (await routes.request("/context/composer-catalog?cwd=/catalog")).json()).toEqual({ commands: [], plugins: [] });
+  } finally {
+    mutating.release();
+  }
+});
 
 describe("skill marketplace install route", () => {
   it("admits conversations during preparation and leaves runtimes alone when verification fails", async () => {

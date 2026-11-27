@@ -5,6 +5,7 @@ import { Composer } from "../../conversation-page/composer/composer"
 import { toComposerSkills } from "../../conversation-page/composer/composer-picker-model"
 import { toComposerCommands } from "../../conversation-page/composer/composer-command-catalog"
 import { pluginMentionsEnabled } from "../../conversation-page/composer/plugin-mentions-feature"
+import { useComposerCatalog } from "../../conversation-page/composer/use-composer-catalog"
 import { PermissionStack } from "@renderer/components/desktop/conversation-page/message/blocks/permission-stack"
 import { requiresPermissionReply } from "@renderer/components/desktop/conversation-page/message/blocks/permission-presentation"
 import { useComputerAppPermissionId } from "../computer/computer-interaction"
@@ -70,8 +71,6 @@ import { markComposerSessionTransient } from "@renderer/stores/desktop-session/c
 import type {
   DesktopSessionView,
   DesktopSessionRecord,
-  DesktopCommandCatalogEntry,
-  DesktopPluginCatalogEntry,
   DesktopModel,
   DesktopPermissionMode,
   DesktopWorkMode,
@@ -285,12 +284,6 @@ export function SideChatPanel({
   const [error, setError] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [creating, setCreating] = useState(() => pendingForks.has(sourceId))
-  const [catalog, setCatalog] = useState<{
-    cwd: string
-    commands: DesktopCommandCatalogEntry[]
-    plugins: DesktopPluginCatalogEntry[]
-    error?: string
-  } | null>(null)
   const [preferences, setPreferences] = useState<{
     model?: DesktopModel
     mode?: DesktopPermissionMode
@@ -556,30 +549,7 @@ export function SideChatPanel({
     }
   }, [active, sourceId, subscriptionId, targetId])
 
-  useEffect(() => {
-    if (!cwd) return
-    let disposed = false
-    void Promise.all([
-      window.desktop.sessions.listCommands(cwd),
-      pluginMentionsEnabled ? window.desktop.sessions.listContextPlugins(cwd) : Promise.resolve([]),
-    ]).then(
-      ([commands, plugins]) => {
-        if (!disposed) setCatalog({ cwd, commands, plugins })
-      },
-      () => {
-        if (!disposed)
-          setCatalog({
-            cwd,
-            commands: [],
-            plugins: [],
-            error: "命令或插件列表暂时无法加载，请稍后重试。",
-          })
-      }
-    )
-    return () => {
-      disposed = true
-    }
-  }, [cwd])
+  const catalog = useComposerCatalog(cwd ?? null)
   useEffect(() => {
     if (!active) return
     const frame = requestAnimationFrame(() =>
@@ -685,7 +655,7 @@ export function SideChatPanel({
     )
   }
   const actions = useDesktopSessionStore.getState()
-  const commands = toComposerCommands(catalog && catalog.cwd === cwd ? catalog.commands : [], {
+  const commands = toComposerCommands(catalog?.commands ?? [], {
     hasSession: !!verifiedTargetId,
     running,
     canOpenReview,
@@ -915,8 +885,8 @@ export function SideChatPanel({
               modeChangePending={modeChangePending}
               onWorkModeChange={changeWorkMode}
               effort={effort}
-              skills={toComposerSkills(catalog && catalog.cwd === cwd ? catalog.commands : [])}
-              plugins={catalog && catalog.cwd === cwd ? catalog.plugins : []}
+              skills={toComposerSkills(catalog?.commands ?? [])}
+              plugins={pluginMentionsEnabled ? (catalog?.plugins ?? []) : []}
               commands={commands}
               conversations={sessions}
               activeSessionId={targetId}

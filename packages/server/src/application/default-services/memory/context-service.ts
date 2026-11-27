@@ -20,8 +20,11 @@ import {
 import { getLocalRulesDir, loadFacts } from "@vykor/personalization";
 import { detectCredentialValue } from "@vykor/memory";
 import { loadOutputStyles } from "@vykor/output-styles";
-import { discoverVykorExtensions } from "@vykor/agent-runtime";
+import { discoverVykorExtensions, withSharedExtensionDiscovery, type PluginCapabilityInventory } from "@vykor/agent-runtime";
+import type { PluginCatalogEntry } from "@vykor/domain-contracts/inputs";
 
+import { mergeCommandCatalog } from "../../../commands/commands.js";
+import { listSkillCommands } from "../../../commands/default-command-catalog.js";
 import type { ContextService, ModelProviderInfo } from "../../settings-api.js";
 import {
   ContextUsageCache,
@@ -42,6 +45,23 @@ interface ContextStatusRow {
   purpose: string;
 }
 
+function listPluginCatalogEntries(inventory: PluginCapabilityInventory): PluginCatalogEntry[] {
+  return Array.from(inventory.plugins.values(), (plugin) => ({
+    pluginId: plugin.pluginId,
+    ...(plugin.icon ? { icon: plugin.icon } : {}),
+    displayName: plugin.displayName,
+    version: plugin.version,
+    scope: plugin.scope,
+    origin: plugin.origin,
+    description: plugin.description,
+    capabilities: [
+      ...(plugin.skillNames.length ? ["skills" as const] : []),
+      ...(plugin.mcpServerIds.length || plugin.nativeToolEntries.length ? ["tools" as const] : []),
+      ...(plugin.agentNames.length ? ["agents" as const] : []),
+    ],
+  }));
+}
+
 export function createDefaultContextService(
   ref: DaemonSettingsRef,
   cache: ContextUsageCache = sharedContextUsageCache,
@@ -58,24 +78,28 @@ export function createDefaultContextService(
     }) => Promise<ModelContextLimits> | ModelContextLimits;
   } = {},
 ): ContextService {
-  return {
+  const service: ContextService = {
+    async composerCatalog({ cwd, sessionId }) {
+      const loadCatalog = async () => {
+        const settings = await readCurrentSettings(ref);
+        const { pluginCapabilityInventory, skillRegistry } = await discoverVykorExtensions(cwd, settings);
+        return {
+          commands: mergeCommandCatalog(listSkillCommands(skillRegistry)),
+          plugins: listPluginCatalogEntries(pluginCapabilityInventory),
+        };
+      };
+      if (!sessionId) return loadCatalog();
+
+      return withSharedExtensionDiscovery(async () => {
+        const catalog = await loadCatalog();
+        const usage = await service.usage({ cwd, sessionId }).catch(() => null);
+        return { ...catalog, contextUsage: usage?.snapshot ?? null };
+      });
+    },
     async plugins({ cwd }) {
       const settings = await readCurrentSettings(ref);
       const { pluginCapabilityInventory } = await discoverVykorExtensions(cwd, settings);
-      return { plugins: [...pluginCapabilityInventory.plugins.values()].map((plugin) => ({
-        pluginId: plugin.pluginId,
-        ...(plugin.icon ? { icon: plugin.icon } : {}),
-        displayName: plugin.displayName,
-        version: plugin.version,
-        scope: plugin.scope,
-        origin: plugin.origin,
-        description: plugin.description,
-        capabilities: [
-          ...(plugin.skillNames.length ? ["skills" as const] : []),
-          ...(plugin.mcpServerIds.length || plugin.nativeToolEntries.length ? ["tools" as const] : []),
-          ...(plugin.agentNames.length ? ["agents" as const] : []),
-        ],
-      })) };
+      return { plugins: listPluginCatalogEntries(pluginCapabilityInventory) };
     },
     async preview({ cwd }) {
       const settings = await readCurrentSettings(ref);
@@ -295,6 +319,7 @@ export function createDefaultContextService(
       return { snapshot, report: formatContextUsageReport(snapshot) };
     },
   };
+  return service;
 }
 
 function formatPromptLayersReport(

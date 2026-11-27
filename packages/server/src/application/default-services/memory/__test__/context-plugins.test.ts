@@ -4,7 +4,9 @@ import { createDefaultContextService } from "../context-service.js";
 import { createServiceRoutes } from "../../../../http/routes/service.js";
 
 vi.mock("@vykor/agent-runtime", () => ({
+  withSharedExtensionDiscovery: (operation: () => Promise<unknown>) => operation(),
   discoverVykorExtensions: async () => ({
+    skillRegistry: { getAll: () => [] },
     pluginCapabilityInventory: {
       plugins: new Map([["dev.quality", {
         pluginId: "dev.quality", displayName: "Quality", description: "Review code",
@@ -26,6 +28,22 @@ it("projects discovery winners into a catalog with no paths, permissions or serv
     icon: "https://example.test/quality.png",
     version: "1.0.0", scope: "user", origin: "native", capabilities: ["skills", "tools"],
   }] });
+});
+
+it("returns the composer catalog when its session usage cannot be read", async () => {
+  const assembleLive = vi.fn(async () => { throw new Error("fixture usage failed"); });
+  const routes = createServiceRoutes({
+    contextService: createDefaultContextService({ current: {} as Settings }, undefined, { assembleLive }),
+    control: { acquireComposerCatalogUsage: () => ({ release() {} }) } as Parameters<typeof createServiceRoutes>[0]["control"],
+  });
+  const response = await routes.request("/context/composer-catalog?cwd=/repo&sessionId=missing-usage");
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({
+    commands: expect.arrayContaining([expect.objectContaining({ name: "/status" })]),
+    plugins: [expect.objectContaining({ pluginId: "dev.quality" })],
+    contextUsage: null,
+  });
+  expect(assembleLive).toHaveBeenCalledWith({ cwd: "/repo", sessionId: "missing-usage" });
 });
 
 it("serves the scoped catalog through the context endpoint", async () => {

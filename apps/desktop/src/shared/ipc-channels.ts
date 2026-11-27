@@ -44,7 +44,7 @@ import type {
   DesktopProjectDetails,
   DesktopProjectDirectory,
   DesktopCommandCatalogEntry,
-  DesktopPluginCatalogEntry,
+  DesktopComposerCatalog,
   CompactDesktopSessionInput,
   DesktopCompactSessionResult,
   DesktopSessionRecord,
@@ -289,7 +289,7 @@ export const IpcChannels = {
   sessionReadLocalProjectDirectory: "session:read-local-project-directory",
   sessionInspectProject: "session:inspect-project",
   sessionListCommands: "session:list-commands",
-  sessionListContextPlugins: "session:list-context-plugins",
+  sessionGetComposerCatalog: "session:get-composer-catalog",
   sessionCompact: "session:compact",
   sessionGoalGet: "session:goal:get",
   sessionMessagePartGet: "session:message-part:get",
@@ -808,9 +808,9 @@ export interface IpcInvokeMap
     args: [cwd: string]
     result: DesktopCommandCatalogEntry[]
   }
-  [IpcChannels.sessionListContextPlugins]: {
-    args: [cwd: string]
-    result: DesktopPluginCatalogEntry[]
+  [IpcChannels.sessionGetComposerCatalog]: {
+    args: [cwd: string, sessionId?: string]
+    result: DesktopComposerCatalog
   }
   [IpcChannels.sessionCompact]: {
     args: [input: CompactDesktopSessionInput]

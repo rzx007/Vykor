@@ -7,10 +7,11 @@
  * 3. SessionOperations：会话生命周期、Prompt、Permission、Goal 与项目操作
  */
 import { app, BrowserWindow, dialog, type OpenDialogOptions, type WebContents } from "electron"
+import log from "electron-log/main"
 import { getDataRoot, getWorkspacesDir, isHiddenManagedProjectPath } from "@vykor/host-config/paths"
 
-import type { HttpTransport, VykorClient } from "@rzx/client"
-import type { PluginAppConversationRequest } from "@vykor/protocol"
+import { VykorApiError, type HttpTransport, type VykorClient } from "@rzx/client"
+import { ProtocolDataError, type PluginAppConversationRequest } from "@vykor/protocol"
 import { SystemResource } from "@vykor/daemon-admin/configuration"
 import { KnowledgeResource } from "@vykor/daemon-admin/knowledge"
 import { CommandCatalogResource, DevelopmentResource } from "@vykor/daemon-admin/workspace"
@@ -23,6 +24,7 @@ import type {
   CreateDesktopSessionInput,
   DesktopBootstrapData,
   DesktopCommandCatalogEntry,
+  DesktopComposerCatalog,
   DesktopCompactSessionResult,
   DesktopDaemonStatus,
   DesktopPermissionMode,
@@ -69,6 +71,7 @@ import { resolveDesktopAttachmentSupport } from "../../../shared/attachment-type
 import { IpcEvents } from "../../../shared/ipc-channels"
 import { requireDesktopPluginCapabilities } from "../../../shared/plugin-capabilities"
 import type { DesktopContextUsageSnapshot } from "../../../shared/context-usage-types"
+import { parseDesktopContextUsageSnapshot } from "../../../shared/parse-context-usage-snapshot"
 import {
   isLegacyOutsideProjectWorkspacePath,
   normalizeWorkspacePath,
@@ -96,10 +99,26 @@ import {
   normalizePermissionMode,
   requirePermissionMode,
   requireString,
+  resolveRequiredPath,
   resolveProviderForModel,
   SessionOperations,
+  toDesktopCommandCatalog,
   toDesktopProject,
 } from "./session-operations"
+
+const composerCatalogFailures = {
+  daemon_connection_timeout: { stage: "connect", message: "读取输入框目录时，连接后台超时。" },
+  daemon_connection_failed: { stage: "connect", message: "读取输入框目录时，无法连接后台。" },
+  daemon_request_failed: { stage: "forward", message: "无法读取输入框目录，请稍后重试。" },
+  daemon_response_timeout: { stage: "response", message: "读取输入框目录超时，请稍后重试。" },
+  daemon_invalid_response: { stage: "decode", message: "后台返回的输入框目录格式异常。" },
+} as const
+
+function composerCatalogFailure(code: keyof typeof composerCatalogFailures, status?: number): Error {
+  const { stage, message } = composerCatalogFailures[code]
+  log.error(JSON.stringify({ interface: "GET /context/composer-catalog", stage, code, status }))
+  return new Error(message)
+}
 
 export type DesktopSessionConnection = Pick<
   DaemonConnectionService,
@@ -316,9 +335,49 @@ export class DesktopSessionService {
     return await this.operations.listCommands(client, cwdInput)
   }
 
-  async listContextPlugins(cwdInput: string) {
-    const client = { system: new KnowledgeResource(await this.daemonTransport()) }
-    return await this.operations.listContextPlugins(client, cwdInput)
+  async getComposerCatalog(cwdInput: string, sessionId?: string): Promise<DesktopComposerCatalog> {
+    const cwd = resolveRequiredPath(cwdInput)
+    let transport: HttpTransport
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      const timeout = new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new DOMException("Daemon connection timed out", "TimeoutError")), 45_000)
+      })
+      const connection = this.daemonTransport().then(async (current) => {
+        await current.ensureProtocol()
+        return current
+      })
+      transport = await Promise.race([timeout, connection])
+    } catch (error) {
+      throw composerCatalogFailure(error instanceof Error && error.name === "TimeoutError"
+        ? "daemon_connection_timeout"
+        : "daemon_connection_failed")
+    } finally {
+      clearTimeout(timer)
+    }
+
+    const signal = AbortSignal.timeout(15_000)
+    try {
+      const { commands, plugins, contextUsage } = await new KnowledgeResource(transport).getComposerCatalog({ cwd, sessionId, signal })
+      return {
+        commands: toDesktopCommandCatalog(commands), plugins,
+        ...(contextUsage !== undefined ? { contextUsage: parseDesktopContextUsageSnapshot(contextUsage) } : {}),
+      }
+    } catch (error) {
+      const status = error instanceof VykorApiError ? error.status : undefined
+      const cause = error instanceof Error ? error.cause : undefined
+      const causeCode = cause && typeof cause === "object" && "code" in cause ? cause.code : undefined
+      if (signal.aborted || (error instanceof Error && error.name === "TimeoutError")
+          || causeCode === "UND_ERR_HEADERS_TIMEOUT" || causeCode === "UND_ERR_BODY_TIMEOUT" || status === 504) {
+        const failure = composerCatalogFailure("daemon_response_timeout", status)
+        if (sessionId) return { ...await this.getComposerCatalog(cwd), contextUsage: null }
+        throw failure
+      }
+      if (error instanceof SyntaxError || error instanceof ProtocolDataError) {
+        throw composerCatalogFailure("daemon_invalid_response")
+      }
+      throw composerCatalogFailure("daemon_request_failed", status)
+    }
   }
 
   async compactSession(input: CompactDesktopSessionInput): Promise<DesktopCompactSessionResult> {

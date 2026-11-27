@@ -507,7 +507,8 @@ describe("local service management", () => {
   });
 
   it("cleans up a startup that times out before registration", async () => {
-    await expect(Service.ensure({ file, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION), "400"], timeoutMs: 80 })).rejects.toThrow(/timed out/i);
+    await expect(Service.ensure({ file, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION), "400"], timeoutMs: 80 }))
+      .rejects.toMatchObject({ name: "TimeoutError", message: expect.stringMatching(/timed out/i) });
     await sleep(500);
     expect(await Service.discover({ file })).toBeUndefined();
   });
@@ -582,7 +583,9 @@ describe("local service management", () => {
   it("bounds a joining caller by its own deadline without canceling the owner", async () => {
     const owner = Service.ensure({ file, command: [process.execPath, fixture, file, "1.2.3", String(CURRENT_PROTOCOL_VERSION), "400"], timeoutMs: 5_000 });
     await sleep(30);
-    try { await expect(Service.ensure({ file, timeoutMs: 50 })).rejects.toThrow(/timed out/i); }
+    try {
+      await expect(Service.ensure({ file, timeoutMs: 50 })).rejects.toMatchObject({ name: "TimeoutError", message: expect.stringMatching(/timed out/i) });
+    }
     finally { endpoints.push(await owner); }
   });
 

@@ -7,6 +7,8 @@ import type {
   ApprovalMode,
   WorkMode,
 } from "@rzx/client"
+import type { PluginCatalogEntry } from "@vykor/protocol"
+import type { DesktopContextUsageSnapshot } from "./context-usage-types"
 
 export type { SessionUserInputItem, SessionGoal } from "@rzx/client"
 export type { SearchSessionsOptions } from "@rzx/client"
@@ -281,6 +283,12 @@ export interface DesktopTemplateCommandCatalogEntry extends DesktopCommandCatalo
 
 export type DesktopCommandCatalogEntry =
   DesktopSessionCommandCatalogEntry | DesktopTemplateCommandCatalogEntry
+
+export interface DesktopComposerCatalog {
+  commands: DesktopCommandCatalogEntry[]
+  plugins: PluginCatalogEntry[]
+  contextUsage?: DesktopContextUsageSnapshot | null
+}
 
 export interface ListDesktopCommandsInput {
   cwd: string

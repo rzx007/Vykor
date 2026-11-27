@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, useRef, useState } from "react"
+import { act, StrictMode, useRef, useState } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { useDesktopSessionStore } from "@renderer/stores/desktop-session"
@@ -13,6 +13,7 @@ import { ConversationPane } from "../../../conversation-page"
 import { MainLayoutContext } from "../../../layout/main-layout/main-layout-context"
 import type {
   DesktopAuxSessionUpdate,
+  DesktopComposerCatalog,
   DesktopSessionUpdate,
   DesktopSessionView,
   SendDesktopPromptInput,
@@ -61,6 +62,8 @@ const closeAux = vi.fn(async (_input: unknown) => undefined)
 const acknowledgeUpdate = vi.fn(async () => ({ accepted: true }))
 const requestUpdateResync = vi.fn(async () => ({ accepted: true }))
 const deleteSession = vi.fn(async (sessionId: string) => [sessionId])
+const getComposerCatalog = vi.fn(async (_cwd: string, _sessionId?: string): Promise<DesktopComposerCatalog> => ({ commands: [], plugins: [] }))
+const getContextUsage = vi.fn(async () => null)
 const callbacks = {
   onOpenFile: () => {},
   canOpenReview: false,
@@ -109,6 +112,7 @@ beforeEach(() => {
   listeners = new Set()
   deliveryId = 0
   vi.clearAllMocks()
+  getComposerCatalog.mockReset().mockResolvedValue({ commands: [], plugins: [] })
   fork.mockReset().mockImplementation(async ({ sessionId }) => sideView(sessionId).session)
   openAux.mockReset().mockImplementation(async ({ sessionId }) => sideView(sessionId.replace("side-", "")))
   sendPrompt.mockReset().mockImplementation(async () => undefined)
@@ -126,6 +130,7 @@ beforeEach(() => {
     configurable: true,
     value: {
       sessions: {
+        open: async (sessionId: string) => emptySessionView(sessionId),
         fork,
         openAux,
         closeAux,
@@ -140,8 +145,8 @@ beforeEach(() => {
           listeners.add(callback)
           return () => listeners.delete(callback)
         },
-        listCommands: async () => [],
-        listContextPlugins: async () => [],
+        getComposerCatalog,
+        getContextUsage,
       },
       clipboard: { writeText: async () => {} },
       settings: { snapshot: async () => ({ showReasoning: false }), onUpdated: () => () => {} },
@@ -172,6 +177,45 @@ async function mount(sourceId = "main", active = true) {
     root.render(<SideChatPanel key={sourceId} sourceId={sourceId} active={active} {...callbacks} />)
   )
 }
+it.each(["主会话", "侧栏会话"])("%s loads the composer directory with one request and shows a load failure", async (surface) => {
+  const cwd = useDesktopSessionStore.getState().sessionView!.session.cwd
+  getComposerCatalog.mockRejectedValueOnce(new Error("catalog failed"))
+  await act(async () => root.render(
+    <StrictMode>
+      <MainLayoutContext.Provider value={{ conversationWorkspace: null, startNewConversation() {}, openSideChat() {} }}>
+        {surface === "主会话" ? (
+          <ConversationPane {...callbacks} panelOpen onTogglePanel={vi.fn()} onOpenAgents={vi.fn()} />
+        ) : (
+          <SideChatPanel sourceId="main" active {...callbacks} />
+        )}
+      </MainLayoutContext.Provider>
+    </StrictMode>
+  ))
+  expect(getComposerCatalog.mock.calls).toEqual(surface === "主会话" ? [[cwd, "main"]] : [[cwd]])
+  expect(container.textContent).toContain("命令或插件列表暂时无法加载，请稍后重试。")
+})
+
+it("loads initial usage and the catalog in one request when opening a saved conversation", async () => {
+  useDesktopSessionStore.setState({ activeSessionId: null, sessionView: null })
+  const contextUsage = {
+    model: "test-model", contextWindow: 100_000, estimatedInputTokens: 25,
+    percentFull: 0.025, estimator: "heuristic_v1" as const, buckets: [], tips: [],
+    computedAt: "2026-11-01T00:00:00.000Z", source: "live_assembly" as const,
+  }
+  getComposerCatalog.mockResolvedValueOnce({ commands: [], plugins: [], contextUsage })
+  await act(async () => root.render(
+    <MainLayoutContext.Provider value={{ conversationWorkspace: null, startNewConversation() {}, openSideChat() {} }}>
+      <ConversationPane {...callbacks} panelOpen onTogglePanel={vi.fn()} onOpenAgents={vi.fn()} />
+    </MainLayoutContext.Provider>
+  ))
+  await act(async () => useDesktopSessionStore.getState().openSession("main"))
+  await act(() => vi.dynamicImportSettled())
+
+  expect(getComposerCatalog.mock.calls).toEqual([[emptySessionView("main").session.cwd, "main"]])
+  expect(getContextUsage).not.toHaveBeenCalled()
+  expect(useDesktopSessionStore.getState().contextUsageSnapshot).toEqual(contextUsage)
+})
+
 it("rejects stale image feedback after the side-chat region unmounts or its target disappears", async () => {
   expect(canUseSideChatImageScope("main", "linked-chat:main")).toBe(false)
   await mount()

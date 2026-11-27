@@ -69,6 +69,7 @@ import { mergeSessionOptimisticTranscript } from "./transcript/optimistic-transc
 import type { ComposerPickerCommand } from "./composer/composer-picker"
 import { toComposerCommands } from "./composer/composer-command-catalog"
 import { toComposerSkills } from "./composer/composer-picker-model"
+import { useComposerCatalog } from "./composer/use-composer-catalog"
 import type { ComposerSkill } from "./composer/rich-prompt-input"
 import { HeaderIconButton } from "./composer/controls"
 import { resolveEffortTiers } from "./composer/effort-picker"
@@ -114,16 +115,7 @@ function ConversationPane({
   onOpenAgents,
 }: ConversationPaneProps): React.JSX.Element {
   const [composerValidationError, setComposerValidationError] = useState<string | null>(null)
-  const [skillCommandSnapshot, setSkillCommandSnapshot] = useState<{
-    cwd: string
-    commands: import("@shared/session-types").DesktopCommandCatalogEntry[]
-  } | null>(null)
   const [statusOpen, setStatusOpen] = useState(false)
-  const [pluginSnapshot, setPluginSnapshot] = useState<{
-    cwd: string
-    plugins: import("@shared/session-types").DesktopPluginCatalogEntry[]
-    error?: string
-  } | null>(null)
   const navigate = useNavigate()
   const messageViewportRef = useRef<HTMLDivElement>(null)
   const activeSessionId = useDesktopSessionStore((state) => state.activeSessionId)
@@ -350,8 +342,13 @@ function ConversationPane({
     ),
   })
   const commandCwd = useDesktopSessionStore(selectCommandCatalogCwd)
-  const commandCatalog =
-    commandCwd && skillCommandSnapshot?.cwd === commandCwd ? skillCommandSnapshot.commands : []
+  const catalogSessionId = sessionView?.session.id === activeSessionId ? sessionView?.session.id : undefined
+  const composerCatalog = useComposerCatalog(
+    commandCwd,
+    loadStatus === "ready" && (!activeSessionId || catalogSessionId !== undefined),
+    catalogSessionId
+  )
+  const commandCatalog = composerCatalog?.commands ?? []
   const skillCommands: ComposerSkill[] = toComposerSkills(commandCatalog)
   const applicationCommands = toComposerCommands(commandCatalog, {
     hasSession: Boolean(activeSessionId && sessionView?.session.id === activeSessionId),
@@ -363,12 +360,8 @@ function ConversationPane({
     hasModels: models.length > 0,
     hasEffortTiers: resolveEffortTiers(models, currentModel, selectedProvider).length > 0,
   })
-  const pluginCatalog =
-    pluginMentionsEnabled && pluginSnapshot?.cwd === commandCwd ? pluginSnapshot.plugins : []
-  const pluginCatalogError =
-    pluginMentionsEnabled && pluginSnapshot?.cwd === commandCwd
-      ? (pluginSnapshot.error ?? null)
-      : null
+  const pluginCatalog = pluginMentionsEnabled ? (composerCatalog?.plugins ?? []) : []
+  const catalogError = composerCatalog?.error ?? null
   const appContextEntries = useSyncExternalStore(
     pluginAppModelContexts.subscribe,
     pluginAppModelContexts.snapshot,
@@ -429,47 +422,6 @@ function ConversationPane({
     window.addEventListener("desktop:add-to-composer", handleAddToComposer)
     return () => window.removeEventListener("desktop:add-to-composer", handleAddToComposer)
   }, [activeSessionId, draft.items, setDraft])
-
-  useEffect(() => {
-    if (!commandCwd || loadStatus !== "ready") {
-      return
-    }
-
-    let cancelled = false
-    void window.desktop.sessions
-      .listCommands(commandCwd)
-      .then((commands) => {
-        if (!cancelled) setSkillCommandSnapshot({ cwd: commandCwd, commands })
-      })
-      .catch(() => {
-        if (!cancelled) setSkillCommandSnapshot({ cwd: commandCwd, commands: [] })
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [commandCwd, loadStatus])
-
-  useEffect(() => {
-    if (!pluginMentionsEnabled || !commandCwd || loadStatus !== "ready") return
-    let cancelled = false
-    void window.desktop.sessions.listContextPlugins(commandCwd).then(
-      (plugins) => {
-        if (!cancelled) setPluginSnapshot({ cwd: commandCwd, plugins })
-      },
-      () => {
-        if (!cancelled)
-          setPluginSnapshot({
-            cwd: commandCwd,
-            plugins: [],
-            error: "插件列表暂时无法加载，请稍后重试。",
-          })
-      }
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [commandCwd, loadStatus])
 
   const executeComposerCommand = useCallback(
     async (command: ComposerPickerCommand): Promise<void> => {
@@ -641,7 +593,7 @@ function ConversationPane({
             modeChangePending={modeChangePending}
             onWorkModeChange={changeWorkMode}
             effort={selectedEffort}
-            operationError={composerValidationError ?? newConversationError ?? pluginCatalogError}
+            operationError={composerValidationError ?? newConversationError ?? catalogError}
             goalError={goalComposer.error}
             onDismissGoalError={() => dismissGoalError(composerScope)}
             goalMode={goalMode}
@@ -799,7 +751,7 @@ function ConversationPane({
                 />
                 <ScopedOperationError
                   key={`error:${composerScope}`}
-                  error={composerValidationError ?? activeSessionError ?? pluginCatalogError}
+                  error={composerValidationError ?? activeSessionError ?? catalogError}
                 />
                 <PendingPromptQueue
                   key={`queue:${composerScope}`}

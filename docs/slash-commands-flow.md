@@ -204,10 +204,12 @@ print 走 daemon Session API，不走本 flow。旧 `--task-worker` 入口已退
 ## Web/Desktop 接入清单
 
 1. 用 `@rzx/client`：`VykorClient` + `hydrateState`/`syncEvents`。
-2. 拉取 `listCommands({ cwd })`，与 `LOCAL_COMMAND_DETAILS` 合并做 autocomplete。
+2. 桌面输入框通过 `GET /context/composer-catalog` 一次读取该目录的斜杠命令、Skill 和插件。TUI 仍通过 `listCommands({ cwd })` 读取命令，并与 `LOCAL_COMMAND_DETAILS` 合并用于补全。
 3. 提交行：本地 UI → `dispatchSessionCommand` → Skill 则 `admitPrompt({ items: [skill, text] })` → unknown 拦截 → 普通文本 `admitPrompt`。
 4. 实现 `emit`（transcript / toast）与可选 `patchStatus`。
 5. `/new` `/sessions` 等会话生命周期由宿主自己接 HTTP；`/resume` 必须调用专用恢复 API，不能把旧 prompt 当普通文本悄悄重新发送（与 TUI `useServerSync` 对齐即可）。
+
+独立运行的后台需要提供 `/context/composer-catalog` 才能加载桌面输入框目录。后台尚未更新时，输入框显示目录加载失败，主日志记录 HTTP 状态。
 
 ## 相关文档
 

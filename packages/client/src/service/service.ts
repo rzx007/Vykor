@@ -122,7 +122,7 @@ function waitForStartup<T>(
   return new Promise((resolve, reject) => {
     const cleanup = () => { clearTimeout(timer); signal?.removeEventListener("abort", abort); };
     const abort = () => { cleanup(); reject(signal!.reason); };
-    const timer = setTimeout(() => { cleanup(); reject(new Error(timeoutMessage)); }, Math.max(1, end - Date.now()));
+    const timer = setTimeout(() => { cleanup(); reject(new DOMException(timeoutMessage, "TimeoutError")); }, Math.max(1, end - Date.now()));
     signal?.addEventListener("abort", abort, { once: true });
     pending.then(value => { cleanup(); resolve(value); }, error => { cleanup(); reject(error); });
   });
@@ -202,7 +202,7 @@ async function startRegisteredService(options: EnsureServiceOptions & { file: st
     throw new Error("A custom registry file requires a command that writes it, or a matching VYKOR_DATA_DIR.");
   const command = options.command ?? await defaultCommand(cwd);
   options.signal?.throwIfAborted();
-  if (Date.now() >= end) throw new Error("Vykor service startup timed out before process creation.");
+  if (Date.now() >= end) throw new DOMException("Vykor service startup timed out before process creation.", "TimeoutError");
   const started = startProcess(command, cwd, env, options.logPath, Boolean(options.pairSpawned));
   try {
     while (Date.now() < end) {
@@ -229,7 +229,7 @@ async function startRegisteredService(options: EnsureServiceOptions & { file: st
       if (failure) throw failure;
       await sleep(Math.min(50, Math.max(1, end - Date.now())), undefined, { signal: options.signal });
     }
-    throw new Error("Vykor service startup timed out before compatible registration.");
+    throw new DOMException("Vykor service startup timed out before compatible registration.", "TimeoutError");
   } catch (error) {
     await abandonProcess(started.child);
     const current = await readEndpoint(options.file);

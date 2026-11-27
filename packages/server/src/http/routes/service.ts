@@ -15,6 +15,7 @@ import type {
   SkillService,
 } from "../../application/index.js";
 import type { DaemonControlService } from "../../application/control/index.js";
+import type { DaemonOperationLease } from "../../application/control/daemon-operation-gate.js";
 import type { PluginLifecycle, PluginLifecycleScope } from "../../application/session/plugins/plugin-lifecycle.js";
 
 export interface ServiceRoutesContext {
@@ -38,7 +39,7 @@ export interface ServiceRoutesContext {
     | "inspectRuntimeHooks"
     | "runtimeInspectionAvailable"
     | "sessionExists"
-  >;
+  > & Partial<Pick<DaemonControlService, "acquireComposerCatalogUsage">>;
 }
 
 export function createServiceRoutes(context: ServiceRoutesContext): Hono {
@@ -63,6 +64,25 @@ export function createServiceRoutes(context: ServiceRoutesContext): Hono {
         scope = { kind: "global", pluginId: decodeURIComponent(path.split("/")[2]!) };
       }
       await context.pluginLifecycle.withMutation(scope, async () => { await next(); });
+    })
+    .get("/context/composer-catalog", async (c) => {
+      if (!context.contextService?.composerCatalog)
+        return errorResponse(501, "Composer catalog is not configured");
+      const cwd = c.req.query("cwd");
+      if (!cwd?.trim()) return errorResponse(400, "cwd is required");
+      const sessionId = c.req.query("sessionId");
+      if (sessionId !== undefined && !sessionId.trim()) return errorResponse(400, "sessionId must not be blank");
+      let lease: DaemonOperationLease | undefined;
+      try {
+        // Initial usage can start an agent using the same discovery. Do not interleave it with revocation.
+        if (sessionId) lease = context.control.acquireComposerCatalogUsage?.(sessionId, cwd);
+        const catalog = await context.contextService.composerCatalog({ cwd, ...(lease && sessionId ? { sessionId } : {}) });
+        return jsonResponse(sessionId && !lease ? { ...catalog, contextUsage: null } : catalog);
+      } catch {
+        return errorResponse(500, "Composer catalog could not be loaded");
+      } finally {
+        lease?.release();
+      }
     })
     .get("/context/plugins", async (c) => {
       if (!context.contextService?.plugins)

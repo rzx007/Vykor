@@ -1,5 +1,7 @@
 import type { HttpTransport } from "@rzx/client";
+import { isJsonObject, ProtocolDataError } from "@vykor/protocol";
 import type { ClearMemoryInput, MemoryEntryRecord, PluginCatalogEntry, UpdateMemoryEntryInput } from "@vykor/protocol";
+import type { CommandCatalogEntry } from "../workspace/types.js";
 import type { FactReplacementResult, MemoryListResponse, ProjectFactRecord, StartDreamResponse } from "./types.js";
 
 export class KnowledgeResource {
@@ -99,6 +101,20 @@ export class KnowledgeResource {
     return response.plugins;
   }
 
+  /** `GET /context/composer-catalog?cwd=&sessionId=` */
+  async getComposerCatalog({ cwd, sessionId, signal }: { cwd: string; sessionId?: string; signal?: AbortSignal }): Promise<{
+    commands: CommandCatalogEntry[];
+    plugins: PluginCatalogEntry[];
+    contextUsage?: unknown;
+  }> {
+    const response = await this.transport.requestUnknown(this.transport.path("/context/composer-catalog", { cwd, sessionId }), { signal });
+    if (!isJsonObject(response) || !Array.isArray(response.commands) || !response.commands.every(isCatalogCommand)
+        || !Array.isArray(response.plugins) || !response.plugins.every(isCatalogPlugin)) {
+      throw new ProtocolDataError("Invalid composer catalog response");
+    }
+    return { commands: response.commands, plugins: response.plugins, contextUsage: response.contextUsage };
+  }
+
   /** `GET /context?cwd=` */
   async getContextPreview(options: {
     cwd: string;
@@ -158,4 +174,24 @@ export class KnowledgeResource {
       signal: options.signal,
     });
   }
+}
+
+function isCatalogCommand(value: unknown): value is CommandCatalogEntry {
+  if (!isJsonObject(value) || typeof value.name !== "string") return false;
+  if (!["displayName", "description", "argumentHint"].every((field) => value[field] === undefined || typeof value[field] === "string")) return false;
+  if (value.source !== undefined && !["builtin", "bundled", "user", "plugin", "project"].some((source) => source === value.source)) return false;
+  if (value.selection !== undefined && !["execute", "submenu", "insert"].some((selection) => selection === value.selection)) return false;
+  if (value.requiresEmptyComposer !== undefined && typeof value.requiresEmptyComposer !== "boolean") return false;
+  return value.kind === "session" && value.path === undefined && value.skillName === undefined
+    || value.kind === "template" && typeof value.path === "string" && typeof value.skillName === "string";
+}
+
+function isCatalogPlugin(value: unknown): value is PluginCatalogEntry {
+  return isJsonObject(value)
+    && ["pluginId", "displayName", "version", "description"].every((field) => typeof value[field] === "string")
+    && (value.icon === undefined || typeof value.icon === "string")
+    && ["user", "managed", "project", "local"].some((scope) => scope === value.scope)
+    && (value.origin === "native" || value.origin === "converted")
+    && Array.isArray(value.capabilities)
+    && value.capabilities.every((capability) => capability === "skills" || capability === "tools" || capability === "agents");
 }
