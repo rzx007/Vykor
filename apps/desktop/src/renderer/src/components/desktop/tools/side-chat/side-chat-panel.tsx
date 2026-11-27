@@ -5,10 +5,9 @@ import { Composer } from "../../conversation-page/composer/composer"
 import { toComposerSkills } from "../../conversation-page/composer/composer-picker-model"
 import { toComposerCommands } from "../../conversation-page/composer/composer-command-catalog"
 import { pluginMentionsEnabled } from "../../conversation-page/composer/plugin-mentions-feature"
-import { PermissionCard } from "@renderer/components/desktop/conversation-page/message/blocks/permission-card"
+import { PermissionStack } from "@renderer/components/desktop/conversation-page/message/blocks/permission-stack"
 import { requiresPermissionReply } from "@renderer/components/desktop/conversation-page/message/blocks/permission-presentation"
-import { AskUserCard } from "../../conversation-page/message/blocks/ask-user-card"
-import { isAskUserPermission } from "../../conversation-page/message/blocks/ask-user-payload"
+import { useComputerAppPermission } from "../computer/computer-interaction"
 import { ConversationTranscript } from "../../conversation-page/transcript/transcript"
 import { mergeSessionOptimisticTranscript } from "../../conversation-page/transcript/optimistic-transcript"
 import { resolveScrollerAgentStatus } from "../../conversation-page/transcript/scroller-agent-status"
@@ -62,8 +61,7 @@ import {
   selectSessionRuntime,
   selectSessionSending,
   selectSessionInterrupting,
-  selectPermissionReplyError,
-  selectPermissionReplyPending,
+  selectSessionPermissionReplies,
 } from "@renderer/stores/desktop-session/selectors"
 import { areDesktopAttachmentsSendable } from "@shared/attachment-types"
 import { applySessionPartDeltas } from "@renderer/stores/desktop-session/session-view-state"
@@ -318,6 +316,9 @@ export function SideChatPanel({
   const providerDefault = useDesktopSessionStore((state) => state.defaultProvider)
   const support = useDesktopSessionStore((state) => state.attachmentSupport)
   const runtime = useDesktopSessionStore((state) => selectSessionRuntime(state, verifiedTargetId))
+  const permissionReplies = useDesktopSessionStore((state) =>
+    selectSessionPermissionReplies(state, verifiedTargetId)
+  )
   const sending = useDesktopSessionStore((state) =>
     verifiedTargetId ? selectSessionSending(state, verifiedTargetId) : false
   )
@@ -373,7 +374,10 @@ export function SideChatPanel({
   )
   const activeRun = view?.runs.find(run => run.status === "running")
   const archived = view?.session.status === "archived"
-  const permissions = view?.permissions.filter(requiresPermissionReply) ?? []
+  const approvalView = verifiedTargetId && !archived ? view : null
+  const hasComputerAppPermission = useComputerAppPermission(approvalView?.session.id)
+  const permissions = approvalView?.permissions.filter(requiresPermissionReply) ?? []
+  const pendingPermissionCount = permissions.length + Number(hasComputerAppPermission)
   const submissions = Object.values(runtime.pendingPromptSubmissions)
   const runtimeError = Object.values(runtime.operations)
     .filter((operation) => operation.phase === "failed" && operation.kind !== "reply-permission")
@@ -385,7 +389,7 @@ export function SideChatPanel({
     parts: view?.parts ?? [],
     messages: view?.messages,
     runs: view?.runs,
-    pendingPermissionCount: permissions.length,
+    pendingPermissionCount,
     agentTaskRunning: view?.tasks.some(
       (task) => task.type === "agent" && (task.status === "running" || task.status === "pending")
     ),
@@ -742,7 +746,7 @@ export function SideChatPanel({
                   parts={transcript.parts}
                   runs={view?.runs ?? []}
                   running={running}
-                  pendingPermissionCount={permissions.length}
+                  pendingPermissionCount={pendingPermissionCount}
                   canEditLastUserMessage={false}
                   onEditLastUserMessage={() => {}}
                   onCopyAssistantMessage={(content) => window.desktop.clipboard.writeText(content)}
@@ -792,40 +796,18 @@ export function SideChatPanel({
             正在准备侧边聊天
           </p>
         ) : null}
-        {!archived
-          ? permissions.map((permission) => {
-              const state = useDesktopSessionStore.getState()
-              const pending = selectPermissionReplyPending(state, targetId!, permission.id)
-              const replyError = selectPermissionReplyError(state, targetId!, permission.id)
-              return isAskUserPermission(permission) ? (
-                <AskUserCard
-                  key={`${permission.id}:${replyError ?? "active"}`}
-                  permission={permission}
-                  replyPending={pending}
-                  replyError={replyError}
-                  onReply={(answer) =>
-                    void state.replyPermission(permission.id, "approved", "once", answer, targetId!)
-                  }
-                />
-              ) : (
-                <PermissionCard
-                  key={permission.id}
-                  permission={permission}
-                  replyPending={pending}
-                  replyError={replyError}
-                  onReply={(status, decision) =>
-                    void state.replyPermission(
-                      permission.id,
-                      status,
-                      decision,
-                      undefined,
-                      targetId!
-                    )
-                  }
-                />
-              )
-            })
-          : null}
+        {verifiedTargetId && pendingPermissionCount > 0 ? (
+          <PermissionStack
+            key={verifiedTargetId}
+            sessionId={verifiedTargetId}
+            permissions={permissions}
+            replies={permissionReplies}
+            onReply={(id, status, decision, answer) => {
+              if (isCurrentTarget(verifiedTargetId))
+                void actions.replyPermission(id, status, decision, answer, verifiedTargetId)
+            }}
+          />
+        ) : null}
         {archived ? (
           <Alert>
             <AlertDescription>此会话已归档，只能查看历史内容</AlertDescription>

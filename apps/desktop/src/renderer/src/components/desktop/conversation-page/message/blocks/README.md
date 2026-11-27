@@ -16,6 +16,7 @@
 | [message-actions.tsx](message-actions.tsx)、[format-message-time.ts](format-message-time.ts)         | 工具栏、时间、复制、编辑和回复分叉操作   |
 | [content-entrance.tsx](content-entrance.tsx)                                                         | 消息内容入场状态                         |
 | [permission-card.tsx](permission-card.tsx)、[permission-presentation.ts](permission-presentation.ts) | 权限确认卡片、人工回复判断和审查信息解析 |
+| [permission-stack.tsx](permission-stack.tsx) | 主聊天和侧边聊天共用的待处理卡堆与翻页操作 |
 | [ask-user-card.tsx](ask-user-card.tsx)、[ask-user-payload.ts](ask-user-payload.ts)                   | 提问内容、回答表单和请求类型识别         |
 
 ## 调用流程与状态
@@ -24,9 +25,9 @@
 
 用户消息通过浏览器分类的 `readBrowserAnnotationContext` 读取末尾完整、字段有效的批注快照。正文、复制和编辑初值均去掉自动追加的快照，保留插件等输入引用；原消息条目不变，供发送入口编辑重发时使用。`UserMessageAnnotations` 在独立正文气泡上方显示“n 条批注”，悬停或点击后通过已有 `Popover` 查看页面目标和意见。批注详情始终只读；编辑历史消息时沿用同一入口查看原批注，只允许修改正文。仅含批注时不显示空正文气泡。用于页面内搜索高亮的正文节点不含批注原始数据；无效或不在末尾的示例块仍按原文显示。
 
-主会话和侧聊用 `requiresPermissionReply` 筛选请求，再展示权限或提问卡片。自动审查进行中、已经自动决定或请求结束时不显示人工批准卡片。卡片通过原回调返回操作；提交状态、错误、会话记录和实际授权由宿主管理。权限批准仍使用 `once`，仅针对当前请求。
+主聊天和侧边聊天用 `requiresPermissionReply` 筛出需要人工回复的请求，和当前会话的电脑应用授权一起交给 `PermissionStack`。输入框上方一次展示一张卡。多项待处理时，卡边和页码提示还有其他请求，用户可用前后按钮翻看。卡堆按请求 ID 记住当前项，新请求到达时保留阅读位置。当前项从队列移除后，优先展示它后面仍待处理的一项。翻页保留问卷中的答案，只在用户提交时回复该请求。提交状态、错误和授权结果由原请求的宿主提供。
 
-权限卡片默认显示批准状态、操作摘要、工具原名和批准/拒绝按钮；自动审查转人工的原因和回复失败直接显示，让用户知道为什么需要处理。命令、工作目录、文件路径、网址、目标、技术原因、开发检查范围及原始请求统一收进弱化的“查看详情”，默认折叠。字段从 `payload.input` 和 `payload.reason` 提取，未提供的信息不补猜。操作文案只精确匹配真实内置名称，第三方大小写变体使用中性的“运行工具”。详情保留纯文本、有界显示与截断提示，摘要解析和长度限制放在 `permission-presentation.ts`；原生 `details` 控件管理展开状态并支持键盘操作，展开不触发授权回复，图标过渡尊重减少动态效果设置。
+权限卡片的标题说明要做什么，并保留工具原名。命令、文件路径等操作参数取自实际请求，审批原因和回复错误直接显示。长命令先展示开头，通过「展开完整命令」可查看原文和换行。「查看详情」另行提供开发检查范围和原始请求，过长的原始请求带截断提示。摘要解析放在 `permission-presentation.ts`。普通工具的「允许本次」只批准当前请求。
 
 错误提示通过 `userActions.editing` 与 `onEditingChange` 控制最新用户消息的原编辑表单，不重建编辑器；重复打开保留未提交修改。打开和取消都不发送请求，只有用户明确提交才调用 `onEdit`。
 

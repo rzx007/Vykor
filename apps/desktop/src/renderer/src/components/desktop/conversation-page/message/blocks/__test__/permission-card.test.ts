@@ -82,30 +82,35 @@ describe("PermissionCard", () => {
   it.each([
     ["ask_user", "需要你确认"],
     ["timed_out", "审查超时"],
-  ])("shows automatic review state %s and its escaped reason without expanding details", (status, title) => {
-    const html = renderToStaticMarkup(
-      createElement(PermissionCard, {
-        permission: {
-          id: "review",
-          sessionId: "session",
-          toolName: "Shell",
-          status: "pending",
-          payload: { approvalReview: { status, startedAt: 1, reason: "<script>reason</script>" } },
-          createdAt: 1,
-          updatedAt: 1,
-        },
-        onReply: vi.fn(),
-      })
-    )
-    expect(html).toContain(title)
-    expect(html).toContain("&lt;script&gt;reason")
-    expect(html).not.toContain("<script>")
-    const container = document.createElement("div")
-    container.innerHTML = html
-    expect(summaryText(container)).toContain("<script>reason</script>")
-    expect(container.querySelector("details p")?.textContent).not.toBe("<script>reason</script>")
-    expect(container.querySelector("details")?.hasAttribute("open")).toBe(false)
-  })
+  ])(
+    "shows automatic review state %s and its escaped reason without expanding details",
+    (status, title) => {
+      const html = renderToStaticMarkup(
+        createElement(PermissionCard, {
+          permission: {
+            id: "review",
+            sessionId: "session",
+            toolName: "Shell",
+            status: "pending",
+            payload: {
+              approvalReview: { status, startedAt: 1, reason: "<script>reason</script>" },
+            },
+            createdAt: 1,
+            updatedAt: 1,
+          },
+          onReply: vi.fn(),
+        })
+      )
+      expect(html).toContain(title)
+      expect(html).toContain("&lt;script&gt;reason")
+      expect(html).not.toContain("<script>")
+      const container = document.createElement("div")
+      container.innerHTML = html
+      expect(summaryText(container)).toContain("<script>reason</script>")
+      expect(container.querySelector("details p")?.textContent).not.toBe("<script>reason</script>")
+      expect(container.querySelector("details")?.hasAttribute("open")).toBe(false)
+    }
+  )
 
   it.each(["approved", "denied", "expired"] as const)(
     "does not render a settled %s request, regardless of review state",
@@ -235,19 +240,18 @@ describe("PermissionCard", () => {
     }
   )
 
-  it("keeps a shell command, its working directory, and technical reason inside collapsed details", () => {
+  it("shows the command, working directory, and reason before the one-time decision", () => {
     const container = renderPermission("Shell", {
       reason: "需要确认部署命令",
       input: { command: "pnpm deploy --tag release", workdir: "C:/projects/vykor" },
     })
 
-    expect(container.textContent).toContain("运行命令")
-    expect(container.querySelector("dl")?.textContent ?? "").toContain("pnpm deploy --tag release")
-    expect(container.querySelector("dl")?.textContent ?? "").toContain("C:/projects/vykor")
-    expect(summaryText(container)).not.toContain("pnpm deploy --tag release")
-    expect(summaryText(container)).not.toContain("C:/projects/vykor")
-    expect(summaryText(container)).not.toContain("需要确认部署命令")
-    expect(container.querySelector("details")?.textContent).toContain("需要确认部署命令")
+    expect(container.querySelector("h3")?.textContent).toBe("运行命令")
+    expect(summaryText(container)).toContain("pnpm deploy --tag release")
+    expect(summaryText(container)).toContain("C:/projects/vykor")
+    expect(summaryText(container)).toContain("需要确认部署命令")
+    expect(summaryText(container)).not.toContain("展开完整命令")
+    expect(container.querySelector('[role="checkbox"]')).toBeNull()
     expect(container.textContent).toContain("允许本次")
     expect(container.textContent).not.toContain("检查类别")
   })
@@ -263,11 +267,51 @@ describe("PermissionCard", () => {
       })
 
       expect(container.textContent).toContain(summary)
-      expect(container.querySelector("dl")?.textContent ?? "").toContain("C:/work/config.json")
-      expect(container.querySelector("dl")?.textContent ?? "").not.toContain("private file body")
+      expect(summaryText(container)).toContain("C:/work/config.json")
+      expect(summaryText(container)).not.toContain("private file body")
+      expect(summaryText(container)).not.toContain("预计变更")
       expect(container.querySelector("details pre")?.textContent ?? "").toContain(
         "private file body"
       )
+    }
+  )
+
+  it("summarizes paths and proposed line changes from complete patch hunks", () => {
+    const patch = [
+      "diff --git a/app/form.tsx b/app/form.tsx",
+      "--- a/app/form.tsx",
+      "+++ b/app/form.tsx",
+      "@@ -1,2 +1,3 @@",
+      " context",
+      "-old",
+      "+new",
+      "+second",
+      "diff --git a/app/label.ts b/app/label.ts",
+      "--- a/app/label.ts",
+      "+++ b/app/label.ts",
+      "@@ -1 +1 @@",
+      "-before",
+      "+after",
+    ].join("\n")
+    const visible = summaryText(renderPermission("ApplyPatch", { input: { patch } }))
+    expect(visible).toContain("app/form.tsx")
+    expect(visible).toContain("app/label.ts")
+    expect(visible).toContain("预计变更")
+    expect(visible).toContain("+3")
+    expect(visible).toContain("−2")
+    expect(visible).not.toContain("context")
+    const truncated = patch.replace("+second\n", "")
+    expect(
+      summaryText(renderPermission("ApplyPatch", { input: { patch: truncated } }))
+    ).not.toContain("预计变更")
+  })
+
+  it.each(["", "diff --git a/b/real.ts b/b/real.ts\n"])(
+    "shows the actual target path for both unified and Git patches",
+    (gitHeader) => {
+      const patch = gitHeader + "--- a/b/real.ts\n+++ b/b/real.ts\n@@ -1 +1 @@\n-before\n+after\n"
+      const container = renderPermission("ApplyPatch", { input: { patch } })
+      expect(container.querySelector("dl dd")?.textContent).toBe("b/real.ts")
     }
   )
 
@@ -299,7 +343,7 @@ describe("PermissionCard", () => {
       input: { action: "navigate" },
     })
 
-    expect(summaryText(container)).not.toContain("https://example.org/account")
+    expect(summaryText(container)).toContain("https://example.org/account")
     expect(container.querySelector("details")?.textContent).toContain("https://example.org/account")
     expect(container.querySelector("dl")?.textContent ?? "").toContain("navigate")
     expect(container.querySelector("dl")?.textContent ?? "").not.toContain(
@@ -347,6 +391,47 @@ describe("PermissionCard", () => {
     expect(container.querySelector("details")?.textContent ?? "").toContain("已截断")
     expect(container.textContent!.length).toBeLessThan(15000)
   })
+
+  it.each([
+    "Write-Output '" + "很长的中文参数".repeat(2500) + "'",
+    "  echo '开头'\r\necho two\r\necho three\r\necho \"最后一行\"  ",
+  ])(
+    "folds long commands and reveals the entire original text without replying",
+    async (command) => {
+      const container = document.body.appendChild(document.createElement("div"))
+      const root = createRoot(container)
+      const onReply = vi.fn()
+      vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
+      try {
+        await act(async () =>
+          root.render(
+            createElement(PermissionCard, {
+              permission: { ...pendingPermission, payload: { input: { command } } },
+              onReply,
+            })
+          )
+        )
+        const toggle = [...container.querySelectorAll("button")].find(
+          (button) => button.textContent === "展开完整命令"
+        )
+        expect(toggle?.getAttribute("aria-expanded")).toBe("false")
+        const code = container.querySelector("dl code")!
+        expect(code.textContent).toContain(command.slice(0, 10))
+        expect(code.textContent).not.toBe(command)
+        await act(async () => toggle!.click())
+        expect(toggle!.getAttribute("aria-expanded")).toBe("true")
+        expect(toggle!.textContent).toBe("收起命令")
+        expect(code.textContent).toBe(command)
+        await act(async () => toggle!.click())
+        expect(code.textContent).not.toBe(command)
+        expect(onReply).not.toHaveBeenCalled()
+      } finally {
+        await act(async () => root.unmount())
+        container.remove()
+        vi.unstubAllGlobals()
+      }
+    }
+  )
 
   it("expands details without replying and retains the once-only approval and rejection callbacks", async () => {
     const container = document.createElement("div")

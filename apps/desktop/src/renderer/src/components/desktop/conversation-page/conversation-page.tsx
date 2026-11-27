@@ -7,7 +7,7 @@ import { useNavigate } from "@tanstack/react-router"
 
 import { OpenWithSplitButton } from "@renderer/components/desktop/open-with"
 import { SideChatSelectionActions } from "@renderer/components/desktop/tools/side-chat/side-chat-selection-actions"
-import { ComputerAppPermissionCard, useComputerAppPermission } from "@renderer/components/desktop/tools/computer/computer-interaction"
+import { useComputerAppPermission } from "@renderer/components/desktop/tools/computer/computer-interaction"
 import {
   ConversationScroller as MessageScroller,
   ConversationScrollerButton as MessageScrollerButton,
@@ -73,10 +73,8 @@ import { HeaderIconButton } from "./composer/controls"
 import { resolveEffortTiers } from "./composer/effort-picker"
 import { isSessionPinned } from "@renderer/stores/desktop-session/helpers"
 import { NewConversationStart } from "./session/new-conversation-start"
-import { PermissionCard } from "./message/blocks/permission-card"
+import { PermissionStack } from "./message/blocks/permission-stack"
 import { requiresPermissionReply } from "./message/blocks/permission-presentation"
-import { AskUserCard } from "./message/blocks/ask-user-card"
-import { isAskUserPermission } from "./message/blocks/ask-user-payload"
 import { ProjectInfoButton } from "./session/project-info-popover"
 import { SessionSummaryPopover } from "./session/session-summary-popover"
 import { SessionMoreMenu } from "./session/session-more-menu"
@@ -120,7 +118,6 @@ function ConversationPane({
   const navigate = useNavigate()
   const messageViewportRef = useRef<HTMLDivElement>(null)
   const activeSessionId = useDesktopSessionStore((state) => state.activeSessionId)
-  const hasComputerAppPermission = useComputerAppPermission(activeSessionId)
   const sessionView = useDesktopSessionStore((state) => state.sessionView)
   const activeSession = useDesktopSessionStore(selectActiveSessionRecord)
   const conversationActivities = useDesktopSessionStore((state) => state.activity.sessions)
@@ -320,10 +317,11 @@ function ConversationPane({
       )
     )
   const pendingPrompts = queuedPrompts(sessionView, queuedPromptActions)
-  const pendingPermissions = sessionView?.permissions.filter(requiresPermissionReply) ?? []
-  const pendingPermissionCount = pendingPermissions.length + Number(!archived && hasComputerAppPermission)
-  const singleAskUserPrompt =
-    pendingPermissions.length === 1 && isAskUserPermission(pendingPermissions[0]!)
+  const approvalView = sessionView?.session.id === activeSessionId && !archived ? sessionView : null
+  const approvalSessionId = approvalView?.session.id
+  const hasComputerAppPermission = useComputerAppPermission(approvalSessionId)
+  const pendingPermissions = approvalView?.permissions.filter(requiresPermissionReply) ?? []
+  const pendingPermissionCount = pendingPermissions.length + Number(hasComputerAppPermission)
   const localPromptSubmissions = Object.values(pendingPromptSubmissions)
     .filter((submission) => submission.sessionId === activeSessionId)
     .sort((left, right) => left.createdAt - right.createdAt)
@@ -731,9 +729,6 @@ function ConversationPane({
                           onOpenTerminal={onOpenTerminal}
                           showReasoning={showReasoning}
                           pendingPermissionCount={pendingPermissionCount}
-                          pendingComputerAppApproval={!archived && activeSessionId && hasComputerAppPermission
-                            ? <ComputerAppPermissionCard sessionId={activeSessionId} />
-                            : undefined}
                         />
                       )}
                     </MessageScrollerContent>
@@ -757,44 +752,18 @@ function ConversationPane({
               />
             </div>
 
-            {!archived && pendingPermissions.length > 0 ? (
-              <div
-                role="region"
-                aria-label="待处理的授权请求"
-                className={cn(
-                  "conversation-composer-column mb-2 shrink-0",
-                  singleAskUserPrompt
-                    ? "overflow-visible"
-                    : "max-h-[min(18rem,35vh)] scrollbar-thin overflow-y-auto"
-                )}
-              >
-                <div className="space-y-2">
-                  {pendingPermissions.map((permission) =>
-                    isAskUserPermission(permission) ? (
-                      <AskUserCard
-                        key={`${permission.id}:${permissionReplies[permission.id]?.error ?? "active"}`}
-                        permission={permission}
-                        replyPending={permissionReplies[permission.id]?.pending}
-                        replyError={permissionReplies[permission.id]?.error}
-                        onReply={(answer) =>
-                          void replyPermission(permission.id, "approved", "once", answer)
-                        }
-                      />
-                    ) : (
-                      <PermissionCard
-                        key={permission.id}
-                        permission={permission}
-                        className="mt-0"
-                        replyPending={permissionReplies[permission.id]?.pending}
-                        replyError={permissionReplies[permission.id]?.error}
-                        onReply={(status, decision) =>
-                          void replyPermission(permission.id, status, decision)
-                        }
-                      />
-                    )
-                  )}
-                </div>
-              </div>
+            {approvalSessionId && pendingPermissionCount > 0 ? (
+              <PermissionStack
+                key={approvalSessionId}
+                className="conversation-composer-column mb-2 shrink-0"
+                sessionId={approvalSessionId}
+                permissions={pendingPermissions}
+                replies={permissionReplies}
+                onReply={(id, status, decision, answer) => {
+                  if (useDesktopSessionStore.getState().activeSessionId === approvalSessionId)
+                    void replyPermission(id, status, decision, answer, approvalSessionId)
+                }}
+              />
             ) : null}
 
             {archived ? (

@@ -1141,7 +1141,19 @@ it("keeps A and B drafts and routes quoted text to each correct side", async () 
   expect(fork).toHaveBeenCalledTimes(1)
 })
 
-it("normal authorization cards send approval to the side session and retain reply errors", async () => {
+function visibleControls<T extends HTMLElement>(selector: string): T[] {
+  return [...container.querySelectorAll<T>(selector)].filter(
+    (element) => !element.closest("[hidden], [inert], [aria-hidden=true]")
+  )
+}
+
+function pageRequests(direction: "上一个请求" | "下一个请求"): Promise<void> {
+  const button = container.querySelector<HTMLButtonElement>(`button[aria-label="${direction}"]`)
+  expect(button).not.toBeNull()
+  return act(async () => button!.click())
+}
+
+it("keeps a failed side-chat approval on its card when paging away and retrying", async () => {
   draft("main", "question")
   await mount()
   await submit()
@@ -1153,21 +1165,22 @@ it("normal authorization cards send approval to the side session and retain repl
         sessionId: "side-main",
         runId: "run-1",
         toolCallId: "call-1",
-        toolName: "shell",
-        reason: "run command",
+        toolName: "Shell",
         status: "pending" as const,
-        payload: {},
+        payload: { input: { command: "pnpm test" } },
         createdAt: 1,
         updatedAt: 1,
+      },
+      {
+        id: "p-2", sessionId: "side-main", toolName: "Read", status: "pending" as const,
+        payload: { input: { file_path: "src/index.ts" } }, createdAt: 2, updatedAt: 2,
       },
     ],
   }
   await emit(view)
   replyPermission.mockRejectedValueOnce(new Error("permission offline"))
-  const allow = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-    (button) => button.textContent === "允许本次"
-  )!
-  await act(async () => allow.click())
+  const allow = () => visibleControls<HTMLButtonElement>("button").find((button) => button.textContent === "允许本次")!
+  await act(async () => allow().click())
   expect(replyPermission).toHaveBeenCalledWith({
     permissionId: "p-1",
     status: "approved",
@@ -1178,7 +1191,15 @@ it("normal authorization cards send approval to the side session and retain repl
   ).toContainEqual(
     expect.objectContaining({ sessionId: "side-main", target: "p-1", phase: "failed" })
   )
-  expect(container.textContent).toContain("permission offline")
+  const visibleErrors = () => visibleControls('[role="alert"]').map((alert) => alert.textContent)
+  expect(visibleErrors()).toContain("permission offline")
+  await pageRequests("下一个请求")
+  expect(visibleErrors()).not.toContain("permission offline")
+  await pageRequests("上一个请求")
+  expect(visibleErrors()).toContain("permission offline")
+  await act(async () => allow().click())
+  expect(replyPermission).toHaveBeenCalledTimes(2)
+  expect(replyPermission).toHaveBeenLastCalledWith({ permissionId: "p-1", status: "approved", decision: "once" })
 })
 
 it("keeps automatic review quiet and only shows an approval card when the reviewer needs the user", async () => {
@@ -1194,7 +1215,7 @@ it("keeps automatic review quiet and only shows an approval card when the review
     }],
   }
   await emit(view)
-  expect(container.textContent).not.toContain("Vykor 请求运行命令 · Shell")
+  expect(container.textContent).not.toContain("运行命令")
   expect([...container.querySelectorAll("button")].some((button) => button.textContent === "允许本次")).toBe(false)
 
   await emit({
@@ -1204,7 +1225,8 @@ it("keeps automatic review quiet and only shows an approval card when the review
       payload: { approvalReview: { status: "ask_user", startedAt: 1, reason: "需要你确认操作范围" } },
     })),
   })
-  expect(container.textContent).toContain("Vykor 请求运行命令 · Shell")
+  expect(container.textContent).toContain("运行命令")
+  expect(container.textContent).toContain("Shell")
   expect(container.textContent).toContain("需要你确认操作范围")
   expect([...container.querySelectorAll("button")].some((button) => button.textContent === "允许本次")).toBe(true)
 })
@@ -1228,7 +1250,7 @@ it.each(["ask_user", "timed_out"])("removes a %s approval banner after confirmat
     ],
   }
   await emit(view)
-  expect(container.textContent).toContain("Vykor 请求运行命令 · Shell")
+  expect(container.textContent).toContain("运行命令")
   const allow = [...container.querySelectorAll<HTMLButtonElement>("button")].find(
     (button) => button.textContent === "允许本次"
   )!
@@ -1243,16 +1265,16 @@ it.each(["ask_user", "timed_out"])("removes a %s approval banner after confirmat
       ? { ...permission, status: "approved", updatedAt: 2 }
       : permission),
   })
-  expect(container.textContent).not.toContain("Vykor 请求运行命令 · Shell")
+  expect(container.textContent).not.toContain("运行命令")
   expect(container.textContent).not.toContain("已批准")
-  expect(container.textContent).toContain("Vykor 请求运行工具 · WebFetch")
+  expect(container.textContent).toContain("WebFetch")
   expect([...container.querySelectorAll("button")].filter((button) => button.textContent === "允许本次")).toHaveLength(1)
 
   await emit({
     ...view, cursor: 3,
     permissions: view.permissions.map((permission) => ({ ...permission, status: "denied", updatedAt: 3 })),
   })
-  expect(container.textContent).not.toContain("Vykor 请求运行")
+  expect([...container.querySelectorAll("button")].some((button) => button.textContent === "允许本次")).toBe(false)
 })
 
 function SelectionHarness({
@@ -1352,7 +1374,7 @@ it("a quotation added while fork is delayed stays in the ordinary draft and is n
   expect(selections("session:side-main")).toEqual(["new quote"])
 })
 
-it("AskUser renders the normal answer card and records its reply only in the side runtime", async () => {
+it("keeps an AskUser draft while paging through side chat approvals and records its reply only in the side runtime", async () => {
   draft("main", "question")
   await mount()
   await submit()
@@ -1373,6 +1395,10 @@ it("AskUser renders the normal answer card and records its reply only in the sid
         createdAt: 1,
         updatedAt: 1,
       },
+      {
+        id: "shell-2", sessionId: "side-main", toolName: "Shell", status: "pending",
+        payload: { input: { command: "pnpm typecheck" } }, createdAt: 2, updatedAt: 2,
+      },
     ],
   })
   expect(container.textContent).toContain("Which option?")
@@ -1381,6 +1407,13 @@ it("AskUser renders the normal answer card and records its reply only in the sid
       .find((item) => item.textContent?.includes("Alpha"))!
       .click()
   )
+  await pageRequests("下一个请求")
+  expect(container.textContent).toContain("2 / 2")
+  expect(visibleControls("button").some((button) => button.textContent === "Alpha")).toBe(false)
+  expect(visibleControls("button").some((button) => button.textContent === "允许本次")).toBe(true)
+  await pageRequests("上一个请求")
+  expect(visibleControls("button").find((button) => button.textContent === "Alpha")?.getAttribute("aria-pressed")).toBe("true")
+  expect(replyPermission).not.toHaveBeenCalled()
   await act(async () =>
     [...container.querySelectorAll<HTMLButtonElement>("button")]
       .find((item) => item.textContent?.includes("提交"))!

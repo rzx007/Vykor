@@ -281,7 +281,14 @@ export function selectPermissionReplyError(
 export function selectActiveSessionPermissionReplies(
   state: DesktopSessionState
 ): Record<string, PermissionReplyState> {
-  const operations = selectActiveSessionRuntime(state).operations
+  return selectSessionPermissionReplies(state, state.activeSessionId)
+}
+
+export function selectSessionPermissionReplies(
+  state: DesktopSessionState,
+  sessionId: string | null
+): Record<string, PermissionReplyState> {
+  const operations = selectSessionRuntime(state, sessionId).operations
   const cached = permissionReplyStatesByOperations.get(operations)
   if (cached) return cached
   const replies: Record<string, PermissionReplyState> = {}

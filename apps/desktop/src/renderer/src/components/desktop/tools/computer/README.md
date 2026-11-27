@@ -1,6 +1,6 @@
 # 电脑操作
 
-[`computer-interaction.tsx`](computer-interaction.tsx) 在桌面根页面订阅主进程的请求。应用授权复用 Approval 卡片，按会话标识显示在对应聊天的消息区底部。应用授权按当前任务范围提供「仅本任务」和「始终允许」选择。选项回复原请求后继续同一步。
+[`computer-interaction.tsx`](computer-interaction.tsx) 在桌面根页面订阅主进程的请求。应用授权进入所属聊天输入框上方的[待处理卡堆](../../conversation-page/message/blocks/permission-stack.tsx)。默认允许范围是当前任务。用户也可以勾选针对该应用的长期授权，在点击允许后生效。回复原请求后继续同一步。
 
 [`computer-interaction-dialog.tsx`](computer-interaction-dialog.tsx) 负责需要用户选择的目标。断线或操作取消后，主进程通知界面撤下对应请求。主进程核对应用授权和目标有效性。新增电脑操作的界面交互放在本目录，授权列表在[电脑控制设置](../../settings-page/computer/README.md)管理。
 

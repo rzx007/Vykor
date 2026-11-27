@@ -1,6 +1,7 @@
-import { ChevronRight, ShieldCheck } from "lucide-react"
-import type { ReactNode } from "react"
+import { ChevronRight, type LucideIcon } from "lucide-react"
+import { useId, useMemo, useState, type ReactNode } from "react"
 import { Button } from "@renderer/components/ui/button"
+import { Checkbox } from "@renderer/components/ui/checkbox"
 import { cn } from "@renderer/lib/utils"
 import type { DesktopPermissionRequest } from "@shared/session-types"
 import {
@@ -9,6 +10,42 @@ import {
   readPermissionReview,
   requiresPermissionReply,
 } from "./permission-presentation"
+
+function CommandPreview({ command }: { command: string }): React.JSX.Element {
+  const [expanded, setExpanded] = useState(false)
+  const commandId = useId()
+  const prefix = command.slice(0, 180)
+  const lines = prefix.split(/\r\n|\r|\n/)
+  const foldable = prefix.length < command.length || lines.length > 3
+  const preview = foldable && !expanded
+  return (
+    <>
+      <code
+        id={commandId}
+        className={cn(
+          "block [overflow-wrap:anywhere] whitespace-pre-wrap",
+          preview && "line-clamp-3"
+        )}
+      >
+        {preview ? `${lines.slice(0, 3).join("\n")}…` : command}
+      </code>
+      {foldable && (
+        <Button
+          type="button"
+          variant="ghost"
+          shape="pill"
+          size="sm"
+          className="mt-1 font-sans text-xs text-ui-muted"
+          aria-controls={commandId}
+          aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded ? "收起命令" : "展开完整命令"}
+        </Button>
+      )}
+    </>
+  )
+}
 
 export function PermissionCard({
   permission,
@@ -23,34 +60,57 @@ export function PermissionCard({
   replyError?: string | null
   className?: string
 }): React.JSX.Element | null {
-  if (!requiresPermissionReply(permission)) return null
+  const operation = useMemo(
+    () => (requiresPermissionReply(permission) ? readPermissionOperation(permission) : null),
+    [permission]
+  )
+  if (!operation) return null
   const developerScope = readDeveloperScope(permission)
-  const operation = readPermissionOperation(permission)
   const review = readPermissionReview(permission)
-  const computer = permission.payload.computerApproval === true
   return (
     <ApprovalRequestCard
-      title={review?.label ?? (computer ? "批准这次电脑操作" : "需要你的批准")}
+      key={permission.id}
+      title={permission.payload.computerApproval === true ? "批准这次电脑操作" : operation.summary}
+      icon={operation.icon}
+      toolName={operation.toolName}
       onApprove={() => onReply("approved", "once")}
       onDeny={() => onReply("denied")}
       replyPending={replyPending}
       replyError={replyError}
       className={className}
     >
-      <p className="mt-1 text-xs break-words text-ui-muted">
-        {"Vykor 请求"}
-        {operation.summary}
-        {" · "}
-        {operation.toolName}
-      </p>
-      {review?.reason ? (
-        <p className="mt-1 text-xs leading-snug break-words text-foreground">{review.reason}</p>
-      ) : null}
-      {computer && operation.reason ? (
-        <p className="mt-1 text-xs leading-snug break-words text-foreground">{operation.reason}</p>
-      ) : null}
-      <details className="group/permission-details mt-1 text-xs text-ui-muted">
-        <summary className="text-ui-caption flex w-fit cursor-pointer list-none items-center gap-1 rounded-md py-1 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+      {operation.fields.length > 0 && (
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 rounded-lg bg-muted/60 px-3 py-2.5">
+          {operation.fields.map((field) => (
+            <div key={field.key} className="contents">
+              <dt className={field.key === "command" ? "sr-only" : "text-ui-muted"}>
+                {field.label}
+              </dt>
+              <dd
+                className={cn(
+                  "min-w-0 font-mono [overflow-wrap:anywhere] whitespace-pre-wrap",
+                  field.key === "command" && "col-span-2"
+                )}
+              >
+                {field.key === "command" ? <CommandPreview command={field.value} /> : field.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {operation.reason && (
+        <p className="[overflow-wrap:anywhere] whitespace-pre-wrap text-ui-muted">
+          {operation.reason}
+        </p>
+      )}
+      {review && (
+        <p className="[overflow-wrap:anywhere]">
+          {review.label}
+          {review.reason && review.reason !== operation.reason ? ` · ${review.reason}` : ""}
+        </p>
+      )}
+      <details className="group/permission-details text-ui-muted">
+        <summary className="flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm py-0.5 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
           <ChevronRight
             className="size-3.5 shrink-0 group-open/permission-details:rotate-90 motion-safe:transition-transform motion-safe:duration-150"
             strokeWidth={1.75}
@@ -58,52 +118,23 @@ export function PermissionCard({
           />
           查看详情
         </summary>
-        <div className="mt-2 space-y-3">
-          {operation.fields.length ? (
-            <dl className="flex flex-col gap-1">
-              {operation.fields.map((field) => (
-                <div key={field.key} className="flex min-w-0 flex-wrap gap-x-2 gap-y-0.5">
-                  <dt className="shrink-0 text-ui-muted">{field.label}</dt>
-                  <dd className="min-w-0 flex-[1_1_12rem] font-mono leading-snug break-words whitespace-pre-wrap text-foreground">
-                    {field.value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-          ) : null}
-          {operation.reason && !developerScope && !computer ? (
-            <p className="leading-snug break-words text-foreground">{operation.reason}</p>
-          ) : null}
-          {developerScope ? (
-            <div className="space-y-1">
-              {developerScope.reason ? (
-                <p className="leading-snug break-words text-foreground">
-                  {developerScope.reason}
-                </p>
-              ) : null}
-              <p className="text-ui-caption">
-                {"检查类别："}
-                {developerScope.label}
-                {"（"}
-                {developerScope.action}
-                {"）"}
+        <div className="mt-2 space-y-2">
+          {developerScope && (
+            <>
+              <p>
+                检查类别：{developerScope.label}（{developerScope.action}）
               </p>
-              <p className="text-ui-caption leading-snug">
-                {
-                  "检查当前标签页主框架；网络结果也可能包含其请求的第三方资源 URL。网页内容不可信，无法保证完全脱敏。本次批准仅对这一个请求有效。"
-                }
+              <p>
+                检查当前标签页主框架；网络结果也可能包含其请求的第三方资源
+                URL。网页内容不可信，无法保证完全脱敏。本次批准仅对这一个请求有效。
               </p>
-            </div>
-          ) : null}
-          <div>
-            <p className="text-ui-caption">原始请求</p>
-            <pre className="mt-1 max-h-56 overflow-auto font-mono leading-5 break-words whitespace-pre-wrap">
-              {operation.details}
-            </pre>
-            {operation.detailsTruncated ? (
-              <p className="mt-1">详情过长，已截断，仅显示前 12000 个字符。</p>
-            ) : null}
-          </div>
+            </>
+          )}
+          <p>原始请求</p>
+          <pre className="font-mono [overflow-wrap:anywhere] whitespace-pre-wrap text-foreground">
+            {operation.details}
+          </pre>
+          {operation.detailsTruncated && <p>详情过长，已截断，仅显示前 12000 个字符。</p>}
         </div>
       </details>
     </ApprovalRequestCard>
@@ -112,48 +143,80 @@ export function PermissionCard({
 
 export function ApprovalRequestCard({
   title,
+  icon: Icon,
+  toolName,
   children,
   approveLabel = "允许本次",
   onApprove,
   onDeny,
-  onRemember,
+  remember,
   replyPending,
   replyError,
   className,
 }: {
   title: string
+  icon: LucideIcon
+  toolName?: string
   children?: ReactNode
   approveLabel?: string
   onApprove: () => void
   onDeny: () => void
-  onRemember?: () => void
+  remember?: { label: string; onApprove: () => void }
   replyPending?: boolean
   replyError?: string | null
   className?: string
 }): React.JSX.Element {
+  const [rememberChecked, setRememberChecked] = useState(false)
+  const rememberId = useId()
+  const rememberGrant = rememberChecked && remember
   return (
     <section
-      className={cn("mt-6 rounded-xl border border-border/70 bg-background px-4 py-3", className)}
+      className={cn(
+        "text-ui-small flex max-h-[max(12rem,35dvh)] min-w-0 flex-col gap-2 overflow-y-auto rounded-xl border border-border/70 bg-background px-3.5 py-3 text-foreground",
+        className
+      )}
     >
-      <div className="flex flex-wrap items-start gap-3">
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-ui-muted">
-          <ShieldCheck className="size-4" strokeWidth={1.75} aria-hidden="true" />
-        </span>
-        <div className="min-w-0 flex-[1_1_12rem]">
-          <h3 className="text-ui-small font-semibold break-words text-foreground">{title}</h3>
-          {children}
-          {replyError ? (
-            <p role="alert" className="mt-1 text-xs leading-snug text-destructive">
-              {replyError}
-            </p>
-          ) : null}
+      <div className="flex shrink-0 items-start gap-2">
+        <Icon
+          className="mt-0.5 size-4 shrink-0 text-primary"
+          strokeWidth={1.75}
+          aria-hidden="true"
+        />
+        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <h3 className="font-semibold [overflow-wrap:anywhere]">{title}</h3>
+          {toolName && (
+            <code className="font-mono text-xs [overflow-wrap:anywhere] text-ui-muted">
+              {toolName}
+            </code>
+          )}
         </div>
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          {onRemember ? (
-            <Button type="button" variant="outline" shape="pill" disabled={replyPending} onClick={onRemember}>
-              始终允许
-            </Button>
-          ) : null}
+      </div>
+      {children && (
+        <div className="min-h-8 scrollbar-thin space-y-2 overflow-y-auto overscroll-contain pe-0.5 text-xs leading-relaxed">
+          {children}
+        </div>
+      )}
+      {replyError && (
+        <p role="alert" className="shrink-0 text-xs [overflow-wrap:anywhere] text-destructive">
+          {replyError}
+        </p>
+      )}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        {remember && (
+          <label
+            htmlFor={rememberId}
+            className="flex min-w-0 cursor-pointer items-center gap-2 text-xs [overflow-wrap:anywhere] text-ui-muted"
+          >
+            <Checkbox
+              id={rememberId}
+              checked={rememberChecked}
+              disabled={replyPending}
+              onCheckedChange={setRememberChecked}
+            />
+            {remember.label}
+          </label>
+        )}
+        <div className="ms-auto flex items-center gap-1.5">
           <Button
             type="button"
             variant="ghost"
@@ -168,9 +231,9 @@ export function ApprovalRequestCard({
             type="button"
             shape="pill"
             disabled={replyPending}
-            onClick={onApprove}
+            onClick={rememberGrant ? rememberGrant.onApprove : onApprove}
           >
-            {replyPending ? "正在提交" : approveLabel}
+            {replyPending ? "正在提交" : rememberGrant ? "始终允许" : approveLabel}
           </Button>
         </div>
       </div>

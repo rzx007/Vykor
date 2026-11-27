@@ -1,3 +1,4 @@
+import { AppWindow } from "lucide-react"
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 import { ApprovalRequestCard } from "@renderer/components/desktop/conversation-page/message/blocks/permission-card"
 import type { DesktopComputerPrompt } from "@shared/computer-types"
@@ -43,9 +44,13 @@ export function ComputerInteractionProvider({ children }: { children: ReactNode 
   )
 }
 
-export function useComputerAppPermission(sessionId?: string | null): boolean {
+export function useComputerAppPermissionId(sessionId?: string | null): string | undefined {
   const prompt = useContext(ComputerInteractionContext)?.state?.prompt
-  return prompt?.kind === "authorize" && prompt.sessionId === sessionId
+  return prompt?.kind === "authorize" && prompt.sessionId === sessionId ? prompt.id : undefined
+}
+
+export function useComputerAppPermission(sessionId?: string | null): boolean {
+  return !!useComputerAppPermissionId(sessionId)
 }
 
 export function ComputerAppPermissionCard({ sessionId }: { sessionId: string }): React.JSX.Element | null {
@@ -54,14 +59,15 @@ export function ComputerAppPermissionCard({ sessionId }: { sessionId: string }):
   if (!interaction || !state || state.prompt.kind !== "authorize" || state.prompt.sessionId !== sessionId) return null
   return (
     <ApprovalRequestCard
+      key={state.prompt.id}
       title={`允许 Vykor 使用「${state.prompt.appName}」？`}
-      className="mt-0"
+      icon={AppWindow}
       approveLabel="仅本任务"
       replyPending={state.answering}
       replyError={state.error}
       onApprove={() => interaction.answer("once")}
       onDeny={() => interaction.answer(null)}
-      onRemember={() => interaction.answer("always")}
+      remember={{ label: `始终允许使用「${state.prompt.appName}」`, onApprove: () => interaction.answer("always") }}
     />
   )
 }

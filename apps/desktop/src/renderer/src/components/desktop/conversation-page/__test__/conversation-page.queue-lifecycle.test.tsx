@@ -11,7 +11,9 @@ import {
 import { createEmptySessionRuntime } from "@renderer/stores/desktop-session/operation-state"
 import { selectComposerDocumentText } from "@renderer/stores/desktop-session/composer-document"
 import type { DesktopSessionActivity } from "@shared/activity-types"
-import type { DesktopSessionInput, DesktopSessionRecord, DesktopSessionRun } from "@shared/session-types"
+import type { DesktopComputerInteractionEvent } from "@shared/computer-types"
+import { ComputerInteractionProvider } from "../../tools/computer/computer-interaction"
+import type { DesktopPermissionRequest, DesktopSessionInput, DesktopSessionRecord, DesktopSessionRun } from "@shared/session-types"
 import type { Composer } from "../composer/composer"
 
 // Keep the actual page/queue relationship; omit unrelated native surfaces and the rich editor.
@@ -97,6 +99,49 @@ it("offers the shared new conversation action in the header only when the sideba
   expect(button).not.toBeNull()
   await act(async () => button!.click())
   expect(onNewConversation).toHaveBeenCalledOnce()
+})
+
+it("keeps the selected approval when the main chat receives a new queue and replies only to its visible card", async () => {
+  const view = emptySessionView("chat")
+  const request = (id: string): DesktopPermissionRequest => ({
+    id, sessionId: "chat", toolName: "Shell", status: "pending",
+    payload: { input: { command: `pnpm test ${id}` } }, createdAt: 1, updatedAt: 1,
+  })
+  const first = request("first")
+  const second = request("second")
+  const third = request("third")
+  const fourth = request("fourth")
+  const reply = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal("desktop", { businessData: businessDataFixture, sessions: { replyPermission: reply } })
+  useDesktopSessionStore.setState({
+    activeSessionId: "chat", sessions: [view.session],
+    sessionView: { ...view, permissions: [first, second, third] },
+    refreshGoal: vi.fn(async () => {}),
+  })
+  await act(async () => root.render(
+    <ConversationPane panelOpen canOpenReview={false} onTogglePanel={vi.fn()} onOpenFile={vi.fn()}
+      onOpenReview={vi.fn()} onOpenTerminal={vi.fn()} onOpenAgents={vi.fn()} />
+  ))
+  const region = () => host.querySelector<HTMLElement>('[aria-label="待处理的授权请求"]')!
+  const allowButtons = () => [...region().querySelectorAll<HTMLButtonElement>("button")]
+    .filter((button) => button.textContent === "允许本次" && !button.closest("[hidden], [inert], [aria-hidden=true]"))
+  expect(allowButtons()).toHaveLength(1)
+  expect(region().textContent).toContain("1 / 3")
+  await act(async () => region().querySelector<HTMLButtonElement>('button[aria-label="下一个请求"]')!.click())
+  expect(region().textContent).toContain("2 / 3")
+  await act(async () => useDesktopSessionStore.getState().applySessionUpdate({
+    ...view, cursor: 1, permissions: [fourth, first, second, third],
+  }))
+  expect(region().textContent).toContain("3 / 4")
+  expect(reply).not.toHaveBeenCalled()
+  await act(async () => allowButtons()[0]!.click())
+  expect(reply.mock.calls).toEqual([[{ permissionId: "second", status: "approved", decision: "once" }]])
+  await act(async () => useDesktopSessionStore.getState().applySessionUpdate({
+    ...view, cursor: 2, permissions: [fourth, first, third],
+  }))
+  expect(region().textContent).toContain("3 / 3")
+  await act(async () => allowButtons()[0]!.click())
+  expect(reply).toHaveBeenLastCalledWith({ permissionId: "third", status: "approved", decision: "once" })
 })
 
 it("passes observation candidates and live activity for a saved root chat only outside Goal mode", async () => {
@@ -385,3 +430,46 @@ it.each(["stop", "remove"] as const)(
     expect(sendPrompt).toHaveBeenCalledTimes(1)
   }
 )
+
+it("stacks the current chat's app authorization with tool requests and follows revocation", async () => {
+  const view = emptySessionView("chat")
+  const permission: DesktopPermissionRequest = {
+    id: "shell-request", sessionId: "chat", toolName: "Shell", status: "pending",
+    payload: { input: { command: "pnpm test" } }, createdAt: 1, updatedAt: 1,
+  }
+  let receive!: (event: DesktopComputerInteractionEvent) => void
+  const reply = vi.fn()
+  vi.stubGlobal("desktop", {
+    businessData: businessDataFixture,
+    computer: {
+      onInteraction: (listener: typeof receive) => { receive = listener; return () => {} },
+      reply,
+    },
+  })
+  useDesktopSessionStore.setState({
+    activeSessionId: "chat", sessions: [view.session],
+    sessionView: { ...view, permissions: [permission] }, refreshGoal: vi.fn(async () => {}),
+  })
+  await act(async () => root.render(
+    <ComputerInteractionProvider>
+      <ConversationPane panelOpen canOpenReview={false} onTogglePanel={vi.fn()} onOpenFile={vi.fn()}
+        onOpenReview={vi.fn()} onOpenTerminal={vi.fn()} onOpenAgents={vi.fn()} />
+    </ComputerInteractionProvider>
+  ))
+  const region = () => host.querySelector<HTMLElement>('[aria-label="待处理的授权请求"]')!
+  const next = () => region().querySelector<HTMLButtonElement>('button[aria-label="下一个请求"]')
+  const prompt = { kind: "authorize", id: "app-request", sessionId: "other", appName: "计算器" } as const
+  await act(async () => receive({ type: "prompt", prompt }))
+  expect(next()).toBeNull()
+  await act(async () => receive({ type: "prompt", prompt: { ...prompt, sessionId: "chat" } }))
+  expect(next()).not.toBeNull()
+  await act(async () => next()!.click())
+  expect(region().textContent).toContain("计算器")
+  await act(async () => receive({ type: "dismissed", id: prompt.id }))
+  expect(next()).toBeNull()
+  expect(region().textContent).not.toContain("计算器")
+  expect(region().textContent).toContain("允许本次")
+  expect(reply).not.toHaveBeenCalled()
+  await act(async () => useDesktopSessionStore.setState({ activeSessionId: "other" }))
+  expect(region()).toBeNull()
+})
