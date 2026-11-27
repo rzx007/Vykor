@@ -1,12 +1,12 @@
 import { hostedContextUsageAgent } from "../../context-usage/assemble-session-context-usage.js";
 import type { AutoReviewMode } from "@vykor/domain-contracts/approvals";
+import { INTERACTIVE_UI_REPLY_FORMAT } from "@vykor/domain-contracts/inputs";
 import type { SessionRecord } from "@vykor/domain-contracts/sessions";
 import { readSessionModelRetryState } from "@vykor/domain-contracts/sessions";
 import { resolveRunPluginSelection } from "../plugins/session-plugin-selection.js";
 import type { ProviderInputCapabilities } from "@vykor/api";
 import { PluginPreparationError } from "@vykor/agent-runtime";
 import { buildInteractiveUiPrompt } from "@vykor/prompts";
-import { INTERACTIVE_UI_REPLY_FORMAT } from "@vykor/protocol";
 import {
   createGoalRunContribution,
   type GoalRunBinding,

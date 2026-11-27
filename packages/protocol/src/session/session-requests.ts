@@ -2,6 +2,8 @@ import type { InputDelivery, PermissionStatus, SessionStorage } from "./session.
 import type { AttachmentIntent } from "../attachments/attachment.js";
 import type { SessionUserInputItem } from "./session-input-items.js";
 
+export { INTERACTIVE_UI_REPLY_FORMAT } from "@vykor/domain-contracts/inputs";
+
 export interface CreateSessionInput {
   id?: string;
   storage?: SessionStorage;
@@ -34,9 +36,6 @@ export interface ClearSessionWorktreeBindingInput {
   path: string;
   branch: string;
 }
-
-/** Optional Input.metadata.replyPresentation value and its Markdown fence language. */
-export const INTERACTIVE_UI_REPLY_FORMAT = "vykor-ui-v1";
 
 export interface AdmitPromptInput {
   pluginAppContexts?: import("../extensions/plugin-apps.js").PluginAppConversationRequest[];

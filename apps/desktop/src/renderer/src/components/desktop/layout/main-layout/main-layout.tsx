@@ -429,7 +429,6 @@ export function MainLayout(): React.JSX.Element {
           <ConversationPane
             searchTarget={messageSearchTarget}
             onSearchTargetConsumed={consumeMessageSearchTarget}
-            onNewConversation={sidebarOpen ? undefined : () => beginSidebarConversation()}
             panelOpen={panelOpen}
             onTogglePanel={togglePanel}
             onOpenFile={openMessageFile}
@@ -492,7 +491,6 @@ export function MainLayout(): React.JSX.Element {
       messageSearchTarget,
       consumeMessageSearchTarget,
       activeWorkspaceIsGit,
-      beginSidebarConversation,
       conversationPanelRef,
       innerGroupElementRef,
       openTerminal,
@@ -501,7 +499,6 @@ export function MainLayout(): React.JSX.Element {
       openUtilityTool,
       panelOpen,
       requestOpenReview,
-      sidebarOpen,
       togglePanel,
       utilityMaximized,
       collapseUtilityPanel,
@@ -574,6 +571,7 @@ export function MainLayout(): React.JSX.Element {
             <MainLayoutContext.Provider
               value={{
                 conversationWorkspace,
+                headerNewConversation: sidebarOpen ? undefined : () => beginSidebarConversation(),
                 openFile: openMessageFile,
                 startNewConversation: startNewConversationRoute,
                 openSideChat: (sourceId, text) => {

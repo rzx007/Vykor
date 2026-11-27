@@ -5,7 +5,6 @@ import type { DesktopGitDiffScope } from "@shared/git-types"
 export type ConversationPaneProps = {
   searchTarget?: ConversationSearchTarget
   onSearchTargetConsumed?: () => void
-  onNewConversation?: () => void
   panelOpen: boolean
   onTogglePanel: () => void
   onOpenFile: (path: string, line?: number) => void

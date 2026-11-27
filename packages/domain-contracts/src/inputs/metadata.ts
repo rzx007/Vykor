@@ -28,3 +28,6 @@ export function assertPromptMetadataAllowed(input: {
     }
   }
 }
+
+/** Optional Input.metadata.replyPresentation value and its Markdown fence language. */
+export const INTERACTIVE_UI_REPLY_FORMAT = "vykor-ui-v1";

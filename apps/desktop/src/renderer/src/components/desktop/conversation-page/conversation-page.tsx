@@ -2,10 +2,11 @@ import { ConversationFind } from "./transcript/conversation-find"
 import { submitConversationDraft } from "./session/submit-conversation-draft"
 import { pluginAppModelContexts } from "../shell/plugin-apps/plugin-app-model-context"
 import { MoreHorizontal, PanelRight, SquarePen } from "lucide-react"
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react"
+import { useCallback, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react"
 import { useNavigate } from "@tanstack/react-router"
 
 import { OpenWithSplitButton } from "@renderer/components/desktop/open-with"
+import { MainLayoutContext } from "@renderer/components/desktop/layout/main-layout/main-layout-context"
 import { SideChatSelectionActions } from "@renderer/components/desktop/tools/side-chat/side-chat-selection-actions"
 import { useComputerAppPermissionId } from "@renderer/components/desktop/tools/computer/computer-interaction"
 import {
@@ -91,11 +92,19 @@ import { resolveScrollerAgentStatus } from "./transcript/scroller-agent-status"
 import { resolveModelLabel, stopChatOnEscape } from "./shared/utils"
 import { isDesktopObservableSession } from "./shared/session-observation"
 
+function HeaderNewConversationButton(): React.JSX.Element | null {
+  const start = useContext(MainLayoutContext)?.headerNewConversation
+  return start ? (
+    <HeaderIconButton label="新对话" onClick={start}>
+      <SquarePen strokeWidth={1.75} />
+    </HeaderIconButton>
+  ) : null
+}
+
 function ConversationPane({
   panelOpen,
   searchTarget,
   onSearchTargetConsumed,
-  onNewConversation,
   onTogglePanel,
   onOpenFile,
   canOpenReview,
@@ -555,11 +564,7 @@ function ConversationPane({
         {hasSession ? (
           <header className="flex h-12 shrink-0 items-center border-b bg-background px-3">
             <div className="flex min-w-0 items-center gap-2">
-              {onNewConversation ? (
-                <HeaderIconButton label="新对话" onClick={onNewConversation}>
-                  <SquarePen strokeWidth={1.75} />
-                </HeaderIconButton>
-              ) : null}
+              <HeaderNewConversationButton />
               <ProjectInfoButton
                 selectedProject={selectedProject}
                 projects={projects}

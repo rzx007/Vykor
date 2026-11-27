@@ -349,16 +349,38 @@ describe("maximized workbench chat status integration", () => {
 })
 
 describe("sidebar toggle rendering", () => {
-  it("keeps the conversation workspace element when only the sidebar state changes", () => {
+  it("keeps the workspace and offers the header new chat action only while the sidebar is collapsed", async () => {
     outletWorkspace.last = null
-    const container = mountLayout(stateWith({}))
+    const view = sessionView("sidebar-chat", "idle")
+    const startNewConversation = vi.fn(async () => {})
+    const selectProject = vi.fn(async () => {})
+    const container = await mountReadyLayout(
+      stateWith({
+        activeSessionId: view.session.id,
+        sessions: [view.session],
+        sessionView: view,
+        startNewConversation,
+        selectProject,
+      })
+    )
     const workspaceBeforeToggle = outletWorkspace.last
     expect(workspaceBeforeToggle).not.toBeNull()
+    const newChat = () =>
+      container.querySelector<HTMLButtonElement>('header button[aria-label="新对话"]')
+    const toggleSidebar = () =>
+      act(() => {
+        container.querySelector<HTMLButtonElement>("[data-testid='sidebar-toggle']")!.click()
+      })
 
-    act(() => {
-      container.querySelector<HTMLButtonElement>("[data-testid='sidebar-toggle']")!.click()
-    })
-
+    expect(newChat()).toBeNull()
+    toggleSidebar()
+    expect(outletWorkspace.last).toBe(workspaceBeforeToggle)
+    expect(newChat()).not.toBeNull()
+    await act(async () => newChat()!.click())
+    expect(startNewConversation).toHaveBeenCalledOnce()
+    expect(selectProject).not.toHaveBeenCalled()
+    toggleSidebar()
+    expect(newChat()).toBeNull()
     expect(outletWorkspace.last).toBe(workspaceBeforeToggle)
   })
 })

@@ -2,6 +2,7 @@ import { createContext, useContext, type ReactNode } from "react"
 
 export type MainLayoutContextValue = {
   conversationWorkspace: ReactNode
+  headerNewConversation?: () => void
   startNewConversation: () => void
   openSideChat: (sourceId: string, text: string) => void
   openFile?: (path: string, line?: number) => void

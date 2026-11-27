@@ -7,7 +7,7 @@
 | [index.ts](index.ts) | `@vykor/domain-contracts/inputs` 公开入口 |
 | [items.ts](items.ts) | 输入项类型、展示目录数据及数量与长度上限 |
 | [validation.ts](validation.ts) | 输入项和附件引用解析、文字合并与文本提取 |
-| [metadata.ts](metadata.ts) | 拒绝或移除仅允许宿主构造的插件元数据 |
+| [metadata.ts](metadata.ts) | 定义交互式回复的格式标记，检查和清理输入元数据中的保留字段 |
 
 调用方先用 `parseSessionInputItems` 解析未知值，再按需用 `sessionUserInputText` 得到文本表示；附件引用交给 `parsePromptAttachments`。普通输入的元数据可用 `assertPromptMetadataAllowed` 检查，防止冒充宿主创建的插件动作。
 
